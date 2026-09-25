@@ -15,10 +15,12 @@
 #include <omp.h>
 #endif
 
+#include "gtb/change.hpp"
 #include "gtb/contagion.hpp"
 #include "gtb/distance.hpp"
 #include "gtb/entropy.hpp"
 #include "gtb/fad.hpp"
+#include "gtb/grayspatcon.hpp"
 #include "gtb/gtn.hpp"
 #include "gtb/morphology.hpp"
 #include "gtb/mosaic.hpp"
@@ -394,6 +396,81 @@ py::array_t<std::uint32_t> compute_contortion(
     return to_array(std::move(out));
 }
 
+py::dict compute_simple_change(
+    const CArray<std::uint8_t>& im1,
+    const CArray<std::uint8_t>& im2
+) {
+    const gtb::ImageU8 a = to_image(im1);
+    const gtb::ImageU8 b = to_image(im2);
+    gtb::SimpleChangeResult res = gtb::compute_simple_change(a, b);
+    py::dict d;
+    d["change_map"] = to_array(std::move(res.change_map));
+    d["stable_bg"] = res.stable_bg;
+    d["gain"] = res.gain;
+    d["loss"] = res.loss;
+    d["stable_fg"] = res.stable_fg;
+    d["missing"] = res.missing;
+    d["total_valid"] = res.total_valid;
+    return d;
+}
+
+py::dict compute_morphological_change(
+    const CArray<std::uint8_t>& im1,
+    const CArray<std::uint8_t>& im2
+) {
+    const gtb::ImageU8 a = to_image(im1);
+    const gtb::ImageU8 b = to_image(im2);
+    gtb::MorphologicalChangeResult res = gtb::compute_morphological_change(a, b);
+    py::dict d;
+    d["change_map"] = to_array(std::move(res.change_map));
+    d["fg_area_t1"] = res.fg_area_t1;
+    d["fg_area_t2"] = res.fg_area_t2;
+    d["net_change"] = res.net_change;
+    d["stable_bg"] = res.stable_bg;
+    d["stable_fg"] = res.stable_fg;
+    d["mcd_gain"] = res.mcd_gain;
+    d["mcd_loss"] = res.mcd_loss;
+    d["spurious"] = res.spurious;
+    d["missing"] = res.missing;
+    d["elasticity"] = res.elasticity;
+    return d;
+}
+
+py::dict compute_fos_change(
+    const CArray<std::uint8_t>& fos1,
+    const CArray<std::uint8_t>& fos2
+) {
+    const gtb::ImageU8 a = to_image(fos1);
+    const gtb::ImageU8 b = to_image(fos2);
+    gtb::FOSChangeResult res = gtb::compute_fos_change(a, b);
+    py::dict d;
+    d["change_map"] = to_array(std::move(res.change_map));
+    d["fg_gain"] = res.fg_gain;
+    d["fg_loss"] = res.fg_loss;
+    d["stable_bg"] = res.stable_bg;
+    d["forcom"] = res.forcom;
+    d["diag_same_class"] = res.diag_same_class;
+    d["diff_class"] = res.diff_class;
+    d["frag_decrease_pct"] = res.frag_decrease_pct;
+    d["frag_increase_pct"] = res.frag_increase_pct;
+    d["matrix_6x6"] = res.matrix_6x6;
+    return d;
+}
+
+py::array_t<float> compute_gray_convolution(
+    const CArray<std::uint8_t>& input,
+    const std::string& metric,
+    int window_size,
+    bool mask_missing,
+    int n_threads
+) {
+    const gtb::ImageU8 im = to_image(input);
+    gtb::Image<float> out = run_parallel(n_threads, [&] {
+        return gtb::compute_gray_convolution(im, metric, window_size, mask_missing, n_threads);
+    });
+    return to_array(std::move(out));
+}
+
 int max_threads() {
 #if defined(_OPENMP)
     return omp_get_max_threads();
@@ -488,6 +565,15 @@ PYBIND11_MODULE(_core, m) {
           py::arg("return_labels") = false, "Compute Parcellation class-level and global statistics.");
     m.def("compute_contortion", &compute_contortion, py::arg("input"), py::arg("min_area") = 1,
           "Compute Contortion boundary shape tortuosity metric for foreground habitat components.");
+    m.def("compute_simple_change", &compute_simple_change, py::arg("im1"), py::arg("im2"),
+          "Compute simple binary change between two binary rasters (stable BG, gain, loss, stable FG).");
+    m.def("compute_morphological_change", &compute_morphological_change, py::arg("im1"), py::arg("im2"),
+          "Compute Morphological Change Detection (MCD) with geodesic reconstruction, closing, and elasticity.");
+    m.def("compute_fos_change", &compute_fos_change, py::arg("fos1"), py::arg("fos2"),
+          "Compute Fragmentation (FOS) change map, 6x6 transition matrix, and shift percentages.");
+    m.def("compute_gray_convolution", &compute_gray_convolution, py::arg("input"), py::arg("metric") = "mean",
+          py::arg("window_size") = 7, py::arg("mask_missing") = true, py::arg("n_threads") = 0,
+          "Compute moving-window spatial convolution over continuous grayscale raster.");
 
     m.def("max_threads", &max_threads, "Number of OpenMP threads available (1 if built without OpenMP).");
 #if defined(_OPENMP)

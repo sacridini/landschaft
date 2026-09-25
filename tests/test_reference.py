@@ -81,3 +81,41 @@ def test_live_random_scenes(mspa_exe, kind, seed):
     data = scenes.make(kind, 5000 + seed)
     expected = run_original_mspa(mspa_exe, data, **params)
     assert_same(gp.mspa(data, **params), expected)
+
+
+GTB_GSC_EXE = Path(r"C:\Users\eduar\Documents\dev\GTB\external_sources\grayspatcon64.exe")
+
+
+@pytest.mark.skipif(not GTB_GSC_EXE.is_file(), reason="grayspatcon64.exe not found")
+@pytest.mark.parametrize(
+    "mname, mcode",
+    [
+        ("mean", 1),
+        ("median", 9),
+        ("majority", 16),
+        ("range", 27),
+        ("stddev", 25),
+        ("shannon_diversity", 7),
+        ("shannon_evenness", 8),
+    ],
+)
+def test_live_grayspatcon_against_gtb(tmp_path, mname, mcode):
+    import subprocess
+
+    rng = np.random.default_rng(42)
+    img = rng.integers(0, 101, size=(40, 40), dtype=np.uint8)
+    img[0, 0] = 255
+    img[10, 10] = 255
+
+    img.tofile(tmp_path / "gscinput")
+    w = 7
+    with open(tmp_path / "gscpars.txt", "w") as f:
+        f.write(f"R 40\nC 40\nM {mcode}\nP 0\nG 0\nW {w}\nF 2\nB 6\nA 1\nX 5\nY 10\nK 5\n")
+
+    subprocess.run([str(GTB_GSC_EXE)], cwd=str(tmp_path), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    gtb_out = np.fromfile(tmp_path / "gscoutput", dtype=np.float32).reshape((40, 40))
+
+    gpy_out = gp.gray_spatial_convolution(img, metric=mname, window_size=w, mask_missing=True)
+
+    diff = np.abs(gtb_out - gpy_out)
+    assert np.all(diff <= 1e-4)

@@ -14,10 +14,12 @@ import rioxarray  # noqa: F401  (registers the .rio accessor)
 import xarray as xr
 
 from ._palettes import (
+    CHANGE_PALETTE,
     CONTORTION_PALETTE,
     DIST_PALETTE,
     ENTROPY_PALETTE,
     FAD_PALETTE,
+    FOSCHANGE_PALETTE,
     LM_PALETTE,
     RESISTANCE_PALETTE,
 )
@@ -38,12 +40,16 @@ __all__ = [
     "lm_colormap",
     "contortion_colormap",
     "resistance_colormap",
+    "change_colormap",
+    "foschange_colormap",
     "FAD_COLORMAP",
     "DIST_COLORMAP",
     "ENTROPY_COLORMAP",
     "LM_COLORMAP",
     "CONTORTION_COLORMAP",
     "RESISTANCE_COLORMAP",
+    "CHANGE_COLORMAP",
+    "FOSCHANGE_COLORMAP",
 ]
 
 PathLike = str | os.PathLike
@@ -302,12 +308,24 @@ def resistance_colormap() -> dict[int, tuple[int, int, int, int]]:
     return {i: (*RESISTANCE_PALETTE[i], 255) for i in range(256)}
 
 
+def change_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for Simple Change and MCD maps (256 entries, RGBA)."""
+    return {i: (*CHANGE_PALETTE[i], 255) for i in range(256)}
+
+
+def foschange_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for FOS Change maps (256 entries, RGBA)."""
+    return {i: (*FOSCHANGE_PALETTE[i], 255) for i in range(256)}
+
+
 FAD_COLORMAP: dict[int, tuple[int, int, int, int]] = fad_colormap()
 DIST_COLORMAP: dict[int, tuple[int, int, int, int]] = dist_colormap()
 ENTROPY_COLORMAP: dict[int, tuple[int, int, int, int]] = entropy_colormap()
 LM_COLORMAP: dict[int, tuple[int, int, int, int]] = lm_colormap()
 CONTORTION_COLORMAP: dict[int, tuple[int, int, int, int]] = contortion_colormap()
 RESISTANCE_COLORMAP: dict[int, tuple[int, int, int, int]] = resistance_colormap()
+CHANGE_COLORMAP: dict[int, tuple[int, int, int, int]] = change_colormap()
+FOSCHANGE_COLORMAP: dict[int, tuple[int, int, int, int]] = foschange_colormap()
 
 
 def _resolve_colormap(colormap, data) -> dict | None:
@@ -334,6 +352,10 @@ def _resolve_colormap(colormap, data) -> dict | None:
             return contortion_colormap()
         if product in ("RESISTANCE", "COST_DISTANCE", "LEAST_COST_PATH"):
             return resistance_colormap()
+        if product in ("SIMPLE_CHANGE", "MORPHOLOGICAL_CHANGE"):
+            return change_colormap()
+        if product == "FOS_CHANGE":
+            return foschange_colormap()
         return None
     if colormap == "mspa":
         return mspa_colormap(True)
@@ -343,6 +365,10 @@ def _resolve_colormap(colormap, data) -> dict | None:
         return contortion_colormap()
     if colormap == "resistance":
         return resistance_colormap()
+    if colormap in ("change", "simple_change", "mcd"):
+        return change_colormap()
+    if colormap in ("foschange", "fos_change"):
+        return foschange_colormap()
     if colormap == "gtn_importance":
         return gtn_importance_colormap()
     if colormap == "fad":
@@ -433,6 +459,26 @@ def write_raster(
             )
         elif description is None and data.attrs.get("guidospy_product") == "SPATIAL_ENTROPY":
             description = f"GTB_ENT (guidospy), window_size: {data.attrs.get('window_size', 'full')}"
+        elif description is None and data.attrs.get("guidospy_product") == "SIMPLE_CHANGE":
+            description = (
+                f"GTB_CHANGE (guidospy), Gain: {data.attrs.get('gain', 0)}, "
+                f"Loss: {data.attrs.get('loss', 0)}, Stable_FG: {data.attrs.get('stable_fg', 0)}"
+            )
+        elif description is None and data.attrs.get("guidospy_product") == "MORPHOLOGICAL_CHANGE":
+            description = (
+                f"GTB_MCD (guidospy), Gain: {data.attrs.get('mcd_gain', 0)}, "
+                f"Loss: {data.attrs.get('mcd_loss', 0)}, Elasticity: {data.attrs.get('elasticity', 0):.4f}"
+            )
+        elif description is None and data.attrs.get("guidospy_product") == "FOS_CHANGE":
+            description = (
+                f"GTB_FOSCHANGE (guidospy), FragDec: {data.attrs.get('frag_decrease_pct', 0):.2f}%, "
+                f"FragInc: {data.attrs.get('frag_increase_pct', 0):.2f}%"
+            )
+        elif description is None and data.attrs.get("guidospy_product") == "GRAY_SPATIAL_CONVOLUTION":
+            description = (
+                f"GTB_GSC (guidospy), metric: {data.attrs.get('spatial_metric', 'mean')}, "
+                f"window_size: {data.attrs.get('window_size', 7)}"
+            )
 
     height, width = arr.shape
     profile: dict[str, Any] = {

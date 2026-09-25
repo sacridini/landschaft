@@ -14,12 +14,21 @@ from importlib import metadata as _metadata
 
 from . import _core
 from .batch import BatchResult, mspa_batch
+from .change import (
+    FOSChangeResult,
+    MorphologicalChangeResult,
+    SimpleChangeResult,
+    fos_change,
+    morphological_change,
+    simple_change,
+)
 from .collection import RasterCollection, RasterInfo
 from .contagion import clustering_fac, contagion_pff
 from .datasets import EXAMPLE_DATA, example_data
 from .distance import EuclideanDistanceResult, euclidean_distance
 from .entropy import SpatialEntropyResult, spatial_entropy, spatial_entropy_map
 from .fad import FAD_CLASSES, FADMultiscaleResult, FADResult, fad, fad_multiscale
+from .grayspatcon import gray_spatial_convolution
 from .gtn import (
     BRIDGE_CLASSES,
     CORE_CLASSES,
@@ -30,23 +39,27 @@ from .gtn import (
     gtn_importance,
 )
 from .io import (
+    CHANGE_COLORMAP,
     DIST_COLORMAP,
     ENTROPY_COLORMAP,
     FAD_COLORMAP,
+    FOSCHANGE_COLORMAP,
     GTN_COMPONENTS_COLORMAP,
     GTN_IMPORTANCE_COLORMAP,
     LM_COLORMAP,
+    change_colormap,
+    contortion_colormap,
     dist_colormap,
     entropy_colormap,
     fad_colormap,
+    foschange_colormap,
     gtn_components_colormap,
     gtn_importance_colormap,
     lm_colormap,
-    contortion_colormap,
-    resistance_colormap,
     load_raster,
     mspa_colormap,
     reclassify,
+    resistance_colormap,
     write_raster,
 )
 from .morphology import ParcellationResult, contortion, parcellation
@@ -80,6 +93,9 @@ __all__ = [
     "FADResult",
     "FAD_CLASSES",
     "FAD_COLORMAP",
+    "FOSCHANGE_COLORMAP",
+    "FOSChangeResult",
+    "CHANGE_COLORMAP",
     "GTNComponentsResult",
     "GTNImportanceResult",
     "GTN_COMPONENTS_COLORMAP",
@@ -88,13 +104,16 @@ __all__ = [
     "LM19_CLASSES",
     "LM_COLORMAP",
     "MSPA_CLASSES",
+    "MorphologicalChangeResult",
     "ParcellationResult",
     "RasterCollection",
     "RasterInfo",
     "RestorationCorridorResult",
     "RestorationStatusResult",
     "LeastCostPathResult",
+    "SimpleChangeResult",
     "SpatialEntropyResult",
+    "change_colormap",
     "clustering_fac",
     "conefor_inputs",
     "contagion_pff",
@@ -108,6 +127,9 @@ __all__ = [
     "fad",
     "fad_colormap",
     "fad_multiscale",
+    "fos_change",
+    "foschange_colormap",
+    "gray_spatial_convolution",
     "gtn_components",
     "gtn_components_colormap",
     "gtn_importance",
@@ -118,6 +140,7 @@ __all__ = [
     "lm_colormap",
     "load_raster",
     "max_threads",
+    "morphological_change",
     "mspa",
     "mspa_batch",
     "mspa_colormap",
@@ -127,6 +150,7 @@ __all__ = [
     "resistance_colormap",
     "restoration_corridor",
     "restoration_status",
+    "simple_change",
     "spatial_entropy",
     "spatial_entropy_map",
     "validate_mspa_input",
