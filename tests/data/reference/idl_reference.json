@@ -1,0 +1,1445 @@
+{
+ "generated": "2026-09-25",
+ "interpreter": "gdl.exe",
+ "sources": [
+  "tests/gtb_idl/gtb_accounting.pro",
+  "tests/gtb_idl/gtb_accounting_scaled_classes.pro"
+ ],
+ "accounting": [
+  {
+   "input": "gtb_input",
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "connectivity": 8,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "04863a747dfeb909ffc5b54bc354a88a065229050d37fee78c9925e6fe947dd6",
+    "ids": "daabf035e833d5d8e2ff9a980715102ee37b52f2781f36ee65fc4842feb910db",
+    "area": "00ad952231a32a8d015a25a93f6d62ee07e0a0d4445739a198a4ce78e2e1c152"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "2668,129,30,13,7,3",
+    "cat_area": "19953,13094,13867,30322,76569,274685",
+    "pct_objects": "93.6140,4.52632,1.05263,0.456140,0.245614,0.105263",
+    "pct_area": "4.65658,3.05585,3.23625,7.07648,17.8695,64.1053",
+    "tot_ids": "2850",
+    "tot_area": "428490.",
+    "allid": "2850",
+    "allarea": "428490",
+    "median": "5",
+    "mean": "150.347",
+    "sdev": "4143.11",
+    "oba_max": "214811",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "gtb_input",
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "connectivity": 4,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "e0530e9a5313c257b230626cea3aee594a59759f378b898ff2373a568f57ca14",
+    "ids": "0016e7b08a269f82442ac727ffef76824727692bf5681ab1a2e62790c4968ffb",
+    "area": "138c5d33c5f0728e313d89f4ee72ae0f15a4e0fedb4ed21516351966f265c355"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "4649,146,31,15,8,5",
+    "cat_area": "26413,15171,14478,31887,73998,266543",
+    "pct_objects": "95.7767,3.00783,0.638649,0.309023,0.164813,0.103008",
+    "pct_area": "6.16420,3.54057,3.37884,7.44171,17.2695,62.2052",
+    "tot_ids": "4854",
+    "tot_area": "428490.",
+    "allid": "4854",
+    "allarea": "428490",
+    "median": "3",
+    "mean": "88.2757",
+    "sdev": "2421.11",
+    "oba_max": "156669",
+    "id_max1": "1",
+    "id_max2": "1694",
+    "id_max3": "818",
+    "oba_max1": "156669",
+    "oba_max2": "33222",
+    "oba_max3": "27657"
+   }
+  },
+  {
+   "input": "gtb_input",
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "connectivity": 8,
+   "thresholds": [
+    1,
+    10,
+    100
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "1c3c58ffa460792869ba01b8869f59577f0283d66347b75303a857bcaf3464a2",
+    "ids": "daabf035e833d5d8e2ff9a980715102ee37b52f2781f36ee65fc4842feb910db",
+    "area": "00ad952231a32a8d015a25a93f6d62ee07e0a0d4445739a198a4ce78e2e1c152"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "1,10,100",
+    "cat_id": "369,1732,649,100",
+    "cat_area": "369,7707,17442,402972",
+    "pct_objects": "12.9474,60.7719,22.7719,3.50877",
+    "pct_area": "0.0861164,1.79864,4.07057,94.0447",
+    "tot_ids": "2850",
+    "tot_area": "428490.",
+    "allid": "2850",
+    "allarea": "428490",
+    "median": "5",
+    "mean": "150.347",
+    "sdev": "4143.11",
+    "oba_max": "214811",
+    "id_max1": "1",
+    "id_max2": "901",
+    "id_max3": "1662",
+    "oba_max1": "214811",
+    "oba_max2": "33508",
+    "oba_max3": "26366"
+   }
+  },
+  {
+   "input": "gtb_input",
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "connectivity": 4,
+   "thresholds": [
+    5
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "fc376ef7e3c48f7ef1235500943e7c29ff1c2d998ca02ad2cfe4e0ee477d3b63",
+    "ids": "0016e7b08a269f82442ac727ffef76824727692bf5681ab1a2e62790c4968ffb",
+    "area": "138c5d33c5f0728e313d89f4ee72ae0f15a4e0fedb4ed21516351966f265c355"
+   },
+   "stats": {
+    "nr_cat": "1",
+    "cat": "5",
+    "cat_id": "3284,1570",
+    "cat_area": "7295,421195",
+    "pct_objects": "67.6555,32.3445",
+    "pct_area": "1.70249,98.2975",
+    "tot_ids": "4854",
+    "tot_area": "428490.",
+    "allid": "4854",
+    "allarea": "428490",
+    "median": "3",
+    "mean": "88.2757",
+    "sdev": "2421.11",
+    "oba_max": "156669",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "gtb_input",
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "connectivity": 8,
+   "thresholds": [
+    3,
+    3,
+    40,
+    40,
+    900
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "19885223036fbfa3fc0462f9a844418d6087b7c808e025ffcf71f8ce84a05212",
+    "ids": "daabf035e833d5d8e2ff9a980715102ee37b52f2781f36ee65fc4842feb910db",
+    "area": "00ad952231a32a8d015a25a93f6d62ee07e0a0d4445739a198a4ce78e2e1c152"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "3,40,900",
+    "cat_id": "1157,1477,192,24",
+    "cat_area": "2272,16159,27491,382568",
+    "pct_objects": "40.5965,51.8246,6.73684,0.842105",
+    "pct_area": "0.530234,3.77115,6.41579,89.2828",
+    "tot_ids": "2850",
+    "tot_area": "428490.",
+    "allid": "2850",
+    "allarea": "428490",
+    "median": "5",
+    "mean": "150.347",
+    "sdev": "4143.11",
+    "oba_max": "214811",
+    "id_max1": "1",
+    "id_max2": "901",
+    "id_max3": "1662",
+    "oba_max1": "214811",
+    "oba_max2": "33508",
+    "oba_max3": "26366"
+   }
+  },
+  {
+   "input": "gtb_input",
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "scaled_classes": [
+    215,
+    2149,
+    21482,
+    107406,
+    193330
+   ]
+  },
+  {
+   "input": "blobs_101",
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "connectivity": 8,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "c3579a169d7ca28a015ea840745eb68994fdeea125b98d613efc4e9c44da37b5",
+    "ids": "44ed24976c235f4872e1d5a7aa1ea1773483adaa9a2ed099797f30023c1c0f3f",
+    "area": "df31027f4ec91882d24261a4849252f6afd92a7886311c51e587c07eace5f341"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "6,8,4,3,0,1",
+    "cat_area": "148,943,1835,9229,0,22738",
+    "pct_objects": "27.2727,36.3636,18.1818,13.6364,0.00000,4.54545",
+    "pct_area": "0.424154,2.70255,5.25893,26.4494,0.00000,65.1649",
+    "tot_ids": "22",
+    "tot_area": "34893.0",
+    "allid": "22",
+    "allarea": "34893",
+    "median": "103",
+    "mean": "1586.05",
+    "sdev": "4858.62",
+    "oba_max": "22738",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "blobs_101",
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "connectivity": 4,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "52156e0c092759db8b04ed4c4d413504ef94483ed3b5a8945fee55c359814c87",
+    "ids": "1760249d1018d6c55f37a53a02457b56ea05f13b4986cc3948b7f5f673ff36d4",
+    "area": "053c387f0e709e66b4d3b8bc45ee6d55ab962d349879982f41009e8652ec7aae"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "8,8,4,3,0,1",
+    "cat_area": "150,943,1835,9228,0,22737",
+    "pct_objects": "33.3333,33.3333,16.6667,12.5000,0.00000,4.16667",
+    "pct_area": "0.429886,2.70255,5.25893,26.4466,0.00000,65.1621",
+    "tot_ids": "24",
+    "tot_area": "34893.0",
+    "allid": "24",
+    "allarea": "34893",
+    "median": "90",
+    "mean": "1453.88",
+    "sdev": "4663.89",
+    "oba_max": "22737",
+    "id_max1": "1",
+    "id_max2": "19",
+    "id_max3": "18",
+    "oba_max1": "22737",
+    "oba_max2": "4117",
+    "oba_max3": "3762"
+   }
+  },
+  {
+   "input": "blobs_101",
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "connectivity": 8,
+   "thresholds": [
+    1,
+    10,
+    100
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "a1b0fc140d2259940aac9292277c190c55a132e062e09a168c67a272747e8da4",
+    "ids": "44ed24976c235f4872e1d5a7aa1ea1773483adaa9a2ed099797f30023c1c0f3f",
+    "area": "df31027f4ec91882d24261a4849252f6afd92a7886311c51e587c07eace5f341"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "1,10,100",
+    "cat_id": "0,1,10,11",
+    "cat_area": "0,6,542,34345",
+    "pct_objects": "0.00000,4.54545,45.4545,50.0000",
+    "pct_area": "0.00000,0.0171954,1.55332,98.4295",
+    "tot_ids": "22",
+    "tot_area": "34893.0",
+    "allid": "22",
+    "allarea": "34893",
+    "median": "103",
+    "mean": "1586.05",
+    "sdev": "4858.62",
+    "oba_max": "22738",
+    "id_max1": "1",
+    "id_max2": "17",
+    "id_max3": "16",
+    "oba_max1": "22738",
+    "oba_max2": "4117",
+    "oba_max3": "3762"
+   }
+  },
+  {
+   "input": "blobs_101",
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "connectivity": 4,
+   "thresholds": [
+    5
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "1fdaa82f1e0666bc010b72e22bcb299c26fae1f819d9ff8225ab335e96b0e0b6",
+    "ids": "1760249d1018d6c55f37a53a02457b56ea05f13b4986cc3948b7f5f673ff36d4",
+    "area": "053c387f0e709e66b4d3b8bc45ee6d55ab962d349879982f41009e8652ec7aae"
+   },
+   "stats": {
+    "nr_cat": "1",
+    "cat": "5",
+    "cat_id": "2,22",
+    "cat_area": "2,34891",
+    "pct_objects": "8.33333,91.6667",
+    "pct_area": "0.00573181,99.9943",
+    "tot_ids": "24",
+    "tot_area": "34893.0",
+    "allid": "24",
+    "allarea": "34893",
+    "median": "90",
+    "mean": "1453.88",
+    "sdev": "4663.89",
+    "oba_max": "22737",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "blobs_101",
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "connectivity": 8,
+   "thresholds": [
+    3,
+    3,
+    40,
+    40,
+    900
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "bb03817b27a690dc1e35a3c982c333845de6263961fd2505aaed1c709396ee98",
+    "ids": "44ed24976c235f4872e1d5a7aa1ea1773483adaa9a2ed099797f30023c1c0f3f",
+    "area": "df31027f4ec91882d24261a4849252f6afd92a7886311c51e587c07eace5f341"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "3,40,900",
+    "cat_id": "0,4,14,4",
+    "cat_area": "0,59,2867,31967",
+    "pct_objects": "0.00000,18.1818,63.6364,18.1818",
+    "pct_area": "0.00000,0.169088,8.21655,91.6144",
+    "tot_ids": "22",
+    "tot_area": "34893.0",
+    "allid": "22",
+    "allarea": "34893",
+    "median": "103",
+    "mean": "1586.05",
+    "sdev": "4858.62",
+    "oba_max": "22738",
+    "id_max1": "1",
+    "id_max2": "17",
+    "id_max3": "16",
+    "oba_max1": "22738",
+    "oba_max2": "4117",
+    "oba_max3": "3762"
+   }
+  },
+  {
+   "input": "blobs_101",
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "scaled_classes": [
+    28,
+    233,
+    2279,
+    11372,
+    20464
+   ]
+  },
+  {
+   "input": "salt_101",
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "connectivity": 8,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "51dfe3d1213e6f1f2f7d1375e4a38eaf7a0a0cae43c5334cf72b5466eea1ab0c",
+    "ids": "1fd262f325de6373d693a0f253929065b25de2fc820b971b7abd7a81615c577b",
+    "area": "c755c0b0abfa300ffe57e53c3f3c62722dac3f574e2fd8f17e7a0556559bbe26"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "53,0,0,0,1,0",
+    "cat_area": "119,0,0,0,13539,0",
+    "pct_objects": "98.1481,0.00000,0.00000,0.00000,1.85185,0.00000",
+    "pct_area": "0.871284,0.00000,0.00000,0.00000,99.1287,0.00000",
+    "tot_ids": "54",
+    "tot_area": "13658.0",
+    "allid": "54",
+    "allarea": "13658",
+    "median": "1",
+    "mean": "252.926",
+    "sdev": "1842.12",
+    "oba_max": "13539",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "salt_101",
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "connectivity": 4,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "b603ff6a8171a5e49696a77a0583e95a6dcb4c70cd3ba8518bade8e3a8ca807a",
+    "ids": "2a07165de98f4bf960bdf0fd3ba35ca7dd19b7b93cda8e3606e8400074b0070c",
+    "area": "15f764b8556ae13c9c77df025d6e039b873d6580386fd516884115958cb888e8"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "1297,46,7,0,0,0",
+    "cat_area": "5862,4643,3153,0,0,0",
+    "pct_objects": "96.0741,3.40741,0.518519,0.00000,0.00000,0.00000",
+    "pct_area": "42.9199,33.9947,23.0854,0.00000,0.00000,0.00000",
+    "tot_ids": "1350",
+    "tot_area": "13658.0",
+    "allid": "1350",
+    "allarea": "13658",
+    "median": "2",
+    "mean": "10.1170",
+    "sdev": "39.9092",
+    "oba_max": "802",
+    "id_max1": "90",
+    "id_max2": "1013",
+    "id_max3": "825",
+    "oba_max1": "802",
+    "oba_max2": "623",
+    "oba_max3": "430"
+   }
+  },
+  {
+   "input": "salt_101",
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "connectivity": 8,
+   "thresholds": [
+    1,
+    10,
+    100
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "777b48f3778def23ad3dd14d2c1d9e0e0d3e5757de48c50d3bda5bf5dc9d10b2",
+    "ids": "1fd262f325de6373d693a0f253929065b25de2fc820b971b7abd7a81615c577b",
+    "area": "c755c0b0abfa300ffe57e53c3f3c62722dac3f574e2fd8f17e7a0556559bbe26"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "1,10,100",
+    "cat_id": "31,21,1,1",
+    "cat_area": "31,61,27,13539",
+    "pct_objects": "57.4074,38.8889,1.85185,1.85185",
+    "pct_area": "0.226973,0.446625,0.197686,99.1287",
+    "tot_ids": "54",
+    "tot_area": "13658.0",
+    "allid": "54",
+    "allarea": "13658",
+    "median": "1",
+    "mean": "252.926",
+    "sdev": "1842.12",
+    "oba_max": "13539",
+    "id_max1": "1",
+    "id_max2": "48",
+    "id_max3": "26,52",
+    "oba_max1": "13539",
+    "oba_max2": "27",
+    "oba_max3": "6"
+   }
+  },
+  {
+   "input": "salt_101",
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "connectivity": 4,
+   "thresholds": [
+    5
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "6fe0f2d93c1824fbb79d700a48517744209de6ad696cd9dd1dbf1fa3f0ec64d9",
+    "ids": "2a07165de98f4bf960bdf0fd3ba35ca7dd19b7b93cda8e3606e8400074b0070c",
+    "area": "15f764b8556ae13c9c77df025d6e039b873d6580386fd516884115958cb888e8"
+   },
+   "stats": {
+    "nr_cat": "1",
+    "cat": "5",
+    "cat_id": "1018,332",
+    "cat_area": "1752,11906",
+    "pct_objects": "75.4074,24.5926",
+    "pct_area": "12.8276,87.1724",
+    "tot_ids": "1350",
+    "tot_area": "13658.0",
+    "allid": "1350",
+    "allarea": "13658",
+    "median": "2",
+    "mean": "10.1170",
+    "sdev": "39.9092",
+    "oba_max": "802",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "salt_101",
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "connectivity": 8,
+   "thresholds": [
+    3,
+    3,
+    40,
+    40,
+    900
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "49972278f7f83b941e69bbf43ac39797e85b81952f11de583a3299fcb1c4659a",
+    "ids": "1fd262f325de6373d693a0f253929065b25de2fc820b971b7abd7a81615c577b",
+    "area": "c755c0b0abfa300ffe57e53c3f3c62722dac3f574e2fd8f17e7a0556559bbe26"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "3,40,900",
+    "cat_id": "46,7,0,1",
+    "cat_area": "63,56,0,13539",
+    "pct_objects": "85.1852,12.9630,0.00000,1.85185",
+    "pct_area": "0.461268,0.410016,0.00000,99.1287",
+    "tot_ids": "54",
+    "tot_area": "13658.0",
+    "allid": "54",
+    "allarea": "13658",
+    "median": "1",
+    "mean": "252.926",
+    "sdev": "1842.12",
+    "oba_max": "13539",
+    "id_max1": "1",
+    "id_max2": "48",
+    "id_max3": "26,52",
+    "oba_max1": "13539",
+    "oba_max2": "27",
+    "oba_max3": "6"
+   }
+  },
+  {
+   "input": "salt_101",
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "scaled_classes": [
+    14,
+    136,
+    1354,
+    6770,
+    12185
+   ]
+  },
+  {
+   "input": "network_101",
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "connectivity": 8,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "8f15b601e88fdf3fa2fd744a1b64cb7531541c3db52b32e5485e1960b20c87a7",
+    "ids": "4f47db9a593ed68efb4cdbff30cca8dd30274d2badbd768df4ba61d36c959a69",
+    "area": "58d2e486a7b722e86a4b3ed8cf56795a1f3a9f986ebe59ddbeada9ed3eac9385"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "0,0,0,0,1,0",
+    "cat_area": "0,0,0,0,6985,0",
+    "pct_objects": "0.00000,0.00000,0.00000,0.00000,100.000,0.00000",
+    "pct_area": "0.00000,0.00000,0.00000,0.00000,100.000,0.00000",
+    "tot_ids": "1",
+    "tot_area": "6985.00",
+    "allid": "1",
+    "allarea": "6985",
+    "median": "6985",
+    "mean": "6985.00",
+    "sdev": "-NaN",
+    "oba_max": "6985",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "network_101",
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "connectivity": 4,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "9372e1ab571c30da5b49cbaa8fffcacf2a550c99c45aea2a7928d384779a6c3a",
+    "ids": "2dbd7e87dedac0a08e1f2109e44a1b61ea560ba0be9de237c590a23196d2a109",
+    "area": "16a7f3796befa08ae9ba061dc5b38590760b2e6ddb11a4341a93e924d98acfd5"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "64,0,0,0,1,0",
+    "cat_area": "153,0,0,0,6832,0",
+    "pct_objects": "98.4615,0.00000,0.00000,0.00000,1.53846,0.00000",
+    "pct_area": "2.19041,0.00000,0.00000,0.00000,97.8096,0.00000",
+    "tot_ids": "65",
+    "tot_area": "6985.00",
+    "allid": "65",
+    "allarea": "6985",
+    "median": "2",
+    "mean": "107.462",
+    "sdev": "847.110",
+    "oba_max": "6832",
+    "id_max1": "1",
+    "id_max2": "11,14",
+    "id_max3": "13",
+    "oba_max1": "6832",
+    "oba_max2": "6",
+    "oba_max3": "5"
+   }
+  },
+  {
+   "input": "network_101",
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "connectivity": 8,
+   "thresholds": [
+    1,
+    10,
+    100
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "381921103a11da360c8bda74782dd5b2e32e9b064ef7e2fb31336476f89a0b57",
+    "ids": "4f47db9a593ed68efb4cdbff30cca8dd30274d2badbd768df4ba61d36c959a69",
+    "area": "58d2e486a7b722e86a4b3ed8cf56795a1f3a9f986ebe59ddbeada9ed3eac9385"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "1,10,100",
+    "cat_id": "0,0,0,1",
+    "cat_area": "0,0,0,6985",
+    "pct_objects": "0.00000,0.00000,0.00000,100.000",
+    "pct_area": "0.00000,0.00000,0.00000,100.000",
+    "tot_ids": "1",
+    "tot_area": "6985.00",
+    "allid": "1",
+    "allarea": "6985",
+    "median": "6985",
+    "mean": "6985.00",
+    "sdev": "-NaN",
+    "oba_max": "6985",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "network_101",
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "connectivity": 4,
+   "thresholds": [
+    5
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "b9e48c14fcd388340d748c4b7d8f7def693d374af26df089e286bb9e7ab9116e",
+    "ids": "2dbd7e87dedac0a08e1f2109e44a1b61ea560ba0be9de237c590a23196d2a109",
+    "area": "16a7f3796befa08ae9ba061dc5b38590760b2e6ddb11a4341a93e924d98acfd5"
+   },
+   "stats": {
+    "nr_cat": "1",
+    "cat": "5",
+    "cat_id": "62,3",
+    "cat_area": "141,6844",
+    "pct_objects": "95.3846,4.61538",
+    "pct_area": "2.01861,97.9814",
+    "tot_ids": "65",
+    "tot_area": "6985.00",
+    "allid": "65",
+    "allarea": "6985",
+    "median": "2",
+    "mean": "107.462",
+    "sdev": "847.110",
+    "oba_max": "6832",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "network_101",
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "connectivity": 8,
+   "thresholds": [
+    3,
+    3,
+    40,
+    40,
+    900
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "381921103a11da360c8bda74782dd5b2e32e9b064ef7e2fb31336476f89a0b57",
+    "ids": "4f47db9a593ed68efb4cdbff30cca8dd30274d2badbd768df4ba61d36c959a69",
+    "area": "58d2e486a7b722e86a4b3ed8cf56795a1f3a9f986ebe59ddbeada9ed3eac9385"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "3,40,900",
+    "cat_id": "0,0,0,1",
+    "cat_area": "0,0,0,6985",
+    "pct_objects": "0.00000,0.00000,0.00000,100.000",
+    "pct_area": "0.00000,0.00000,0.00000,100.000",
+    "tot_ids": "1",
+    "tot_area": "6985.00",
+    "allid": "1",
+    "allarea": "6985",
+    "median": "6985",
+    "mean": "6985.00",
+    "sdev": "-NaN",
+    "oba_max": "6985",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "network_101",
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "scaled_classes": [
+    6985,
+    6985,
+    6985,
+    6985,
+    6985
+   ]
+  },
+  {
+   "input": "border_101",
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "connectivity": 8,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "79d545bc829b66dda2d6670d359985bfcac5d83a8239d54da4794cab0a9f8139",
+    "ids": "b7833b8b5fd1b9b9c7eb25088514daa3db11314b9253760389361b34bd0d96ba",
+    "area": "9f13c05d750172de0794cbf1873fb76f98a20c028e308a495ac0e7a29963c2d8"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "0,3,0,0,1,0",
+    "cat_area": "0,319,0,0,6311,0",
+    "pct_objects": "0.00000,75.0000,0.00000,0.00000,25.0000,0.00000",
+    "pct_area": "0.00000,4.81146,0.00000,0.00000,95.1885,0.00000",
+    "tot_ids": "4",
+    "tot_area": "6630.00",
+    "allid": "4",
+    "allarea": "6630",
+    "median": "119",
+    "mean": "1657.50",
+    "sdev": "3102.36",
+    "oba_max": "6311",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "border_101",
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "connectivity": 4,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "e42301952fc611870fbe0b49d82749c90ca3b0f37c78195fa2c61255c9f7d0ce",
+    "ids": "b7833b8b5fd1b9b9c7eb25088514daa3db11314b9253760389361b34bd0d96ba",
+    "area": "9f13c05d750172de0794cbf1873fb76f98a20c028e308a495ac0e7a29963c2d8"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "0,3,0,0,1,0",
+    "cat_area": "0,319,0,0,6311,0",
+    "pct_objects": "0.00000,75.0000,0.00000,0.00000,25.0000,0.00000",
+    "pct_area": "0.00000,4.81146,0.00000,0.00000,95.1885,0.00000",
+    "tot_ids": "4",
+    "tot_area": "6630.00",
+    "allid": "4",
+    "allarea": "6630",
+    "median": "119",
+    "mean": "1657.50",
+    "sdev": "3102.36",
+    "oba_max": "6311",
+    "id_max1": "1",
+    "id_max2": "3",
+    "id_max3": "2",
+    "oba_max1": "6311",
+    "oba_max2": "119",
+    "oba_max3": "112"
+   }
+  },
+  {
+   "input": "border_101",
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "connectivity": 8,
+   "thresholds": [
+    1,
+    10,
+    100
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "c734aa72bb5a3622361541f2788924091e469019094c60015b8572e8abb85ab4",
+    "ids": "b7833b8b5fd1b9b9c7eb25088514daa3db11314b9253760389361b34bd0d96ba",
+    "area": "9f13c05d750172de0794cbf1873fb76f98a20c028e308a495ac0e7a29963c2d8"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "1,10,100",
+    "cat_id": "0,0,1,3",
+    "cat_area": "0,0,88,6542",
+    "pct_objects": "0.00000,0.00000,25.0000,75.0000",
+    "pct_area": "0.00000,0.00000,1.32730,98.6727",
+    "tot_ids": "4",
+    "tot_area": "6630.00",
+    "allid": "4",
+    "allarea": "6630",
+    "median": "119",
+    "mean": "1657.50",
+    "sdev": "3102.36",
+    "oba_max": "6311",
+    "id_max1": "1",
+    "id_max2": "3",
+    "id_max3": "2",
+    "oba_max1": "6311",
+    "oba_max2": "119",
+    "oba_max3": "112"
+   }
+  },
+  {
+   "input": "border_101",
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "connectivity": 4,
+   "thresholds": [
+    5
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "07375129d37bd31961f13e5cc855358109b14a5476bd076d5b2c4a0e55b5784d",
+    "ids": "b7833b8b5fd1b9b9c7eb25088514daa3db11314b9253760389361b34bd0d96ba",
+    "area": "9f13c05d750172de0794cbf1873fb76f98a20c028e308a495ac0e7a29963c2d8"
+   },
+   "stats": {
+    "nr_cat": "1",
+    "cat": "5",
+    "cat_id": "0,4",
+    "cat_area": "0,6630",
+    "pct_objects": "0.00000,100.000",
+    "pct_area": "0.00000,100.000",
+    "tot_ids": "4",
+    "tot_area": "6630.00",
+    "allid": "4",
+    "allarea": "6630",
+    "median": "119",
+    "mean": "1657.50",
+    "sdev": "3102.36",
+    "oba_max": "6311",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "border_101",
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "connectivity": 8,
+   "thresholds": [
+    3,
+    3,
+    40,
+    40,
+    900
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "c734aa72bb5a3622361541f2788924091e469019094c60015b8572e8abb85ab4",
+    "ids": "b7833b8b5fd1b9b9c7eb25088514daa3db11314b9253760389361b34bd0d96ba",
+    "area": "9f13c05d750172de0794cbf1873fb76f98a20c028e308a495ac0e7a29963c2d8"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "3,40,900",
+    "cat_id": "0,0,3,1",
+    "cat_area": "0,0,319,6311",
+    "pct_objects": "0.00000,0.00000,75.0000,25.0000",
+    "pct_area": "0.00000,0.00000,4.81146,95.1885",
+    "tot_ids": "4",
+    "tot_area": "6630.00",
+    "allid": "4",
+    "allarea": "6630",
+    "median": "119",
+    "mean": "1657.50",
+    "sdev": "3102.36",
+    "oba_max": "6311",
+    "id_max1": "1",
+    "id_max2": "3",
+    "id_max3": "2",
+    "oba_max1": "6311",
+    "oba_max2": "119",
+    "oba_max3": "112"
+   }
+  },
+  {
+   "input": "border_101",
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "scaled_classes": [
+    94,
+    150,
+    710,
+    3199,
+    5688
+   ]
+  },
+  {
+   "input": "tiny_101",
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "connectivity": 8,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "c406c14213a17cad93af352bae1e7f19cff31217cf8ce418999e9bd179a4b5e8",
+    "ids": "2b42e9195b195786d60954379861ca6bac2a892aeca375b022d8c2b217569ccd",
+    "area": "bf007e921089785f6e3aed87e38753467943064f27e3c2cbe58aed19887ee73f"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "1,0,0,0,0,0",
+    "cat_area": "33,0,0,0,0,0",
+    "pct_objects": "100.000,0.00000,0.00000,0.00000,0.00000,0.00000",
+    "pct_area": "100.000,0.00000,0.00000,0.00000,0.00000,0.00000",
+    "tot_ids": "1",
+    "tot_area": "33.0000",
+    "allid": "1",
+    "allarea": "33",
+    "median": "33",
+    "mean": "33.0000",
+    "sdev": "-NaN",
+    "oba_max": "33",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "tiny_101",
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "connectivity": 4,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "308e9a7e9d0929a82f2904cc458e4ead3388565348d8518f65e980acdd1e0bcc",
+    "ids": "e885f013776dc689b6f529883cd326ae29a9e2975ca9298b6eeb8472097cfc8a",
+    "area": "9f82d5af19a4fafeafb9821d397a74e2bd224f2a7b610a35b408290292f87abc"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "5,0,0,0,0,0",
+    "cat_area": "33,0,0,0,0,0",
+    "pct_objects": "100.000,0.00000,0.00000,0.00000,0.00000,0.00000",
+    "pct_area": "100.000,0.00000,0.00000,0.00000,0.00000,0.00000",
+    "tot_ids": "5",
+    "tot_area": "33.0000",
+    "allid": "5",
+    "allarea": "33",
+    "median": "6",
+    "mean": "6.60000",
+    "sdev": "5.98331",
+    "oba_max": "16",
+    "id_max1": "3",
+    "id_max2": "1",
+    "id_max3": "4",
+    "oba_max1": "16",
+    "oba_max2": "8",
+    "oba_max3": "6"
+   }
+  },
+  {
+   "input": "tiny_101",
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "connectivity": 8,
+   "thresholds": [
+    1,
+    10,
+    100
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "037521395dbde85594e6286d039a0edb05483c3337c6cd66a19a3db267b20521",
+    "ids": "2b42e9195b195786d60954379861ca6bac2a892aeca375b022d8c2b217569ccd",
+    "area": "bf007e921089785f6e3aed87e38753467943064f27e3c2cbe58aed19887ee73f"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "1,10,100",
+    "cat_id": "0,0,1,0",
+    "cat_area": "0,0,33,0",
+    "pct_objects": "0.00000,0.00000,100.000,0.00000",
+    "pct_area": "0.00000,0.00000,100.000,0.00000",
+    "tot_ids": "1",
+    "tot_area": "33.0000",
+    "allid": "1",
+    "allarea": "33",
+    "median": "33",
+    "mean": "33.0000",
+    "sdev": "-NaN",
+    "oba_max": "33",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "tiny_101",
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "connectivity": 4,
+   "thresholds": [
+    5
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "06c446887efa0f09c9bef78161cbd36e553aa95efd4226abd0ca151ac656dc61",
+    "ids": "e885f013776dc689b6f529883cd326ae29a9e2975ca9298b6eeb8472097cfc8a",
+    "area": "9f82d5af19a4fafeafb9821d397a74e2bd224f2a7b610a35b408290292f87abc"
+   },
+   "stats": {
+    "nr_cat": "1",
+    "cat": "5",
+    "cat_id": "2,3",
+    "cat_area": "3,30",
+    "pct_objects": "40.0000,60.0000",
+    "pct_area": "9.09091,90.9091",
+    "tot_ids": "5",
+    "tot_area": "33.0000",
+    "allid": "5",
+    "allarea": "33",
+    "median": "6",
+    "mean": "6.60000",
+    "sdev": "5.98331",
+    "oba_max": "16",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "tiny_101",
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "connectivity": 8,
+   "thresholds": [
+    3,
+    3,
+    40,
+    40,
+    900
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "095f4af3a9c0640b2b2a1b1dcdc83132398cd2cf626549f978afdc89eb874c3d",
+    "ids": "2b42e9195b195786d60954379861ca6bac2a892aeca375b022d8c2b217569ccd",
+    "area": "bf007e921089785f6e3aed87e38753467943064f27e3c2cbe58aed19887ee73f"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "3,40,900",
+    "cat_id": "0,1,0,0",
+    "cat_area": "0,33,0,0",
+    "pct_objects": "0.00000,100.000,0.00000,0.00000",
+    "pct_area": "0.00000,100.000,0.00000,0.00000",
+    "tot_ids": "1",
+    "tot_area": "33.0000",
+    "allid": "1",
+    "allarea": "33",
+    "median": "33",
+    "mean": "33.0000",
+    "sdev": "-NaN",
+    "oba_max": "33",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "tiny_101",
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "scaled_classes": [
+    33,
+    33,
+    33,
+    33,
+    33
+   ]
+  },
+  {
+   "input": "special_bg_202",
+   "input_sha256": "1391b4214c70800b43d5300d8facfb93421cf120e4044ef8b1b145ac619c5a86",
+   "connectivity": 8,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "10c4167b4aaecb83519c4c7ca4eb836609a1a9f1269ca21bedd812866c30297b",
+    "ids": "0af6bd1916dd8794316d5ba3dfc941a9c5fad81ec4e5854f1030ed2b103a914f",
+    "area": "99efe760c0116efb82582304ab490c37058df28cf98261518ac0ddbb4d8c760a"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "13,4,9,7,2,0",
+    "cat_area": "169,402,3590,15472,16109,0",
+    "pct_objects": "37.1429,11.4286,25.7143,20.0000,5.71429,0.00000",
+    "pct_area": "0.472833,1.12473,10.0442,43.2880,45.0702,0.00000",
+    "tot_ids": "35",
+    "tot_area": "35742.0",
+    "allid": "35",
+    "allarea": "35742",
+    "median": "254",
+    "mean": "1021.20",
+    "sdev": "2012.67",
+    "oba_max": "9558",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "special_bg_202",
+   "input_sha256": "1391b4214c70800b43d5300d8facfb93421cf120e4044ef8b1b145ac619c5a86",
+   "connectivity": 4,
+   "thresholds": [
+    50,
+    250,
+    1000,
+    5000,
+    20000
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "2378eee66c213f7bc6e17fedee225eff5f5169025fc69c0a09cfc20383f7907f",
+    "ids": "db666d363580467147fc43877d0823a07d5ea281bd885aafd9e715eaa3a4a04f",
+    "area": "ae3f501f3880007e866669fe203003d38d2728fc7b6f5768813ab7d34c60146c"
+   },
+   "stats": {
+    "nr_cat": "5",
+    "cat": "50,250,1000,5000,20000",
+    "cat_id": "14,4,9,7,2,0",
+    "cat_area": "169,402,3590,15472,16109,0",
+    "pct_objects": "38.8889,11.1111,25.0000,19.4444,5.55556,0.00000",
+    "pct_area": "0.472833,1.12473,10.0442,43.2880,45.0702,0.00000",
+    "tot_ids": "36",
+    "tot_area": "35742.0",
+    "allid": "36",
+    "allarea": "35742",
+    "median": "254",
+    "mean": "992.833",
+    "sdev": "1990.99",
+    "oba_max": "9558",
+    "id_max1": "12",
+    "id_max2": "3",
+    "id_max3": "17",
+    "oba_max1": "9558",
+    "oba_max2": "6551",
+    "oba_max3": "3418"
+   }
+  },
+  {
+   "input": "special_bg_202",
+   "input_sha256": "1391b4214c70800b43d5300d8facfb93421cf120e4044ef8b1b145ac619c5a86",
+   "connectivity": 8,
+   "thresholds": [
+    1,
+    10,
+    100
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "5b2b7de876ed95c2e952e40bec89539d9cc527c205cb703c01bc134fa831f782",
+    "ids": "0af6bd1916dd8794316d5ba3dfc941a9c5fad81ec4e5854f1030ed2b103a914f",
+    "area": "99efe760c0116efb82582304ab490c37058df28cf98261518ac0ddbb4d8c760a"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "1,10,100",
+    "cat_id": "3,4,8,20",
+    "cat_area": "3,16,303,35420",
+    "pct_objects": "8.57143,11.4286,22.8571,57.1429",
+    "pct_area": "0.00839349,0.0447653,0.847742,99.0991",
+    "tot_ids": "35",
+    "tot_area": "35742.0",
+    "allid": "35",
+    "allarea": "35742",
+    "median": "254",
+    "mean": "1021.20",
+    "sdev": "2012.67",
+    "oba_max": "9558",
+    "id_max1": "12",
+    "id_max2": "3",
+    "id_max3": "17",
+    "oba_max1": "9558",
+    "oba_max2": "6551",
+    "oba_max3": "3418"
+   }
+  },
+  {
+   "input": "special_bg_202",
+   "input_sha256": "1391b4214c70800b43d5300d8facfb93421cf120e4044ef8b1b145ac619c5a86",
+   "connectivity": 4,
+   "thresholds": [
+    5
+   ],
+   "highlight_largest": false,
+   "sha256": {
+    "classes": "ca662d3b0bfc06e1a057582fefa6781d099befe84e98233573de4d3ecbd45290",
+    "ids": "db666d363580467147fc43877d0823a07d5ea281bd885aafd9e715eaa3a4a04f",
+    "area": "ae3f501f3880007e866669fe203003d38d2728fc7b6f5768813ab7d34c60146c"
+   },
+   "stats": {
+    "nr_cat": "1",
+    "cat": "5",
+    "cat_id": "7,29",
+    "cat_area": "14,35728",
+    "pct_objects": "19.4444,80.5556",
+    "pct_area": "0.0391696,99.9608",
+    "tot_ids": "36",
+    "tot_area": "35742.0",
+    "allid": "36",
+    "allarea": "35742",
+    "median": "254",
+    "mean": "992.833",
+    "sdev": "1990.99",
+    "oba_max": "9558",
+    "id_max1": "-1",
+    "id_max2": "-1",
+    "id_max3": "-1",
+    "oba_max1": "0",
+    "oba_max2": "0",
+    "oba_max3": "0"
+   }
+  },
+  {
+   "input": "special_bg_202",
+   "input_sha256": "1391b4214c70800b43d5300d8facfb93421cf120e4044ef8b1b145ac619c5a86",
+   "connectivity": 8,
+   "thresholds": [
+    3,
+    3,
+    40,
+    40,
+    900
+   ],
+   "highlight_largest": true,
+   "sha256": {
+    "classes": "cf5fd259ade7a603f0c2a78cf2c306ad779beb3d3fcf7cb9f82b40626fde0844",
+    "ids": "0af6bd1916dd8794316d5ba3dfc941a9c5fad81ec4e5854f1030ed2b103a914f",
+    "area": "99efe760c0116efb82582304ab490c37058df28cf98261518ac0ddbb4d8c760a"
+   },
+   "stats": {
+    "nr_cat": "3",
+    "cat": "3,40,900",
+    "cat_id": "5,7,14,9",
+    "cat_area": "8,120,4033,31581",
+    "pct_objects": "14.2857,20.0000,40.0000,25.7143",
+    "pct_area": "0.0223826,0.335739,11.2836,88.3582",
+    "tot_ids": "35",
+    "tot_area": "35742.0",
+    "allid": "35",
+    "allarea": "35742",
+    "median": "254",
+    "mean": "1021.20",
+    "sdev": "2012.67",
+    "oba_max": "9558",
+    "id_max1": "12",
+    "id_max2": "3",
+    "id_max3": "17",
+    "oba_max1": "9558",
+    "oba_max2": "6551",
+    "oba_max3": "3418"
+   }
+  },
+  {
+   "input": "special_bg_202",
+   "input_sha256": "1391b4214c70800b43d5300d8facfb93421cf120e4044ef8b1b145ac619c5a86",
+   "scaled_classes": [
+    10,
+    96,
+    956,
+    4779,
+    8602
+   ]
+  }
+ ]
+}

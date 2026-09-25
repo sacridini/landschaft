@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- `accounting()`: GTB Accounting. It groups foreground objects into up to six size
+  classes and returns the GTB colour-coded class map, object ID and object area
+  maps, a per-class table and a `summary()` in the layout of GTB's `acc.txt`. It
+  supports GTB's batch default classes, the dialog's `"auto"` classes, 4/8
+  connectivity and "big3pink" highlighting. The C++ core uses run-length labelling,
+  with OpenMP for the per-pixel maps.
+- `validate_fad_input()`, `accounting_colormap()` / `ACCOUNTING_COLORMAP` (GTB's
+  `mspacolorston` table), `ACCOUNTING_CLASSES`.
+- Verification of IDL-only GTB tools with GDL: `tests/gtb_idl` (GTB statements
+  copied verbatim), `tools/make_reference_idl.py` and
+  `tests/data/reference/idl_reference.json`. Live runs use `LANDSCHAFT_GDL_EXE`.
+
 ### Changed
 - **Project renamed from `guidospy` to `landschaft`** (repository:
   https://github.com/sacridini/landschaft). Use `import landschaft as ls`.

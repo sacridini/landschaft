@@ -13,6 +13,7 @@ Typical use::
 from importlib import metadata as _metadata
 
 from . import _core
+from .accounting import ACCOUNTING_CLASSES, AccountingResult, accounting
 from .batch import BatchResult, mspa_batch
 from .change import (
     FOSChangeResult,
@@ -39,6 +40,7 @@ from .gtn import (
     gtn_importance,
 )
 from .io import (
+    ACCOUNTING_COLORMAP,
     CHANGE_COLORMAP,
     DIST_COLORMAP,
     ENTROPY_COLORMAP,
@@ -47,6 +49,7 @@ from .io import (
     GTN_COMPONENTS_COLORMAP,
     GTN_IMPORTANCE_COLORMAP,
     LM_COLORMAP,
+    accounting_colormap,
     change_colormap,
     contortion_colormap,
     dist_colormap,
@@ -74,7 +77,7 @@ from .restoration import (
     restoration_corridor,
     restoration_status,
 )
-from .validation import InvalidInputError, validate_mspa_input
+from .validation import InvalidInputError, validate_fad_input, validate_mspa_input
 
 try:
     __version__ = _metadata.version("landschaft")  # single source: pyproject.toml
@@ -82,6 +85,9 @@ except _metadata.PackageNotFoundError:  # pragma: no cover - running from a sour
     __version__ = "0.0.0+unknown"
 
 __all__ = [
+    "ACCOUNTING_CLASSES",
+    "ACCOUNTING_COLORMAP",
+    "AccountingResult",
     "BatchResult",
     "BRIDGE_CLASSES",
     "CORE_CLASSES",
@@ -113,6 +119,8 @@ __all__ = [
     "LeastCostPathResult",
     "SimpleChangeResult",
     "SpatialEntropyResult",
+    "accounting",
+    "accounting_colormap",
     "change_colormap",
     "clustering_fac",
     "conefor_inputs",
@@ -153,6 +161,7 @@ __all__ = [
     "simple_change",
     "spatial_entropy",
     "spatial_entropy_map",
+    "validate_fad_input",
     "validate_mspa_input",
     "write_raster",
 ]

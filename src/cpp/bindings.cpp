@@ -15,6 +15,7 @@
 #include <omp.h>
 #endif
 
+#include "gtb/accounting.hpp"
 #include "gtb/change.hpp"
 #include "gtb/contagion.hpp"
 #include "gtb/distance.hpp"
@@ -387,6 +388,24 @@ py::tuple compute_parcellation(
     return py::make_tuple(class_stats_list, gd, labels_arr);
 }
 
+py::dict compute_accounting(const CArray<std::uint8_t>& input, int connectivity, const std::vector<i64>& thresholds,
+                            bool highlight_largest, int n_threads) {
+    const gtb::ImageU8 im = to_image(input);
+    gtb::AccountingResult res = run_parallel(n_threads, [&] {
+        return gtb::compute_accounting(im, connectivity, thresholds, highlight_largest);
+    });
+    py::dict d;
+    d["thresholds"] = py::cast(res.thresholds);
+    d["object_area"] = py::array_t<i64>(static_cast<py::ssize_t>(res.object_area.size()), res.object_area.data());
+    py::list largest;
+    for (const auto& ids : res.largest) largest.append(py::cast(ids));
+    d["largest"] = largest;
+    d["classes"] = to_array(std::move(res.classes));
+    d["ids"] = to_array(std::move(res.ids));
+    d["area"] = to_array(std::move(res.area));
+    return d;
+}
+
 py::array_t<std::uint32_t> compute_contortion(
     const CArray<std::uint8_t>& input,
     i64 min_area
@@ -503,6 +522,13 @@ void bind_detail(py::module_& m) {
         gtb::label_components(im, graph);
         return to_array(std::move(im));
     });
+    m.def("label_regions", [](const CArray<std::uint8_t>& a, std::uint8_t value, int graph, bool bottom_up) {
+        const auto im = to_image(a);
+        gtb::Image<std::int32_t> labels;
+        std::vector<i64> areas;
+        gtb::label_regions(im, value, graph, bottom_up, labels, areas);
+        return py::make_tuple(to_array(std::move(labels)), py::cast(areas));
+    });
     m.def("wsfah", [](const CArray<std::uint32_t>& labels, const CArray<std::uint8_t>& ref, int graph, int maxfl) {
         auto im = to_image(labels);
         gtb::wsfah(im, to_image(ref), graph, maxfl);
@@ -563,6 +589,9 @@ PYBIND11_MODULE(_core, m) {
           "Compute two-ended least cost path between marker A and marker B.");
     m.def("compute_parcellation", &compute_parcellation, py::arg("input"), py::arg("connectivity") = 8,
           py::arg("return_labels") = false, "Compute Parcellation class-level and global statistics.");
+    m.def("compute_accounting", &compute_accounting, py::arg("input"), py::arg("connectivity") = 8,
+          py::arg("thresholds") = std::vector<i64>{50, 250, 1000, 5000, 20000}, py::arg("highlight_largest") = false,
+          py::arg("n_threads") = 0, "GTB Accounting: foreground objects grouped into size classes.");
     m.def("compute_contortion", &compute_contortion, py::arg("input"), py::arg("min_area") = 1,
           "Compute Contortion boundary shape tortuosity metric for foreground habitat components.");
     m.def("compute_simple_change", &compute_simple_change, py::arg("im1"), py::arg("im2"),

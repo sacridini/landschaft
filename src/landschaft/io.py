@@ -21,6 +21,7 @@ from ._palettes import (
     FAD_PALETTE,
     FOSCHANGE_PALETTE,
     LM_PALETTE,
+    MSPA_ON_PALETTE,
     RESISTANCE_PALETTE,
 )
 from .validation import BACKGROUND, FOREGROUND, MISSING, InvalidInputError, validate_mspa_input
@@ -42,6 +43,7 @@ __all__ = [
     "resistance_colormap",
     "change_colormap",
     "foschange_colormap",
+    "accounting_colormap",
     "FAD_COLORMAP",
     "DIST_COLORMAP",
     "ENTROPY_COLORMAP",
@@ -50,6 +52,7 @@ __all__ = [
     "RESISTANCE_COLORMAP",
     "CHANGE_COLORMAP",
     "FOSCHANGE_COLORMAP",
+    "ACCOUNTING_COLORMAP",
 ]
 
 PathLike = str | os.PathLike
@@ -318,6 +321,11 @@ def foschange_colormap() -> dict[int, tuple[int, int, int, int]]:
     return {i: (*FOSCHANGE_PALETTE[i], 255) for i in range(256)}
 
 
+def accounting_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for Accounting maps (256 entries, RGBA)."""
+    return {i: (*MSPA_ON_PALETTE[i], 255) for i in range(256)}
+
+
 FAD_COLORMAP: dict[int, tuple[int, int, int, int]] = fad_colormap()
 DIST_COLORMAP: dict[int, tuple[int, int, int, int]] = dist_colormap()
 ENTROPY_COLORMAP: dict[int, tuple[int, int, int, int]] = entropy_colormap()
@@ -326,6 +334,7 @@ CONTORTION_COLORMAP: dict[int, tuple[int, int, int, int]] = contortion_colormap(
 RESISTANCE_COLORMAP: dict[int, tuple[int, int, int, int]] = resistance_colormap()
 CHANGE_COLORMAP: dict[int, tuple[int, int, int, int]] = change_colormap()
 FOSCHANGE_COLORMAP: dict[int, tuple[int, int, int, int]] = foschange_colormap()
+ACCOUNTING_COLORMAP: dict[int, tuple[int, int, int, int]] = accounting_colormap()
 
 
 def _resolve_colormap(colormap, data) -> dict | None:
@@ -356,6 +365,8 @@ def _resolve_colormap(colormap, data) -> dict | None:
             return change_colormap()
         if product == "FOS_CHANGE":
             return foschange_colormap()
+        if product == "ACCOUNTING":
+            return accounting_colormap()
         return None
     if colormap == "mspa":
         return mspa_colormap(True)
@@ -379,6 +390,8 @@ def _resolve_colormap(colormap, data) -> dict | None:
         return entropy_colormap()
     if colormap == "lm":
         return lm_colormap()
+    if colormap == "accounting":
+        return accounting_colormap()
     return dict(colormap)
 
 
@@ -473,6 +486,11 @@ def write_raster(
             description = (
                 f"GTB_FOSCHANGE (landschaft), FragDec: {data.attrs.get('frag_decrease_pct', 0):.2f}%, "
                 f"FragInc: {data.attrs.get('frag_increase_pct', 0):.2f}%"
+            )
+        elif description is None and data.attrs.get("landschaft_product") == "ACCOUNTING":
+            description = (
+                f"GTB_ACC (landschaft), {data.attrs.get('connectivity')}-conn. objects: "
+                f"{data.attrs.get('n_objects')}, size classes: {data.attrs.get('thresholds')}"
             )
         elif description is None and data.attrs.get("landschaft_product") == "GRAY_SPATIAL_CONVOLUTION":
             description = (

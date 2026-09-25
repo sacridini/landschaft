@@ -8,6 +8,7 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 * **GTN & Connectivity**: Topological Network Components (ECA, DOC), Importance (dPC), and Conefor Sensinode inputs.
 * **Fragmentation & Distance**: Forest Area Density (single & multiscale FAD, $O(1)$ integral images), Euclidean Distance Transform ($O(N)$), and Directional Spatial Entropy.
 * **Landscape Mosaic & Contagion**: LM (19 & 103 classes with barycentric stats), Contagion ($P_{ff}$), and Clustering (FAC).
+* **Objects**: Accounting (foreground objects in up to 6 size classes, with object ID and area maps; identical to GTB's IDL code).
 * **Restoration & Morphology**: Restoration Status (RSS), Cost Distance, Least-Cost Paths & Corridors, Landscape Parcellation (AWAPS, DIVISION, PARC), and Habitat Contortion.
 * **Change Detection & Convolution**: Simple Change, Morphological Change Detection (MCD with geodesic core reconstruction & elasticity), Fragmentation Change (FOS Delta & 6x6 transition matrix), and Continuous Grayscale Spatial Convolution (GraySpatCon).
 
@@ -152,6 +153,7 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `reclassify(data, foreground, *, missing=None, background=None)` | Build a 0/1/2 MSPA input from class values or a boolean function; NaN and nodata become missing. |
 | `mspa(data, *, connectivity=8, edge_width=1, transition=True, internal=True, n_threads=None, validate=True, output_dir=None, n_workers=None, max_memory=None, overwrite=False)` | Run MSPA on numpy, dask or xarray data (2-D or stacks), or on a `RasterCollection` in parallel (the last four options are for collections). |
 | `mspa_batch(inputs, output_dir, *, ..., n_workers=None, threads_per_worker=1, max_memory=None, overwrite=False, raise_errors=False)` | Process many files in parallel; returns one `BatchResult` (`input`, `output`, `seconds`, `error`, `ok`) per file. |
+| `accounting(data, thresholds=(50, 250, 1000, 5000, 20000), *, connectivity=8, highlight_largest=False, pixel_resolution=25.0, n_threads=0)` | GTB Accounting: size-class map (GTB colour codes), object IDs, object areas, per-class table and `summary()` report. `thresholds="auto"` uses the classes proposed by GTB's dialog. |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |
@@ -229,6 +231,15 @@ LANDSCHAFT_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live co
 * During development, 1,200 random cases (5 scene types, connectivity 4/8,
   edge widths 1 to 10, internal on/off) plus the 2000×2000 CORINE map with edge
   widths up to 100 were compared with the executable. They showed 0 differing pixels.
+* Tools that GTB implements in IDL only (Accounting) are checked against GTB's own
+  code: `tests/gtb_idl` holds the processing statements copied verbatim from
+  `guidostoolbox.pro`, run with [GDL](https://github.com/gnudatalanguage/gdl) (the
+  free IDL implementation). `tools/make_reference_idl.py` stores digests of their
+  outputs in `tests/data/reference/idl_reference.json`; with GDL installed
+  (`LANDSCHAFT_GDL_EXE`, PATH or the default install), the tests also run GTB's
+  code live on random scenes. Maps and integer statistics are identical; GTB's
+  single-precision means and standard deviations agree to 1e-4 (landschaft
+  computes them in double precision).
 * `tests/test_primitives.py` checks each C++ primitive against SciPy or brute
   force. `tests/test_mspa_semantics.py` checks the classes on hand-made patterns.
   The I/O and API tests cover validation, georeferencing, colour tables,

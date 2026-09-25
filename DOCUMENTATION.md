@@ -306,6 +306,32 @@ print(f"Total Path Cost: {lcp.total_cost:.2f}, Length: {lcp.path_length} pixels"
 corridor = ls.restoration_corridor(resistance_surface, marker_a, marker_b, corridor_width=3)
 ```
 
+### Accounting (Object Size Classes)
+GTB's *Objects → Accounting*: labels every foreground object and groups it into
+up to six size classes. The maps are identical to GTB's `_acc.tif`,
+`_acc_ids.tif` and `_acc_pixels.tif`, and the numbers match its `acc.txt` report:
+```python
+acc = ls.accounting(data, thresholds=(50, 250, 1000, 5000, 20000), connectivity=8,
+                    highlight_largest=True)
+print(acc.summary())          # GTB acc.txt layout
+acc.stats                     # per class: range, colour, objects, area, % objects, % FG area
+acc.classes                   # uint8 GTB colour codes (see ls.ACCOUNTING_CLASSES)
+acc.ids                       # int32 object IDs (0 BG, -1 missing, -3/-4 special BG)
+acc.area                      # int32 object area in pixels on every object pixel
+ls.write_raster(acc.classes, "forest_acc.tif")   # with GTB's colour table
+```
+* Input: `uint8`, 0 = missing, 1 = background, 2 = foreground, 3/4 = special background.
+* `thresholds`: 1 to 5 non-decreasing upper bounds (repeats dropped). Class 1 is
+  `[1, t1]`, class k is `(t(k-1), tk]`, and the last class holds the larger objects.
+  `"auto"` uses the classes GTB's dialog proposes (0.1/1/10/50/90% of the 8-connected
+  object-area range).
+* IDs are numbered as in GTB: raster order starting from the bottom row, because GTB
+  flips the image before `label_region`.
+* `highlight_largest` paints the three largest objects pink (code 80), like
+  GTB's "big3pink". It needs at least three objects. Objects of equal area share a rank.
+* The median is the upper middle value for an even count (IDL `MEDIAN`), and the
+  standard deviation is the sample one (IDL `MOMENT`).
+
 ### Landscape Parcellation
 Computes patch division, effective mesh size, and splitting indices:
 ```python
@@ -409,11 +435,12 @@ results = ls.mspa_batch(
 
 ## 12. Accuracy & Bit-for-Bit Verification
 
-`landschaft` is validated by an automated test suite containing **222 test cases**:
+`landschaft` is validated by an automated test suite containing **288 test cases**:
 * **MSPA**: Tested against `mspa_win64.exe` on 1,200+ random configurations and full CORINE datasets (0 differing pixels).
 * **FAD & Contagion**: Tested against original JRC `spatcon64` binaries (bit-exact).
 * **Landscape Mosaic**: Tested against JRC `recode64` binaries (bit-exact).
 * **GraySpatCon**: Tested directly against `grayspatcon64.exe` (parity verified to float32 precision).
+* **Accounting** (IDL-only in GTB): Tested against GTB's own IDL code (`tests/gtb_idl`, statements copied verbatim from `guidostoolbox.pro`) run in GDL. Maps and integer statistics are identical. Stored digests (`tests/data/reference/idl_reference.json`) cover 7 maps × 5 parameter sets, and random scenes run live when GDL is available.
 
 To run the verification suite:
 ```bash

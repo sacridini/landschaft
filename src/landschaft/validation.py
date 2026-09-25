@@ -6,9 +6,10 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 
-__all__ = ["InvalidInputError", "validate_mspa_input"]
+__all__ = ["InvalidInputError", "validate_fad_input", "validate_mspa_input"]
 
 MISSING, BACKGROUND, FOREGROUND = 0, 1, 2
+SPECIAL_BACKGROUND_2 = 4
 
 
 class InvalidInputError(ValueError):
@@ -68,3 +69,32 @@ def validate_mspa_input(data, *, spatial_only: bool = True) -> None:
         raise InvalidInputError("MSPA-compliant map required: map has no foreground (value 2).")
     if lo > BACKGROUND:
         raise InvalidInputError("MSPA-compliant map required: map has no background (value 1).")
+
+
+def validate_fad_input(data) -> None:
+    """Raise :class:`InvalidInputError` unless ``data`` is a valid 2-D FAD-type input.
+
+    GuidosToolbox's ``LM_Compliance`` check for the ``'fad'`` tools
+    (Accounting, FOS): a single-band ``uint8`` map coded ``0`` = missing,
+    ``1`` = background, ``2`` = foreground, ``3``/``4`` = special background,
+    with at least one foreground pixel.
+    """
+    values = np.asarray(data.values if isinstance(data, xr.DataArray) else data)
+    if values.ndim != 2:
+        raise InvalidInputError(
+            f"FAD-compliant map required: expected a single-band 2-D map, got shape {tuple(values.shape)}."
+        )
+    if values.size == 0:
+        raise InvalidInputError("FAD-compliant map required: the map is empty.")
+    if values.dtype != np.uint8:
+        raise InvalidInputError(
+            f"FAD-compliant map required: map is of type {values.dtype}, not uint8 (BYTE). "
+            "Convert it with landschaft.reclassify() or astype('uint8')."
+        )
+    if int(values.max()) > SPECIAL_BACKGROUND_2:
+        raise InvalidInputError(
+            f"FAD-compliant map required: map maximum is {int(values.max())}, larger than 4. Use 0 = missing, "
+            "1 = background, 2 = foreground, 3/4 = special background (see landschaft.reclassify())."
+        )
+    if not (values == FOREGROUND).any():
+        raise InvalidInputError("FAD-compliant map required: map has no foreground (value 2).")

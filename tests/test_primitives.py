@@ -111,6 +111,24 @@ def test_label_components_raster_order_from_two(rng, graph):
     np.testing.assert_array_equal(D.label_components(im, graph), expected)
 
 
+@pytest.mark.parametrize("graph", [4, 8])
+@pytest.mark.parametrize("bottom_up", [False, True])
+def test_label_regions_idl_order(rng, graph, bottom_up):
+    im = rng.choice(np.array([0, 1, 2, 3], np.uint8), size=(61, 47), p=[0.1, 0.3, 0.5, 0.1])
+    flip = np.flipud if bottom_up else (lambda a: a)
+    scipy_labels, n = ndi.label(flip(im == 2), structure=STRUCT[graph])  # border pixels labelled too
+    labels, areas = D.label_regions(im, 2, graph, bottom_up)
+    np.testing.assert_array_equal(labels, flip(scipy_labels))
+    assert labels.dtype == np.int32
+    assert areas == [0, *np.bincount(scipy_labels.ravel())[1:].tolist()]
+    assert len(areas) == n + 1
+
+
+def test_label_regions_empty():
+    labels, areas = D.label_regions(np.ones((4, 5), np.uint8), 2, 8, True)
+    assert not labels.any() and areas == [0]
+
+
 def test_wsfah_floods_from_both_ends():
     labels = np.zeros((5, 12), np.uint32)
     labels[2, 1] = 2

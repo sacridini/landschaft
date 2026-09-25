@@ -496,6 +496,8 @@ public:
     }
 
     const std::vector<Run>& runs() const { return runs_; }
+    // Runs of row y are [row_begin(y), row_begin(y + 1)).
+    i64 row_begin(i64 y) const { return row_begin_[y]; }
     // Root (component id) of run i; ids are run indices.
     i64 root(i64 i) const { return parent_[i]; }
 
@@ -647,6 +649,43 @@ void label_components(Image<std::uint32_t>& im, int graph) {
         const auto& run = runs[r];
         std::fill(im.data() + run.y * nx + run.xs, im.data() + run.y * nx + run.xe, label_of[cc.root(r)]);
     }
+}
+
+std::uint32_t label_regions(const ImageU8& im, u8 value, int graph, bool bottom_up,
+                            Image<std::int32_t>& labels, std::vector<i64>& areas) {
+    const i64 nx = im.nx;
+    const i64 ny = im.ny;
+    const u8* p = im.data();
+    const RunComponents cc(nx, ny, graph, [p, value](i64 i) { return p[i] == value; });
+    const auto& runs = cc.runs();
+
+    // Number the components in the order their first run is met.
+    std::vector<std::int32_t> label_of(runs.size(), 0);
+    std::int32_t n = 0;
+    areas.assign(1, 0);
+    for (i64 k = 0; k < ny; ++k) {
+        const i64 y = bottom_up ? ny - 1 - k : k;
+        for (i64 r = cc.row_begin(y); r < cc.row_begin(y + 1); ++r) {
+            const i64 root = cc.root(r);
+            if (label_of[root] == 0) {
+                if (n == std::numeric_limits<std::int32_t>::max()) throw std::overflow_error("too many regions");
+                label_of[root] = ++n;
+                areas.push_back(0);
+            }
+            areas[static_cast<std::size_t>(label_of[root])] += runs[r].xe - runs[r].xs;
+        }
+    }
+
+    labels = Image<std::int32_t>(nx, ny, 0);
+    const i64 nruns = static_cast<i64>(runs.size());
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(static) if (im.size() >= kParallelThreshold)
+#endif
+    for (i64 r = 0; r < nruns; ++r) {
+        const auto& run = runs[r];
+        std::fill(labels.data() + run.y * nx + run.xs, labels.data() + run.y * nx + run.xe, label_of[cc.root(r)]);
+    }
+    return static_cast<std::uint32_t>(n);
 }
 
 void wsfah(Image<std::uint32_t>& iml, const ImageU8& imr, int graph, int maxfl) {

@@ -99,6 +99,16 @@ void reconstruct_dilation(ImageU8& marker, const ImageU8& mask, int graph);
 // 1-pixel image border is cleared first.
 void label_components(Image<std::uint32_t>& im, int graph);
 
+// IDL label_region(..., /ulong) of the pixels equal to `value`, on an image
+// framed with zeros (so border pixels are labelled too): components of
+// connectivity `graph` get labels 1..n by first appearance in raster order.
+// With `bottom_up` rows are scanned from the last to the first, as when GTB
+// labels its vertically flipped image (rotate(im, 7)). Other pixels get 0.
+// Fills `labels` (resized to the image) and `areas` (areas[k] = pixel count
+// of label k, areas[0] = 0) and returns n.
+std::uint32_t label_regions(const ImageU8& im, u8 value, int graph, bool bottom_up,
+                            Image<std::int32_t>& labels, std::vector<i64>& areas);
+
 // wsfah (wsfah.c) for UINT32 labels and UCHAR reference image.
 void wsfah(Image<std::uint32_t>& labels, const ImageU8& ref, int graph, int maxfl);
 

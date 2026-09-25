@@ -31,6 +31,6 @@ cmake.build-type = "Release"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "reference: compare against outputs of the original GTB mspa executable",
-    "live_reference: run the original GTB mspa executable (needs LANDSCHAFT_MSPA_EXE)",
+    "reference: compare against stored outputs of the original GTB code",
+    "live_reference: run the original GTB code now (needs LANDSCHAFT_MSPA_EXE or GDL)",
 ]
