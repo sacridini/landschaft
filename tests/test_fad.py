@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests for Forest Area Density (FAD) & FAD-Multiscale in guidospy.
+"""Tests for Forest Area Density (FAD) & FAD-Multiscale in landschaft.
 
 Includes:
 1. Accuracy tests against the original GTB spatcon64.exe binary (rule 81).
@@ -18,8 +18,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import guidospy as gp
-from guidospy.validation import InvalidInputError
+import landschaft as ls
+from landschaft.validation import InvalidInputError
 
 SPATCON_EXE = Path(r"C:\Users\eduar\Documents\dev\GTB\external_sources\spatcon64.exe")
 
@@ -59,11 +59,11 @@ def gtb_rescale_fad(spatcon_raw: np.ndarray) -> np.ndarray:
 
 @pytest.fixture(scope="module")
 def input_raster():
-    return gp.load_raster(gp.example_data("input"))
+    return ls.load_raster(ls.example_data("input"))
 
 
 def test_fad_accuracy_against_gtb_spatcon(input_raster):
-    """Verify bit-exact agreement between guidospy FAD and original GTB spatcon64.exe."""
+    """Verify bit-exact agreement between landschaft FAD and original GTB spatcon64.exe."""
     # Test on a representative 100x100 sub-patch containing fg, bg, and complex edges
     patch = input_raster.values[50:150, 50:150].copy()
 
@@ -71,7 +71,7 @@ def test_fad_accuracy_against_gtb_spatcon(input_raster):
         spatcon_raw = run_original_spatcon(patch, window_size=w)
         expected_density = gtb_rescale_fad(spatcon_raw)
 
-        res = gp.fad(patch, window_size=w)
+        res = ls.fad(patch, window_size=w)
 
         # Check raw density
         raw_val = np.asarray(res.raw_density)
@@ -85,7 +85,7 @@ def test_fad_synthetic_pure_foreground():
     """All foreground pixels (except 1 background pixel for compliance) should be Intact."""
     arr = np.full((30, 30), 2, dtype=np.uint8)
     arr[0, 0] = 1  # 1 background pixel to satisfy MSPA input validation
-    res = gp.fad(arr, window_size=7)
+    res = ls.fad(arr, window_size=7)
 
     # Core interior pixels away from the 1 background corner must have 100% density
     density = np.asarray(res.density)
@@ -101,7 +101,7 @@ def test_fad_synthetic_pure_background():
     # validate_mspa_input requires at least one FG pixel:
     arr[15, 15] = 2
 
-    res = gp.fad(arr, window_size=7)
+    res = ls.fad(arr, window_size=7)
     density = np.asarray(res.density)
     classes = np.asarray(res.classes)
     assert density[0, 0] == 101  # GTB background code
@@ -114,7 +114,7 @@ def test_fad_synthetic_missing_values():
     arr[0, :] = 0  # Missing row
     arr[10, 10] = 1 # Background dot
 
-    res = gp.fad(arr, window_size=7)
+    res = ls.fad(arr, window_size=7)
     density = np.asarray(res.density)
     classes = np.asarray(res.classes)
     assert (density[0, :] == 102).all()
@@ -124,7 +124,7 @@ def test_fad_synthetic_missing_values():
 def test_fad_multiscale(input_raster):
     """Test multiscale FAD across 5 scales on full test raster."""
     scales = [7, 13, 27]
-    res = gp.fad_multiscale(input_raster, window_sizes=scales)
+    res = ls.fad_multiscale(input_raster, window_sizes=scales)
 
     assert res.multiscale_map.shape == input_raster.shape
     assert len(res.single_scales) == 3
@@ -152,18 +152,18 @@ def test_fad_invalid_inputs():
     arr[10, 10] = 2
 
     with pytest.raises(ValueError, match="odd integer"):
-        gp.fad(arr, window_size=6)  # Even window size
+        ls.fad(arr, window_size=6)  # Even window size
 
     with pytest.raises(ValueError, match="odd integer"):
-        gp.fad(arr, window_size=2)  # Window size < 3
+        ls.fad(arr, window_size=2)  # Window size < 3
 
 
 def test_fad_write_raster_integration(tmp_path, input_raster):
     """Test saving FAD GeoTIFF with colormap and GDAL metadata."""
-    res = gp.fad(input_raster, window_size=7)
+    res = ls.fad(input_raster, window_size=7)
     out_file = tmp_path / "test_fad.tif"
 
-    gp.write_raster(res.density, out_file)
+    ls.write_raster(res.density, out_file)
     assert out_file.exists()
 
     # Re-read and check colormap

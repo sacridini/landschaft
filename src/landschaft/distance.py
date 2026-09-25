@@ -155,14 +155,14 @@ def euclidean_distance(
     stats_df = pd.DataFrame(stats_rows)
 
     dist_attrs = {
-        "guidospy_product": "EUCLIDEAN_DISTANCE_FLOAT",
+        "landschaft_product": "EUCLIDEAN_DISTANCE_FLOAT",
         "mean_fg_dist": st["mean_fg_distance"],
         "max_fg_dist": st["max_fg_distance"],
         "mean_bg_dist": st["mean_bg_distance"],
         "max_bg_dist": st["max_bg_distance"],
     }
     byte_attrs = {
-        "guidospy_product": "EUCLIDEAN_DISTANCE",
+        "landschaft_product": "EUCLIDEAN_DISTANCE",
         "colormap": "dist",
         "mean_fg_dist": st["mean_fg_distance"],
         "max_fg_dist": st["max_fg_distance"],

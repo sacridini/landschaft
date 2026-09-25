@@ -192,7 +192,7 @@ def mspa(
         result.name = "mspa"
         result.attrs = {
             "long_name": "MSPA classes",
-            "guidospy_product": "MSPA",
+            "landschaft_product": "MSPA",
             "mspa_connectivity": kw["connectivity"],
             "mspa_edge_width": kw["edge_width"],
             "mspa_transition": int(bool(transition)),

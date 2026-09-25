@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-import guidospy as gp
-from guidospy.restoration import (
+import landschaft as ls
+from landschaft.restoration import (
     RestorationCorridorResult,
     RestorationStatusResult,
     cost_distance,
@@ -20,7 +20,7 @@ from guidospy.restoration import (
 
 @pytest.fixture
 def input_path() -> Path:
-    return Path(__file__).resolve().parent.parent / "src" / "guidospy" / "data" / "input.tif"
+    return Path(__file__).resolve().parent.parent / "src" / "landschaft" / "data" / "input.tif"
 
 
 class TestRestorationStatus:

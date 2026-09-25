@@ -285,13 +285,13 @@ def gtn_components(
     stats_df = pd.DataFrame(stats_data)
 
     comp_attrs = {
-        "guidospy_product": "GTN_COMPONENTS_DATA",
+        "landschaft_product": "GTN_COMPONENTS_DATA",
         "num_components": nr_comp,
         "eca": eca_val,
         "doc": doc,
     }
     colored_attrs = {
-        "guidospy_product": "GTN_COMPONENTS",
+        "landschaft_product": "GTN_COMPONENTS",
         "colormap": "gtn_components",
         "num_components": nr_comp,
         "eca": eca_val,
@@ -337,7 +337,7 @@ class GTNImportanceResult:
             f"{len(self.nodes)} evaluated stepping-stone nodes (max dPC={self.max_node_dpc:.4f}%)>"
         )
 
-    def summary_text(self, title: str = "guidospy Connectivity Importance") -> str:
+    def summary_text(self, title: str = "landschaft Connectivity Importance") -> str:
         """Generate formatted report string matching GTB's ``_cs.txt``."""
         buf = io.StringIO()
         buf.write(f"{title}: Connectivity Importance(Node_max={self.max_node_dpc:.2f}, Link_max={self.max_link_dpc:.2f})\n")
@@ -632,15 +632,15 @@ def gtn_importance(
         colored[(importance_map <= ntop1) & core] = _GTB_NODE_HOT_1
 
     imp_attrs = {
-        "guidospy_product": "GTN_IMPORTANCE_MAP",
+        "landschaft_product": "GTN_IMPORTANCE_MAP",
         "max_link_dpc": max_link,
         "max_node_dpc": max_node,
     }
     id_attrs = {
-        "guidospy_product": "GTN_NODE_LINK_IDS",
+        "landschaft_product": "GTN_NODE_LINK_IDS",
     }
     colored_attrs = {
-        "guidospy_product": "GTN_IMPORTANCE",
+        "landschaft_product": "GTN_IMPORTANCE",
         "colormap": "gtn_importance",
         "max_link_dpc": max_link,
         "max_node_dpc": max_node,

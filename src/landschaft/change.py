@@ -306,7 +306,7 @@ def simple_change(
             dims=xr_tpl.dims,
             attrs={
                 **xr_tpl.attrs,
-                "guidospy_product": "SIMPLE_CHANGE",
+                "landschaft_product": "SIMPLE_CHANGE",
                 "stable_bg": res["stable_bg"],
                 "gain": res["gain"],
                 "loss": res["loss"],
@@ -360,7 +360,7 @@ def morphological_change(
             dims=xr_tpl.dims,
             attrs={
                 **xr_tpl.attrs,
-                "guidospy_product": "MORPHOLOGICAL_CHANGE",
+                "landschaft_product": "MORPHOLOGICAL_CHANGE",
                 "fg_area_t1": res["fg_area_t1"],
                 "fg_area_t2": res["fg_area_t2"],
                 "net_change": res["net_change"],
@@ -416,7 +416,7 @@ def fos_change(
             dims=xr_tpl.dims,
             attrs={
                 **xr_tpl.attrs,
-                "guidospy_product": "FOS_CHANGE",
+                "landschaft_product": "FOS_CHANGE",
                 "fg_gain": res["fg_gain"],
                 "fg_loss": res["fg_loss"],
                 "stable_bg": res["stable_bg"],

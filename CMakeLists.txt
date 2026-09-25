@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
-project(guidospy LANGUAGES CXX)
+project(landschaft LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(GUIDOSPY_OPENMP "Build with OpenMP" ON)
+option(LANDSCHAFT_OPENMP "Build with OpenMP" ON)
 
 find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 CONFIG REQUIRED)
@@ -28,7 +28,7 @@ add_library(gtbcore STATIC
 target_include_directories(gtbcore PUBLIC src/cpp)
 set_target_properties(gtbcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-if(GUIDOSPY_OPENMP)
+if(LANDSCHAFT_OPENMP)
     find_package(OpenMP COMPONENTS CXX)
     if(OpenMP_CXX_FOUND)
         target_link_libraries(gtbcore PUBLIC OpenMP::OpenMP_CXX)
@@ -53,4 +53,4 @@ else()
     target_compile_options(_core PRIVATE -ffp-contract=off -fno-fast-math)
 endif()
 
-install(TARGETS _core DESTINATION guidospy)
+install(TARGETS _core DESTINATION landschaft)

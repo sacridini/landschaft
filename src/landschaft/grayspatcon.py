@@ -129,7 +129,7 @@ def gray_spatial_convolution(
     if is_xr and xr_template is not None:
         attrs = {
             **xr_template.attrs,
-            "guidospy_product": "GRAY_SPATIAL_CONVOLUTION",
+            "landschaft_product": "GRAY_SPATIAL_CONVOLUTION",
             "spatial_metric": canonical_metric,
             "window_size": window_size,
             "mask_missing": mask_missing,

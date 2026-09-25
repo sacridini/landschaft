@@ -103,7 +103,7 @@ def contagion_pff(
         res = _core.compute_contagion_pff_float(arr, window_size, apply_gtb_mask, threads)
 
     attrs = {
-        "guidospy_product": "CONTAGION",
+        "landschaft_product": "CONTAGION",
         "metric": "Pff",
         "window_size": window_size,
         "colormap": "entropy",
@@ -161,7 +161,7 @@ def clustering_fac(
         res = _core.compute_clustering_fac_float(arr, window_size, apply_gtb_mask, threads)
 
     attrs = {
-        "guidospy_product": "CLUSTERING",
+        "landschaft_product": "CLUSTERING",
         "metric": "FAC",
         "window_size": window_size,
         "colormap": "entropy",

@@ -35,10 +35,10 @@ def example_data(name: str = "input") -> Path:
 
     Examples
     --------
-    >>> import guidospy as gp
-    >>> result = gp.mspa(gp.load_raster(gp.example_data("input")))
+    >>> import landschaft as ls
+    >>> result = ls.mspa(ls.load_raster(ls.example_data("input")))
     """
     if name not in EXAMPLE_DATA:
         raise ValueError(f"unknown example {name!r}; available: {', '.join(EXAMPLE_DATA)}")
-    path = resources.files("guidospy") / "data" / f"{name}.tif"
+    path = resources.files("landschaft") / "data" / f"{name}.tif"
     return Path(str(path))

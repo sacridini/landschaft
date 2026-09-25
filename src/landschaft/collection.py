@@ -92,8 +92,8 @@ class RasterInfo:
 class RasterCollection(Sequence):
     """Many rasters handled as one object; pixels are read only when processed.
 
-    Create it with :func:`guidospy.load_raster` given a list of paths, a
-    directory or a glob pattern. Pass it to :func:`guidospy.mspa` to process
+    Create it with :func:`landschaft.load_raster` given a list of paths, a
+    directory or a glob pattern. Pass it to :func:`landschaft.mspa` to process
     every raster in parallel (one thread per raster), or turn it into a lazy
     ``(file, y, x)`` stack with :meth:`to_stack` when all rasters share a grid.
     """
@@ -198,7 +198,7 @@ class RasterCollection(Sequence):
         """Lazy ``(file, y, x)`` DataArray, one dask chunk per raster.
 
         Requires a shared grid (see :attr:`same_grid`). Pixel values are not
-        checked here; :func:`guidospy.mspa` checks them when it runs.
+        checked here; :func:`landschaft.mspa` checks them when it runs.
         """
         if not self.same_grid:
             raise InvalidInputError(

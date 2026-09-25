@@ -151,7 +151,7 @@ def landscape_mosaic(
     res = _core.compute_landscape_mosaic(arr, window_size, output_classes, threads)
 
     attrs = {
-        "guidospy_product": "LANDSCAPE_MOSAIC",
+        "landschaft_product": "LANDSCAPE_MOSAIC",
         "output_classes": output_classes,
         "window_size": window_size,
         "colormap": "lm" if output_classes == 19 else None,

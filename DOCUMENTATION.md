@@ -1,6 +1,6 @@
-# guidospy: Complete Documentation & User Guide
+# landschaft: Complete Documentation & User Guide
 
-**guidospy** is a high-performance Python package reimplementing the complete scientific raster analysis suite of [GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/) developed by the European Commission Joint Research Centre (JRC).
+**landschaft** is a high-performance Python package reimplementing the complete scientific raster analysis suite of [GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/) developed by the European Commission Joint Research Centre (JRC).
 
 It provides a native **C++17 / OpenMP** core exposed through zero-copy **pybind11** wrappers, offering high-level Python APIs fully integrated with **numpy**, **xarray**, **rioxarray**, **pandas**, and **dask**.
 
@@ -46,8 +46,8 @@ It provides a native **C++17 / OpenMP** core exposed through zero-copy **pybind1
 
 ```bash
 # Clone the repository
-git clone https://github.com/sacridini/guidospy.git
-cd guidospy
+git clone https://github.com/sacridini/landschaft.git
+cd landschaft
 
 # Install dependencies and package in editable mode
 pip install .
@@ -56,9 +56,9 @@ pip install .
 ### With Conda / Mamba
 
 ```bash
-conda create -n guidospy -c conda-forge python=3.12 numpy pandas rasterio rioxarray xarray dask \
+conda create -n landschaft -c conda-forge python=3.12 numpy pandas rasterio rioxarray xarray dask \
       scikit-build-core pybind11 cmake ninja pytest scipy
-conda activate guidospy
+conda activate landschaft
 pip install --no-build-isolation -e .
 ```
 
@@ -72,20 +72,20 @@ GuidosToolbox standard binary format uses single-band `uint8` rasters:
 * `2`: Foreground (focal habitat / forest)
 
 ```python
-import guidospy as gp
+import landschaft as ls
 
 # 1. Load sample dataset or GeoTIFF
-data = gp.load_raster(gp.example_data("input"))  # 1000x1000 binary map
+data = ls.load_raster(ls.example_data("input"))  # 1000x1000 binary map
 
 # 2. Run MSPA
-mspa_map = gp.mspa(data, connectivity=8, edge_width=1)
+mspa_map = ls.mspa(data, connectivity=8, edge_width=1)
 
 # 3. Calculate Fragmentation (FAD)
-fad_map = gp.fad(data, window_size=27)
+fad_map = ls.fad(data, window_size=27)
 
 # 4. Save to GeoTIFF with original GTB colormap
-gp.write_raster(mspa_map, "output_mspa.tif")
-gp.write_raster(fad_map.fad_map, "output_fad.tif")
+ls.write_raster(mspa_map, "output_mspa.tif")
+ls.write_raster(fad_map.fad_map, "output_fad.tif")
 ```
 
 ---
@@ -96,31 +96,31 @@ gp.write_raster(fad_map.fad_map, "output_fad.tif")
 Loads a GeoTIFF or raster file as a georeferenced `xarray.DataArray`. If passed a folder or glob pattern, returns a `RasterCollection`.
 ```python
 # Single file
-da = gp.load_raster("landcover.tif", validate="mspa")  # checks 0/1/2 coding
-raw = gp.load_raster("dem.tif", validate=None)         # loads raw continuous data
+da = ls.load_raster("landcover.tif", validate="mspa")  # checks 0/1/2 coding
+raw = ls.load_raster("dem.tif", validate=None)         # loads raw continuous data
 
 # Multiple files / folder
-collection = gp.load_raster("tiles/*.tif")
+collection = ls.load_raster("tiles/*.tif")
 ```
 
 ### `reclassify`
 Conveniently reclassifies any landcover classification map into GTB binary coding (`0`, `1`, `2`):
 ```python
-clc = gp.load_raster("corine.tif", validate=None)
+clc = ls.load_raster("corine.tif", validate=None)
 # Classes 23, 24, 25 are forest (foreground=2), nodata 48 is missing=0, others background=1
-forest = gp.reclassify(clc, foreground=[23, 24, 25], missing=[48])
+forest = ls.reclassify(clc, foreground=[23, 24, 25], missing=[48])
 
 # Using lambda condition:
-dense = gp.reclassify(tree_cover, foreground=lambda arr: arr >= 40)
+dense = ls.reclassify(tree_cover, foreground=lambda arr: arr >= 40)
 ```
 
 ### `write_raster`
 Writes a 2D array or `xarray.DataArray` to a GeoTIFF with optional LZW/Deflate compression and the official GuidosToolbox colormap:
 ```python
-gp.write_raster(result_da, "output.tif", colormap="auto")
+ls.write_raster(result_da, "output.tif", colormap="auto")
 ```
 
-### Available Colormaps (`guidospy.io`)
+### Available Colormaps (`landschaft.io`)
 Extracted bit-for-bit from original GTB `.sav` colortables:
 * `mspa_colormap(transition=True)`
 * `gtn_components_colormap()`
@@ -141,7 +141,7 @@ Extracted bit-for-bit from original GTB `.sav` colortables:
 MSPA segments foreground habitat into 7 mutually exclusive morphological classes and openings based on geometric connectivity and distance to boundaries.
 
 ```python
-result = gp.mspa(
+result = ls.mspa(
     data,
     connectivity=8,   # Foreground connectivity: 8 (default) or 4
     edge_width=1,     # Effective edge width in pixels (1 to 255)
@@ -151,7 +151,7 @@ result = gp.mspa(
 )
 ```
 
-### MSPA Classes Table (`gp.MSPA_CLASSES`)
+### MSPA Classes Table (`ls.MSPA_CLASSES`)
 
 | Pixel Value | Class Name | Description |
 | :---: | :--- | :--- |
@@ -168,7 +168,7 @@ result = gp.mspa(
 
 ### Class Statistics
 ```python
-df_stats = gp.mspa_stats(result)
+df_stats = ls.mspa_stats(result)
 print(df_stats)
 ```
 
@@ -179,10 +179,10 @@ print(df_stats)
 Identifies functional components and ranks the structural importance of individual habitat nodes and corridors.
 
 ```python
-from guidospy import gtn_components, gtn_importance, conefor_inputs
+from landschaft import gtn_components, gtn_importance, conefor_inputs
 
 # Step 1: Run MSPA to get segmented classes
-mspa_map = gp.mspa(data, edge_width=2)
+mspa_map = ls.mspa(data, edge_width=2)
 
 # Step 2: Extract connected network components
 net = gtn_components(mspa_map, min_patch_size=1)
@@ -211,14 +211,14 @@ conefor_inputs(mspa_map, output_dir="./conefor_files")
 Calculates foreground pixel proportion within square moving windows.
 ```python
 # Single window size
-fad_res = gp.fad(data, window_size=27)
+fad_res = ls.fad(data, window_size=27)
 print(f"Average FAD: {fad_res.average_fad:.2f}%")
 
 # Multiscale FAD across 5 default GTB window scales: 7, 13, 27, 81, 243
-multi = gp.fad_multiscale(data, window_sizes=[7, 13, 27, 81, 243])
+multi = ls.fad_multiscale(data, window_sizes=[7, 13, 27, 81, 243])
 # multi.fad_maps is a dictionary mapping window_size -> DataArray
 ```
-**FAD Classes (`gp.FAD_CLASSES`)**:
+**FAD Classes (`ls.FAD_CLASSES`)**:
 1. Rare ($0..9\%$)
 2. Patchy ($10..39\%$)
 3. Transitional ($40..59\%$)
@@ -228,7 +228,7 @@ multi = gp.fad_multiscale(data, window_sizes=[7, 13, 27, 81, 243])
 ### Euclidean Distance Transform
 Computes exact Signed Euclidean Distance transform using Meijster's $O(N)$ algorithm:
 ```python
-dist_res = gp.euclidean_distance(data)
+dist_res = ls.euclidean_distance(data)
 # dist_res.distance_float: continuous distance (positive inside FG, negative inside BG)
 # dist_res.distance_byte : 256-level byte-scaled distance map for GIS visualization
 # dist_res.mean_fg_dist  : average distance from perimeter to interior
@@ -239,12 +239,12 @@ dist_res = gp.euclidean_distance(data)
 Measures textural heterogeneity and spatial order across 4 directions ($0^\circ, 45^\circ, 90^\circ, 135^\circ$):
 ```python
 # Global entropy indices
-ent_res = gp.spatial_entropy(data)
+ent_res = ls.spatial_entropy(data)
 print(f"Spatial Entropy H: {ent_res.entropy:.4f}")
 print(f"Relative Spatial Entropy H_rel: {ent_res.relative_entropy:.4f}")
 
 # Moving-window local entropy map
-ent_map = gp.spatial_entropy_map(data, window_size=50)
+ent_map = ls.spatial_entropy_map(data, window_size=50)
 ```
 
 ---
@@ -259,21 +259,21 @@ Analyzes spatial mixing between three landcover components:
 ### Landscape Mosaic (LM)
 ```python
 # 19-class or 103-class Landscape Mosaic
-lm19 = gp.landscape_mosaic(data, window_size=27, output_classes=19)
-lm103 = gp.landscape_mosaic(data, window_size=27, output_classes=103)
+lm19 = ls.landscape_mosaic(data, window_size=27, output_classes=19)
+lm103 = ls.landscape_mosaic(data, window_size=27, output_classes=103)
 
 # 103-class barycentric statistics breakdown
-stats = gp.landscape_mosaic_stats(lm103)
+stats = ls.landscape_mosaic_stats(lm103)
 print(stats)
 ```
 
 ### Contagion ($P_{ff}$) & Area Clustering (FAC)
 ```python
 # Pff: pixel co-occurrence probability of foreground
-pff = gp.contagion_pff(data, window_size=7)
+pff = ls.contagion_pff(data, window_size=7)
 
 # FAC: Foreground Area Clustering normalized by density (Pff / Pf)
-fac = gp.clustering_fac(data, window_size=7)
+fac = ls.clustering_fac(data, window_size=7)
 ```
 
 ---
@@ -283,7 +283,7 @@ fac = gp.clustering_fac(data, window_size=7)
 ### Restoration Status (RSS)
 Evaluates landscape connectivity before and after hypothetical restoration of all non-core pixels:
 ```python
-rss = gp.restoration_status(mspa_map)
+rss = ls.restoration_status(mspa_map)
 print(rss.summary())
 # Attributes:
 # - current_eca, potential_eca
@@ -296,20 +296,20 @@ print(rss.summary())
 Anisotropic 8-neighbor Dijkstra least-cost routing across resistance surfaces:
 ```python
 # 1. Cost Distance Map from Source Mask
-cost_map = gp.cost_distance(resistance_surface, source_mask)
+cost_map = ls.cost_distance(resistance_surface, source_mask)
 
 # 2. Two-ended Least Cost Path
-lcp = gp.least_cost_path(resistance_surface, marker_a, marker_b)
+lcp = ls.least_cost_path(resistance_surface, marker_a, marker_b)
 print(f"Total Path Cost: {lcp.total_cost:.2f}, Length: {lcp.path_length} pixels")
 
 # 3. Restoration Corridor (Dijkstra forward-backward intersection)
-corridor = gp.restoration_corridor(resistance_surface, marker_a, marker_b, corridor_width=3)
+corridor = ls.restoration_corridor(resistance_surface, marker_a, marker_b, corridor_width=3)
 ```
 
 ### Landscape Parcellation
 Computes patch division, effective mesh size, and splitting indices:
 ```python
-parc = gp.parcellation(data, connectivity=8, return_labels=True)
+parc = ls.parcellation(data, connectivity=8, return_labels=True)
 print(parc.summary())
 # Class-level metrics table:
 # - APS (Average Patch Size)
@@ -321,7 +321,7 @@ print(parc.summary())
 ### Habitat Contortion
 Calculates boundary tortuosity and perimeter inflection points:
 ```python
-contortion_map = gp.contortion(data, min_area=1)
+contortion_map = ls.contortion(data, min_area=1)
 # Values represent shape tortuosity per component
 ```
 
@@ -332,7 +332,7 @@ contortion_map = gp.contortion(data, min_area=1)
 ### Simple Change (A $\to$ B)
 Computes 4-class binary transition:
 ```python
-sc = gp.simple_change(map_t1, map_t2)
+sc = ls.simple_change(map_t1, map_t2)
 print(sc.summary())
 # sc.change_map values:
 # 11: Stable Background
@@ -345,7 +345,7 @@ print(sc.summary())
 ### Morphological Change Detection (MCD)
 Eliminates spurious boundary chatter through geodesic reconstruction of core changes ($d > 2$) and computes landscape elasticity:
 ```python
-mcd = gp.morphological_change(map_t1, map_t2)
+mcd = ls.morphological_change(map_t1, map_t2)
 print(mcd.summary())
 # mcd.change_map values:
 # 11: Stable BG
@@ -359,7 +359,7 @@ print(mcd.summary())
 ### Fragmentation (FOS) Change
 Produces continuous delta FOS maps and a $6 \times 6$ density class transition matrix:
 ```python
-fc = gp.fos_change(fos_t1, fos_t2)
+fc = ls.fos_change(fos_t1, fos_t2)
 print(fc.summary())
 print(fc.matrix_6x6)
 # - fc.change_map: delta FOS shifted by +100
@@ -370,9 +370,9 @@ print(fc.matrix_6x6)
 ### Continuous Grayscale Spatial Convolution (GraySpatCon)
 Computes moving-window spatial metrics over continuous grayscale/percentage rasters ($0..100$):
 ```python
-gsc_mean = gp.gray_spatial_convolution(img, metric="mean", window_size=7)
-gsc_std = gp.gray_spatial_convolution(img, metric="stddev", window_size=7)
-gsc_ent = gp.gray_spatial_convolution(img, metric="shannon_diversity", window_size=7)
+gsc_mean = ls.gray_spatial_convolution(img, metric="mean", window_size=7)
+gsc_std = ls.gray_spatial_convolution(img, metric="stddev", window_size=7)
+gsc_ent = ls.gray_spatial_convolution(img, metric="shannon_diversity", window_size=7)
 ```
 **Supported Metrics**:
 * `"mean"` / `"average"`
@@ -392,10 +392,10 @@ Process thousands of raster tiles efficiently without exhausting system RAM:
 
 ```python
 # Header-only scan of directory
-tiles = gp.load_raster("path/to/tiles/")
+tiles = ls.load_raster("path/to/tiles/")
 
 # Batch process with bounded memory (max 16 GB RAM used concurrently)
-results = gp.mspa_batch(
+results = ls.mspa_batch(
     tiles,
     output_dir="./mspa_output",
     edge_width=2,
@@ -409,7 +409,7 @@ results = gp.mspa_batch(
 
 ## 12. Accuracy & Bit-for-Bit Verification
 
-`guidospy` is validated by an automated test suite containing **222 test cases**:
+`landschaft` is validated by an automated test suite containing **222 test cases**:
 * **MSPA**: Tested against `mspa_win64.exe` on 1,200+ random configurations and full CORINE datasets (0 differing pixels).
 * **FAD & Contagion**: Tested against original JRC `spatcon64` binaries (bit-exact).
 * **Landscape Mosaic**: Tested against JRC `recode64` binaries (bit-exact).

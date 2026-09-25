@@ -1,8 +1,17 @@
 # Changelog
 
-All notable changes to guidospy are documented here. The project follows
+All notable changes to landschaft are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may still change
 between minor versions.
+
+## [Unreleased]
+
+### Changed
+- **Project renamed from `guidospy` to `landschaft`** (repository:
+  https://github.com/sacridini/landschaft). Use `import landschaft as ls`.
+  - Output attribute `guidospy_product` is now `landschaft_product` (also in GeoTIFF tags).
+  - Environment variables `GUIDOSPY_MSPA_EXE`, `GUIDOSPY_PROFILE` and the CMake option
+    `GUIDOSPY_OPENMP` are now `LANDSCHAFT_MSPA_EXE`, `LANDSCHAFT_PROFILE` and `LANDSCHAFT_OPENMP`.
 
 ## [0.4.0] - 2026-09-25
 
@@ -62,4 +71,4 @@ First release: Morphological Spatial Pattern Analysis (MSPA).
   run-length connected components, task-parallel pipeline stages.
 - Test-suite: unit tests of the primitives, MSPA semantics, I/O and API, and
   pixel-by-pixel comparison with outputs of the original executable
-  (`tests/data/reference`, optional live comparison via `GUIDOSPY_MSPA_EXE`).
+  (`tests/data/reference`, optional live comparison via `LANDSCHAFT_MSPA_EXE`).

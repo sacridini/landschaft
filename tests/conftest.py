@@ -29,7 +29,7 @@ def reference_dir() -> Path:
 def mspa_exe() -> Path:
     exe = find_executable()
     if exe is None:
-        pytest.skip("set GUIDOSPY_MSPA_EXE to the original GTB mspa executable to run live comparisons")
+        pytest.skip("set LANDSCHAFT_MSPA_EXE to the original GTB mspa executable to run live comparisons")
     return exe
 
 

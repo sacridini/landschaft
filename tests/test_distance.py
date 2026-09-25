@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests for Euclidean Distance Transform in guidospy.
+"""Tests for Euclidean Distance Transform in landschaft.
 
 Includes:
 1. Verification against reference distance formulations.
@@ -15,12 +15,12 @@ import numpy as np
 import pytest
 import rasterio
 
-import guidospy as gp
+import landschaft as ls
 
 
 @pytest.fixture(scope="module")
 def input_raster():
-    return gp.load_raster(gp.example_data("input"))
+    return ls.load_raster(ls.example_data("input"))
 
 
 def test_distance_synthetic_square_patch():
@@ -28,7 +28,7 @@ def test_distance_synthetic_square_patch():
     arr = np.ones((20, 20), dtype=np.uint8) # Background = 1
     arr[7:13, 7:13] = 2                     # Foreground = 2
 
-    res = gp.euclidean_distance(arr)
+    res = ls.euclidean_distance(arr)
 
     # 1. Sign semantics: foreground positive, background negative
     signed = np.asarray(res.signed_distance)
@@ -57,7 +57,7 @@ def test_distance_synthetic_square_patch():
 
 def test_distance_real_landscape(input_raster):
     """Test distance transform on input.tif and check expected metrics."""
-    res = gp.euclidean_distance(input_raster, pixel_size=30.0)
+    res = ls.euclidean_distance(input_raster, pixel_size=30.0)
 
     assert res.signed_distance.shape == input_raster.shape
     assert res.byte_map.shape == input_raster.shape
@@ -77,10 +77,10 @@ def test_distance_real_landscape(input_raster):
 
 def test_distance_write_raster_integration(tmp_path, input_raster):
     """Test saving Euclidean distance GeoTIFF with colormap and tags."""
-    res = gp.euclidean_distance(input_raster)
+    res = ls.euclidean_distance(input_raster)
     out_file = tmp_path / "test_dist.tif"
 
-    gp.write_raster(res.byte_map, out_file)
+    ls.write_raster(res.byte_map, out_file)
     assert out_file.exists()
 
     with rasterio.open(out_file) as src:

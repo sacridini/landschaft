@@ -1,4 +1,4 @@
-# guidospy
+# landschaft
 
 Fast Python reimplementation of [GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/)
 raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / dask / rasterio API.
@@ -14,23 +14,23 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 📖 **For complete documentation and usage examples for every module, see [DOCUMENTATION.md](DOCUMENTATION.md).**
 
 ```python
-import guidospy as gp
+import landschaft as ls
 
-data = gp.load_raster("forest.tif")        # reads and checks the 0/1/2 coding
-result = gp.mspa(data, edge_width=2)        # georeferenced xarray.DataArray
-gp.write_raster(result, "forest_mspa.tif")  # GeoTIFF with the GTB colour table
-print(gp.mspa_stats(result))                # class areas, as in GTB
+data = ls.load_raster("forest.tif")        # reads and checks the 0/1/2 coding
+result = ls.mspa(data, edge_width=2)        # georeferenced xarray.DataArray
+ls.write_raster(result, "forest_mspa.tif")  # GeoTIFF with the GTB colour table
+print(ls.mspa_stats(result))                # class areas, as in GTB
 ```
 
 ## Installation
 
-guidospy builds from source with a C++17 compiler (MSVC 2019+, GCC 9+, Clang 10+)
+landschaft builds from source with a C++17 compiler (MSVC 2019+, GCC 9+, Clang 10+)
 and OpenMP if available. Recommended with conda:
 
 ```bash
-conda create -n guidospy -c conda-forge python=3.12 numpy pandas rasterio rioxarray xarray dask \
+conda create -n landschaft -c conda-forge python=3.12 numpy pandas rasterio rioxarray xarray dask \
       scikit-build-core pybind11 cmake ninja pytest scipy
-conda activate guidospy
+conda activate landschaft
 pip install --no-build-isolation -e .
 ```
 
@@ -44,10 +44,10 @@ On Windows, with only the Visual Studio *Build Tools* installed, pick the genera
 GTB's sample maps ship with the package, so everything below can be tried right away:
 
 ```python
-gp.EXAMPLE_DATA                       # name -> description
-data = gp.load_raster(gp.example_data("input"))                 # MSPA-ready 1000 x 1000 map
-clc = gp.load_raster(gp.example_data("clc"), validate=None)     # CORINE land cover, 2000 x 2000
-forest = gp.reclassify(clc, foreground=[23, 24, 25])            # forests as foreground
+ls.EXAMPLE_DATA                       # name -> description
+data = ls.load_raster(ls.example_data("input"))                 # MSPA-ready 1000 x 1000 map
+clc = ls.load_raster(ls.example_data("clc"), validate=None)     # CORINE land cover, 2000 x 2000
+forest = ls.reclassify(clc, foreground=[23, 24, 25])            # forests as foreground
 ```
 
 | name | content |
@@ -67,15 +67,15 @@ GTB's *MSPA compliance* check.
 `reclassify` builds that input from categorical or continuous maps:
 
 ```python
-lc = gp.load_raster("corine.tif", validate=None)
-forest = gp.reclassify(lc, foreground=[23, 24, 25], missing=[48])  # nodata -> missing too
-tree_cover = gp.reclassify(gp.load_raster("cover.tif", validate=None), foreground=lambda a: a >= 30)
+lc = ls.load_raster("corine.tif", validate=None)
+forest = ls.reclassify(lc, foreground=[23, 24, 25], missing=[48])  # nodata -> missing too
+tree_cover = ls.reclassify(ls.load_raster("cover.tif", validate=None), foreground=lambda a: a >= 30)
 ```
 
 ### MSPA
 
 ```python
-result = gp.mspa(
+result = ls.mspa(
     data,
     connectivity=8,   # foreground connectivity, GTB "FGconn" (8 or 4)
     edge_width=1,     # effective edge width in pixels, GTB "EdgeWidth"
@@ -90,10 +90,10 @@ processed slice by slice; with dask the slices run in parallel and lazily:
 
 ```python
 stack = xr.open_mfdataset(...)["forest"].chunk({"time": 1})
-gp.mspa(stack).to_netcdf("mspa_stack.nc")
+ls.mspa(stack).to_netcdf("mspa_stack.nc")
 ```
 
-Output classes (`gp.MSPA_CLASSES`):
+Output classes (`ls.MSPA_CLASSES`):
 
 | value | class | value | class |
 |---|---|---|---|
@@ -111,11 +111,11 @@ returns a `RasterCollection`. The collection reads only the file headers, checks
 them (existence, band count, `uint8`) and holds no pixels in memory:
 
 ```python
-tiles = gp.load_raster("tiles/")              # or "tiles/*.tif", or [path1, path2, ...]
+tiles = ls.load_raster("tiles/")              # or "tiles/*.tif", or [path1, path2, ...]
 tiles                                          # <RasterCollection: 3120 rasters, different grids, ...>
 
-gp.mspa(tiles, edge_width=2, output_dir="out/", max_memory="16GB")   # -> list of BatchResult
-small = gp.mspa(tiles[:10])                    # no output_dir: list of DataArrays in memory
+ls.mspa(tiles, edge_width=2, output_dir="out/", max_memory="16GB")   # -> list of BatchResult
+small = ls.mspa(tiles[:10])                    # no output_dir: list of DataArrays in memory
 ```
 
 Passed to `mspa`, the collection is processed one raster per thread. Each thread
@@ -134,15 +134,15 @@ releases the GIL, so the threads run truly in parallel.
 
 When all rasters share the same grid (e.g. a time series of one tile),
 `load_raster(..., stack=True)` returns a lazy `(file, y, x)` DataArray with one
-dask chunk per file, and `gp.mspa(stack)` processes it in parallel with dask.
+dask chunk per file, and `ls.mspa(stack)` processes it in parallel with dask.
 
-`gp.mspa_batch(inputs, output_dir, ...)` does the same as
-`gp.mspa(collection, output_dir=...)` and accepts paths, directories or collections directly.
+`ls.mspa_batch(inputs, output_dir, ...)` does the same as
+`ls.mspa(collection, output_dir=...)` and accepts paths, directories or collections directly.
 
 ## API reference
 
-All functions are available from the top-level package (`import guidospy as gp`);
-their docstrings (`help(gp.mspa)`) give every detail.
+All functions are available from the top-level package (`import landschaft as ls`);
+their docstrings (`help(ls.mspa)`) give every detail.
 
 | function | purpose |
 |---|---|
@@ -162,7 +162,7 @@ their docstrings (`help(gp.mspa)`) give every detail.
 
 Parameter correspondence with GuidosToolbox:
 
-| GTB | guidospy | values |
+| GTB | landschaft | values |
 |---|---|---|
 | Foreground connectivity (FGconn) | `connectivity` | 8 (default), 4 |
 | EdgeWidth | `edge_width` | 1 (default) to 255 (GTB's GUI allows up to 100) |
@@ -171,16 +171,16 @@ Parameter correspondence with GuidosToolbox:
 
 ## Versioning
 
-guidospy follows [Semantic Versioning](https://semver.org/); the current version is
-**0.1.0** (`gp.__version__`). While below 1.0, minor versions may change the API.
+landschaft follows [Semantic Versioning](https://semver.org/); the current version is
+**0.1.0** (`ls.__version__`). While below 1.0, minor versions may change the API.
 Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Performance
 
 `python tools/benchmark.py --exe <mspa executable>` (bundled example maps), on a laptop Ryzen 7 7730U
-(8 cores, 15 W). The original's time includes its TIFF I/O. guidospy's is in memory:
+(8 cores, 15 W). The original's time includes its TIFF I/O. landschaft's is in memory:
 
-| map | FGconn_EdgeWidth | GTB mspa | guidospy, 1 thread | guidospy, 16 threads | identical |
+| map | FGconn_EdgeWidth | GTB mspa | landschaft, 1 thread | landschaft, 16 threads | identical |
 |---|---|---|---|---|---|
 | GTB input.tif 1000×1000 | 8_1 | 0.64 s | 0.11 s | 0.09 s | yes |
 | GTB input.tif 1000×1000 | 4_20 | 0.97 s | 0.14 s | 0.13 s | yes |
@@ -210,7 +210,7 @@ Expect more on workstations and servers.
 
 ## Exactness and tests
 
-guidospy is a line-by-line port of GTB's `fsp.c` (the `mspa` executable, run with
+landschaft is a line-by-line port of GTB's `fsp.c` (the `mspa` executable, run with
 `-disk` as GTB does) and of the miallib routines it calls (`sqedt`, `ced`,
 `binOIthin_FIFO`, `wsfah`, `label`, `set_regions`, …). It keeps their integer and
 float types, neighbour orders and queue orders, and their quirks, e.g. the
@@ -218,13 +218,13 @@ replicated frame of `fm_preproc2` that leaves the last row and column empty.
 
 ```bash
 pytest                                   # 160+ tests
-GUIDOSPY_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live comparison
+LANDSCHAFT_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live comparison
 ```
 
 * `tests/test_reference.py` compares pixel by pixel with outputs of the original
   executable stored in `tests/data/reference` (GTB's sample map with 7 parameter
   sets and 10 synthetic scenes with 4 parameter sets). With
-  `GUIDOSPY_MSPA_EXE` set, it also runs the executable live on random scenes and
+  `LANDSCHAFT_MSPA_EXE` set, it also runs the executable live on random scenes and
   parameters. `tools/make_reference.py` regenerates the stored outputs.
 * During development, 1,200 random cases (5 scene types, connectivity 4/8,
   edge widths 1 to 10, internal on/off) plus the 2000×2000 CORINE map with edge
@@ -234,14 +234,14 @@ GUIDOSPY_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live comp
   The I/O and API tests cover validation, georeferencing, colour tables,
   xarray/dask and batch processing.
 
-Set `GUIDOSPY_PROFILE=1` to print the time of every MSPA stage.
+Set `LANDSCHAFT_PROFILE=1` to print the time of every MSPA stage.
 
 ## Limitations
 
 * MSPA is a global operator: the whole map must fit in memory (≈30 bytes/pixel).
   There is no tiling yet. GTB's "MSPA tiling" is approximate by design.
 * The original stores geodesic offsets in 16-bit integers and distances in 32 bits.
-  guidospy reproduces them. For maps with a side of 46,000 px or more, the fast
+  landschaft reproduces them. For maps with a side of 46,000 px or more, the fast
   distance path is disabled and the original arithmetic is used.
 * Eigen is not used yet: MSPA's hot paths are queue propagations and byte
   operations that the compiler already vectorises. Eigen will be considered for
@@ -249,8 +249,8 @@ Set `GUIDOSPY_PROFILE=1` to print the time of every MSPA stage.
 
 ## License and credits
 
-GPL-3.0-or-later. The example maps in `src/guidospy/data` come from the
-[GTB repository](https://github.com/ec-jrc/GTB) (GPL-3.0). guidospy ports code from GuidosToolbox and miallib, © European
+GPL-3.0-or-later. The example maps in `src/landschaft/data` come from the
+[GTB repository](https://github.com/ec-jrc/GTB) (GPL-3.0). landschaft ports code from GuidosToolbox and miallib, © European
 Union (Joint Research Centre), authors Pierre Soille, Peter Vogt et al., both
 GPL-3.0-or-later. GTB's `mspa` notes that its interface is made available for
 non-commercial purposes. Contact the JRC for commercial use of MSPA.

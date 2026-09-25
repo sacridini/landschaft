@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-import guidospy as gp
+import landschaft as ls
 
 SPATCON_EXE = r"C:\Users\eduar\Documents\dev\GTB\external_sources\spatcon64.exe"
 RECODE_EXE = r"C:\Users\eduar\Documents\dev\GTB\external_sources\recode64.exe"
@@ -59,7 +59,7 @@ def test_landscape_mosaic_pure_classes():
     data[10:, :10] = 3   # dev
     data[10:, 10:] = 0   # missing
 
-    lm19 = gp.landscape_mosaic(data, window_size=3, output_classes=19)
+    lm19 = ls.landscape_mosaic(data, window_size=3, output_classes=19)
     assert lm19.shape == (20, 20)
     assert lm19.dtype == np.uint8
 
@@ -71,7 +71,7 @@ def test_landscape_mosaic_pure_classes():
     assert lm19[5, 15] == 17  # Pure forest (100%) -> 17
     assert lm19[15, 5] == 19  # Pure developed (100%) -> 19
 
-    lm103 = gp.landscape_mosaic(data, window_size=3, output_classes=103)
+    lm103 = ls.landscape_mosaic(data, window_size=3, output_classes=103)
     assert lm103[5, 5] == 180   # 103-code for pure agr
     assert lm103[5, 15] == 170  # 103-code for pure for
     assert lm103[15, 5] == 190  # 103-code for pure dev
@@ -84,7 +84,7 @@ def test_landscape_mosaic_stats():
     data[:15, 15:] = 2
     data[15:, :] = 3
 
-    df = gp.landscape_mosaic_stats(data, window_size=5)
+    df = ls.landscape_mosaic_stats(data, window_size=5)
     assert isinstance(df, pd.DataFrame)
     assert "class_code" in df.columns
     assert "pixel_count" in df.columns
@@ -102,9 +102,9 @@ def test_landscape_mosaic_xarray_metadata():
         dims=("y", "x"),
         attrs={"crs": "EPSG:32632"},
     )
-    res = gp.landscape_mosaic(da, window_size=3)
+    res = ls.landscape_mosaic(da, window_size=3)
     assert isinstance(res, xr.DataArray)
-    assert res.attrs["guidospy_product"] == "LANDSCAPE_MOSAIC"
+    assert res.attrs["landschaft_product"] == "LANDSCAPE_MOSAIC"
     assert res.attrs["output_classes"] == 19
     assert res.attrs["window_size"] == 3
     assert res.attrs["colormap"] == "lm"
@@ -113,11 +113,11 @@ def test_landscape_mosaic_xarray_metadata():
 def test_invalid_parameters():
     data = np.ones((10, 10), dtype=np.uint8)
     with pytest.raises(ValueError, match="odd integer"):
-        gp.landscape_mosaic(data, window_size=4)
+        ls.landscape_mosaic(data, window_size=4)
     with pytest.raises(ValueError, match="output_classes must be either 19 or 103"):
-        gp.landscape_mosaic(data, window_size=3, output_classes=50)
+        ls.landscape_mosaic(data, window_size=3, output_classes=50)
     with pytest.raises(ValueError, match="Landscape Mosaic input must contain only classes"):
-        gp.landscape_mosaic(np.array([[1, 4]], dtype=np.uint8), window_size=3)
+        ls.landscape_mosaic(np.array([[1, 4]], dtype=np.uint8), window_size=3)
 
 
 @pytest.mark.skipif(not HAS_GTB_BINARIES, reason="GTB binaries or recodelm103.sav not found")
@@ -127,16 +127,16 @@ def test_accuracy_against_gtb_spatcon_and_recode():
 
     # 1. Compare 103-class output
     gtb_103, gtb_19 = run_gtb_lm(sample, window=7)
-    py_103 = gp.landscape_mosaic(sample, window_size=7, output_classes=103)
-    py_19 = gp.landscape_mosaic(sample, window_size=7, output_classes=19)
+    py_103 = ls.landscape_mosaic(sample, window_size=7, output_classes=103)
+    py_19 = ls.landscape_mosaic(sample, window_size=7, output_classes=19)
 
     np.testing.assert_array_equal(py_103, gtb_103)
     np.testing.assert_array_equal(py_19, gtb_19)
 
     # 2. Compare larger window 13
     gtb_103_w13, gtb_19_w13 = run_gtb_lm(sample, window=13)
-    py_103_w13 = gp.landscape_mosaic(sample, window_size=13, output_classes=103)
-    py_19_w13 = gp.landscape_mosaic(sample, window_size=13, output_classes=19)
+    py_103_w13 = ls.landscape_mosaic(sample, window_size=13, output_classes=103)
+    py_19_w13 = ls.landscape_mosaic(sample, window_size=13, output_classes=19)
 
     np.testing.assert_array_equal(py_103_w13, gtb_103_w13)
     np.testing.assert_array_equal(py_19_w13, gtb_19_w13)

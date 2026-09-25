@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from scipy import ndimage as ndi
 
-from guidospy._core import detail as D
+from landschaft._core import detail as D
 
 STRUCT = {4: ndi.generate_binary_structure(2, 1), 8: ndi.generate_binary_structure(2, 2)}
 

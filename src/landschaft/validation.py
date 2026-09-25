@@ -56,13 +56,13 @@ def validate_mspa_input(data, *, spatial_only: bool = True) -> None:
     if values.dtype != np.uint8:
         raise InvalidInputError(
             f"MSPA-compliant map required: map is of type {values.dtype}, not uint8 (BYTE). "
-            "Convert it with guidospy.reclassify() or astype('uint8')."
+            "Convert it with landschaft.reclassify() or astype('uint8')."
         )
     lo, hi = _minmax(values)
     if hi > FOREGROUND:
         raise InvalidInputError(
             f"MSPA-compliant map required: map maximum is {hi}, larger than 2. Use 0 = missing, "
-            "1 = background, 2 = foreground (see guidospy.reclassify())."
+            "1 = background, 2 = foreground (see landschaft.reclassify())."
         )
     if hi < FOREGROUND:
         raise InvalidInputError("MSPA-compliant map required: map has no foreground (value 2).")

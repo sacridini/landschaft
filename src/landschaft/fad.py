@@ -182,7 +182,7 @@ def fad(
     )
 
     attrs = {
-        "guidospy_product": "FAD",
+        "landschaft_product": "FAD",
         "window_size": window_size,
         "average_fad": avg_fad,
         "colormap": "fad",
@@ -236,12 +236,12 @@ def fad_multiscale(
     raw_single_scales: dict[int, xr.DataArray | np.ndarray] = {}
 
     for w, sm, rm in zip(ws_list, raw_res["single_scale_maps"], raw_res["raw_densities"]):
-        attrs = {"guidospy_product": "FAD", "window_size": w, "colormap": "fad"}
+        attrs = {"landschaft_product": "FAD", "window_size": w, "colormap": "fad"}
         single_scales[w] = _wrap_as_dataarray(sm, data, f"fad_{w}", attrs)
         raw_single_scales[w] = _wrap_as_dataarray(rm, data, f"fad_raw_{w}")
 
     ms_map = raw_res["multiscale_map"]
-    ms_attrs = {"guidospy_product": "FAD_MULTISCALE", "colormap": "fad"}
+    ms_attrs = {"landschaft_product": "FAD_MULTISCALE", "colormap": "fad"}
     wrapped_ms = _wrap_as_dataarray(ms_map, data, "fad_multiscale", ms_attrs)
     classes = _wrap_as_dataarray(_classify_fad(ms_map, arr), data, "fad_classes")
 

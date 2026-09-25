@@ -12,10 +12,10 @@ import rasterio
 import xarray as xr
 from rasterio.transform import from_origin
 
-import guidospy as gp
+import landschaft as ls
 import scenes
-from guidospy import InvalidInputError, RasterCollection
-from guidospy.batch import parse_memory, run_parallel
+from landschaft import InvalidInputError, RasterCollection
+from landschaft.batch import parse_memory, run_parallel
 
 TRANSFORM = from_origin(0.0, 1000.0, 10.0, 10.0)
 
@@ -37,7 +37,7 @@ def tiles(tmp_path):
 
 
 def test_directory_gives_lazy_collection(tiles):
-    coll = gp.load_raster(tiles[0].parent)
+    coll = ls.load_raster(tiles[0].parent)
     assert isinstance(coll, RasterCollection) and len(coll) == 4
     assert coll.paths == tiles and coll.same_grid
     assert coll[0].pixels == 60 * 70 and coll.total_pixels == 4 * 60 * 70
@@ -47,18 +47,18 @@ def test_directory_gives_lazy_collection(tiles):
 
 def test_glob_list_and_mixed_sources(tiles):
     folder = tiles[0].parent
-    assert gp.load_raster(str(folder / "t[12].tif")).paths == tiles[1:3]
-    assert gp.load_raster([tiles[3], tiles[0]]).paths == [tiles[3], tiles[0]]
-    assert gp.load_raster([folder, tiles[0]]).paths == tiles  # duplicates dropped
+    assert ls.load_raster(str(folder / "t[12].tif")).paths == tiles[1:3]
+    assert ls.load_raster([tiles[3], tiles[0]]).paths == [tiles[3], tiles[0]]
+    assert ls.load_raster([folder, tiles[0]]).paths == tiles  # duplicates dropped
 
 
 def test_single_path_still_returns_dataarray(tiles):
-    assert isinstance(gp.load_raster(tiles[0]), xr.DataArray)
+    assert isinstance(ls.load_raster(tiles[0]), xr.DataArray)
 
 
 def test_empty_directory(tmp_path):
     with pytest.raises(InvalidInputError, match="no raster"):
-        gp.load_raster(tmp_path)
+        ls.load_raster(tmp_path)
 
 
 def test_bad_headers_raise_or_are_skipped(tiles):
@@ -66,60 +66,60 @@ def test_bad_headers_raise_or_are_skipped(tiles):
     write(folder / "multiband.tif", np.stack([scenes.blobs(9, shape=(60, 70))] * 2))
     write(folder / "float.tif", scenes.blobs(9, shape=(60, 70)).astype("float32"))
     with pytest.raises(InvalidInputError, match="2 of 6 rasters"):
-        gp.load_raster(folder)
+        ls.load_raster(folder)
     with pytest.warns(UserWarning, match="skipping 2"):
-        coll = gp.load_raster(folder, errors="skip")
+        coll = ls.load_raster(folder, errors="skip")
     assert len(coll) == 4 and {p.name for p in coll.skipped} == {"multiband.tif", "float.tif"}
 
 
 def test_mspa_on_collection_in_memory(tiles):
-    results = gp.mspa(gp.load_raster(tiles[0].parent), edge_width=2, n_workers=3)
+    results = ls.mspa(ls.load_raster(tiles[0].parent), edge_width=2, n_workers=3)
     assert len(results) == 4
     for path, res in zip(tiles, results):
         assert isinstance(res, xr.DataArray) and res.name == path.stem
-        np.testing.assert_array_equal(res.values, gp.mspa(gp.load_raster(path), edge_width=2).values)
+        np.testing.assert_array_equal(res.values, ls.mspa(ls.load_raster(path), edge_width=2).values)
 
 
 def test_mspa_on_collection_to_disk(tiles, tmp_path):
-    results = gp.mspa(gp.load_raster(tiles[0].parent), output_dir=tmp_path / "out", max_memory="1MB")
+    results = ls.mspa(ls.load_raster(tiles[0].parent), output_dir=tmp_path / "out", max_memory="1MB")
     assert all(r.ok for r in results)
     assert [r.output.name for r in results] == [f"t{i}_8_1_1_1.tif" for i in range(4)]
     with rasterio.open(results[3].output) as src:
-        np.testing.assert_array_equal(src.read(1), gp.mspa(scenes.blobs(3, shape=(60, 70))))
+        np.testing.assert_array_equal(src.read(1), ls.mspa(scenes.blobs(3, shape=(60, 70))))
 
 
 def test_mspa_batch_accepts_directory(tiles, tmp_path):
-    results = gp.mspa_batch(tiles[0].parent, tmp_path / "out")
+    results = ls.mspa_batch(tiles[0].parent, tmp_path / "out")
     assert len(results) == 4 and all(r.ok for r in results)
 
 
 def test_invalid_values_are_reported_when_processed(tiles, tmp_path):
     write(tiles[0].parent / "bad.tif", np.full((10, 10), 7, np.uint8))  # header is fine
-    coll = gp.load_raster(tiles[0].parent)
-    results = gp.mspa(coll, output_dir=tmp_path / "out")
+    coll = ls.load_raster(tiles[0].parent)
+    results = ls.mspa(coll, output_dir=tmp_path / "out")
     bad = [r for r in results if not r.ok]
     assert len(bad) == 1 and "larger than 2" in bad[0].error
 
 
 def test_stack_of_shared_grid(tiles):
-    stack = gp.load_raster(tiles[0].parent, stack=True)
+    stack = ls.load_raster(tiles[0].parent, stack=True)
     assert stack.dims == ("file", "y", "x") and stack.chunks is not None
     assert list(stack["file"].values) == ["t0", "t1", "t2", "t3"]
-    out = gp.mspa(stack).compute()
-    np.testing.assert_array_equal(out.sel(file="t2").values, gp.mspa(scenes.blobs(2, shape=(60, 70))))
+    out = ls.mspa(stack).compute()
+    np.testing.assert_array_equal(out.sel(file="t2").values, ls.mspa(scenes.blobs(2, shape=(60, 70))))
 
 
 def test_stack_requires_shared_grid(tiles):
     write(tiles[0].parent / "shifted.tif", scenes.blobs(5, shape=(60, 70)), transform=from_origin(5, 1000, 10, 10))
-    coll = gp.load_raster(tiles[0].parent)
+    coll = ls.load_raster(tiles[0].parent)
     assert not coll.same_grid
     with pytest.raises(InvalidInputError, match="same grid"):
-        gp.load_raster(tiles[0].parent, stack=True)
+        ls.load_raster(tiles[0].parent, stack=True)
 
 
 def test_collection_options_rejected_for_arrays():
     with pytest.raises(TypeError):
-        gp.mspa(scenes.blobs(1), output_dir="x")
+        ls.mspa(scenes.blobs(1), output_dir="x")
 
 
 @pytest.mark.parametrize("text, expected", [("16GB", 16 * 10**9), ("500 MiB", 500 * 2**20), ("2kb", 2000), (123, 123)])

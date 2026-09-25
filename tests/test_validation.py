@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 import xarray as xr
 
-import guidospy as gp
-from guidospy import InvalidInputError, validate_mspa_input
+import landschaft as ls
+from landschaft import InvalidInputError, validate_mspa_input
 
 
 def valid() -> np.ndarray:
@@ -46,14 +46,14 @@ def test_missing_and_foreground_only_is_accepted_like_gtb():
 
 def test_mspa_validates_by_default():
     with pytest.raises(InvalidInputError):
-        gp.mspa(np.ones((5, 5), np.uint8))
+        ls.mspa(np.ones((5, 5), np.uint8))
 
 
 def test_core_rejects_bad_values_even_without_validation():
     a = valid()
     a[0, 0] = 7
     with pytest.raises(InvalidInputError):
-        gp.mspa(a, validate=False)
+        ls.mspa(a, validate=False)
 
 
 def test_dask_input_is_validated_lazily():

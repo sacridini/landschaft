@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""guidospy: fast Python reimplementation of GuidosToolbox (GTB).
+"""landschaft: fast Python reimplementation of GuidosToolbox (GTB).
 
 Typical use::
 
-    import guidospy as gp
+    import landschaft as ls
 
-    data = gp.load_raster("forest.tif")      # checks the 0/1/2 coding
-    result = gp.mspa(data, edge_width=2)      # xarray.DataArray of MSPA classes
-    gp.write_raster(result, "forest_mspa.tif")
+    data = ls.load_raster("forest.tif")      # checks the 0/1/2 coding
+    result = ls.mspa(data, edge_width=2)      # xarray.DataArray of MSPA classes
+    ls.write_raster(result, "forest_mspa.tif")
 """
 
 from importlib import metadata as _metadata
@@ -77,7 +77,7 @@ from .restoration import (
 from .validation import InvalidInputError, validate_mspa_input
 
 try:
-    __version__ = _metadata.version("guidospy")  # single source: pyproject.toml
+    __version__ = _metadata.version("landschaft")  # single source: pyproject.toml
 except _metadata.PackageNotFoundError:  # pragma: no cover - running from a source tree
     __version__ = "0.0.0+unknown"
 

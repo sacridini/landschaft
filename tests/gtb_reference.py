@@ -2,7 +2,7 @@
 """Run the original GuidosToolbox ``mspa`` executable on numpy arrays.
 
 The executable ships with GTB (``MSPAstandalone/mspa_win64.exe``,
-``mspa_lin64``, ``mspa_mac``). Point ``GUIDOSPY_MSPA_EXE`` to it.
+``mspa_lin64``, ``mspa_mac``). Point ``LANDSCHAFT_MSPA_EXE`` to it.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from rasterio.errors import NotGeoreferencedWarning
 
 
 def find_executable() -> Path | None:
-    exe = os.environ.get("GUIDOSPY_MSPA_EXE")
+    exe = os.environ.get("LANDSCHAFT_MSPA_EXE")
     return Path(exe) if exe and Path(exe).is_file() else None
 
 

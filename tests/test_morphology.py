@@ -7,13 +7,13 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-import guidospy as gp
-from guidospy.morphology import ParcellationResult, contortion, parcellation
+import landschaft as ls
+from landschaft.morphology import ParcellationResult, contortion, parcellation
 
 
 @pytest.fixture
 def input_path() -> Path:
-    return Path(__file__).resolve().parent.parent / "src" / "guidospy" / "data" / "input.tif"
+    return Path(__file__).resolve().parent.parent / "src" / "landschaft" / "data" / "input.tif"
 
 
 class TestParcellation:

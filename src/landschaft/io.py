@@ -98,7 +98,7 @@ def load_raster(
     xarray.DataArray or RasterCollection
         For one raster, a georeferenced ``(y, x)`` array (CRS and transform via
         ``.rio``). For several, a :class:`RasterCollection` that reads only the
-        file headers now; pass it to :func:`guidospy.mspa` to process every
+        file headers now; pass it to :func:`landschaft.mspa` to process every
         raster in parallel. With ``stack=True``, a lazy DataArray.
 
     Raises
@@ -333,7 +333,7 @@ def _resolve_colormap(colormap, data) -> dict | None:
         return None
     if colormap == "auto":
         attrs = getattr(data, "attrs", {})
-        product = attrs.get("guidospy_product")
+        product = attrs.get("landschaft_product")
         if product == "MSPA":
             return mspa_colormap(bool(attrs.get("mspa_transition", 1)))
         if product == "GTN_COMPONENTS":
@@ -430,53 +430,53 @@ def write_raster(
             transform = data.rio.transform()
         if nodata is None:
             nodata = data.rio.nodata
-        tags = {k: str(v) for k, v in data.attrs.items() if k.startswith(("mspa_", "guidospy_"))}
-        if description is None and data.attrs.get("guidospy_product") == "MSPA":
+        tags = {k: str(v) for k, v in data.attrs.items() if k.startswith(("mspa_", "landschaft_"))}
+        if description is None and data.attrs.get("landschaft_product") == "MSPA":
             description = (
-                "GTB_MSPA (guidospy), MSPA parameters (FGconn_EdgeWidth_Transition_Intext): "
+                "GTB_MSPA (landschaft), MSPA parameters (FGconn_EdgeWidth_Transition_Intext): "
                 f"{data.attrs['mspa_connectivity']}_{data.attrs['mspa_edge_width']}_"
                 f"{data.attrs['mspa_transition']}_{data.attrs['mspa_internal']}"
             )
-        elif description is None and data.attrs.get("guidospy_product") in ("GTN_COMPONENTS", "GTN_COMPONENTS_DATA"):
+        elif description is None and data.attrs.get("landschaft_product") in ("GTN_COMPONENTS", "GTN_COMPONENTS_DATA"):
             description = (
-                f"GTB_NW (guidospy), components: {data.attrs.get('num_components')}, "
+                f"GTB_NW (landschaft), components: {data.attrs.get('num_components')}, "
                 f"ECA: {data.attrs.get('eca', 0):.2f}, DOC: {data.attrs.get('doc', 0):.2f}%"
             )
-        elif description is None and data.attrs.get("guidospy_product") in ("GTN_IMPORTANCE", "GTN_IMPORTANCE_MAP"):
+        elif description is None and data.attrs.get("landschaft_product") in ("GTN_IMPORTANCE", "GTN_IMPORTANCE_MAP"):
             description = (
-                f"GTB_CS (guidospy), Link_max: {data.attrs.get('max_link_dpc', 0):.2f}, "
+                f"GTB_CS (landschaft), Link_max: {data.attrs.get('max_link_dpc', 0):.2f}, "
                 f"Node_max: {data.attrs.get('max_node_dpc', 0):.2f}"
             )
-        elif description is None and data.attrs.get("guidospy_product") in ("FAD", "FAD_MULTISCALE"):
+        elif description is None and data.attrs.get("landschaft_product") in ("FAD", "FAD_MULTISCALE"):
             description = (
-                f"GTB_FAD (guidospy), window_size: {data.attrs.get('window_size', 'multi')}, "
+                f"GTB_FAD (landschaft), window_size: {data.attrs.get('window_size', 'multi')}, "
                 f"avg_fad: {data.attrs.get('average_fad', 0):.2f}%"
             )
-        elif description is None and data.attrs.get("guidospy_product") in ("EUCLIDEAN_DISTANCE", "EUCLIDEAN_DISTANCE_FLOAT"):
+        elif description is None and data.attrs.get("landschaft_product") in ("EUCLIDEAN_DISTANCE", "EUCLIDEAN_DISTANCE_FLOAT"):
             description = (
-                f"GTB_EUCL (guidospy), mean_fg: {data.attrs.get('mean_fg_dist', 0):.2f}, "
+                f"GTB_EUCL (landschaft), mean_fg: {data.attrs.get('mean_fg_dist', 0):.2f}, "
                 f"max_fg: {data.attrs.get('max_fg_dist', 0):.2f}"
             )
-        elif description is None and data.attrs.get("guidospy_product") == "SPATIAL_ENTROPY":
-            description = f"GTB_ENT (guidospy), window_size: {data.attrs.get('window_size', 'full')}"
-        elif description is None and data.attrs.get("guidospy_product") == "SIMPLE_CHANGE":
+        elif description is None and data.attrs.get("landschaft_product") == "SPATIAL_ENTROPY":
+            description = f"GTB_ENT (landschaft), window_size: {data.attrs.get('window_size', 'full')}"
+        elif description is None and data.attrs.get("landschaft_product") == "SIMPLE_CHANGE":
             description = (
-                f"GTB_CHANGE (guidospy), Gain: {data.attrs.get('gain', 0)}, "
+                f"GTB_CHANGE (landschaft), Gain: {data.attrs.get('gain', 0)}, "
                 f"Loss: {data.attrs.get('loss', 0)}, Stable_FG: {data.attrs.get('stable_fg', 0)}"
             )
-        elif description is None and data.attrs.get("guidospy_product") == "MORPHOLOGICAL_CHANGE":
+        elif description is None and data.attrs.get("landschaft_product") == "MORPHOLOGICAL_CHANGE":
             description = (
-                f"GTB_MCD (guidospy), Gain: {data.attrs.get('mcd_gain', 0)}, "
+                f"GTB_MCD (landschaft), Gain: {data.attrs.get('mcd_gain', 0)}, "
                 f"Loss: {data.attrs.get('mcd_loss', 0)}, Elasticity: {data.attrs.get('elasticity', 0):.4f}"
             )
-        elif description is None and data.attrs.get("guidospy_product") == "FOS_CHANGE":
+        elif description is None and data.attrs.get("landschaft_product") == "FOS_CHANGE":
             description = (
-                f"GTB_FOSCHANGE (guidospy), FragDec: {data.attrs.get('frag_decrease_pct', 0):.2f}%, "
+                f"GTB_FOSCHANGE (landschaft), FragDec: {data.attrs.get('frag_decrease_pct', 0):.2f}%, "
                 f"FragInc: {data.attrs.get('frag_increase_pct', 0):.2f}%"
             )
-        elif description is None and data.attrs.get("guidospy_product") == "GRAY_SPATIAL_CONVOLUTION":
+        elif description is None and data.attrs.get("landschaft_product") == "GRAY_SPATIAL_CONVOLUTION":
             description = (
-                f"GTB_GSC (guidospy), metric: {data.attrs.get('spatial_metric', 'mean')}, "
+                f"GTB_GSC (landschaft), metric: {data.attrs.get('spatial_metric', 'mean')}, "
                 f"window_size: {data.attrs.get('window_size', 7)}"
             )
 

@@ -4,7 +4,7 @@
 * ``reference``: outputs stored in tests/data/reference, produced by
   tools/make_reference.py with the original executable. Runs everywhere.
 * ``live_reference``: runs the original executable now (set
-  ``GUIDOSPY_MSPA_EXE``) on fresh random inputs and parameters.
+  ``LANDSCHAFT_MSPA_EXE``) on fresh random inputs and parameters.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import guidospy as gp
+import landschaft as ls
 import scenes
 from gtb_reference import run_original_mspa
 
@@ -39,7 +39,7 @@ def assert_same(got: np.ndarray, expected: np.ndarray) -> None:
     if diff.any():
         ys, xs = np.nonzero(diff)
         sample = [(int(y), int(x), int(got[y, x]), int(expected[y, x])) for y, x in zip(ys[:10], xs[:10])]
-        pytest.fail(f"{diff.sum()} pixels differ from the original; (y, x, guidospy, original): {sample}")
+        pytest.fail(f"{diff.sum()} pixels differ from the original; (y, x, landschaft, original): {sample}")
 
 
 @pytest.fixture(scope="module")
@@ -54,13 +54,13 @@ def synthetic(reference_dir):
 
 @pytest.mark.parametrize("key", _cases(REFERENCE / "gtb_input.npz"))
 def test_gtb_sample_image(gtb_input, key):
-    assert_same(gp.mspa(gtb_input["input"], **_params(key)), gtb_input[key])
+    assert_same(ls.mspa(gtb_input["input"], **_params(key)), gtb_input[key])
 
 
 @pytest.mark.parametrize("key", _cases(REFERENCE / "synthetic.npz"))
 def test_synthetic_scenes(synthetic, key):
     case = key.split("/")[0]
-    assert_same(gp.mspa(synthetic[f"{case}/input"], **_params(key)), synthetic[key])
+    assert_same(ls.mspa(synthetic[f"{case}/input"], **_params(key)), synthetic[key])
 
 
 # --- live comparison with the executable ---------------------------------------
@@ -80,7 +80,7 @@ def test_live_random_scenes(mspa_exe, kind, seed):
     )
     data = scenes.make(kind, 5000 + seed)
     expected = run_original_mspa(mspa_exe, data, **params)
-    assert_same(gp.mspa(data, **params), expected)
+    assert_same(ls.mspa(data, **params), expected)
 
 
 GTB_GSC_EXE = Path(r"C:\Users\eduar\Documents\dev\GTB\external_sources\grayspatcon64.exe")
@@ -115,7 +115,7 @@ def test_live_grayspatcon_against_gtb(tmp_path, mname, mcode):
     subprocess.run([str(GTB_GSC_EXE)], cwd=str(tmp_path), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     gtb_out = np.fromfile(tmp_path / "gscoutput", dtype=np.float32).reshape((40, 40))
 
-    gpy_out = gp.gray_spatial_convolution(img, metric=mname, window_size=w, mask_missing=True)
+    gpy_out = ls.gray_spatial_convolution(img, metric=mname, window_size=w, mask_missing=True)
 
     diff = np.abs(gtb_out - gpy_out)
     assert np.all(diff <= 1e-4)

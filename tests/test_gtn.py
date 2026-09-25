@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Tests for Graph Theory Network (GTN) & Connectivity Analysis in guidospy.
+"""Tests for Graph Theory Network (GTN) & Connectivity Analysis in landschaft.
 
 Includes an accuracy verification against the original GuidosToolbox (GTB)
 IDL implementation logic from guidostoolbox.pro (lines 12542-12880).
@@ -16,8 +16,8 @@ import pytest
 from scipy import ndimage
 import xarray as xr
 
-import guidospy as gp
-from guidospy.gtn import BRIDGE_CLASSES, CORE_CLASSES, _extract_topology
+import landschaft as ls
+from landschaft.gtn import BRIDGE_CLASSES, CORE_CLASSES, _extract_topology
 
 
 # --- Reference GTB Simulation Function ----------------------------------------
@@ -161,16 +161,16 @@ def gtb_reference_gtn(mspa_arr: np.ndarray, eew: int = 1) -> dict:
 @pytest.fixture(scope="module")
 def input_mspa():
     """Load test input.tif and compute MSPA."""
-    da = gp.load_raster(gp.example_data("input"))
-    return gp.mspa(da, edge_width=1, connectivity=8)
+    da = ls.load_raster(ls.example_data("input"))
+    return ls.mspa(da, edge_width=1, connectivity=8)
 
 
 def test_gtn_accuracy_against_gtb_reference(input_mspa):
-    """Verify bit-exact agreement between guidospy GTN and GTB's IDL reference."""
+    """Verify bit-exact agreement between landschaft GTN and GTB's IDL reference."""
     ref = gtb_reference_gtn(input_mspa.values, eew=1)
 
-    comp_res = gp.gtn_components(input_mspa)
-    imp_res = gp.gtn_importance(input_mspa, components=comp_res)
+    comp_res = ls.gtn_components(input_mspa)
+    imp_res = ls.gtn_importance(input_mspa, components=comp_res)
 
     # 1. Global component metrics
     assert comp_res.num_components == ref["nr_comp"]
@@ -218,7 +218,7 @@ def test_gtn_synthetic_line_graph():
     # Core 3 (area 4)
     arr[2:4, 12:14] = 17
 
-    comp = gp.gtn_components(arr)
+    comp = ls.gtn_components(arr)
     assert comp.num_components == 1
     assert comp.num_nodes == 3
     assert comp.num_links == 2
@@ -231,7 +231,7 @@ def test_gtn_synthetic_line_graph():
     assert comp.eca_max_pixels == 12
     assert comp.doc == 100.0
 
-    imp = gp.gtn_importance(arr, components=comp)
+    imp = ls.gtn_importance(arr, components=comp)
     assert len(imp.links) == 2
     assert len(imp.nodes) == 1  # only Core 2 has degree >= 2
 
@@ -268,12 +268,12 @@ def test_gtn_synthetic_redundant_cycle():
     arr[6:19, 20] = 33
     arr[19, 13:20] = 33
 
-    comp = gp.gtn_components(arr)
+    comp = ls.gtn_components(arr)
     assert comp.num_components == 1
     assert comp.num_nodes == 3
     assert comp.num_links == 3
 
-    imp = gp.gtn_importance(arr, components=comp)
+    imp = ls.gtn_importance(arr, components=comp)
     # Because there are 2 alternate paths between all pairs of nodes,
     # severing any single link leaves all 3 nodes connected!
     # So link dPC for all 3 links must be exactly 0.0%
@@ -290,7 +290,7 @@ def test_gtn_isolated_cores_only():
     arr[10:14, 10:14] = 17  # area 16
     arr[20:25, 20:25] = 17  # area 25
 
-    comp = gp.gtn_components(arr)
+    comp = ls.gtn_components(arr)
     assert comp.num_components == 3
     assert comp.num_connected_components == 0
     assert comp.num_isolated_cores == 3
@@ -304,7 +304,7 @@ def test_gtn_isolated_cores_only():
     assert pytest.approx(comp.doc, rel=1e-5) == (expected_eca / 50.0 * 100.0)
 
     # In importance, no links to evaluate
-    imp = gp.gtn_importance(arr, components=comp)
+    imp = ls.gtn_importance(arr, components=comp)
     assert imp.links.empty
     assert imp.nodes.empty
     assert imp.max_link_dpc == 0.0
@@ -314,12 +314,12 @@ def test_gtn_isolated_cores_only():
 def test_gtn_empty_landscape():
     """Test GTN on an empty/background-only array."""
     arr = np.zeros((20, 20), dtype=np.uint8)
-    comp = gp.gtn_components(arr)
+    comp = ls.gtn_components(arr)
     assert comp.num_components == 0
     assert comp.eca == 0.0
     assert comp.doc == 0.0
 
-    imp = gp.gtn_importance(arr, components=comp)
+    imp = ls.gtn_importance(arr, components=comp)
     assert imp.links.empty
     assert imp.nodes.empty
 
@@ -328,7 +328,7 @@ def test_conefor_export(input_mspa):
     """Test ConeforInputs generation and text file export."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
-        nodes_df, links_df = gp.conefor_inputs(input_mspa, output_dir=tmp_path, prefix="test")
+        nodes_df, links_df = ls.conefor_inputs(input_mspa, output_dir=tmp_path, prefix="test")
 
         assert not nodes_df.empty
         assert not links_df.empty
@@ -356,16 +356,16 @@ def test_conefor_export(input_mspa):
 
 def test_gtn_write_raster_integration(input_mspa):
     """Verify write_raster properly saves GTN products with embedded colormaps."""
-    comp = gp.gtn_components(input_mspa)
-    imp = gp.gtn_importance(input_mspa, components=comp)
+    comp = ls.gtn_components(input_mspa)
+    imp = ls.gtn_importance(input_mspa, components=comp)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
         out_comp = tmp_path / "components_colored.tif"
         out_imp = tmp_path / "importance_colored.tif"
 
-        p1 = gp.write_raster(comp.colored_map, out_comp)
-        p2 = gp.write_raster(imp.colored_map, out_imp)
+        p1 = ls.write_raster(comp.colored_map, out_comp)
+        p2 = ls.write_raster(imp.colored_map, out_imp)
 
         assert p1.exists()
         assert p2.exists()

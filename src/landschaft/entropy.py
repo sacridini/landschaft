@@ -128,7 +128,7 @@ def spatial_entropy_map(
 
     raw_map = _core.compute_spatial_entropy_map(arr, window_size, threads)
     attrs = {
-        "guidospy_product": "SPATIAL_ENTROPY",
+        "landschaft_product": "SPATIAL_ENTROPY",
         "window_size": window_size,
         "colormap": "entropy",
     }

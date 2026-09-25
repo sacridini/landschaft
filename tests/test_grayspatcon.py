@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 import xarray as xr
 
-import guidospy as gp
-from guidospy.grayspatcon import gray_spatial_convolution
+import landschaft as ls
+from landschaft.grayspatcon import gray_spatial_convolution
 
 
 def test_grayspatcon_constant_raster():
@@ -81,7 +81,7 @@ def test_grayspatcon_dataarray():
     res = gray_spatial_convolution(da, metric="mean", window_size=5)
     assert isinstance(res, xr.DataArray)
     assert res.dims == ("y", "x")
-    assert res.attrs["guidospy_product"] == "GRAY_SPATIAL_CONVOLUTION"
+    assert res.attrs["landschaft_product"] == "GRAY_SPATIAL_CONVOLUTION"
     assert res.attrs["spatial_metric"] == "mean"
     assert res.attrs["window_size"] == 5
 

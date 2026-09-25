@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Python bindings of the guidospy C++ core.
+// Python bindings of the landschaft C++ core.
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -519,7 +519,7 @@ void bind_detail(py::module_& m) {
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
-    m.doc() = "guidospy C++ core (MSPA, GTN, FAD, distance, and entropy).";
+    m.doc() = "landschaft C++ core (MSPA, GTN, FAD, distance, and entropy).";
     m.def("mspa", &mspa, py::arg("input"), py::arg("connectivity") = 8, py::arg("edge_width") = 1,
           py::arg("internal") = true, py::arg("n_threads") = 0,
           "Run MSPA on a uint8 array coded 0=missing, 1=background, 2=foreground.");

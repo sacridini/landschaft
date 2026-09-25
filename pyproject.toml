@@ -3,7 +3,7 @@ requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "guidospy"
+name = "landschaft"
 version = "0.4.0"
 description = "Fast Python reimplementation of GuidosToolbox (GTB) raster analysis, starting with MSPA."
 readme = "README.md"
@@ -25,12 +25,12 @@ test = ["pytest>=7", "scipy>=1.10", "dask[array]>=2023.1"]
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"
-wheel.packages = ["src/guidospy"]
+wheel.packages = ["src/landschaft"]
 cmake.build-type = "Release"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
     "reference: compare against outputs of the original GTB mspa executable",
-    "live_reference: run the original GTB mspa executable (needs GUIDOSPY_MSPA_EXE)",
+    "live_reference: run the original GTB mspa executable (needs LANDSCHAFT_MSPA_EXE)",
 ]

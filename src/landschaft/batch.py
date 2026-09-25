@@ -150,7 +150,7 @@ def mspa_batch(
     output_dir
         Directory for the results (created if needed).
     connectivity, edge_width, transition, internal
-        MSPA parameters, see :func:`guidospy.mspa`.
+        MSPA parameters, see :func:`landschaft.mspa`.
     n_workers
         Rasters processed concurrently. Default: number of CPU cores divided
         by ``threads_per_worker``.
@@ -221,7 +221,7 @@ def mspa_collection(
     overwrite: bool = False,
     **params,
 ):
-    """:func:`guidospy.mspa` for a :class:`RasterCollection`."""
+    """:func:`landschaft.mspa` for a :class:`RasterCollection`."""
     if output_dir is not None:
         return mspa_batch(
             collection,

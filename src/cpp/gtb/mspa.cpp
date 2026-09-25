@@ -33,10 +33,10 @@ namespace {
 // DEF_PEDU in frag.h, passed to fsp() as a float.
 const float kEdu = static_cast<float>(std::sqrt(2.0));
 
-// Prints the duration of each stage to stderr when GUIDOSPY_PROFILE is set.
+// Prints the duration of each stage to stderr when LANDSCHAFT_PROFILE is set.
 class StageTimer {
 public:
-    StageTimer() : enabled_(std::getenv("GUIDOSPY_PROFILE") != nullptr), last_(Clock::now()) {}
+    StageTimer() : enabled_(std::getenv("LANDSCHAFT_PROFILE") != nullptr), last_(Clock::now()) {}
     void operator()(const char* stage) {
         if (!enabled_) return;
         const auto now = Clock::now();

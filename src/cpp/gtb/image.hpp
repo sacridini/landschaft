@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Minimal 2-D raster container used by the guidospy C++ core.
+// Minimal 2-D raster container used by the landschaft C++ core.
 //
 // Pixels are stored row-major (x varies fastest), exactly like miallib's
 // IMAGE buffers and like a C-contiguous numpy array of shape (ny, nx).
