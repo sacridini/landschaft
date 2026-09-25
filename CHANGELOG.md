@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-25
+
 ### Added
 - `fad_multiscale_change()`: GTB Change → FAD Multiscale. It gives the 7×7
   fragmentation-class transition tables A → B for every FAD-MS observation scale and
