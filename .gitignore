@@ -1,0 +1,10 @@
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.venv/
+*.aux.xml

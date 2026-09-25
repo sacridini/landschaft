@@ -1,0 +1,73 @@
+{
+  "generated": "2026-09-25",
+  "executable": "mspa_win64.exe",
+  "executable_sha256": "d1d010ed3549c46a014815ebc3ceb67c50fdfc0542eac8a6759b64f5514670aa",
+  "command": "mspa -graphfg C -eew E -internal I -disk -transition 1 -i in.tif -o out.tif -odir ./",
+  "files": {
+    "gtb_input.npz": {
+      "source": "GTB data/input.tif",
+      "params": [
+        [
+          8,
+          1,
+          1
+        ],
+        [
+          4,
+          1,
+          1
+        ],
+        [
+          8,
+          2,
+          1
+        ],
+        [
+          4,
+          3,
+          0
+        ],
+        [
+          8,
+          5,
+          1
+        ],
+        [
+          8,
+          10,
+          0
+        ],
+        [
+          4,
+          20,
+          1
+        ]
+      ]
+    },
+    "synthetic.npz": {
+      "source": "tests/scenes.py",
+      "params": [
+        [
+          8,
+          1,
+          1
+        ],
+        [
+          4,
+          2,
+          1
+        ],
+        [
+          8,
+          3,
+          0
+        ],
+        [
+          4,
+          7,
+          1
+        ]
+      ]
+    }
+  }
+}
