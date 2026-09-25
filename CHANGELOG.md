@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-26
+
 ### Added
 - `fos()`: GTB Fragmentation at a Fixed Observation Scale, complete. All of GTB's
   methods (FAD, FED, FAC) in 5 or 6 classes, on binary maps (with special
