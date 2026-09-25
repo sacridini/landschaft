@@ -4,20 +4,48 @@ All notable changes to guidospy are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may still change
 between minor versions.
 
-## [Unreleased]
+## [0.4.0] - 2026-09-25
 
 ### Added
-- GTB's sample maps (`input`, `clc`, `gscinput`) bundled with the package, with
-  `example_data()` and `EXAMPLE_DATA`; `tools/benchmark.py` uses them.
-- `load_raster` accepts a directory, a glob pattern or a list of paths and returns a
-  lazy `RasterCollection` (headers only; `errors="skip"`, `recursive`), or with
-  `stack=True` a lazy `(file, y, x)` DataArray for rasters on a shared grid.
-- `mspa(collection, output_dir=..., n_workers=..., max_memory=...)` processes a
-  collection one raster per thread, writing results as they finish or returning
-  them in memory.
-- `max_memory` (e.g. `"16GB"`) for `mspa_batch` and collections: limits the
-  rasters processed at once from their size. `mspa_batch` also accepts directories,
-  globs and collections.
+- **Change Analysis**:
+  - `simple_change()`: 4-class binary transition map (Stable BG, Gain, Loss, Stable FG).
+  - `morphological_change()`: Morphological Change Detection (MCD) with geodesic core reconstruction ($d > 2$), $3 \times 3$ morphological closing, boundary chatter segregation (`176`), and landscape elasticity index.
+  - `fos_change()`: Fragmentation (FOS) change analysis, delta FOS continuous map (+100 offset), $6 \times 6$ transition matrix across density classes, and fragmentation shift percentages.
+- **Continuous Grayscale Spatial Convolution (GraySpatCon)**:
+  - `gray_spatial_convolution()`: Moving-window spatial convolution over continuous grayscale/percentage rasters using an $O(1)$ 101-bin sliding histogram and OpenMP parallelization.
+  - Supported metrics: Mean, Median, Majority, Min, Max, Range, StdDev, Shannon Diversity, Shannon Evenness, and Diagonal Contagion.
+  - Bit-for-bit / single-precision parity verified against original GTB binary `grayspatcon64.exe`.
+- **Colormaps**: Added `FOSCHANGE_PALETTE`, `CHANGE_PALETTE`, `foschange_colormap()`, and `change_colormap()`.
+- **Documentation**: Complete user manual and API reference added in `DOCUMENTATION.md`.
+
+## [0.3.0] - 2026-09-25
+
+### Added
+- **Restoration & Corridors**:
+  - `restoration_status()`: Evaluates landscape connectivity before/after hypothetical restoration (ECA, DOC, CNOA, RAC).
+  - `cost_distance()`: Anisotropic 8-neighbor Dijkstra shortest-cost propagation across resistance surfaces.
+  - `least_cost_path()` & `restoration_corridor()`: Two-ended corridor delineation with gradient descent path tracing.
+- **Landscape Morphology & Shape**:
+  - `parcellation()`: Multi-class landscape division, average patch size (APS), effective mesh size (AWAPS), division index, and logarithmic PARC.
+  - `contortion()`: Moore-neighborhood boundary tracing and inflection point counting (tortuosity).
+- **Colormaps**: Added `CONTORTION_PALETTE`, `RESISTANCE_PALETTE`, `contortion_colormap()`, and `resistance_colormap()`.
+
+## [0.2.0] - 2026-09-25
+
+### Added
+- **Topological Network Analysis (GTN & Conefor)**:
+  - `gtn_components()`: Connected components, Equivalent Connected Area (ECA), Degree of Coherence (DOC).
+  - `gtn_importance()`: Node & link importance ranking using Probability of Connectivity (dPC, dPCflux, dPCintra, dPCconnector).
+  - `conefor_inputs()`: Generates `nodes.txt` and `distances.txt` ready for Conefor Sensinode.
+- **Fragmentation & Distance Transforms**:
+  - `fad()` & `fad_multiscale()`: Single and multiscale Forest Area Density using 2D Integral Images ($O(1)$ per pixel).
+  - `euclidean_distance()`: Meijster $O(N)$ Signed Euclidean Distance transform (float and 256-level byte maps).
+  - `spatial_entropy()` & `spatial_entropy_map()`: Joint directional co-occurrence spatial entropy (global index & moving-window map).
+- **Landscape Mosaic & Contagion**:
+  - `contagion_pff()`: Foreground pixel-adjacency co-occurrence ($P_{ff}$).
+  - `clustering_fac()`: Foreground Area Clustering normalized by density ($P_{ff} / P_f$).
+  - `landscape_mosaic()` & `landscape_mosaic_stats()`: 19-class and 103-class tri-polar Landscape Mosaic with barycentric statistics.
+- **Colormaps**: Added `FAD_PALETTE`, `DIST_PALETTE`, `ENTROPY_PALETTE`, `LM_PALETTE` and corresponding colormap factories.
 
 ## [0.1.0] - 2026-09-25
 

@@ -1,12 +1,17 @@
 # guidospy
 
 Fast Python reimplementation of [GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/)
-raster image analysis, with a C++17/OpenMP core and a small numpy / xarray / dask
-/ rasterio API.
+raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / dask / rasterio API.
 
-**Status (0.1.0):** Morphological Spatial Pattern Analysis (MSPA) is available and
-produces **bit-identical** results to GTB's `mspa` v2.3 executable, 5 to 7 times
-faster on one thread. The other GTB tools come next.
+**Current Version (v0.4.0):** Complete reimplementation of all major GuidosToolbox tools:
+* **MSPA**: Morphological Spatial Pattern Analysis (bit-identical to GTB `mspa` v2.3, 5-7x faster).
+* **GTN & Connectivity**: Topological Network Components (ECA, DOC), Importance (dPC), and Conefor Sensinode inputs.
+* **Fragmentation & Distance**: Forest Area Density (single & multiscale FAD, $O(1)$ integral images), Euclidean Distance Transform ($O(N)$), and Directional Spatial Entropy.
+* **Landscape Mosaic & Contagion**: LM (19 & 103 classes with barycentric stats), Contagion ($P_{ff}$), and Clustering (FAC).
+* **Restoration & Morphology**: Restoration Status (RSS), Cost Distance, Least-Cost Paths & Corridors, Landscape Parcellation (AWAPS, DIVISION, PARC), and Habitat Contortion.
+* **Change Detection & Convolution**: Simple Change, Morphological Change Detection (MCD with geodesic core reconstruction & elasticity), Fragmentation Change (FOS Delta & 6x6 transition matrix), and Continuous Grayscale Spatial Convolution (GraySpatCon).
+
+📖 **For complete documentation and usage examples for every module, see [DOCUMENTATION.md](DOCUMENTATION.md).**
 
 ```python
 import guidospy as gp
