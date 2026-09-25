@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-26
+
 ### Added
 - `mspa_tiled()`: GTB's MSPA Tiling for maps too large for memory. The map is cut
   into overlapping tiles (GTB: 6500 pixels with a 2000-pixel overlap on MS-Windows),
