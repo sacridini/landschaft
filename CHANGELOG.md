@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-26
+
 ### Added
 - `spa()`: GTB Simplified Pattern Analysis SPA2 (contiguous / small linear
   features), SPA3 (core, core-opening, margin), SPA5 (core, edge, perforation,
