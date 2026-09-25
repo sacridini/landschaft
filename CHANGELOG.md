@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-25
+
 ### Added
 - `accounting()`: GTB Accounting. It groups foreground objects into up to six size
   classes and returns the GTB colour-coded class map, object ID and object area
