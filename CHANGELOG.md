@@ -6,6 +6,21 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- `isochrone_map()` / `isochrone_map_ab()`: GTB Restoration Planner → Isochrone Map
+  A / AB, identical to GTB. They give the accumulated cost from object A (or the
+  cheapest A–B route through every pixel) across a resistance map, scaled to GTB's
+  0–100 display codes, with the least-cost path for map AB. They port GTB's `ggeo`
+  program: miallib's symmetric geodesic time (`sqtgsym`, in C++) and its
+  least-cost path (the pixels of minimal A–B cost, thinned with miallib's
+  `binOIthin_FIFO`), plus GTB's IDL post-processing. This includes a GTB quirk: a
+  resistance map without foreground makes its top-right pixel cost 1.
+- `distance_to_resistance()`: GTB Setup Tools → Distance → Resistance
+  (`round(distance + 2)` capped at 100). It relies on IDL's MORPH_DISTANCE and
+  shares the caveat of `influence_zones()`.
+- Parity tests for the isochrone maps against GTB's IDL code and `ggeo`
+  (`LANDSCHAFT_GGEO_EXE`, or a GTB desktop installation).
+
 ## [0.7.0] - 2026-09-26
 
 ### Added

@@ -353,7 +353,7 @@ def _resolve_colormap(colormap, data) -> dict | None:
             return fad_colormap()
         if product == "EUCLIDEAN_DISTANCE":
             return dist_colormap()
-        if product in ("SPATIAL_ENTROPY", "CONTAGION", "CLUSTERING"):
+        if product in ("SPATIAL_ENTROPY", "CONTAGION", "CLUSTERING", "ISOCHRONE_A", "ISOCHRONE_AB"):
             return entropy_colormap()
         if product == "LANDSCAPE_MOSAIC":
             return lm_colormap()

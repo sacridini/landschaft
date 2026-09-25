@@ -9,6 +9,7 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 * **Fragmentation & Distance**: Forest Area Density (single & multiscale FAD, $O(1)$ integral images), Euclidean Distance Transform ($O(N)$), and Directional Spatial Entropy.
 * **Landscape Mosaic & Contagion**: LM (19 & 103 classes with barycentric stats), Contagion ($P_{ff}$), and Clustering (FAC).
 * **Objects**: Accounting (foreground objects in up to 6 size classes, with object ID and area maps; identical to GTB's IDL code).
+* **Restoration Planner**: Isochrone maps A and AB with the least-cost path (identical to GTB's `ggeo`), Distance → Resistance.
 * **Distance (experimental)**: Influence Zones and Proximity. Not yet identical to GTB, see the CHANGELOG.
 * **Restoration & Morphology**: Restoration Status (RSS), Cost Distance, Least-Cost Paths & Corridors, Landscape Parcellation (AWAPS, DIVISION, PARC), and Habitat Contortion.
 * **Change Detection & Convolution**: Simple Change, Morphological Change Detection (MCD with geodesic core reconstruction & elasticity), Fragmentation Change (FOS Delta & 6x6 transition matrix), FAD Multiscale Change (7x7 class transitions per observation scale), Landscape Mosaic Heatmap and Heatmap Change (GTB's heatmap/delta CSV, bit-identical), and Continuous Grayscale Spatial Convolution (GraySpatCon).
@@ -157,6 +158,8 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `accounting(data, thresholds=(50, 250, 1000, 5000, 20000), *, connectivity=8, highlight_largest=False, pixel_resolution=25.0, n_threads=0)` | GTB Accounting: size-class map (GTB colour codes), object IDs, object areas, per-class table and `summary()` report. `thresholds="auto"` uses the classes proposed by GTB's dialog. |
 | `fad_multiscale_change(a, b, *, window_sizes=(7, 13, 27, 81, 243), n_threads=0)` | GTB Change → FAD Multiscale: 7×7 fragmentation-class transition tables A → B for every observation scale and the multiscale map, with FAD_AV/AVCON changes. `a`/`b` are FAD-MS results, input maps or GTB `*_fad_mscale.tif` files. |
 | `landscape_mosaic_heatmap(data, window_size=27, *, is_lm103=False)`, `landscape_mosaic_change(a, b, window_size=27)` | GTB Landscape Mosaic heatmap (share of the 103 classes, `triangle` grid, `to_csv()` = GTB `heatmap.csv`) and its change B − A (GTB `delta_heatmap.csv`). |
+| `isochrone_map(resistance, marker)`, `isochrone_map_ab(resistance, marker)` | GTB Restoration Planner isochrone maps: accumulated cost from object A (marker 1), or the cheapest A–B route (markers 1 and 2) with its least-cost path; marker 3 = missing. GTB display codes 0–100, 101–104. |
+| `distance_to_resistance(data)` | Resistance map growing with the distance to the foreground (GTB Setup Tools). |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |

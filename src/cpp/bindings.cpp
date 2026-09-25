@@ -24,6 +24,7 @@
 #include "gtb/fad.hpp"
 #include "gtb/grayspatcon.hpp"
 #include "gtb/influence.hpp"
+#include "gtb/isochrone.hpp"
 #include "gtb/gtn.hpp"
 #include "gtb/morphology.hpp"
 #include "gtb/mosaic.hpp"
@@ -527,6 +528,17 @@ py::dict compute_influence(const CArray<std::uint8_t>& input, i64 min_area, int 
     return d;
 }
 
+py::array_t<std::uint32_t> compute_geodesic_time(const CArray<std::uint8_t>& mask, const CArray<std::uint8_t>& ref) {
+    const gtb::ImageU8 m = to_image(mask);
+    const gtb::ImageU8 r = to_image(ref);
+    gtb::Image<std::uint32_t> t;
+    {
+        py::gil_scoped_release release;
+        t = gtb::geodesic_time(m, r);
+    }
+    return to_array(std::move(t));
+}
+
 py::array_t<float> compute_gray_convolution(
     const CArray<std::uint8_t>& input,
     const std::string& metric,
@@ -671,6 +683,20 @@ PYBIND11_MODULE(_core, m) {
           py::arg("core_buffer") = 0, py::arg("buffer") = 0, py::arg("proximity") = false,
           py::arg("metric") = "euclidean", py::arg("n_threads") = 0,
           "GTB Influence Zones / Proximity of the foreground objects.");
+    m.def("compute_morph_distance", [](const CArray<std::uint8_t>& mask, bool background, const std::string& metric) {
+        const auto im = to_image(mask);
+        return to_array(gtb::morph_distance(im, background, parse_metric(metric)), im.nx, im.ny);
+    }, py::arg("mask"), py::arg("background") = true, py::arg("metric") = "quasi-euclidean",
+          "IDL MORPH_DISTANCE(mask, /BACKGROUND, NEIGHBOR_SAMPLING=3) as ported for GTB.");
+    m.def("compute_thin_anchored", [](const CArray<std::uint8_t>& a, int stype, const CArray<std::uint8_t>& anchor) {
+        auto im = to_image(a);
+        auto an = to_image(anchor);
+        gtb::thin_anchored(im, stype, an);
+        return to_array(std::move(im));
+    }, py::arg("image"), py::arg("stype"), py::arg("anchor"),
+          "miallib binOIthin_FIFO: anchored order-independent homotopic thinning (2-pixel border cleared).");
+    m.def("compute_geodesic_time", &compute_geodesic_time, py::arg("mask"), py::arg("ref"),
+          "miallib uc_sqtgsym (GTB ggeo): geodesic time from ref == 1 across mask; ref == 3 blocks.");
     m.def("compute_gray_convolution", &compute_gray_convolution, py::arg("input"), py::arg("metric") = "mean",
           py::arg("window_size") = 7, py::arg("mask_missing") = true, py::arg("n_threads") = 0,
           "Compute moving-window spatial convolution over continuous grayscale raster.");

@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_idl.py [path/to/gdl.exe [path/to/spatcon64.exe]]
+    python tools/make_reference_idl.py [path/to/gdl.exe [path/to/spatcon64.exe [path/to/ggeo64.exe]]]
 
 Runs the verbatim GTB code in ``tests/gtb_idl`` with GDL (or IDL) and writes
 ``tests/data/reference/idl_reference.json``: for every case, the SHA-256 of
@@ -29,11 +29,13 @@ import scenes  # noqa: E402
 from gtb_reference import (  # noqa: E402
     FAD_SCALES,
     find_gdl,
+    find_ggeo,
     find_spatcon,
     run_gtb_accounting,
     run_gtb_accounting_scaled_classes,
     run_gtb_fad_change,
     run_gtb_fad_mscale,
+    run_gtb_isochrone,
     run_gtb_lm_delta,
     run_gtb_lm_heatmap,
 )
@@ -125,11 +127,40 @@ LM_WINDOWS = {"random_a": (7, 13), "random_b": (13,), "smooth_a": (7, 27), "smoo
 LM_DELTA_PAIRS = [(("random_a", 13), ("random_b", 13)), (("smooth_a", 7), ("smooth_b", 27))]
 
 
+def isochrone_inputs() -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """(resistance, marker) pairs: resistance 2 = foreground, 3-100 = background;
+    marker 1 = object A, 2 = object B, 3 = missing."""
+    rng = np.random.default_rng(31)
+    cases = {}
+    r = rng.integers(3, 101, (90, 120)).astype(np.uint8)
+    r[rng.random(r.shape) < 0.1] = 2
+    m = np.zeros(r.shape, np.uint8)
+    m[5:8, 6:9] = 1
+    m[80, 110] = 2
+    cases["random"] = (r, m)
+    m2 = m.copy()
+    m2[45, 10:115] = 3  # a wall of missing pixels with a gap on the left
+    m2[20:70, 60] = 3
+    cases["random_walls"] = (r, m2)
+    u = np.full((70, 90), 20, np.uint8)  # uniform: many equal-cost routes
+    mu = np.zeros(u.shape, np.uint8)
+    mu[10, 10] = 1
+    mu[60, 75:78] = 2
+    cases["uniform"] = (u, mu)
+    base = gtb_input()[300:600, 200:600]
+    rr = np.where(base == 2, 2, np.clip(3 + 97 * (base == 1) * rng.random(base.shape), 3, 100)).astype(np.uint8)
+    mm = np.where(base == 0, 3, 0).astype(np.uint8)
+    mm[20:24, 30:34] = 1
+    mm[280, 380] = 2
+    cases["gtb_input_crop"] = (rr, mm)
+    return cases
+
+
 def float32_hex(a: np.ndarray) -> str:
     return np.asarray(a, dtype="<f4").tobytes().hex()
 
 
-def main(exe: Path, spatcon: Path) -> None:
+def main(exe: Path, spatcon: Path, ggeo: Path | None = None) -> None:
     cases = []
     for name, data in accounting_inputs().items():
         for conn, thresholds, highlight in ACCOUNTING_PARAMS:
@@ -196,6 +227,15 @@ def main(exe: Path, spatcon: Path) -> None:
                                "csv": ref["csv"]})
         print("lm_delta", name_a, name_b)
 
+    iso_cases = []
+    if ggeo is not None:
+        for name, (resist, marker) in isochrone_inputs().items():
+            for mode in ("cost_map_aa", "cost_map_ab"):
+                ref = run_gtb_isochrone(exe, ggeo, resist, marker, mode)
+                iso_cases.append({"input": name, "mode": mode, "resist_sha256": digest(resist),
+                                  "marker_sha256": digest(marker), "sha256": digest(ref)})
+                print("isochrone", name, mode)
+
     OUT.write_text(json.dumps({
         "generated": dt.date.today().isoformat(),
         "interpreter": exe.name,
@@ -206,6 +246,8 @@ def main(exe: Path, spatcon: Path) -> None:
         "fad_change": fad_change_cases,
         "lm_heatmap": lm_cases,
         "lm_delta": lm_delta_cases,
+        "isochrone": iso_cases,
+        "ggeo_sha256": hashlib.sha256(ggeo.read_bytes()).hexdigest() if ggeo else None,
     }, indent=1))
 
 
@@ -216,4 +258,7 @@ if __name__ == "__main__":
     spatcon_exe = Path(sys.argv[2]) if len(sys.argv) > 2 else find_spatcon()
     if spatcon_exe is None:
         sys.exit("spatcon not found: pass its path or set LANDSCHAFT_SPATCON_EXE")
-    main(gdl, spatcon_exe)
+    ggeo_exe = Path(sys.argv[3]) if len(sys.argv) > 3 else find_ggeo()
+    if ggeo_exe is None:
+        print("ggeo not found (LANDSCHAFT_GGEO_EXE): isochrone references are not generated")
+    main(gdl, spatcon_exe, ggeo_exe)

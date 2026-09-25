@@ -359,6 +359,23 @@ ls.write_raster(acc.classes, "forest_acc.tif")   # with GTB's colour table
 * The median is the upper middle value for an even count (IDL `MEDIAN`), and the
   standard deviation is the sample one (IDL `MOMENT`).
 
+### Isochrone Maps and Restoration Setup
+GTB's *Restoration Planner*. Resistance maps are coded 2 = foreground (cost 1) and
+3–100 = background resistance; marker maps 1 = object A, 2 = object B, 3 = missing.
+A step between neighbouring pixels (8-connectivity, diagonals included) costs the mean
+of their resistances, as in GTB's `ggeo` program:
+```python
+resist = ls.distance_to_resistance(forest)        # or any 2/3-100 resistance map
+iso = ls.isochrone_map(resist, marker)            # cost from A
+iso.map      # 0-100 scaled cost, 101 markers, 102 missing, 104 unreachable
+iso.cost     # cost as GTB rounds it
+ab = ls.isochrone_map_ab(resist, marker)          # cheapest A-B route through every pixel
+ab.lcp       # least-cost path (1 pixel wide), code 103 in ab.map
+```
+The isochrone maps are identical to GTB's (tested against GTB's code and its `ggeo`
+program). `cost_distance()` / `least_cost_path()` above use a different cost model
+(floating point, diagonal steps weighted by √2).
+
 ### Landscape Parcellation
 Computes patch division, effective mesh size, and splitting indices:
 ```python

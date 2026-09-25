@@ -31,6 +31,7 @@ from .entropy import SpatialEntropyResult, spatial_entropy, spatial_entropy_map
 from .fad import FAD_CLASSES, FADMultiscaleResult, FADResult, fad, fad_multiscale
 from .fad_change import FADChangeScale, FADMultiscaleChangeResult, fad_multiscale_change
 from .grayspatcon import gray_spatial_convolution
+from .isochrone import ISOCHRONE_CLASSES, IsochroneResult, distance_to_resistance, isochrone_map, isochrone_map_ab
 from .influence import INFLUENCE_CLASSES, InfluenceZonesResult, ProximityResult, influence_zones, proximity
 from .gtn import (
     BRIDGE_CLASSES,
@@ -112,6 +113,8 @@ __all__ = [
     "GTN_COMPONENTS_COLORMAP",
     "GTN_IMPORTANCE_COLORMAP",
     "INFLUENCE_CLASSES",
+    "ISOCHRONE_CLASSES",
+    "IsochroneResult",
     "InfluenceZonesResult",
     "InvalidInputError",
     "LM19_CLASSES",
@@ -139,6 +142,7 @@ __all__ = [
     "contortion_colormap",
     "cost_distance",
     "dist_colormap",
+    "distance_to_resistance",
     "entropy_colormap",
     "euclidean_distance",
     "example_data",
@@ -154,6 +158,8 @@ __all__ = [
     "gtn_importance",
     "gtn_importance_colormap",
     "influence_zones",
+    "isochrone_map",
+    "isochrone_map_ab",
     "landscape_mosaic",
     "landscape_mosaic_change",
     "landscape_mosaic_heatmap",

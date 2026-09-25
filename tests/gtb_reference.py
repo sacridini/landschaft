@@ -269,3 +269,31 @@ def run_gtb_lm_delta(exe: os.PathLike, hn_a: np.ndarray, hn_b: np.ndarray, kdim_
                       f"'{kdim_a}', '{kdim_b}', {_idl_str(root / 'out')} + '/'"])
         return {"hn": np.fromfile(root / "out" / "hn.raw", dtype="<f4"),
                 "csv": (root / "out" / "delta_heatmap.csv").read_text()}
+
+
+DEFAULT_GGEO = Path(r"C:\GuidosToolbox\guidos_progs\spatcon\ggeo64.exe")
+
+
+def find_ggeo() -> Path | None:
+    """GTB's ggeo executable from ``LANDSCHAFT_GGEO_EXE`` or a GTB desktop installation."""
+    exe = os.environ.get("LANDSCHAFT_GGEO_EXE")
+    path = Path(exe) if exe else DEFAULT_GGEO
+    return path if path.is_file() else None
+
+
+def run_gtb_isochrone(exe: os.PathLike, ggeo: os.PathLike, resist: np.ndarray, marker: np.ndarray,
+                      mode: str = "cost_map_aa") -> np.ndarray:
+    """GTB's isochrone map A (``cost_map_aa``) or AB (``cost_map_ab``) via ``tests/gtb_idl/gtb_isochrone.pro``."""
+    import shutil
+
+    ny, nx = resist.shape
+    with tempfile.TemporaryDirectory(prefix="gtb_iso_") as tmp:
+        root = Path(tmp)
+        (root / "spatcon").mkdir()
+        shutil.copy(ggeo, root / "spatcon" / "ggeo64.exe")
+        (root / "work").mkdir()
+        _write_tif(root / "resist.tif", resist)
+        _write_tif(root / "marker.tif", marker)
+        run_gdl(exe, [f"gtb_isochrone, {_idl_str(root / 'resist.tif')}, {_idl_str(root / 'marker.tif')}, "
+                      f"{_idl_str(root / 'work')} + '/', {_idl_str(root / 'out.raw')}, '{mode}'"])
+        return np.fromfile(root / "out.raw", dtype=np.uint8).reshape(ny, nx)

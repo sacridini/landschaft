@@ -26,6 +26,7 @@ add_library(gtbcore STATIC
     src/cpp/gtb/grayspatcon.cpp
     src/cpp/gtb/accounting.cpp
     src/cpp/gtb/influence.cpp
+    src/cpp/gtb/isochrone.cpp
 )
 target_include_directories(gtbcore PUBLIC src/cpp)
 set_target_properties(gtbcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
