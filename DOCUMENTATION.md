@@ -240,6 +240,22 @@ dist_res = ls.euclidean_distance(data)
 # dist_res.max_fg_dist   : maximum distance to edge
 ```
 
+### Influence Zones and Proximity (experimental)
+GTB's *Distance → Influence Zones / Proximity*. The objects (8-connected foreground
+areas of at least `min_area` pixels, with their holes filled) divide the map into the
+zones of the watershed of the distance to the objects:
+```python
+iz = ls.influence_zones(data, min_area=5000, core_buffer=0, buffer=10)
+iz.classes, iz.ids, iz.zones          # GTB viewport codes, object ids, zone labels
+px = ls.proximity(data, min_area=5000)
+px.distance, px.cag, px.lines         # proximity map, connected area gain, watershed pixels
+px.to_csv("input_proximity_5000_0_0.csv")   # GTB's proximity CSV
+```
+These tools are **not yet identical to GTB**: IDL's `MORPH_DISTANCE`, which GTB uses, does
+not always pick the nearest object next to the boundaries between zones, and its exact
+rule is still unknown. The objects, ids, holes, buffers and CAG follow GTB's code
+line by line.
+
 ### Spatial Joint Directional Entropy
 Measures textural heterogeneity and spatial order across 4 directions ($0^\circ, 45^\circ, 90^\circ, 135^\circ$):
 ```python

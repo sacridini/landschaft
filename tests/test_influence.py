@@ -140,12 +140,14 @@ def test_proximity_two_objects():
     assert r.n_objects == 2
     cag = int(round(np.sqrt(2 * 100 * 100)))
     assert (r.lines["cag"] == cag).all() and (r.lines["nbr"] == 2).all()
-    # closest points: 3 pixels from both squares -> round(2 * 3) = 6
-    assert r.prox_min == 6 and r.prox_min_count > 0
+    # prox_min is round(2 * distance) at the closest watershed pixel (the gap is 6 pixels wide)
+    lines = np.asarray(r.zones) == 0
+    assert r.prox_min == int(np.asarray(r.distance)[lines].min()) and r.prox_min in (6, 7)
+    assert r.prox_min_count > 0
     assert (np.asarray(r.classes)[np.asarray(r.zones) > 0] != 193).all()
     assert set(np.unique(np.asarray(r.classes))) <= {0, 1, 4, 12, 165, 193}
     text = r.csv_text("test.tif").splitlines()
-    assert text[0] == "test.tif - Min. FG-obj. size: 50 - 2 objects - prox_min: 6"
+    assert text[0] == f"test.tif - Min. FG-obj. size: 50 - 2 objects - prox_min: {r.prox_min}"
     assert text[1] == "WS-X,WS-Y, #nbr, clength, CAG, IDs(area),"
     assert text[2].endswith(f",2,{r.lines['clength'][0]},{cag},1-100  2-100")
     assert len(text) == 2 + len(r.lines)

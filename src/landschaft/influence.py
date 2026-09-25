@@ -31,8 +31,8 @@ __all__ = [
     "proximity",
 ]
 
-# How GTB computes MORPH_DISTANCE(..., NEIGHBOR_SAMPLING=3); see the tests.
-_METRIC = "euclidean"
+# IDL MORPH_DISTANCE(..., NEIGHBOR_SAMPLING=3) is a quasi-Euclidean chamfer (see influence.cpp).
+_METRIC = "quasi-euclidean"
 
 INFLUENCE_CLASSES: dict[int, str] = {
     0: "Zone (background) / hole in an object",

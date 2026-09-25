@@ -6,6 +6,25 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-26
+
+### Added
+- `influence_zones()` and `proximity()` (**experimental**): GTB Distance →
+  Influence Zones / Proximity. They return the GTB viewport codes, object ids,
+  zone labels, the background buffer, the proximity distance map, the CAG on the
+  watershed lines and GTB's proximity CSV. C++ ports of the IDL routines they use:
+  MORPH_DISTANCE (quasi-Euclidean chamfer), HIST_EQUAL (identical to GDL's) and
+  WATERSHED (Vincent–Soille).
+  **Not yet identical to GTB.** IDL's MORPH_DISTANCE does not always pick the
+  nearest source next to the boundaries between the zones of different objects
+  (about 1% of the pixels of the test probes), and GTB's watershed then produces
+  extra basins and lines. The GTB desktop outputs in
+  `tools/make_reference_gtb_desktop.md` document the differences.
+
+### Known issues
+- `euclidean_distance()` does not match GTB's Euclidean Distance, which uses the
+  same IDL MORPH_DISTANCE; it will be aligned together with the tools above.
+
 ## [0.6.0] - 2026-09-25
 
 ### Added

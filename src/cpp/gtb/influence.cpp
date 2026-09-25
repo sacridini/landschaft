@@ -75,35 +75,40 @@ std::vector<float> morph_distance(const ImageU8& mask, bool background, Distance
         return out;
     }
 
-    // Quasi-Euclidean chamfer distance (orthogonal steps 1, diagonal steps sqrt(2)).
-    const double inf = std::numeric_limits<double>::infinity();
-    const double diag = std::sqrt(2.0);
-    std::vector<double> d(static_cast<std::size_t>(n));
-    for (i64 i = 0; i < n; ++i) d[static_cast<std::size_t>(i)] = set[i] ? inf : 0.0;
-    auto at = [&](i64 x, i64 y) -> double& { return d[static_cast<std::size_t>(y * nx + x)]; };
-    for (i64 y = 0; y < ny; ++y) {
-        for (i64 x = 0; x < nx; ++x) {
-            double& v = at(x, y);
-            if (x > 0) v = std::min(v, at(x - 1, y) + 1.0);
-            if (y > 0) {
-                v = std::min(v, at(x, y - 1) + 1.0);
-                if (x > 0) v = std::min(v, at(x - 1, y - 1) + diag);
-                if (x + 1 < nx) v = std::min(v, at(x + 1, y - 1) + diag);
+    // Quasi-Euclidean chamfer distance (orthogonal steps 1, diagonal steps sqrt(2)) in single
+    // precision, as one propagation pass per direction in the order that best reproduces IDL's
+    // MORPH_DISTANCE(NEIGHBOR_SAMPLING=3) on GTB outputs (image rows as GTB stores them, i.e.
+    // flipped): right, down, up, down-right, down-left, left, up-right, up-left. IDL still differs
+    // at some pixels next to the boundaries between the zones of different sources.
+    const float inf = std::numeric_limits<float>::infinity();
+    const float diag = std::sqrt(2.0f);
+    std::vector<float>& d = out;
+    for (i64 i = 0; i < n; ++i) d[static_cast<std::size_t>(i)] = set[i] ? inf : 0.0f;
+    constexpr int kDirs[8][2] = {{0, 1}, {1, 0}, {-1, 0}, {1, 1}, {1, -1}, {0, -1}, {-1, 1}, {-1, -1}};  // (dy, dx)
+    for (const auto& dir : kDirs) {
+        const int dy = dir[0], dx = dir[1];
+        const float w = (dy != 0 && dx != 0) ? diag : 1.0f;
+        if (dy == 0) {  // along the rows, column by column
+            for (i64 k = 1; k < nx; ++k) {
+                const i64 x = dx > 0 ? k : nx - 1 - k;
+                for (i64 y = 0; y < ny; ++y) {
+                    float& v = d[static_cast<std::size_t>(y * nx + x)];
+                    v = std::min(v, d[static_cast<std::size_t>(y * nx + x - dx)] + w);
+                }
+            }
+        } else {  // row by row from the previous row
+            for (i64 k = 1; k < ny; ++k) {
+                const i64 y = dy > 0 ? k : ny - 1 - k;
+                const float* prev = d.data() + (y - dy) * nx;
+                float* row = d.data() + y * nx;
+                for (i64 x = 0; x < nx; ++x) {
+                    const i64 px = x - dx;
+                    if (px < 0 || px >= nx) continue;
+                    row[x] = std::min(row[x], prev[px] + w);
+                }
             }
         }
     }
-    for (i64 y = ny - 1; y >= 0; --y) {
-        for (i64 x = nx - 1; x >= 0; --x) {
-            double& v = at(x, y);
-            if (x + 1 < nx) v = std::min(v, at(x + 1, y) + 1.0);
-            if (y + 1 < ny) {
-                v = std::min(v, at(x, y + 1) + 1.0);
-                if (x + 1 < nx) v = std::min(v, at(x + 1, y + 1) + diag);
-                if (x > 0) v = std::min(v, at(x - 1, y + 1) + diag);
-            }
-        }
-    }
-    for (i64 i = 0; i < n; ++i) out[static_cast<std::size_t>(i)] = static_cast<float>(d[static_cast<std::size_t>(i)]);
     return out;
 }
 
