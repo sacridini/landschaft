@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-26
+
 ### Added
 - `isochrone_map()` / `isochrone_map_ab()`: GTB Restoration Planner → Isochrone Map
   A / AB, identical to GTB. They give the accumulated cost from object A (or the
