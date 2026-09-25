@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 #if defined(_OPENMP)
@@ -22,6 +23,7 @@
 #include "gtb/entropy.hpp"
 #include "gtb/fad.hpp"
 #include "gtb/grayspatcon.hpp"
+#include "gtb/influence.hpp"
 #include "gtb/gtn.hpp"
 #include "gtb/morphology.hpp"
 #include "gtb/mosaic.hpp"
@@ -494,6 +496,37 @@ py::dict compute_fad_change_counts(const CArray<std::uint8_t>& a, const CArray<s
     return d;
 }
 
+gtb::DistanceMetric parse_metric(const std::string& metric) {
+    if (metric == "euclidean") return gtb::DistanceMetric::Euclidean;
+    if (metric == "quasi-euclidean") return gtb::DistanceMetric::QuasiEuclidean;
+    throw py::value_error("metric must be 'euclidean' or 'quasi-euclidean'");
+}
+
+py::dict compute_influence(const CArray<std::uint8_t>& input, i64 min_area, int core_buffer, int buffer, bool proximity,
+                           const std::string& metric, int n_threads) {
+    const gtb::ImageU8 im = to_image(input);
+    const gtb::DistanceMetric m = parse_metric(metric);
+    gtb::InfluenceResult r = run_parallel(n_threads, [&] {
+        return gtb::compute_influence(im, min_area, core_buffer, buffer, proximity, m);
+    });
+    py::dict d;
+    d["n_objects"] = r.n_objects;
+    d["object_area"] = py::cast(r.object_area);
+    d["classes"] = to_array(std::move(r.classes));
+    d["ids"] = to_array(std::move(r.ids));
+    d["zones"] = to_array(std::move(r.zones));
+    if (proximity) {
+        d["distance"] = to_array(std::move(r.distance));
+        if (r.cag.size() > 0) d["cag"] = to_array(std::move(r.cag));
+        py::list lines;
+        for (const auto& l : r.lines) lines.append(py::make_tuple(l.x, l.y, l.nbr, l.clength, l.cag, l.ids, l.areas));
+        d["lines"] = lines;
+        d["prox_min"] = r.prox_min;
+        d["prox_min_count"] = r.prox_min_count;
+    }
+    return d;
+}
+
 py::array_t<float> compute_gray_convolution(
     const CArray<std::uint8_t>& input,
     const std::string& metric,
@@ -546,6 +579,20 @@ void bind_detail(py::module_& m) {
         std::vector<i64> areas;
         gtb::label_regions(im, value, graph, bottom_up, labels, areas);
         return py::make_tuple(to_array(std::move(labels)), py::cast(areas));
+    });
+    m.def("morph_distance", [](const CArray<std::uint8_t>& a, bool background, const std::string& metric) {
+        const auto im = to_image(a);
+        return to_array(gtb::morph_distance(im, background, parse_metric(metric)), im.nx, im.ny);
+    });
+    m.def("hist_equal", [](const CArray<float>& a) {
+        if (a.ndim() != 2) throw py::value_error("expected a 2-D array");
+        std::vector<float> v(a.data(), a.data() + a.size());
+        return to_array(gtb::hist_equal(v, a.shape(1), a.shape(0)));
+    });
+    m.def("watershed", [](const CArray<std::uint8_t>& a, int graph) {
+        std::int32_t nregions = 0;
+        auto ws = gtb::watershed(to_image(a), graph, nregions);
+        return py::make_tuple(to_array(std::move(ws)), nregions);
     });
     m.def("wsfah", [](const CArray<std::uint32_t>& labels, const CArray<std::uint8_t>& ref, int graph, int maxfl) {
         auto im = to_image(labels);
@@ -620,6 +667,10 @@ PYBIND11_MODULE(_core, m) {
           "Compute Fragmentation (FOS) change map, 6x6 transition matrix, and shift percentages.");
     m.def("compute_fad_change_counts", &compute_fad_change_counts, py::arg("a"), py::arg("b"), py::arg("n_threads") = 0,
           "GTB FAD Multiscale change: 7x7 class transition counts and foreground areas of two FAD maps.");
+    m.def("compute_influence", &compute_influence, py::arg("input"), py::arg("min_area") = 5000,
+          py::arg("core_buffer") = 0, py::arg("buffer") = 0, py::arg("proximity") = false,
+          py::arg("metric") = "euclidean", py::arg("n_threads") = 0,
+          "GTB Influence Zones / Proximity of the foreground objects.");
     m.def("compute_gray_convolution", &compute_gray_convolution, py::arg("input"), py::arg("metric") = "mean",
           py::arg("window_size") = 7, py::arg("mask_missing") = true, py::arg("n_threads") = 0,
           "Compute moving-window spatial convolution over continuous grayscale raster.");

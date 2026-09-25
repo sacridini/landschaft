@@ -365,8 +365,8 @@ def _resolve_colormap(colormap, data) -> dict | None:
             return change_colormap()
         if product == "FOS_CHANGE":
             return foschange_colormap()
-        if product == "ACCOUNTING":
-            return accounting_colormap()
+        if product in ("ACCOUNTING", "INFLUENCE_ZONES", "PROXIMITY"):
+            return accounting_colormap()  # GTB's mspacolorston table
         return None
     if colormap == "mspa":
         return mspa_colormap(True)

@@ -31,6 +31,7 @@ from .entropy import SpatialEntropyResult, spatial_entropy, spatial_entropy_map
 from .fad import FAD_CLASSES, FADMultiscaleResult, FADResult, fad, fad_multiscale
 from .fad_change import FADChangeScale, FADMultiscaleChangeResult, fad_multiscale_change
 from .grayspatcon import gray_spatial_convolution
+from .influence import INFLUENCE_CLASSES, InfluenceZonesResult, ProximityResult, influence_zones, proximity
 from .gtn import (
     BRIDGE_CLASSES,
     CORE_CLASSES,
@@ -110,6 +111,8 @@ __all__ = [
     "GTNImportanceResult",
     "GTN_COMPONENTS_COLORMAP",
     "GTN_IMPORTANCE_COLORMAP",
+    "INFLUENCE_CLASSES",
+    "InfluenceZonesResult",
     "InvalidInputError",
     "LM19_CLASSES",
     "LMHeatmap",
@@ -118,6 +121,7 @@ __all__ = [
     "MSPA_CLASSES",
     "MorphologicalChangeResult",
     "ParcellationResult",
+    "ProximityResult",
     "RasterCollection",
     "RasterInfo",
     "RestorationCorridorResult",
@@ -149,6 +153,7 @@ __all__ = [
     "gtn_components_colormap",
     "gtn_importance",
     "gtn_importance_colormap",
+    "influence_zones",
     "landscape_mosaic",
     "landscape_mosaic_change",
     "landscape_mosaic_heatmap",
@@ -163,6 +168,7 @@ __all__ = [
     "mspa_colormap",
     "mspa_stats",
     "parcellation",
+    "proximity",
     "reclassify",
     "resistance_colormap",
     "restoration_corridor",
