@@ -162,6 +162,7 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `isochrone_map(resistance, marker)`, `isochrone_map_ab(resistance, marker)` | GTB Restoration Planner isochrone maps: accumulated cost from object A (marker 1), or the cheapest A–B route (markers 1 and 2) with its least-cost path; marker 3 = missing. GTB display codes 0–100, 101–104. |
 | `distance_to_resistance(data)` | Resistance map growing with the distance to the foreground (GTB Setup Tools). |
 | `spa(data, variant=5)` | GTB SPA2/3/5/6: map in GTB codes (17 core, 3 edge, 5 perforation, 1 margin, 9 islet, 100 core-opening), class table, object counts, porosity, `summary()`. |
+| `batch(tool, inputs, output_dir, *, n_workers=None, threads_per_worker=1, max_memory=None, overwrite=False, **params)` | Any tool (`BATCH_TOOLS`, e.g. `"accounting"`, `"spa"`, `"fad_multiscale"`, or a function) on many rasters in parallel; writes GeoTIFF maps, CSV tables, TXT reports and a JSON record per input. |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |

@@ -1,8 +1,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Parallel processing of many rasters, one thread per raster."""
+"""Parallel processing of many rasters, one thread per raster.
+
+:func:`batch` runs any landschaft tool on many rasters (GuidosToolbox's
+*File -> Batch Process*); :func:`mspa_batch` is the MSPA-specific version with
+GTB's output naming.
+"""
 
 from __future__ import annotations
 
+import dataclasses
+import inspect
+import json
+import math
 import os
 import re
 import threading
@@ -11,15 +20,19 @@ import warnings
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
+
+import numpy as np
+import pandas as pd
+import xarray as xr
 
 from .collection import RasterCollection, RasterInfo, expand_sources
 from .io import PathLike, load_raster, write_raster
 from .mspa import mspa
 
-__all__ = ["BatchResult", "mspa_batch"]
+__all__ = ["BATCH_TOOLS", "BatchResult", "batch", "mspa_batch"]
 
 T = TypeVar("T")
 
@@ -35,6 +48,7 @@ class BatchResult:
     output: Path | None
     seconds: float
     error: str | None = None
+    outputs: list[Path] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -250,6 +264,218 @@ def mspa_collection(
         list(range(len(collection))),
         process,
         pixels=lambda i: collection[i].pixels,
+        n_workers=n_workers,
+        threads_per_worker=threads_per_worker,
+        max_memory=max_memory,
+    )
+
+
+# --- any tool -------------------------------------------------------------------------
+
+#: Tools :func:`batch` knows by name (any other function of one raster works too).
+BATCH_TOOLS: tuple[str, ...] = (
+    "accounting", "clustering_fac", "conefor_inputs", "contagion_pff", "contortion", "distance_to_resistance",
+    "euclidean_distance", "fad", "fad_multiscale", "gray_spatial_convolution", "gtn_components", "gtn_importance",
+    "influence_zones", "landscape_mosaic", "landscape_mosaic_heatmap", "landscape_mosaic_stats", "mspa",
+    "parcellation", "proximity", "reclassify", "restoration_status", "spa", "spatial_entropy",
+    "spatial_entropy_map",
+)
+
+# Peak memory per pixel of the tools that need more than MSPA's 32 bytes.
+_TOOL_BYTES_PER_PIXEL = {"fad_multiscale": 64, "landscape_mosaic": 48, "landscape_mosaic_heatmap": 48,
+                         "influence_zones": 80, "proximity": 96, "gtn_importance": 64, "euclidean_distance": 48}
+
+
+def _resolve_tool(tool) -> tuple[str, Callable]:
+    if callable(tool):
+        return getattr(tool, "__name__", "tool"), tool
+    if tool not in BATCH_TOOLS:
+        raise ValueError(f"unknown tool {tool!r}; known tools: {', '.join(BATCH_TOOLS)} (or pass a function)")
+    import landschaft
+
+    return tool, getattr(landschaft, tool)
+
+
+def _thread_keyword(fn: Callable) -> str | None:
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return None
+    return next((k for k in ("n_threads", "threads") if k in params), None)
+
+
+def _json_value(value):
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, (list, tuple)):
+        return [_json_value(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _json_value(v) for k, v in value.items()}
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
+def _is_map(value) -> bool:
+    return isinstance(value, (xr.DataArray, np.ndarray)) and np.ndim(value) == 2 and min(np.shape(value)) > 1
+
+
+def _writable(value):
+    """The map with a GeoTIFF-friendly data type."""
+    arr = value.values if isinstance(value, xr.DataArray) else np.asarray(value)
+    if arr.dtype == bool:
+        arr = arr.astype(np.uint8)
+    elif arr.dtype == np.int64:
+        info = np.iinfo(np.int32)
+        arr = arr.astype(np.int32 if arr.size == 0 or (arr.min() >= info.min and arr.max() <= info.max) else np.float64)
+    elif arr.dtype == np.uint64:
+        arr = arr.astype(np.float64)
+    return value.copy(data=arr) if isinstance(value, xr.DataArray) else arr
+
+
+def _write_outputs(result, base: Path) -> tuple[list[Path], dict[str, Any]]:
+    """Write every map (GeoTIFF), table (CSV) and report (TXT) of a tool result."""
+    outputs: list[Path] = []
+    values: dict[str, Any] = {}
+
+    def name_for(suffix: str, ext: str) -> Path:
+        return base.with_name(f"{base.name}_{suffix}{ext}" if suffix else f"{base.name}{ext}")
+
+    def put(key: str, value) -> None:
+        if value is None:
+            return
+        if _is_map(value):
+            outputs.append(write_raster(_writable(value), name_for(key, ".tif")))
+        elif isinstance(value, pd.DataFrame):
+            path = name_for(key, ".csv")
+            value.to_csv(path, index=not isinstance(value.index, pd.RangeIndex))
+            outputs.append(path)
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                if _is_map(v) or isinstance(v, pd.DataFrame):
+                    put(f"{key}_{k}" if key else str(k), v)
+                elif not isinstance(v, (xr.DataArray, np.ndarray)):
+                    values[f"{key}.{k}" if key else str(k)] = _json_value(v)
+        elif isinstance(value, (bool, int, float, str, np.generic)):
+            values[key or "value"] = _json_value(value)
+        elif isinstance(value, (list, tuple)) and all(isinstance(v, (bool, int, float, str, np.generic)) for v in value):
+            values[key or "value"] = _json_value(list(value))
+
+    if dataclasses.is_dataclass(result) and not isinstance(result, type):
+        for f in dataclasses.fields(result):
+            put(f.name, getattr(result, f.name))
+        if callable(getattr(result, "summary", None)):
+            path = name_for("", ".txt")
+            path.write_text(result.summary())
+            outputs.append(path)
+        if callable(getattr(result, "csv_text", None)):
+            path = name_for("gtb", ".csv")
+            path.write_text(result.csv_text())
+            outputs.append(path)
+    elif isinstance(result, tuple):
+        for i, v in enumerate(result):
+            put(str(i), v)
+    else:
+        put("", result)
+    return outputs, values
+
+
+def batch(
+    tool,
+    inputs,
+    output_dir: PathLike,
+    *,
+    n_workers: int | None = None,
+    threads_per_worker: int = 1,
+    max_memory: int | str | None = None,
+    overwrite: bool = False,
+    raise_errors: bool = False,
+    **params,
+) -> list[BatchResult]:
+    """Run a landschaft tool on many rasters in parallel and write its outputs.
+
+    GuidosToolbox's *Batch Process* for every tool: each worker thread loads
+    one raster, runs ``tool(data, **params)`` and writes what it returns to
+    ``output_dir``, named after the input and the tool:
+
+    - maps: ``<name>_<tool>[_<field>].tif`` (GeoTIFF with the input's
+      georeferencing and, for GTB products, GTB's colour table);
+    - tables: ``<name>_<tool>_<field>.csv``; the text report (``summary()``):
+      ``<name>_<tool>.txt``; GTB's CSV report when the tool has one:
+      ``<name>_<tool>_gtb.csv``;
+    - ``<name>_<tool>.json``: tool, parameters, output files, scalar results
+      and run time. An input whose JSON exists is skipped unless ``overwrite``.
+
+    MSPA is written with GTB's naming (see :func:`mspa_batch`).
+
+    Parameters
+    ----------
+    tool
+        A name from :data:`BATCH_TOOLS` (e.g. ``"accounting"``, ``"spa"``,
+        ``"fad_multiscale"``) or any function taking a raster as first argument.
+    inputs
+        A :class:`RasterCollection`, a directory, a glob pattern or a list of
+        raster paths.
+    output_dir
+        Directory for the results (created if needed).
+    n_workers, threads_per_worker, max_memory, overwrite, raise_errors
+        As in :func:`mspa_batch`. ``threads_per_worker`` is passed to the
+        tool's ``n_threads``/``threads`` argument.
+    **params
+        Parameters of the tool, e.g. ``variant=6`` for ``"spa"``.
+
+    Returns
+    -------
+    list of BatchResult
+        One entry per input, in input order; ``outputs`` lists every file written.
+    """
+    name, fn = _resolve_tool(tool)
+    if name == "mspa":
+        return mspa_batch(inputs, output_dir, n_workers=n_workers, threads_per_worker=threads_per_worker,
+                          max_memory=max_memory, overwrite=overwrite, raise_errors=raise_errors, **params)
+    if isinstance(inputs, RasterCollection):
+        paths, band = inputs.paths, inputs.band
+        size = {i.path: i.pixels for i in inputs}
+    else:
+        paths, band, size = expand_sources(inputs), None, {}
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    thread_kw = _thread_keyword(fn)
+    call_params = dict(params)
+    if thread_kw and thread_kw not in call_params:
+        call_params[thread_kw] = threads_per_worker
+    from . import __version__
+
+    def process(src: Path) -> BatchResult:
+        start = time.perf_counter()
+        base = out_dir / f"{src.stem}_{name}"
+        meta_path = base.with_name(base.name + ".json")
+        try:
+            if meta_path.exists() and not overwrite:
+                files = [Path(f) for f in json.loads(meta_path.read_text()).get("outputs", [])]
+                return BatchResult(src, files[0] if files else meta_path, 0.0, outputs=files + [meta_path])
+            data = load_raster(src, band=band, validate=None)
+            result = fn(data, **call_params)
+            outputs, values = _write_outputs(result, base)
+            seconds = time.perf_counter() - start
+            meta_path.write_text(json.dumps({
+                "tool": name, "input": str(src), "params": _json_value(params),
+                "outputs": [str(p) for p in outputs], "values": values,
+                "seconds": round(seconds, 3), "landschaft": __version__,
+            }, indent=1))
+            return BatchResult(src, outputs[0] if outputs else meta_path, seconds, outputs=outputs + [meta_path])
+        except Exception as err:  # noqa: BLE001 - reported per file
+            if raise_errors:
+                raise
+            return BatchResult(src, None, time.perf_counter() - start, f"{type(err).__name__}: {err}")
+
+    per_pixel = _TOOL_BYTES_PER_PIXEL.get(name, BYTES_PER_PIXEL)
+    return run_parallel(
+        paths,
+        process,
+        pixels=lambda p: (size.get(p) or _header_pixels(p)) * per_pixel // BYTES_PER_PIXEL,
         n_workers=n_workers,
         threads_per_worker=threads_per_worker,
         max_memory=max_memory,

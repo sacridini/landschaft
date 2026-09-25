@@ -6,6 +6,20 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- `batch(tool, inputs, output_dir, **params)`: GTB's Batch Process for every tool.
+  It runs any landschaft tool, or any function of one raster, on many rasters in
+  parallel, with the memory budget of `mspa_batch`, and writes everything the tool
+  returns: maps as georeferenced GeoTIFFs (with GTB's colour tables), tables as CSV,
+  `summary()` reports as TXT, GTB's CSV reports, and a JSON record (parameters,
+  outputs, scalar results, run time) that lets reruns skip finished inputs.
+  `BATCH_TOOLS` lists the tools known by name.
+
+### Changed
+- The C++ core now releases the GIL in every tool (parcellation, contortion,
+  restoration status, cost distance, LM statistics, change analyses), so batch
+  workers run in parallel.
+
 ## [0.9.0] - 2026-09-26
 
 ### Added

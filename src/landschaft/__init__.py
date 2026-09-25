@@ -14,7 +14,7 @@ from importlib import metadata as _metadata
 
 from . import _core
 from .accounting import ACCOUNTING_CLASSES, AccountingResult, accounting
-from .batch import BatchResult, mspa_batch
+from .batch import BATCH_TOOLS, BatchResult, batch, mspa_batch
 from .change import (
     FOSChangeResult,
     MorphologicalChangeResult,
@@ -93,6 +93,7 @@ __all__ = [
     "ACCOUNTING_CLASSES",
     "ACCOUNTING_COLORMAP",
     "AccountingResult",
+    "BATCH_TOOLS",
     "BatchResult",
     "BRIDGE_CLASSES",
     "CORE_CLASSES",
@@ -138,6 +139,7 @@ __all__ = [
     "accounting",
     "accounting_colormap",
     "change_colormap",
+    "batch",
     "clustering_fac",
     "conefor_inputs",
     "contagion_pff",

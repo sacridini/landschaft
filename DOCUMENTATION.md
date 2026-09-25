@@ -494,6 +494,17 @@ gsc_ent = ls.gray_spatial_convolution(img, metric="shannon_diversity", window_si
 
 ## 11. Batch Processing & Raster Collections
 
+Any tool can run on many rasters (GTB's *Batch Process*):
+```python
+results = ls.batch("accounting", "tiles/*.tif", "out/", highlight_largest=True, max_memory="16GB")
+ls.batch("spa", "tiles/", "out/", variant=6)
+ls.batch(my_function, "tiles/", "out/")     # any function of one raster
+[r.outputs for r in results]                # GeoTIFF maps, CSV tables, TXT report, JSON record
+```
+Outputs are named `<name>_<tool>[_<field>].<ext>`. The JSON record
+(`<name>_<tool>.json`) holds the parameters, the output files and the scalar
+results, and lets a rerun skip finished inputs (`overwrite=True` recomputes them).
+
 Process thousands of raster tiles efficiently without exhausting system RAM:
 
 ```python

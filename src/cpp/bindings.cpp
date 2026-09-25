@@ -294,7 +294,7 @@ py::dict compute_landscape_mosaic_stats(
     const CArray<std::uint8_t>& im103
 ) {
     const gtb::ImageU8 im = to_image(im103);
-    gtb::LandscapeMosaicStats stats = gtb::compute_landscape_mosaic_stats(im);
+    gtb::LandscapeMosaicStats stats = run_parallel(0, [&] { return gtb::compute_landscape_mosaic_stats(im); });  // releases the GIL
     py::dict out;
     out["class_codes"] = stats.class_codes;
     out["pixel_counts"] = stats.pixel_counts;
@@ -304,7 +304,7 @@ py::dict compute_landscape_mosaic_stats(
 
 py::dict compute_restoration_status(const CArray<std::uint8_t>& input) {
     const gtb::ImageU8 im = to_image(input);
-    gtb::RestorationStatusResult res = gtb::compute_restoration_status(im);
+    gtb::RestorationStatusResult res = run_parallel(0, [&] { return gtb::compute_restoration_status(im); });  // releases the GIL
     py::dict d;
     d["data_area"] = res.data_area;
     d["nr_comp"] = res.nr_comp;
@@ -325,7 +325,7 @@ py::array_t<float> compute_cost_distance(
 ) {
     const gtb::ImageU8 res = to_image(resistance);
     const gtb::ImageU8 src = to_image(source_mask);
-    gtb::Image<float> out = gtb::compute_cost_distance(res, src);
+    gtb::Image<float> out = run_parallel(0, [&] { return gtb::compute_cost_distance(res, src); });  // releases the GIL
     return to_array(std::move(out));
 }
 
@@ -343,7 +343,7 @@ py::dict compute_least_cost_path(
         auto d_arr = dist_map_obj.cast<CArray<float>>();
         dist_map_ptr = std::make_unique<gtb::Image<float>>(to_image(d_arr));
     }
-    gtb::LeastCostPathResult lcp = gtb::compute_least_cost_path(res, ma, mb, dist_map_ptr.get());
+    gtb::LeastCostPathResult lcp = run_parallel(0, [&] { return gtb::compute_least_cost_path(res, ma, mb, dist_map_ptr.get()); });  // releases the GIL
     py::dict d;
     d["combined_cost"] = to_array(std::move(lcp.combined_cost));
     d["lcp_mask"] = to_array(std::move(lcp.lcp_mask));
@@ -360,7 +360,7 @@ py::tuple compute_parcellation(
     bool return_labels
 ) {
     const gtb::ImageU8 im = to_image(input);
-    gtb::ParcellationResult res = gtb::compute_parcellation(im, connectivity, return_labels);
+    gtb::ParcellationResult res = run_parallel(0, [&] { return gtb::compute_parcellation(im, connectivity, return_labels); });  // releases the GIL
 
     py::list class_stats_list;
     for (const auto& cs : res.class_stats) {
@@ -415,7 +415,7 @@ py::array_t<std::uint32_t> compute_contortion(
     i64 min_area
 ) {
     const gtb::ImageU8 im = to_image(input);
-    gtb::Image<std::uint32_t> out = gtb::compute_contortion(im, min_area);
+    gtb::Image<std::uint32_t> out = run_parallel(0, [&] { return gtb::compute_contortion(im, min_area); });  // releases the GIL
     return to_array(std::move(out));
 }
 
@@ -425,7 +425,7 @@ py::dict compute_simple_change(
 ) {
     const gtb::ImageU8 a = to_image(im1);
     const gtb::ImageU8 b = to_image(im2);
-    gtb::SimpleChangeResult res = gtb::compute_simple_change(a, b);
+    gtb::SimpleChangeResult res = run_parallel(0, [&] { return gtb::compute_simple_change(a, b); });  // releases the GIL
     py::dict d;
     d["change_map"] = to_array(std::move(res.change_map));
     d["stable_bg"] = res.stable_bg;
@@ -443,7 +443,7 @@ py::dict compute_morphological_change(
 ) {
     const gtb::ImageU8 a = to_image(im1);
     const gtb::ImageU8 b = to_image(im2);
-    gtb::MorphologicalChangeResult res = gtb::compute_morphological_change(a, b);
+    gtb::MorphologicalChangeResult res = run_parallel(0, [&] { return gtb::compute_morphological_change(a, b); });  // releases the GIL
     py::dict d;
     d["change_map"] = to_array(std::move(res.change_map));
     d["fg_area_t1"] = res.fg_area_t1;
@@ -465,7 +465,7 @@ py::dict compute_fos_change(
 ) {
     const gtb::ImageU8 a = to_image(fos1);
     const gtb::ImageU8 b = to_image(fos2);
-    gtb::FOSChangeResult res = gtb::compute_fos_change(a, b);
+    gtb::FOSChangeResult res = run_parallel(0, [&] { return gtb::compute_fos_change(a, b); });  // releases the GIL
     py::dict d;
     d["change_map"] = to_array(std::move(res.change_map));
     d["fg_gain"] = res.fg_gain;
