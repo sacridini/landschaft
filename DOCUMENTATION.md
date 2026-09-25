@@ -152,6 +152,22 @@ result = ls.mspa(
 )
 ```
 
+### MSPA Tiling (maps larger than memory)
+GTB's *MSPA Tiling*: overlapping tiles processed one by one (or `n_workers` at a time) and put back together.
+A GeoTIFF path is processed out of core, reading and writing one tile window at a time:
+```python
+out = ls.mspa_tiled("europe_forest.tif")        # -> europe_forest_8_1_1_1.tif (GTB naming)
+out = ls.mspa_tiled("europe_forest.tif", "mspa.tif", connectivity=4, n_workers=4, overwrite=True)
+m = ls.mspa_tiled(data, tile_size=6500, overlap=2000)  # arrays / DataArrays in memory
+ls.tile_layout(20000)  # [(read_start, read_stop, keep_start, keep_stop), ...] per tile along an axis
+```
+Tiles are `tile_size` pixels including the `overlap` (GTB: 6500 and 2000 on MS-Windows, 9500 on Linux,
+8500 on macOS; GTB fixes the edge width to 1); each tile keeps its half of every overlap. Tiles with only
+missing data, only foreground, or lacking background or foreground are classified directly, as in GTB.
+The result is identical to GTB's MSPA Tiling. It equals MSPA of the whole map when the objects are small
+compared with the overlap; otherwise classes that depend on whole objects (loops, bridges, islets, openings)
+can differ near the seams — use `ls.mspa()` on the whole map whenever it fits in memory (about 32 bytes per pixel).
+
 ### Simplified Pattern Analysis (SPA2/3/5/6)
 GTB's simplified alternatives to MSPA (8-connected foreground, 1-pixel edge width):
 ```python
@@ -554,6 +570,7 @@ results = ls.mspa_batch(
 * **Landscape Mosaic**: Tested against JRC `recode64` binaries (bit-exact).
 * **FAD-MS, FAD Multiscale Change, LM Heatmap and Heatmap Change**: Tested against GTB's own IDL code run in GDL together with GTB's `spatcon` (FAD-MS maps and 103-class maps identical, change tables identical, heatmap vectors identical bit for bit, CSV reports identical character for character).
 * **GraySpatCon**: Tested directly against `grayspatcon64.exe` (parity verified to float32 precision).
+* **MSPA Tiling**: Tested against GTB's `mspatile` IDL code run in GDL with GTB's gdal tools and `mspa` (10 stored cases covering all tiling layouts and tile shortcuts, plus live random cases; maps identical). GDL needs two shims for GTB's file handling (`tests/gtb_idl/read_tiff.pro`, `updategeotagsinimage.pro`).
 * **FOS** (FAD/FED/FAC, 5/6 classes, binary and grayscale): Tested against GTB's batch FOS IDL code run in GDL with GTB's `spatcon` and `grayspatcon` (maps identical; statistics identical to IDL's float/double precision). 13 stored cases plus live random scenes.
 * **Accounting** (IDL-only in GTB): Tested against GTB's own IDL code (`tests/gtb_idl`, statements copied verbatim from `guidostoolbox.pro`) run in GDL. Maps and integer statistics are identical. Stored digests (`tests/data/reference/idl_reference.json`) cover 7 maps × 5 parameter sets, and random scenes run live when GDL is available.
 

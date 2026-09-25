@@ -75,6 +75,7 @@ from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
 from .spa import SPA_CLASSES, SPAResult, spa
 from .fos import FOSResult, fos
+from .mspa_tiling import mspa_tiled, tile_layout
 from .restoration import (
     LeastCostPathResult,
     RestorationCorridorResult,
@@ -183,6 +184,7 @@ __all__ = [
     "mspa_batch",
     "mspa_colormap",
     "mspa_stats",
+    "mspa_tiled",
     "parcellation",
     "proximity",
     "reclassify",
@@ -191,6 +193,7 @@ __all__ = [
     "restoration_status",
     "simple_change",
     "spa",
+    "tile_layout",
     "spatial_entropy",
     "spatial_entropy_map",
     "validate_fad_input",

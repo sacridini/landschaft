@@ -6,6 +6,18 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- `mspa_tiled()`: GTB's MSPA Tiling for maps too large for memory. The map is cut
+  into overlapping tiles (GTB: 6500 pixels with a 2000-pixel overlap on MS-Windows),
+  MSPA runs on every tile, and the tiles are put back together as GTB does, including
+  its shortcuts for tiles without background or without foreground. GeoTIFF paths are
+  processed out of core, window by window, with tiles in parallel (`n_workers`);
+  arrays and DataArrays in memory. `tile_layout()` gives the tiles of an axis. Outputs
+  are identical to GTB's MSPA Tiling, i.e. its IDL code with its gdal tools and `mspa`,
+  run in GDL. Like GTB's, the result is an approximation of MSPA near the seams when
+  objects are larger than the overlap. Unlike GTB, a map that fits in one tile gets
+  MSPA of the whole map (GTB drops the first `overlap / 2` columns).
+
 ## [0.11.0] - 2026-09-26
 
 ### Added

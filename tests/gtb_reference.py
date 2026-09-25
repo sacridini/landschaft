@@ -341,3 +341,65 @@ def run_gtb_fos(exe: os.PathLike, spatcon: os.PathLike, grayspatcon: os.PathLike
                       f"'{fosclass}', {int(window)}, '{connectivity}', {int(gray_threshold)}, {int(not grayscale)}"])
         return {"map": np.fromfile(root / "out" / "fos.raw", dtype=np.uint8).reshape(ny, nx),
                 "stats": _read_stats(root / "out" / "stats.txt")}
+
+
+DEFAULT_GTB_FWTOOLS = Path(r"C:\GuidosToolbox\guidos_progs\GTBtools")
+GTB_PROGS = Path(r"C:\Users\eduar\Documents\dev\GTB\guidos_progs")
+
+
+def find_gtb_mspa() -> Path | None:
+    """GTB's ``mspa`` executable: ``LANDSCHAFT_MSPA_EXE`` or the GTB desktop install."""
+    exe = find_executable()
+    if exe is not None:
+        return exe
+    default = DEFAULT_GTB_FWTOOLS.parent / "mspa.exe"
+    return default if default.is_file() else None
+
+
+def find_gtb_fwtools() -> Path | None:
+    """GTB's gdal tools folder (with ``setfw.bat``) from ``LANDSCHAFT_GTB_FWTOOLS`` or the default install."""
+    d = Path(os.environ.get("LANDSCHAFT_GTB_FWTOOLS", DEFAULT_GTB_FWTOOLS))
+    return d if (d / "setfw.bat").is_file() else None
+
+
+def _gtb_colortables() -> Path | None:
+    for d in (Path(os.environ.get("LANDSCHAFT_GTB_PROGS", GTB_PROGS)), DEFAULT_GTB_FWTOOLS.parent):
+        if (d / "mspacolorston.sav").is_file():
+            return d
+    return None
+
+
+def run_gtb_mspa_tile(exe: os.PathLike, mspa: os.PathLike, fwtools: os.PathLike, data: np.ndarray, *,
+                      connectivity: int = 8, edge_width: int = 1, transition: bool = True, internal: bool = True,
+                      tile_size: int = 6500, overlap: int = 2000) -> np.ndarray:
+    """GTB's MSPA Tiling (``tests/gtb_idl/gtb_mspa_tile.pro``) with GTB's gdal tools and ``mspa`` executable."""
+    import shutil
+
+    from rasterio.transform import from_origin
+
+    ct = _gtb_colortables()
+    if ct is None:
+        raise FileNotFoundError("mspacolorston.sav not found (set LANDSCHAFT_GTB_PROGS to GTB's guidos_progs)")
+    import sys
+
+    os.environ.setdefault("LANDSCHAFT_PYTHON", sys.executable)  # for tests/gtb_idl/read_tiff.pro
+    ny, nx = data.shape
+    with tempfile.TemporaryDirectory(prefix="gtb_tile_") as tmp:
+        root = Path(tmp)
+        (root / "mspatmp").mkdir()
+        (root / "data").mkdir()
+        shutil.copy(mspa, root / "mspa.exe")
+        for name in ("mspacolorston.sav", "mspacolorstoff.sav"):
+            shutil.copy(ct / name, root / name)
+        with rasterio.open(root / "data" / "in.tif", "w", driver="GTiff", width=nx, height=ny, count=1,
+                           dtype="uint8", crs="EPSG:3035", transform=from_origin(4_000_000, 3_000_000, 25, 25)) as dst:
+            dst.write(np.ascontiguousarray(data, dtype=np.uint8), 1)
+        params = [str(connectivity), str(edge_width), str(int(transition)), str(int(internal))]
+        fw = str(Path(fwtools)).rstrip("\\/") + "\\"
+        run_gdl(exe, [f"gtb_mspa_tile, {_idl_str(root / 'data' / 'in.tif')}, {_idl_str(root)} + '/', '{fw}', "
+                      + ", ".join(f"'{p}'" for p in params) + f", {int(tile_size)}, {int(overlap)}"], timeout=3600)
+        out = root / "data" / ("in_" + "_".join(params) + ".tif")
+        with rasterio.open(out) as src:
+            if (src.height, src.width) != (ny, nx):
+                raise RuntimeError(f"GTB tiling produced a {src.height}x{src.width} map for {ny}x{nx}")
+            return src.read(1)

@@ -31,6 +31,8 @@ from gtb_reference import (  # noqa: E402
     find_gdl,
     find_ggeo,
     find_grayspatcon,
+    find_gtb_fwtools,
+    find_gtb_mspa,
     find_spatcon,
     run_gtb_accounting,
     run_gtb_accounting_scaled_classes,
@@ -40,6 +42,7 @@ from gtb_reference import (  # noqa: E402
     run_gtb_isochrone,
     run_gtb_lm_delta,
     run_gtb_lm_heatmap,
+    run_gtb_mspa_tile,
     run_gtb_spa,
 )
 
@@ -205,6 +208,34 @@ FOS_CASES = [
 ]
 
 
+def mspa_tile_inputs() -> dict[str, np.ndarray]:
+    shortcuts = scenes.make("blobs", 9).copy()  # tiles without background or without foreground
+    shortcuts[:80, :100] = 0
+    shortcuts[:80, 100:200] = 2
+    shortcuts[80:160, :100] = np.where(np.arange(100) % 7 < 3, 0, 2)
+    shortcuts[160:, :100] = np.where(np.arange(100) % 5 < 2, 0, 1)
+    shortcuts[160:, 100:160] = 1
+    strip = scenes.make("blobs", 21)
+    return {"blobs_3": scenes.make("blobs", 3), "blobs_4": scenes.make("blobs", 4), "salt_5": scenes.make("salt", 5),
+            "network_6": scenes.make("network", 6), "shortcuts": shortcuts, "strip_row": strip[:50, :],
+            "strip_col": strip[:, :55], "gtb_input": gtb_input()}
+
+
+# (input, tile size, overlap, MSPA parameters)
+MSPA_TILE_CASES = [
+    ("blobs_3", 60, 10, {}),
+    ("blobs_4", 100, 20, {"connectivity": 4, "internal": False}),
+    ("salt_5", 70, 30, {"transition": False}),
+    ("network_6", 90, 11, {"edge_width": 2}),
+    ("shortcuts", 60, 20, {}),
+    ("shortcuts", 80, 10, {"connectivity": 4}),
+    ("shortcuts", 45, 4, {"internal": False}),
+    ("strip_row", 60, 16, {}),
+    ("strip_col", 60, 16, {}),
+    ("gtb_input", 300, 60, {}),
+]
+
+
 def float32_hex(a: np.ndarray) -> str:
     return np.asarray(a, dtype="<f4").tobytes().hex()
 
@@ -298,6 +329,18 @@ def main(exe: Path, spatcon: Path, ggeo: Path | None = None) -> None:
                               "stats": ref["stats"]})
             print("fos", name, fosclass, window)
 
+    tile_cases = []
+    mspa_exe, fwtools = find_gtb_mspa(), find_gtb_fwtools()
+    if mspa_exe is None or fwtools is None:
+        print("GTB mspa.exe or gdal tools (setfw.bat) not found: MSPA Tiling references are not generated")
+    else:
+        inputs = mspa_tile_inputs()
+        for name, tile, overlap, params in MSPA_TILE_CASES:
+            ref = run_gtb_mspa_tile(exe, mspa_exe, fwtools, inputs[name], tile_size=tile, overlap=overlap, **params)
+            tile_cases.append({"input": name, "tile_size": tile, "overlap": overlap, "params": params,
+                               "input_sha256": digest(inputs[name]), "sha256": digest(ref)})
+            print("mspa_tile", name, tile, overlap, params)
+
     iso_cases = []
     if ggeo is not None:
         for name, (resist, marker) in isochrone_inputs().items():
@@ -320,6 +363,7 @@ def main(exe: Path, spatcon: Path, ggeo: Path | None = None) -> None:
         "isochrone": iso_cases,
         "spa": spa_cases,
         "fos": fos_cases,
+        "mspa_tile": tile_cases,
         "grayspatcon_sha256": hashlib.sha256(grayspatcon.read_bytes()).hexdigest() if grayspatcon else None,
         "ggeo_sha256": hashlib.sha256(ggeo.read_bytes()).hexdigest() if ggeo else None,
     }, indent=1))

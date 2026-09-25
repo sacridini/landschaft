@@ -11,10 +11,13 @@
   "tests/gtb_idl/gtb_isochrone.pro",
   "tests/gtb_idl/gtb_lm_delta.pro",
   "tests/gtb_idl/gtb_lm_heatmap.pro",
+  "tests/gtb_idl/gtb_mspa_tile.pro",
   "tests/gtb_idl/gtb_spa.pro",
   "tests/gtb_idl/mesage.pro",
   "tests/gtb_idl/morph_open.pro",
-  "tests/gtb_idl/spatcon.pro"
+  "tests/gtb_idl/read_tiff.pro",
+  "tests/gtb_idl/spatcon.pro",
+  "tests/gtb_idl/updategeotagsinimage.pro"
  ],
  "accounting": [
   {
@@ -4739,5 +4742,98 @@
    }
   }
  ],
- "grayspatcon_sha256": "2a5f7ae7ba99d40511406e584c372c6eafbf6754711a01ccc47227f1c7b0f484"
+ "grayspatcon_sha256": "2a5f7ae7ba99d40511406e584c372c6eafbf6754711a01ccc47227f1c7b0f484",
+ "mspa_tile": [
+  {
+   "input": "blobs_3",
+   "tile_size": 60,
+   "overlap": 10,
+   "params": {},
+   "input_sha256": "975ff75a31140f0d75f67e123a7218a43113640f5bf136fc71c491d3540794a8",
+   "sha256": "ad19f8789e25f86cefbb6bc59b7c78e3ac466c0b12be432c9b2ea9d52b3d35d6"
+  },
+  {
+   "input": "blobs_4",
+   "tile_size": 100,
+   "overlap": 20,
+   "params": {
+    "connectivity": 4,
+    "internal": false
+   },
+   "input_sha256": "b253cac2254e5dc0b3ebaa4ebe20260bda96425253d7560aecd56c5c55dc41ce",
+   "sha256": "429759ce78fedd2ee283c30cd8af63d2ca73b122e8cae55552db0a560d22a3bc"
+  },
+  {
+   "input": "salt_5",
+   "tile_size": 70,
+   "overlap": 30,
+   "params": {
+    "transition": false
+   },
+   "input_sha256": "e88d386ef831e2e1af9ab3c636d5fa02be8615616ac1266e7ca16b922adace8f",
+   "sha256": "4e1dad94a4b97cf90124273e1158b90cf11664457f0d47f829d298460fd08eea"
+  },
+  {
+   "input": "network_6",
+   "tile_size": 90,
+   "overlap": 11,
+   "params": {
+    "edge_width": 2
+   },
+   "input_sha256": "2dd02175f835414a799627e3384b7a7756eecaa360f2a301a219898d65ace624",
+   "sha256": "60e344c2e6eebfbce2dc516609928a224170ea070e8506250739ddb884f78365"
+  },
+  {
+   "input": "shortcuts",
+   "tile_size": 60,
+   "overlap": 20,
+   "params": {},
+   "input_sha256": "53c6d736e7755da863e1a86b03103083c315ea7283666a53dc4980363cf05dad",
+   "sha256": "1779661d40bc93727e0b6b8144ddf0693f177e902abec127409316da2124586c"
+  },
+  {
+   "input": "shortcuts",
+   "tile_size": 80,
+   "overlap": 10,
+   "params": {
+    "connectivity": 4
+   },
+   "input_sha256": "53c6d736e7755da863e1a86b03103083c315ea7283666a53dc4980363cf05dad",
+   "sha256": "6381ef543f26ef0d922dda421f69bc1dff193ca82e1f2be6c44fab88cc7da7a9"
+  },
+  {
+   "input": "shortcuts",
+   "tile_size": 45,
+   "overlap": 4,
+   "params": {
+    "internal": false
+   },
+   "input_sha256": "53c6d736e7755da863e1a86b03103083c315ea7283666a53dc4980363cf05dad",
+   "sha256": "3c139a2100ffa0c24121bcb85434ffca592b94d6585d22a9151c0a7db66de27b"
+  },
+  {
+   "input": "strip_row",
+   "tile_size": 60,
+   "overlap": 16,
+   "params": {},
+   "input_sha256": "83ff8a931971bc19431b27c04b40df0b1c91b981709e8ea5da944087e2998d08",
+   "sha256": "583e2fdc11707ad13c6a9f28561411a6bffee7ecd6c28f39c8ec633a324d1c9a"
+  },
+  {
+   "input": "strip_col",
+   "tile_size": 60,
+   "overlap": 16,
+   "params": {},
+   "input_sha256": "fef7a3b36cb59d1aa2db52226b6150baea76b77a1aa65772a65543b6da369eb0",
+   "sha256": "7f563d34aa6bd5a251e4c4979192bff1face520ac172f99cea62808f33cf779d"
+  },
+  {
+   "input": "gtb_input",
+   "tile_size": 300,
+   "overlap": 60,
+   "params": {},
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "sha256": "5f8eee1d2c46cf4dc870dcb6e6b87f1a2b94cee0b67d7b0169776e0031183dbf"
+  }
+ ]
 }
