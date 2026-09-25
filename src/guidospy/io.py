@@ -13,7 +13,14 @@ import rasterio
 import rioxarray  # noqa: F401  (registers the .rio accessor)
 import xarray as xr
 
-from ._palettes import DIST_PALETTE, ENTROPY_PALETTE, FAD_PALETTE, LM_PALETTE
+from ._palettes import (
+    CONTORTION_PALETTE,
+    DIST_PALETTE,
+    ENTROPY_PALETTE,
+    FAD_PALETTE,
+    LM_PALETTE,
+    RESISTANCE_PALETTE,
+)
 from .validation import BACKGROUND, FOREGROUND, MISSING, InvalidInputError, validate_mspa_input
 
 __all__ = [
@@ -29,10 +36,14 @@ __all__ = [
     "dist_colormap",
     "entropy_colormap",
     "lm_colormap",
+    "contortion_colormap",
+    "resistance_colormap",
     "FAD_COLORMAP",
     "DIST_COLORMAP",
     "ENTROPY_COLORMAP",
     "LM_COLORMAP",
+    "CONTORTION_COLORMAP",
+    "RESISTANCE_COLORMAP",
 ]
 
 PathLike = str | os.PathLike
@@ -281,10 +292,22 @@ def lm_colormap() -> dict[int, tuple[int, int, int, int]]:
     return {i: (*LM_PALETTE[i], 255) for i in range(256)}
 
 
+def contortion_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for Contortion maps (256 entries, RGBA)."""
+    return {i: (*CONTORTION_PALETTE[i], 255) for i in range(256)}
+
+
+def resistance_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for Resistance / Isochrone maps (256 entries, RGBA)."""
+    return {i: (*RESISTANCE_PALETTE[i], 255) for i in range(256)}
+
+
 FAD_COLORMAP: dict[int, tuple[int, int, int, int]] = fad_colormap()
 DIST_COLORMAP: dict[int, tuple[int, int, int, int]] = dist_colormap()
 ENTROPY_COLORMAP: dict[int, tuple[int, int, int, int]] = entropy_colormap()
 LM_COLORMAP: dict[int, tuple[int, int, int, int]] = lm_colormap()
+CONTORTION_COLORMAP: dict[int, tuple[int, int, int, int]] = contortion_colormap()
+RESISTANCE_COLORMAP: dict[int, tuple[int, int, int, int]] = resistance_colormap()
 
 
 def _resolve_colormap(colormap, data) -> dict | None:
@@ -307,11 +330,19 @@ def _resolve_colormap(colormap, data) -> dict | None:
             return entropy_colormap()
         if product == "LANDSCAPE_MOSAIC":
             return lm_colormap()
+        if product == "CONTORTION":
+            return contortion_colormap()
+        if product in ("RESISTANCE", "COST_DISTANCE", "LEAST_COST_PATH"):
+            return resistance_colormap()
         return None
     if colormap == "mspa":
         return mspa_colormap(True)
     if colormap == "gtn_components":
         return gtn_components_colormap()
+    if colormap == "contortion":
+        return contortion_colormap()
+    if colormap == "resistance":
+        return resistance_colormap()
     if colormap == "gtn_importance":
         return gtn_importance_colormap()
     if colormap == "fad":

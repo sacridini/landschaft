@@ -42,13 +42,25 @@ from .io import (
     gtn_components_colormap,
     gtn_importance_colormap,
     lm_colormap,
+    contortion_colormap,
+    resistance_colormap,
     load_raster,
     mspa_colormap,
     reclassify,
     write_raster,
 )
+from .morphology import ParcellationResult, contortion, parcellation
 from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
+from .restoration import (
+    LeastCostPathResult,
+    RestorationCorridorResult,
+    RestorationStatusResult,
+    cost_distance,
+    least_cost_path,
+    restoration_corridor,
+    restoration_status,
+)
 from .validation import InvalidInputError, validate_mspa_input
 
 try:
@@ -76,12 +88,19 @@ __all__ = [
     "LM19_CLASSES",
     "LM_COLORMAP",
     "MSPA_CLASSES",
+    "ParcellationResult",
     "RasterCollection",
     "RasterInfo",
+    "RestorationCorridorResult",
+    "RestorationStatusResult",
+    "LeastCostPathResult",
     "SpatialEntropyResult",
     "clustering_fac",
     "conefor_inputs",
     "contagion_pff",
+    "contortion",
+    "contortion_colormap",
+    "cost_distance",
     "dist_colormap",
     "entropy_colormap",
     "euclidean_distance",
@@ -95,6 +114,7 @@ __all__ = [
     "gtn_importance_colormap",
     "landscape_mosaic",
     "landscape_mosaic_stats",
+    "least_cost_path",
     "lm_colormap",
     "load_raster",
     "max_threads",
@@ -102,7 +122,11 @@ __all__ = [
     "mspa_batch",
     "mspa_colormap",
     "mspa_stats",
+    "parcellation",
     "reclassify",
+    "resistance_colormap",
+    "restoration_corridor",
+    "restoration_status",
     "spatial_entropy",
     "spatial_entropy_map",
     "validate_mspa_input",

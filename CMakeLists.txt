@@ -20,6 +20,8 @@ add_library(gtbcore STATIC
     src/cpp/gtb/entropy.cpp
     src/cpp/gtb/contagion.cpp
     src/cpp/gtb/mosaic.cpp
+    src/cpp/gtb/restoration.cpp
+    src/cpp/gtb/morphology.cpp
 )
 target_include_directories(gtbcore PUBLIC src/cpp)
 set_target_properties(gtbcore PROPERTIES POSITION_INDEPENDENT_CODE ON)

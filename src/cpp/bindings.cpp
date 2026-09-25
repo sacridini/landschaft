@@ -20,9 +20,11 @@
 #include "gtb/entropy.hpp"
 #include "gtb/fad.hpp"
 #include "gtb/gtn.hpp"
+#include "gtb/morphology.hpp"
 #include "gtb/mosaic.hpp"
 #include "gtb/mspa.hpp"
 #include "gtb/primitives.hpp"
+#include "gtb/restoration.hpp"
 
 namespace py = pybind11;
 using gtb::i64;
@@ -293,6 +295,105 @@ py::dict compute_landscape_mosaic_stats(
     return out;
 }
 
+py::dict compute_restoration_status(const CArray<std::uint8_t>& input) {
+    const gtb::ImageU8 im = to_image(input);
+    gtb::RestorationStatusResult res = gtb::compute_restoration_status(im);
+    py::dict d;
+    d["data_area"] = res.data_area;
+    d["nr_comp"] = res.nr_comp;
+    d["eca_max"] = res.eca_max;
+    d["larg_obj"] = res.larg_obj;
+    d["aps"] = res.aps;
+    d["cnoa"] = res.cnoa;
+    d["eca"] = res.eca;
+    d["doc"] = res.doc;
+    d["rest_pot"] = res.rest_pot;
+    d["rac"] = res.rac;
+    return d;
+}
+
+py::array_t<float> compute_cost_distance(
+    const CArray<std::uint8_t>& resistance,
+    const CArray<std::uint8_t>& source_mask
+) {
+    const gtb::ImageU8 res = to_image(resistance);
+    const gtb::ImageU8 src = to_image(source_mask);
+    gtb::Image<float> out = gtb::compute_cost_distance(res, src);
+    return to_array(std::move(out));
+}
+
+py::dict compute_least_cost_path(
+    const CArray<std::uint8_t>& resistance,
+    const CArray<std::uint8_t>& marker_a,
+    const CArray<std::uint8_t>& marker_b,
+    py::object dist_map_obj
+) {
+    const gtb::ImageU8 res = to_image(resistance);
+    const gtb::ImageU8 ma = to_image(marker_a);
+    const gtb::ImageU8 mb = to_image(marker_b);
+    std::unique_ptr<gtb::Image<float>> dist_map_ptr;
+    if (!dist_map_obj.is_none()) {
+        auto d_arr = dist_map_obj.cast<CArray<float>>();
+        dist_map_ptr = std::make_unique<gtb::Image<float>>(to_image(d_arr));
+    }
+    gtb::LeastCostPathResult lcp = gtb::compute_least_cost_path(res, ma, mb, dist_map_ptr.get());
+    py::dict d;
+    d["combined_cost"] = to_array(std::move(lcp.combined_cost));
+    d["lcp_mask"] = to_array(std::move(lcp.lcp_mask));
+    d["path_length"] = lcp.path_length;
+    d["rest_pixels"] = lcp.rest_pixels;
+    d["expense"] = lcp.expense;
+    d["avg_distance"] = lcp.avg_distance;
+    return d;
+}
+
+py::tuple compute_parcellation(
+    const CArray<std::uint8_t>& input,
+    int connectivity,
+    bool return_labels
+) {
+    const gtb::ImageU8 im = to_image(input);
+    gtb::ParcellationResult res = gtb::compute_parcellation(im, connectivity, return_labels);
+
+    py::list class_stats_list;
+    for (const auto& cs : res.class_stats) {
+        py::dict cd;
+        cd["class_id"] = cs.class_id;
+        cd["count"] = cs.count;
+        cd["area"] = cs.area;
+        cd["aps"] = cs.aps;
+        cd["awaps_rel"] = cs.awaps_rel;
+        cd["awaps_data"] = cs.awaps_data;
+        cd["division"] = cs.division;
+        cd["parc"] = cs.parc;
+        class_stats_list.append(cd);
+    }
+
+    py::dict gd;
+    gd["total_parcels"] = res.global_stats.total_parcels;
+    gd["data_area"] = res.global_stats.data_area;
+    gd["aps"] = res.global_stats.aps;
+    gd["awaps"] = res.global_stats.awaps;
+    gd["division"] = res.global_stats.division;
+    gd["parc"] = res.global_stats.parc;
+
+    py::object labels_arr = py::none();
+    if (return_labels) {
+        labels_arr = to_array(std::move(res.parcel_labels));
+    }
+
+    return py::make_tuple(class_stats_list, gd, labels_arr);
+}
+
+py::array_t<std::uint32_t> compute_contortion(
+    const CArray<std::uint8_t>& input,
+    i64 min_area
+) {
+    const gtb::ImageU8 im = to_image(input);
+    gtb::Image<std::uint32_t> out = gtb::compute_contortion(im, min_area);
+    return to_array(std::move(out));
+}
+
 int max_threads() {
 #if defined(_OPENMP)
     return omp_get_max_threads();
@@ -376,6 +477,17 @@ PYBIND11_MODULE(_core, m) {
           "Compute Landscape Mosaic (LM) 19-class or 103-class moving-window metric.");
     m.def("compute_landscape_mosaic_stats", &compute_landscape_mosaic_stats, py::arg("im103"),
           "Compute 103-class distribution and percentages for Landscape Mosaic.");
+    m.def("compute_restoration_status", &compute_restoration_status, py::arg("input"),
+          "Compute Restoration Status (RSS) metrics (ECA, DOC, CNOA, RAC, etc.).");
+    m.def("compute_cost_distance", &compute_cost_distance, py::arg("resistance"), py::arg("source_mask"),
+          "Compute 8-neighbor anisotropic cost distance from source mask across resistance surface.");
+    m.def("compute_least_cost_path", &compute_least_cost_path, py::arg("resistance"),
+          py::arg("marker_a"), py::arg("marker_b"), py::arg("dist_map") = py::none(),
+          "Compute two-ended least cost path between marker A and marker B.");
+    m.def("compute_parcellation", &compute_parcellation, py::arg("input"), py::arg("connectivity") = 8,
+          py::arg("return_labels") = false, "Compute Parcellation class-level and global statistics.");
+    m.def("compute_contortion", &compute_contortion, py::arg("input"), py::arg("min_area") = 1,
+          "Compute Contortion boundary shape tortuosity metric for foreground habitat components.");
 
     m.def("max_threads", &max_threads, "Number of OpenMP threads available (1 if built without OpenMP).");
 #if defined(_OPENMP)
