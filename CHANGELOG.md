@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-26
+
 ### Added
 - `batch(tool, inputs, output_dir, **params)`: GTB's Batch Process for every tool.
   It runs any landschaft tool, or any function of one raster, on many rasters in
