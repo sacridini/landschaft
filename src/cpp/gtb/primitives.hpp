@@ -18,11 +18,6 @@
 
 namespace gtb {
 
-// Below this many pixels, data-parallel loops stay single-threaded: short
-// OpenMP regions cost more than they save (idle workers spin afterwards and
-// slow down the sequential stages that follow).
-constexpr i64 kParallelThreshold = i64(1) << 24;
-
 // Calls f(begin, end) on consecutive chunks of [0, n), in parallel for large
 // n. Keeping the per-pixel loop inside `f` lets the compiler vectorise it.
 template <class F>

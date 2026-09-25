@@ -14,6 +14,12 @@ add_library(gtbcore STATIC
     src/cpp/gtb/primitives.cpp
     src/cpp/gtb/thinning.cpp
     src/cpp/gtb/mspa.cpp
+    src/cpp/gtb/gtn.cpp
+    src/cpp/gtb/fad.cpp
+    src/cpp/gtb/distance.cpp
+    src/cpp/gtb/entropy.cpp
+    src/cpp/gtb/contagion.cpp
+    src/cpp/gtb/mosaic.cpp
 )
 target_include_directories(gtbcore PUBLIC src/cpp)
 set_target_properties(gtbcore PROPERTIES POSITION_INDEPENDENT_CODE ON)

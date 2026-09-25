@@ -17,6 +17,8 @@ namespace gtb {
 using u8 = std::uint8_t;
 using i64 = std::int64_t;
 
+constexpr i64 kParallelThreshold = i64(1) << 24;
+
 template <class T>
 struct Image {
     i64 nx = 0;

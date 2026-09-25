@@ -13,9 +13,27 @@ import rasterio
 import rioxarray  # noqa: F401  (registers the .rio accessor)
 import xarray as xr
 
+from ._palettes import DIST_PALETTE, ENTROPY_PALETTE, FAD_PALETTE, LM_PALETTE
 from .validation import BACKGROUND, FOREGROUND, MISSING, InvalidInputError, validate_mspa_input
 
-__all__ = ["load_raster", "write_raster", "reclassify"]
+__all__ = [
+    "load_raster",
+    "write_raster",
+    "reclassify",
+    "mspa_colormap",
+    "gtn_components_colormap",
+    "gtn_importance_colormap",
+    "GTN_COMPONENTS_COLORMAP",
+    "GTN_IMPORTANCE_COLORMAP",
+    "fad_colormap",
+    "dist_colormap",
+    "entropy_colormap",
+    "lm_colormap",
+    "FAD_COLORMAP",
+    "DIST_COLORMAP",
+    "ENTROPY_COLORMAP",
+    "LM_COLORMAP",
+]
 
 PathLike = str | os.PathLike
 
@@ -191,6 +209,34 @@ _MSPA_COLORS = {
 _TRANSITION_ON = {35: (255, 0, 0), 37: (255, 0, 0), 67: (255, 255, 0), 69: (255, 255, 0)}
 _TRANSITION_OFF = {35: (0, 0, 0), 37: (0, 0, 255), 67: (0, 0, 0), 69: (0, 0, 255)}
 
+_GTN_COMPONENTS_COLORS = {
+    0: (220, 220, 220),      # Background (light gray)
+    1: (255, 140, 0),        # Network component color 1 (orange)
+    5: (0, 0, 255),          # Network component color 2 (blue)
+    9: (160, 60, 0),         # Network component color 3 (brown)
+    17: (0, 200, 0),         # Network component color 4 (green)
+    33: (255, 0, 0),         # Network component color 5 (red)
+    65: (255, 255, 0),       # Network component color 6 (yellow)
+    80: (255, 0, 255),       # Network component color 7 (magenta)
+    103: (0, 0, 0),          # Isolated cores (black)
+    129: (255, 255, 255),    # Missing (white)
+    150: (150, 150, 150),    # Network component color 8 (gray)
+    176: (191, 191, 255),    # Network component color 9 (light blue / lavender)
+}
+
+_GTN_IMPORTANCE_COLORS = {
+    0: (220, 220, 220),      # Background (light gray)
+    103: (0, 0, 0),          # Bridges baseline (black)
+    129: (255, 255, 255),    # Missing (white)
+    176: (191, 191, 255),    # Cores baseline (light blue / lavender)
+    192: (170, 0, 0),        # Top 1% Links (dark red)
+    194: (255, 101, 101),    # Top 5% Links (medium red)
+    195: (255, 191, 191),    # Top 10% Links (light red)
+    208: (0, 101, 0),        # Top 1% Nodes (dark green)
+    210: (0, 200, 0),        # Top 5% Nodes (medium green)
+    211: (170, 255, 170),    # Top 10% Nodes (light green)
+}
+
 
 def mspa_colormap(transition: bool = True) -> dict[int, tuple[int, int, int, int]]:
     """Colour table of GuidosToolbox for MSPA maps (256 entries, RGBA)."""
@@ -201,16 +247,81 @@ def mspa_colormap(transition: bool = True) -> dict[int, tuple[int, int, int, int
     return {i: (*colors.get(i, (0, 0, 0)), 255) for i in range(256)}
 
 
+def gtn_components_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for GTN Components maps (256 entries, RGBA)."""
+    return {i: (*_GTN_COMPONENTS_COLORS.get(i, (0, 0, 0)), 255) for i in range(256)}
+
+
+def gtn_importance_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for GTN Importance maps (256 entries, RGBA)."""
+    return {i: (*_GTN_IMPORTANCE_COLORS.get(i, (0, 0, 0)), 255) for i in range(256)}
+
+
+GTN_COMPONENTS_COLORMAP: dict[int, tuple[int, int, int, int]] = gtn_components_colormap()
+GTN_IMPORTANCE_COLORMAP: dict[int, tuple[int, int, int, int]] = gtn_importance_colormap()
+
+
+def fad_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for FAD maps (256 entries, RGBA)."""
+    return {i: (*FAD_PALETTE[i], 255) for i in range(256)}
+
+
+def dist_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for Euclidean Distance maps (256 entries, RGBA)."""
+    return {i: (*DIST_PALETTE[i], 255) for i in range(256)}
+
+
+def entropy_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for Spatial Entropy maps (256 entries, RGBA)."""
+    return {i: (*ENTROPY_PALETTE[i], 255) for i in range(256)}
+
+
+def lm_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for Landscape Mosaic maps (256 entries, RGBA)."""
+    return {i: (*LM_PALETTE[i], 255) for i in range(256)}
+
+
+FAD_COLORMAP: dict[int, tuple[int, int, int, int]] = fad_colormap()
+DIST_COLORMAP: dict[int, tuple[int, int, int, int]] = dist_colormap()
+ENTROPY_COLORMAP: dict[int, tuple[int, int, int, int]] = entropy_colormap()
+LM_COLORMAP: dict[int, tuple[int, int, int, int]] = lm_colormap()
+
+
 def _resolve_colormap(colormap, data) -> dict | None:
     if colormap is None or colormap is False:
         return None
     if colormap == "auto":
         attrs = getattr(data, "attrs", {})
-        if attrs.get("guidospy_product") == "MSPA":
+        product = attrs.get("guidospy_product")
+        if product == "MSPA":
             return mspa_colormap(bool(attrs.get("mspa_transition", 1)))
+        if product == "GTN_COMPONENTS":
+            return gtn_components_colormap()
+        if product == "GTN_IMPORTANCE":
+            return gtn_importance_colormap()
+        if product in ("FAD", "FAD_MULTISCALE"):
+            return fad_colormap()
+        if product == "EUCLIDEAN_DISTANCE":
+            return dist_colormap()
+        if product in ("SPATIAL_ENTROPY", "CONTAGION", "CLUSTERING"):
+            return entropy_colormap()
+        if product == "LANDSCAPE_MOSAIC":
+            return lm_colormap()
         return None
     if colormap == "mspa":
         return mspa_colormap(True)
+    if colormap == "gtn_components":
+        return gtn_components_colormap()
+    if colormap == "gtn_importance":
+        return gtn_importance_colormap()
+    if colormap == "fad":
+        return fad_colormap()
+    if colormap == "dist":
+        return dist_colormap()
+    if colormap in ("entropy", "contagion", "clustering"):
+        return entropy_colormap()
+    if colormap == "lm":
+        return lm_colormap()
     return dict(colormap)
 
 
@@ -269,6 +380,28 @@ def write_raster(
                 f"{data.attrs['mspa_connectivity']}_{data.attrs['mspa_edge_width']}_"
                 f"{data.attrs['mspa_transition']}_{data.attrs['mspa_internal']}"
             )
+        elif description is None and data.attrs.get("guidospy_product") in ("GTN_COMPONENTS", "GTN_COMPONENTS_DATA"):
+            description = (
+                f"GTB_NW (guidospy), components: {data.attrs.get('num_components')}, "
+                f"ECA: {data.attrs.get('eca', 0):.2f}, DOC: {data.attrs.get('doc', 0):.2f}%"
+            )
+        elif description is None and data.attrs.get("guidospy_product") in ("GTN_IMPORTANCE", "GTN_IMPORTANCE_MAP"):
+            description = (
+                f"GTB_CS (guidospy), Link_max: {data.attrs.get('max_link_dpc', 0):.2f}, "
+                f"Node_max: {data.attrs.get('max_node_dpc', 0):.2f}"
+            )
+        elif description is None and data.attrs.get("guidospy_product") in ("FAD", "FAD_MULTISCALE"):
+            description = (
+                f"GTB_FAD (guidospy), window_size: {data.attrs.get('window_size', 'multi')}, "
+                f"avg_fad: {data.attrs.get('average_fad', 0):.2f}%"
+            )
+        elif description is None and data.attrs.get("guidospy_product") in ("EUCLIDEAN_DISTANCE", "EUCLIDEAN_DISTANCE_FLOAT"):
+            description = (
+                f"GTB_EUCL (guidospy), mean_fg: {data.attrs.get('mean_fg_dist', 0):.2f}, "
+                f"max_fg: {data.attrs.get('max_fg_dist', 0):.2f}"
+            )
+        elif description is None and data.attrs.get("guidospy_product") == "SPATIAL_ENTROPY":
+            description = f"GTB_ENT (guidospy), window_size: {data.attrs.get('window_size', 'full')}"
 
     height, width = arr.shape
     profile: dict[str, Any] = {

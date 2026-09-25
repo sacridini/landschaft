@@ -15,8 +15,39 @@ from importlib import metadata as _metadata
 from . import _core
 from .batch import BatchResult, mspa_batch
 from .collection import RasterCollection, RasterInfo
+from .contagion import clustering_fac, contagion_pff
 from .datasets import EXAMPLE_DATA, example_data
-from .io import load_raster, mspa_colormap, reclassify, write_raster
+from .distance import EuclideanDistanceResult, euclidean_distance
+from .entropy import SpatialEntropyResult, spatial_entropy, spatial_entropy_map
+from .fad import FAD_CLASSES, FADMultiscaleResult, FADResult, fad, fad_multiscale
+from .gtn import (
+    BRIDGE_CLASSES,
+    CORE_CLASSES,
+    GTNComponentsResult,
+    GTNImportanceResult,
+    conefor_inputs,
+    gtn_components,
+    gtn_importance,
+)
+from .io import (
+    DIST_COLORMAP,
+    ENTROPY_COLORMAP,
+    FAD_COLORMAP,
+    GTN_COMPONENTS_COLORMAP,
+    GTN_IMPORTANCE_COLORMAP,
+    LM_COLORMAP,
+    dist_colormap,
+    entropy_colormap,
+    fad_colormap,
+    gtn_components_colormap,
+    gtn_importance_colormap,
+    lm_colormap,
+    load_raster,
+    mspa_colormap,
+    reclassify,
+    write_raster,
+)
+from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
 from .validation import InvalidInputError, validate_mspa_input
 
@@ -27,12 +58,44 @@ except _metadata.PackageNotFoundError:  # pragma: no cover - running from a sour
 
 __all__ = [
     "BatchResult",
+    "BRIDGE_CLASSES",
+    "CORE_CLASSES",
+    "DIST_COLORMAP",
+    "ENTROPY_COLORMAP",
     "EXAMPLE_DATA",
+    "EuclideanDistanceResult",
+    "FADMultiscaleResult",
+    "FADResult",
+    "FAD_CLASSES",
+    "FAD_COLORMAP",
+    "GTNComponentsResult",
+    "GTNImportanceResult",
+    "GTN_COMPONENTS_COLORMAP",
+    "GTN_IMPORTANCE_COLORMAP",
     "InvalidInputError",
+    "LM19_CLASSES",
+    "LM_COLORMAP",
     "MSPA_CLASSES",
     "RasterCollection",
     "RasterInfo",
+    "SpatialEntropyResult",
+    "clustering_fac",
+    "conefor_inputs",
+    "contagion_pff",
+    "dist_colormap",
+    "entropy_colormap",
+    "euclidean_distance",
     "example_data",
+    "fad",
+    "fad_colormap",
+    "fad_multiscale",
+    "gtn_components",
+    "gtn_components_colormap",
+    "gtn_importance",
+    "gtn_importance_colormap",
+    "landscape_mosaic",
+    "landscape_mosaic_stats",
+    "lm_colormap",
     "load_raster",
     "max_threads",
     "mspa",
@@ -40,6 +103,8 @@ __all__ = [
     "mspa_colormap",
     "mspa_stats",
     "reclassify",
+    "spatial_entropy",
+    "spatial_entropy_map",
     "validate_mspa_input",
     "write_raster",
 ]
