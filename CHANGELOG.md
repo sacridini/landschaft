@@ -6,6 +6,20 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- `fos()`: GTB Fragmentation at a Fixed Observation Scale, complete. All of GTB's
+  methods (FAD, FED, FAC) in 5 or 6 classes, on binary maps (with special
+  backgrounds 3/4) or grayscale cover maps (0-100 %, foreground at or above a
+  threshold, 103/104 special backgrounds). Returns the map with GTB's codes, the class
+  proportions, the foreground histogram, the patch statistics (APS, ECA, COH, COH_ru),
+  the average connectivity and AVCON, and a `fos.txt`-style `summary()`. Maps are
+  identical to GTB's batch FOS (its IDL code run in GDL with GTB's spatcon and
+  grayspatcon), and so are the statistics.
+- GraySpatCon metrics 1 (mean) and 52 (clustering, FED) in C++ with sliding-window
+  frequency/adjacency counts and OpenMP, identical to `grayspatcon64.exe`.
+- `fad5_colormap()` (GTB's `fadcolors5` table), used automatically for 5-class FOS
+  maps. `"fos"` is available in `batch()`.
+
 ## [0.10.0] - 2026-09-26
 
 ### Added

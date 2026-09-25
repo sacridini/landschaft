@@ -126,6 +126,7 @@ Extracted bit-for-bit from original GTB `.sav` colortables:
 * `gtn_components_colormap()`
 * `gtn_importance_colormap()`
 * `fad_colormap()`
+* `fad5_colormap()` (5-class FAD/FOS)
 * `dist_colormap()`
 * `entropy_colormap()`
 * `lm_colormap()`
@@ -241,6 +242,27 @@ outputs (`*_fad_<window>.tif`, `*_fad_mscale.tif`).
 3. Transitional ($40..59\%$)
 4. Dominant ($60..89\%$)
 5. Interior ($90..100\%$)
+
+### Fragmentation at a Fixed Observation Scale (FOS)
+GTB's *Fragmentation → FOS*, with all its methods and inputs:
+```python
+r = ls.fos(data, window_size=27, method="FAD", classes=6)   # "FAD", "FED" or "FAC"; 5 or 6 classes
+r.map          # 0-100 connectivity of each foreground pixel; 101 BG, 102 missing, 105/106 special BG
+r.stats        # share [%] of the foreground per class (Rare .. Interior/Intact)
+r.histogram    # share [%] of the foreground pixels with each value 0..100
+r.average, r.avcon, r.n_patches, r.average_patch_size, r.eca, r.coherence, r.coherence_ru
+print(r.summary())  # GTB's fos.txt report
+
+gray = ls.load_raster("cover.tif", validate=None)  # 0-100 % cover, 255 missing, 103/104 special BG
+r = ls.fos(gray, 13, "FED", 5, gray_threshold=30)   # foreground = cover >= 30
+```
+* **FAD** (area density): share of foreground in the window (spatcon, or GraySpatCon metric 1 — the mean cover — for grayscale maps).
+* **FED** (edge density): GraySpatCon metric 52 ("clustering") of the window's pixel pairs.
+* **FAC** (area clustering): spatcon's foreground-foreground adjacency share; binary maps only, as in GTB.
+
+Six classes separate *Intact* (100) from *Interior* (90-99); five merge them (colour table `fadcolors5`).
+A map is taken as grayscale when its maximum exceeds 4 (as in GTB) unless `grayscale=` is given. Patch statistics
+use `connectivity` (8 or 4). Maps and statistics are identical to GTB's batch FOS.
 
 ### Euclidean Distance Transform
 Computes exact Signed Euclidean Distance transform using Meijster's $O(N)$ algorithm:
@@ -532,6 +554,7 @@ results = ls.mspa_batch(
 * **Landscape Mosaic**: Tested against JRC `recode64` binaries (bit-exact).
 * **FAD-MS, FAD Multiscale Change, LM Heatmap and Heatmap Change**: Tested against GTB's own IDL code run in GDL together with GTB's `spatcon` (FAD-MS maps and 103-class maps identical, change tables identical, heatmap vectors identical bit for bit, CSV reports identical character for character).
 * **GraySpatCon**: Tested directly against `grayspatcon64.exe` (parity verified to float32 precision).
+* **FOS** (FAD/FED/FAC, 5/6 classes, binary and grayscale): Tested against GTB's batch FOS IDL code run in GDL with GTB's `spatcon` and `grayspatcon` (maps identical; statistics identical to IDL's float/double precision). 13 stored cases plus live random scenes.
 * **Accounting** (IDL-only in GTB): Tested against GTB's own IDL code (`tests/gtb_idl`, statements copied verbatim from `guidostoolbox.pro`) run in GDL. Maps and integer statistics are identical. Stored digests (`tests/data/reference/idl_reference.json`) cover 7 maps × 5 parameter sets, and random scenes run live when GDL is available.
 
 To run the verification suite:

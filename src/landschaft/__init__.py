@@ -57,6 +57,7 @@ from .io import (
     contortion_colormap,
     dist_colormap,
     entropy_colormap,
+    fad5_colormap,
     fad_colormap,
     foschange_colormap,
     gtn_components_colormap,
@@ -73,6 +74,7 @@ from .lm_heatmap import LMHeatmap, LMHeatmapChange, landscape_mosaic_change, lan
 from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
 from .spa import SPA_CLASSES, SPAResult, spa
+from .fos import FOSResult, fos
 from .restoration import (
     LeastCostPathResult,
     RestorationCorridorResult,
@@ -109,6 +111,7 @@ __all__ = [
     "FAD_COLORMAP",
     "FOSCHANGE_COLORMAP",
     "FOSChangeResult",
+    "FOSResult",
     "CHANGE_COLORMAP",
     "GTNComponentsResult",
     "GTNImportanceResult",
@@ -152,9 +155,11 @@ __all__ = [
     "euclidean_distance",
     "example_data",
     "fad",
+    "fad5_colormap",
     "fad_colormap",
     "fad_multiscale",
     "fad_multiscale_change",
+    "fos",
     "fos_change",
     "foschange_colormap",
     "gray_spatial_convolution",

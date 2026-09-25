@@ -28,6 +28,7 @@ add_library(gtbcore STATIC
     src/cpp/gtb/influence.cpp
     src/cpp/gtb/isochrone.cpp
     src/cpp/gtb/spa.cpp
+    src/cpp/gtb/fos.cpp
 )
 target_include_directories(gtbcore PUBLIC src/cpp)
 set_target_properties(gtbcore PROPERTIES POSITION_INDEPENDENT_CODE ON)

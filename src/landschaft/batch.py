@@ -275,7 +275,7 @@ def mspa_collection(
 #: Tools :func:`batch` knows by name (any other function of one raster works too).
 BATCH_TOOLS: tuple[str, ...] = (
     "accounting", "clustering_fac", "conefor_inputs", "contagion_pff", "contortion", "distance_to_resistance",
-    "euclidean_distance", "fad", "fad_multiscale", "gray_spatial_convolution", "gtn_components", "gtn_importance",
+    "euclidean_distance", "fad", "fad_multiscale", "fos", "gray_spatial_convolution", "gtn_components", "gtn_importance",
     "influence_zones", "landscape_mosaic", "landscape_mosaic_heatmap", "landscape_mosaic_stats", "mspa",
     "parcellation", "proximity", "reclassify", "restoration_status", "spa", "spatial_entropy",
     "spatial_entropy_map",

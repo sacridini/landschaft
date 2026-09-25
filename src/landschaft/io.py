@@ -18,6 +18,7 @@ from ._palettes import (
     CONTORTION_PALETTE,
     DIST_PALETTE,
     ENTROPY_PALETTE,
+    FAD5_PALETTE,
     FAD_PALETTE,
     FOSCHANGE_PALETTE,
     LM_PALETTE,
@@ -36,6 +37,7 @@ __all__ = [
     "GTN_COMPONENTS_COLORMAP",
     "GTN_IMPORTANCE_COLORMAP",
     "fad_colormap",
+    "fad5_colormap",
     "dist_colormap",
     "entropy_colormap",
     "lm_colormap",
@@ -286,6 +288,11 @@ def fad_colormap() -> dict[int, tuple[int, int, int, int]]:
     return {i: (*FAD_PALETTE[i], 255) for i in range(256)}
 
 
+def fad5_colormap() -> dict[int, tuple[int, int, int, int]]:
+    """Colour table of GuidosToolbox for 5-class FAD/FOS maps (256 entries, RGBA)."""
+    return {i: (*FAD5_PALETTE[i], 255) for i in range(256)}
+
+
 def dist_colormap() -> dict[int, tuple[int, int, int, int]]:
     """Colour table of GuidosToolbox for Euclidean Distance maps (256 entries, RGBA)."""
     return {i: (*DIST_PALETTE[i], 255) for i in range(256)}
@@ -351,6 +358,8 @@ def _resolve_colormap(colormap, data) -> dict | None:
             return gtn_importance_colormap()
         if product in ("FAD", "FAD_MULTISCALE"):
             return fad_colormap()
+        if product == "FOS":
+            return fad5_colormap() if attrs.get("fos_classes") == 5 else fad_colormap()
         if product == "EUCLIDEAN_DISTANCE":
             return dist_colormap()
         if product in ("SPATIAL_ENTROPY", "CONTAGION", "CLUSTERING", "ISOCHRONE_A", "ISOCHRONE_AB"):
@@ -384,6 +393,8 @@ def _resolve_colormap(colormap, data) -> dict | None:
         return gtn_importance_colormap()
     if colormap == "fad":
         return fad_colormap()
+    if colormap in ("fad5", "fos5"):
+        return fad5_colormap()
     if colormap == "dist":
         return dist_colormap()
     if colormap in ("entropy", "contagion", "clustering"):

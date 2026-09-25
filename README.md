@@ -7,7 +7,7 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 * **MSPA**: Morphological Spatial Pattern Analysis (bit-identical to GTB `mspa` v2.3, 5-7x faster).
 * **SPA2/3/5/6**: Simplified Pattern Analysis (identical to GTB).
 * **GTN & Connectivity**: Topological Network Components (ECA, DOC), Importance (dPC), and Conefor Sensinode inputs.
-* **Fragmentation & Distance**: Forest Area Density (single & multiscale FAD, $O(1)$ integral images), Euclidean Distance Transform ($O(N)$), and Directional Spatial Entropy.
+* **Fragmentation & Distance**: Forest Area Density (single & multiscale FAD, $O(1)$ integral images), FOS (Fixed Observation Scale: FAD/FED/FAC in 5 or 6 classes, binary or grayscale input, identical to GTB), Euclidean Distance Transform ($O(N)$), and Directional Spatial Entropy.
 * **Landscape Mosaic & Contagion**: LM (19 & 103 classes with barycentric stats), Contagion ($P_{ff}$), and Clustering (FAC).
 * **Objects**: Accounting (foreground objects in up to 6 size classes, with object ID and area maps; identical to GTB's IDL code).
 * **Restoration Planner**: Isochrone maps A and AB with the least-cost path (identical to GTB's `ggeo`), Distance → Resistance.

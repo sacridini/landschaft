@@ -30,11 +30,13 @@ from gtb_reference import (  # noqa: E402
     FAD_SCALES,
     find_gdl,
     find_ggeo,
+    find_grayspatcon,
     find_spatcon,
     run_gtb_accounting,
     run_gtb_accounting_scaled_classes,
     run_gtb_fad_change,
     run_gtb_fad_mscale,
+    run_gtb_fos,
     run_gtb_isochrone,
     run_gtb_lm_delta,
     run_gtb_lm_heatmap,
@@ -164,6 +166,45 @@ def spa_inputs() -> dict[str, np.ndarray]:
     return inputs
 
 
+def gray_scene(seed: int, shape=(180, 240)) -> np.ndarray:
+    """Grayscale cover map (0-100) with missing (255) and special backgrounds (103/104)."""
+    rng = np.random.default_rng(seed)
+    import scipy.ndimage as ndi
+
+    cover = ndi.gaussian_filter(rng.random(shape), 6)
+    cover = np.round((cover - cover.min()) / np.ptp(cover) * 100).astype(np.uint8)
+    cover[rng.random(shape) < 0.03] = 255
+    low = cover < 20
+    cover[low & (rng.random(shape) < 0.1)] = 103
+    cover[low & (rng.random(shape) < 0.05)] = 104
+    return cover
+
+
+def fos_inputs() -> dict[str, np.ndarray]:
+    with rasterio.open(ROOT / "src" / "landschaft" / "data" / "gscinput.tif") as src:
+        gsc = src.read(1)
+    return {"gtb_input_special": with_special_background(gtb_input(), 1),
+            "blobs_101": scenes.make("blobs", 101), "gscinput": gsc, "gray_7": gray_scene(7)}
+
+
+# (input, fosclass, window, connectivity, gray threshold)
+FOS_CASES = [
+    ("gtb_input_special", "FAD_6class", 13, 8, 30),
+    ("gtb_input_special", "FAD_5class", 27, 4, 30),
+    ("gtb_input_special", "FED_6class", 13, 8, 30),
+    ("gtb_input_special", "FED_5class", 7, 4, 30),
+    ("gtb_input_special", "FAC_6class", 7, 8, 30),
+    ("gtb_input_special", "FAC_5class", 13, 4, 30),
+    ("blobs_101", "FAD_6class", 5, 8, 30),
+    ("blobs_101", "FED_6class", 9, 8, 30),
+    ("blobs_101", "FAC_5class", 11, 8, 30),
+    ("gscinput", "FAD_6class", 13, 8, 30),
+    ("gscinput", "FED_5class", 13, 8, 30),
+    ("gray_7", "FAD_5class", 7, 4, 50),
+    ("gray_7", "FED_6class", 11, 8, 40),
+]
+
+
 def float32_hex(a: np.ndarray) -> str:
     return np.asarray(a, dtype="<f4").tobytes().hex()
 
@@ -243,6 +284,20 @@ def main(exe: Path, spatcon: Path, ggeo: Path | None = None) -> None:
                               "sha256": digest(ref["map"]), "stats": ref["stats"]})
             print("spa", name, variant)
 
+    fos_cases = []
+    grayspatcon = find_grayspatcon()
+    if grayspatcon is None:
+        print("grayspatcon not found (LANDSCHAFT_GRAYSPATCON_EXE): FOS references are not generated")
+    else:
+        inputs = fos_inputs()
+        for name, fosclass, window, conn, grayt in FOS_CASES:
+            data = inputs[name]
+            ref = run_gtb_fos(exe, spatcon, grayspatcon, data, fosclass, window, conn, grayt)
+            fos_cases.append({"input": name, "fosclass": fosclass, "window": window, "connectivity": conn,
+                              "gray_threshold": grayt, "input_sha256": digest(data), "sha256": digest(ref["map"]),
+                              "stats": ref["stats"]})
+            print("fos", name, fosclass, window)
+
     iso_cases = []
     if ggeo is not None:
         for name, (resist, marker) in isochrone_inputs().items():
@@ -264,6 +319,8 @@ def main(exe: Path, spatcon: Path, ggeo: Path | None = None) -> None:
         "lm_delta": lm_delta_cases,
         "isochrone": iso_cases,
         "spa": spa_cases,
+        "fos": fos_cases,
+        "grayspatcon_sha256": hashlib.sha256(grayspatcon.read_bytes()).hexdigest() if grayspatcon else None,
         "ggeo_sha256": hashlib.sha256(ggeo.read_bytes()).hexdigest() if ggeo else None,
     }, indent=1))
 

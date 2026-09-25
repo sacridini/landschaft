@@ -22,6 +22,7 @@
 #include "gtb/distance.hpp"
 #include "gtb/entropy.hpp"
 #include "gtb/fad.hpp"
+#include "gtb/fos.hpp"
 #include "gtb/grayspatcon.hpp"
 #include "gtb/influence.hpp"
 #include "gtb/isochrone.hpp"
@@ -714,6 +715,12 @@ PYBIND11_MODULE(_core, m) {
           "miallib binOIthin_FIFO: anchored order-independent homotopic thinning (2-pixel border cleared).");
     m.def("compute_geodesic_time", &compute_geodesic_time, py::arg("mask"), py::arg("ref"),
           "miallib uc_sqtgsym (GTB ggeo): geodesic time from ref == 1 across mask; ref == 3 blocks.");
+    m.def("compute_grayspatcon_fos", [](const CArray<std::uint8_t>& input, int metric, int window, int n_threads) {
+        const auto im = to_image(input);
+        gtb::ImageU8 out = run_parallel(n_threads, [&] { return gtb::grayspatcon_fos(im, metric, window); });
+        return to_array(std::move(out));
+    }, py::arg("input"), py::arg("metric"), py::arg("window"), py::arg("n_threads") = 0,
+          "GraySpatCon metric 1 (mean, byte stretch 6) or 52 (clustering, byte stretch 1) as GTB's FOS runs them.");
     m.def("compute_spa", &compute_spa, py::arg("input"), py::arg("variant"), py::arg("n_threads") = 0,
           "GTB SPA2/3/5/6: simplified pattern analysis of the 8-connected foreground.");
     m.def("compute_gray_convolution", &compute_gray_convolution, py::arg("input"), py::arg("metric") = "mean",

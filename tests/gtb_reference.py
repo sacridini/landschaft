@@ -308,3 +308,36 @@ def run_gtb_spa(exe: os.PathLike, data: np.ndarray, variant: str) -> dict:
         run_gdl(exe, [f"gtb_spa, {_idl_str(root / 'in.tif')}, {_idl_str(root)} + '/', '{variant}'"])
         return {"map": np.fromfile(root / "spa.raw", dtype=np.uint8).reshape(ny, nx),
                 "stats": _read_stats(root / "stats.txt")}
+
+
+DEFAULT_GRAYSPATCON = Path(r"C:\Users\eduar\Documents\dev\GTB\external_sources\grayspatcon64.exe")
+
+
+def find_grayspatcon() -> Path | None:
+    """GTB's grayspatcon executable from ``LANDSCHAFT_GRAYSPATCON_EXE`` or the default GTB checkout."""
+    exe = os.environ.get("LANDSCHAFT_GRAYSPATCON_EXE")
+    path = Path(exe) if exe else DEFAULT_GRAYSPATCON
+    return path if path.is_file() else None
+
+
+def run_gtb_fos(exe: os.PathLike, spatcon: os.PathLike, grayspatcon: os.PathLike, data: np.ndarray,
+                fosclass: str = "FAD_6class", window: int = 7, connectivity: int = 8, gray_threshold: int = 30,
+                grayscale: bool | None = None) -> dict:
+    """GTB's batch FOS (``tests/gtb_idl/gtb_fos.pro``): the FOS map and its statistics (strings)."""
+    import shutil
+
+    if grayscale is None:
+        grayscale = int(data.max()) > 4
+    ny, nx = data.shape
+    with tempfile.TemporaryDirectory(prefix="gtb_fos_") as tmp:
+        root = Path(tmp)
+        (root / "spatcon").mkdir()
+        shutil.copy(spatcon, root / "spatcon" / "spatcon64.exe")
+        shutil.copy(grayspatcon, root / "spatcon" / "grayspatcon64.exe")
+        (root / "work").mkdir()
+        (root / "out").mkdir()
+        _write_tif(root / "in.tif", data)
+        run_gdl(exe, [f"gtb_fos, {_idl_str(root / 'in.tif')}, {_idl_str(root)} + '/', {_idl_str(root / 'out')} + '/', "
+                      f"'{fosclass}', {int(window)}, '{connectivity}', {int(gray_threshold)}, {int(not grayscale)}"])
+        return {"map": np.fromfile(root / "out" / "fos.raw", dtype=np.uint8).reshape(ny, nx),
+                "stats": _read_stats(root / "out" / "stats.txt")}

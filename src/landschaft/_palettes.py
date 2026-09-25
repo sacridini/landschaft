@@ -2097,3 +2097,11 @@ MSPA_ON_PALETTE: tuple[tuple[int, int, int], ...] = (
     (254, 254, 254),
     (255, 255, 255),
 )
+
+# fadcolors5.sav: GTB's FAD/FOS 5-class table; fadcolors.sav except interior = intact
+# (100) and entries 108-111 white.
+FAD5_PALETTE: tuple[tuple[int, int, int], ...] = tuple(
+    {100: (0, 175, 0), 108: (255, 255, 255), 109: (255, 255, 255), 110: (255, 255, 255),
+     111: (255, 255, 255)}.get(i, c)
+    for i, c in enumerate(FAD_PALETTE)
+)
