@@ -21,43 +21,69 @@ PathLike = str | os.PathLike
 
 
 def load_raster(
-    source: PathLike,
+    source,
     *,
     band: int | None = None,
     chunks: Any = None,
     validate: str | None = "mspa",
-) -> xr.DataArray:
-    """Read a single-band raster as a 2-D ``(y, x)`` DataArray and check it.
+    stack: bool = False,
+    errors: str = "raise",
+    recursive: bool = False,
+):
+    """Read one raster, or collect many, checking them for MSPA.
 
     Parameters
     ----------
     source
-        Path (or GDAL URL) of the raster, e.g. a GeoTIFF.
+        One raster (path or GDAL URL), a directory (its ``.tif``/``.tiff``
+        files), a glob pattern (``"tiles/*.tif"``) or a list of any of these.
     band
-        Band number (1-based) to read from a multi-band file. By default the
+        Band number (1-based) to read from multi-band files. By default each
         file must have exactly one band.
     chunks
-        ``None`` (default) loads the data into memory. Anything else (e.g.
-        ``"auto"`` or ``{"x": 4096, "y": 4096}``) returns a lazy dask-backed
-        array; note that MSPA itself always needs the whole map in memory.
+        Single raster only: ``None`` (default) loads the data into memory;
+        anything else (e.g. ``"auto"``) returns a lazy dask-backed array.
+        MSPA itself always needs the whole map in memory.
     validate
-        ``"mspa"`` (default) checks that the map is an MSPA input:
-        ``uint8`` coded 0 = missing, 1 = background, 2 = foreground, with some
+        ``"mspa"`` (default) checks that the map is an MSPA input: ``uint8``
+        coded 0 = missing, 1 = background, 2 = foreground, with some
         foreground and some background. ``None`` skips the checks.
+    stack
+        Several rasters only: return a lazy ``(file, y, x)`` DataArray (one
+        dask chunk per file) instead of a :class:`RasterCollection`. All
+        rasters must share the same grid.
+    errors
+        Several rasters only: ``"raise"`` (default) if any file is unusable,
+        ``"skip"`` to leave such files out (listed in ``.skipped``).
+    recursive
+        Several rasters only: also search sub-directories.
 
     Returns
     -------
-    xarray.DataArray
-        Georeferenced array (CRS and transform available via ``.rio``).
+    xarray.DataArray or RasterCollection
+        For one raster, a georeferenced ``(y, x)`` array (CRS and transform via
+        ``.rio``). For several, a :class:`RasterCollection` that reads only the
+        file headers now; pass it to :func:`guidospy.mspa` to process every
+        raster in parallel. With ``stack=True``, a lazy DataArray.
 
     Raises
     ------
     InvalidInputError
-        If the file does not satisfy the requested checks.
+        If a file does not satisfy the requested checks.
     """
+    from .collection import RasterCollection, is_single_source
+
     if validate not in (None, "mspa"):
         raise ValueError(f"validate must be 'mspa' or None, got {validate!r}")
+    if not is_single_source(source):
+        collection = RasterCollection.from_sources(
+            source, band=band, validate=validate, errors=errors, recursive=recursive
+        )
+        return collection.to_stack() if stack else collection
+    return _load_single(source, band=band, chunks=chunks, validate=validate)
 
+
+def _load_single(source: PathLike, *, band: int | None, chunks: Any, validate: str | None) -> xr.DataArray:
     raw = rioxarray.open_rasterio(source, chunks=chunks, masked=False)
     if isinstance(raw, (list, xr.Dataset)):
         raise InvalidInputError(f"{source}: file contains several sub-datasets; open one of them explicitly.")

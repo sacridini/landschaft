@@ -14,6 +14,7 @@ from importlib import metadata as _metadata
 
 from . import _core
 from .batch import BatchResult, mspa_batch
+from .collection import RasterCollection, RasterInfo
 from .datasets import EXAMPLE_DATA, example_data
 from .io import load_raster, mspa_colormap, reclassify, write_raster
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
@@ -29,6 +30,8 @@ __all__ = [
     "EXAMPLE_DATA",
     "InvalidInputError",
     "MSPA_CLASSES",
+    "RasterCollection",
+    "RasterInfo",
     "example_data",
     "load_raster",
     "max_threads",

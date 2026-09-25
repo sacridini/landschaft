@@ -9,6 +9,15 @@ between minor versions.
 ### Added
 - GTB's sample maps (`input`, `clc`, `gscinput`) bundled with the package, with
   `example_data()` and `EXAMPLE_DATA`; `tools/benchmark.py` uses them.
+- `load_raster` accepts a directory, a glob pattern or a list of paths and returns a
+  lazy `RasterCollection` (headers only; `errors="skip"`, `recursive`), or with
+  `stack=True` a lazy `(file, y, x)` DataArray for rasters on a shared grid.
+- `mspa(collection, output_dir=..., n_workers=..., max_memory=...)` processes a
+  collection one raster per thread, writing results as they finish or returning
+  them in memory.
+- `max_memory` (e.g. `"16GB"`) for `mspa_batch` and collections: limits the
+  rasters processed at once from their size. `mspa_batch` also accepts directories,
+  globs and collections.
 
 ## [0.1.0] - 2026-09-25
 

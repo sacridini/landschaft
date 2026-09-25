@@ -99,18 +99,40 @@ Output classes (`gp.MSPA_CLASSES`):
 | 100 | Core-opening | 220 | Border-opening |
 | 129 | Missing | +100 | the same class inside a core-opening (`internal=True`) |
 
-### Thousands of images
+### Many images
+
+`load_raster` also takes a directory, a glob pattern or a list of paths. It then
+returns a `RasterCollection`. The collection reads only the file headers, checks
+them (existence, band count, `uint8`) and holds no pixels in memory:
 
 ```python
-results = gp.mspa_batch(sorted(Path("tiles").glob("*.tif")), "out/", edge_width=2)
-failed = [r for r in results if not r.ok]
+tiles = gp.load_raster("tiles/")              # or "tiles/*.tif", or [path1, path2, ...]
+tiles                                          # <RasterCollection: 3120 rasters, different grids, ...>
+
+gp.mspa(tiles, edge_width=2, output_dir="out/", max_memory="16GB")   # -> list of BatchResult
+small = gp.mspa(tiles[:10])                    # no output_dir: list of DataArrays in memory
 ```
 
-Each worker thread loads, processes and writes one file
-(`<name>_<conn>_<edgewidth>_<transition>_<internal>.tif`, as GTB). The C++ core
-releases the GIL, so threads run truly in parallel. By default one worker per
-core with one thread each, which gives the best throughput. Memory: about
-30 bytes per pixel per worker.
+Passed to `mspa`, the collection is processed one raster per thread. Each thread
+loads, processes and writes one file, then takes the next. The C++ core
+releases the GIL, so the threads run truly in parallel.
+
+* Memory stays bounded. With `output_dir` each result goes to disk
+  (`<name>_<conn>_<edgewidth>_<transition>_<internal>.tif`, as GTB).
+  `max_memory` limits how many rasters run at once, from their size (about
+  32 bytes per pixel), besides `n_workers` (default: one per core).
+* Existing outputs are skipped, so an interrupted run can be resumed.
+  `overwrite=True` recomputes them.
+* Errors are recorded per file (`result.ok`, `result.error`) without stopping the
+  batch. Files with unusable headers are reported by `load_raster`, or left out
+  with `errors="skip"` (see `tiles.skipped`).
+
+When all rasters share the same grid (e.g. a time series of one tile),
+`load_raster(..., stack=True)` returns a lazy `(file, y, x)` DataArray with one
+dask chunk per file, and `gp.mspa(stack)` processes it in parallel with dask.
+
+`gp.mspa_batch(inputs, output_dir, ...)` does the same as
+`gp.mspa(collection, output_dir=...)` and accepts paths, directories or collections directly.
 
 ## API reference
 
@@ -119,11 +141,12 @@ their docstrings (`help(gp.mspa)`) give every detail.
 
 | function | purpose |
 |---|---|
-| `load_raster(source, *, band=None, chunks=None, validate="mspa")` | Read one band as a `(y, x)` DataArray with CRS/transform. By default checks the MSPA coding and raises `InvalidInputError` otherwise. `chunks` gives a lazy dask array. |
+| `load_raster(source, *, band=None, chunks=None, validate="mspa", stack=False, errors="raise", recursive=False)` | One file: read one band as a `(y, x)` DataArray with CRS/transform, checking the MSPA coding (`InvalidInputError` otherwise); `chunks` gives a lazy dask array. Directory, glob or list: a `RasterCollection` (headers only), or with `stack=True` a lazy `(file, y, x)` DataArray. |
+| `RasterCollection` | Sequence of `RasterInfo` (path, shape, dtype, CRS, …) with `.paths`, `.same_grid`, `.total_pixels`, `.skipped`, `.load(i)`, `.to_stack()`. |
 | `write_raster(data, path, *, crs=None, transform=None, nodata=None, colormap="auto", compress="lzw", description=None)` | Write a 2-D array or DataArray to GeoTIFF. MSPA results get the GTB colour table and their parameters as tags. |
 | `reclassify(data, foreground, *, missing=None, background=None)` | Build a 0/1/2 MSPA input from class values or a boolean function; NaN and nodata become missing. |
-| `mspa(data, *, connectivity=8, edge_width=1, transition=True, internal=True, n_threads=None, validate=True)` | Run MSPA on numpy, dask or xarray data (2-D or stacks). |
-| `mspa_batch(inputs, output_dir, *, ..., n_workers=None, threads_per_worker=1, overwrite=False, raise_errors=False)` | Process many files in parallel; returns one `BatchResult` (`input`, `output`, `seconds`, `error`, `ok`) per file. |
+| `mspa(data, *, connectivity=8, edge_width=1, transition=True, internal=True, n_threads=None, validate=True, output_dir=None, n_workers=None, max_memory=None, overwrite=False)` | Run MSPA on numpy, dask or xarray data (2-D or stacks), or on a `RasterCollection` in parallel (the last four options are for collections). |
+| `mspa_batch(inputs, output_dir, *, ..., n_workers=None, threads_per_worker=1, max_memory=None, overwrite=False, raise_errors=False)` | Process many files in parallel; returns one `BatchResult` (`input`, `output`, `seconds`, `error`, `ok`) per file. |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |

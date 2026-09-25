@@ -96,6 +96,10 @@ def mspa(
     internal: bool = True,
     n_threads: int | None = None,
     validate: bool = True,
+    output_dir=None,
+    n_workers: int | None = None,
+    max_memory: int | str | None = None,
+    overwrite: bool = False,
 ):
     """Morphological Spatial Pattern Analysis, identical to GuidosToolbox's MSPA.
 
@@ -107,6 +111,8 @@ def mspa(
         ``xarray.DataArray``. Arrays with more dimensions (e.g.
         ``(time, y, x)``) are processed slice by slice over the last two
         (or ``y``/``x``) dimensions; with dask the slices run in parallel.
+        A :class:`RasterCollection` (``load_raster`` of a list, directory or
+        glob) is processed one raster per thread, see ``output_dir``.
     connectivity
         Foreground connectivity, 8 (default) or 4 (GTB "FGconn").
     edge_width
@@ -124,14 +130,41 @@ def mspa(
         because dask already runs the slices in parallel.
     validate
         Check the input like GuidosToolbox before processing.
+    output_dir, n_workers, max_memory, overwrite
+        Collections only. With ``output_dir`` every result is written there
+        as soon as it is ready (GTB naming) and a list of
+        :class:`BatchResult` is returned, so memory stays bounded; see
+        :func:`mspa_batch`. Without it, the results are returned as a list
+        of DataArrays. ``n_workers`` rasters run concurrently (default: one
+        per core), within the ``max_memory`` budget (e.g. ``"16GB"``).
 
     Returns
     -------
     Same container type as ``data`` with the ``uint8`` MSPA classes; see
     :data:`MSPA_CLASSES`. DataArrays keep coordinates and georeferencing and
-    record the parameters in ``attrs``.
+    record the parameters in ``attrs``. For a collection, a list (see
+    ``output_dir``).
     """
     _check_params(connectivity, edge_width)
+    from .collection import RasterCollection
+
+    if isinstance(data, RasterCollection):
+        from .batch import mspa_collection
+
+        return mspa_collection(
+            data,
+            output_dir=output_dir,
+            n_workers=n_workers,
+            threads_per_worker=1 if n_threads is None else int(n_threads),
+            max_memory=max_memory,
+            overwrite=overwrite,
+            connectivity=connectivity,
+            edge_width=edge_width,
+            transition=transition,
+            internal=internal,
+        )
+    if output_dir is not None or n_workers is not None or max_memory is not None:
+        raise TypeError("output_dir, n_workers and max_memory apply to raster collections only")
     lazy = hasattr(getattr(data, "data", None), "dask") or hasattr(data, "dask")
     if n_threads is None:
         n_threads = 1 if lazy else 0  # 0 = all cores
