@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <queue>
+#include <stdexcept>
 #include <vector>
 
 #include "primitives.hpp"
@@ -393,6 +394,68 @@ FOSChangeResult compute_fos_change(
         res.frag_increase_pct = (static_cast<double>(below_diag) / static_cast<double>(res.diff_class)) * 100.0;
     }
 
+    return res;
+}
+
+FADChangeCounts compute_fad_change_counts(const ImageU8& a, const ImageU8& b) {
+    if (a.nx != b.nx || a.ny != b.ny) throw std::invalid_argument("FAD maps A and B have different dimensions");
+
+    // Class of every byte value; -1: not counted, -2: missing (excludes the pixel pair).
+    std::array<std::int8_t, 256> cls{};
+    for (int v = 0; v < 256; ++v) {
+        std::int8_t c = -1;
+        if (v < 10) c = 1;
+        else if (v < 40) c = 2;
+        else if (v < 60) c = 3;
+        else if (v < 90) c = 4;
+        else if (v < 100) c = 5;
+        else if (v == 100) c = 6;
+        else if (v == 102) c = -2;
+        else if (v < 150) c = 0;
+        cls[static_cast<std::size_t>(v)] = c;
+    }
+
+    FADChangeCounts res;
+    const i64 n = a.size();
+    const u8* pa = a.data();
+    const u8* pb = b.data();
+#if defined(_OPENMP)
+#pragma omp parallel if (n >= kParallelThreshold)
+#endif
+    {
+        std::array<i64, 49> m{};
+        i64 fa = 0, fb = 0, fc = 0, sa = 0, sb = 0, ra = 0, rb = 0;
+#if defined(_OPENMP)
+#pragma omp for schedule(static) nowait
+#endif
+        for (i64 i = 0; i < n; ++i) {
+            const u8 va = pa[i];
+            const u8 vb = pb[i];
+            fa += va <= 100;
+            fb += vb <= 100;
+            fc += (va <= 100) & (vb <= 100);
+            sa += va <= 100 ? va : 0;
+            sb += vb <= 100 ? vb : 0;
+            ra += va != 102;
+            rb += vb != 102;
+            const int ca = cls[va];
+            const int cb = cls[vb];
+            if (ca >= 0 && cb >= 0) ++m[static_cast<std::size_t>(7 * ca + cb)];
+        }
+#if defined(_OPENMP)
+#pragma omp critical
+#endif
+        {
+            for (std::size_t k = 0; k < m.size(); ++k) res.matrix[k] += m[k];
+            res.fg_area_a += fa;
+            res.fg_area_b += fb;
+            res.forcom += fc;
+            res.fg_sum_a += sa;
+            res.fg_sum_b += sb;
+            res.ru_area_a += ra;
+            res.ru_area_b += rb;
+        }
+    }
     return res;
 }
 

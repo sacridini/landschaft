@@ -29,6 +29,7 @@ from .datasets import EXAMPLE_DATA, example_data
 from .distance import EuclideanDistanceResult, euclidean_distance
 from .entropy import SpatialEntropyResult, spatial_entropy, spatial_entropy_map
 from .fad import FAD_CLASSES, FADMultiscaleResult, FADResult, fad, fad_multiscale
+from .fad_change import FADChangeScale, FADMultiscaleChangeResult, fad_multiscale_change
 from .grayspatcon import gray_spatial_convolution
 from .gtn import (
     BRIDGE_CLASSES,
@@ -66,6 +67,7 @@ from .io import (
     write_raster,
 )
 from .morphology import ParcellationResult, contortion, parcellation
+from .lm_heatmap import LMHeatmap, LMHeatmapChange, landscape_mosaic_change, landscape_mosaic_heatmap
 from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
 from .restoration import (
@@ -95,6 +97,8 @@ __all__ = [
     "ENTROPY_COLORMAP",
     "EXAMPLE_DATA",
     "EuclideanDistanceResult",
+    "FADChangeScale",
+    "FADMultiscaleChangeResult",
     "FADMultiscaleResult",
     "FADResult",
     "FAD_CLASSES",
@@ -108,6 +112,8 @@ __all__ = [
     "GTN_IMPORTANCE_COLORMAP",
     "InvalidInputError",
     "LM19_CLASSES",
+    "LMHeatmap",
+    "LMHeatmapChange",
     "LM_COLORMAP",
     "MSPA_CLASSES",
     "MorphologicalChangeResult",
@@ -135,6 +141,7 @@ __all__ = [
     "fad",
     "fad_colormap",
     "fad_multiscale",
+    "fad_multiscale_change",
     "fos_change",
     "foschange_colormap",
     "gray_spatial_convolution",
@@ -143,6 +150,8 @@ __all__ = [
     "gtn_importance",
     "gtn_importance_colormap",
     "landscape_mosaic",
+    "landscape_mosaic_change",
+    "landscape_mosaic_heatmap",
     "landscape_mosaic_stats",
     "least_cost_path",
     "lm_colormap",

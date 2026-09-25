@@ -216,8 +216,13 @@ print(f"Average FAD: {fad_res.average_fad:.2f}%")
 
 # Multiscale FAD across 5 default GTB window scales: 7, 13, 27, 81, 243
 multi = ls.fad_multiscale(data, window_sizes=[7, 13, 27, 81, 243])
-# multi.fad_maps is a dictionary mapping window_size -> DataArray
+# multi.single_scales maps window_size -> DataArray; multi.multiscale_map is their rounded mean
 ```
+Inputs may also contain GTB's special backgrounds: `3` (special background, coded 105 in the
+maps) and `4` (non-fragmenting special background, treated as missing when measuring density,
+coded 106). `multi.stats` lists the class shares, `average_fad` and GTB's `avcon`
+(average FAD × foreground / non-missing area) per scale. The maps are identical to GTB's FAD-MS
+outputs (`*_fad_<window>.tif`, `*_fad_mscale.tif`).
 **FAD Classes (`ls.FAD_CLASSES`)**:
 1. Rare ($0..9\%$)
 2. Patchy ($10..39\%$)
@@ -265,6 +270,12 @@ lm103 = ls.landscape_mosaic(data, window_size=27, output_classes=103)
 # 103-class barycentric statistics breakdown
 stats = ls.landscape_mosaic_stats(lm103)
 print(stats)
+
+# GTB heatmap: share [%] of each of the 103 classes, as GTB stores it (single precision)
+heat = ls.landscape_mosaic_heatmap(data, window_size=27)
+heat.table          # share per class code, with its 19-class recode
+heat.triangle       # 12 x 21 grid in GTB's triangle layout (NaN outside)
+heat.to_csv("forest_lm_27_heatmap.csv")   # identical to GTB's heatmap.csv
 ```
 
 ### Contagion ($P_{ff}$) & Area Clustering (FAC)
@@ -393,6 +404,30 @@ print(fc.matrix_6x6)
 # - fc.frag_increase_pct: % of shifts with increased fragmentation
 ```
 
+### FAD Multiscale Change
+GTB's *Change → FAD Multiscale*: for every FAD-MS observation scale and the multiscale map,
+a 7×7 table of pixels moving between fragmentation classes (background, rare, patchy,
+transitional, dominant, interior, intact) from time A to time B:
+```python
+ch = ls.fad_multiscale_change(forest_2000, forest_2020)   # maps, FAD-MS results or GTB *_fad_mscale.tif
+sc = ch.scales["mscale"]            # or ch.scales[7], ch.scales[13], ...
+sc.matrix                           # 7x7 pixel counts, rows A0-Background..A6-Intact, columns B0..B6
+sc.percent                          # 6x6 foreground transitions in % of the changed pixels
+sc.frag_decrease_pct, sc.frag_increase_pct   # above / below the matrix diagonal
+ch.averages                         # FAD_AV and AVCON at A and B per scale, and their change
+print(ch.summary("mscale"))         # GTB FAD_change_mscale.txt layout
+```
+Both maps must have the same size, and either both or neither may contain non-fragmenting
+background (input 4). The tables are identical to GTB's.
+
+### Landscape Mosaic Heatmap Change
+GTB's *Change → Landscape Mosaic Heatmap*: the difference B − A of two heatmaps.
+```python
+d = ls.landscape_mosaic_change(lm_input_2000, lm_input_2020, window_size=27)
+d.table            # percent_a, percent_b, change per LM class
+d.to_csv("delta_heatmap.csv")   # identical to GTB's delta_heatmap.csv
+```
+
 ### Continuous Grayscale Spatial Convolution (GraySpatCon)
 Computes moving-window spatial metrics over continuous grayscale/percentage rasters ($0..100$):
 ```python
@@ -435,10 +470,11 @@ results = ls.mspa_batch(
 
 ## 12. Accuracy & Bit-for-Bit Verification
 
-`landschaft` is validated by an automated test suite containing **288 test cases**:
+`landschaft` is validated by an automated test suite containing **324 test cases**:
 * **MSPA**: Tested against `mspa_win64.exe` on 1,200+ random configurations and full CORINE datasets (0 differing pixels).
 * **FAD & Contagion**: Tested against original JRC `spatcon64` binaries (bit-exact).
 * **Landscape Mosaic**: Tested against JRC `recode64` binaries (bit-exact).
+* **FAD-MS, FAD Multiscale Change, LM Heatmap and Heatmap Change**: Tested against GTB's own IDL code run in GDL together with GTB's `spatcon` (FAD-MS maps and 103-class maps identical, change tables identical, heatmap vectors identical bit for bit, CSV reports identical character for character).
 * **GraySpatCon**: Tested directly against `grayspatcon64.exe` (parity verified to float32 precision).
 * **Accounting** (IDL-only in GTB): Tested against GTB's own IDL code (`tests/gtb_idl`, statements copied verbatim from `guidostoolbox.pro`) run in GDL. Maps and integer statistics are identical. Stored digests (`tests/data/reference/idl_reference.json`) cover 7 maps × 5 parameter sets, and random scenes run live when GDL is available.
 

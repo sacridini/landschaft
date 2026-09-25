@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_idl.py [path/to/gdl.exe]
+    python tools/make_reference_idl.py [path/to/gdl.exe [path/to/spatcon64.exe]]
 
 Runs the verbatim GTB code in ``tests/gtb_idl`` with GDL (or IDL) and writes
 ``tests/data/reference/idl_reference.json``: for every case, the SHA-256 of
@@ -26,7 +26,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 
 import scenes  # noqa: E402
-from gtb_reference import find_gdl, run_gtb_accounting, run_gtb_accounting_scaled_classes  # noqa: E402
+from gtb_reference import (  # noqa: E402
+    FAD_SCALES,
+    find_gdl,
+    find_spatcon,
+    run_gtb_accounting,
+    run_gtb_accounting_scaled_classes,
+    run_gtb_fad_change,
+    run_gtb_fad_mscale,
+    run_gtb_lm_delta,
+    run_gtb_lm_heatmap,
+)
 
 OUT = ROOT / "tests" / "data" / "reference" / "idl_reference.json"
 GTB_INPUT = ROOT / "src" / "landschaft" / "data" / "input.tif"
@@ -59,7 +69,67 @@ def accounting_inputs() -> dict[str, np.ndarray]:
     return inputs
 
 
-def main(exe: Path) -> None:
+def gtb_input() -> np.ndarray:
+    with rasterio.open(GTB_INPUT) as src:
+        return src.read(1)
+
+
+def with_special_background(data: np.ndarray, seed: int) -> np.ndarray:
+    """Some background pixels recoded to 3 and 4 (special backgrounds)."""
+    out = data.copy()
+    rng = np.random.default_rng(seed)
+    bg = out == 1
+    out[bg & (rng.random(out.shape) < 0.2)] = 3
+    out[bg & (rng.random(out.shape) < 0.1)] = 4
+    return out
+
+
+def fad_inputs() -> dict[str, np.ndarray]:
+    """FAD-MS inputs (sides >= 250 pixels, as GTB requires for the 243 window)."""
+    base = gtb_input()
+    changed = base.copy()
+    changed[300:500, 200:700] = 1
+    changed[600:650, :] = 2
+    changed[:30, :30] = 0
+    return {
+        "gtb_input": base,
+        "gtb_input_changed": changed,
+        "gtb_input_special": with_special_background(base, 1),
+        "gtb_input_changed_special": with_special_background(changed, 2),
+        "blobs_a": scenes.blobs(11, shape=(300, 420), scale=15, missing=0.03),
+        "blobs_b": scenes.blobs(12, shape=(300, 420), scale=15, missing=0.03),
+    }
+
+
+FAD_CHANGE_PAIRS = [
+    ("gtb_input", "gtb_input_changed"),
+    ("gtb_input_special", "gtb_input_changed_special"),
+    ("blobs_a", "blobs_b"),
+]
+
+
+def lm_inputs() -> dict[str, np.ndarray]:
+    """Land-cover maps coded 0 missing, 1 agriculture, 2 forest, 3 developed."""
+    rng = np.random.default_rng(3)
+    inputs = {
+        "random_a": rng.choice([0, 1, 2, 3], size=(300, 300), p=[0.05, 0.35, 0.35, 0.25]).astype(np.uint8),
+        "random_b": rng.choice([0, 1, 2, 3], size=(300, 300), p=[0.05, 0.15, 0.55, 0.25]).astype(np.uint8),
+    }
+    for name, seed in (("smooth_a", 21), ("smooth_b", 22)):
+        f = scenes._smooth_noise(np.random.default_rng(seed), (260, 310), 9)
+        inputs[name] = np.digitize(f, np.quantile(f, [0.02, 0.4, 0.75])).astype(np.uint8)
+    return inputs
+
+
+LM_WINDOWS = {"random_a": (7, 13), "random_b": (13,), "smooth_a": (7, 27), "smooth_b": (27,)}
+LM_DELTA_PAIRS = [(("random_a", 13), ("random_b", 13)), (("smooth_a", 7), ("smooth_b", 27))]
+
+
+def float32_hex(a: np.ndarray) -> str:
+    return np.asarray(a, dtype="<f4").tobytes().hex()
+
+
+def main(exe: Path, spatcon: Path) -> None:
     cases = []
     for name, data in accounting_inputs().items():
         for conn, thresholds, highlight in ACCOUNTING_PARAMS:
@@ -79,11 +149,63 @@ def main(exe: Path) -> None:
             "input_sha256": digest(data),
             "scaled_classes": run_gtb_accounting_scaled_classes(exe, data),
         })
+
+    fad_cases, fad_change_cases = [], []
+    inputs = fad_inputs()
+    for name, data in inputs.items():
+        ref = run_gtb_fad_mscale(exe, spatcon, data)
+        fad_cases.append({
+            "input": name,
+            "input_sha256": digest(data),
+            "sha256": {str(k): digest(m) for k, m in ref["maps"].items()},
+            "fad_av": ref["fad_av"].tolist(),
+            "fadru_av": ref["fadru_av"].tolist(),
+        })
+        print("fad_mscale", name)
+    for name_a, name_b in FAD_CHANGE_PAIRS:
+        ref = run_gtb_fad_change(exe, spatcon, inputs[name_a], inputs[name_b])
+        fad_change_cases.append({
+            "a": name_a,
+            "b": name_b,
+            "change": ref["change"].tolist(),
+            "perc": np.nan_to_num(ref["perc"], nan=-1.0).tolist(),
+            "sums": np.nan_to_num(ref["sums"], nan=-1.0).tolist(),
+            "delta_fad_av": ref["delta_fad_av"].tolist(),
+            "delta_avcon": ref["delta_avcon"].tolist(),
+        })
+        print("fad_change", name_a, name_b)
+
+    lm_cases, lm_delta_cases = [], []
+    heatmaps = {}
+    for name, data in lm_inputs().items():
+        for window in LM_WINDOWS[name]:
+            ref = run_gtb_lm_heatmap(exe, spatcon, data, window)
+            heatmaps[name, window] = ref["hn"]
+            lm_cases.append({
+                "input": name,
+                "input_sha256": digest(data),
+                "window": window,
+                "im103_sha256": digest(ref["im103"]),
+                "hn": float32_hex(ref["hn"]),
+                "csv": ref["csv"],
+            })
+            print("lm_heatmap", name, window)
+    for (name_a, win_a), (name_b, win_b) in LM_DELTA_PAIRS:
+        ref = run_gtb_lm_delta(exe, heatmaps[name_a, win_a], heatmaps[name_b, win_b], str(win_a), str(win_b))
+        lm_delta_cases.append({"a": [name_a, win_a], "b": [name_b, win_b], "hn": float32_hex(ref["hn"]),
+                               "csv": ref["csv"]})
+        print("lm_delta", name_a, name_b)
+
     OUT.write_text(json.dumps({
         "generated": dt.date.today().isoformat(),
         "interpreter": exe.name,
-        "sources": ["tests/gtb_idl/gtb_accounting.pro", "tests/gtb_idl/gtb_accounting_scaled_classes.pro"],
+        "spatcon_sha256": hashlib.sha256(spatcon.read_bytes()).hexdigest(),
+        "sources": sorted(f"tests/gtb_idl/{p.name}" for p in (ROOT / "tests" / "gtb_idl").glob("*.pro")),
         "accounting": cases,
+        "fad_mscale": fad_cases,
+        "fad_change": fad_change_cases,
+        "lm_heatmap": lm_cases,
+        "lm_delta": lm_delta_cases,
     }, indent=1))
 
 
@@ -91,4 +213,7 @@ if __name__ == "__main__":
     gdl = Path(sys.argv[1]) if len(sys.argv) > 1 else find_gdl()
     if gdl is None:
         sys.exit("GDL not found: pass its path or set LANDSCHAFT_GDL_EXE")
-    main(gdl)
+    spatcon_exe = Path(sys.argv[2]) if len(sys.argv) > 2 else find_spatcon()
+    if spatcon_exe is None:
+        sys.exit("spatcon not found: pass its path or set LANDSCHAFT_SPATCON_EXE")
+    main(gdl, spatcon_exe)

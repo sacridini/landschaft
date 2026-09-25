@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -63,5 +64,24 @@ FOSChangeResult compute_fos_change(
     const ImageU8& fos1,
     const ImageU8& fos2
 );
+
+// GTB "Change -> FAD Multiscale" pixel counts for one observation scale.
+// Inputs are GTB FAD maps: 0..100 foreground FAD [%], 101 background,
+// 102 missing, 105/106 special background. Classes: 0 background (101..149
+// except 102), 1 rare (<10), 2 patchy (10-39), 3 transitional (40-59),
+// 4 dominant (60-89), 5 interior (90-99), 6 intact (100). Pixels missing at
+// either time, or with values >= 150, are not counted in the matrix.
+struct FADChangeCounts {
+    std::array<i64, 49> matrix{};  // matrix[7 * class_A + class_B]
+    i64 fg_area_a = 0;             // pixels <= 100 in A
+    i64 fg_area_b = 0;             // pixels <= 100 in B
+    i64 forcom = 0;                // pixels <= 100 in both
+    i64 fg_sum_a = 0;              // sum of the values <= 100 in A (for the mean FAD)
+    i64 fg_sum_b = 0;
+    i64 ru_area_a = 0;             // non-missing pixels (!= 102) in A (GTB reporting unit)
+    i64 ru_area_b = 0;
+};
+
+FADChangeCounts compute_fad_change_counts(const ImageU8& a, const ImageU8& b);
 
 }  // namespace gtb

@@ -46,11 +46,36 @@ void build_integral_images(
         std::uint64_t row_fg = 0;
         for (i64 x = 0; x < nx; ++x) {
             const u8 v = im.at(x, y);
-            if (v > 0) row_valid += 1;
+            if (v != 0 && v != 4) row_valid += 1;  // GTB sets 4 to missing for spatcon
             if (v == 2) row_fg += 1;
             sat_valid.set(x + 1, y + 1, sat_valid.at(x + 1, y) + row_valid);
             sat_fg.set(x + 1, y + 1, sat_fg.at(x + 1, y) + row_fg);
         }
+    }
+}
+
+// spatcon rule 81 (area density of code 2, missing not included) followed by
+// GTB's rescaling to percent: spatcon computes the proportion in float and
+// maps it to 1 + (int)(p * 254.) (255 only for p = 1); GTB then takes
+// byte(round(((b - 1) / 254.0 < 0.994999) * 100)), 255 -> 100.
+inline u8 fad_percent(std::uint64_t fg, std::uint64_t non_missing) {
+    if (non_missing == 0) return 0;
+    const float p = static_cast<float>(fg) / static_cast<float>(non_missing);
+    const int spatcon_byte = static_cast<int>(static_cast<double>(p) * 254.) + 1;
+    if (spatcon_byte >= 255) return 100;
+    float val = static_cast<float>(spatcon_byte - 1) / 254.0f;
+    val = std::max(0.0f, std::min(val, 0.994999f));
+    return static_cast<u8>(std::round(val * 100.0f));
+}
+
+// GTB codes of the non-foreground pixels in FAD maps (0 = foreground).
+inline u8 fad_code(u8 orig) {
+    switch (orig) {
+        case 0: return 102;  // missing
+        case 1: return 101;  // background
+        case 3: return 105;  // special background
+        case 4: return 106;  // special background, non-fragmenting
+        default: return 0;
     }
 }
 
@@ -89,36 +114,9 @@ ImageU8 compute_fad_density(
             const std::uint64_t non_missing = sat_valid.rect_sum(x0, y0, x1, y1);
             const std::uint64_t fg = sat_fg.rect_sum(x0, y0, x1, y1);
 
-            u8 byte_val = 0;
-            if (non_missing == 0) {
-                byte_val = 0;
-            } else if (fg == non_missing) {
-                byte_val = 100;
-            } else {
-                const double prop = static_cast<double>(fg) / static_cast<double>(non_missing);
-                const u8 spatcon_byte = static_cast<u8>(prop * 254.0) + 1;
-                if (spatcon_byte == 255) {
-                    byte_val = 100;
-                } else {
-                    double val = (static_cast<double>(spatcon_byte) - 1.0) / 254.0;
-                    if (val > 0.994999) val = 0.994999;
-                    if (val < 0.0) val = 0.0;
-                    byte_val = static_cast<u8>(std::round(val * 100.0));
-                }
-            }
-
-            if (apply_gtb_mask) {
-                const u8 orig = im.at(x, y);
-                if (orig == 0) {
-                    out.at(x, y) = 102; // GTB Missing code
-                } else if (orig == 1) {
-                    out.at(x, y) = 101; // GTB Background code
-                } else {
-                    out.at(x, y) = byte_val;
-                }
-            } else {
-                out.at(x, y) = byte_val;
-            }
+            const u8 byte_val = fad_percent(fg, non_missing);
+            const u8 code = apply_gtb_mask ? fad_code(im.at(x, y)) : 0;
+            out.at(x, y) = code ? code : byte_val;
         }
     }
 
@@ -184,32 +182,13 @@ FADMultiscaleResultCpp compute_fad_multiscale(
                 const std::uint64_t non_missing = sat_valid.rect_sum(x0, y0, x1, y1);
                 const std::uint64_t fg = sat_fg.rect_sum(x0, y0, x1, y1);
 
-                u8 byte_val = 0;
-                if (non_missing == 0) {
-                    byte_val = 0;
-                } else if (fg == non_missing) {
-                    byte_val = 100;
-                } else {
-                    const double prop = static_cast<double>(fg) / static_cast<double>(non_missing);
-                    const u8 spatcon_byte = static_cast<u8>(prop * 254.0) + 1;
-                    if (spatcon_byte == 255) {
-                        byte_val = 100;
-                    } else {
-                        double val = (static_cast<double>(spatcon_byte) - 1.0) / 254.0;
-                        if (val > 0.994999) val = 0.994999;
-                        if (val < 0.0) val = 0.0;
-                        byte_val = static_cast<u8>(std::round(val * 100.0));
-                    }
-                }
-
+                const u8 byte_val = fad_percent(fg, non_missing);
                 raw_map.at(x, y) = byte_val;
                 sum_densities[static_cast<std::size_t>(y * nx + x)] += byte_val;
 
-                const u8 orig = im.at(x, y);
-                if (orig == 0) {
-                    gtb_map.at(x, y) = 102;
-                } else if (orig == 1) {
-                    gtb_map.at(x, y) = 101;
+                const u8 code = fad_code(im.at(x, y));
+                if (code) {
+                    gtb_map.at(x, y) = code;
                 } else {
                     gtb_map.at(x, y) = byte_val;
                     sum_fad_fg += byte_val;
@@ -257,14 +236,13 @@ FADMultiscaleResultCpp compute_fad_multiscale(
     for (i64 y = 0; y < ny; ++y) {
         for (i64 x = 0; x < nx; ++x) {
             const i64 idx = y * nx + x;
-            const u8 orig = im.at(x, y);
+            const u8 code = fad_code(im.at(x, y));
 
-            if (orig == 0) {
-                multi_map.at(x, y) = 102;
-            } else if (orig == 1) {
-                multi_map.at(x, y) = 101;
+            if (code) {
+                multi_map.at(x, y) = code;
             } else {
-                const double avg = static_cast<double>(sum_densities[static_cast<std::size_t>(idx)]) / static_cast<double>(num_scales);
+                // IDL: byte(round(sum / 5.0)) in single precision
+                const float avg = static_cast<float>(sum_densities[static_cast<std::size_t>(idx)]) / static_cast<float>(num_scales);
                 const u8 byte_val = static_cast<u8>(std::round(avg));
                 multi_map.at(x, y) = byte_val;
                 m_sum_fad_fg += byte_val;

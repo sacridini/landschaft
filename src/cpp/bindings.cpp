@@ -476,6 +476,24 @@ py::dict compute_fos_change(
     return d;
 }
 
+py::dict compute_fad_change_counts(const CArray<std::uint8_t>& a, const CArray<std::uint8_t>& b, int n_threads) {
+    const gtb::ImageU8 ia = to_image(a);
+    const gtb::ImageU8 ib = to_image(b);
+    const gtb::FADChangeCounts c = run_parallel(n_threads, [&] { return gtb::compute_fad_change_counts(ia, ib); });
+    py::array_t<i64> m({7, 7});
+    std::copy(c.matrix.begin(), c.matrix.end(), m.mutable_data());
+    py::dict d;
+    d["matrix"] = m;
+    d["fg_area_a"] = c.fg_area_a;
+    d["fg_area_b"] = c.fg_area_b;
+    d["forcom"] = c.forcom;
+    d["fg_sum_a"] = c.fg_sum_a;
+    d["fg_sum_b"] = c.fg_sum_b;
+    d["ru_area_a"] = c.ru_area_a;
+    d["ru_area_b"] = c.ru_area_b;
+    return d;
+}
+
 py::array_t<float> compute_gray_convolution(
     const CArray<std::uint8_t>& input,
     const std::string& metric,
@@ -600,6 +618,8 @@ PYBIND11_MODULE(_core, m) {
           "Compute Morphological Change Detection (MCD) with geodesic reconstruction, closing, and elasticity.");
     m.def("compute_fos_change", &compute_fos_change, py::arg("fos1"), py::arg("fos2"),
           "Compute Fragmentation (FOS) change map, 6x6 transition matrix, and shift percentages.");
+    m.def("compute_fad_change_counts", &compute_fad_change_counts, py::arg("a"), py::arg("b"), py::arg("n_threads") = 0,
+          "GTB FAD Multiscale change: 7x7 class transition counts and foreground areas of two FAD maps.");
     m.def("compute_gray_convolution", &compute_gray_convolution, py::arg("input"), py::arg("metric") = "mean",
           py::arg("window_size") = 7, py::arg("mask_missing") = true, py::arg("n_threads") = 0,
           "Compute moving-window spatial convolution over continuous grayscale raster.");

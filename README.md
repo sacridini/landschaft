@@ -10,7 +10,7 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 * **Landscape Mosaic & Contagion**: LM (19 & 103 classes with barycentric stats), Contagion ($P_{ff}$), and Clustering (FAC).
 * **Objects**: Accounting (foreground objects in up to 6 size classes, with object ID and area maps; identical to GTB's IDL code).
 * **Restoration & Morphology**: Restoration Status (RSS), Cost Distance, Least-Cost Paths & Corridors, Landscape Parcellation (AWAPS, DIVISION, PARC), and Habitat Contortion.
-* **Change Detection & Convolution**: Simple Change, Morphological Change Detection (MCD with geodesic core reconstruction & elasticity), Fragmentation Change (FOS Delta & 6x6 transition matrix), and Continuous Grayscale Spatial Convolution (GraySpatCon).
+* **Change Detection & Convolution**: Simple Change, Morphological Change Detection (MCD with geodesic core reconstruction & elasticity), Fragmentation Change (FOS Delta & 6x6 transition matrix), FAD Multiscale Change (7x7 class transitions per observation scale), Landscape Mosaic Heatmap and Heatmap Change (GTB's heatmap/delta CSV, bit-identical), and Continuous Grayscale Spatial Convolution (GraySpatCon).
 
 📖 **For complete documentation and usage examples for every module, see [DOCUMENTATION.md](DOCUMENTATION.md).**
 
@@ -154,6 +154,8 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `mspa(data, *, connectivity=8, edge_width=1, transition=True, internal=True, n_threads=None, validate=True, output_dir=None, n_workers=None, max_memory=None, overwrite=False)` | Run MSPA on numpy, dask or xarray data (2-D or stacks), or on a `RasterCollection` in parallel (the last four options are for collections). |
 | `mspa_batch(inputs, output_dir, *, ..., n_workers=None, threads_per_worker=1, max_memory=None, overwrite=False, raise_errors=False)` | Process many files in parallel; returns one `BatchResult` (`input`, `output`, `seconds`, `error`, `ok`) per file. |
 | `accounting(data, thresholds=(50, 250, 1000, 5000, 20000), *, connectivity=8, highlight_largest=False, pixel_resolution=25.0, n_threads=0)` | GTB Accounting: size-class map (GTB colour codes), object IDs, object areas, per-class table and `summary()` report. `thresholds="auto"` uses the classes proposed by GTB's dialog. |
+| `fad_multiscale_change(a, b, *, window_sizes=(7, 13, 27, 81, 243), n_threads=0)` | GTB Change → FAD Multiscale: 7×7 fragmentation-class transition tables A → B for every observation scale and the multiscale map, with FAD_AV/AVCON changes. `a`/`b` are FAD-MS results, input maps or GTB `*_fad_mscale.tif` files. |
+| `landscape_mosaic_heatmap(data, window_size=27, *, is_lm103=False)`, `landscape_mosaic_change(a, b, window_size=27)` | GTB Landscape Mosaic heatmap (share of the 103 classes, `triangle` grid, `to_csv()` = GTB `heatmap.csv`) and its change B − A (GTB `delta_heatmap.csv`). |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |
@@ -231,10 +233,11 @@ LANDSCHAFT_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live co
 * During development, 1,200 random cases (5 scene types, connectivity 4/8,
   edge widths 1 to 10, internal on/off) plus the 2000×2000 CORINE map with edge
   widths up to 100 were compared with the executable. They showed 0 differing pixels.
-* Tools that GTB implements in IDL only (Accounting) are checked against GTB's own
-  code: `tests/gtb_idl` holds the processing statements copied verbatim from
+* Tools that GTB implements in IDL (Accounting, FAD-MS, FAD Multiscale change, LM
+  heatmap and heatmap change) are checked against GTB's own code: `tests/gtb_idl` holds the processing statements copied verbatim from
   `guidostoolbox.pro`, run with [GDL](https://github.com/gnudatalanguage/gdl) (the
-  free IDL implementation). `tools/make_reference_idl.py` stores digests of their
+  free IDL implementation), with GTB's `spatcon` executable where GTB calls it.
+  `tools/make_reference_idl.py` stores digests of their
   outputs in `tests/data/reference/idl_reference.json`; with GDL installed
   (`LANDSCHAFT_GDL_EXE`, PATH or the default install), the tests also run GTB's
   code live on random scenes. Maps and integer statistics are identical; GTB's

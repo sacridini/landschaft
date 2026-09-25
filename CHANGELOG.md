@@ -6,6 +6,29 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- `fad_multiscale_change()`: GTB Change → FAD Multiscale. It gives the 7×7
+  fragmentation-class transition tables A → B for every FAD-MS observation scale and
+  for the multiscale map, the % of changed pixels above and below the diagonal, and
+  the FAD_AV/AVCON changes. Inputs can be FAD-MS results, input maps or GTB
+  `*_fad_mscale.tif` files. Counting runs in C++ with OpenMP.
+- `landscape_mosaic_heatmap()` / `LMHeatmap` and `landscape_mosaic_change()` /
+  `LMHeatmapChange`: GTB's Landscape Mosaic heatmap and its change, with the
+  triangle grid and `to_csv()` writing GTB's `heatmap.csv` / `delta_heatmap.csv`.
+- `fad_multiscale()` accepts GTB's special backgrounds 3 and 4 (codes 105/106; 4 is
+  missing for the density) and reports GTB's AVCON.
+- Parity tests for FAD-MS, FAD change and the LM heatmap/change against GTB's IDL
+  code and `spatcon` (`LANDSCHAFT_SPATCON_EXE`).
+
+### Fixed
+- `fad()` / `fad_multiscale()`: the spatcon proportion is now computed in single
+  precision, as in `spatcon.c`. Before, a few pixels could differ by 1% from GTB
+  (4 pixels of GTB's `input.tif` at the 243 window).
+- `landscape_mosaic()`: class boundaries now compare the single-precision
+  proportions with double constants, and the pure-class test uses `FLT_EPSILON`, as
+  in `spatcon.c`. Windows exactly on a boundary (e.g. 70% forest) were assigned to the
+  neighbouring class before.
+
 ## [0.5.0] - 2026-09-25
 
 ### Added

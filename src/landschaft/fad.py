@@ -25,7 +25,7 @@ import xarray as xr
 
 from . import _core
 from .io import FAD_COLORMAP
-from .validation import validate_mspa_input
+from .validation import validate_fad_input, validate_mspa_input
 
 __all__ = [
     "fad",
@@ -44,6 +44,8 @@ FAD_CLASSES: dict[int, str] = {
     6: "Intact (100%)",
     101: "Background",
     102: "Missing",
+    105: "Special background (input 3)",
+    106: "Special background, non-fragmenting (input 4)",
 }
 
 
@@ -56,6 +58,8 @@ def _classify_fad(density_arr: np.ndarray, orig_arr: np.ndarray) -> np.ndarray:
 
     classes[bg] = 101
     classes[missing] = 102
+    classes[orig_arr == 3] = 105
+    classes[orig_arr == 4] = 106
 
     d_fg = density_arr[fg]
     c_fg = np.ones_like(d_fg, dtype=np.uint8) # Default 1 (Rare)
@@ -212,7 +216,10 @@ def fad_multiscale(
     Parameters
     ----------
     data : xarray.DataArray or numpy.ndarray
-        2D raster coded 0=missing, 1=background, 2=foreground.
+        2D raster coded 0=missing, 1=background, 2=foreground, and optionally
+        3=special background and 4=non-fragmenting special background (treated
+        as missing when measuring density), as in GTB. The maps code them 105
+        and 106 (and background 101, missing 102).
     window_sizes : sequence of int, default (7, 13, 27, 81, 243)
         List of odd window sizes.
     threads : int, default 0
@@ -223,7 +230,7 @@ def fad_multiscale(
     FADMultiscaleResult
         Result containing composite map, single scale maps, and statistics table.
     """
-    validate_mspa_input(data)
+    validate_fad_input(data)
     arr = np.ascontiguousarray(data.values if isinstance(data, xr.DataArray) else data, dtype=np.uint8)
     ws_list = [int(w) for w in window_sizes]
     for w in ws_list:
@@ -245,6 +252,8 @@ def fad_multiscale(
     wrapped_ms = _wrap_as_dataarray(ms_map, data, "fad_multiscale", ms_attrs)
     classes = _wrap_as_dataarray(_classify_fad(ms_map, arr), data, "fad_classes")
 
+    # GTB's AVCON: average FAD scaled to the reporting unit (non-missing area)
+    avcon_factor = int((arr == 2).sum()) / int((arr != 0).sum())
     rows = []
     for d in raw_res["stats"]:
         scale_label = f"Scale {d['scale']}" if d["scale"] > 0 else "MultiScale"
@@ -259,6 +268,7 @@ def fad_multiscale(
                 "patchy_%": round(d["patchy_pct"], 2),
                 "rare_%": round(d["rare_pct"], 2),
                 "average_fad": round(d["average_fad"], 2),
+                "avcon": round(d["average_fad"] * avcon_factor, 2),
             }
         )
     stats_df = pd.DataFrame(rows)
