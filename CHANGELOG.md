@@ -4,6 +4,12 @@ All notable changes to guidospy are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may still change
 between minor versions.
 
+## [Unreleased]
+
+### Added
+- GTB's sample maps (`input`, `clc`, `gscinput`) bundled with the package, with
+  `example_data()` and `EXAMPLE_DATA`; `tools/benchmark.py` uses them.
+
 ## [0.1.0] - 2026-09-25
 
 First release: Morphological Spatial Pattern Analysis (MSPA).

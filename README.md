@@ -34,6 +34,23 @@ On Windows, with only the Visual Studio *Build Tools* installed, pick the genera
 
 ## Usage
 
+### Example data
+
+GTB's sample maps ship with the package, so everything below can be tried right away:
+
+```python
+gp.EXAMPLE_DATA                       # name -> description
+data = gp.load_raster(gp.example_data("input"))                 # MSPA-ready 1000 x 1000 map
+clc = gp.load_raster(gp.example_data("clc"), validate=None)     # CORINE land cover, 2000 x 2000
+forest = gp.reclassify(clc, foreground=[23, 24, 25])            # forests as foreground
+```
+
+| name | content |
+|---|---|
+| `input` | GTB MSPA test map, 1000×1000, coded 0/1/2 (EPSG:4326) |
+| `clc` | CORINE Land Cover excerpt, 2000×2000, 25 m (EPSG:3035), CLC classes; forests are 23/24/25 |
+| `gscinput` | GraySpatCon test map, 1990×1289, 2430 m (EPSG:5070), percentages 0–100, nodata 255 |
+
 ### Input data
 
 MSPA uses GTB's coding: a single-band `uint8` map with
@@ -111,6 +128,7 @@ their docstrings (`help(gp.mspa)`) give every detail.
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |
 | `MSPA_CLASSES` | Byte value → class name. |
+| `example_data(name="input")`, `EXAMPLE_DATA` | Path and descriptions of the bundled GTB sample maps. |
 | `max_threads()` | Threads available to the C++ core. |
 | `__version__` | Installed version. |
 
@@ -131,7 +149,7 @@ Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Performance
 
-`python tools/benchmark.py <GTB repo> --exe <mspa executable>`, on a laptop Ryzen 7 7730U
+`python tools/benchmark.py --exe <mspa executable>` (bundled example maps), on a laptop Ryzen 7 7730U
 (8 cores, 15 W). The original's time includes its TIFF I/O. guidospy's is in memory:
 
 | map | FGconn_EdgeWidth | GTB mspa | guidospy, 1 thread | guidospy, 16 threads | identical |
@@ -203,7 +221,8 @@ Set `GUIDOSPY_PROFILE=1` to print the time of every MSPA stage.
 
 ## License and credits
 
-GPL-3.0-or-later. guidospy ports code from GuidosToolbox and miallib, © European
+GPL-3.0-or-later. The example maps in `src/guidospy/data` come from the
+[GTB repository](https://github.com/ec-jrc/GTB) (GPL-3.0). guidospy ports code from GuidosToolbox and miallib, © European
 Union (Joint Research Centre), authors Pierre Soille, Peter Vogt et al., both
 GPL-3.0-or-later. GTB's `mspa` notes that its interface is made available for
 non-commercial purposes. Contact the JRC for commercial use of MSPA.

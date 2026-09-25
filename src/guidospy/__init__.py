@@ -14,6 +14,7 @@ from importlib import metadata as _metadata
 
 from . import _core
 from .batch import BatchResult, mspa_batch
+from .datasets import EXAMPLE_DATA, example_data
 from .io import load_raster, mspa_colormap, reclassify, write_raster
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
 from .validation import InvalidInputError, validate_mspa_input
@@ -25,8 +26,10 @@ except _metadata.PackageNotFoundError:  # pragma: no cover - running from a sour
 
 __all__ = [
     "BatchResult",
+    "EXAMPLE_DATA",
     "InvalidInputError",
     "MSPA_CLASSES",
+    "example_data",
     "load_raster",
     "max_threads",
     "mspa",

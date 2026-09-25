@@ -3,10 +3,10 @@
 
 Usage::
 
-    python tools/benchmark.py path/to/GTB [--exe path/to/mspa_win64.exe]
+    python tools/benchmark.py [--exe path/to/mspa_win64.exe]
 
-Uses GTB's sample maps: ``data/input.tif`` (1000 x 1000) and ``data/clc.tif``
-(2000 x 2000 CORINE land cover, forest classes as foreground).
+Uses the bundled GTB sample maps (``gp.example_data``): ``input`` (1000 x 1000)
+and ``clc`` (2000 x 2000 CORINE land cover, forest classes as foreground).
 The original's time includes its TIFF I/O; guidospy is timed in memory.
 """
 
@@ -36,14 +36,13 @@ def best_of(f, repeats=3) -> float:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("gtb", type=Path, help="GTB repository (for data/input.tif and data/clc.tif)")
     ap.add_argument("--exe", type=Path, help="original mspa executable")
     args = ap.parse_args()
 
     maps = {
-        "input.tif 1000x1000": gp.load_raster(args.gtb / "data" / "input.tif").values,
+        "input.tif 1000x1000": gp.load_raster(gp.example_data("input")).values,
         "CORINE 2000x2000": gp.reclassify(
-            gp.load_raster(args.gtb / "data" / "clc.tif", validate=None).values, foreground=[23, 24, 25]
+            gp.load_raster(gp.example_data("clc"), validate=None).values, foreground=[23, 24, 25]
         ),
     }
     print(f"threads available: {gp.max_threads()}")
