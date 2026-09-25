@@ -31,6 +31,7 @@
 #include "gtb/mspa.hpp"
 #include "gtb/primitives.hpp"
 #include "gtb/restoration.hpp"
+#include "gtb/spa.hpp"
 
 namespace py = pybind11;
 using gtb::i64;
@@ -539,6 +540,22 @@ py::array_t<std::uint32_t> compute_geodesic_time(const CArray<std::uint8_t>& mas
     return to_array(std::move(t));
 }
 
+py::dict compute_spa(const CArray<std::uint8_t>& input, int variant, int n_threads) {
+    const gtb::ImageU8 im = to_image(input);
+    gtb::SPAResult r = run_parallel(n_threads, [&] { return gtb::compute_spa(im, variant); });
+    py::dict d;
+    d["map"] = to_array(std::move(r.map));
+    d["nr_fg"] = r.nr_fg;
+    d["nr_cores"] = r.nr_cores;
+    d["nr_margin"] = r.nr_margin;
+    d["nr_holes"] = r.nr_holes;
+    d["nr_edge"] = r.nr_edge;
+    d["nr_perf"] = r.nr_perf;
+    d["nr_islet"] = r.nr_islet;
+    d["nr_contiguous"] = r.nr_contiguous;
+    return d;
+}
+
 py::array_t<float> compute_gray_convolution(
     const CArray<std::uint8_t>& input,
     const std::string& metric,
@@ -697,6 +714,8 @@ PYBIND11_MODULE(_core, m) {
           "miallib binOIthin_FIFO: anchored order-independent homotopic thinning (2-pixel border cleared).");
     m.def("compute_geodesic_time", &compute_geodesic_time, py::arg("mask"), py::arg("ref"),
           "miallib uc_sqtgsym (GTB ggeo): geodesic time from ref == 1 across mask; ref == 3 blocks.");
+    m.def("compute_spa", &compute_spa, py::arg("input"), py::arg("variant"), py::arg("n_threads") = 0,
+          "GTB SPA2/3/5/6: simplified pattern analysis of the 8-connected foreground.");
     m.def("compute_gray_convolution", &compute_gray_convolution, py::arg("input"), py::arg("metric") = "mean",
           py::arg("window_size") = 7, py::arg("mask_missing") = true, py::arg("n_threads") = 0,
           "Compute moving-window spatial convolution over continuous grayscale raster.");

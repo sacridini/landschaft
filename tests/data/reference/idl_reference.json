@@ -10,7 +10,9 @@
   "tests/gtb_idl/gtb_isochrone.pro",
   "tests/gtb_idl/gtb_lm_delta.pro",
   "tests/gtb_idl/gtb_lm_heatmap.pro",
+  "tests/gtb_idl/gtb_spa.pro",
   "tests/gtb_idl/mesage.pro",
+  "tests/gtb_idl/morph_open.pro",
   "tests/gtb_idl/spatcon.pro"
  ],
  "accounting": [
@@ -1464,17 +1466,17 @@
    },
    "fad_av": [
     85.203857421875,
-    80.14777374267578,
+    80.14778137207031,
     73.543212890625,
-    61.59141540527344,
+    61.5914192199707,
     51.401832580566406,
     70.37895965576172
    ],
    "fadru_av": [
     36.51885986328125,
-    34.3517951965332,
+    34.35179901123047,
     31.521041870117188,
-    26.398433685302734,
+    26.398435592651367,
     22.03112030029297,
     30.164825439453125
    ]
@@ -1522,16 +1524,16 @@
     86.00160217285156,
     81.16106414794922,
     74.85861206054688,
-    63.47246551513672,
-    53.674530029296875,
+    63.472469329833984,
+    53.67452621459961,
     71.83340454101562
    ],
    "fadru_av": [
     36.86077880859375,
     34.786094665527344,
     32.0848274230957,
-    27.204660415649414,
-    23.005210876464844,
+    27.204662322998047,
+    23.00520896911621,
     30.7882080078125
    ]
   },
@@ -1550,7 +1552,7 @@
     87.81966400146484,
     83.56607055664062,
     77.95209503173828,
-    67.2617416381836,
+    67.26173400878906,
     57.3187370300293,
     74.78401947021484
    ],
@@ -1558,7 +1560,7 @@
     38.484619140625,
     36.62059783935547,
     34.160423278808594,
-    29.47566032409668,
+    29.475656509399414,
     25.118406295776367,
     32.772098541259766
    ]
@@ -2384,17 +2386,17 @@
     1.9109115600585938,
     2.5132217407226562,
     3.219512939453125,
-    3.864452362060547,
-    3.656158447265625,
-    3.031280517578125
+    3.8644561767578125,
+    3.6561622619628906,
+    3.0312576293945312
    ],
    "delta_avcon": [
     1.6568603515625,
     1.8721771240234375,
     2.1181716918945312,
-    2.2858524322509766,
-    2.0965728759765625,
-    2.0052528381347656
+    2.2858543395996094,
+    2.0965747833251953,
+    2.0052413940429688
    ]
   },
   {
@@ -3158,7 +3160,7 @@
    ],
    "delta_fad_av": [
     1.8180618286132812,
-    2.4050064086914062,
+    2.4050140380859375,
     3.0934829711914062,
     3.7892684936523438,
     3.644207000732422,
@@ -3166,7 +3168,7 @@
    ],
    "delta_avcon": [
     1.62384033203125,
-    1.834503173828125,
+    1.8345069885253906,
     2.0755958557128906,
     2.270994186401367,
     2.1131954193115234,
@@ -4082,6 +4084,356 @@
    "resist_sha256": "6d36d5506981b85ef015012d57be466af6aa61bd10ba4f22c0c725bf851ea3bd",
    "marker_sha256": "128f53b756576d15d807a33751ed09bbbda8b1b78abc50a72a031d74244dfc6a",
    "sha256": "9532724129a8fd03cbd25c3c64b98ebe1c10c2d4ce79d21be4528daf252decfe"
+  }
+ ],
+ "spa": [
+  {
+   "input": "gtb_input",
+   "variant": 2,
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "sha256": "0608916b1f5914c21e95a821e7790b4284747ecb9646b6373f0bd1fb86f2201a",
+   "stats": {
+    "nr_FG": "2850",
+    "nr_Cores": "847",
+    "nr_margin": "6792",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "gtb_input",
+   "variant": 3,
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "sha256": "f33f6902a5a73de7c5c40f8a33395c9354c9284786c5de032131c4e4475c307d",
+   "stats": {
+    "nr_FG": "2850",
+    "nr_Cores": "1196",
+    "nr_margin": "3272",
+    "nr_holes": "707",
+    "porosity": "1.7115190762745414"
+   }
+  },
+  {
+   "input": "gtb_input",
+   "variant": 5,
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "sha256": "fa19c8c85f8126e8a93437dc7d708cf2afd24f4f68f05fa1900ef10ea2f1721a",
+   "stats": {
+    "nr_FG": "2850",
+    "nr_Cores": "1196",
+    "nr_margin": "6839",
+    "nr_holes": "707",
+    "nr_edge": "870",
+    "nr_perf": "422",
+    "nr_contiguous": "847",
+    "porosity": "1.420271633603889"
+   }
+  },
+  {
+   "input": "gtb_input",
+   "variant": 6,
+   "input_sha256": "b5601232f18cb4c5cf1c5e967a5a97edbb482212465ba29d6488cae7ce29f5f8",
+   "sha256": "4f2d259c19436767f19c204ffff55473045f2aad0fbd5248404faa45b31c41fe",
+   "stats": {
+    "nr_FG": "2850",
+    "nr_Cores": "1196",
+    "nr_margin": "4396",
+    "nr_holes": "707",
+    "nr_edge": "870",
+    "nr_perf": "422",
+    "nr_islet": "2443",
+    "nr_contiguous": "847",
+    "porosity": "1.420271633603889"
+   }
+  },
+  {
+   "input": "blobs_101",
+   "variant": 2,
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "sha256": "3d135bd643a9f2bc2aab0305c299ce7d5b3861853a29338e219bcb298597110b",
+   "stats": {
+    "nr_FG": "22",
+    "nr_Cores": "24",
+    "nr_margin": "50",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "blobs_101",
+   "variant": 3,
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "sha256": "dac9a16e3bbd0d596ad51150c6d09596cdd2246ec2ad63645a23fb271143bc0c",
+   "stats": {
+    "nr_FG": "22",
+    "nr_Cores": "26",
+    "nr_margin": "50",
+    "nr_holes": "3",
+    "porosity": "0.37692281571530373"
+   }
+  },
+  {
+   "input": "blobs_101",
+   "variant": 5,
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "sha256": "db0c5190bafd8d3a8c5f3b9da419d310e27030345f0c9c0147a3893d1009b99e",
+   "stats": {
+    "nr_FG": "22",
+    "nr_Cores": "26",
+    "nr_margin": "63",
+    "nr_holes": "3",
+    "nr_edge": "49",
+    "nr_perf": "3",
+    "nr_contiguous": "24",
+    "porosity": "0.3185353115045757"
+   }
+  },
+  {
+   "input": "blobs_101",
+   "variant": 6,
+   "input_sha256": "ec1e85f41a019a71361fceb29ea911d1d58e4a3662df516f464ea6dc89dd839b",
+   "sha256": "20e36810eef12c343a751e0651be86a444d30d588f6e6c405400cf15e067ffad",
+   "stats": {
+    "nr_FG": "22",
+    "nr_Cores": "26",
+    "nr_margin": "61",
+    "nr_holes": "3",
+    "nr_edge": "49",
+    "nr_perf": "3",
+    "nr_islet": "2",
+    "nr_contiguous": "24",
+    "porosity": "0.3185353115045757"
+   }
+  },
+  {
+   "input": "salt_101",
+   "variant": 2,
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "sha256": "7d45dd6d5919829b01ed290fde0d40f5e3b5c4346873c4cc5e8b2526546d2b2e",
+   "stats": {
+    "nr_FG": "54",
+    "nr_Cores": "85",
+    "nr_margin": "82",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "salt_101",
+   "variant": 3,
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "sha256": "f2ec5a668b339b69c736d668a478276da70f4318978928a5e01fb7b9df54a910",
+   "stats": {
+    "nr_FG": "54",
+    "nr_Cores": "90",
+    "nr_margin": "54",
+    "nr_holes": "0",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "salt_101",
+   "variant": 5,
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "sha256": "ab4614791f1d71c3df4f8c56919c4db2b22adad3c624b6afdb9b6ba56e182dba",
+   "stats": {
+    "nr_FG": "54",
+    "nr_Cores": "90",
+    "nr_margin": "79",
+    "nr_holes": "0",
+    "nr_edge": "88",
+    "nr_perf": "0",
+    "nr_contiguous": "85",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "salt_101",
+   "variant": 6,
+   "input_sha256": "6e8ef77952c8dd7363bb64da0b9ba52c88bf47fe03d367920231a62e421c1506",
+   "sha256": "270a403b22d3c0b862f86edb7d452019655b4ab8a7f457142e7d63cacb773c1c",
+   "stats": {
+    "nr_FG": "54",
+    "nr_Cores": "90",
+    "nr_margin": "42",
+    "nr_holes": "0",
+    "nr_edge": "88",
+    "nr_perf": "0",
+    "nr_islet": "37",
+    "nr_contiguous": "85",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "network_101",
+   "variant": 2,
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "sha256": "5258b16ff20b5d78045fc58929379dfda0011a23daccaa08dd7b5a9d3f03e604",
+   "stats": {
+    "nr_FG": "1",
+    "nr_Cores": "11",
+    "nr_margin": "31",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "network_101",
+   "variant": 3,
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "sha256": "28c039fe10ebb7382126bed7c634710f7a1f5dc5b615b8fb463305e41bd083bb",
+   "stats": {
+    "nr_FG": "1",
+    "nr_Cores": "18",
+    "nr_margin": "6",
+    "nr_holes": "7",
+    "porosity": "0.92417061611374152"
+   }
+  },
+  {
+   "input": "network_101",
+   "variant": 5,
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "sha256": "31ec0f940f2cf21eb37a7241b5ca73869af2eb8a099e74b162a924d7791c476c",
+   "stats": {
+    "nr_FG": "1",
+    "nr_Cores": "18",
+    "nr_margin": "31",
+    "nr_holes": "7",
+    "nr_edge": "11",
+    "nr_perf": "5",
+    "nr_contiguous": "11",
+    "porosity": "0.71064139941691451"
+   }
+  },
+  {
+   "input": "network_101",
+   "variant": 6,
+   "input_sha256": "c410bc79926a139ab1f1ad100e4c7cd4d0933ab0a27fc179b6fd6656ca151f06",
+   "sha256": "31ec0f940f2cf21eb37a7241b5ca73869af2eb8a099e74b162a924d7791c476c",
+   "stats": {
+    "nr_FG": "1",
+    "nr_Cores": "18",
+    "nr_margin": "31",
+    "nr_holes": "7",
+    "nr_edge": "11",
+    "nr_perf": "5",
+    "nr_islet": "0",
+    "nr_contiguous": "11",
+    "porosity": "0.71064139941691451"
+   }
+  },
+  {
+   "input": "border_101",
+   "variant": 2,
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "sha256": "70a409c344ef5774499f719ac00bdad2ea8c723ca4b11f36ebfb2217bd59a01c",
+   "stats": {
+    "nr_FG": "4",
+    "nr_Cores": "4",
+    "nr_margin": "10",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "border_101",
+   "variant": 3,
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "sha256": "1903382e7431e66b29a515efbb552e5a75fc9ee8f76230b8f4b6c72457b39fcc",
+   "stats": {
+    "nr_FG": "4",
+    "nr_Cores": "4",
+    "nr_margin": "16",
+    "nr_holes": "8",
+    "porosity": "8.389786347055761"
+   }
+  },
+  {
+   "input": "border_101",
+   "variant": 5,
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "sha256": "b0c1754764b6dc43ba2a1545eff915ebb2fcadd8145221848bdb27e688cd3085",
+   "stats": {
+    "nr_FG": "4",
+    "nr_Cores": "4",
+    "nr_margin": "12",
+    "nr_holes": "8",
+    "nr_edge": "9",
+    "nr_perf": "8",
+    "nr_contiguous": "4",
+    "porosity": "6.8076109936575051"
+   }
+  },
+  {
+   "input": "border_101",
+   "variant": 6,
+   "input_sha256": "1d844e5b4a09b1782ca748f35d8af6339613f0f8b91deb149ff74d26ca30d0bb",
+   "sha256": "b0c1754764b6dc43ba2a1545eff915ebb2fcadd8145221848bdb27e688cd3085",
+   "stats": {
+    "nr_FG": "4",
+    "nr_Cores": "4",
+    "nr_margin": "12",
+    "nr_holes": "8",
+    "nr_edge": "9",
+    "nr_perf": "8",
+    "nr_islet": "0",
+    "nr_contiguous": "4",
+    "porosity": "6.8076109936575051"
+   }
+  },
+  {
+   "input": "tiny_101",
+   "variant": 2,
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "sha256": "efdd18a021afbecfdd29563339fefb5ae8add82d93bd9debd87e83377fc45aaf",
+   "stats": {
+    "nr_FG": "1",
+    "nr_Cores": "2",
+    "nr_margin": "3",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "tiny_101",
+   "variant": 3,
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "sha256": "f9b52f90d1d7b7f90e7518b3ad5a0060dfd2187af695f7114cd918d18d752c20",
+   "stats": {
+    "nr_FG": "1",
+    "nr_Cores": "2",
+    "nr_margin": "1",
+    "nr_holes": "0",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "tiny_101",
+   "variant": 5,
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "sha256": "2804101b066991c5dda5b7d187816b74dae70b638f5bce6e051016bad8d4d972",
+   "stats": {
+    "nr_FG": "1",
+    "nr_Cores": "2",
+    "nr_margin": "1",
+    "nr_holes": "0",
+    "nr_edge": "2",
+    "nr_perf": "0",
+    "nr_contiguous": "2",
+    "porosity": "0"
+   }
+  },
+  {
+   "input": "tiny_101",
+   "variant": 6,
+   "input_sha256": "1e7f0602b68898d2c3f780b1069a2caf94e3281feba8cd983e097e300a91651b",
+   "sha256": "2804101b066991c5dda5b7d187816b74dae70b638f5bce6e051016bad8d4d972",
+   "stats": {
+    "nr_FG": "1",
+    "nr_Cores": "2",
+    "nr_margin": "1",
+    "nr_holes": "0",
+    "nr_edge": "2",
+    "nr_perf": "0",
+    "nr_islet": "0",
+    "nr_contiguous": "2",
+    "porosity": "0"
+   }
   }
  ],
  "ggeo_sha256": "30c160c0c231bc8bdba8a92c50489750c11e89392ace803d97d2e1d3b4da2609"

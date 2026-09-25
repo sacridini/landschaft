@@ -151,6 +151,18 @@ result = ls.mspa(
 )
 ```
 
+### Simplified Pattern Analysis (SPA2/3/5/6)
+GTB's simplified alternatives to MSPA (8-connected foreground, 1-pixel edge width):
+```python
+r = ls.spa(data, variant=5)   # 2, 3, 5 or 6
+r.map       # 17 core (SPA2: contiguous), 1 margin (SPA2: small linear features), 3 edge,
+            # 5 perforation, 9 islet (SPA6), 100 core-opening, 0 background, 129 missing
+r.stats     # area, % of data, % of foreground per class
+r.counts, r.porosity
+print(r.summary())
+```
+Identical to GTB (maps and statistics).
+
 ### MSPA Classes Table (`ls.MSPA_CLASSES`)
 
 | Pixel Value | Class Name | Description |

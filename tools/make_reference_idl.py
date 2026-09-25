@@ -38,6 +38,7 @@ from gtb_reference import (  # noqa: E402
     run_gtb_isochrone,
     run_gtb_lm_delta,
     run_gtb_lm_heatmap,
+    run_gtb_spa,
 )
 
 OUT = ROOT / "tests" / "data" / "reference" / "idl_reference.json"
@@ -156,6 +157,13 @@ def isochrone_inputs() -> dict[str, tuple[np.ndarray, np.ndarray]]:
     return cases
 
 
+def spa_inputs() -> dict[str, np.ndarray]:
+    inputs = {"gtb_input": gtb_input()}
+    for kind in scenes.SCENES:
+        inputs[f"{kind}_101"] = scenes.make(kind, 101)
+    return inputs
+
+
 def float32_hex(a: np.ndarray) -> str:
     return np.asarray(a, dtype="<f4").tobytes().hex()
 
@@ -227,6 +235,14 @@ def main(exe: Path, spatcon: Path, ggeo: Path | None = None) -> None:
                                "csv": ref["csv"]})
         print("lm_delta", name_a, name_b)
 
+    spa_cases = []
+    for name, data in spa_inputs().items():
+        for variant in (2, 3, 5, 6):
+            ref = run_gtb_spa(exe, data, f"spa{variant}")
+            spa_cases.append({"input": name, "variant": variant, "input_sha256": digest(data),
+                              "sha256": digest(ref["map"]), "stats": ref["stats"]})
+            print("spa", name, variant)
+
     iso_cases = []
     if ggeo is not None:
         for name, (resist, marker) in isochrone_inputs().items():
@@ -247,6 +263,7 @@ def main(exe: Path, spatcon: Path, ggeo: Path | None = None) -> None:
         "lm_heatmap": lm_cases,
         "lm_delta": lm_delta_cases,
         "isochrone": iso_cases,
+        "spa": spa_cases,
         "ggeo_sha256": hashlib.sha256(ggeo.read_bytes()).hexdigest() if ggeo else None,
     }, indent=1))
 

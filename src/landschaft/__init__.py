@@ -72,6 +72,7 @@ from .morphology import ParcellationResult, contortion, parcellation
 from .lm_heatmap import LMHeatmap, LMHeatmapChange, landscape_mosaic_change, landscape_mosaic_heatmap
 from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
+from .spa import SPA_CLASSES, SPAResult, spa
 from .restoration import (
     LeastCostPathResult,
     RestorationCorridorResult,
@@ -130,6 +131,8 @@ __all__ = [
     "RestorationCorridorResult",
     "RestorationStatusResult",
     "LeastCostPathResult",
+    "SPA_CLASSES",
+    "SPAResult",
     "SimpleChangeResult",
     "SpatialEntropyResult",
     "accounting",
@@ -180,6 +183,7 @@ __all__ = [
     "restoration_corridor",
     "restoration_status",
     "simple_change",
+    "spa",
     "spatial_entropy",
     "spatial_entropy_map",
     "validate_fad_input",

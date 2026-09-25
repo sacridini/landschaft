@@ -5,6 +5,7 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 
 **Current Version (v0.8.0):** Complete reimplementation of all major GuidosToolbox tools:
 * **MSPA**: Morphological Spatial Pattern Analysis (bit-identical to GTB `mspa` v2.3, 5-7x faster).
+* **SPA2/3/5/6**: Simplified Pattern Analysis (identical to GTB).
 * **GTN & Connectivity**: Topological Network Components (ECA, DOC), Importance (dPC), and Conefor Sensinode inputs.
 * **Fragmentation & Distance**: Forest Area Density (single & multiscale FAD, $O(1)$ integral images), Euclidean Distance Transform ($O(N)$), and Directional Spatial Entropy.
 * **Landscape Mosaic & Contagion**: LM (19 & 103 classes with barycentric stats), Contagion ($P_{ff}$), and Clustering (FAC).
@@ -160,6 +161,7 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `landscape_mosaic_heatmap(data, window_size=27, *, is_lm103=False)`, `landscape_mosaic_change(a, b, window_size=27)` | GTB Landscape Mosaic heatmap (share of the 103 classes, `triangle` grid, `to_csv()` = GTB `heatmap.csv`) and its change B − A (GTB `delta_heatmap.csv`). |
 | `isochrone_map(resistance, marker)`, `isochrone_map_ab(resistance, marker)` | GTB Restoration Planner isochrone maps: accumulated cost from object A (marker 1), or the cheapest A–B route (markers 1 and 2) with its least-cost path; marker 3 = missing. GTB display codes 0–100, 101–104. |
 | `distance_to_resistance(data)` | Resistance map growing with the distance to the foreground (GTB Setup Tools). |
+| `spa(data, variant=5)` | GTB SPA2/3/5/6: map in GTB codes (17 core, 3 edge, 5 perforation, 1 margin, 9 islet, 100 core-opening), class table, object counts, porosity, `summary()`. |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |

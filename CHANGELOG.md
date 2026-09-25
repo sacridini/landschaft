@@ -6,6 +6,14 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- `spa()`: GTB Simplified Pattern Analysis SPA2 (contiguous / small linear
+  features), SPA3 (core, core-opening, margin), SPA5 (core, edge, perforation,
+  margin) and SPA6 (+ islets), with GTB's areas, proportions, object counts and
+  porosity. Maps and statistics are identical to GTB's code (run in GDL, with the
+  documented MORPH_OPEN). C++ core with separable 3×3 morphology and OpenMP: about
+  0.4–1 s for 25 Mpx.
+
 ## [0.8.0] - 2026-09-26
 
 ### Added

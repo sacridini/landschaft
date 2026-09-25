@@ -297,3 +297,14 @@ def run_gtb_isochrone(exe: os.PathLike, ggeo: os.PathLike, resist: np.ndarray, m
         run_gdl(exe, [f"gtb_isochrone, {_idl_str(root / 'resist.tif')}, {_idl_str(root / 'marker.tif')}, "
                       f"{_idl_str(root / 'work')} + '/', {_idl_str(root / 'out.raw')}, '{mode}'"])
         return np.fromfile(root / "out.raw", dtype=np.uint8).reshape(ny, nx)
+
+
+def run_gtb_spa(exe: os.PathLike, data: np.ndarray, variant: str) -> dict:
+    """GTB's SPA2/3/5/6 (``tests/gtb_idl/gtb_spa.pro``): the class map and the statistics strings."""
+    ny, nx = data.shape
+    with tempfile.TemporaryDirectory(prefix="gtb_spa_") as tmp:
+        root = Path(tmp)
+        _write_tif(root / "in.tif", data)
+        run_gdl(exe, [f"gtb_spa, {_idl_str(root / 'in.tif')}, {_idl_str(root)} + '/', '{variant}'"])
+        return {"map": np.fromfile(root / "spa.raw", dtype=np.uint8).reshape(ny, nx),
+                "stats": _read_stats(root / "stats.txt")}
