@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-26
+
 ### Changed
 - Landscape metrics part 14, `convention="fragstats"` completed: `shape` is FRAGSTATS'
   raster SHAPE (perimeter over the smallest perimeter of as many cells), `_sd`/`_cv` use
