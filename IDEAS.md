@@ -302,7 +302,33 @@ Fases:
      **Feita** junto com 5b–5d (todos os cenários raster; mapas `.asc`/`.tif`,
      `_resistances.out`, `_resistances_3columns.out`, a configuração em `output_file`).
      Fase 5 concluída; o modo de rede (grafos) do Circuitscape continua fora.
-   O modo de rede (grafos) fica de fora por enquanto.
+
+Próximos passos sugeridos (2026-09-26, depois da 0.48.0):
+- Fatoração paralela de um componente grande. Hoje cada componente é fatorado numa thread
+  só; é o que limita o pairwise e o advanced num mapa de um componente só (1000×1000 com 20
+  pontos: 2,7 s contra 8,7 s do Circuitscape, só 3×, enquanto os modos com muitas
+  fatorações ganham 5–8×). Dois níveis:
+  - paralelismo na árvore: subárvores independentes da ND fatoradas ao mesmo tempo, por
+    alturas (OpenMP 2.0 do MSVC não tem `task`: `parallel for` sobre os nós de mesma
+    altura), com as matrizes de atualização em áreas próprias por nó em vez da pilha única
+    (o pico de memória sobe; somar os `u²` por nível para estimar);
+  - paralelismo nos kernels densos dos fronts do topo (os separadores de ~N células
+    concentram a maior parte dos flops: só a árvore dá no máximo ~3×): LLT/TRSM/SYRK em
+    blocos com `parallel for`, ou o GEMM paralelo do Eigen onde couber;
+  - manter o resultado determinístico (mesma ordem de soma com qualquer número de
+    threads) e conferir com o CHOLMOD como nas outras partes.
+- Modo de rede (grafos) do Circuitscape (`data_type = network`): nós e arestas de arquivo
+  (listas de pares com resistência ou condutância, nós a partir de 0 deslocados),
+  pairwise e advanced sobre o grafo, correntes de ramo e de nó (`_branch_currents`,
+  `_node_currents`, `_voltages`), com a suíte de verificação dele (`sgNetworkVerify*`,
+  `mgNetworkVerify*` em `test/output_verify`). O núcleo já aceita grafos gerais
+  (`frontal_analyze_graph`), mas a ordenação precisa de uma dissecção aninhada para grafos
+  sem geometria (hoje os nós sem célula vão todos para a raiz).
+- Omniscape com raio grande e muitas threads: limitado pela banda de memória (6× de 1 para
+  20 threads em r = 100; o fator de uma janela tem 13 MB). Ideias: fatorar o landscape em
+  precisão mista não serve (condicionamento); reduzir o tráfego guardando só a parte de L
+  que a substituição reversa lê, ou resolver lotes de alvos vizinhos na mesma thread para
+  reaproveitar a cache.
 
 Referência: Julia 1.13.0 (`C:\Users\eduar\AppData\Local\Programs\Julia-1.13.0`) com
 Omniscape 0.7 (o clone local, `Pkg.develop`) e Circuitscape 6.1 num depot separado
