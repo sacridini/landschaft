@@ -24,10 +24,8 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Análises no estilo pylandstats
 
-- **Assinatura espacial** (`SpatialSignatureAnalysis`): PCA + agrupamento de
-  paisagens/zonas pelas métricas, com gráficos dos clusters.
-- **Séries temporais**: `SpatioTemporalAnalysis` com gráficos de métrica × tempo,
-  e as variantes zonal/buffer/grade no tempo.
+- Outros métodos de decomposição/agrupamento (NMF, agrupamento hierárquico) e o
+  `get_cgram` do pylandstats (correlogramas) na `SpatialSignatureAnalysis`.
 
 ## Desempenho e escala
 
@@ -118,3 +116,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
    `"landscape_metrics"` / `"window_metrics"` (tabelas CSV ou Parquet). **Feita.**
 10. Gráficos com matplotlib (opcional): `show_patches`, `show_cores`, `show_lsm`,
     `show_correlation`. **Feita.**
+11. Análises no estilo pylandstats: `SpatioTemporalAnalysis` (séries de métricas no
+    tempo, de mapas inteiros, zonas, buffers ou grade, com gráficos) e
+    `SpatialSignatureAnalysis` (PCA e k-means das assinaturas, com gráficos). **Feita.**

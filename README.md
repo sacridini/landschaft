@@ -139,6 +139,10 @@ ls.write_table(ls.zonal_metrics("landcover.tif", gdf_zones), "zones.gpkg")   # z
 lc.to_raster("pland", path="pland.tif")                         # class metric as a GeoTIFF
 ls.batch("landscape_metrics", "maps/*.tif", "out", table_format="parquet")
 lc.show_patches("all"); lc.show_lsm("shape"); ls.show_correlation(lc.metrics())  # matplotlib figures
+sta = ls.SpatioTemporalAnalysis(["lc2000.tif", "lc2010.tif", "lc2020.tif"], [2000, 2010, 2020])
+sta.landscape_metrics(["shdi", "ed"]); sta.plot_metric("pland", classes="all")
+sig = ls.SpatialSignatureAnalysis("landcover.tif", grid=1000, landscape_metrics=["shdi", "ed", "contag"])
+sig.pca(); sig.cluster(4)                                        # signatures of 1 km cells
 ```
 
 Options are those of landscapemetrics (`directions`, `count_boundary`,

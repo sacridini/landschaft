@@ -894,6 +894,33 @@ blocks; `batch("window_metrics", ...)` writes one GeoTIFF per metric.
 `window_metrics`) are computed side by side when they are small and one after the
 other, each in parallel, when they are large.
 
+### Time series and spatial signatures (pylandstats-style)
+
+```python
+sta = ls.SpatioTemporalAnalysis(["lc2000.tif", "lc2010.tif", "lc2020.tif"], dates=[2000, 2010, 2020])
+sta.landscape_metrics(["shdi", "ed", "np"])        # one row per date
+sta.class_metrics(["pland", "np"])                  # (class, date) rows; absent class: 0 for area/count
+sta.plot_metric("pland", classes="all")             # one line per class
+ls.SpatioTemporalAnalysis(files, dates, zones=gdf)                   # per polygon: (zone, date) rows
+ls.SpatioTemporalAnalysis(files, dates, points=xy, size=500)         # buffers around points
+ls.SpatioTemporalAnalysis(files, dates, grid=1000)                   # 1 km grid (ls.grid_zones)
+
+sig = ls.SpatialSignatureAnalysis(files, landscape_metrics=["shdi", "ed"], class_metrics=["pland"])
+sig.table                     # the signature matrix: rows = landscapes (or zones), columns = metrics
+res = sig.pca()               # scores, loadings, explained_variance_ratio
+labels = sig.cluster(3)       # k-means (k-means++, best of 10)
+sig.plot_pca(labels); sig.plot_cluster_metrics(labels)
+ls.SpatialSignatureAnalysis("map.tif", grid=1000, landscape_metrics=[...])   # zones of one map
+```
+
+The series are computed with `landscape_metrics` / `sample_metrics` (so they are the same
+values). The signature matrix has one column per landscape metric and one per class
+metric and class (`pland_11`); the PCA works on z-scores (population standard deviation,
+as scikit-learn's `StandardScaler`), leaves out constant metrics and rows with NaN (with a
+warning), and orients each component so that its largest loading is positive; k-means runs
+on the z-scores or on the first principal components. Both agree with scikit-learn, which
+is not needed.
+
 ### Plots
 
 With matplotlib (`pip install landschaft[plot]`), like landscapemetrics' `show_*` (they

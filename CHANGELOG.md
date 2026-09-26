@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 11, pylandstats-style analyses: `ls.SpatioTemporalAnalysis`
+  (metrics along a time series of rasters, for whole maps, polygons, buffers around
+  points or a grid of zones; wide landscape/class tables with 0 for absent classes in
+  area/count metrics, and `plot_metric`), `ls.SpatialSignatureAnalysis` (signature matrix
+  of landscapes or zones, principal components on standardised metrics and k-means
+  clusters in numpy, the same as scikit-learn's; `plot_pca`, `plot_cluster_metrics`) and
+  `ls.grid_zones()`.
+
 ## [0.21.0] - 2026-09-26
 
 ### Added

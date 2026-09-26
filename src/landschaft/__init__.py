@@ -72,6 +72,9 @@ from .io import (
 from .morphology import ParcellationResult, contortion, parcellation
 from .lsm import (
     Landscape,
+    SpatialSignatureAnalysis,
+    SpatioTemporalAnalysis,
+    grid_zones,
     calculate_correlation,
     check_landscape,
     extract_metrics,
@@ -155,6 +158,8 @@ __all__ = [
     "RestorationCorridorResult",
     "RestorationStatusResult",
     "LeastCostPathResult",
+    "SpatialSignatureAnalysis",
+    "SpatioTemporalAnalysis",
     "SPA_CLASSES",
     "SPAResult",
     "SimpleChangeResult",
@@ -186,6 +191,7 @@ __all__ = [
     "fos_change",
     "foschange_colormap",
     "gray_spatial_convolution",
+    "grid_zones",
     "gtn_components",
     "gtn_components_colormap",
     "gtn_importance",
