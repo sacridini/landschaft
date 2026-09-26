@@ -6,6 +6,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <limits>
+
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -760,6 +762,50 @@ void bind_landscape(py::module_& m) {
         .def("landscape_metric", [](lsm::Landscape& l, const std::string& name) {
             return lsm_call(l.options().n_threads, [&] { return l.landscape_metric(name); });
         })
+        .def("centroids", [](lsm::Landscape& l, double xmin, double xmax, double ymin, double ymax, bool cell_center) {
+            const lsm::CentroidTable t =
+                lsm_call(l.options().n_threads, [&] { return l.centroids(xmin, xmax, ymin, ymax, cell_center); });
+            py::dict d;
+            d["patch"] = vector_array(t.patch);
+            d["x"] = vector_array(t.x);
+            d["y"] = vector_array(t.y);
+            return d;
+        })
+        .def("nearest_neighbours", [](lsm::Landscape& l, bool return_id) {
+            const lsm::NeighbourTable t = lsm_call(l.options().n_threads, [&] { return l.nearest_neighbours(return_id); });
+            py::dict d;
+            d["patch"] = vector_array(t.patch);
+            d["dist"] = vector_array(t.dist);
+            d["neighbour"] = vector_array(t.neighbour);
+            return d;
+        })
+        .def("circles", [](lsm::Landscape& l, bool by_class) {
+            const std::vector<lsm::EnclosingCircle> c = lsm_call(l.options().n_threads, [&] {
+                return by_class ? l.class_circles() : l.patch_circles();
+            });
+            std::vector<double> cx(c.size()), cy(c.size()), r(c.size());
+            for (std::size_t i = 0; i < c.size(); ++i) {
+                cx[i] = c[i].cx;
+                cy[i] = c[i].cy;
+                r[i] = c[i].r;
+            }
+            py::dict d;
+            d["cx"] = vector_array(cx);
+            d["cy"] = vector_array(cy);
+            d["r"] = vector_array(r);
+            return d;
+        })
+        .def("patch_boundaries", [](lsm::Landscape& l, bool consider_boundary, int edge_depth) {
+            auto v = lsm_call(l.options().n_threads, [&] { return l.patch_boundaries(consider_boundary, edge_depth); });
+            return to_array(std::move(v), l.nx(), l.ny());
+        })
+        .def("cooccurrence", [](lsm::Landscape& l, const std::vector<std::pair<int, int>>& offsets) {
+            const std::vector<std::int64_t> v = lsm_call(l.options().n_threads, [&] { return l.cooccurrence(offsets); });
+            const auto k = static_cast<py::ssize_t>(l.n_classes());
+            py::array_t<std::int64_t> a({k, k});
+            std::copy(v.begin(), v.end(), a.mutable_data());
+            return a;
+        })
         .def("prepare", [](lsm::Landscape& l, const std::vector<int>& levels, const std::vector<std::string>& names) {
             const std::vector<lsm::MetricSpec> specs = metric_specs(levels, names);
             lsm_call(l.options().n_threads, [&] { l.prepare(specs); });
@@ -832,6 +878,37 @@ void bind_landscape(py::module_& m) {
         },
         py::arg("rasters"), py::arg("options"), py::arg("levels"), py::arg("names"));
 
+    m.def(
+        "lsm_raster_boundaries",
+        [](const CArray<std::int32_t>& values, const py::object& na_mask, bool consider_boundary, int edge_depth,
+           bool patch_id) {
+            CArray<std::uint8_t> mask_arr;
+            const lsm::RasterView r = raster_view(values, na_mask, mask_arr, 1.0, 1.0);
+            constexpr std::int32_t kNa = std::numeric_limits<std::int32_t>::min();
+            auto v = lsm_call(0, [&] {
+                return lsm::raster_boundaries(r.values, r.na_mask, r.nx, r.ny, consider_boundary, edge_depth, patch_id,
+                                              kNa);
+            });
+            return to_array(std::move(v), r.nx, r.ny);
+        },
+        py::arg("values"), py::arg("na_mask"), py::arg("consider_boundary"), py::arg("edge_depth"),
+        py::arg("patch_id"));
+    m.def(
+        "lsm_r_cor",
+        [](const CArray<double>& x, const std::string& method) {
+            if (x.ndim() != 2) throw py::value_error("expected a 2-D array (observations x variables)");
+            const auto n = static_cast<lsm::i64>(x.shape(0));
+            const auto m = static_cast<lsm::i64>(x.shape(1));
+            std::vector<double> col(static_cast<std::size_t>(n * m));  // column-major, as R
+            for (lsm::i64 i = 0; i < n; ++i) {
+                for (lsm::i64 j = 0; j < m; ++j) col[j * n + i] = x.data()[i * m + j];
+            }
+            const std::vector<double> r = lsm_call(0, [&] { return lsm::r_cor(col, n, m, method); });
+            py::array_t<double> a({static_cast<py::ssize_t>(m), static_cast<py::ssize_t>(m)});
+            std::copy(r.begin(), r.end(), a.mutable_data());
+            return a;
+        },
+        py::arg("x"), py::arg("method"), "R's cor() of the columns of x.");
     m.def("lsm_r_statistics", &lsm::r_statistics, py::arg("x"),
           "R's sum, mean, sd and median of x, log(x[0]) and sqrt(x[0]), as landschaft computes them.");
 

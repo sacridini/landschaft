@@ -130,6 +130,10 @@ ls.sample_metrics("landcover.tif", points_xy, size=500, shape="circle")  # sampl
 ls.window_metrics("landcover.tif", window=21, what="lsm_l_shdi")         # moving window (window_lsm)
 ls.Landscape("huge.tif", block_rows="auto").metrics()                   # larger than memory, same values
 lc.class_metrics(["AREA_AM", "shape_index_md", "gyrate_am"])  # FRAGSTATS extras, pylandstats/FRAGSTATS names
+lc.centroids(); lc.nearest_neighbours(return_id=True)            # get_centroids, get_nearestneighbour
+lc.adjacencies(8); lc.boundaries(edge_depth=2); lc.circumscribing_circles()
+ls.extract_metrics("landcover.tif", points_xy)                   # extract_lsm
+ls.calculate_correlation(lc.metrics(level="class"))             # calculate_correlation
 ```
 
 Options are those of landscapemetrics (`directions`, `count_boundary`,
@@ -199,6 +203,8 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `list_metrics(level=None, metric=None, name=None, type=None, what=None, *, extras=False)` | Catalogue of the metrics (`list_lsm`); `extras=True` adds the FRAGSTATS `_am`/`_md`/`_ra` statistics and `perim_*`. |
 | `sample_metrics(data, y, *, size=None, shape="square", plot_id=None, all_classes=False, level=None, metric=None, name=None, type=None, what=None, extras=False, n_threads=None, **options)` | landscapemetrics' `sample_lsm`: metrics of sample plots (buffers around points, or polygons), with `plot_id` and `percentage_inside`. |
 | `window_metrics(data, window, level="landscape", metric=None, name=None, type=None, what=None, *, extras=False, n_threads=None, **options)` | landscapemetrics' `window_lsm`: landscape-level metrics in a moving window (odd side or any odd-sized shape), as `{metric: raster}`. |
+| `Landscape.centroids`, `.nearest_neighbours`, `.circumscribing_circles`, `.adjacencies`, `.boundaries`, `.patches`, `.extract_metrics` | landscapemetrics' `get_centroids`, `get_nearestneighbour`, `get_circumscribingcircle`, `get_adjacencies`, `get_boundaries`, `get_patches`, `extract_lsm` (same values). |
+| `extract_metrics(data, y, *, extract_id=None, ...)`, `raster_boundaries(data, ...)`, `check_landscape(data)`, `calculate_correlation(metrics, method="pearson")` | landscapemetrics' `extract_lsm` (lists of rasters too), `get_boundaries` on raster values, `check_landscape`, `calculate_correlation`. |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |

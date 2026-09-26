@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_lsm.py [lsm] [sample] [window] [rmath]
+    python tools/make_reference_lsm.py [lsm] [sample] [window] [rmath] [utils]
 
 Needs Rscript with landscapemetrics and terra (see ``tests/lsm_reference.py``
 for ``LANDSCHAFT_RSCRIPT`` / ``LANDSCHAFT_R_LIBS``). ``lsm`` (default: all
@@ -13,7 +13,12 @@ of ``calculate_lsm`` for each option set to
 ``sample`` and ``window`` store ``sample_lsm`` and ``window_lsm`` results in
 ``tests/data/reference/lsm_sample`` and ``lsm_window``; ``rmath`` stores R's
 ``sum``, ``mean``, ``sd``, ``median``, ``log`` and ``sqrt`` of random vectors
-(``tests/data/reference/lsm_rmath``), the arithmetic the metrics reproduce. The test-suite
+(``tests/data/reference/lsm_rmath``), the arithmetic the metrics reproduce;
+``utils`` stores the results of landscapemetrics' utility functions
+(``get_centroids``, ``get_nearestneighbour``, ``get_circumscribingcircle``,
+``get_adjacencies``, ``get_boundaries``, ``extract_lsm``, ``check_landscape``,
+``calculate_correlation``; ``tools/lsm_utils_reference.R``) in
+``tests/data/reference/lsm_utils``. The test-suite
 compares landschaft against these files, so it runs anywhere without R.
 """
 
@@ -40,6 +45,22 @@ OUT = ROOT / "tests" / "data" / "reference" / "lsm"
 OUT_SAMPLE = ROOT / "tests" / "data" / "reference" / "lsm_sample"
 OUT_WINDOW = ROOT / "tests" / "data" / "reference" / "lsm_window"
 OUT_RMATH = ROOT / "tests" / "data" / "reference" / "lsm_rmath"
+OUT_UTILS = ROOT / "tests" / "data" / "reference" / "lsm_utils"
+R_UTILS_SCRIPT = ROOT / "tools" / "lsm_utils_reference.R"
+
+# (input, options): the stored maps, with the utilities' options
+UTILS_CASES = {
+    "augusta": ("augusta.tif", {}),
+    "augusta_d4": ("augusta.tif", {"directions": 4, "consider_boundary": True, "edge_depth": 2}),
+    "lm_landscape": ("lm_landscape.tif", {"edge_depth": 3}),
+    "synthetic_na": ("synthetic_na.tif", {}),
+    "sparse": ("sparse.tif", {"directions": 4}),
+    "salt_pepper": ("salt_pepper.tif", {"consider_boundary": True}),
+    "na_ring": ("na_ring.tif", {"edge_depth": 2}),
+    "checker": ("checker.tif", {"directions": 4}),
+}
+# an asymmetric neighbourhood (landscapemetrics reads it transposed)
+UTILS_NEIGHBOURHOOD = np.array([[np.nan, 1, np.nan], [1, 0, 1], [np.nan, 1, 1]])
 
 # R's arithmetic on vectors like the metrics' (sd uses a scalar sqrt, which
 # R's byte-code computes inline; sqrt of a vector goes through the x87 libm).
@@ -73,6 +94,54 @@ def rmath_vectors() -> list[np.ndarray]:
             x = 1 + rng.uniform(-0.3, 0.3, n)  # log near 1 (fyl2xp1)
         out.append(x)
     return out
+
+
+def utils_points(tif: Path) -> pd.DataFrame:
+    """Points in and around the raster, on cell edges and corners too."""
+    import rasterio
+
+    with rasterio.open(tif) as src:
+        b = src.bounds
+        rx, ry = src.res
+    rng = np.random.default_rng(7)
+    xs = list(rng.uniform(b.left, b.right, 12)) + [b.left, b.right, b.left + 3 * rx, b.left - rx, b.right + rx]
+    ys = list(rng.uniform(b.bottom, b.top, 12)) + [b.top, b.bottom, b.top - 2 * ry, b.bottom, b.top]
+    return pd.DataFrame({"x": xs, "y": ys})
+
+
+def make_utils(rscript) -> None:
+    import gzip
+    import shutil
+
+    OUT_UTILS.mkdir(parents=True, exist_ok=True)
+    stack = [INPUTS / "synthetic_na.tif", INPUTS / "salt_pepper.tif", INPUTS / "sparse.tif"]
+    files = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        nb = tmp / "neighbourhood.csv"
+        nb.write_text("\n".join(",".join("NA" if np.isnan(v) else str(int(v)) for v in row)
+                                for row in UTILS_NEIGHBOURHOOD) + "\n")
+        for name, (tif, options) in UTILS_CASES.items():
+            points = utils_points(INPUTS / tif)
+            pts = tmp / f"{name}_points.csv"
+            points.to_csv(pts, index=False, float_format="%.17g")
+            out = tmp / name
+            opts = {**options, "points": pts, "neighbourhood": nb}
+            if name == "augusta":
+                opts["stack"] = ",".join(str(s) for s in stack)
+            lsm_reference._run_r(rscript, R_UTILS_SCRIPT, [INPUTS / tif, out], opts)
+            target = OUT_UTILS / name
+            if target.exists():
+                shutil.rmtree(target)
+            target.mkdir(parents=True)
+            points.to_csv(target / "points.csv", index=False, float_format="%.17g")
+            for csv in sorted(out.glob("*.csv")):
+                with open(csv, "rb") as src, gzip.GzipFile(target / (csv.name + ".gz"), "wb", mtime=0) as dst:
+                    shutil.copyfileobj(src, dst)
+            files[name] = {"input": tif, "options": options, "outputs": sorted(p.name for p in out.glob("*.csv"))}
+            print(f"{name}: {len(files[name]['outputs'])} tables")
+    write_manifest(OUT_UTILS, rscript, files, {"stack": [p.name for p in stack],
+                                              "neighbourhood": UTILS_NEIGHBOURHOOD.tolist()})
 
 
 def make_rmath(rscript) -> None:
@@ -229,8 +298,8 @@ def write_manifest(folder: Path, rscript, files: dict, extra: dict | None = None
 
 
 def main() -> None:
-    parts = set(sys.argv[1:]) or {"lsm", "sample", "window", "rmath"}
-    unknown = parts - {"lsm", "sample", "window", "rmath"}
+    parts = set(sys.argv[1:]) or {"lsm", "sample", "window", "rmath", "utils"}
+    unknown = parts - {"lsm", "sample", "window", "rmath", "utils"}
     if unknown:
         sys.exit(f"unknown part(s): {sorted(unknown)}")
     rscript = lsm_reference.find_rscript()
@@ -242,6 +311,8 @@ def main() -> None:
         make_sample(rscript)
     if "rmath" in parts:
         make_rmath(rscript)
+    if "utils" in parts:
+        make_utils(rscript)
     if "window" in parts:
         make_window(rscript)
 

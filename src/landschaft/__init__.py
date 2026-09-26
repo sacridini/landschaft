@@ -70,7 +70,17 @@ from .io import (
     write_raster,
 )
 from .morphology import ParcellationResult, contortion, parcellation
-from .lsm import Landscape, landscape_metrics, list_metrics, sample_metrics, window_metrics
+from .lsm import (
+    Landscape,
+    calculate_correlation,
+    check_landscape,
+    extract_metrics,
+    landscape_metrics,
+    list_metrics,
+    raster_boundaries,
+    sample_metrics,
+    window_metrics,
+)
 from .lm_heatmap import LMHeatmap, LMHeatmapChange, landscape_mosaic_change, landscape_mosaic_heatmap
 from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
@@ -149,6 +159,8 @@ __all__ = [
     "clustering_fac",
     "conefor_inputs",
     "contagion_pff",
+    "calculate_correlation",
+    "check_landscape",
     "contortion",
     "contortion_colormap",
     "cost_distance",
@@ -157,6 +169,7 @@ __all__ = [
     "entropy_colormap",
     "euclidean_distance",
     "example_data",
+    "extract_metrics",
     "fad",
     "fad5_colormap",
     "fad_colormap",
@@ -191,6 +204,7 @@ __all__ = [
     "mspa_tiled",
     "parcellation",
     "proximity",
+    "raster_boundaries",
     "reclassify",
     "resistance_colormap",
     "restoration_corridor",

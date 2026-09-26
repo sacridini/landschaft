@@ -842,6 +842,63 @@ cells) or scrambled (rectangular windows); landschaft keeps the geometry. And
 `window_metrics`) are computed side by side when they are small and one after the
 other, each in parallel, when they are large.
 
+### Utilities (landscapemetrics' `get_*`, `extract_lsm`, `check_landscape`, `calculate_correlation`)
+
+```python
+lc = ls.Landscape("landcover.tif")
+lc.centroids()                          # class, id, x, y (get_centroids)
+lc.centroids(cell_center=True)          # the patch cell nearest to it (ties: several rows)
+lc.nearest_neighbours(return_id=True)   # class, id, dist, id_neighbour (get_nearestneighbour)
+lc.circumscribing_circles("class")      # diameter and centre (get_circumscribingcircle)
+lc.adjacencies(8, what="unlike")        # class x class cell pairs (get_adjacencies)
+lc.boundaries(edge_depth=2, patch_id=True)   # get_boundaries of the patches
+lc.patches()                            # {class: raster of patch ids} (get_patches)
+lc.extract_metrics(points_xy, what=["lsm_p_area", "lsm_p_shape"])   # extract_lsm
+ls.raster_boundaries("patch_ids.tif")   # get_boundaries on the values of any raster
+ls.check_landscape(["a.tif", "b.tif"])  # crs, units, class, n_classes, OK
+ls.calculate_correlation(ls.landscape_metrics(["t1.tif", "t2.tif", "t3.tif"]), method="spearman")
+```
+
+All give landscapemetrics' values, bit for bit (except the circles, randomised in
+landscapemetrics), and follow its conventions:
+
+* **Coordinates** are terra's: cell centres `xmin + (col + 0.5) · (xmax − xmin) / ncol`,
+  the extent from the geotransform (`xmax = xmin + res · ncol`). A point on a cell edge
+  belongs to the cell right of / below it, except on the last column / row (terra's
+  `cellFromXY`); points outside or on NA give no rows in `extract_metrics`.
+* **Centroids** are R's `mean()` of the cell centres in raster order (80-bit sums). With
+  `cell_center`, the nearest cells are those at the smallest distance (x87 `sqrt`, as R
+  computes a vector); ties come in the order R's `merge()` leaves them (its Shell sort).
+* **Nearest neighbours**: the distance of each patch to the nearest patch of its class is
+  the `enn` metric. With `return_id`, landscapemetrics gives each boundary cell (4
+  neighbours) the first cell of another patch at its nearest distance that its sweep over
+  the cells sorted by x meets; the patch lists the patches its cells meet at the patch's
+  distance. landschaft applies the same rule to the candidates of a range search around
+  each cell, so it does not slow down on long columns of cells.
+* **Circles** enclose the corners of the cells in the first and last rows and columns
+  of the patch (or class), as the `circle` metric; centres in map coordinates. Non-square
+  cells work (landscapemetrics refuses them).
+* **Adjacencies** count directed pairs (each pair twice) with 4, 8 or any neighbourhood
+  matrix (1 = neighbour, 0 = focal cell; read transposed, as landscapemetrics does); NA
+  cells are left out. `what="like"/"unlike"/"triangle"` keep the diagonal / the lower (or
+  `upper`) triangle, NaN elsewhere.
+* **Boundaries**: `Landscape.boundaries` marks, for every class separately, the cells
+  within `edge_depth` cells (city-block) of another class, NA or the map edge (unless
+  `consider_boundary`): the complement of the core cells. `raster_boundaries` runs
+  landscapemetrics' `rcpp_get_boundaries` rule on the values as given: a cell is a
+  boundary when the cell *below* differs or the cell above, left or right is NA, so on a
+  multi-class raster only one side of a change is marked, as in R; `patch_id` is refused
+  with a warning when a value is 0.
+* **check_landscape** reads the CRS like terra, which assumes lon/lat (`OGC:CRS84`) for a
+  raster file without CRS whose extent fits longitudes and latitudes.
+* **calculate_correlation** builds the tables like R's `xtabs` (values summed per id /
+  class / layer, missing combinations 0, NA values NA, rows without id left out) and
+  computes R's `cor()`: two-pass means and 80-bit cross products, Spearman on average
+  ranks, Kendall from sign products; NA or constant metrics have NA correlations (left
+  out) and a diagonal of 1.
+
+These need the raster, so they are not available out of core (`block_rows`).
+
 ### Verification
 
 `tools/make_reference_lsm.py` runs landscapemetrics (`tools/lsm_reference.R`) on 14
@@ -864,7 +921,9 @@ All comparisons with landscapemetrics require the same bits, except for the four
 families above (relative 1e-10); `tests/test_lsm_rmath.py` checks the arithmetic itself
 against R on 600 stored vectors (`make_reference_lsm.py rmath`).
 `tests/test_lsm_extras.py` checks the extras against numpy and pylandstats, the names
-and the threads. `tests/test_lsm.py` checks values computed by hand, the labels against SciPy, the
+and the threads. `make_reference_lsm.py utils` stores the results of the utilities
+(`tools/lsm_utils_reference.R`) on 8 maps and option sets, compared by
+`tests/test_lsm_utils.py`, which also runs them live on random maps. `tests/test_lsm.py` checks values computed by hand, the labels against SciPy, the
 parallel seams, input handling and metric selection; `enn` against SciPy's exact
 Euclidean distance transform and `circle` against an exhaustive search over the
 circles through two or three hull points.

@@ -769,12 +769,24 @@ double related_circle(const std::vector<double>& xy, std::uint64_t seed, double 
     return 1 - (area_ha * 10000) / (kPi * std::pow(c.r, 2));
 }
 
-// 1 - patch area / area of the smallest circle around the patch. As in
-// landscapemetrics, the circle encloses the corners of the patch cells in
-// its first and last rows and columns.
+// 1 - patch area / area of the smallest circle around the patch.
 std::vector<double> Landscape::circle() {
-    const Patches& pt = patches();
+    const std::vector<EnclosingCircle>& circles = patch_circles();
     const std::vector<double>& area = patch_base("area");
+    std::vector<double> out(circles.size());
+    for (std::size_t i = 0; i < circles.size(); ++i) {
+        out[i] = 1 - (area[i] * 10000) / (kPi * std::pow(circles[i].r, 2));
+    }
+    return out;
+}
+
+// Smallest circle around each patch. As in landscapemetrics, the circle
+// encloses the corners of the patch cells in its first and last rows and
+// columns.
+const std::vector<EnclosingCircle>& Landscape::patch_circles() {
+    if (patch_circles_) return *patch_circles_;
+    if (tables_only_) throw std::logic_error("circles of an out-of-core landscape need a detail pass");
+    const Patches& pt = patches();
     const i64 n = pt.n;
     const i64 nx = nx_;
     const i64 ny = ny_;
@@ -835,7 +847,7 @@ std::vector<double> Landscape::circle() {
 
     const double rx = resx_;
     const double ry = resy_;
-    std::vector<double> out(static_cast<std::size_t>(n));
+    std::vector<EnclosingCircle> out(static_cast<std::size_t>(n));
 #pragma omp parallel if (parallel)
     {
         std::vector<Point> pts;  // reused by the patches of one thread
@@ -872,8 +884,71 @@ std::vector<double> Landscape::circle() {
                 }
             }
             const Circle c = smallest_circle(pts, static_cast<std::uint64_t>(i));
-            out[i] = 1 - (area[i] * 10000) / (kPi * std::pow(c.r, 2));
+            out[i] = EnclosingCircle{c.c.x, c.c.y, c.r};
         }
+    }
+    patch_circles_ = std::move(out);
+    return *patch_circles_;
+}
+
+// Smallest circle around all cells of each class (get_circumscribingcircle
+// with level = "class"): the corners of the class cells in the first and
+// last rows and columns of the class.
+std::vector<EnclosingCircle> Landscape::class_circles() {
+    if (tables_only_) throw std::logic_error("circles of an out-of-core landscape need a detail pass");
+    const int k = n_classes();
+    const i64 nx = nx_;
+    const i64 ny = ny_;
+    struct Box {
+        i64 x0, x1, y0, y1;
+    };
+    std::vector<Box> box(static_cast<std::size_t>(k), Box{nx, -1, ny, -1});
+    for (i64 y = 0; y < ny; ++y) {
+        for (i64 x = 0; x < nx; ++x) {
+            const std::int32_t c = cls_[y * nx + x];
+            if (c < 0) continue;
+            Box& b = box[c];
+            b.x0 = std::min(b.x0, x);
+            b.x1 = std::max(b.x1, x);
+            b.y0 = std::min(b.y0, y);
+            b.y1 = std::max(b.y1, y);
+        }
+    }
+    const double rx = resx_;
+    const double ry = resy_;
+    std::vector<EnclosingCircle> out(static_cast<std::size_t>(k));
+#pragma omp parallel for schedule(dynamic) if (nx * ny >= kParallelThreshold)
+    for (int c = 0; c < k; ++c) {
+        const Box& b = box[c];
+        std::vector<Point> pts;
+        for (i64 x = b.x0; x <= b.x1; ++x) {
+            const double X = static_cast<double>(x) * rx;
+            if (cls_[b.y0 * nx + x] == c) {
+                const double Y = static_cast<double>(b.y0) * ry;
+                pts.push_back({X, Y});
+                pts.push_back({X + rx, Y});
+            }
+            if (cls_[b.y1 * nx + x] == c) {
+                const double Y = static_cast<double>(b.y1) * ry + ry;
+                pts.push_back({X, Y});
+                pts.push_back({X + rx, Y});
+            }
+        }
+        for (i64 y = b.y0; y <= b.y1; ++y) {
+            const double Y = static_cast<double>(y) * ry;
+            if (cls_[y * nx + b.x0] == c) {
+                const double X = static_cast<double>(b.x0) * rx;
+                pts.push_back({X, Y});
+                pts.push_back({X, Y + ry});
+            }
+            if (cls_[y * nx + b.x1] == c) {
+                const double X = static_cast<double>(b.x1) * rx + rx;
+                pts.push_back({X, Y});
+                pts.push_back({X, Y + ry});
+            }
+        }
+        const Circle circ = smallest_circle(pts, static_cast<std::uint64_t>(c));
+        out[c] = EnclosingCircle{circ.c.x, circ.c.y, circ.r};
     }
     return out;
 }

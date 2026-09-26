@@ -21,13 +21,8 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Uso e API
 
-- **`check_landscape()`**: relatório de validade como o do landscapemetrics (CRS
-  projetado, valores inteiros, número de classes).
-- **Utilitários do landscapemetrics**: `get_centroids`, `get_nearestneighbour`,
-  `get_circumscribingcircle`, `get_adjacencies`, `get_boundaries`, `extract_lsm`
-  (valores das métricas de patch em pontos).
-- **Correlação entre métricas** (`calculate_correlation` / `show_correlation`).
-- **Gráficos** (matplotlib opcional): `show_patches`, `show_cores`, `show_lsm`.
+- **Gráficos** (matplotlib opcional): `show_patches`, `show_cores`, `show_lsm`,
+  `show_correlation`.
 - **`scale_sample`**: métricas em várias escalas (tamanhos de buffer) ao redor de
   pontos.
 - **Integração com `batch()`**: `"landscape_metrics"` em `BATCH_TOOLS`, gravando
@@ -124,3 +119,7 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
      e com o landscapemetrics em mapas pequenos cortados em blocos pequenos.
 6. Estatísticas extras do FRAGSTATS (`_am`, `_md`, `_ra`, `perim_*`), nomes do
    FRAGSTATS/pylandstats, `n_threads` e valores bit a bit iguais ao R. **Feita.**
+7. Utilitários do landscapemetrics (`get_centroids`, `get_nearestneighbour`,
+   `get_circumscribingcircle`, `get_adjacencies`, `get_boundaries`, `get_patches`,
+   `extract_lsm`, `check_landscape`, `calculate_correlation`), bit a bit. **Feita.**
+   Fora da memória (`block_rows`) esses utilitários não existem (precisam do raster).

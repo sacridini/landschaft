@@ -6,6 +6,22 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 7, landscapemetrics' utilities, the same bits as in R:
+  `Landscape.centroids()` (`get_centroids`, also `cell_center` with R's order of
+  ties), `.nearest_neighbours()` (`get_nearestneighbour` per class, with the ids of
+  the neighbours and landscapemetrics' tie rule, found by a range search instead of
+  its sweep: 0.05 s instead of 1.8 s on 1000x1000), `.circumscribing_circles()`
+  (patch and class level, with centres), `.adjacencies()` (`get_adjacencies`: 4, 8 or
+  any neighbourhood matrix; full, like, unlike or triangle), `.boundaries()`
+  (`get_boundaries` of the patches of each class), `.patches()` (`get_patches`),
+  `.extract_metrics()` / `ls.extract_metrics()` (`extract_lsm`, several rasters too),
+  `ls.raster_boundaries()` (`get_boundaries` on raster values, with its one-sided
+  rule), `ls.check_landscape()` and `ls.calculate_correlation()` (R's `cor` for
+  Pearson, Spearman and Kendall, and `xtabs`' handling of NA). Stored references on 8
+  maps (`make_reference_lsm.py utils`) and live R runs.
+- `Landscape.extent` (terra's extent of the raster).
+
 ## [0.17.0] - 2026-09-26
 
 ### Added

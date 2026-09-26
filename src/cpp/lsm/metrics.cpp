@@ -20,53 +20,6 @@ bool ends_with(const std::string& s, const std::string& suffix) {
     return s.size() > suffix.size() && s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
-// R's mean(): sum, divide, then add the mean residual, all in R's LDOUBLE.
-double r_mean(const double* x, i64 n) {
-    if (n == 0) return kNaN;
-    Extended s = 0.0;
-    for (i64 i = 0; i < n; ++i) s += x[i];
-    s /= Extended(n);
-    if (std::isfinite(static_cast<double>(s))) {
-        Extended t = 0.0;
-        for (i64 i = 0; i < n; ++i) t += Extended(x[i]) - s;
-        s += t / Extended(n);
-    }
-    return static_cast<double>(s);
-}
-
-// R's sd(): sqrt(var()), var as R's cov.c (mean rounded to double, then the
-// sum of squared deviations in LDOUBLE); NA for fewer than 2 values. `mean`
-// is r_mean(x, n).
-double r_sd(const double* x, i64 n, double mean) {
-    if (n < 2) return kNaN;
-    const Extended m = mean;
-    Extended ss = 0.0;
-    for (i64 i = 0; i < n; ++i) {
-        const Extended d = Extended(x[i]) - m;
-        ss += d * d;
-    }
-    return r_sqrt(static_cast<double>(ss / Extended(n - 1)), true);  // sqrt(var(x)): one number
-}
-
-// R's sum() of doubles.
-double r_sum(const double* x, i64 n) {
-    Extended s = 0.0;
-    for (i64 i = 0; i < n; ++i) s += x[i];
-    return static_cast<double>(s);
-}
-
-// R's sum() of f(i) for i in [begin, end), NaN skipped when na_rm.
-template <class F>
-double sum_of(i64 begin, i64 end, F&& f, bool na_rm = false) {
-    Extended s = 0.0;
-    for (i64 i = begin; i < end; ++i) {
-        const double v = f(i);
-        if (na_rm && std::isnan(v)) continue;
-        s += v;
-    }
-    return static_cast<double>(s);
-}
-
 // R's median(): the middle value, or the mean() of the two middle values.
 double r_median(const double* x, i64 n) {
     if (n == 0) return kNaN;

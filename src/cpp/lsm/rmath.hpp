@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstdint>
 #include <limits>
 
 #include "lsm/extended.hpp"
@@ -76,6 +77,57 @@ inline double r_sqrt(double x, bool scalar = false) {
 #else
     return std::sqrt(x);
 #endif
+}
+
+// -- R's sum(), mean() and sd() (80-bit accumulation) ------------------------
+
+using i64 = std::int64_t;
+
+// R's mean(): sum, divide, then add the mean residual, all in R's LDOUBLE.
+inline double r_mean(const double* x, i64 n) {
+    if (n == 0) return std::numeric_limits<double>::quiet_NaN();
+    Extended s = 0.0;
+    for (i64 i = 0; i < n; ++i) s += x[i];
+    s /= Extended(n);
+    if (std::isfinite(static_cast<double>(s))) {
+        Extended t = 0.0;
+        for (i64 i = 0; i < n; ++i) t += Extended(x[i]) - s;
+        s += t / Extended(n);
+    }
+    return static_cast<double>(s);
+}
+
+// R's sd(): sqrt(var()), var as R's cov.c (mean rounded to double, then the
+// sum of squared deviations in LDOUBLE); NA for fewer than 2 values. `mean`
+// is r_mean(x, n).
+inline double r_sd(const double* x, i64 n, double mean) {
+    if (n < 2) return std::numeric_limits<double>::quiet_NaN();
+    const Extended m = mean;
+    Extended ss = 0.0;
+    for (i64 i = 0; i < n; ++i) {
+        const Extended d = Extended(x[i]) - m;
+        ss += d * d;
+    }
+    return r_sqrt(static_cast<double>(ss / Extended(n - 1)), true);  // sqrt(var(x)): one number
+}
+
+// R's sum() of doubles.
+inline double r_sum(const double* x, i64 n) {
+    Extended s = 0.0;
+    for (i64 i = 0; i < n; ++i) s += x[i];
+    return static_cast<double>(s);
+}
+
+// R's sum() of f(i) for i in [begin, end), NaN skipped when na_rm.
+template <class F>
+inline double sum_of(i64 begin, i64 end, F&& f, bool na_rm = false) {
+    Extended s = 0.0;
+    for (i64 i = begin; i < end; ++i) {
+        const double v = f(i);
+        if (na_rm && std::isnan(v)) continue;
+        s += v;
+    }
+    return static_cast<double>(s);
 }
 
 // R's x^-1: powl(x, -1), the reciprocal rounded to extended, then to double.

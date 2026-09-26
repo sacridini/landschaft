@@ -38,6 +38,7 @@ add_library(lsmcore STATIC
     src/cpp/lsm/metrics.cpp
     src/cpp/lsm/table.cpp
     src/cpp/lsm/tiled.cpp
+    src/cpp/lsm/utils.cpp
 )
 target_include_directories(lsmcore PUBLIC src/cpp)
 # R's x87 log/sqrt (see src/cpp/lsm/rmath.hpp): MSVC has no x64 inline assembly

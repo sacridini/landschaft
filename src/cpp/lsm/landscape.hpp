@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace lsm {
@@ -108,6 +109,33 @@ std::vector<double> r_statistics(const std::vector<double>& x);
 
 enum Level : std::int8_t { kPatch = 0, kClass = 1, kLandscape = 2 };
 
+// Smallest circle around a patch or a class: centre in map units from the
+// top-left corner of the raster (y downwards), and radius.
+struct EnclosingCircle {
+    double cx, cy, r;
+};
+
+// The cells (pixel indices) of every patch in raster order: patch i has
+// cell[offset[i] .. offset[i + 1]).
+struct PatchCells {
+    std::vector<i64> offset;
+    std::vector<i64> cell;
+};
+
+// get_centroids: one row per patch (several with cell_center ties).
+struct CentroidTable {
+    std::vector<std::int32_t> patch;
+    std::vector<double> x, y;
+};
+
+// get_nearestneighbour: distance per patch (NaN when the class has one
+// patch), and with return_id one row per neighbour patch reached (-1: none).
+struct NeighbourTable {
+    std::vector<std::int32_t> patch;
+    std::vector<double> dist;
+    std::vector<std::int32_t> neighbour;
+};
+
 struct MetricSpec {
     Level level;
     std::string name;
@@ -150,6 +178,15 @@ public:
     std::vector<double> class_metric(const std::string& name);
     double landscape_metric(const std::string& name);
 
+    // landscapemetrics' utilities (utils.cpp, geometry.cpp)
+    PatchCells patch_cells();
+    CentroidTable centroids(double xmin, double xmax, double ymin, double ymax, bool cell_center);
+    NeighbourTable nearest_neighbours(bool return_id);
+    const std::vector<EnclosingCircle>& patch_circles();
+    std::vector<EnclosingCircle> class_circles();
+    std::vector<std::int8_t> patch_boundaries(bool consider_boundary, int edge_depth);
+    std::vector<i64> cooccurrence(const std::vector<std::pair<int, int>>& offsets);
+
 private:
     // metrics.cpp
     const std::vector<double>& patch_base(const std::string& name);
@@ -161,6 +198,8 @@ private:
     int stat_slot(const std::string& base, const std::string& stat, bool by_class);
     const std::vector<i64>& class_start();
     double cohesion_factor() const;
+    // utils.cpp
+    void order_ties_as_r(std::vector<std::vector<i64>>& nearest);
     // geometry.cpp
     std::vector<double> enn();
     std::vector<double> circle();
@@ -195,7 +234,16 @@ private:
     std::map<std::string, std::vector<double>> class_cache_;
     std::map<std::string, double> landscape_cache_;
     std::vector<i64> class_start_;
+    std::optional<std::vector<EnclosingCircle>> patch_circles_;
 };
+
+// landscapemetrics' get_boundaries on the values of a raster (see utils.cpp).
+std::vector<std::int32_t> raster_boundaries(const std::int32_t* values, const std::uint8_t* na_mask, i64 nx, i64 ny,
+                                            bool consider_boundary, int edge_depth, bool patch_id, std::int32_t na);
+
+// R's cor(x, method = "pearson" | "kendall" | "spearman") of the columns of
+// the n x m column-major matrix x; returns m x m.
+std::vector<double> r_cor(const std::vector<double>& x, i64 n, i64 m, const std::string& method);
 
 // -- many metrics, many rasters (table.cpp) --------------------------------
 

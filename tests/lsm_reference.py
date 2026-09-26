@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 R_SCRIPT = ROOT / "tools" / "lsm_reference.R"
 R_SAMPLE_SCRIPT = ROOT / "tools" / "lsm_sample_reference.R"
 R_WINDOW_SCRIPT = ROOT / "tools" / "lsm_window_reference.R"
+R_UTILS_SCRIPT = ROOT / "tools" / "lsm_utils_reference.R"
 NODATA = np.iinfo(np.int32).min
 DEFAULT_R_LIBS = Path.home() / "AppData" / "Local" / "R" / "landschaft-lsm-lib"
 
@@ -117,6 +118,12 @@ def run_window(rscript: os.PathLike, tif: os.PathLike, window: np.ndarray, what:
         _run_r(rscript, R_WINDOW_SCRIPT, [tif, window_csv, out], {"what": list(what), **options})
         df = pd.read_csv(out, na_values=["NA", ""], keep_default_na=False, float_precision="round_trip")
     return {m: g.sort_values("cell")["value"].to_numpy(float).reshape(shape) for m, g in df.groupby("metric")}
+
+
+def run_utils(rscript: os.PathLike, tif: os.PathLike, outdir: os.PathLike, **options) -> None:
+    """landscapemetrics' utility functions on a raster file: one CSV per
+    result in `outdir` (see tools/lsm_utils_reference.R)."""
+    _run_r(rscript, R_UTILS_SCRIPT, [tif, outdir], options)
 
 
 def run_array(rscript: os.PathLike, data: np.ndarray, res=(1.0, 1.0), **options) -> pd.DataFrame:

@@ -21,6 +21,7 @@ import xarray as xr
 
 from .. import _core
 from .catalog import LEVELS, canonical_name, select_metrics
+from .utils import raster_extent
 
 __all__ = ["Landscape", "landscape_metrics"]
 
@@ -268,12 +269,14 @@ class Landscape:
             self._template = None
             self.resolution = self._tiled.res
             self.shape = self._tiled.shape
+            self._extent = raster_extent(self._tiled.transform, self.shape, self.resolution)
             self._core = self._tiled.engine.landscape()
             return
         values, mask, res, template = _prepare(data, res, nodata, band)
         self._template = template
         self.resolution = res
         self.shape = values.shape
+        self._extent = raster_extent(_transform(template), self.shape, res)
         self._core = _core.LsmLandscape(values, mask, res[0], res[1], core_options(self.options, n_threads))
 
     def __repr__(self) -> str:
@@ -325,6 +328,149 @@ class Landscape:
         self._no_raster("to_raster")
         values = np.concatenate([[np.nan], self._patch_values(metric)])
         return self._wrap(values[self._core.labels()], metric)
+
+    @property
+    def extent(self) -> tuple[float, float, float, float]:
+        """(xmin, xmax, ymin, ymax) of the raster (terra's extent)."""
+        return self._extent
+
+    def patches(self, classes=None) -> dict:
+        """Patch ids of each class on a raster of their own (NaN elsewhere),
+        like landscapemetrics' ``get_patches``: ``{class: raster}``."""
+        self._no_raster("patches")
+        labels = np.asarray(self._core.labels())
+        pclass = np.concatenate([[np.iinfo(np.int32).min], self.patch_classes])
+        cell_class = pclass[labels]
+        wanted = self.classes if classes is None else np.atleast_1d(classes)
+        missing = set(np.asarray(wanted).tolist()) - set(self.classes.tolist())
+        if missing:
+            raise ValueError(f"class(es) not present in the landscape: {sorted(missing)}")
+        out = {}
+        for c in wanted:
+            arr = np.where((labels > 0) & (cell_class == c), labels, np.nan)
+            out[int(c)] = self._wrap(arr, f"class_{int(c)}")
+        return out
+
+    def centroids(self, cell_center: bool = False) -> pd.DataFrame:
+        """Centroid of every patch, like landscapemetrics' ``get_centroids``.
+
+        The mean of the cell-centre coordinates of the patch (map
+        coordinates, as terra computes them; the same bits as
+        landscapemetrics). With ``cell_center`` the patch cell nearest to that
+        point instead (several rows on ties, as landscapemetrics returns).
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``class``, ``id``, ``x``, ``y``.
+        """
+        self._no_raster("centroids")
+        t = self._core.centroids(*self._extent, bool(cell_center))
+        patch = t["patch"]
+        return pd.DataFrame({"class": self.patch_classes[patch], "id": patch + 1, "x": t["x"], "y": t["y"]})
+
+    def nearest_neighbours(self, return_id: bool = False) -> pd.DataFrame:
+        """Distance from every patch to the nearest patch of its class, like
+        landscapemetrics' ``get_nearestneighbour`` on the patches of each class
+        (the distance is the ``enn`` metric: between cell centres).
+
+        With ``return_id``, the ``id`` of the neighbour patch: one row per
+        neighbour when several are equally near, found with landscapemetrics'
+        own search (same ties). NaN / NA for classes with a single patch.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``class``, ``id``, ``dist`` (and ``id_neighbour``).
+        """
+        self._no_raster("nearest_neighbours")
+        t = self._core.nearest_neighbours(bool(return_id))
+        patch = t["patch"]
+        df = pd.DataFrame({"class": self.patch_classes[patch], "id": patch + 1, "dist": t["dist"]})
+        if return_id:
+            nb = t["neighbour"].astype(np.int64) + 1
+            df["id_neighbour"] = pd.arrays.IntegerArray(nb, t["neighbour"] < 0)
+        return df
+
+    def circumscribing_circles(self, level: str = "patch") -> pd.DataFrame:
+        """Smallest circle around every patch (or every class), like
+        landscapemetrics' ``get_circumscribingcircle``: it encloses the corners
+        of the cells in the first and last rows and columns, as for the
+        ``circle`` metric.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``class``, ``id`` (patch level), ``diameter``, ``center_x``,
+            ``center_y`` (map coordinates).
+        """
+        if level not in ("patch", "class"):
+            raise ValueError("level must be 'patch' or 'class'")
+        self._no_raster("circumscribing_circles")
+        c = self._core.circles(level == "class")
+        xmin, _, ymin, _ = self._extent
+        ny = self.shape[0]
+        center_x = c["cx"] + xmin
+        center_y = (ny * self.resolution[1] - c["cy"]) + ymin
+        if level == "class":
+            return pd.DataFrame({"class": self.classes, "diameter": c["r"] * 2, "center_x": center_x,
+                                 "center_y": center_y})
+        return pd.DataFrame({"class": self.patch_classes, "id": np.arange(1, self.n_patches + 1),
+                             "diameter": c["r"] * 2, "center_x": center_x, "center_y": center_y})
+
+    def adjacencies(self, neighbourhood=4, what: str = "full", upper: bool = False) -> pd.DataFrame:
+        """Cell adjacencies between classes, like landscapemetrics'
+        ``get_adjacencies``: the number of (cell, neighbour) pairs, row = class
+        of the cell, column = class of the neighbour (NA cells left out).
+
+        Parameters
+        ----------
+        neighbourhood
+            4, 8, or a matrix with 1 for the neighbours and 0 for the focal
+            cell (read transposed, as landscapemetrics does).
+        what
+            "full" (counts), or only "like" (diagonal), "unlike" (off-diagonal)
+            or "triangle" (with the diagonal) of the lower triangle (upper
+            with ``upper``), NaN elsewhere.
+        """
+        self._no_raster("adjacencies")
+        from .utils import adjacency_frame, neighbourhood_offsets
+
+        counts = self._core.cooccurrence(neighbourhood_offsets(neighbourhood))
+        return adjacency_frame(counts, self.classes, what, upper)
+
+    def boundaries(self, consider_boundary: bool = False, edge_depth: int = 1, as_na: bool = False,
+                   patch_id: bool = False):
+        """Boundary cells of the patches, like landscapemetrics'
+        ``get_boundaries`` on the rasters of ``get_patches``: 1 for cells
+        within ``edge_depth`` cells (4 neighbours) of another class, NA or,
+        unless ``consider_boundary``, the map edge; 0 inside (NaN with
+        ``as_na``); the patch id instead of 1 with ``patch_id``. NaN where the
+        map is NA. The cells that are not boundary are the core cells of the
+        core-area metrics.
+        """
+        self._no_raster("boundaries")
+        b = np.asarray(self._core.patch_boundaries(bool(consider_boundary), int(edge_depth))).astype(float)
+        b[b < 0] = np.nan
+        if patch_id:
+            labels = np.asarray(self._core.labels())
+            b = np.where(b == 1, labels, b)
+        if as_na:
+            b[b == 0] = np.nan
+        return self._wrap(b, "boundaries")
+
+    def extract_metrics(self, y, *, extract_id=None, metric=None, name=None, type=None, what=None,
+                        extras: bool = False, verbose: bool = True) -> pd.DataFrame:
+        """Patch metrics of the patches under points, like landscapemetrics'
+        ``extract_lsm`` (see :func:`landschaft.extract_metrics`)."""
+        self._no_raster("extract_metrics")
+        from .utils import _order, extract_frame
+
+        level = "patch" if what is None else None
+        chosen = chosen_metrics(level, metric, name, type, what, extras)
+        if set(chosen["level"]) != {"patch"}:
+            raise ValueError("extract_metrics only takes patch level metrics")
+        return _order(extract_frame(self, y, extract_id, chosen, verbose), False)
 
     def _wrap(self, arr: np.ndarray, name: str):
         if self._template is None:
@@ -395,6 +541,16 @@ class Landscape:
         chosen = chosen_metrics(level, metric, name, type, what, extras)
         self._ensure(chosen["metric"])
         return long_frame(self._core.long_table(*metric_specs(chosen)), chosen)
+
+
+def _transform(template):
+    """The geotransform of a DataArray (None without one)."""
+    if template is None:
+        return None
+    try:
+        return template.rio.transform()
+    except Exception:
+        return None
 
 
 def _names(metrics, level: str, extras: bool = False) -> tuple[list[str], list[str]]:

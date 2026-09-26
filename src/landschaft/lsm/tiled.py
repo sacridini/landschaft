@@ -56,6 +56,7 @@ class TiledReader:
                 raise ValueError("the raster has several bands; select one with band=")
             self.band = 1 if band is None else int(band)
             self.shape = (src.height, src.width)
+            self.transform = src.transform
             if res is None:
                 rx, ry = src.res
                 res = (abs(float(rx)), abs(float(ry)))
