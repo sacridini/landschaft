@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-09-26
+
 ### Changed
 - Landscape metrics part 12, performance: patch labelling sums the pieces, sorts
   (parallel radix sort) and permutes the patch tables in parallel (27 M patches on a
