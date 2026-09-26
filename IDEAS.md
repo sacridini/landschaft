@@ -238,7 +238,12 @@ Fases:
    do CHOLMOD, mesmas células com corrente; o cg+amg fica a 2e-7);
 2. Omniscape básico (alvos, fontes, terra, correção, flow potential, normalizada,
    `mask_nodata`, com as peculiaridades), conferido com `test/output_verify` (test1–5) e
-   referências novas;
+   referências novas. **Feita** (0.42.0: `ls.omniscape`, também `source_threshold`,
+   `r_cutoff`, condutância e 4 vizinhos; conferido com o `run_omniscape` por INI nas
+   configurações 1–3 do Omniscape e em mapas sintéticos, a 1,7e-11 do CHOLMOD. Janelas
+   agrupadas por formato, um `CellSystem` por formato e thread, flow potential com a
+   fatoração em cache; soma por linhas em ordem fixa. 300×300, r = 25, bloco 3, com flow
+   potential: Omniscape 17,4 s com 20 threads, landschaft 0,87 s (8,2 s numa thread));
 3. desempenho (reuso simbólico, cache do nulo, OpenMP, acumulação determinística) e
    benchmark final contra o Omniscape;
 4. conectividade condicional, reclassificação, `source_from_resistance`, `r_cutoff`, `.ini`,

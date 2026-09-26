@@ -61,6 +61,7 @@ target_compile_definitions(eigen_headers INTERFACE EIGEN_MPL2_ONLY)
 
 add_library(circuitcore STATIC
     src/cpp/circuit/grid.cpp
+    src/cpp/circuit/omniscape.cpp
     src/cpp/circuit/system.cpp
 )
 target_include_directories(circuitcore PUBLIC src/cpp)

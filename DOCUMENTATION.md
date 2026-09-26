@@ -1517,9 +1517,9 @@ the results do not depend on the number of threads.
 ## 15. Circuit Connectivity (Circuitscape / Omniscape)
 
 `ls.circuit` treats a conductance raster as an electrical circuit, as
-[Circuitscape](https://circuitscape.org) 6.1 does, and is the base of the port of
+[Circuitscape](https://circuitscape.org) 6.1 does, and `ls.omniscape` is
 [Omniscape](https://github.com/Circuitscape/Omniscape.jl) 0.7 (omnidirectional
-moving-window connectivity; in progress, see IDEAS.md).
+moving-window connectivity) on top of it.
 
 ```python
 import numpy as np
@@ -1536,7 +1536,7 @@ r.current   # current through every cell (0 where nothing flows)
 r.voltage   # node voltages (NaN without a node)
 ```
 
-### How it works
+### Advanced mode
 
 It is Circuitscape's advanced mode on in-memory rasters (`compute_omniscape_current`,
 the solve behind every Omniscape window):
@@ -1561,3 +1561,51 @@ without a source or a ground, 4 and 8 neighbours, an Omniscape window and conduc
 over six orders of magnitude (`tests/data/reference/circuit`). The same cells carry
 current and the values agree with CHOLMOD to 1.2e-13 of the largest current; the
 iterative `cg+amg` itself is 2e-7 away from both.
+
+### Omniscape
+
+```python
+ds = ls.omniscape(
+    "resistance.tif", radius=100,     # window radius in cells
+    block_size=5, buffer=0,           # Omniscape's options, same names
+    source=None,                      # default: 1 / resistance (source_from_resistance, r_cutoff)
+    flow_potential=True, normalized_current=True,
+)
+ds.cum_currmap                 # cumulative current
+ds.flow_potential              # the same circuits with conductance 1
+ds.normalized_cum_currmap      # cum_currmap / flow_potential
+ds.cum_currmap.rio.to_raster("cum_currmap.tif")
+```
+
+Every `block_size` × `block_size` block whose sources add up to more than 0 is a target.
+Its window is the circle of `radius + buffer` cells around it; the block's strength is
+injected into the sources within `radius` (the block left out, shared in proportion to
+their strengths) and flows to the grounded target cell. The window currents are summed
+into `cum_currmap`. Omniscape's options map one to one: `source_threshold`, `r_cutoff`,
+`resistance_is_conductance`, `four_neighbors` (`connect_four_neighbors_only`),
+`correct_artifacts`, `mask_nodata`, `flow_potential` (`calc_flow_potential`) and
+`normalized_current` (`calc_normalized_current`). Omniscape's quirks are kept on
+purpose: windows and circles cut at the map edges, the target block zeroed at
+`radius + buffer` cells from the window's corner (not at the target when the window is
+cut on the left or the top), even block sizes made odd, and the block-artifact
+correction.
+
+How it is fast: every window of the same shape (the interior disk, and each shape cut by
+the edges) shares one nested-dissection ordering and symbolic analysis per thread; a
+window only refills its values and runs the numeric factorisation. The flow potential
+uses conductance 1 everywhere, so its factorisation is done once per shape and each
+window only runs the triangular solves. Windows are solved in parallel and added to the
+maps row by row in a fixed order, so the result does not depend on the number of
+threads.
+
+Verification: `python tools/make_reference_omniscape.py omniscape` runs Omniscape 0.7's
+`run_omniscape` (INI files, `cholmod` and `cg+amg`) on its own test rasters with its
+test configurations 1-3, and on synthetic maps (NoData blobs and lines, source files with
+NoData, block sizes 1-7, buffers, 4 neighbours, conductance input, windows wider than
+the map). NoData and zero cells are the same, and every value agrees with CHOLMOD to
+1.7e-11 (relative). Omniscape's default `cg+amg` is up to 1.6e-4 of the largest value away
+from its own CHOLMOD result where the block correction amplifies its error.
+
+| map | Omniscape 0.7, 20 threads (cg+amg / cholmod) | landschaft, 1 thread / 20 threads |
+|---|---|---|
+| 300×300, radius 25, block 3, flow potential and normalised (10,000 targets) | 17.4 s / 18.6 s | 8.2 s / 0.87 s |

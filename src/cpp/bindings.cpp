@@ -37,6 +37,7 @@
 #include "gtb/restoration.hpp"
 #include "gtb/spa.hpp"
 #include "circuit/grid.hpp"
+#include "circuit/omniscape.hpp"
 #include "conn/cost.hpp"
 #include "conn/graph.hpp"
 #include "conn/nodes.hpp"
@@ -1308,6 +1309,46 @@ py::dict circuit_advanced(const CArray<double>& conductance, const CArray<double
     return out;
 }
 
+py::dict circuit_omniscape(const CArray<double>& resistance, const CArray<double>& source, int radius, int buffer,
+                           int block_size, bool four_neighbors, bool resistance_is_conductance,
+                           bool correct_artifacts, bool flow_potential, int n_threads) {
+    if (resistance.ndim() != 2 || source.ndim() != 2 || source.shape(0) != resistance.shape(0) ||
+        source.shape(1) != resistance.shape(1))
+        throw py::value_error("expected resistance and source rasters of the same shape");
+    const i64 ny = resistance.shape(0), nx = resistance.shape(1);
+    circuit::OmniscapeParams p;
+    p.radius = radius;
+    p.buffer = buffer;
+    p.block_size = block_size;
+    p.four_neighbors = four_neighbors;
+    p.resistance_is_conductance = resistance_is_conductance;
+    p.correct_artifacts = correct_artifacts;
+    p.flow_potential = flow_potential;
+    circuit::OmniscapeResult r =
+        run_parallel(n_threads, [&] { return circuit::omniscape(resistance.data(), source.data(), nx, ny, p, n_threads); });
+    py::dict out;
+    out["current"] = to_array(std::move(r.current), nx, ny);
+    if (flow_potential) out["flow_potential"] = to_array(std::move(r.flow_potential), nx, ny);
+    out["n_targets"] = r.n_targets;
+    return out;
+}
+
+py::array_t<double> circuit_omniscape_correction(int radius, int buffer, int block_size, bool four_neighbors,
+                                                 i64 nx, i64 ny) {
+    circuit::OmniscapeParams p;
+    p.radius = radius;
+    p.buffer = buffer;
+    p.block_size = block_size;
+    p.four_neighbors = four_neighbors;
+    const i64 w = 2 * (static_cast<i64>(radius) + buffer) + 1;
+    std::vector<double> c;
+    {
+        py::gil_scoped_release release;
+        c = circuit::omniscape_correction(p, nx, ny);
+    }
+    return to_array(std::move(c), w, w);
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -1333,6 +1374,13 @@ PYBIND11_MODULE(_core, m) {
     m.def("circuit_advanced", &circuit_advanced, py::arg("conductance"), py::arg("source"), py::arg("ground"),
           py::arg("four_neighbors") = false, py::arg("n_threads") = 0,
           "Circuitscape's advanced mode on a raster: node currents and voltages.");
+    m.def("circuit_omniscape", &circuit_omniscape, py::arg("resistance"), py::arg("source"), py::arg("radius"),
+          py::arg("buffer"), py::arg("block_size"), py::arg("four_neighbors"), py::arg("resistance_is_conductance"),
+          py::arg("correct_artifacts"), py::arg("flow_potential"), py::arg("n_threads") = 0,
+          "Omniscape's cumulative current (and flow potential) over moving windows.");
+    m.def("circuit_omniscape_correction", &circuit_omniscape_correction, py::arg("radius"), py::arg("buffer"),
+          py::arg("block_size"), py::arg("four_neighbors"), py::arg("nx"), py::arg("ny"),
+          "Omniscape's block-artifact correction factors.");
     m.def("conn_raster_nodes", &conn_raster_nodes, py::arg("values"), py::arg("na"), py::arg("xmin"), py::arg("xmax"),
           py::arg("ymin"), py::arg("ymax"), py::arg("centroids"), py::arg("keep_index"), py::arg("n_threads") = 0,
           "Patch ids, cell counts, centroids and node index of a raster of patch ids.");

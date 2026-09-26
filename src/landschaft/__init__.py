@@ -24,6 +24,7 @@ from .change import (
     simple_change,
 )
 from . import circuit
+from .circuit import omniscape
 from .collection import RasterCollection, RasterInfo
 from . import conn
 from .conn import HabitatGraph
@@ -220,6 +221,7 @@ __all__ = [
     "mspa_colormap",
     "mspa_stats",
     "mspa_tiled",
+    "omniscape",
     "parcellation",
     "proximity",
     "raster_boundaries",
