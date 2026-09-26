@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 9: focal nodes. `ls.conn.focal_nodes` is Makurhini's
   `MK_Focal_nodes`: for every node the graph of the polygons within its search buffer
