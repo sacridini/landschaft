@@ -103,7 +103,10 @@ ls.connectivity_grid(g, grid_zones(...))
   1. motor de grafo (IIC, PC, ECA, NC, NL, H, CCP, LCP, F, AWF, dI com frações) lendo e
      escrevendo os arquivos do Conefor. **Feita** (0.30.0: `HabitatGraph`, conferido com
      o Makurhini a 1e-12 e com o Conefor 2.2 compilado, em precisão simples);
-  2. nós de raster e vetor, distâncias euclidianas (centroide e borda) com limiar;
+  2. nós de raster e vetor, distâncias euclidianas (centroide e borda) com limiar.
+     **Feita** (0.31.0: `from_raster`, `from_vector`, `node_table`, `distance_table`, os
+     mesmos bits do Makurhini; o `keep` do Makurhini, simplificação com `rmapshaper`,
+     ficou de fora);
   3. distâncias de menor custo (reaproveitando o `cost_distance`);
   4. importância das ligações, varPC, dECA no tempo e índices em grade;
   5. ProtConn completo (uma ou várias regiões);

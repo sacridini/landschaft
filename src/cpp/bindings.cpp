@@ -37,6 +37,7 @@
 #include "gtb/restoration.hpp"
 #include "gtb/spa.hpp"
 #include "conn/graph.hpp"
+#include "conn/nodes.hpp"
 #include "lsm/landscape.hpp"
 
 namespace py = pybind11;
@@ -1039,6 +1040,71 @@ py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>
     return out;
 }
 
+py::dict pair_dict(conn::PairList&& p) {
+    py::dict out;
+    out["i"] = vector_array(p.i);
+    out["j"] = vector_array(p.j);
+    out["distance"] = vector_array(p.distance);
+    return out;
+}
+
+// Nodes of a raster of patch ids (Makurhini's nodesfile / distancefile).
+py::dict conn_raster_nodes(const CArray<std::int32_t>& values, const py::object& na, double xmin, double xmax,
+                           double ymin, double ymax, bool centroids, bool keep_index, int n_threads) {
+    if (values.ndim() != 2) throw py::value_error("expected a 2-D raster");
+    conn::RasterGrid grid;
+    grid.ny = values.shape(0);
+    grid.nx = values.shape(1);
+    grid.xmin = xmin;
+    grid.xmax = xmax;
+    grid.ymin = ymin;
+    grid.ymax = ymax;
+    CArray<std::uint8_t> mask;
+    const std::uint8_t* na_ptr = nullptr;
+    if (!na.is_none()) {
+        mask = na.cast<CArray<std::uint8_t>>();
+        if (mask.ndim() != 2 || mask.shape(0) != grid.ny || mask.shape(1) != grid.nx) {
+            throw py::value_error("the mask does not match the raster");
+        }
+        na_ptr = mask.data();
+    }
+    conn::RasterNodes r =
+        lsm_call(n_threads, [&] { return conn::raster_nodes(values.data(), na_ptr, grid, centroids, keep_index); });
+    py::dict out;
+    out["ids"] = vector_array(r.ids);
+    out["cells"] = vector_array(r.cells);
+    if (centroids) {
+        out["cx"] = vector_array(r.cx);
+        out["cy"] = vector_array(r.cy);
+    }
+    if (keep_index) out["node"] = to_array(std::move(r.node), grid.nx, grid.ny);
+    return out;
+}
+
+py::dict conn_point_distances(const CArray<double>& x, const CArray<double>& y, double max_distance, int n_threads) {
+    if (x.ndim() != 1 || y.ndim() != 1 || x.shape(0) != y.shape(0)) throw py::value_error("expected two 1-D arrays");
+    const auto n = static_cast<std::int32_t>(x.shape(0));
+    return pair_dict(lsm_call(n_threads, [&] { return conn::point_distances(x.data(), y.data(), n, max_distance); }));
+}
+
+py::dict conn_raster_edge_distances(const CArray<std::int32_t>& node, std::int32_t n_nodes, double resx, double resy,
+                                    double max_distance, int n_threads) {
+    if (node.ndim() != 2) throw py::value_error("expected a 2-D node raster");
+    return pair_dict(lsm_call(n_threads, [&] {
+        return conn::raster_edge_distances(node.data(), n_nodes, node.shape(1), node.shape(0), resx, resy, max_distance);
+    }));
+}
+
+py::array_t<double> conn_gdal_areas(const CArray<double>& x, const CArray<double>& y, const CArray<std::int64_t>& ring_start,
+                                    const CArray<std::int64_t>& poly_start, const CArray<std::int64_t>& geom_start) {
+    const i64 n_geoms = geom_start.shape(0) - 1;
+    if (n_geoms < 0) throw py::value_error("geom_start needs at least one entry");
+    std::vector<double> a = lsm_call(0, [&] {
+        return conn::gdal_areas(x.data(), y.data(), ring_start.data(), poly_start.data(), geom_start.data(), n_geoms);
+    });
+    return vector_array(a);
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -1048,6 +1114,16 @@ PYBIND11_MODULE(_core, m) {
           py::arg("kind"), py::arg("threshold"), py::arg("probability"), py::arg("pij_min"), py::arg("expand_limit"),
           py::arg("conefor"), py::arg("links"), py::arg("probabilities"), py::arg("importance"),
           py::arg("n_threads") = 0, "Connectivity indices of one habitat-graph scenario (see src/cpp/conn/graph.hpp).");
+    m.def("conn_raster_nodes", &conn_raster_nodes, py::arg("values"), py::arg("na"), py::arg("xmin"), py::arg("xmax"),
+          py::arg("ymin"), py::arg("ymax"), py::arg("centroids"), py::arg("keep_index"), py::arg("n_threads") = 0,
+          "Patch ids, cell counts, centroids and node index of a raster of patch ids.");
+    m.def("conn_gdal_areas", &conn_gdal_areas, py::arg("x"), py::arg("y"), py::arg("ring_start"),
+          py::arg("poly_start"), py::arg("geom_start"), "Polygon areas as GDAL (sf::st_area) computes them.");
+    m.def("conn_point_distances", &conn_point_distances, py::arg("x"), py::arg("y"), py::arg("max_distance"),
+          py::arg("n_threads") = 0, "Distances between points, pairs up to max_distance.");
+    m.def("conn_raster_edge_distances", &conn_raster_edge_distances, py::arg("node"), py::arg("n_nodes"),
+          py::arg("resx"), py::arg("resy"), py::arg("max_distance"), py::arg("n_threads") = 0,
+          "Edge-to-edge distances between the patches of a node index raster.");
     m.def("mspa", &mspa, py::arg("input"), py::arg("connectivity") = 8, py::arg("edge_width") = 1,
           py::arg("internal") = true, py::arg("n_threads") = 0,
           "Run MSPA on a uint8 array coded 0=missing, 1=background, 2=foreground.");

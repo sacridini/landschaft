@@ -154,6 +154,115 @@ class HabitatGraph:
         return (frame["i"].to_numpy(np.int32), frame["j"].to_numpy(np.int32), frame["v"].to_numpy(np.float64), False)
 
     @classmethod
+    def from_raster(cls, nodes, *, attribute=None, weighted: bool = False, area_unit: str = "m2",
+                    distance: str = "centroid", max_distance: float | None = None, distance_unit: str = "m",
+                    habitat=None, directions: int = 8, nodata=None, band=None, **kwargs) -> "HabitatGraph":
+        """Nodes from a raster of patch ids (or the patches of ``habitat`` classes).
+
+        The attributes come from :func:`~landschaft.conn.node_table` (the patch
+        areas in ``area_unit`` by default) and the connections from
+        :func:`~landschaft.conn.distance_table` (``distance="centroid"`` or
+        ``"edge"``, pairs up to ``max_distance`` in ``distance_unit``), as
+        Makurhini's ``MK_dPCIIC`` does with raster nodes. Other arguments go
+        to :class:`HabitatGraph`; :meth:`to_raster` paints node values on the
+        patches.
+        """
+        from .nodes import distance_table, node_table, read_patches
+
+        patches = read_patches(nodes, habitat=habitat, directions=directions, nodata=nodata, band=band)
+        threads = kwargs.get("n_threads")
+        table = node_table(patches, attribute=attribute, weighted=weighted, area_unit=area_unit, n_threads=threads)
+        pairs = distance_table(patches, distance=distance, max_distance=max_distance, distance_unit=distance_unit,
+                               n_threads=threads)
+        graph = cls(table["attribute"].to_numpy(), pairs, ids=table["id"].to_numpy(), **kwargs)
+        graph._patches = patches
+        return graph
+
+    @classmethod
+    def from_vector(cls, nodes, *, id: str | None = None, attribute=None, weighted: bool = False,
+                    area_unit: str = "m2", distance: str = "centroid", max_distance: float | None = None,
+                    distance_unit: str = "m", **kwargs) -> "HabitatGraph":
+        """Nodes from polygons or points (GeoDataFrame), as Makurhini's ``MK_dPCIIC``.
+
+        ``id`` names the column of node ids, ``attribute`` a column (default:
+        the area in ``area_unit``); distances are ``"centroid"`` or ``"edge"``
+        (GEOS), pairs up to ``max_distance``. :meth:`to_geodataframe` joins
+        node values to the geometries.
+        """
+        from .nodes import distance_table, node_table
+
+        threads = kwargs.get("n_threads")
+        table = node_table(nodes, attribute=attribute, weighted=weighted, area_unit=area_unit, id=id,
+                           n_threads=threads)
+        pairs = distance_table(nodes, distance=distance, id=id, max_distance=max_distance,
+                               distance_unit=distance_unit, n_threads=threads)
+        graph = cls(table["attribute"].to_numpy(), pairs, ids=table["id"].to_numpy(), **kwargs)
+        graph._vector = nodes
+        return graph
+
+    def to_raster(self, values, name: str | None = None):
+        """Node values painted on the patches of :meth:`from_raster` (NaN elsewhere).
+
+        ``values``: one value per node (in node order), a Series indexed by
+        node id, or a :meth:`node_importance` table and a column ``name``.
+        """
+        patches = getattr(self, "_patches", None)
+        if patches is None:
+            raise ValueError("to_raster needs a graph made by HabitatGraph.from_raster")
+        per_node = self._per_node(values, name)
+        node = patches.read_nodes(self.n_threads)["node"]
+        out = np.full(node.shape, np.nan)
+        inside = node >= 0
+        out[inside] = per_node[node[inside]]
+        template = patches.template
+        if template is not None and hasattr(template, "coords"):
+            import xarray as xr
+
+            da = template.squeeze(drop=True) if "band" in template.dims else template
+            result = xr.DataArray(out, coords=da.coords, dims=da.dims, name=name or "value")
+            try:
+                result = result.rio.write_crs(da.rio.crs).rio.write_nodata(np.nan)
+            except Exception:
+                pass
+            return result
+        return out
+
+    def to_geodataframe(self, values, name: str | None = None):
+        """Node values joined to the geometries of :meth:`from_vector`.
+
+        ``values``: a :meth:`node_importance` table (all its columns; with
+        several distances, one block per distance), a Series indexed by node
+        id, or one value per node with a ``name``.
+        """
+        nodes = getattr(self, "_vector", None)
+        if nodes is None:
+            raise ValueError("to_geodataframe needs a graph made by HabitatGraph.from_vector")
+        import geopandas as gpd
+
+        geometry = nodes.geometry.values if isinstance(nodes, gpd.GeoDataFrame) else np.asarray(nodes.values)
+        crs = nodes.crs
+        if isinstance(values, pd.DataFrame) and "id" in values.columns:
+            position = pd.Index(self.ids).get_indexer(values["id"])
+            return gpd.GeoDataFrame(values.reset_index(drop=True), geometry=geometry[position], crs=crs)
+        per_node = self._per_node(values, name)
+        frame = pd.DataFrame({"id": self.ids, name or "value": per_node})
+        return gpd.GeoDataFrame(frame, geometry=geometry, crs=crs)
+
+    def _per_node(self, values, name) -> np.ndarray:
+        if isinstance(values, pd.DataFrame):
+            if name is None:
+                raise ValueError("give the column to use (name=)")
+            if values["id"].duplicated().any():
+                raise ValueError("the table has several rows per node (several distances): select one")
+            values = pd.Series(values[name].to_numpy(), index=values["id"].to_numpy())
+        if isinstance(values, pd.Series) and not isinstance(values.index, pd.RangeIndex):
+            return values.reindex(self.ids).to_numpy(dtype=np.float64)
+        v = np.asarray(values, dtype=np.float64)
+        if v.shape != (self.n_nodes,):
+            raise ValueError(f"expected one value per node ({self.n_nodes})")
+        return v
+
+    @classmethod
     def from_conefor(cls, node_file, connection_file, **kwargs) -> "HabitatGraph":
         """Read Conefor's input files.
 

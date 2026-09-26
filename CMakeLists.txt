@@ -47,6 +47,7 @@ target_include_directories(lsmcore PUBLIC src/cpp)
 
 add_library(conncore STATIC
     src/cpp/conn/graph.cpp
+    src/cpp/conn/nodes.cpp
 )
 target_include_directories(conncore PUBLIC src/cpp)
 set_target_properties(conncore PROPERTIES POSITION_INDEPENDENT_CODE ON)

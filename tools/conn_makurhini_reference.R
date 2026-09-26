@@ -2,6 +2,10 @@
 #
 # Reference values of Makurhini's MK_dPCIIC for landschaft's habitat graphs.
 #
+#   Rscript conn_makurhini_reference.R spatial <out_dir> <polygons.gpkg>
+#       nodesfile / distancefile (centroid, edge) on Makurhini's example raster
+#       `habitat_nodes_raster` (also written to out_dir) and on the polygons,
+#       and MK_dPCIIC run on both end to end
 #   Rscript conn_makurhini_reference.R export <out_dir>
 #       writes Makurhini's example `habitat_nodes` (centroid distances, areas
 #       in km2) as habitat_nodes.csv / habitat_pairs.csv
@@ -14,6 +18,45 @@ suppressPackageStartupMessages(library(Makurhini))
 
 args <- commandArgs(trailingOnly = TRUE)
 fmt <- function(x) sprintf("%.17g", x)
+
+if (args[1] == "spatial") {
+    # Nodes and distances from Makurhini's example raster and polygons
+    # (nodesfile, distancefile) and MK_dPCIIC run on them end to end.
+    out <- args[2]
+    polygons <- sf::st_read(args[3], quiet = TRUE)
+    data("habitat_nodes_raster", package = "Makurhini")
+    r <- terra::rast(habitat_nodes_raster)
+    terra::writeRaster(r, file.path(out, "habitat_nodes_raster.tif"), overwrite = TRUE, datatype = "INT4S",
+                       gdal = c("COMPRESS=DEFLATE"))
+    rows <- list()
+    put <- function(what, table) {
+        table <- as.data.frame(table)
+        for (col in names(table)) if (is.numeric(table[[col]])) table[[col]] <- fmt(table[[col]])
+        write.csv(table, file.path(out, paste0(what, ".csv")), row.names = FALSE, quote = FALSE)
+    }
+    put("raster_nodes_m2", nodesfile(r))
+    put("raster_nodes_ha", nodesfile(r, area_unit = "ha"))
+    put("raster_nodes_weighted", nodesfile(r, attribute = seq_len(398) / 398, weighted = TRUE, area_unit = "km2"))
+    put("vector_nodes_km2", nodesfile(polygons, id = "id", area_unit = "km2"))
+    put("raster_centroid", distancefile(r, type = "centroid"))
+    put("raster_edge", distancefile(r, type = "edge"))
+    put("vector_centroid", distancefile(polygons, id = "id", type = "centroid"))
+    put("vector_edge", distancefile(polygons, id = "id", type = "edge"))
+    put("vector_edge_2km", distancefile(polygons, id = "id", type = "edge", threshold = 2, distance_unit = "km"))
+    # End to end: importance rasters read back per node id.
+    res <- MK_dPCIIC(nodes = r, area_unit = "ha", distance = list(type = "edge"), metric = "PC",
+                     probability = 0.5, distance_thresholds = 5000, overall = TRUE, intern = FALSE)
+    imp <- res[[1]]
+    z <- terra::zonal(imp[[-1]], r, fun = "min")
+    names(z)[1] <- "id"
+    put("raster_edge_pc_nodes", z)
+    put("raster_edge_pc_overall", res[[2]])
+    res <- MK_dPCIIC(nodes = polygons, area_unit = "km2", distance = list(type = "centroid"),
+                     metric = "IIC", distance_thresholds = 3000, overall = TRUE, intern = FALSE)
+    put("vector_centroid_iic_nodes", sf::st_drop_geometry(res[[1]]))
+    put("vector_centroid_iic_overall", res[[2]])
+    quit(save = "no")
+}
 
 if (args[1] == "export") {
     data("habitat_nodes", package = "Makurhini")

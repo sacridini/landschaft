@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_conn.py [makurhini] [conefor]
+    python tools/make_reference_conn.py [makurhini] [conefor] [spatial]
 
 ``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
 in ``tests/lsm_reference.py``; the default R library is used). It exports
@@ -11,6 +11,13 @@ Makurhini's example ``habitat_nodes`` (centroid distances), builds three
 synthetic scenes, stores them in ``tests/data/reference/conn/scenes.npz`` and
 runs ``MK_dPCIIC`` (public, rounded output and the unrounded internal steps,
 ``tools/conn_makurhini_reference.R``) into ``makurhini.csv.gz``.
+
+``spatial`` writes synthetic polygons (``tests/data/reference/conn/polygons.gpkg``)
+and Makurhini's example raster ``habitat_nodes_raster``
+(``habitat_nodes_raster.tif``), and stores Makurhini's ``nodesfile`` /
+``distancefile`` (centroid and edge distances) on both and ``MK_dPCIIC`` run
+on them end to end in ``tests/data/reference/conn/spatial`` (pairs up to 30 km
+and every 17th of the others).
 
 ``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
 Sensinode 2.2 sources (``LANDSCHAFT_CONEFOR_SRC``, default
@@ -116,6 +123,65 @@ def load_scenes() -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
     return out
 
 
+def synthetic_polygons():
+    """Polygons of every kind Makurhini's centroids and edges meet."""
+    import geopandas as gpd
+    import shapely
+    from shapely import affinity
+
+    rng = np.random.default_rng(7)
+    geoms = []
+    for _ in range(18):  # boxes
+        x, y = rng.uniform(0, 30_000, 2)
+        w, h = rng.uniform(200, 2_000, 2)
+        geoms.append(shapely.box(x, y, x + w, y + h))
+    for _ in range(12):  # convex, rotated
+        c = rng.uniform(0, 30_000, 2)
+        pts = c + rng.normal(0, 600, (12, 2))
+        geoms.append(affinity.rotate(shapely.MultiPoint(pts).convex_hull, rng.uniform(0, 90)))
+    for _ in range(8):  # U shapes: the centroid falls outside
+        x, y = rng.uniform(0, 30_000, 2)
+        u = shapely.Polygon([(0, 0), (900, 0), (900, 900), (650, 900), (650, 250), (250, 250), (250, 900), (0, 900)])
+        geoms.append(affinity.translate(affinity.rotate(u, rng.uniform(0, 360), origin=(450, 450)), x, y))
+    for _ in range(5):  # with a hole
+        x, y = rng.uniform(0, 30_000, 2)
+        geoms.append(shapely.Polygon([(x, y), (x + 1500, y), (x + 1500, y + 1200), (x, y + 1200)],
+                                     [[(x + 300, y + 300), (x + 900, y + 300), (x + 900, y + 800), (x + 300, y + 800)]]))
+    for k in range(7):  # multipolygons, the last with two equal parts
+        x, y = rng.uniform(0, 30_000, 2)
+        parts = [shapely.box(x, y, x + 400 + 100 * k, y + 500), shapely.box(x + 1_500, y, x + 1_900, y + 700)]
+        if k == 6:
+            parts = [shapely.box(x, y, x + 500, y + 500), shapely.box(x + 2_000, y, x + 2_500, y + 500)]
+        elif k % 2:
+            parts.append(shapely.box(x, y + 2_000, x + 300, y + 2_300))
+        geoms.append(shapely.MultiPolygon(parts))
+    a = shapely.box(10_000, 10_000, 11_000, 11_000)  # touching and overlapping neighbours
+    geoms += [a, shapely.box(11_000, 10_200, 11_800, 10_900), shapely.box(10_500, 10_900, 10_700, 11_600)]
+    ids = np.arange(len(geoms)) * 5 + 11
+    return gpd.GeoDataFrame({"id": ids}, geometry=geoms, crs="EPSG:3857")
+
+
+def run_spatial() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    out = OUT / "spatial"
+    out.mkdir(parents=True, exist_ok=True)
+    polygons = OUT / "polygons.gpkg"
+    synthetic_polygons().to_file(polygons, driver="GPKG")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        subprocess.run([str(rscript), str(R_SCRIPT), "spatial", str(tmp), str(polygons)], check=True)
+        (OUT / "habitat_nodes_raster.tif").write_bytes((tmp / "habitat_nodes_raster.tif").read_bytes())
+        for f in sorted(tmp.glob("*.csv")):
+            table = pd.read_csv(f, float_precision="round_trip")
+            if {"From", "To", "Distance"} <= set(table.columns) and len(table) > 5_000:
+                keep = (table["Distance"] <= 30_000) | (np.arange(len(table)) % 17 == 0)
+                table = table[keep]
+            table.to_csv(out / f"{f.stem}.csv.gz", index=False, float_format="%.17g")
+            print(f.stem, len(table))
+
+
 def run_makurhini() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -218,8 +284,10 @@ def run_conefor() -> None:
 
 
 if __name__ == "__main__":
-    parts = sys.argv[1:] or ["makurhini", "conefor"]
+    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial"]
     if "makurhini" in parts:
         run_makurhini()
     if "conefor" in parts:
         run_conefor()
+    if "spatial" in parts:
+        run_spatial()

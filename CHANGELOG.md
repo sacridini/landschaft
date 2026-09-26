@@ -6,6 +6,21 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 2: nodes from maps. `HabitatGraph.from_raster`
+  (a raster of patch ids, or the patches of `habitat` classes) and
+  `HabitatGraph.from_vector` (polygons or points), with centroid or edge distances up
+  to `max_distance` in `distance_unit`; `to_raster` / `to_geodataframe` put node values
+  back on the map. `ls.conn.node_table` and `ls.conn.distance_table` are Makurhini's
+  `nodesfile` and `distancefile`, with the same bits: raster areas and centroids
+  (`raster::xyFromCell` cell centres averaged in 80-bit precision as R's `colMeans`),
+  polygon areas (GDAL's shoelace sums, as `sf::st_area`), centroids of the largest part
+  with Makurhini's point-on-surface fallback, GEOS edge distances; raster edge
+  distances (gap between the closest cells, searched row by row over the boundary
+  cells) to the last bit. `MK_dPCIIC` run end to end on Makurhini's raster and on
+  synthetic polygons is reproduced exactly. 8,395 patches of a 4000×4000 raster: all
+  35 M centroid distances in 0.9 s, edge distances up to 5 km in 0.24 s.
+
 ## [0.30.0] - 2026-09-26
 
 ### Added

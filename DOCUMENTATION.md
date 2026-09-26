@@ -1129,7 +1129,42 @@ g.components(distance=10_000)                          # component of every node
 
 g = ls.HabitatGraph.from_conefor("nodes.txt", "distances.txt", convention="conefor")
 g.to_conefor("nodes.txt", "distances.txt")
+
+# nodes from a raster of patch ids (or the patches of habitat classes), or from polygons
+g = ls.HabitatGraph.from_raster("patches.tif", area_unit="ha", distance="edge", max_distance=20_000)
+g = ls.HabitatGraph.from_raster("landcover.tif", habitat=[1, 2], directions=8)
+g = ls.HabitatGraph.from_vector(patches_gdf, id="patch_id", area_unit="km2", distance="centroid")
+imp = g.node_importance("PC", distance=10_000)
+g.to_raster(imp, "dPC")            # node values on the patches (from_raster)
+g.to_geodataframe(imp)             # node values with the geometries (from_vector)
+
+ls.conn.node_table("patches.tif", area_unit="ha")              # Makurhini's nodesfile
+ls.conn.distance_table(patches_gdf, id="patch_id", distance="edge", max_distance=5_000)  # distancefile
 ```
+
+### Nodes and distances from maps
+
+`node_table` and `distance_table` are Makurhini's `nodesfile` and `distancefile`
+(Euclidean distances; the map units must be metres):
+
+* **Raster of patch ids** (NA or `nodata` = no habitat; with `habitat=` the
+  `directions`-connected patches of those classes are labelled first): the
+  attribute is the number of cells × the cell width² in `area_unit` (or given per
+  patch, `weighted` multiplies it by the area). Centroids are the means of the cell
+  centres (`raster::xyFromCell`, averaged in 80-bit precision as R's `colMeans`);
+  edge distances are the gap between the closest cells of two patches (what GEOS
+  measures between the polygons of `terra::as.polygons`), 0 when they touch.
+* **Polygons or points** (GeoDataFrame): the attribute is the area as sf's
+  `st_area` computes it (GDAL's shoelace sums), or a column. Centroids are those
+  of the largest part, or a point on the surface when that centroid falls outside
+  (Makurhini's `st_centroid_within_poly`); edge distances come from GEOS.
+
+`max_distance` keeps the pairs up to that distance (in `distance_unit`), which is
+what Makurhini's `threshold` does in pair tables (in its matrices it drops the
+pairs up to it instead). Raster edge distances search the boundary cells of each
+patch row by row, from the nearest row outwards, and stop at the gap of the
+bounding boxes; with `max_distance`, only patches whose boxes come that close are
+compared.
 
 ### Indices
 
@@ -1199,6 +1234,15 @@ the results do not depend on the number of threads.
   g++ and stores every index and node importance of the synthetic scenes
   (`conefor.csv.gz`). Conefor computes in single precision: the values agree to
   its precision (1e-5 relative for the indices).
+* `make_reference_conn.py spatial` stores `nodesfile`, `distancefile` and `MK_dPCIIC`
+  on Makurhini's example raster (`habitat_nodes_raster`, 398 patches) and on 53
+  synthetic polygons (multipart, with holes, U-shaped, touching and overlapping) in
+  `tests/data/reference/conn/spatial`. `tests/test_conn_spatial.py` finds the same
+  bits for the node attributes and the centroid distances (rasters and polygons) and
+  for the polygon edge distances; raster edge distances agree to the last bit
+  (GEOS measures between terra's polygon vertices: 1 in 80,000 values differs by 1
+  ulp). It also checks raster edge distances against brute force (non-square
+  cells too) and GEOS on the cell polygons.
 * `tests/test_conn.py` checks every index and importance against a brute-force
   recomputation of the graph without each node (and with its attribute set to 0),
   under both conventions, and the input kinds, pair tables, Conefor files and
@@ -1211,3 +1255,5 @@ the results do not depend on the number of threads.
 | `habitat_nodes` (404 patches), 10 km, IIC / PC with node importance | 1.4 s / 10.6 s | 0.005 s / 0.017 s |
 | 2,000 random patches, 9 km (47 k links; PC: 1.2 M pairs above `pij_min`), IIC / PC | – | 0.09 s / 1.7 s |
 | 5,000 random patches, 6 km (134 k links; PC: 4.3 M pairs), IIC / PC | – | 0.8 s / 19 s |
+| 4000×4000 raster, 8,395 patches: centroid distances, all 35 M pairs / up to 5 km | – | 0.9 s / 0.1 s |
+| same, edge distances up to 5 km / 20 km / all pairs | – | 0.24 s / 1.1 s / 12.5 s |
