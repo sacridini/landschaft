@@ -112,6 +112,9 @@ private:
     // metrics.cpp
     const std::vector<double>& patch_base(const std::string& name);
     std::vector<double> gyrate();
+    // geometry.cpp
+    std::vector<double> enn();
+    std::vector<double> circle();
     double total_area();
     double edge_length(i64 h, i64 v) const;
     std::vector<double> class_te();

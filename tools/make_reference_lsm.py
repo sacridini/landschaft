@@ -64,6 +64,9 @@ def synthetic_cases() -> dict[str, tuple]:
             (30.0, 20.0),
         ),
         "salt_pepper": (lsm_scenes.salt_and_pepper((25, 30), [1, 2, 3], seed=7, na_fraction=0.05), (10.0, 10.0)),
+        # few, distant patches (enn over long distances) and a non-integer cell size
+        "sparse": (lsm_scenes.sparse((70, 90), [2, 3, 4], seed=12, n_blobs=25, background=1), (0.3, 0.3)),
+        "sparse_na": (lsm_scenes.sparse((60, 50), [5, 6], seed=13, n_blobs=18, na_fraction=0.02), (2.5, 2.5)),
     }
     for name, data in lsm_scenes.small_cases().items():
         cases[name] = (data, (1.0, 1.0))

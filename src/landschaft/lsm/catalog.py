@@ -156,9 +156,6 @@ _CATALOG = [
     ("te", "total edge", "area and edge metric", "landscape"),
 ]
 
-# Metric families not implemented yet (first part of the metric name).
-_PENDING = {"circle", "enn"}
-
 _PREFIX = {"patch": "lsm_p_", "class": "lsm_c_", "landscape": "lsm_l_"}
 
 
@@ -166,7 +163,6 @@ def _table() -> pd.DataFrame:
     df = pd.DataFrame(_CATALOG, columns=["metric", "name", "type", "level"])
     df["function_name"] = [_PREFIX[lvl] + m for m, lvl in zip(df["metric"], df["level"])]
     df["family"] = df["metric"].str.split("_").str[0]
-    df = df[~df["family"].isin(_PENDING)]
     order = {lvl: i for i, lvl in enumerate(LEVELS)}
     return df.sort_values(["level", "metric"], key=lambda s: s.map(order) if s.name == "level" else s).reset_index(
         drop=True

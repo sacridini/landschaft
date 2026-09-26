@@ -169,6 +169,10 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
         }
     } else if (name == "gyrate") {
         out = gyrate();
+    } else if (name == "enn") {
+        out = enn();
+    } else if (name == "circle") {
+        out = circle();
     } else if (name == "core") {
         const Core& core = this->core();
         for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(core.cells[i]) * (resx_ * resy_) / 10000;

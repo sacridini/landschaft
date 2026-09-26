@@ -341,3 +341,128 @@ class TestCore:
         owner = ndimage.labeled_comprehension(labels, comp, np.arange(1, n + 1), np.min, int, 0)
         ncore = np.bincount(owner, minlength=lm.n_patches + 1)[1:]
         np.testing.assert_array_equal(lm.patch_metrics("ncore")["ncore"], ncore)
+
+
+def brute_enn(labels, patch_classes, res):
+    """Per patch: exact distance to the nearest cell of another patch of its class."""
+    out = np.full(len(patch_classes), np.nan)
+    for cls in np.unique(patch_classes):
+        ids = np.flatnonzero(patch_classes == cls) + 1
+        if ids.size < 2:
+            continue
+        of_class = np.isin(labels, ids)
+        for pid in ids:
+            others = of_class & (labels != pid)
+            dist = ndimage.distance_transform_edt(~others, sampling=(res[1], res[0]))
+            out[pid - 1] = dist[labels == pid].min()
+    return out
+
+
+def min_circle_radius(points):
+    """Smallest enclosing circle by brute force: every circle through two or
+    three convex hull points, keeping the smallest that holds all points."""
+    from itertools import combinations
+
+    from scipy.spatial import ConvexHull
+
+    pts = np.unique(points, axis=0)
+    if len(pts) > 3:
+        pts = pts[ConvexHull(pts).vertices]
+    pairs = np.array(list(combinations(range(len(pts)), 2)))
+    centres = [(pts[pairs[:, 0]] + pts[pairs[:, 1]]) / 2]
+    if len(pts) >= 3:
+        t = np.array(list(combinations(range(len(pts)), 3)))
+        a, b, c = pts[t[:, 0]], pts[t[:, 1]], pts[t[:, 2]]
+        d = 2 * (a[:, 0] * (b[:, 1] - c[:, 1]) + b[:, 0] * (c[:, 1] - a[:, 1]) + c[:, 0] * (a[:, 1] - b[:, 1]))
+        ok = d != 0
+        a, b, c, d = a[ok], b[ok], c[ok], d[ok]
+        sa, sb, sc = (a**2).sum(1), (b**2).sum(1), (c**2).sum(1)
+        ux = (sa * (b[:, 1] - c[:, 1]) + sb * (c[:, 1] - a[:, 1]) + sc * (a[:, 1] - b[:, 1])) / d
+        uy = (sa * (c[:, 0] - b[:, 0]) + sb * (a[:, 0] - c[:, 0]) + sc * (b[:, 0] - a[:, 0])) / d
+        centres.append(np.stack([ux, uy], axis=1))
+    best = np.inf
+    for chunk in np.array_split(np.concatenate(centres), max(1, len(pts) ** 3 // 200000)):
+        r = np.sqrt(((chunk[:, None, :] - pts[None, :, :]) ** 2).sum(-1)).max(1)
+        best = min(best, r.min())
+    return best
+
+
+def extreme_corners(mask, res):
+    """Corners of the patch cells in its first/last rows and columns (landscapemetrics)."""
+    ys, xs = np.nonzero(mask)
+    keep = (xs == xs.min()) | (xs == xs.max()) | (ys == ys.min()) | (ys == ys.max())
+    xs, ys = xs[keep], ys[keep]
+    corners = [(xs + dx) * res[0] for dx in (0, 1) for _ in (0, 1)], [(ys + dy) * res[1] for _ in (0, 1) for dy in (0, 1)]
+    return np.stack([np.concatenate(corners[0]), np.concatenate(corners[1])], axis=1)
+
+
+class TestNearestNeighbour:
+    def test_hand_computed(self):
+        # class 1: two cells three columns apart; class 2: one patch
+        enn = ls.Landscape(np.array([[1, 2, 2, 1]]), res=10).patch_metrics("enn")
+        assert enn["class"].tolist() == [1, 1, 2]
+        np.testing.assert_allclose(enn["enn"], [30, 30, np.nan])
+
+    def test_diagonal_patches_with_four_directions(self):
+        diagonal = np.array([[1, 2], [2, 1]])
+        enn = ls.Landscape(diagonal, directions=4, res=(3, 4)).patch_metrics("enn")["enn"]
+        np.testing.assert_allclose(enn, 5.0)
+
+    @pytest.mark.parametrize("directions", [4, 8])
+    @pytest.mark.parametrize(
+        "shape, res", [((40, 50), (1.0, 1.0)), ((300, 280), (30.0, 30.0)), ((60, 45), (30.0, 20.0))]
+    )
+    def test_brute_force(self, directions, shape, res):
+        # large map (parallel paths): smoother, so the brute force stays quick
+        sigma = 4.0 if shape[0] > 100 else 1.2
+        data = lsm_scenes.clustered(shape, [1, 2, 3], seed=21, sigma=sigma, na_fraction=0.05)
+        lm = ls.Landscape(data, res=res, directions=directions)
+        expected = brute_enn(lm.labels(), lm.patch_classes, res)
+        np.testing.assert_allclose(lm.patch_metrics("enn")["enn"], expected, rtol=1e-12)
+
+    def test_sparse_distant_patches(self):
+        data = lsm_scenes.sparse((200, 240), [2, 3], seed=5, n_blobs=40, background=1)
+        lm = ls.Landscape(data, res=2.5)
+        expected = brute_enn(lm.labels(), lm.patch_classes, (2.5, 2.5))
+        np.testing.assert_allclose(lm.patch_metrics("enn")["enn"], expected, rtol=1e-12)
+
+    def test_single_patch_classes_long_format(self):
+        # every class has a single patch: one class-level row without class,
+        # as in landscapemetrics
+        df = ls.Landscape(np.array([[1, 1], [2, 2]])).metrics(metric="enn")
+        cls = df[df["level"] == "class"]
+        assert len(cls) == 3
+        assert cls["class"].isna().all()
+        assert cls["value"].isna().all()
+        wide = ls.Landscape(np.array([[1, 1], [2, 2]])).class_metrics("enn_mn")
+        assert wide["class"].tolist() == [1, 2]
+
+
+class TestCircle:
+    def test_hand_computed(self):
+        # one cell: circle through its corners; a 1 x 3 bar: diameter sqrt(10)
+        c = ls.Landscape(np.array([[1, 2, 2, 2]])).patch_metrics("circle")["circle"]
+        np.testing.assert_allclose(c, [1 - 1 / (np.pi * 0.5), 1 - 3 / (np.pi * 2.5)])
+
+    @pytest.mark.parametrize(
+        "shape, res",
+        [((30, 36), (1.0, 1.0)), ((30, 36), (0.3, 0.3)), ((30, 36), (30.0, 20.0)), ((300, 240), (10.0, 10.0))],
+    )
+    def test_brute_force(self, shape, res):
+        # the large map uses the parallel path, with patches across strip seams
+        sigma = 5.0 if shape[0] > 100 else 1.5
+        data = lsm_scenes.clustered(shape, [1, 2, 3], seed=9, sigma=sigma, na_fraction=0.05)
+        lm = ls.Landscape(data, res=res)
+        labels = lm.labels()
+        area = lm.patch_metrics("area")["area"].to_numpy() * 10000
+        expected = [
+            1 - area[i] / (np.pi * min_circle_radius(extreme_corners(labels == i + 1, res)) ** 2)
+            for i in range(lm.n_patches)
+        ]
+        np.testing.assert_allclose(lm.patch_metrics("circle")["circle"], expected, rtol=1e-10, atol=1e-12)
+
+    def test_repeatable(self):
+        data = lsm_scenes.clustered((300, 280), [1, 2, 3], seed=3, sigma=4)
+        a = ls.Landscape(data).patch_metrics("circle")
+        b = ls.Landscape(data).patch_metrics("circle")
+        pd.testing.assert_frame_equal(a, b)

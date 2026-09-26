@@ -62,6 +62,11 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 - Paralelizar a inicialização (mapa de classes, contagens por classe) e a junção
   das peças entre faixas, que ainda são sequenciais (~0,4 s + 0,3 s em 100 M pixels).
+  Com muitos patches o rótulo pesa mais: 40 M de patches em 100 M pixels levam ~7 s
+  (junção, ordenação e permutação das tabelas por patch).
+- ENN: a construção das árvores e a passada estável por classe ainda são limitadas
+  pela memória (~0,5 s cada em 100 M pixels); nós menores (sem `begin`/`end` nos
+  nós internos, caixas em 16 bits relativas) reduziriam o tráfego.
 - Rótulos em 64 bits para rasters em memória com mais de 2^31 pixels (hoje esses
   casos ficam para o processamento por tiles).
 - Janela móvel com métricas de patch (reclassificar por janela é caro): reaproveitar
@@ -73,13 +78,19 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   as referências muda `circle` em ~1e-16 (1 ulp). Comparar com tolerância relativa
   e não regravar as referências sem necessidade.
 - O landscapemetrics não calcula `circle` com células não quadradas (erro); o script
-  de referência pula essas métricas nesse caso.
+  de referência pula essas métricas nesse caso (mesmo teste `all.equal` do pacote).
+  O landschaft calcula com a largura e a altura reais da célula.
+- Ler as referências sempre com `float_precision="round_trip"` (o parser rápido do
+  pandas muda o último bit de alguns valores).
+- `_sd`/`_cv` diferem do R no último bit: o R (mingw) acumula em `long double` de
+  80 bits e o MSVC não tem esse tipo. Para bater bit a bit, acumular com soma
+  compensada (double-double) nas reduções.
 
 ## Fases combinadas (referência)
 
 1. Motor C++ + área/borda, forma, agregação, diversidade, complexidade. **Feita.**
-2. Área core (`core`, `cai`, `ncore`, `tca`, `cpland`, `ndca`, `dcad`, `dcore_*`).
-3. ENN, círculo circunscrito (e PROX, se incluído).
+2. Área core (`core`, `cai`, `ncore`, `tca`, `cpland`, `ndca`, `dcad`, `dcore_*`). **Feita.**
+3. ENN, círculo circunscrito. **Feita** (PROX continua nas ideias acima).
 4. Vários rasters em paralelo, zonas/buffers/amostragem (`sample_lsm`), janela
    móvel (`window_lsm`).
 5. Processamento fora da memória por tiles, juntando patches cortados nas costuras.

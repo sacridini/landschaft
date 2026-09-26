@@ -33,6 +33,7 @@ add_library(gtbcore STATIC
 target_include_directories(gtbcore PUBLIC src/cpp)
 
 add_library(lsmcore STATIC
+    src/cpp/lsm/geometry.cpp
     src/cpp/lsm/landscape.cpp
     src/cpp/lsm/metrics.cpp
 )

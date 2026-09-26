@@ -270,19 +270,29 @@ class Landscape:
         chosen = select_metrics(level, metric, name, type, what).sort_values(["level", "metric"])
         level_names = sorted(set(chosen["level"]))
         metric_order = list(dict.fromkeys(chosen["metric"]))
-        levels, metric_names, classes, ids, values = [], [], [], [], []
+        levels, metric_names, classes, class_na, ids, values = [], [], [], [], [], []
         for lvl, metric_name in zip(chosen["level"], chosen["metric"]):
             if lvl == "patch":
                 v = self._core.patch_metric(metric_name)
                 classes.append(self.patch_classes)
+                class_na.append(np.zeros(v.size, dtype=bool))
                 ids.append(np.arange(1, v.size + 1))
             elif lvl == "class":
                 v = self._core.class_metric(metric_name)
-                classes.append(self.classes)
+                if metric_name.startswith("enn_") and v.size and np.isnan(v).all():
+                    # every class has a single patch: landscapemetrics gives one
+                    # row without class
+                    v = v[:1]
+                    classes.append(np.zeros(1, dtype=np.int64))
+                    class_na.append(np.ones(1, dtype=bool))
+                else:
+                    classes.append(self.classes)
+                    class_na.append(np.zeros(v.size, dtype=bool))
                 ids.append(np.zeros(v.size, dtype=np.int64))
             else:
                 v = np.array([self._core.landscape_metric(metric_name)])
                 classes.append(np.zeros(1, dtype=np.int64))
+                class_na.append(np.ones(1, dtype=bool))
                 ids.append(np.zeros(1, dtype=np.int64))
             levels.append(np.full(v.size, level_names.index(lvl), dtype=np.int8))
             metric_names.append(np.full(v.size, metric_order.index(metric_name), dtype=np.int16))
@@ -294,7 +304,7 @@ class Landscape:
         return pd.DataFrame(
             {
                 "level": level_col,
-                "class": pd.arrays.IntegerArray(cls, np.asarray(level_col == "landscape")),
+                "class": pd.arrays.IntegerArray(cls, np.concatenate(class_na)),
                 "id": pd.arrays.IntegerArray(pid, np.asarray(level_col != "patch")),
                 "metric": pd.Categorical.from_codes(np.concatenate(metric_names), metric_order),
                 "value": np.concatenate(values),

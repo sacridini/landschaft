@@ -60,6 +60,8 @@ def test_matches_landscapemetrics(fname):
         warnings.simplefilter("ignore")  # geographic CRS of podlasie
         ours = ls.Landscape(DATA / "lsm" / info["input"], **options).metrics()
     ref = implemented(lsm_reference.read_reference(REF_DIR / fname))
+    if not ref["metric"].str.startswith("circle").any():  # non-square cells
+        ours = ours[~ours["metric"].str.startswith("circle")]
     if options.get("neighbourhood") == 8:
         quirk = ref["metric"].isin(NEIGHBOURHOOD_QUIRK)
         default = implemented(lsm_reference.read_reference(REF_DIR / fname.replace("__complexity", "__default")))
@@ -96,6 +98,9 @@ LIVE_CASES = [
      {"edge_depth": 0, "consider_boundary": True}),
     ("clustered", dict(shape=(60, 50), classes=[1, 2], seed=7, sigma=5.0), (20.0, 20.0),
      {"edge_depth": 4, "directions": 4}),
+    ("sparse", dict(shape=(80, 70), classes=[2, 3, 4], seed=8, n_blobs=30, background=1), (0.7, 0.7), {}),
+    ("sparse", dict(shape=(50, 90), classes=[1, 2], seed=9, n_blobs=25, na_fraction=0.03), (5.0, 5.0),
+     {"directions": 4}),
 ]
 
 
@@ -105,7 +110,7 @@ def test_live_landscapemetrics(rscript, kind, params, res, options):
     params = dict(params)
     shape = params.pop("shape")
     classes = params.pop("classes")
-    make = lsm_scenes.clustered if kind == "clustered" else lsm_scenes.salt_and_pepper
+    make = {"clustered": lsm_scenes.clustered, "salt": lsm_scenes.salt_and_pepper, "sparse": lsm_scenes.sparse}[kind]
     data = make(shape, classes, **params)
     ref = implemented(lsm_reference.run_array(rscript, data, res, **options))
     if options.get("neighbourhood") == 8:

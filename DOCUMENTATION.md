@@ -664,12 +664,32 @@ neighbours). landschaft follows the individual functions; with the default
 
 | level | metrics |
 |---|---|
-| patch | `area`, `perim`, `para`, `shape`, `frac`, `gyrate`, `contig`, `core`, `ncore`, `cai` |
-| class | `ca`, `pland`, `np`, `pd`, `lpi`, `te`, `ed`, `ai`, `clumpy`, `cohesion`, `division`, `mesh`, `split`, `iji`, `lsi`, `nlsi`, `pladj`, `pafrac`, `tca`, `cpland`, `ndca`, `dcad`, and `_mn`/`_sd`/`_cv` of `area`, `para`, `shape`, `frac`, `gyrate`, `contig`, `core`, `cai`, `dcore` |
+| patch | `area`, `perim`, `para`, `shape`, `frac`, `gyrate`, `contig`, `circle`, `enn`, `core`, `ncore`, `cai` |
+| class | `ca`, `pland`, `np`, `pd`, `lpi`, `te`, `ed`, `ai`, `clumpy`, `cohesion`, `division`, `mesh`, `split`, `iji`, `lsi`, `nlsi`, `pladj`, `pafrac`, `tca`, `cpland`, `ndca`, `dcad`, and `_mn`/`_sd`/`_cv` of `area`, `para`, `shape`, `frac`, `gyrate`, `contig`, `circle`, `enn`, `core`, `cai`, `dcore` |
 | landscape | `ta`, `np`, `pd`, `lpi`, `te`, `ed`, `ai`, `cohesion`, `contag`, `division`, `mesh`, `split`, `iji`, `lsi`, `pladj`, `pafrac`, `pr`, `prd`, `rpr`, `shdi`, `shei`, `sidi`, `siei`, `msidi`, `msiei`, `ent`, `condent`, `joinent`, `mutinf`, `relmutinf`, `tca`, `ndca`, `dcad`, and the same `_mn`/`_sd`/`_cv` |
 
 `_sd` is the sample standard deviation and `_cv` = `_sd / _mn · 100`, as in
-landscapemetrics (NA for a single patch). Not implemented yet: `enn` and `circle`.
+landscapemetrics (NA for a single patch).
+
+`enn` is the distance between the centres of the nearest cells of the patch and of
+another patch of the same class; it is NA when the class has a single patch, and
+so are the `enn_mn/sd/cv` of that class and of the landscape (NA propagates, as
+in landscapemetrics). When every class has a single patch, landscapemetrics
+returns one class-level row without class for each `enn_*`; `metrics()` does the
+same, while `class_metrics()` keeps one NA row per class. The engine sorts the
+patch edge cells of each class in Morton order, builds one quadtree-like tree per
+class whose nodes know when all their cells belong to one patch, and searches the
+nearest cell of another patch leaf by leaf, in parallel; a 5×5 raster look-up
+and the smallest possible distance between two patches settle most cells without
+a search. The distances are computed as in landscapemetrics and are identical.
+
+`circle` is `1 - area / area of the smallest circumscribing circle`. As in
+landscapemetrics the circle encloses the corners of the patch cells in its first
+and last rows and columns, found with Welzl's algorithm. landscapemetrics shuffles
+the points at random, so its values can change in the last bit between runs;
+landschaft uses a fixed shuffle per patch (repeatable results, same values within
+1e-15). landscapemetrics refuses non-square cells; landschaft uses the real cell
+width and height.
 
 Core areas follow landscapemetrics' `get_boundaries`: a cell is core when its
 city-block distance to the nearest cell of another class or NA (and to the map edge,
@@ -680,23 +700,28 @@ core areas per patch (`ncore`), not their sizes.
 
 ### Verification
 
-`tools/make_reference_lsm.py` runs landscapemetrics (`tools/lsm_reference.R`) on 12
+`tools/make_reference_lsm.py` runs landscapemetrics (`tools/lsm_reference.R`) on 14
 maps (its `landscape`, crops of `augusta_nlcd` and `podlasie_ccilc`, synthetic maps
 with NA cells, negative and large class values, non-square cells, salt-and-pepper
-patterns, a checkerboard, single rows and columns, a single class) with 5 option
-sets, and stores every value in `tests/data/reference/lsm`. `tests/test_lsm_reference.py`
+patterns, few distant patches with a non-integer cell size, a checkerboard, single
+rows and columns, a single class) with 5 option sets, and stores every value in `tests/data/reference/lsm`. `tests/test_lsm_reference.py`
 compares all of them; with `Rscript` available (`LANDSCHAFT_RSCRIPT`,
 `LANDSCHAFT_R_LIBS` for a specific landscapemetrics library) it also runs
 landscapemetrics live on random maps with other option combinations.
 `tests/test_lsm.py` checks values computed by hand, the labels against SciPy, the
-parallel seams, input handling and metric selection.
+parallel seams, input handling and metric selection; `enn` against SciPy's exact
+Euclidean distance transform and `circle` against an exhaustive search over the
+circles through two or three hull points.
 
 ### Performance
 
 | map | landscapemetrics 2.2.2 | landschaft |
 |---|---|---|
 | `augusta_nlcd`, 440×678, the 91 metrics of part 1 | 8.6 s | 0.1 s |
+| `augusta_nlcd`, all 133 metrics | 15.6 s | 0.03 s |
+| `augusta_nlcd`, `enn` / `circle` | 2.4 s / 0.14 s | 0.014 s / 0.008 s |
 | 10,000×10,000, 10 classes, 7.7 M patches: labelling | – | 1.4 s |
 | same, all class and landscape metrics | – | 2.2 s more |
 | same, core areas (distance, core cells, core labelling) | – | 1.0 s more |
+| same, `enn` / `circle` | – | 2.0 s / 0.5 s more |
 

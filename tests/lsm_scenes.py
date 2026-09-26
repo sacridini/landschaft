@@ -28,6 +28,22 @@ def salt_and_pepper(shape, classes, *, seed: int, na_fraction: float = 0.0) -> n
     return np.ma.MaskedArray(out, mask=mask)
 
 
+def sparse(shape, classes, *, seed: int, n_blobs: int, background=None, na_fraction: float = 0.0) -> np.ma.MaskedArray:
+    """Small blobs of ``classes`` scattered over ``background`` (NA if None):
+    few patches per class, far apart."""
+    rng = np.random.default_rng(seed)
+    out = np.full(shape, 0 if background is None else background, dtype=np.int32)
+    mask = np.full(shape, background is None)
+    for _ in range(n_blobs):
+        y, x = rng.integers(0, shape[0]), rng.integers(0, shape[1])
+        h, w = rng.integers(1, 5, size=2)
+        out[y : y + h, x : x + w] = rng.choice(np.asarray(classes))
+        mask[y : y + h, x : x + w] = False
+    if na_fraction > 0:
+        mask |= rng.random(shape) < na_fraction
+    return np.ma.MaskedArray(out, mask=mask)
+
+
 def small_cases() -> dict[str, np.ma.MaskedArray]:
     """Degenerate shapes and class layouts."""
     checker = (np.indices((8, 8)).sum(axis=0) % 2 + 1).astype(np.int32)

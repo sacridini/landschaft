@@ -227,14 +227,14 @@
     "podlasie__default.csv.gz": {
       "input": "podlasie.tif",
       "options": {},
-      "rows": 8384
+      "rows": 9121
     },
     "podlasie__d4.csv.gz": {
       "input": "podlasie.tif",
       "options": {
         "directions": 4
       },
-      "rows": 15743
+      "rows": 17149
     },
     "podlasie__boundary.csv.gz": {
       "input": "podlasie.tif",
@@ -243,7 +243,7 @@
         "consider_boundary": true,
         "edge_depth": 2
       },
-      "rows": 8384
+      "rows": 9121
     },
     "podlasie__complexity.csv.gz": {
       "input": "podlasie.tif",
@@ -254,7 +254,7 @@
         "classes_max": 20,
         "cell_center": true
       },
-      "rows": 8384
+      "rows": 9121
     },
     "podlasie__core.csv.gz": {
       "input": "podlasie.tif",
@@ -262,7 +262,7 @@
         "edge_depth": 3,
         "directions": 4
       },
-      "rows": 15743
+      "rows": 17149
     },
     "row__default.csv.gz": {
       "input": "row.tif",
@@ -383,6 +383,86 @@
         "directions": 4
       },
       "rows": 133
+    },
+    "sparse__default.csv.gz": {
+      "input": "sparse.tif",
+      "options": {},
+      "rows": 586
+    },
+    "sparse__d4.csv.gz": {
+      "input": "sparse.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 586
+    },
+    "sparse__boundary.csv.gz": {
+      "input": "sparse.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 586
+    },
+    "sparse__complexity.csv.gz": {
+      "input": "sparse.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 586
+    },
+    "sparse__core.csv.gz": {
+      "input": "sparse.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 586
+    },
+    "sparse_na__default.csv.gz": {
+      "input": "sparse_na.tif",
+      "options": {},
+      "rows": 380
+    },
+    "sparse_na__d4.csv.gz": {
+      "input": "sparse_na.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 380
+    },
+    "sparse_na__boundary.csv.gz": {
+      "input": "sparse_na.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 380
+    },
+    "sparse_na__complexity.csv.gz": {
+      "input": "sparse_na.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 380
+    },
+    "sparse_na__core.csv.gz": {
+      "input": "sparse_na.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 380
     },
     "stripes__default.csv.gz": {
       "input": "stripes.tif",

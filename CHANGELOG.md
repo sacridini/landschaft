@@ -6,6 +6,26 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 3: `enn` (Euclidean nearest-neighbour distance) and
+  `circle` (related circumscribing circle) at patch level, and their
+  `_mn`/`_sd`/`_cv` at class and landscape level (133 metrics). ENN searches the
+  patch edge cells of each class in per-class Morton-order trees whose nodes know
+  when they hold a single patch, leaf by leaf and in parallel, after a 5×5 raster
+  look-up; the distances are identical to landscapemetrics (0.014 s instead of
+  2.4 s on `augusta_nlcd`). The circle uses Welzl's algorithm on the same points as
+  landscapemetrics, with a fixed shuffle per patch (repeatable), and also works
+  with non-square cells.
+- Reference maps with few distant patches and a non-integer cell size, and live
+  comparisons on such maps.
+
+### Fixed
+- The landscapemetrics references were read back with pandas' fast float parser
+  before being stored, which changed some values in the last bit; they are now
+  read with round-trip precision and were regenerated. `lsm_reference.R` decides
+  whether cells are square as landscapemetrics does (`all.equal`), so `podlasie`
+  now has circle references.
+
 ## [0.13.0] - 2026-09-26
 
 ### Added

@@ -93,7 +93,7 @@ def run_array(rscript: os.PathLike, data: np.ndarray, res=(1.0, 1.0), **options)
 
 
 def read_reference(path: os.PathLike) -> pd.DataFrame:
-    df = pd.read_csv(path, na_values=["NA", ""], keep_default_na=False)
+    df = pd.read_csv(path, na_values=["NA", ""], keep_default_na=False, float_precision="round_trip")
     df["class"] = df["class"].astype("Int64")
     df["id"] = df["id"].astype("Int64")
     df["value"] = df["value"].astype(float)

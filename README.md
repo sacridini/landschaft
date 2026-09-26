@@ -14,7 +14,7 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 * **Distance (experimental)**: Influence Zones and Proximity. Not yet identical to GTB, see the CHANGELOG.
 * **Restoration & Morphology**: Restoration Status (RSS), Cost Distance, Least-Cost Paths & Corridors, Landscape Parcellation (AWAPS, DIVISION, PARC), and Habitat Contortion.
 * **Change Detection & Convolution**: Simple Change, Morphological Change Detection (MCD with geodesic core reconstruction & elasticity), Fragmentation Change (FOS Delta & 6x6 transition matrix), FAD Multiscale Change (7x7 class transitions per observation scale), Landscape Mosaic Heatmap and Heatmap Change (GTB's heatmap/delta CSV, bit-identical), and Continuous Grayscale Spatial Convolution (GraySpatCon).
-* **Landscape Metrics (FRAGSTATS)**: 119 patch-, class- and landscape-level metrics with the names, options and values of the R package landscapemetrics (area/edge, shape, core area, aggregation, diversity, complexity), 50-100x faster.
+* **Landscape Metrics (FRAGSTATS)**: 133 patch-, class- and landscape-level metrics with the names, options and values of the R package landscapemetrics (area/edge, shape, core area, aggregation, diversity, complexity), 50-100x faster.
 
 📖 **For complete documentation and usage examples for every module, see [DOCUMENTATION.md](DOCUMENTATION.md).**
 
@@ -129,10 +129,9 @@ ls.list_metrics(level="landscape")               # catalogue (like list_lsm)
 ```
 
 Options are those of landscapemetrics (`directions`, `count_boundary`,
-`edge_depth`, `neighbourhood`, …). Nearest-neighbour and circle metrics are not
-implemented yet. On landscapemetrics' `augusta_nlcd` (440×678) the 91 metrics
-without core areas take 0.1 s instead of 8.6 s in R; a 10,000×10,000 map with 7.7
-million patches takes about 5 s for all 119 metrics.
+`edge_depth`, `neighbourhood`, …). On landscapemetrics' `augusta_nlcd` (440×678)
+all 133 metrics take 0.03 s instead of 15.6 s in R; a 10,000×10,000 map with 7.7
+million patches takes about 10 s for all of them (92 million values).
 
 ### Many images
 
@@ -280,7 +279,7 @@ LANDSCHAFT_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live co
   single-precision means and standard deviations agree to 1e-4 (landschaft
   computes them in double precision).
 * Landscape metrics are compared with the R package landscapemetrics:
-  `tools/make_reference_lsm.py` stores every value of `calculate_lsm` for 12 maps
+  `tools/make_reference_lsm.py` stores every value of `calculate_lsm` for 14 maps
   (its example data, synthetic maps with NA cells, non-square cells and
   degenerate layouts) and 5 option sets in `tests/data/reference/lsm`, and with
   `Rscript` available the tests also run landscapemetrics live on random maps. All

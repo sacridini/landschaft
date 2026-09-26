@@ -43,8 +43,8 @@ for (kv in args[-(1:2)]) {
 
 r <- terra::rast(args[[1]])
 what <- list_lsm(level = opts$level, simplify = TRUE)
-# circle metrics only exist for square cells in landscapemetrics
-if (terra::res(r)[[1]] != terra::res(r)[[2]]) what <- what[!grepl("circle", what)]
+# circle metrics only exist for square cells in landscapemetrics (same test)
+if (!isTRUE(all.equal(terra::res(r)[[1]], terra::res(r)[[2]]))) what <- what[!grepl("circle", what)]
 res <- suppressWarnings(calculate_lsm(
     r, what = what, directions = opts$directions,
     count_boundary = opts$count_boundary, consider_boundary = opts$consider_boundary,
