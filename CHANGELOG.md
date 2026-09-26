@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 10, plots (matplotlib, optional: `pip install
   landschaft[plot]`): `ls.show_patches()` / `Landscape.show_patches()` (patches in their
