@@ -10,6 +10,7 @@
 #include <pybind11/numpy.h>
 
 #include <cstring>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -70,13 +71,42 @@ py::dict circuit_advanced(const CArray<double>& conductance, const CArray<double
     return out;
 }
 
+// A condition raster (None: no condition) of the resistance's shape.
+const double* condition_data(const py::object& a, i64 nx, i64 ny, const char* name) {
+    if (a.is_none()) return nullptr;
+    const auto arr = a.cast<CArray<double>>();
+    if (arr.ndim() != 2 || arr.shape(0) != ny || arr.shape(1) != nx)
+        throw py::value_error(std::string(name) + " must have the resistance's shape");
+    return arr.data();
+}
+
 py::dict circuit_omniscape(const CArray<double>& resistance, const CArray<double>& source, int radius, int buffer,
                            int block_size, bool four_neighbors, bool resistance_is_conductance,
-                           bool correct_artifacts, bool flow_potential, int n_threads) {
+                           bool correct_artifacts, bool flow_potential, int n_threads, const py::dict& conditions) {
     if (resistance.ndim() != 2 || source.ndim() != 2 || source.shape(0) != resistance.shape(0) ||
         source.shape(1) != resistance.shape(1))
         throw py::value_error("expected resistance and source rasters of the same shape");
     const i64 ny = resistance.shape(0), nx = resistance.shape(1);
+    // Keep the condition arrays alive (c-contiguous float64 copies if needed).
+    std::vector<CArray<double>> keep;
+    auto condition = [&](int k) {
+        circuit::OmniscapeCondition c;
+        const std::string key = "condition" + std::to_string(k);
+        if (!conditions.contains(key.c_str()) || conditions[key.c_str()].is_none()) return c;
+        keep.push_back(conditions[key.c_str()].cast<CArray<double>>());
+        c.present = condition_data(keep.back(), nx, ny, key.c_str());
+        const std::string fut = key + "_future";
+        if (conditions.contains(fut.c_str()) && !conditions[fut.c_str()].is_none()) {
+            keep.push_back(conditions[fut.c_str()].cast<CArray<double>>());
+            c.future = condition_data(keep.back(), nx, ny, fut.c_str());
+        }
+        const std::string cmp = conditions[("comparison" + std::to_string(k)).c_str()].cast<std::string>();
+        if (cmp != "within" && cmp != "equal") throw py::value_error("comparisons must be 'within' or 'equal'");
+        c.equal = cmp == "equal";
+        c.lower = conditions[(key + "_lower").c_str()].cast<double>();
+        c.upper = conditions[(key + "_upper").c_str()].cast<double>();
+        return c;
+    };
     circuit::OmniscapeParams p;
     p.radius = radius;
     p.buffer = buffer;
@@ -85,6 +115,8 @@ py::dict circuit_omniscape(const CArray<double>& resistance, const CArray<double
     p.resistance_is_conductance = resistance_is_conductance;
     p.correct_artifacts = correct_artifacts;
     p.flow_potential = flow_potential;
+    p.condition1 = condition(1);
+    p.condition2 = condition(2);
     circuit::OmniscapeResult r =
         run_parallel(n_threads, [&] { return circuit::omniscape(resistance.data(), source.data(), nx, ny, p, n_threads); });
     py::dict out;
@@ -121,7 +153,9 @@ void register_python(py::module_& m) {
     m.def("circuit_omniscape", &circuit_omniscape, py::arg("resistance"), py::arg("source"), py::arg("radius"),
           py::arg("buffer"), py::arg("block_size"), py::arg("four_neighbors"), py::arg("resistance_is_conductance"),
           py::arg("correct_artifacts"), py::arg("flow_potential"), py::arg("n_threads") = 0,
-          "Omniscape's cumulative current (and flow potential) over moving windows.");
+          py::arg("conditions") = py::dict(),
+          "Omniscape's cumulative current (and flow potential) over moving windows. `conditions`: "
+          "condition1/2 (arrays), condition1/2_future, comparison1/2, condition1/2_lower/upper.");
     m.def("circuit_omniscape_correction", &circuit_omniscape_correction, py::arg("radius"), py::arg("buffer"),
           py::arg("block_size"), py::arg("four_neighbors"), py::arg("nx"), py::arg("ny"),
           "Omniscape's block-artifact correction factors.");

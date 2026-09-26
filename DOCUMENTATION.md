@@ -1620,6 +1620,50 @@ the map). NoData and zero cells are the same, and every value agrees with CHOLMO
 1.7e-11 (relative). Omniscape's default `cg+amg` is up to 1.6e-4 of the largest value away
 from its own CHOLMOD result where the block correction amplifies its error.
 
+### Conditional connectivity, reclassification, INI files and single precision
+
+```python
+# Sources connect only to targets of similar climate (Omniscape's conditional options):
+ds = ls.omniscape(res, 50, block_size=5,
+                  condition1=temperature_now, condition1_future=temperature_2050,
+                  compare_to_future="1", comparison1="within",
+                  condition1_lower=-1.0, condition1_upper=1.0,
+                  condition2=landcover, comparison2="equal")
+
+ds = ls.omniscape(res, 50, reclass_table={1: 10, 2: 1, 3: None})   # None / NaN: NoData
+ds = ls.omniscape(res, 50, precision="single")                      # float32 in and out
+
+ds = ls.circuit.omniscape_ini("config.ini")    # an Omniscape INI file, outputs in project_name
+```
+
+* Conditions (`conditional`, `n_conditions`, `compare_to_future`): after a window's
+  sources are scaled, those whose present condition does not match the target block are
+  set to 0 (so less than the block's strength may be injected, as in Omniscape).
+  `"within"` keeps a source when `lower <= condition - median(block) <= upper`, `"equal"`
+  when `condition == mode(block)` (StatsBase's mode: the first value, in column-major
+  order, to reach the highest count); the block's value comes from the future condition
+  when `compare_to_future` names it, else from the present one; NoData conditions keep the
+  source.
+* `reclass_table` (`reclassify_resistance`): rows (value, new value), each matched against
+  the original values; the default sources come from the reclassified resistance.
+* `precision="single"` reads the rasters as float32 and returns float32 maps, as
+  Omniscape does; the arithmetic stays double (Omniscape's own float32 solves are up to
+  2e-4 away from the double result).
+* `ls.circuit.omniscape_ini(path)` reads every Omniscape option with its default
+  (`parse_ini` is Omniscape's parser), the rasters (paths from the working directory, or
+  next to the INI file) and the reclass table, checks sizes and projections, and writes
+  `config.ini`, `cum_currmap`, `flow_potential`, `normalized_cum_currmap` and
+  `classified_resistance` to `project_name` (`_1`, `_2`... when it exists), GeoTIFF or
+  ASCII grid with NoData -9999. `solver`, `parallelize` and `parallel_batch_size` have no
+  effect.
+
+Verification: `python tools/make_reference_omniscape.py ini` runs Omniscape's own test
+INI files (configurations 1-7, 4a-4c, 32 bit and reclass, with its test rasters, copied
+to `tests/data/reference/circuit/omniscape_input`) through `run_omniscape`: every output
+agrees with Omniscape's CHOLMOD run to 5e-13 (conditional `within` and `equal`, futures,
+four neighbours, conductance input, reclassification), and the single-precision run to
+Omniscape's float32 rounding.
+
 Timings on an Intel i5-13600K (6 performance + 8 efficiency cores, 20 threads), random
 log-normal resistance, source = 1 / resistance, flow potential and normalised current
 (`tools/omniscape_window_benchmark.jl` times single windows):

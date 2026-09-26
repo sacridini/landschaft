@@ -257,7 +257,12 @@ Fases:
    13 MB); folhas da ND de 4 a 64 células dão o mesmo tempo; o Omniscape com `cholmod` é
    tão lento quanto com `cg+amg`;
 4. conectividade condicional, reclassificação, `source_from_resistance`, `r_cutoff`, `.ini`,
-   `precision = single`;
+   `precision = single`. **Feita** (0.44.0: condições no C++ depois da escala das fontes,
+   mediana `a/2 + b/2`, moda do StatsBase = o primeiro valor a passar a maior contagem em
+   ordem de coluna; `ls.circuit.omniscape_ini` com o parser do Omniscape; conferido com os
+   INI de teste do próprio Omniscape (1–7, 4a–4c, 32 bit, reclass) a 5e-13 do CHOLMOD; o
+   `config7` tem resistência 0 e o Omniscape recusa, como nós; em `single` a aritmética
+   fica em double: o Omniscape em float32 fica a até 2,4e-4);
 5. opcionais: solver iterativo para raio grande; modos raster do Circuitscape (pairwise,
    one-to-all, all-to-one, advanced) sobre o mesmo núcleo.
 

@@ -6,6 +6,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <deque>
 #include <limits>
 #include <memory>
@@ -57,6 +58,7 @@ struct Workspace {
     std::vector<double> v, rhs, x, edges, ones, multi;
     std::vector<std::uint8_t> all;
     std::vector<int> which;
+    std::vector<double> cond;
     void reserve(std::size_t cells) {
         present.resize(cells);
         v.resize(cells);
@@ -161,6 +163,70 @@ void flow_batch(CellSystem& sys, bool& factored, const Shape& s, bool four, doub
         node_currents(s.w, s.h, ws.ones.data(), ws.all.data(), v, nullptr, four, cur[which[static_cast<std::size_t>(c)]],
                       ws.edges);
     }
+}
+
+// The target block's value of a condition: the median ("within") or the mode
+// ("equal") of its future values in column-major order, NaN left out.
+double block_condition(const OmniscapeCondition& c, i64 nx, i64 ny, i64 x, i64 y, i64 br, std::vector<double>& buf) {
+    const double* f = c.future ? c.future : c.present;
+    buf.clear();
+    for (i64 xx = x - br; xx <= std::min(x + br, nx - 1); ++xx)
+        for (i64 yy = y - br; yy <= std::min(y + br, ny - 1); ++yy) {
+            const double v = f[yy * nx + xx];
+            if (!std::isnan(v)) buf.push_back(v);
+        }
+    if (buf.empty()) throw std::runtime_error("a target block has no value of a condition (all NoData)");
+    const std::size_t n = buf.size();
+    if (!c.equal) {
+        // Statistics.median: middle(a, b) = a/2 + b/2 for an even count.
+        if (n % 2 == 1) {
+            std::nth_element(buf.begin(), buf.begin() + n / 2, buf.end());
+            return buf[n / 2];
+        }
+        std::nth_element(buf.begin(), buf.begin() + n / 2, buf.end());
+        const double b = buf[n / 2];
+        const double a = *std::max_element(buf.begin(), buf.begin() + n / 2);
+        return a / 2 + b / 2;
+    }
+    // StatsBase.mode: counts by value (isequal: 0.0 and -0.0 apart), the
+    // first value to exceed the running highest count wins.
+    std::vector<std::pair<std::uint64_t, int>> counts;
+    double best = buf[0];
+    int top = 0;
+    for (double v : buf) {
+        std::uint64_t bits;
+        std::memcpy(&bits, &v, sizeof bits);
+        int* cnt = nullptr;
+        for (auto& e : counts)
+            if (e.first == bits) {
+                cnt = &e.second;
+                break;
+            }
+        if (!cnt) {
+            counts.emplace_back(bits, 0);
+            cnt = &counts.back().second;
+        }
+        if (++*cnt > top) {
+            top = *cnt;
+            best = v;
+        }
+    }
+    return best;
+}
+
+// Sources of a window whose present condition does not match `value` set to 0.
+void match_condition(const OmniscapeCondition& c, double value, i64 nx, i64 x0, i64 y0, i64 h, i64 w, double* src) {
+    for (i64 y = 0; y < h; ++y)
+        for (i64 x = 0; x < w; ++x) {
+            const double v = c.present[(y0 + y) * nx + (x0 + x)];
+            if (std::isnan(v)) continue;
+            if (c.equal) {
+                if (v != value) src[y * w + x] = 0.0;
+            } else {
+                const double d = v - value;
+                if (d > c.upper || d < c.lower) src[y * w + x] = 0.0;
+            }
+        }
 }
 
 struct Target {
@@ -435,6 +501,11 @@ OmniscapeResult omniscape(const double* resistance, const double* source, i64 nx
                             if (src[y * s.w + x] > 0) sum += src[y * s.w + x];
                     for (i64 q = 0; q < s.h * s.w; ++q)
                         if (src[q] > 0) src[q] = (src[q] * t.amps) / sum;
+                    for (const OmniscapeCondition* cond : {&p.condition1, &p.condition2}) {
+                        if (!cond->present) continue;
+                        const double value = block_condition(*cond, nx, ny, t.x, t.y, br, spaces[tid].cond);
+                        match_condition(*cond, value, nx, t.x0, t.y0, s.h, s.w, src);
+                    }
                     bool factored = false;
                     solve_window(sys.landscape(symbolic, s), factored, g, src, s, p.four_neighbors, cur[k].data(),
                                  spaces[tid]);

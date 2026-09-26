@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_omniscape.py [advanced] [omniscape]
+    python tools/make_reference_omniscape.py [advanced] [omniscape] [ini]
 
 Julia runs from ``LANDSCHAFT_JULIA`` (default: ``julia``) with the project in
 ``LANDSCHAFT_JULIA_PROJECT`` (an environment with Circuitscape, Omniscape and
@@ -24,6 +24,13 @@ and on synthetic maps (NoData blobs and lines, source files with NoData, block
 sizes 1-7, buffers, 4 neighbours, conductance input, windows wider than the
 map), and stores the inputs, the options and the output rasters in
 ``omniscape.npz``.
+
+``ini`` copies Omniscape's test rasters and reclass table
+(``tests/data/reference/circuit/omniscape_input``, MIT, from Omniscape.jl) and
+its test INI files (``omniscape_ini``: configurations 1-7, 4a-4c, 32 bit and
+reclass, i.e. conditional connectivity, reclassification and single
+precision), runs them with ``run_omniscape`` (``cholmod`` and ``cg+amg``) and
+stores the output rasters in ``omniscape_ini.npz``.
 """
 
 from __future__ import annotations
@@ -245,10 +252,52 @@ def make_omniscape() -> None:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+INI_CONFIGS = ("config", "config2", "config3", "config4a", "config4b", "config4c", "config5", "config6", "config7",
+               "config_32bit", "config_reclass")
+
+
+def make_ini() -> None:
+    """Omniscape's own test INI files, run by Omniscape (inputs copied, outputs stored)."""
+    import shutil
+    import tempfile
+
+    inputs = OUT / "omniscape_input"
+    inis = OUT / "omniscape_ini"
+    inputs.mkdir(parents=True, exist_ok=True)
+    inis.mkdir(parents=True, exist_ok=True)
+    for f in sorted(OMNISCAPE_TEST.iterdir()):
+        if f.suffix in (".asc", ".txt"):
+            shutil.copyfile(f, inputs / f.name)
+    tmp = Path(tempfile.mkdtemp(prefix="landschaft_omniscape_ini_"))
+    try:
+        for name in INI_CONFIGS:
+            text = (OMNISCAPE_TEST / f"{name}.ini").read_text()
+            # Stored with paths relative to the INI file (landschaft falls back to them).
+            (inis / f"{name}.ini").write_text(text.replace("input/", "../omniscape_input/"))
+            d = tmp / name
+            d.mkdir()
+            absolute = text.replace("input/", inputs.resolve().as_posix() + "/")
+            for solver in SOLVERS:
+                (d / f"config_{solver}.ini").write_text(
+                    absolute.rstrip("\n") + f"\n[reference run]\nproject_name = out_{solver}\n"
+                    f"solver = {SOLVERS[solver]}\nwrite_as_tif = true\nwrite_raw_currmap = true\nparallelize = false\n")
+        julia("omniscape", str(tmp))
+        store: dict[str, np.ndarray] = {}
+        for name in INI_CONFIGS:
+            for solver in SOLVERS:
+                for out in (*OUTPUTS, "classified_resistance"):
+                    f = tmp / name / f"out_{solver}" / f"{out}.tif"
+                    if f.exists():
+                        store[f"{name}/{solver}/{out}"] = _read(f)
+        np.savez_compressed(OUT / "omniscape_ini.npz", **store)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main(argv: list[str]) -> None:
-    tasks = argv or ["advanced", "omniscape"]
+    tasks = argv or ["advanced", "omniscape", "ini"]
     for task in tasks:
-        {"advanced": make_advanced, "omniscape": make_omniscape}[task]()
+        {"advanced": make_advanced, "omniscape": make_omniscape, "ini": make_ini}[task]()
 
 
 if __name__ == "__main__":

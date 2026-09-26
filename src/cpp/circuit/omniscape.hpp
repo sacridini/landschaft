@@ -19,6 +19,19 @@
 
 namespace circuit {
 
+// Omniscape's conditional connectivity (source_target_match!): after the
+// sources of a window are scaled, those whose present condition does not match
+// the target block's future condition are set to 0. "within": the median of the
+// block's future values, v; a source is kept when lower <= c - v <= upper.
+// "equal": the block's mode (StatsBase: the first value, in column-major
+// order, to reach the highest count), kept when c == v. NaN = missing (kept).
+struct OmniscapeCondition {
+    const double* present = nullptr;  // row-major ny × nx; nullptr: no condition
+    const double* future = nullptr;   // nullptr: the present values
+    bool equal = false;               // false: "within"
+    double lower = 0, upper = 0;
+};
+
 struct OmniscapeParams {
     int radius = 0;
     int buffer = 0;
@@ -27,6 +40,7 @@ struct OmniscapeParams {
     bool resistance_is_conductance = false;
     bool correct_artifacts = true;
     bool flow_potential = false;
+    OmniscapeCondition condition1, condition2;
 };
 
 struct OmniscapeResult {
