@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 7: raster ProtConn and grids.
   `ls.conn.protconn_raster` (Makurhini's `MK_ProtConn_raster`), `ls.conn.make_grid`
