@@ -4,7 +4,7 @@
 Usage::
 
     python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links] [deca] [protconn] [grids]
-        [centrality] [betweenness]
+        [centrality] [betweenness] [focal]
 
 ``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
 in ``tests/lsm_reference.py``; the default R library is used). It exports
@@ -47,6 +47,10 @@ polygons and the example raster (``makurhini_centrality.csv.gz``).
 ``betweenness`` runs the command line of Conefor 2.7.1 (``CONEFOR_EXE``, from
 conefor.org; not run by default) for BC, BC(IIC) and BC(PC) on the synthetic
 scenes (``conefor_betweenness.csv.gz``).
+
+``focal`` (after ``spatial`` and ``protconn``) runs ``MK_Focal_nodes`` (IIC and
+PC, one and two distances) on the polygons and the ProtConn areas
+(``makurhini_focal.csv.gz``).
 
 ``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
 Sensinode 2.2 sources (the last five nodes of each scene are Conefor's nodes
@@ -472,6 +476,19 @@ def run_centrality() -> None:
     print("centrality", len(table))
 
 
+def run_focal() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "focal.csv"
+        subprocess.run([str(rscript), str(R_SCRIPT), "focal", str(OUT / "polygons.gpkg"),
+                        str(OUT / "protconn_areas.gpkg"), str(out)], check=True)
+        table = pd.read_csv(out, keep_default_na=False, dtype=str)
+    table.to_csv(OUT / "makurhini_focal.csv.gz", index=False)
+    print("focal", len(table))
+
+
 def run_makurhini() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -581,7 +598,7 @@ def run_conefor() -> None:
 
 
 if __name__ == "__main__":
-    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn", "grids", "centrality"]
+    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn", "grids", "centrality", "focal"]
     if "makurhini" in parts:
         run_makurhini()
     if "conefor" in parts:
@@ -600,3 +617,5 @@ if __name__ == "__main__":
         run_centrality()
     if "betweenness" in parts:
         run_betweenness()
+    if "focal" in parts:
+        run_focal()

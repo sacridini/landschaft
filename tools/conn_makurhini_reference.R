@@ -9,6 +9,8 @@
 #       the given resistance for the polygons, and MK_dPCIIC run end to end
 #   Rscript conn_makurhini_reference.R centrality <polygons.gpkg> <raster.tif> <out.csv>
 #       MK_RMCentrality (binary and weighted) on the polygons and the example raster
+#   Rscript conn_makurhini_reference.R focal <polygons.gpkg> <protconn_areas.gpkg> <out.csv>
+#       MK_Focal_nodes (IIC and PC, one and two distances) on the polygons and the ProtConn areas
 #   Rscript conn_makurhini_reference.R export <out_dir>
 #       writes Makurhini's example `habitat_nodes` (centroid distances, areas
 #       in km2) as habitat_nodes.csv / habitat_pairs.csv
@@ -312,6 +314,39 @@ if (args[1] == "centrality") {
             data.frame(case = k, kind = cs[[1]], distance = cs[[3]], probability = if (is.null(cs[[4]])) "" else cs[[4]],
                        binary = cs[[5]], node = tab$node, name = col, value = fmt(tab[[col]]))))
         out[[k]] <- long
+    }
+    write.csv(do.call(rbind, out), args[4], row.names = FALSE)
+    quit(save = "no")
+}
+
+if (args[1] == "focal") {
+    # MK_Focal_nodes on the polygons and the ProtConn areas.
+    polygons <- sf::st_read(args[2], quiet = TRUE)
+    pas <- sf::st_read(args[3], quiet = TRUE)
+    cases <- list(list(polygons, "IIC", NULL, 3000, 6000, NULL, 0.01),
+                  list(polygons, "PC", 0.5, c(2000, 5000), c(4000, 8000), NULL, 0.01),
+                  list(polygons, "IIC", NULL, c(1500, 4000), 2500, NULL, 0.01),
+                  list(polygons, "PC", 0.2, 4000, 7000, NULL, 0.001),
+                  list(pas, "PC", 0.5, 3000, 5000, NULL, 0.01),
+                  list(pas, "IIC", NULL, 2500, 4000, NULL, 0.01))
+    out <- list()
+    for (k in seq_along(cases)) {
+        cs <- cases[[k]]
+        d <- cs[[4]]
+        sb <- if (length(cs[[5]]) < length(d)) rep(cs[[5]], length(d)) else cs[[5]]
+        res <- MK_Focal_nodes(nodes = cs[[1]], id = "id", metric = cs[[2]], probability = cs[[3]],
+                              distance_thresholds = d, search_buffer = sb, threshold = cs[[6]], pij_min = cs[[7]],
+                              intern = FALSE)
+        if (length(d) == 1) res <- list(res)
+        for (j in seq_along(d)) {
+            tab <- sf::st_drop_geometry(res[[j]])
+            long <- do.call(rbind, lapply(setdiff(names(tab), "id"), function(col)
+                data.frame(case = k, data = if (k <= 4) "polygons" else "pas", metric = cs[[2]],
+                           probability = if (is.null(cs[[3]])) "" else cs[[3]], distance = d[j], search_buffer = sb[j],
+                           threshold = if (is.null(cs[[6]])) "" else cs[[6]], pij_min = cs[[7]],
+                           id = tab$id, name = col, value = fmt(tab[[col]]))))
+            out[[length(out) + 1]] <- long
+        }
     }
     write.csv(do.call(rbind, out), args[4], row.names = FALSE)
     quit(save = "no")

@@ -6,6 +6,13 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 9: focal nodes. `ls.conn.focal_nodes` is Makurhini's
+  `MK_Focal_nodes`: for every node the graph of the polygons within its search buffer
+  (points on surface, the bounding box as landscape area), its IIC or PC, the node's dIIC
+  or dPC with its fractions and the composite connectivity index IComp. Matched with
+  Makurhini to 1e-12 (importances after its rounding).
+
 ## [0.37.0] - 2026-09-26
 
 ### Added

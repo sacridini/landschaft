@@ -1141,6 +1141,9 @@ ls.conn.protconn(protected_areas, region, distance=[10_000, 50_000], transbounda
 ls.conn.protconn_regions(protected_areas, ecoregions, id="eco_id", distance=10_000)
 ls.conn.protconn_raster("protected_ids.tif", region, distance=10_000, transboundary=20_000)
 
+# focal connectivity (Makurhini's MK_Focal_nodes): every node in its neighbourhood
+ls.conn.focal_nodes(patches_gdf, id="patch_id", metric="PC", distance=5_000, search_buffer=10_000)
+
 # grids (Makurhini's make_grid, MK_Connect_grid, MK_dECA_grid)
 cells = ls.conn.make_grid(region, cell_area=1e8)            # hexagons of 100 km2
 ls.conn.connectivity_grid(protected_areas, region, grid=cells, distance=10_000)
@@ -1244,6 +1247,21 @@ Conefor) with `convention="conefor"`.
   `cluster` the component. With python-igraph installed, `memb_rw` holds the walktrap
   communities (weighted by p, as in Makurhini); Makurhini's Louvain communities
   depend on a random order and are left out.
+
+### Focal nodes
+
+`ls.conn.focal_nodes(polygons, distance=, search_buffer=, metric="IIC")` is Makurhini's
+`MK_Focal_nodes` (Latorre-Cárdenas et al. 2023). Around every node (the focal node),
+the polygons intersecting its buffer of `search_buffer` (sf's 30 segments per quarter
+circle; one buffer per distance, or one for all) form a graph: distances between their
+points on surface, the landscape area the area of their bounding box. With three or more
+nodes it gives the neighbourhood's `EC(IIC)` and `IIC` (or PC), the focal node's `dIIC`
+and its intra/flux/connector fractions (Makurhini's `MK_dPCIIC` conventions) and the
+composite connectivity index `IComp` = IIC × dIIC; with fewer, NaN. The attribute is the
+area in `area_unit` (Makurhini: always ha), a column or values. Makurhini simplifies the
+focal polygon with mapshaper before buffering it, which only matters for nodes at the
+very edge of the buffer; landschaft buffers the polygon itself. Makurhini's
+`fragmentation` statistics are not included.
 
 ### Links, changes and nodes to add
 
@@ -1423,6 +1441,11 @@ the results do not depend on the number of threads.
   less than float precision (near-collinear points, 1e-10 to 8e-8 relative) it counts
   the path; on the Euclidean scenes BC(PC) is 0 in exact arithmetic, and the tests
   check that every difference is such a tie.
+* `make_reference_conn.py focal` runs `MK_Focal_nodes` (IIC and PC, one and two
+  distances and search buffers, `pij_min`) on the polygons and the ProtConn areas
+  (`makurhini_focal.csv.gz`): every neighbourhood is the same, the indices agree to
+  1e-12 and the importances after Makurhini's 7-digit rounding. (Makurhini fails with a
+  `threshold` there.)
 * `tests/test_conn.py` checks every index and importance against a brute-force
   recomputation of the graph without each node (and with its attribute set to 0),
   under both conventions, and the input kinds, pair tables, Conefor files and

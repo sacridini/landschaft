@@ -121,7 +121,8 @@ ls.connectivity_grid(g, grid_zones(...))
   6. centralidades (BC, BCIIC, BCPC, radial, medial) **feitas** (0.37.0,
      `node_importance(["BC", "BCIIC", "BCPC"])`, `centrality`; conferidas com o
      `MK_RMCentrality` e com a linha de comando do Conefor 2.7.1, sem o Louvain, que é
-     aleatório); faltam os focais (IICf, PCf, CCI, `MK_Focal_nodes`);
+     aleatório); focais **feitos** (0.38.0, `focal_nodes` = `MK_Focal_nodes`, sem a
+     simplificação do mapshaper nem as estatísticas de fragmentação);
   7. opcionais: commute-time e SAMC (Fletcher et al. 2023).
 - Decidido: o Makurhini (instalado na biblioteca do RStudio) é a referência, e o
   Conefor 2.2 compilado (`tools/conefor`) é conferido na precisão simples dele.
