@@ -128,6 +128,7 @@ ls.landscape_metrics("landcover.tif", what=["lsm_c_ca", "lsm_l_ta"])  # one call
 ls.list_metrics(level="landscape")               # catalogue (like list_lsm)
 ls.sample_metrics("landcover.tif", points_xy, size=500, shape="circle")  # sample plots (sample_lsm)
 ls.window_metrics("landcover.tif", window=21, what="lsm_l_shdi")         # moving window (window_lsm)
+ls.Landscape("huge.tif", block_rows="auto").metrics()                   # larger than memory, same values
 ```
 
 Options are those of landscapemetrics (`directions`, `count_boundary`,
@@ -190,7 +191,7 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `distance_to_resistance(data)` | Resistance map growing with the distance to the foreground (GTB Setup Tools). |
 | `spa(data, variant=5)` | GTB SPA2/3/5/6: map in GTB codes (17 core, 3 edge, 5 perforation, 1 margin, 9 islet, 100 core-opening), class table, object counts, porosity, `summary()`. |
 | `batch(tool, inputs, output_dir, *, n_workers=None, threads_per_worker=1, max_memory=None, overwrite=False, **params)` | Any tool (`BATCH_TOOLS`, e.g. `"accounting"`, `"spa"`, `"fad_multiscale"`, or a function) on many rasters in parallel; writes GeoTIFF maps, CSV tables, TXT reports and a JSON record per input. |
-| `Landscape(data, *, res=None, nodata=None, directions=8, count_boundary=False, consider_boundary=False, edge_depth=1, cell_center=False, classes_max=None, neighbourhood=4, ordered=True, base="log2", band=None)` | Categorical map prepared for landscape metrics: `.patch_metrics()`, `.class_metrics()`, `.landscape_metrics()` (wide tables), `.metrics()` (long table), `.labels()`, `.to_raster(metric)`. Values match landscapemetrics. |
+| `Landscape(data, *, res=None, nodata=None, directions=8, count_boundary=False, consider_boundary=False, edge_depth=1, cell_center=False, classes_max=None, neighbourhood=4, ordered=True, base="log2", band=None, block_rows=None)` | Categorical map prepared for landscape metrics: `.patch_metrics()`, `.class_metrics()`, `.landscape_metrics()` (wide tables), `.metrics()` (long table), `.labels()`, `.to_raster(metric)`. Values match landscapemetrics. `block_rows` reads a file by blocks for rasters larger than memory (identical results). |
 | `landscape_metrics(data, level=None, metric=None, name=None, type=None, what=None, **options)` | landscapemetrics' `calculate_lsm`: long table of the selected metrics for one raster, a list or a `RasterCollection` (`layer` column). |
 | `list_metrics(level=None, metric=None, name=None, type=None, what=None)` | Catalogue of the metrics (`list_lsm`). |
 | `sample_metrics(data, y, *, size=None, shape="square", plot_id=None, all_classes=False, level=None, metric=None, name=None, type=None, what=None, **options)` | landscapemetrics' `sample_lsm`: metrics of sample plots (buffers around points, or polygons), with `plot_id` and `percentage_inside`. |

@@ -416,6 +416,161 @@ Circle smallest_circle(std::vector<Point>& pts, std::uint64_t seed) {
     return c;
 }
 
+// Nearest cell of another patch of the class, for every patch, from the
+// edge cells sorted by class group and Morton code. cls / pt (optional)
+// give the raster for the 5x5 look-up shortcut.
+std::vector<double> enn_search(EdgeCells& cells, const std::int32_t* patch_cls, i64 n,
+                               const std::vector<std::int32_t>& group, std::int32_t n_groups, i64 nx, i64 ny,
+                               double resx, double resy, int directions, const std::int32_t* cls, const Patches* pt) {
+    const i64 m = cells.n;
+    const bool parallel = nx * ny >= kParallelThreshold;
+    std::vector<double> out(static_cast<std::size_t>(n), kNaN);
+    auto group_of = [&](i64 i) { return group[patch_cls[cells.patch[i]]]; };
+    std::vector<i64> first(static_cast<std::size_t>(n_groups + 1), m);
+    for (std::int32_t g = 0; g < n_groups; ++g) {
+        i64 lo = 0, hi = m;  // first cell of group >= g
+        while (lo < hi) {
+            const i64 mid = lo + (hi - lo) / 2;
+            if (group_of(mid) < g) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        first[g] = lo;
+    }
+    cells.x.reset(new std::int32_t[m]);
+    cells.y.reset(new std::int32_t[m]);
+#pragma omp parallel for schedule(static) if (m >= kParallelThreshold)
+    for (i64 i = 0; i < m; ++i) {
+        cells.x[i] = static_cast<std::int32_t>(morton_part(cells.key[i]));
+        cells.y[i] = static_cast<std::int32_t>(morton_part(cells.key[i] >> 1));
+    }
+
+    std::vector<double> X(static_cast<std::size_t>(nx)), Y(static_cast<std::size_t>(ny));
+    for (i64 x = 0; x < nx; ++x) X[x] = static_cast<double>(x + 1) * resx;
+    for (i64 y = 0; y < ny; ++y) Y[y] = static_cast<double>(y + 1) * resy;
+
+    // One tree per class: their tops here, all subtrees in one parallel loop,
+    // then each tree joined.
+    std::vector<CellTree> trees;
+    trees.reserve(static_cast<std::size_t>(n_groups));
+    std::vector<CellTree::Job> jobs;
+    std::vector<std::int32_t> job_tree;
+    for (std::int32_t g = 0; g < n_groups; ++g) {
+        trees.emplace_back(cells, static_cast<std::int32_t>(first[g]), static_cast<std::int32_t>(first[g + 1]), X, Y,
+                           jobs);
+        job_tree.resize(jobs.size(), g);
+    }
+    {
+        const auto n_jobs = static_cast<i64>(jobs.size());
+        std::vector<std::vector<CellTree::Node>> sub(jobs.size());
+#pragma omp parallel for schedule(dynamic) if (m >= kParallelThreshold)
+        for (i64 j = 0; j < n_jobs; ++j) sub[j] = trees[job_tree[j]].build_job(jobs[j]);
+#pragma omp parallel for schedule(dynamic) if (m >= kParallelThreshold && n_groups > 1)
+        for (std::int32_t g = 0; g < n_groups; ++g) trees[g].finish(sub);
+    }
+    cells.key.reset();
+
+    // Searches from every edge cell; positive doubles order like their bits.
+    std::unique_ptr<std::atomic<std::uint64_t>[]> best(new std::atomic<std::uint64_t>[static_cast<std::size_t>(n)]);
+    const std::uint64_t inf = double_bits(std::numeric_limits<double>::infinity());
+#pragma omp parallel for schedule(static) if (parallel)
+    for (i64 i = 0; i < n; ++i) best[i].store(inf, std::memory_order_relaxed);
+
+    // Two shortcuts, both exact. (1) Smallest distance two patches of one
+    // class can have (offsets of at most 2 cells, minus those joining them
+    // into one patch), as computed anywhere on the map: a patch that reached
+    // it needs no more searches. (2) The nearest cell within kWindow cells
+    // (a raster look-up) is the nearest overall when it is nearer than any
+    // cell outside the window can be.
+    constexpr int kWindow = 2;
+    auto min_step2 = [](const std::vector<double>& C, int a) {
+        double m = std::numeric_limits<double>::infinity();
+        for (std::size_t i = 0; i + a < C.size(); ++i) m = std::min(m, (C[i + a] - C[i]) * (C[i + a] - C[i]));
+        return a == 0 ? 0.0 : m;
+    };
+    double floor2 = std::numeric_limits<double>::infinity();
+    for (int a = 0; a <= 2; ++a) {
+        for (int b = 0; b <= 2; ++b) {
+            const bool joined = directions == 8 ? (a <= 1 && b <= 1) : (a + b <= 1);
+            if (!joined) floor2 = std::min(floor2, min_step2(X, a) + min_step2(Y, b));
+        }
+    }
+    const std::uint64_t floor_bits = double_bits(floor2);
+    const double reach = (kWindow + 1) * std::min(resx, resy);
+    const double certain2 = reach * reach * (1 - 1e-9);
+
+    // The searches go leaf by leaf: the cells of one patch in a leaf search
+    // together, pruning with the distance between boxes.
+    std::vector<std::array<std::int32_t, 3>> work;  // tree, first cell, end of each leaf
+    for (std::int32_t g = 0; g < n_groups; ++g) trees[g].leaves(g, work);
+    const auto n_work = static_cast<i64>(work.size());
+#pragma omp parallel for schedule(dynamic, 64) if (m >= kParallelThreshold)
+    for (i64 w = 0; w < n_work; ++w) {
+        const std::int32_t begin = work[w][1];
+        const std::int32_t end = work[w][2];
+        constexpr int kMax = CellTree::kLeafSize;
+        double near[kMax];
+        bool done[kMax];
+        for (std::int32_t i = begin; i < end; ++i) {
+            const std::int32_t p = cells.patch[i];
+            done[i - begin] = best[p].load(std::memory_order_relaxed) <= floor_bits;
+            if (done[i - begin]) continue;
+            const std::int32_t x = cells.x[i];
+            const std::int32_t y = cells.y[i];
+            const std::int32_t c = patch_cls[p];
+            double near2 = std::numeric_limits<double>::infinity();
+            if (cls == nullptr) {  // no raster (out of core): no look-up
+                near[i - begin] = near2;
+                continue;
+            }
+            for (i64 yy = std::max<i64>(0, y - kWindow); yy <= std::min<i64>(ny - 1, y + kWindow); ++yy) {
+                for (i64 xx = std::max<i64>(0, x - kWindow); xx <= std::min<i64>(nx - 1, x + kWindow); ++xx) {
+                    const i64 q = yy * nx + xx;
+                    if (cls[q] != c || pt->patch(q, yy) == p) continue;
+                    const double dx = X[xx] - X[x];
+                    const double dy = Y[yy] - Y[y];
+                    near2 = std::min(near2, dx * dx + dy * dy);
+                }
+            }
+            near[i - begin] = near2;
+        }
+        for (std::int32_t i = begin; i < end; ++i) {
+            if (done[i - begin]) continue;
+            const std::int32_t p = cells.patch[i];
+            std::atomic<std::uint64_t>& b = best[p];
+            std::uint64_t cur = b.load(std::memory_order_relaxed);
+            double best2 = bits_double(cur);
+            // the cells of patch p in this leaf; those not settled by their window search together
+            std::int32_t idx[kMax];
+            int count = 0;
+            std::array<std::int32_t, 4> box{std::numeric_limits<std::int32_t>::max(), -1,
+                                            std::numeric_limits<std::int32_t>::max(), -1};
+            for (std::int32_t j = i; j < end; ++j) {
+                if (done[j - begin] || cells.patch[j] != p) continue;
+                done[j - begin] = true;
+                best2 = std::min(best2, near[j - begin]);
+                if (near[j - begin] < certain2) continue;
+                idx[count++] = j;
+                box[0] = std::min(box[0], cells.x[j]);
+                box[1] = std::max(box[1], cells.x[j]);
+                box[2] = std::min(box[2], cells.y[j]);
+                box[3] = std::max(box[3], cells.y[j]);
+            }
+            if (count > 0) trees[work[w][0]].nearest(p, idx, count, box, best2);
+            const std::uint64_t mine = double_bits(best2);
+            while (mine < cur && !b.compare_exchange_weak(cur, mine, std::memory_order_relaxed)) {
+            }
+        }
+    }
+#pragma omp parallel for schedule(static) if (parallel)
+    for (i64 i = 0; i < n; ++i) {
+        if (group[patch_cls[i]] >= 0) out[i] = std::sqrt(bits_double(best[i].load(std::memory_order_relaxed)));
+    }
+    return out;
+}
+
 }  // namespace
 
 // Distance between the centres of the nearest cells of the patch and of
@@ -565,146 +720,53 @@ std::vector<double> Landscape::enn() {
         radix_pass(m, n_groups, m >= kParallelThreshold, cells.key, cells.patch, key_tmp, patch_tmp,
                    [&](std::uint64_t, std::int32_t p) { return static_cast<int>(group[pc[p]]); });
     }
-    auto group_of = [&](i64 i) { return group[pt.cls[cells.patch[i]]]; };
-    std::vector<i64> first(static_cast<std::size_t>(n_groups + 1), m);
-    for (std::int32_t g = 0; g < n_groups; ++g) {
-        i64 lo = 0, hi = m;  // first cell of group >= g
-        while (lo < hi) {
-            const i64 mid = lo + (hi - lo) / 2;
-            if (group_of(mid) < g) {
-                lo = mid + 1;
-            } else {
-                hi = mid;
-            }
-        }
-        first[g] = lo;
-    }
-    cells.x.reset(new std::int32_t[m]);
-    cells.y.reset(new std::int32_t[m]);
-#pragma omp parallel for schedule(static) if (m >= kParallelThreshold)
-    for (i64 i = 0; i < m; ++i) {
-        cells.x[i] = static_cast<std::int32_t>(morton_part(cells.key[i]));
-        cells.y[i] = static_cast<std::int32_t>(morton_part(cells.key[i] >> 1));
-    }
+    return enn_search(cells, pt.cls.data(), n, group, n_groups, nx, ny, resx_, resy_, options_.directions, cls, &pt);
+}
 
-    std::vector<double> X(static_cast<std::size_t>(nx)), Y(static_cast<std::size_t>(ny));
-    for (i64 x = 0; x < nx; ++x) X[x] = static_cast<double>(x + 1) * resx_;
-    for (i64 y = 0; y < ny; ++y) Y[y] = static_cast<double>(y + 1) * resy_;
+std::uint64_t morton_code(std::uint32_t x, std::uint32_t y) { return morton(x, y); }
 
-    // One tree per class: their tops here, all subtrees in one parallel loop,
-    // then each tree joined.
-    std::vector<CellTree> trees;
-    trees.reserve(static_cast<std::size_t>(n_groups));
-    std::vector<CellTree::Job> jobs;
-    std::vector<std::int32_t> job_tree;
-    for (std::int32_t g = 0; g < n_groups; ++g) {
-        trees.emplace_back(cells, static_cast<std::int32_t>(first[g]), static_cast<std::int32_t>(first[g + 1]), X, Y,
-                           jobs);
-        job_tree.resize(jobs.size(), g);
+std::vector<double> enn_from_edge_cells(std::unique_ptr<std::uint64_t[]> key, std::unique_ptr<std::int32_t[]> patch,
+                                        i64 m, const std::vector<std::int32_t>& patch_cls, int n_classes, i64 nx,
+                                        i64 ny, double resx, double resy, int directions) {
+    const auto n = static_cast<i64>(patch_cls.size());
+    std::vector<i64> class_np(static_cast<std::size_t>(n_classes), 0);
+    for (i64 i = 0; i < n; ++i) ++class_np[patch_cls[i]];
+    std::vector<std::int32_t> group(static_cast<std::size_t>(n_classes), -1);
+    std::int32_t n_groups = 0;
+    for (int c = 0; c < n_classes; ++c) {
+        if (class_np[c] >= 2) group[c] = n_groups++;
     }
+    if (n_groups == 0) return std::vector<double>(static_cast<std::size_t>(n), kNaN);
+    EdgeCells cells;
+    cells.n = m;
+    cells.key = std::move(key);
+    cells.patch = std::move(patch);
+    // by Morton code, then (stable) by class group
     {
-        const auto n_jobs = static_cast<i64>(jobs.size());
-        std::vector<std::vector<CellTree::Node>> sub(jobs.size());
-#pragma omp parallel for schedule(dynamic) if (m >= kParallelThreshold)
-        for (i64 j = 0; j < n_jobs; ++j) sub[j] = trees[job_tree[j]].build_job(jobs[j]);
-#pragma omp parallel for schedule(dynamic) if (m >= kParallelThreshold && n_groups > 1)
-        for (std::int32_t g = 0; g < n_groups; ++g) trees[g].finish(sub);
-    }
-    cells.key.reset();
-
-    // Searches from every edge cell; positive doubles order like their bits.
-    std::unique_ptr<std::atomic<std::uint64_t>[]> best(new std::atomic<std::uint64_t>[static_cast<std::size_t>(n)]);
-    const std::uint64_t inf = double_bits(std::numeric_limits<double>::infinity());
-#pragma omp parallel for schedule(static) if (parallel)
-    for (i64 i = 0; i < n; ++i) best[i].store(inf, std::memory_order_relaxed);
-
-    // Two shortcuts, both exact. (1) Smallest distance two patches of one
-    // class can have (offsets of at most 2 cells, minus those joining them
-    // into one patch), as computed anywhere on the map: a patch that reached
-    // it needs no more searches. (2) The nearest cell within kWindow cells
-    // (a raster look-up) is the nearest overall when it is nearer than any
-    // cell outside the window can be.
-    constexpr int kWindow = 2;
-    auto min_step2 = [](const std::vector<double>& C, int a) {
-        double m = std::numeric_limits<double>::infinity();
-        for (std::size_t i = 0; i + a < C.size(); ++i) m = std::min(m, (C[i + a] - C[i]) * (C[i + a] - C[i]));
-        return a == 0 ? 0.0 : m;
-    };
-    double floor2 = std::numeric_limits<double>::infinity();
-    for (int a = 0; a <= 2; ++a) {
-        for (int b = 0; b <= 2; ++b) {
-            const bool joined = options_.directions == 8 ? (a <= 1 && b <= 1) : (a + b <= 1);
-            if (!joined) floor2 = std::min(floor2, min_step2(X, a) + min_step2(Y, b));
+        std::unique_ptr<std::uint64_t[]> key_tmp(new std::uint64_t[m]);
+        std::unique_ptr<std::int32_t[]> patch_tmp(new std::int32_t[m]);
+        const bool par = m >= kParallelThreshold;
+        const std::uint64_t max_key = morton(static_cast<std::uint32_t>(std::max<i64>(nx - 1, 0)),
+                                             static_cast<std::uint32_t>(std::max<i64>(ny - 1, 0)));
+        constexpr int kBits = 11;
+        for (int shift = 0; shift < 64 && (max_key >> shift) != 0; shift += kBits) {
+            radix_pass(m, 1 << kBits, par, cells.key, cells.patch, key_tmp, patch_tmp,
+                       [shift](std::uint64_t k, std::int32_t) { return static_cast<int>((k >> shift) & 2047); });
+        }
+        if (n_groups > 1) {
+            const std::int32_t* pc = patch_cls.data();
+            radix_pass(m, n_groups, par, cells.key, cells.patch, key_tmp, patch_tmp,
+                       [&](std::uint64_t, std::int32_t p) { return static_cast<int>(group[pc[p]]); });
         }
     }
-    const std::uint64_t floor_bits = double_bits(floor2);
-    const double reach = (kWindow + 1) * std::min(resx_, resy_);
-    const double certain2 = reach * reach * (1 - 1e-9);
+    return enn_search(cells, patch_cls.data(), n, group, n_groups, nx, ny, resx, resy, directions, nullptr, nullptr);
+}
 
-    // The searches go leaf by leaf: the cells of one patch in a leaf search
-    // together, pruning with the distance between boxes.
-    std::vector<std::array<std::int32_t, 3>> work;  // tree, first cell, end of each leaf
-    for (std::int32_t g = 0; g < n_groups; ++g) trees[g].leaves(g, work);
-    const auto n_work = static_cast<i64>(work.size());
-#pragma omp parallel for schedule(dynamic, 64) if (m >= kParallelThreshold)
-    for (i64 w = 0; w < n_work; ++w) {
-        const std::int32_t begin = work[w][1];
-        const std::int32_t end = work[w][2];
-        constexpr int kMax = CellTree::kLeafSize;
-        double near[kMax];
-        bool done[kMax];
-        for (std::int32_t i = begin; i < end; ++i) {
-            const std::int32_t p = cells.patch[i];
-            done[i - begin] = best[p].load(std::memory_order_relaxed) <= floor_bits;
-            if (done[i - begin]) continue;
-            const std::int32_t x = cells.x[i];
-            const std::int32_t y = cells.y[i];
-            const std::int32_t c = pt.cls[p];
-            double near2 = std::numeric_limits<double>::infinity();
-            for (i64 yy = std::max<i64>(0, y - kWindow); yy <= std::min<i64>(ny - 1, y + kWindow); ++yy) {
-                for (i64 xx = std::max<i64>(0, x - kWindow); xx <= std::min<i64>(nx - 1, x + kWindow); ++xx) {
-                    const i64 q = yy * nx + xx;
-                    if (cls[q] != c || pt.patch(q, yy) == p) continue;
-                    const double dx = X[xx] - X[x];
-                    const double dy = Y[yy] - Y[y];
-                    near2 = std::min(near2, dx * dx + dy * dy);
-                }
-            }
-            near[i - begin] = near2;
-        }
-        for (std::int32_t i = begin; i < end; ++i) {
-            if (done[i - begin]) continue;
-            const std::int32_t p = cells.patch[i];
-            std::atomic<std::uint64_t>& b = best[p];
-            std::uint64_t cur = b.load(std::memory_order_relaxed);
-            double best2 = bits_double(cur);
-            // the cells of patch p in this leaf; those not settled by their window search together
-            std::int32_t idx[kMax];
-            int count = 0;
-            std::array<std::int32_t, 4> box{std::numeric_limits<std::int32_t>::max(), -1,
-                                            std::numeric_limits<std::int32_t>::max(), -1};
-            for (std::int32_t j = i; j < end; ++j) {
-                if (done[j - begin] || cells.patch[j] != p) continue;
-                done[j - begin] = true;
-                best2 = std::min(best2, near[j - begin]);
-                if (near[j - begin] < certain2) continue;
-                idx[count++] = j;
-                box[0] = std::min(box[0], cells.x[j]);
-                box[1] = std::max(box[1], cells.x[j]);
-                box[2] = std::min(box[2], cells.y[j]);
-                box[3] = std::max(box[3], cells.y[j]);
-            }
-            if (count > 0) trees[work[w][0]].nearest(p, idx, count, box, best2);
-            const std::uint64_t mine = double_bits(best2);
-            while (mine < cur && !b.compare_exchange_weak(cur, mine, std::memory_order_relaxed)) {
-            }
-        }
-    }
-#pragma omp parallel for schedule(static) if (parallel)
-    for (i64 i = 0; i < n; ++i) {
-        if (group[pt.cls[i]] >= 0) out[i] = std::sqrt(bits_double(best[i].load(std::memory_order_relaxed)));
-    }
-    return out;
+double related_circle(const std::vector<double>& xy, std::uint64_t seed, double area_ha) {
+    std::vector<Point> pts(xy.size() / 2);
+    for (std::size_t i = 0; i < pts.size(); ++i) pts[i] = Point{xy[2 * i], xy[2 * i + 1]};
+    const Circle c = smallest_circle(pts, seed);
+    return 1 - (area_ha * 10000) / (kPi * std::pow(c.r, 2));
 }
 
 // 1 - patch area / area of the smallest circle around the patch. As in

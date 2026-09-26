@@ -194,6 +194,12 @@ class Landscape:
         base ("log2", "log" or "log10").
     band
         Band to read from multi-band files.
+    block_rows
+        Out-of-core computation for rasters larger than memory: ``data`` must
+        be a file, read by blocks of this many rows (rounded up to a multiple
+        of 64; ``"auto"``: about 4 million cells per block). Only the patch
+        tables stay in memory. Results are identical to the in-memory ones;
+        ``labels`` and ``to_raster`` are not available.
 
     Examples
     --------
@@ -219,11 +225,8 @@ class Landscape:
         ordered: bool = True,
         base: str = "log2",
         band: int | None = None,
+        block_rows: int | str | None = None,
     ):
-        values, mask, res, template = _prepare(data, res, nodata, band)
-        self._template = template
-        self.resolution = res
-        self.shape = values.shape
         self.options = metric_options(
             directions=directions,
             count_boundary=count_boundary,
@@ -235,6 +238,22 @@ class Landscape:
             ordered=ordered,
             base=base,
         )
+        self._tiled = None
+        if block_rows is not None:
+            from .tiled import TiledReader
+
+            self._tiled = TiledReader(
+                data, band=band, nodata=nodata, res=res, block_rows=block_rows, options=self.options
+            )
+            self._template = None
+            self.resolution = self._tiled.res
+            self.shape = self._tiled.shape
+            self._core = self._tiled.engine.landscape()
+            return
+        values, mask, res, template = _prepare(data, res, nodata, band)
+        self._template = template
+        self.resolution = res
+        self.shape = values.shape
         self._core = _core.LsmLandscape(values, mask, res[0], res[1], self.options)
 
     def __repr__(self) -> str:
@@ -259,15 +278,31 @@ class Landscape:
         """Class value of every patch (patch ``id`` = position + 1)."""
         return self.classes[self._core.patch_class()] if self.classes.size else np.empty(0, np.int32)
 
+    @property
+    def out_of_core(self) -> bool:
+        """Read by blocks (``block_rows``)."""
+        return self._tiled is not None
+
     def labels(self) -> xr.DataArray | np.ndarray:
         """Patch ids (1..n, the ``id`` of the patch tables); 0 where NA."""
+        self._no_raster("labels")
         return self._wrap(self._core.labels(), "patches")
+
+    def _no_raster(self, what: str) -> None:
+        if self._tiled is not None:
+            raise NotImplementedError(f"{what} is not available for an out-of-core landscape (block_rows)")
+
+    def _ensure(self, metrics) -> None:
+        """Out of core: read the file again for the metrics that need it."""
+        if self._tiled is not None:
+            self._tiled.ensure(metrics)
 
     def to_raster(self, metric: str) -> xr.DataArray | np.ndarray:
         """Patch-level metric painted on its patches (NaN where NA).
 
         The equivalent of landscapemetrics' ``spatialize_lsm``.
         """
+        self._no_raster("to_raster")
         values = np.concatenate([[np.nan], self._patch_values(metric)])
         return self._wrap(values[self._core.labels()], metric)
 
@@ -288,11 +323,13 @@ class Landscape:
 
     def _patch_values(self, metric: str) -> np.ndarray:
         _check_level([metric], "patch")
+        self._ensure([metric])
         return self._core.patch_metric(metric)
 
     def patch_metrics(self, metrics: Iterable[str] | str | None = None) -> pd.DataFrame:
         """Patch-level metrics: one row per patch (``class``, ``id``, metrics...)."""
         metrics = _names(metrics, "patch")
+        self._ensure(metrics)
         df = pd.DataFrame({"class": self.patch_classes, "id": np.arange(1, self.n_patches + 1)})
         for m in metrics:
             df[m] = self._core.patch_metric(m)
@@ -301,6 +338,7 @@ class Landscape:
     def class_metrics(self, metrics: Iterable[str] | str | None = None) -> pd.DataFrame:
         """Class-level metrics: one row per class (``class``, metrics...)."""
         metrics = _names(metrics, "class")
+        self._ensure(metrics)
         df = pd.DataFrame({"class": self.classes})
         for m in metrics:
             df[m] = self._core.class_metric(m)
@@ -309,6 +347,7 @@ class Landscape:
     def landscape_metrics(self, metrics: Iterable[str] | str | None = None) -> pd.DataFrame:
         """Landscape-level metrics: a single row."""
         metrics = _names(metrics, "landscape")
+        self._ensure(metrics)
         return pd.DataFrame({m: [self._core.landscape_metric(m)] for m in metrics})
 
     def metrics(self, level=None, metric=None, name=None, type=None, what=None) -> pd.DataFrame:
@@ -325,6 +364,7 @@ class Landscape:
             map gives one missing value per metric, as in landscapemetrics.
         """
         chosen = chosen_metrics(level, metric, name, type, what)
+        self._ensure(chosen["metric"])
         return long_frame(self._core.long_table(*metric_specs(chosen)), chosen)
 
 
@@ -371,7 +411,8 @@ def landscape_metrics(
         by default.
     **options
         :class:`Landscape` options (``directions``, ``count_boundary``,
-        ``edge_depth``, ``res``, ``nodata``, ...).
+        ``edge_depth``, ``res``, ``nodata``, ``block_rows`` for files larger
+        than memory, ...).
 
     Returns
     -------
@@ -382,6 +423,11 @@ def landscape_metrics(
     layers = as_layers(data)
     if layers is None:
         return Landscape(data, **options).metrics(level, metric, name, type, what)
+    if options.get("block_rows") is not None:
+        frames = [Landscape(layer, **options).metrics(level, metric, name, type, what) for layer in layers]
+        for i, df in enumerate(frames, start=1):
+            df.insert(0, "layer", i)
+        return pd.concat(frames, ignore_index=True)
     res, nodata, band = options.pop("res", None), options.pop("nodata", None), options.pop("band", None)
     opts = metric_options(**options)
     chosen = chosen_metrics(level, metric, name, type, what)

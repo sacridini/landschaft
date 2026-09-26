@@ -14,7 +14,6 @@ namespace lsm {
 namespace {
 
 constexpr i64 kParallelThreshold = i64(1) << 16;
-constexpr i64 kStripRows = 64;
 
 int max_threads() {
 #if defined(_OPENMP)
@@ -98,7 +97,7 @@ struct StripStats {
 
 // Label the rows [y0, y1): pixels become -(local index) - 2 (NA: -1) in
 // `code`, which serves meanwhile as the union-find parent array.
-void label_strip(const std::vector<std::int32_t>& cls, std::int32_t* code, i64 nx, i64 ny, i64 y0, i64 y1,
+void label_strip(const std::int32_t* cls, std::int32_t* code, i64 nx, i64 ny, i64 y0, i64 y1,
                  int directions, StripStats& st) {
     for (i64 p = y0 * nx; p < y1 * nx; ++p) code[p] = static_cast<std::int32_t>(p);
     for (i64 y = y0; y < y1; ++y) {
@@ -161,7 +160,9 @@ void label_strip(const std::vector<std::int32_t>& cls, std::int32_t* code, i64 n
     }
 }
 
-Patches label_patches(const std::vector<std::int32_t>& cls, i64 nx, i64 ny, int directions) {
+}  // namespace
+
+Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions) {
     const i64 n = nx * ny;
     Patches out;
     out.strip_rows = kStripRows;
@@ -290,8 +291,6 @@ Patches label_patches(const std::vector<std::int32_t>& cls, i64 nx, i64 ny, int 
     return out;
 }
 
-}  // namespace
-
 Landscape::Landscape(const std::int32_t* values, const std::uint8_t* na_mask, i64 nx, i64 ny, double resx,
                      double resy, Options options)
     : nx_(nx), ny_(ny), resx_(resx), resy_(resy), options_(std::move(options)) {
@@ -356,12 +355,26 @@ Landscape::Landscape(const std::int32_t* values, const std::uint8_t* na_mask, i6
     valid_cells_ = std::accumulate(class_cells_.begin(), class_cells_.end(), i64(0));
 }
 
+Landscape::Landscape(i64 nx, i64 ny, double resx, double resy, Options options, std::vector<std::int32_t> class_values,
+                     std::vector<i64> class_cells, Patches patches, Adjacency adjacency)
+    : nx_(nx), ny_(ny), resx_(resx), resy_(resy), options_(std::move(options)),
+      class_values_(std::move(class_values)), class_cells_(std::move(class_cells)), tables_only_(true),
+      patches_(std::move(patches)), adjacency_(std::move(adjacency)) {
+    valid_cells_ = std::accumulate(class_cells_.begin(), class_cells_.end(), i64(0));
+}
+
+void Landscape::set_patch_values(const std::string& name, std::vector<double> values) {
+    if (static_cast<i64>(values.size()) != patches().n) throw std::invalid_argument("one value per patch expected");
+    patch_cache_[name] = std::move(values);
+}
+
 const Patches& Landscape::patches() {
-    if (!patches_) patches_ = label_patches(cls_, nx_, ny_, options_.directions);
+    if (!patches_) patches_ = label_patches(cls_.data(), nx_, ny_, options_.directions);
     return *patches_;
 }
 
 std::vector<std::int32_t> Landscape::labels() {
+    if (tables_only_) throw std::logic_error("patch labels of an out-of-core landscape are not kept");
     const Patches& pt = patches();
     const i64 n = nx_ * ny_;
     std::vector<std::int32_t> out(static_cast<std::size_t>(n));
@@ -375,21 +388,12 @@ std::vector<std::int32_t> Landscape::labels() {
     return out;
 }
 
-const Core& Landscape::core() {
-    if (core_) return *core_;
-    const Patches& pt = patches();
-    const i64 nx = nx_;
-    const i64 ny = ny_;
+std::vector<std::int32_t> city_block_distance(const std::int32_t* cls, i64 nx, i64 ny, std::int32_t top,
+                                              std::int32_t bottom, std::int32_t sides) {
     const i64 n = nx * ny;
     const bool parallel = n >= kParallelThreshold;
-    // landscapemetrics' get_boundaries always marks one ring of edge cells.
-    const i64 depth = std::max(1, options_.edge_depth);
     constexpr std::int32_t kFar = std::numeric_limits<std::int32_t>::max() / 2;
-    const std::int32_t outside = options_.consider_boundary ? kFar : 1;
-    const std::int32_t* cls = cls_.data();
-
-    // City-block distance to the nearest cell of another class (or NA):
-    // along rows, then along columns. A path through a cell of another class
+    // Along rows, then along columns. A path through a cell of another class
     // would pass a nearer source, so a neighbour of another class is at 1.
     std::vector<std::int32_t> dist(static_cast<std::size_t>(n));
     std::int32_t* d = dist.data();
@@ -399,12 +403,12 @@ const Core& Landscape::core() {
         for (i64 x = 0; x < nx; ++x) {
             const i64 p = row + x;
             if (cls[p] < 0) continue;
-            d[p] = x == 0 ? outside : (cls[p - 1] != cls[p] ? 1 : std::min(kFar, d[p - 1] + 1));
+            d[p] = x == 0 ? sides : (cls[p - 1] != cls[p] ? 1 : std::min(kFar, d[p - 1] + 1));
         }
         for (i64 x = nx - 1; x >= 0; --x) {
             const i64 p = row + x;
             if (cls[p] < 0) continue;
-            const std::int32_t r = x == nx - 1 ? outside : (cls[p + 1] != cls[p] ? 1 : std::min(kFar, d[p + 1] + 1));
+            const std::int32_t r = x == nx - 1 ? sides : (cls[p + 1] != cls[p] ? 1 : std::min(kFar, d[p + 1] + 1));
             d[p] = std::min(d[p], r);
         }
     }
@@ -418,7 +422,7 @@ const Core& Landscape::core() {
             for (i64 x = x0; x < x1; ++x) {
                 const i64 p = y * nx + x;
                 if (cls[p] < 0) continue;
-                const std::int32_t u = y == 0 ? outside : (cls[p - nx] != cls[p] ? 1 : std::min(kFar, d[p - nx] + 1));
+                const std::int32_t u = y == 0 ? top : (cls[p - nx] != cls[p] ? 1 : std::min(kFar, d[p - nx] + 1));
                 d[p] = std::min(d[p], u);
             }
         }
@@ -426,11 +430,29 @@ const Core& Landscape::core() {
             for (i64 x = x0; x < x1; ++x) {
                 const i64 p = y * nx + x;
                 if (cls[p] < 0) continue;
-                const std::int32_t v = y == ny - 1 ? outside : (cls[p + nx] != cls[p] ? 1 : std::min(kFar, d[p + nx] + 1));
+                const std::int32_t v = y == ny - 1 ? bottom : (cls[p + nx] != cls[p] ? 1 : std::min(kFar, d[p + nx] + 1));
                 d[p] = std::min(d[p], v);
             }
         }
     }
+    return dist;
+}
+
+const Core& Landscape::core() {
+    if (core_) return *core_;
+    if (tables_only_) throw std::logic_error("core areas of an out-of-core landscape need a detail pass");
+    const Patches& pt = patches();
+    const i64 nx = nx_;
+    const i64 ny = ny_;
+    const i64 n = nx * ny;
+    const bool parallel = n >= kParallelThreshold;
+    // landscapemetrics' get_boundaries always marks one ring of edge cells.
+    const i64 depth = std::max(1, options_.edge_depth);
+    constexpr std::int32_t kFar = std::numeric_limits<std::int32_t>::max() / 2;
+    const std::int32_t outside = options_.consider_boundary ? kFar : 1;
+    const std::int32_t* cls = cls_.data();
+    std::vector<std::int32_t> dist = city_block_distance(cls, nx, ny, outside, outside, outside);
+    const std::int32_t* d = dist.data();
 
     // Core cells per patch, summed per strip piece and then per patch.
     std::vector<std::int32_t> core_cls(static_cast<std::size_t>(n), -1);
@@ -463,7 +485,7 @@ const Core& Landscape::core() {
 
     // Disjunct core areas: core cells labelled like patches; each lies in one
     // patch (cores of different patches cannot touch).
-    const Patches cores = label_patches(core_cls, nx, ny, options_.directions);
+    const Patches cores = label_patches(core_cls.data(), nx, ny, options_.directions);
     for (i64 i = 0; i < cores.n; ++i) {
         const i64 x = cores.first_cm[i] / ny;
         const i64 y = cores.first_cm[i] % ny;

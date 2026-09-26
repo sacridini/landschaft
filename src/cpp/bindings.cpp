@@ -708,6 +708,16 @@ py::dict long_table_dict(const lsm::LongTable& t) {
     return d;
 }
 
+void tiled_check(const lsm::TiledLandscape& t, const CArray<std::int32_t>& values, const CArray<std::uint8_t>& na,
+                 i64 rows) {
+    if (values.ndim() != 2 || values.shape(1) != t.nx() || values.shape(0) != rows) {
+        throw py::value_error("block shape does not match the raster width and the rows given");
+    }
+    if (na.ndim() != 2 || na.shape(0) != values.shape(0) || na.shape(1) != values.shape(1)) {
+        throw py::value_error("mask shape does not match the block");
+    }
+}
+
 template <class F>
 auto lsm_call(F&& f) {
     try {
@@ -758,6 +768,43 @@ void bind_landscape(py::module_& m) {
             });
             return long_table_dict(t);
         });
+
+    py::class_<lsm::TiledLandscape>(m, "LsmTiled")
+        .def(py::init([](i64 nx, i64 ny, double resx, double resy, const py::dict& options,
+                         const std::vector<std::int32_t>& class_values) {
+                 try {
+                     return std::make_unique<lsm::TiledLandscape>(nx, ny, resx, resy, make_options(options),
+                                                                  class_values);
+                 } catch (const std::invalid_argument& e) {
+                     throw py::value_error(e.what());
+                 }
+             }),
+             py::arg("nx"), py::arg("ny"), py::arg("resx"), py::arg("resy"), py::arg("options"),
+             py::arg("class_values"))
+        .def("add_block", [](lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
+                             const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below) {
+            tiled_check(t, values, na, rows + above + below);
+            lsm_call([&] { t.add_block(values.data(), na.data(), y0, rows, above, below); });
+        })
+        .def("finish", [](lsm::TiledLandscape& t) { lsm_call([&] { t.finish(); }); })
+        .def("landscape", [](lsm::TiledLandscape& t) -> lsm::Landscape& { return t.landscape(); },
+             py::return_value_policy::reference_internal)
+        .def("detail_halo", &lsm::TiledLandscape::detail_halo, py::arg("core"), py::arg("enn"))
+        .def("begin_detail", [](lsm::TiledLandscape& t, bool core, bool gyrate, bool circle, bool enn) {
+            lsm_call([&] { t.begin_detail(core, gyrate, circle, enn); });
+        })
+        .def("detail_block", [](lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
+                                const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below) {
+            tiled_check(t, values, na, rows + above + below);
+            lsm_call([&] { t.detail_block(values.data(), na.data(), y0, rows, above, below); });
+        })
+        .def("end_detail", [](lsm::TiledLandscape& t) { return lsm_call([&] { return t.end_detail(); }); })
+        .def("tie_block", [](lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
+                             const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below) {
+            tiled_check(t, values, na, rows + above + below);
+            lsm_call([&] { t.tie_block(values.data(), na.data(), y0, rows, above, below); });
+        })
+        .def("end_ties", [](lsm::TiledLandscape& t) { lsm_call([&] { t.end_ties(); }); });
 
     // rasters: list of (values, na_mask or None, resx, resy)
     m.def(

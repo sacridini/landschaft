@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 5, rasters larger than memory: `Landscape(path,
+  block_rows=...)` (and `landscape_metrics(..., block_rows=...)`) reads the file by
+  blocks of rows. Each block is labelled by the in-memory engine; patch pieces cut by
+  the seams are joined with a union-find and the seam statistics corrected, so all 133
+  metrics are identical to the in-memory ones (and to landscapemetrics). Core areas,
+  gyrate, circle and enn come from a detail pass run only when asked for. A 400 M-cell
+  map needs 0.8 GB instead of 3.7 GB for the class and landscape metrics.
+
+### Changed
+- `label_patches` works on a pointer (no copy of the raster), and the core-area
+  distance is a separate function shared by both engines.
+
 ## [0.15.0] - 2026-09-26
 
 ### Added

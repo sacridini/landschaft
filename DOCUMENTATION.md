@@ -698,6 +698,41 @@ The core engine computes that distance in two parallel separable passes instead 
 repeated erosions. As in landscapemetrics, `dcore_mn/sd/cv` summarise the *number* of
 core areas per patch (`ncore`), not their sizes.
 
+### Rasters larger than memory (`block_rows`)
+
+```python
+lc = ls.Landscape("huge_landcover.tif", block_rows="auto")   # or a number of rows
+lc.metrics(level=["class", "landscape"])
+ls.landscape_metrics("huge_landcover.tif", block_rows=2048, what=["lsm_c_ca", "lsm_l_shdi"])
+```
+
+With `block_rows` the file is read by blocks of rows (rounded up to a multiple of 64;
+`"auto"`: 64 rows per thread, at least 4 and at most 32 million cells) and only one
+block, the patch tables and the class adjacencies are in memory. The results are
+**identical to the in-memory ones** (all 133 metrics, every option), so they match
+landscapemetrics as well.
+
+1. Pass 0 finds the class values (a count of the raw values for 8/16-bit files).
+2. Pass 1 labels every block with the in-memory engine. The pieces of the patches cut by
+   the block seams are joined with a union-find, and what the block labelling got wrong
+   at the seams is corrected: cell sides towards the next block, cell pairs across the
+   seam and, with 4 directions, diagonal pairs whose pieces turn out to be one patch.
+   Class adjacencies are counted with one row of context above and below. This gives
+   the patch tables (same patches, same ids) and every metric but the next four.
+3. A detail pass, run only when they are asked for, computes core areas (distance to
+   the patch edges with `edge_depth` rows of context; core areas joined across seams
+   like the patches), `gyrate` (plus a pass for the ties with `cell_center`), `circle`
+   (cells on the edges of each patch's bounding box) and `enn`.
+
+Blocks start at multiples of 64 rows, the height of the strips the in-memory engine
+labels in parallel, so even the floating-point sums (`gyrate`) are made in the same
+order. Memory grows with the number of patches (about 70 bytes per patch piece while
+reading, plus the per-patch values the metrics keep) and, for `enn` only, with the
+number of patch edge cells of the classes with several patches (about 24 bytes each):
+enn needs every edge cell to find nearest neighbours. `labels()` and `to_raster()` are
+not available out of core. GeoTIFF blocks are decoded on all cores
+(`GDAL_NUM_THREADS`).
+
 ### Sample plots, moving windows and several rasters
 
 ```python
@@ -755,7 +790,10 @@ landscapemetrics live on random maps with other option combinations.
 polygon plots, with and without `all_classes`, a CRS and boundary options) and
 `window_lsm` (square and circular windows) results, which `tests/test_lsm_sampling.py`
 compares, plus live runs on random maps; sample plots and windows are also checked
-against `Landscape` objects built on the same cells.
+against `Landscape` objects built on the same cells. `tests/test_lsm_tiled.py` checks
+that out-of-core results (`block_rows`) are identical to the in-memory ones on every
+stored reference map and on files with many blocks, patches across every seam, deep
+`edge_depth` context, several data types and nodata values.
 `tests/test_lsm.py` checks values computed by hand, the labels against SciPy, the
 parallel seams, input handling and metric selection; `enn` against SciPy's exact
 Euclidean distance transform and `circle` against an exhaustive search over the
@@ -776,4 +814,6 @@ circles through two or three hull points.
 | 4000×4000, 10,000 plots, all metrics (10 M values), squares / circles | – | 1.6 s / 5.4 s |
 | 9×11 map, 5×5 window, 10 metrics (`window_lsm`) | ~4 s | 0.003 s |
 | 1000×1000, 21×21 window, all 66 landscape metrics | – | 9 s |
+| 20,000×20,000 file (400 M cells, 334 k patches), class and landscape metrics without core/gyrate/circle/enn: in memory / `block_rows="auto"` | – | 3.4 s, 3.7 GB / 3.9 s, 0.8 GB |
+| same, all 133 metrics: in memory / `block_rows="auto"` | – | 8.6 s, 8.7 GB / 13.1 s, 3.3 GB |
 

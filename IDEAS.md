@@ -74,6 +74,12 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   é uma paisagem pequena (1000×1000 com janela 21×21 e as 66 métricas: 9 s); o custo
   restante é montar a paisagem (alocações) e ENN/core. Reaproveitar os buffers do
   `Landscape` entre janelas cortaria boa parte.
+- Fora da memória (`block_rows`): o ENN guarda todas as células de borda (~24 B cada);
+  um ENN realmente fora da memória (p. ex. árvores por bloco em disco, ou busca por
+  anéis de blocos vizinhos) tiraria esse limite. `labels()`/`to_raster()` por blocos
+  poderiam gravar direto num GeoTIFF (reescrevendo os rótulos na passada de detalhe).
+  Blocos processados em paralelo (hoje um bloco por vez, paralelo por faixas) ajudariam
+  em rasters estreitos.
 - `sample_metrics` com círculos e polígonos: a máscara usa `rasterio.features.rasterize`
   (GDAL, idêntico ao terra), ~0,4 ms por plot só de overhead Python. Portar a
   rasterização "all touched" do GDAL para C++ (com as mesmas regras de borda) deixaria
@@ -101,7 +107,8 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 4. Vários rasters em paralelo, zonas/buffers/amostragem (`sample_lsm`), janela
    móvel (`window_lsm`). **Feita.**
 5. Processamento fora da memória por tiles, juntando patches cortados nas costuras.
-   Proposta (2026-09-26, ainda não aprovada):
+   **Feita** (`block_rows`), com todas as métricas idênticas ao cálculo em memória.
+   Proposta original (2026-09-26):
    - ler o raster em blocos de linhas (faixas), rotular cada bloco com o motor atual e
      juntar os pedaços de patch cortados nas costuras, como já se faz entre as faixas
      de 64 linhas em memória (union-find sobre os pedaços + soma das estatísticas);

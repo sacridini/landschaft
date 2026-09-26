@@ -56,29 +56,6 @@ double reduce(const std::string& stat, const double* x, i64 n) {
     return r_sd(x, n) / r_mean(x, n) * 100;  // cv
 }
 
-// R's signif(x, digits) (nmath fprec) for ordinary magnitudes.
-double r_signif(double x, int digits) {
-    if (!std::isfinite(x) || x == 0) return x;
-    double sgn = 1.0;
-    if (x < 0) {
-        sgn = -1.0;
-        x = -x;
-    }
-    const double l10 = std::log10(x);
-    const int e10 = static_cast<int>(digits - 1 - std::floor(l10));
-    auto pow10i = [](int e) {
-        double r = 1.0;
-        for (int i = 0; i < e; ++i) r *= 10.0;
-        return r;
-    };
-    if (e10 > 0) {
-        const double p = pow10i(e10);
-        return sgn * (std::nearbyint(x * p) / p);
-    }
-    const double p = pow10i(-e10);
-    return sgn * (std::nearbyint(x / p) * p);
-}
-
 double entropy(const std::vector<double>& x, const std::string& base) {
     const double s = std::accumulate(x.begin(), x.end(), 0.0);
     double r = 0.0;
@@ -127,6 +104,29 @@ double slope(const std::vector<double>& x, const std::vector<double>& y) {
 
 }  // namespace
 
+// R's signif(x, digits) (nmath fprec) for ordinary magnitudes.
+double r_signif(double x, int digits) {
+    if (!std::isfinite(x) || x == 0) return x;
+    double sgn = 1.0;
+    if (x < 0) {
+        sgn = -1.0;
+        x = -x;
+    }
+    const double l10 = std::log10(x);
+    const int e10 = static_cast<int>(digits - 1 - std::floor(l10));
+    auto pow10i = [](int e) {
+        double r = 1.0;
+        for (int i = 0; i < e; ++i) r *= 10.0;
+        return r;
+    };
+    if (e10 > 0) {
+        const double p = pow10i(e10);
+        return sgn * (std::nearbyint(x * p) / p);
+    }
+    const double p = pow10i(-e10);
+    return sgn * (std::nearbyint(x / p) * p);
+}
+
 double Landscape::edge_length(i64 h, i64 v) const {
     if (resx_ == resy_) return static_cast<double>(h + v) * resx_;
     return static_cast<double>(h) * resx_ + static_cast<double>(v) * resy_;
@@ -167,12 +167,9 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
             const double straight = 2.0 * static_cast<double>(pt.adj_orth[i]) * 2;
             out[i] = (((diagonal + straight + cells) / cells) - 1) / 12;
         }
-    } else if (name == "gyrate") {
-        out = gyrate();
-    } else if (name == "enn") {
-        out = enn();
-    } else if (name == "circle") {
-        out = circle();
+    } else if (name == "gyrate" || name == "enn" || name == "circle") {
+        if (tables_only_) throw std::logic_error(name + " of an out-of-core landscape needs a detail pass");
+        out = name == "gyrate" ? gyrate() : name == "enn" ? enn() : circle();
     } else if (name == "core") {
         const Core& core = this->core();
         for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(core.cells[i]) * (resx_ * resy_) / 10000;

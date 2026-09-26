@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -83,10 +84,36 @@ struct Adjacency {
     i64 orth(int a, int b) const { return h[a * dim + b] + v[a * dim + b]; }
 };
 
+// Height of the strips labelled in parallel (and of the blocks of an
+// out-of-core landscape, which are multiples of it).
+constexpr i64 kStripRows = 64;
+
+// Patches of a raster of dense class indices (-1 = NA), labelled in strips
+// of kStripRows rows, in landscapemetrics' order.
+Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions);
+
+// City-block distance of every valid cell to the nearest cell of another
+// class or NA, and to the edges of the array, which count as `top`, `bottom`
+// and `sides` (the distance just outside them). Capped at a large value.
+std::vector<std::int32_t> city_block_distance(const std::int32_t* cls, i64 nx, i64 ny, std::int32_t top,
+                                              std::int32_t bottom, std::int32_t sides);
+
+// R's signif(x, digits) for ordinary magnitudes.
+double r_signif(double x, int digits);
+
 class Landscape {
 public:
     Landscape(const std::int32_t* values, const std::uint8_t* na_mask, i64 nx, i64 ny, double resx, double resy,
               Options options);
+    // A landscape given by its tables (out-of-core): the metrics that need
+    // the raster itself (core areas, gyrate, circle, enn) must be supplied
+    // with set_core / set_patch_values before they are asked for.
+    Landscape(i64 nx, i64 ny, double resx, double resy, Options options, std::vector<std::int32_t> class_values,
+              std::vector<i64> class_cells, Patches patches, Adjacency adjacency);
+
+    bool has_raster() const { return !tables_only_; }
+    void set_core(Core core) { core_ = std::move(core); }
+    void set_patch_values(const std::string& name, std::vector<double> values);
 
     i64 nx() const { return nx_; }
     i64 ny() const { return ny_; }
@@ -131,6 +158,7 @@ private:
     std::vector<i64> class_cells_;
     i64 valid_cells_ = 0;
 
+    bool tables_only_ = false;
     std::optional<Patches> patches_;
     std::optional<Adjacency> adjacency_;
     std::optional<Core> core_;
@@ -180,10 +208,61 @@ struct RasterView {
 LongTable batch_long_table(const std::vector<RasterView>& rasters, const Options& options,
                            const std::vector<MetricSpec>& specs);
 
+// ENN (Euclidean nearest-neighbour distance) of every patch from the m edge
+// cells of the classes with several patches: Morton code (x, y) and patch
+// per cell, in any order (the arrays are taken over). patch_cls: class
+// index of every patch.
+std::vector<double> enn_from_edge_cells(std::unique_ptr<std::uint64_t[]> key, std::unique_ptr<std::int32_t[]> patch,
+                                        i64 m, const std::vector<std::int32_t>& patch_cls, int n_classes, i64 nx,
+                                        i64 ny, double resx, double resy, int directions);
+std::uint64_t morton_code(std::uint32_t x, std::uint32_t y);
+
+// 1 - area / area of the smallest circle around the points (x0, y0, x1, y1,
+// ...), found with Welzl's algorithm shuffled by `seed` (the patch index).
+double related_circle(const std::vector<double>& xy, std::uint64_t seed, double area_ha);
+
 // Landscape-level metrics in a moving window (window: wy rows x wx columns,
 // odd sizes, non-zero = part of the window) centred on every cell; cells
 // outside the raster are NA. Returns names.size() x ny x nx values.
 std::vector<double> window_metrics(const RasterView& raster, const std::uint8_t* window, i64 wx, i64 wy,
                                    const std::vector<std::string>& names, const Options& options);
+
+// -- out-of-core landscapes (tiled.cpp) ----------------------------------------
+//
+// A raster read by blocks of rows (each a multiple of kStripRows rows, but
+// the last), given with `above` / `below` rows of context. The first pass
+// labels every block, joins the patch pieces cut by the block seams and
+// counts the class adjacencies; finish() then gives a Landscape of tables
+// with the same patches, in the same order, as the in-memory one. Core
+// areas, gyrate, circle and enn need a detail pass over the same blocks
+// (and gyrate with cell_center a pass for the ties); their results are
+// identical to the in-memory computation.
+class TiledLandscape {
+public:
+    TiledLandscape(i64 nx, i64 ny, double resx, double resy, Options options, std::vector<std::int32_t> class_values);
+    ~TiledLandscape();
+
+    i64 nx() const;
+    i64 ny() const;
+
+    // pass 1
+    void add_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above, i64 below);
+    void finish();
+    Landscape& landscape();
+
+    // detail pass: rows of context the blocks need, then the blocks again
+    i64 detail_halo(bool core, bool enn) const;
+    void begin_detail(bool core, bool gyrate, bool circle, bool enn);
+    void detail_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above,
+                      i64 below);
+    // true when gyrate with cell_center needs the tie pass
+    bool end_detail();
+    void tie_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above, i64 below);
+    void end_ties();
+
+private:
+    struct State;
+    std::unique_ptr<State> s_;
+};
 
 }  // namespace lsm
