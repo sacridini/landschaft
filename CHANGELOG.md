@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 8, FRAGSTATS metrics that landscapemetrics lacks (extras):
   `prox` (proximity index, `search_radius`) and `simi` (similarity index, with a
