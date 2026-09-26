@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 6, FRAGSTATS extras: the area-weighted mean (`_am`), median
   (`_md`) and range (`_ra`) of every patch metric at the class and landscape level

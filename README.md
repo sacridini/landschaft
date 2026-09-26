@@ -3,7 +3,7 @@
 Fast Python reimplementation of [GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/)
 raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / dask / rasterio API.
 
-**Current Version (v0.16.0):** Complete reimplementation of all major GuidosToolbox tools:
+**Current Version (v0.17.0):** Complete reimplementation of all major GuidosToolbox tools:
 * **MSPA**: Morphological Spatial Pattern Analysis (bit-identical to GTB `mspa` v2.3, 5-7x faster), and GTB's MSPA Tiling for maps larger than memory (out of core, identical to GTB).
 * **SPA2/3/5/6**: Simplified Pattern Analysis (identical to GTB).
 * **GTN & Connectivity**: Topological Network Components (ECA, DOC), Importance (dPC), and Conefor Sensinode inputs.
@@ -14,7 +14,7 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 * **Distance (experimental)**: Influence Zones and Proximity. Not yet identical to GTB, see the CHANGELOG.
 * **Restoration & Morphology**: Restoration Status (RSS), Cost Distance, Least-Cost Paths & Corridors, Landscape Parcellation (AWAPS, DIVISION, PARC), and Habitat Contortion.
 * **Change Detection & Convolution**: Simple Change, Morphological Change Detection (MCD with geodesic core reconstruction & elasticity), Fragmentation Change (FOS Delta & 6x6 transition matrix), FAD Multiscale Change (7x7 class transitions per observation scale), Landscape Mosaic Heatmap and Heatmap Change (GTB's heatmap/delta CSV, bit-identical), and Continuous Grayscale Spatial Convolution (GraySpatCon).
-* **Landscape Metrics (FRAGSTATS)**: 133 patch-, class- and landscape-level metrics with the names, options and values of the R package landscapemetrics (area/edge, shape, core area, aggregation incl. nearest-neighbour distance, diversity, complexity), 100-500x faster.
+* **Landscape Metrics (FRAGSTATS)**: 133 patch-, class- and landscape-level metrics with the names, options and values (bit for bit) of the R package landscapemetrics (area/edge, shape, core area, aggregation incl. nearest-neighbour distance, diversity, complexity), plus FRAGSTATS' `_am`/`_md`/`_ra` statistics, 100-500x faster.
 
 📖 **For complete documentation and usage examples for every module, see [DOCUMENTATION.md](DOCUMENTATION.md).**
 
@@ -219,7 +219,7 @@ Parameter correspondence with GuidosToolbox:
 ## Versioning
 
 landschaft follows [Semantic Versioning](https://semver.org/); the current version is
-**0.16.0** (`ls.__version__`). While below 1.0, minor versions may change the API.
+**0.17.0** (`ls.__version__`). While below 1.0, minor versions may change the API.
 Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Performance
