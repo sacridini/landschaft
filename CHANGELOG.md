@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-09-26
+
 ### Changed
 - Landscape metrics part 17, performance: a `Landscape` is prepared in parallel (value
   range, per-thread class histogram, no zero-filling of the class raster; the int32 range
