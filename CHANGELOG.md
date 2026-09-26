@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-09-26
+
 ### Changed
 - Landscape metrics part 18: R's 80-bit sums run on the x87 unit under MSVC x64 (MASM
   routines for `sum()`, `mean()`, the squared deviations of `sd()` and blocked
