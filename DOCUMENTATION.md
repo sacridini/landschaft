@@ -1547,8 +1547,9 @@ the solve behind every Omniscape window):
 * a cell that is both a source and a ground loses its source; every connected component
   with a source and a ground is solved (finite grounds on the diagonal, direct grounds at
   0 V), the others carry no current;
-* the grounded Laplacian is factorised exactly (sparse LDLᵀ from Eigen, in a
-  nested-dissection order of the grid cells; independent components in parallel);
+* the grounded Laplacian is factorised exactly: a multifrontal Cholesky over a
+  nested dissection of the grid (every separator line a dense front, factorised with
+  Eigen's dense kernels); independent components in parallel;
 * a node's current is the larger of its inflow and outflow, leaving out branch currents
   under 1e-8 of the largest one, with Circuitscape's column-major node order.
 
@@ -1590,13 +1591,26 @@ purpose: windows and circles cut at the map edges, the target block zeroed at
 cut on the left or the top), even block sizes made odd, and the block-artifact
 correction.
 
-How it is fast: every window of the same shape (the interior disk, and each shape cut by
-the edges) shares one nested-dissection ordering and symbolic analysis per thread; a
-window only refills its values and runs the numeric factorisation. The flow potential
-uses conductance 1 everywhere, so its factorisation is done once per shape and each
-window only runs the triangular solves. Windows are solved in parallel and added to the
-maps row by row in a fixed order, so the result does not depend on the number of
-threads.
+How it is fast:
+
+* each window is factorised by a multifrontal Cholesky built on a geometric nested
+  dissection of the grid: the window is cut by its middle row or column, the halves
+  recursively, and every separator line becomes a dense front whose pivots are
+  factorised with dense kernels (LLᵀ, triangular solve, rank-k update) and whose Schur
+  complement goes to the parent front. On a disk of radius 100 (31 k cells) that is
+  12 ms against 26 ms with Eigen's sparse LDLᵀ in the same order (and 67 ms / 119 ms
+  for Circuitscape's CHOLMOD / cg+amg);
+* windows of the same shape (the interior disk, and each shape cut by the edges) share
+  one symbolic structure between all threads; a window only refills its values; the
+  forward substitution runs inside the factorisation, while each front is in cache;
+* the flow potential has conductance 1 everywhere: its factorisation is done once per
+  shape and thread, and the flow potentials of up to 8 targets are solved together;
+* on x86-64 the circuit code is also built for AVX2 and FMA (`landschaft._circuit_avx2`,
+  loaded only when the CPU has them; `LANDSCHAFT_CIRCUIT_AVX2=0` keeps the baseline
+  build): the dense kernels are 1.2-1.5x faster. Both builds give the same results to
+  1e-11 and are each deterministic (buffers aligned to 64 bytes);
+* windows are solved in parallel and added to the maps row by row in a fixed order, so
+  the result does not depend on the number of threads.
 
 Verification: `python tools/make_reference_omniscape.py omniscape` runs Omniscape 0.7's
 `run_omniscape` (INI files, `cholmod` and `cg+amg`) on its own test rasters with its
@@ -1606,6 +1620,18 @@ the map). NoData and zero cells are the same, and every value agrees with CHOLMO
 1.7e-11 (relative). Omniscape's default `cg+amg` is up to 1.6e-4 of the largest value away
 from its own CHOLMOD result where the block correction amplifies its error.
 
+Timings on an Intel i5-13600K (6 performance + 8 efficiency cores, 20 threads), random
+log-normal resistance, source = 1 / resistance, flow potential and normalised current
+(`tools/omniscape_window_benchmark.jl` times single windows):
+
 | map | Omniscape 0.7, 20 threads (cg+amg / cholmod) | landschaft, 1 thread / 20 threads |
 |---|---|---|
-| 300×300, radius 25, block 3, flow potential and normalised (10,000 targets) | 17.4 s / 18.6 s | 8.2 s / 0.87 s |
+| 300×300, radius 25, block 3 (10,000 targets) | 17.4 s / 18.6 s | 7.2 s / 0.76 s |
+| 800×800, radius 10, block 3 (70,756 targets) | 29.4 s / – | 6.5 s / 0.64 s |
+| 700×700, radius 25, block 5 (19,600 targets) | 46.7 s / – | 14.3 s / 1.36 s |
+| 1000×1000, radius 100, block 15 (4,356 targets) | 275 s / – | – / 12.4 s |
+
+The results agree with Omniscape's `cg+amg` to its tolerance (1e-6 of the largest
+current). Large windows are limited by memory bandwidth with many threads (a radius-100
+window writes and reads a 13 MB factor): 6x from 1 to 20 threads there, 10x for radii
+10-25.

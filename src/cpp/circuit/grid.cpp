@@ -2,6 +2,7 @@
 
 #include "circuit/grid.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -15,48 +16,57 @@
 
 namespace circuit {
 
-namespace {
-
-constexpr i64 kLeafCells = 16;
-
-}  // namespace
-
-void nested_dissection(const std::uint8_t* mark, i64 stride, i64 r0, i64 r1, i64 c0, i64 c1,
-                       std::vector<i64>& order) {
-    // Shrink the box to its marked cells.
-    i64 top = r1, bottom = r0 - 1, left = c1, right = c0 - 1;
-    for (i64 r = r0; r < r1; ++r)
-        for (i64 c = c0; c < c1; ++c)
-            if (mark[r * stride + c]) {
-                if (r < top) top = r;
-                if (r > bottom) bottom = r;
-                if (c < left) left = c;
-                if (c > right) right = c;
-            }
-    if (bottom < top) return;
-    r0 = top;
-    r1 = bottom + 1;
-    c0 = left;
-    c1 = right + 1;
-    const i64 h = r1 - r0, w = c1 - c0;
-    if (h * w <= kLeafCells) {
-        for (i64 r = r0; r < r1; ++r)
-            for (i64 c = c0; c < c1; ++c)
-                if (mark[r * stride + c]) order.push_back(r * stride + c);
-        return;
+void node_currents(i64 w, i64 h, const double* g, const std::uint8_t* present, const double* v,
+                   const double* finite, bool four_neighbors, double* cur, std::vector<double>& edges) {
+    const Offset* nb = four_neighbors ? kNeighbours4 : kNeighbours8;
+    const int nd = four_neighbors ? 4 : 8;
+    const int lower = four_neighbors ? kLower4 : kLower8;
+    const int nf = nd - lower;  // neighbours after the cell
+    const i64 n = w * h;
+    edges.resize(static_cast<std::size_t>(n * nf));
+    double* e = edges.data();
+    // Every edge once, from its earlier cell q to the later r: b = w (v_r - v_q)
+    // is the current into q in column q, row r (the lower triangle: maxout);
+    // seen from r it is -b (the upper triangle: maxin), exactly.
+    const double inf = std::numeric_limits<double>::infinity();
+    double maxin = -inf, maxout = -inf;
+    for (i64 q = 0; q < n; ++q) {
+        if (!present[q]) continue;
+        const i64 y = q / w, x = q % w;
+        for (int d = lower; d < nd; ++d) {
+            const i64 yy = y + nb[d].dy, xx = x + nb[d].dx;
+            if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
+            const i64 r = yy * w + xx;
+            if (!present[r]) continue;
+            const double b = edge_weight(g[q], g[r], nb[d].diagonal) * (v[r] - v[q]);
+            e[q * nf + (d - lower)] = b;
+            if (b > maxout) maxout = b;
+            if (-b > maxin) maxin = -b;
+        }
     }
-    if (h >= w) {
-        const i64 m = r0 + h / 2;
-        nested_dissection(mark, stride, r0, m, c0, c1, order);
-        nested_dissection(mark, stride, m + 1, r1, c0, c1, order);
-        for (i64 c = c0; c < c1; ++c)
-            if (mark[m * stride + c]) order.push_back(m * stride + c);
-    } else {
-        const i64 m = c0 + w / 2;
-        nested_dissection(mark, stride, r0, r1, c0, m, order);
-        nested_dissection(mark, stride, r0, r1, m + 1, c1, order);
-        for (i64 r = r0; r < r1; ++r)
-            if (mark[r * stride + m]) order.push_back(r * stride + m);
+    for (i64 q = 0; q < n; ++q) {
+        if (!present[q]) continue;
+        const i64 y = q / w, x = q % w;
+        double inflow = 0.0, outflow = 0.0;
+        for (int d = 0; d < nd; ++d) {
+            const i64 yy = y + nb[d].dy, xx = x + nb[d].dx;
+            if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
+            const i64 r = yy * w + xx;
+            if (!present[r]) continue;
+            // The opposite of direction d is nd - 1 - d.
+            const double b = d < lower ? -e[r * nf + (nd - 1 - d - lower)] : e[q * nf + (d - lower)];
+            if (b > 0) {
+                if (!(std::abs(b / maxin) < 1e-8)) inflow += b;
+            } else if (b < 0) {
+                if (!(std::abs(b / maxout) < 1e-8)) outflow -= b;
+            }
+        }
+        if (finite) {
+            const double f = finite[q] * v[q];
+            if (f < 0) inflow -= f;
+            else if (f > 0) outflow += f;
+        }
+        cur[q] = inflow > outflow ? inflow : outflow;
     }
 }
 
@@ -65,7 +75,6 @@ AdvancedResult advanced(const double* conductance, const double* source, const d
     const i64 n = nx * ny;
     const Offset* nb = four_neighbors ? kNeighbours4 : kNeighbours8;
     const int nd = four_neighbors ? 4 : 8;
-    const int lower = four_neighbors ? kLower4 : kLower8;
     const double inf = std::numeric_limits<double>::infinity();
     AdvancedResult out;
     out.current.assign(static_cast<std::size_t>(n), 0.0);
@@ -168,13 +177,11 @@ AdvancedResult advanced(const double* conductance, const double* source, const d
             fg[q] = finite[c];
             b[q] = src[c];
         }
-        std::vector<i64> order;
-        order.reserve(static_cast<std::size_t>(p1 - p0));
-        nested_dissection(unknown.data(), bx, 0, by, 0, bx, order);
         std::vector<double> v(present.size(), 0.0);
-        if (!order.empty()) {
+        if (std::find(unknown.begin(), unknown.end(), std::uint8_t{1}) != unknown.end()) {
             CellSystem sys;
-            sys.analyze(bx, by, order, four_neighbors);
+            sys.analyze(bx, by, unknown.data(), four_neighbors);
+            const std::vector<i64>& order = sys.cells();
             // CHOLMOD factorizes with a 10ε shift (construct_cholesky_factor).
             sys.assemble(g.data(), present.data(), any_finite ? fg.data() : nullptr,
                          10 * std::numeric_limits<double>::epsilon());
@@ -189,46 +196,12 @@ AdvancedResult advanced(const double* conductance, const double* source, const d
             for (std::size_t i = 0; i < order.size(); ++i) v[order[i]] = x[i];
         }
 
-        // Node currents (get_node_currents): branch currents b = w (v_n - v_c)
-        // into each cell; those under 1e-8 of the largest one of their
-        // direction are left out.
-        double maxin = -inf, maxout = -inf;
-        for (i64 p = p0; p < p1; ++p) {
-            const i64 q = box(members[p]);
-            const i64 y = q / bx, x = q % bx;
-            for (int d = 0; d < nd; ++d) {
-                const i64 yy = y + nb[d].dy, xx = x + nb[d].dx;
-                if (yy < 0 || yy >= by || xx < 0 || xx >= bx || !present[yy * bx + xx]) continue;
-                const i64 r = yy * bx + xx;
-                const double bc = edge_weight(g[q], g[r], nb[d].diagonal) * (v[r] - v[q]);
-                if (d < lower) {
-                    if (bc > maxin) maxin = bc;
-                } else if (bc > maxout) {
-                    maxout = bc;
-                }
-            }
-        }
+        std::vector<double> cur(present.size(), 0.0), edges;
+        node_currents(bx, by, g.data(), present.data(), v.data(), any_finite ? fg.data() : nullptr, four_neighbors,
+                      cur.data(), edges);
         for (i64 p = p0; p < p1; ++p) {
             const i64 c = members[p], q = box(c);
-            const i64 y = q / bx, x = q % bx;
-            double inflow = 0.0, outflow = 0.0;
-            for (int d = 0; d < nd; ++d) {
-                const i64 yy = y + nb[d].dy, xx = x + nb[d].dx;
-                if (yy < 0 || yy >= by || xx < 0 || xx >= bx || !present[yy * bx + xx]) continue;
-                const i64 r = yy * bx + xx;
-                const double bc = edge_weight(g[q], g[r], nb[d].diagonal) * (v[r] - v[q]);
-                if (bc > 0) {
-                    if (!(std::abs(bc / maxin) < 1e-8)) inflow += bc;
-                } else if (bc < 0) {
-                    if (!(std::abs(bc / maxout) < 1e-8)) outflow -= bc;
-                }
-            }
-            if (any_finite) {
-                const double f = fg[q] * v[q];
-                if (f < 0) inflow -= f;
-                else if (f > 0) outflow += f;
-            }
-            out.current[c] = inflow > outflow ? inflow : outflow;
+            out.current[c] = cur[q];
             out.voltage[c] = v[q];
         }
     }

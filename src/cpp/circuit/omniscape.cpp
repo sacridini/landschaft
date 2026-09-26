@@ -6,8 +6,10 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <deque>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -31,9 +33,9 @@ struct Shape {
     bool operator<(const Shape& o) const { return std::tie(h, w, gy, gx) < std::tie(o.h, o.w, o.gy, o.gx); }
 };
 
-// The unknowns of a window in nested-dissection order: the cells within
-// `radius` of the ground (every cell when radius < 0), without the ground.
-std::vector<i64> window_order(const Shape& s, i64 radius) {
+// The unknowns of a window: the cells within `radius` of the ground (every
+// cell when radius < 0), without the ground.
+std::vector<std::uint8_t> window_mark(const Shape& s, i64 radius) {
     std::vector<std::uint8_t> mark(static_cast<std::size_t>(s.h * s.w), 0);
     for (i64 y = 0; y < s.h; ++y)
         for (i64 x = 0; x < s.w; ++x) {
@@ -41,15 +43,20 @@ std::vector<i64> window_order(const Shape& s, i64 radius) {
             mark[y * s.w + x] = radius < 0 || dy * dy + dx * dx <= radius * radius;
         }
     mark[s.gy * s.w + s.gx] = 0;
-    std::vector<i64> order;
-    nested_dissection(mark.data(), s.w, 0, s.h, 0, s.w, order);
-    return order;
+    return mark;
+}
+
+std::shared_ptr<const FrontalSymbolic> window_symbolic(const Shape& s, i64 radius, bool four) {
+    const std::vector<std::uint8_t> mark = window_mark(s, radius);
+    return frontal_analyze(s.w, s.h, mark.data(), four);
 }
 
 struct Workspace {
     std::vector<std::uint8_t> present;
     std::vector<i64> stack;
-    std::vector<double> v, rhs, x;
+    std::vector<double> v, rhs, x, edges, ones, multi;
+    std::vector<std::uint8_t> all;
+    std::vector<int> which;
     void reserve(std::size_t cells) {
         present.resize(cells);
         v.resize(cells);
@@ -71,7 +78,6 @@ void solve_window(CellSystem& sys, bool& factored, const double* g, const double
     std::fill(present, present + n, std::uint8_t{0});
     const Offset* nb = four ? kNeighbours4 : kNeighbours8;
     const int nd = four ? 4 : 8;
-    const int lower = four ? kLower4 : kLower8;
     present[ground] = 1;
     ws.stack.assign(1, ground);
     double total = 0.0;
@@ -94,56 +100,66 @@ void solve_window(CellSystem& sys, bool& factored, const double* g, const double
 
     const std::vector<i64>& cells = sys.cells();
     const std::size_t m = cells.size();
-    if (!factored) {
-        sys.assemble(g, present, nullptr, kShift);
-        if (!sys.factorize()) throw std::runtime_error("an Omniscape window is not positive definite");
-        factored = true;
-    }
     ws.rhs.resize(m);
     ws.x.resize(m);
     for (std::size_t k = 0; k < m; ++k) ws.rhs[k] = present[cells[k]] ? src[cells[k]] : 0.0;
-    sys.solve(ws.rhs.data(), ws.x.data());
+    if (!factored) {
+        sys.assemble(g, present, nullptr, kShift);
+        if (!sys.factorize_solve(ws.rhs.data(), ws.x.data()))
+            throw std::runtime_error("an Omniscape window is not positive definite");
+        factored = true;
+    } else {
+        sys.solve(ws.rhs.data(), ws.x.data());
+    }
     double* v = ws.v.data();
     std::fill(v, v + n, 0.0);
     for (std::size_t k = 0; k < m; ++k)
         if (present[cells[k]]) v[cells[k]] = ws.x[k];
 
-    // Node currents as in grid.cpp (get_node_currents).
-    const double inf = std::numeric_limits<double>::infinity();
-    double maxin = -inf, maxout = -inf;
-    for (i64 q = 0; q < n; ++q) {
-        if (!present[q]) continue;
-        const i64 y = q / s.w, x = q % s.w;
-        for (int d = 0; d < nd; ++d) {
-            const i64 yy = y + nb[d].dy, xx = x + nb[d].dx;
-            if (yy < 0 || yy >= s.h || xx < 0 || xx >= s.w) continue;
-            const i64 r = yy * s.w + xx;
-            if (!present[r]) continue;
-            const double b = edge_weight(g[q], g[r], nb[d].diagonal) * (v[r] - v[q]);
-            if (d < lower) {
-                if (b > maxin) maxin = b;
-            } else if (b > maxout) {
-                maxout = b;
-            }
-        }
+    node_currents(s.w, s.h, g, present, v, nullptr, four, cur, ws.edges);
+}
+
+// The flow potential of k windows of one shape: conductance 1 on every cell,
+// so the whole window is one component and its factorization is computed once
+// (`factored`); the k right-hand sides are solved together.
+void flow_batch(CellSystem& sys, bool& factored, const Shape& s, bool four, double* const* src, double* const* cur,
+                int k, Workspace& ws) {
+    const i64 n = s.h * s.w;
+    const i64 ground = s.gy * s.w + s.gx;
+    if (ws.ones.size() < static_cast<std::size_t>(n)) {
+        ws.ones.assign(static_cast<std::size_t>(n), 1.0);
+        ws.all.assign(static_cast<std::size_t>(n), std::uint8_t{1});
     }
-    for (i64 q = 0; q < n; ++q) {
-        if (!present[q]) continue;
-        const i64 y = q / s.w, x = q % s.w;
-        double inflow = 0.0, outflow = 0.0;
-        for (int d = 0; d < nd; ++d) {
-            const i64 yy = y + nb[d].dy, xx = x + nb[d].dx;
-            if (yy < 0 || yy >= s.h || xx < 0 || xx >= s.w) continue;
-            const i64 r = yy * s.w + xx;
-            if (!present[r]) continue;
-            const double b = edge_weight(g[q], g[r], nb[d].diagonal) * (v[r] - v[q]);
-            if (b > 0) {
-                if (!(std::abs(b / maxin) < 1e-8)) inflow += b;
-            } else if (b < 0) {
-                if (!(std::abs(b / maxout) < 1e-8)) outflow -= b;
-            }
-        }
-        cur[q] = inflow > outflow ? inflow : outflow;
+    if (!factored) {
+        sys.assemble(ws.ones.data(), ws.all.data(), nullptr, kShift);
+        if (!sys.factorize()) throw std::runtime_error("an Omniscape window is not positive definite");
+        factored = true;
+    }
+    const std::vector<i64>& cells = sys.cells();
+    const std::size_t m = cells.size();
+    ws.multi.resize(m * static_cast<std::size_t>(k));
+    int cols = 0;
+    std::vector<int>& which = ws.which;
+    which.resize(static_cast<std::size_t>(k));
+    for (int j = 0; j < k; ++j) {
+        std::fill(cur[j], cur[j] + n, 0.0);
+        double total = 0.0;
+        for (std::size_t i = 0; i < m; ++i) total += src[j][cells[i]];
+        if (total == 0) continue;  // no source (the ground's own is dropped)
+        double* col = ws.multi.data() + static_cast<std::size_t>(cols) * m;
+        for (std::size_t i = 0; i < m; ++i) col[i] = src[j][cells[i]];
+        which[static_cast<std::size_t>(cols++)] = j;
+    }
+    if (cols == 0) return;
+    sys.solve_many(ws.multi.data(), cols);
+    ws.v.resize(static_cast<std::size_t>(n));
+    double* v = ws.v.data();
+    for (int c = 0; c < cols; ++c) {
+        const double* col = ws.multi.data() + static_cast<std::size_t>(c) * m;
+        v[ground] = 0.0;
+        for (std::size_t i = 0; i < m; ++i) v[cells[i]] = col[i];
+        node_currents(s.w, s.h, ws.ones.data(), ws.all.data(), v, nullptr, four, cur[which[static_cast<std::size_t>(c)]],
+                      ws.edges);
     }
 }
 
@@ -154,37 +170,72 @@ struct Target {
     i64 y0, x0;  // window corner on the map
 };
 
-// The systems of one window shape, for one thread.
-struct ShapeSystems {
-    Shape shape{-1, -1, -1, -1};
-    CellSystem disk;  // cells within radius + buffer: the landscape
-    CellSystem rect;  // every cell, conductance 1: the flow potential
-    bool rect_ready = false, rect_factored = false;
-};
-
-class ShapeCache {
+// The symbolic structures of the window shapes, shared by the threads. Targets
+// come grouped by shape, so a few recent shapes are enough.
+class SymbolicCache {
 public:
-    ShapeSystems& get(const Shape& s, i64 radius, bool four) {
-        for (auto& e : entries_)
-            if (e && e->shape == s) return *e;
-        auto e = std::make_unique<ShapeSystems>();
-        e->shape = s;
-        e->disk.analyze(s.w, s.h, window_order(s, radius), four);
-        std::rotate(entries_.rbegin(), entries_.rbegin() + 1, entries_.rend());
-        entries_[0] = std::move(e);
-        return *entries_[0];
-    }
-    ShapeSystems& get_rect(const Shape& s, i64 radius, bool four) {
-        ShapeSystems& e = get(s, radius, four);
-        if (!e.rect_ready) {
-            e.rect.analyze(s.w, s.h, window_order(s, -1), four);
-            e.rect_ready = true;
+    SymbolicCache(i64 radius, bool four, std::size_t capacity) : radius_(radius), four_(four), capacity_(capacity) {}
+
+    // kind 0: the landscape (cells within radius + buffer); 1: the whole
+    // window (the flow potential).
+    std::shared_ptr<const FrontalSymbolic> get(int kind, const Shape& s) {
+        const Key key{kind, s};
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (const auto& e : entries_)
+                if (e.first == key) return e.second;
         }
-        return e;
+        auto sym = window_symbolic(s, kind == 0 ? radius_ : -1, four_);
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (const auto& e : entries_)
+            if (e.first == key) return e.second;
+        if (entries_.size() >= capacity_) entries_.pop_front();
+        entries_.emplace_back(key, sym);
+        return sym;
     }
 
 private:
-    std::array<std::unique_ptr<ShapeSystems>, 3> entries_;
+    struct Key {
+        int kind;
+        Shape shape;
+        bool operator==(const Key& o) const { return kind == o.kind && shape == o.shape; }
+    };
+    i64 radius_;
+    bool four_;
+    std::size_t capacity_;
+    std::mutex mutex_;
+    std::deque<std::pair<Key, std::shared_ptr<const FrontalSymbolic>>> entries_;
+};
+
+// A thread's systems: the landscape system, refactorised for every window,
+// and the flow-potential systems of its last shapes, factorised once each.
+struct ThreadSystems {
+    CellSystem disk;
+    Shape disk_shape{-1, -1, -1, -1};
+    struct Rect {
+        Shape shape{-1, -1, -1, -1};
+        CellSystem sys;
+        bool factored = false;
+    };
+    std::array<std::unique_ptr<Rect>, 2> rects;
+
+    CellSystem& landscape(SymbolicCache& cache, const Shape& s) {
+        if (!(disk_shape == s)) {
+            disk.share(cache.get(0, s));
+            disk_shape = s;
+        }
+        return disk;
+    }
+    Rect& flow(SymbolicCache& cache, const Shape& s) {
+        for (auto& r : rects)
+            if (r && r->shape == s) return *r;
+        std::swap(rects[0], rects[1]);
+        if (!rects[0]) rects[0] = std::make_unique<Rect>();
+        rects[0]->shape = s;
+        rects[0]->sys.share(cache.get(1, s));
+        rects[0]->factored = false;
+        return *rects[0];
+    }
 };
 
 int thread_count(int max_threads) {
@@ -242,7 +293,7 @@ std::vector<double> omniscape_correction(const OmniscapeParams& p, i64 nx, i64 n
         if (v > 0) v = (v * amps) / sum;
 
     CellSystem sys;
-    sys.analyze(W, W, window_order(s, D), p.four_neighbors);
+    sys.share(window_symbolic(s, D, p.four_neighbors));
     bool factored = false;
     Workspace ws;
     std::vector<double> block_cur(n), null_cur(n);
@@ -314,87 +365,116 @@ OmniscapeResult omniscape(const double* resistance, const double* source, i64 nx
 
     const int threads = thread_count(max_threads);
     const std::size_t window = static_cast<std::size_t>(W * W);
-    // Windows solved together, then added to the maps in target order.
+    // Windows solved together, then added to the maps in target order. Each
+    // thread takes chunks of consecutive targets (mostly of one shape), whose
+    // flow potentials are solved together; about twelve chunks per thread and
+    // batch, within a memory budget.
     const std::size_t per_target = window * (fp ? 2 : 1) * sizeof(double);
-    std::size_t batch = static_cast<std::size_t>(threads) * 8;
-    const std::size_t budget = std::size_t{512} << 20;
-    batch = std::max<std::size_t>(static_cast<std::size_t>(threads), std::min(batch, budget / per_target));
+    const std::size_t budget = std::size_t{768} << 20;
+    const std::size_t nt = static_cast<std::size_t>(threads);
+    const std::size_t fit = std::max<std::size_t>(nt, budget / per_target);
+    const std::size_t chunk = std::max<std::size_t>(1, std::min<std::size_t>(8, fit / (12 * nt)));
+    std::size_t batch = std::min(fit, 12 * nt * chunk);
     batch = std::min(batch, targets.size());
     std::vector<std::vector<double>> cur(batch, std::vector<double>(window)), fpcur;
     if (fp) fpcur.assign(batch, std::vector<double>(window));
-    std::vector<ShapeCache> caches(static_cast<std::size_t>(threads));
+    SymbolicCache symbolic(D, p.four_neighbors, static_cast<std::size_t>(4 * threads + 4));
+    std::vector<ThreadSystems> systems(static_cast<std::size_t>(threads));
     std::vector<Workspace> spaces(static_cast<std::size_t>(threads));
     std::vector<std::vector<double>> gbuf(static_cast<std::size_t>(threads), std::vector<double>(window)),
-        sbuf(static_cast<std::size_t>(threads), std::vector<double>(window)),
-        ones(static_cast<std::size_t>(threads), std::vector<double>(window, 1.0));
+        sbuf(static_cast<std::size_t>(threads), std::vector<double>(window * chunk));
     const std::size_t n_targets = targets.size();
     bool failed = false;
     std::string error;
 
     for (std::size_t start = 0; start < n_targets; start += batch) {
         const std::size_t count = std::min(batch, n_targets - start);
+        const long long n_chunks = static_cast<long long>((count + chunk - 1) / chunk);
 #if defined(_OPENMP)
 #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
 #endif
-        for (long long k = 0; k < static_cast<long long>(count); ++k) {
+        for (long long ch = 0; ch < n_chunks; ++ch) {
             try {
-                const Target& t = targets[start + static_cast<std::size_t>(k)];
                 const int tid = thread_id();
-                const Shape& s = t.shape;
-                double* g = gbuf[tid].data();
-                double* src = sbuf[tid].data();
-                // Conductance within radius + buffer (clip), NoData outside.
-                for (i64 y = 0; y < s.h; ++y)
-                    for (i64 x = 0; x < s.w; ++x) {
-                        const i64 dy = y - s.gy, dx = x - s.gx;
-                        const double r = resistance[(t.y0 + y) * nx + (t.x0 + x)];
-                        double c = -9999.0;
-                        if (dy * dy + dx * dx <= D * D && !std::isnan(r)) c = p.resistance_is_conductance ? r : 1 / r;
-                        g[y * s.w + x] = c;
-                    }
-                // Sources within radius; the target block zeroed at radius +
-                // buffer from the corner (get_source); amps shared out.
-                for (i64 y = 0; y < s.h; ++y)
-                    for (i64 x = 0; x < s.w; ++x) {
-                        const i64 dy = y - s.gy, dx = x - s.gx;
-                        double v = 0.0;
-                        if (dy * dy + dx * dx <= R * R) {
-                            v = source[(t.y0 + y) * nx + (t.x0 + x)];
-                            if (std::isnan(v)) v = 0.0;
-                        }
-                        src[y * s.w + x] = v;
-                    }
-                for (i64 y = D - br; y <= std::min(D + br, ny - 1); ++y)
-                    for (i64 x = D - br; x <= std::min(D + br, nx - 1); ++x)
-                        if (y >= 0 && y < s.h && x >= 0 && x < s.w) src[y * s.w + x] = 0.0;
-                double sum = 0.0;
-                for (i64 x = 0; x < s.w; ++x)
-                    for (i64 y = 0; y < s.h; ++y)
-                        if (src[y * s.w + x] > 0) sum += src[y * s.w + x];
-                for (i64 q = 0; q < s.h * s.w; ++q)
-                    if (src[q] > 0) src[q] = (src[q] * t.amps) / sum;
-
-                ShapeCache& cache = caches[tid];
-                ShapeSystems& sys = fp ? cache.get_rect(s, D, p.four_neighbors) : cache.get(s, D, p.four_neighbors);
-                bool factored = false;
-                double* c = cur[static_cast<std::size_t>(k)].data();
-                solve_window(sys.disk, factored, g, src, s, p.four_neighbors, c, spaces[tid]);
-                double* f = fp ? fpcur[static_cast<std::size_t>(k)].data() : nullptr;
-                if (fp)
-                    solve_window(sys.rect, sys.rect_factored, ones[tid].data(), src, s, p.four_neighbors, f,
-                                 spaces[tid]);
-                if (correct) {
-                    // The part of the correction under the (clipped) window:
-                    // Omniscape keeps its first columns when the window is cut
-                    // on the right (on both sides too), its last when on the left.
-                    const i64 cx0 = t.x < D && t.x + D <= nx - 1 ? W - s.w : 0;
-                    const i64 cy0 = t.y < D && t.y + D <= ny - 1 ? W - s.h : 0;
+                ThreadSystems& sys = systems[tid];
+                const std::size_t k0 = static_cast<std::size_t>(ch) * chunk;
+                const std::size_t k1 = std::min(count, k0 + chunk);
+                for (std::size_t k = k0; k < k1; ++k) {
+                    const Target& t = targets[start + k];
+                    const Shape& s = t.shape;
+                    double* g = gbuf[tid].data();
+                    double* src = sbuf[tid].data() + (k - k0) * window;
+                    // Conductance within radius + buffer (clip), NoData outside.
                     for (i64 y = 0; y < s.h; ++y)
                         for (i64 x = 0; x < s.w; ++x) {
-                            const double k2 = corr[(cy0 + y) * W + (cx0 + x)];
-                            c[y * s.w + x] *= k2;
-                            if (fp) f[y * s.w + x] *= k2;
+                            const i64 dy = y - s.gy, dx = x - s.gx;
+                            const double r = resistance[(t.y0 + y) * nx + (t.x0 + x)];
+                            double c = -9999.0;
+                            if (dy * dy + dx * dx <= D * D && !std::isnan(r))
+                                c = p.resistance_is_conductance ? r : 1 / r;
+                            g[y * s.w + x] = c;
                         }
+                    // Sources within radius; the target block zeroed at radius +
+                    // buffer from the corner (get_source); amps shared out.
+                    for (i64 y = 0; y < s.h; ++y)
+                        for (i64 x = 0; x < s.w; ++x) {
+                            const i64 dy = y - s.gy, dx = x - s.gx;
+                            double v = 0.0;
+                            if (dy * dy + dx * dx <= R * R) {
+                                v = source[(t.y0 + y) * nx + (t.x0 + x)];
+                                if (std::isnan(v)) v = 0.0;
+                            }
+                            src[y * s.w + x] = v;
+                        }
+                    for (i64 y = D - br; y <= std::min(D + br, ny - 1); ++y)
+                        for (i64 x = D - br; x <= std::min(D + br, nx - 1); ++x)
+                            if (y >= 0 && y < s.h && x >= 0 && x < s.w) src[y * s.w + x] = 0.0;
+                    double sum = 0.0;
+                    for (i64 x = 0; x < s.w; ++x)
+                        for (i64 y = 0; y < s.h; ++y)
+                            if (src[y * s.w + x] > 0) sum += src[y * s.w + x];
+                    for (i64 q = 0; q < s.h * s.w; ++q)
+                        if (src[q] > 0) src[q] = (src[q] * t.amps) / sum;
+                    bool factored = false;
+                    solve_window(sys.landscape(symbolic, s), factored, g, src, s, p.four_neighbors, cur[k].data(),
+                                 spaces[tid]);
+                }
+                if (fp) {
+                    // Runs of one shape.
+                    for (std::size_t a = k0; a < k1;) {
+                        std::size_t b = a + 1;
+                        while (b < k1 && targets[start + b].shape == targets[start + a].shape) ++b;
+                        const Shape& s = targets[start + a].shape;
+                        double* srcs[8];
+                        double* curs[8];
+                        for (std::size_t k = a; k < b; ++k) {
+                            srcs[k - a] = sbuf[tid].data() + (k - k0) * window;
+                            curs[k - a] = fpcur[k].data();
+                        }
+                        ThreadSystems::Rect& rect = sys.flow(symbolic, s);
+                        flow_batch(rect.sys, rect.factored, s, p.four_neighbors, srcs, curs, static_cast<int>(b - a),
+                                   spaces[tid]);
+                        a = b;
+                    }
+                }
+                if (correct) {
+                    for (std::size_t k = k0; k < k1; ++k) {
+                        const Target& t = targets[start + k];
+                        const Shape& s = t.shape;
+                        double* c = cur[k].data();
+                        double* f = fp ? fpcur[k].data() : nullptr;
+                        // The part of the correction under the (clipped) window:
+                        // Omniscape keeps its first columns when the window is cut
+                        // on the right (on both sides too), its last when on the left.
+                        const i64 cx0 = t.x < D && t.x + D <= nx - 1 ? W - s.w : 0;
+                        const i64 cy0 = t.y < D && t.y + D <= ny - 1 ? W - s.h : 0;
+                        for (i64 y = 0; y < s.h; ++y)
+                            for (i64 x = 0; x < s.w; ++x) {
+                                const double k2 = corr[(cy0 + y) * W + (cx0 + x)];
+                                c[y * s.w + x] *= k2;
+                                if (fp) f[y * s.w + x] *= k2;
+                            }
+                    }
                 }
             } catch (const std::exception& e) {
 #pragma omp critical(omniscape_error)

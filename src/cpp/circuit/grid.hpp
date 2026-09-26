@@ -39,13 +39,15 @@ inline double edge_weight(double a, double b, bool diagonal) {
     return diagonal ? (a + b) / kTwoSqrt2 : (a + b) / 2;
 }
 
-// Nested-dissection elimination order of the marked cells (mark != 0) of a
-// row-major grid with `stride` columns inside rows [r0, r1) and columns
-// [c0, c1): the box is shrunk to its marked cells and cut by its middle row
-// or column (a single line separates both 4- and 8-neighbour grids), the two
-// halves are ordered first and the separator last. Small boxes keep row order.
-void nested_dissection(const std::uint8_t* mark, i64 stride, i64 r0, i64 r1, i64 c0, i64 c1,
-                       std::vector<i64>& order);
+// Node currents of a circuit over a w × h box (get_node_currents): the cells
+// with present != 0, conductance `g`, voltages `v`, finite grounds `finite`
+// (nullptr: none). Branch currents b = w (v_n - v_c) into each cell; those
+// under 1e-8 of the largest one of their direction (Circuitscape's signed
+// maxima over the upper and the lower triangle) are left out; the node
+// current is the larger of inflow and outflow, summed in column-major
+// neighbour order. Writes cur[] of the present cells only; `edges` is scratch.
+void node_currents(i64 w, i64 h, const double* g, const std::uint8_t* present, const double* v,
+                   const double* finite, bool four_neighbors, double* cur, std::vector<double>& edges);
 
 // Circuitscape's advanced mode on a raster (compute_omniscape_current):
 // `conductance`, `source` (amps) and `ground` (conductance to ground, +Inf =

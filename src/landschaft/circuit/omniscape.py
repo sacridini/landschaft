@@ -7,7 +7,7 @@ import warnings
 
 import numpy as np
 
-from .. import _core
+from ._backend import core
 from .advanced import _grid
 
 
@@ -122,7 +122,7 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
         s = np.where(s < source_threshold, 0.0, s)
     s = np.ascontiguousarray(s, dtype=np.float64)
     compute_fp = bool(flow_potential or normalized_current)
-    out = _core.circuit_omniscape(r, s, radius, buffer, block_size, bool(four_neighbors),
+    out = core().circuit_omniscape(r, s, radius, buffer, block_size, bool(four_neighbors),
                                   bool(resistance_is_conductance), bool(correct_artifacts), compute_fp, int(n_threads))
     cum = out["current"]
     data = {"cum_currmap": cum}

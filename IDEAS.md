@@ -245,7 +245,17 @@ Fases:
    fatoração em cache; soma por linhas em ordem fixa. 300×300, r = 25, bloco 3, com flow
    potential: Omniscape 17,4 s com 20 threads, landschaft 0,87 s (8,2 s numa thread));
 3. desempenho (reuso simbólico, cache do nulo, OpenMP, acumulação determinística) e
-   benchmark final contra o Omniscape;
+   benchmark final contra o Omniscape. **Feita** (0.43.0): Cholesky multifrontal próprio
+   sobre a ND geométrica (`system.cpp`: fronts densos nos separadores, LLT/TRSM/SYRK do
+   Eigen; r = 100: 26 → 12 ms, r = 200: 206 → 78 ms), estrutura simbólica por formato
+   compartilhada entre threads, substituição direta fundida na fatoração, flow potential
+   em lotes de até 8 alvos (`solve_many`), módulo `_circuit_avx2` (x86-64, carregado por
+   `cpu_supports_avx2_fma`; buffers alinhados a 64 bytes para o resultado não depender do
+   endereço). Com 20 threads: 800² r = 10 0,64 s (Omniscape 29,4 s), 700² r = 25 1,36 s
+   (46,7 s), 1000² r = 100 12,4 s (275 s). Ficou para depois: com r grande e muitas threads
+   a banda de memória limita (6× de 1 para 20 threads em r = 100; o fator de uma janela tem
+   13 MB); folhas da ND de 4 a 64 células dão o mesmo tempo; o Omniscape com `cholmod` é
+   tão lento quanto com `cg+amg`;
 4. conectividade condicional, reclassificação, `source_from_resistance`, `r_cutoff`, `.ini`,
    `precision = single`;
 5. opcionais: solver iterativo para raio grande; modos raster do Circuitscape (pairwise,

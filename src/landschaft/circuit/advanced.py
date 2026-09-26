@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .. import _core
+from ._backend import core
 
 
 @dataclass
@@ -99,5 +99,5 @@ def advanced(conductance, source, ground, *, four_neighbors: bool = False, n_thr
         raise ValueError("ground conductances cannot be negative")
     s = np.where(np.isnan(s), 0.0, s)
     gr = np.where(np.isnan(gr), 0.0, gr)
-    r = _core.circuit_advanced(np.where(np.isnan(g), 0.0, g), s, gr, bool(four_neighbors), int(n_threads))
+    r = core().circuit_advanced(np.where(np.isnan(g), 0.0, g), s, gr, bool(four_neighbors), int(n_threads))
     return AdvancedResult(_like(r["current"], like, "current"), _like(r["voltage"], like, "voltage"))

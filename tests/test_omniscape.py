@@ -167,3 +167,15 @@ class _nothing:
 
     def __exit__(self, *exc):
         return False
+
+
+def test_avx2_build_agrees_with_the_baseline():
+    if not _core.cpu_supports_avx2_fma():
+        pytest.skip("no AVX2/FMA on this CPU")
+    avx2 = pytest.importorskip("landschaft._circuit_avx2")
+    r = _map(9)
+    s = np.where(np.isnan(r), 0, 1 / np.nan_to_num(r, nan=1))
+    args = (r, s, 6, 2, 3, False, False, True, True, 0)
+    a, b = _core.circuit_omniscape(*args), avx2.circuit_omniscape(*args)
+    np.testing.assert_allclose(b["current"], a["current"], rtol=1e-11)
+    np.testing.assert_allclose(b["flow_potential"], a["flow_potential"], rtol=1e-11)
