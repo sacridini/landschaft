@@ -579,6 +579,25 @@ class Landscape:
             b[b == 0] = np.nan
         return self._wrap(b, "boundaries")
 
+    def show_patches(self, classes="global", **kwargs):
+        """Map of the patches (landscapemetrics' ``show_patches``); see
+        :func:`landschaft.show_patches`."""
+        from .plotting import show_patches
+
+        return show_patches(self, classes, **kwargs)
+
+    def show_cores(self, classes="all", **kwargs):
+        """Core and edge cells (``show_cores``); see :func:`landschaft.show_cores`."""
+        from .plotting import show_cores
+
+        return show_cores(self, classes, **kwargs)
+
+    def show_lsm(self, metric: str, classes="global", **kwargs):
+        """A patch metric on the map (``show_lsm``); see :func:`landschaft.show_lsm`."""
+        from .plotting import show_lsm
+
+        return show_lsm(self, metric, classes, **kwargs)
+
     def extract_metrics(self, y, *, extract_id=None, metric=None, name=None, type=None, what=None,
                         extras: bool = False, verbose: bool = True) -> pd.DataFrame:
         """Patch metrics of the patches under points, like landscapemetrics'

@@ -138,6 +138,7 @@ ls.scale_sample("landcover.tif", points_xy, size=[250, 500, 1000])  # scale_samp
 ls.write_table(ls.zonal_metrics("landcover.tif", gdf_zones), "zones.gpkg")   # zonal results with geometry
 lc.to_raster("pland", path="pland.tif")                         # class metric as a GeoTIFF
 ls.batch("landscape_metrics", "maps/*.tif", "out", table_format="parquet")
+lc.show_patches("all"); lc.show_lsm("shape"); ls.show_correlation(lc.metrics())  # matplotlib figures
 ```
 
 Options are those of landscapemetrics (`directions`, `count_boundary`,

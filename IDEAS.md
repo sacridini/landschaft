@@ -16,8 +16,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Uso e API
 
-- **Gráficos** (matplotlib opcional): `show_patches`, `show_cores`, `show_lsm`,
-  `show_correlation`.
 
 ## Exportação
 
@@ -118,3 +116,5 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
    `zonal_metrics` (GeoDataFrame por zona), `to_raster` de métricas de classe e com
    gravação, `scale_sample` (bit a bit com o landscapemetrics) e `batch()` com
    `"landscape_metrics"` / `"window_metrics"` (tabelas CSV ou Parquet). **Feita.**
+10. Gráficos com matplotlib (opcional): `show_patches`, `show_cores`, `show_lsm`,
+    `show_correlation`. **Feita.**

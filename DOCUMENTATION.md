@@ -894,6 +894,23 @@ blocks; `batch("window_metrics", ...)` writes one GeoTIFF per metric.
 `window_metrics`) are computed side by side when they are small and one after the
 other, each in parallel, when they are large.
 
+### Plots
+
+With matplotlib (`pip install landschaft[plot]`), like landscapemetrics' `show_*` (they
+return a `matplotlib.figure.Figure`; the maps use the raster's coordinates):
+
+```python
+lc.show_patches()                     # all patches, each in its own colour
+lc.show_patches("all", labels=True)   # one map per class, with patch ids
+lc.show_cores(edge_depth=2)           # core (dark) and edge (light) cells per class
+lc.show_lsm("shape", "all")           # a patch metric on the patches, with a colour bar
+ls.show_correlation(lc.metrics(level=["patch", "class"]), method="spearman", labels=True)
+ls.show_patches("landcover.tif", directions=4)    # rasters work too (Landscape options)
+```
+
+`classes` is `"global"` (one map), `"all"` (one per class) or class values;
+`show_cores` defaults to `consider_boundary=True` as in landscapemetrics' plot.
+
 ### Utilities (landscapemetrics' `get_*`, `extract_lsm`, `check_landscape`, `calculate_correlation`)
 
 ```python

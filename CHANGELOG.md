@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 10, plots (matplotlib, optional: `pip install
+  landschaft[plot]`): `ls.show_patches()` / `Landscape.show_patches()` (patches in their
+  own colours, one map or one per class, with patch ids), `show_cores()` (core and edge
+  cells, with core areas), `show_lsm()` (a patch metric on the map, with values) and
+  `show_correlation()` (correlation heatmaps per level), like landscapemetrics'
+  `show_*`; they return matplotlib Figures.
+- Optional dependency groups `plot` (matplotlib) and `vector` (geopandas, pyarrow).
+
 ## [0.20.0] - 2026-09-26
 
 ### Added
