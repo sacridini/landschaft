@@ -504,6 +504,216 @@ def _apply_included_pairs(points: FocalPoints, pairs: IncludedPairs | None):
     return points, pairs.excluded()
 
 
+def read_point_strengths(path) -> np.ndarray:
+    """Circuitscape's read_point_strengths: two columns, id and strength (ids from 0 shifted to 1)."""
+    t = _read_list_n(path, 2)
+    if t[:, 0].min() == 0:
+        t[:, 0] += 1
+    return t
+
+
+def _point_polymap(polymap, point_map: np.ndarray, ids: np.ndarray) -> np.ndarray:
+    # create_new_polymap with a point map: focal points and regions become polygons.
+    if polymap is None:
+        return point_map.astype(np.int64)
+    newpoly = polymap.copy()
+    no_regions = len(ids) == len(np.unique(ids))
+    cells = np.nonzero(point_map.T)  # column-major
+    cells = list(zip(cells[1], cells[0]))
+    if no_regions:
+        k = polymap.max()
+        for r, c in cells:
+            if polymap[r, c] == 0:
+                newpoly[r, c] = point_map[r, c] + k
+        return newpoly
+    k = max(polymap.max(), point_map.max())
+    for r, c in cells:
+        v1, v2 = point_map[r, c], newpoly[r, c]
+        if v2 == 0:
+            newpoly[r, c] = k + v1
+            continue
+        if v1 != v2:
+            newpoly[newpoly == v2] = v1
+    return newpoly
+
+
+def _one_to_all(g, poly, points: FocalPoints, strengths, pairs: IncludedPairs | None, one_to_all: bool, four, avg,
+                opts: dict, emit, n_threads) -> CircuitscapeResult:
+    # run_onetoall
+    ny, nx = g.shape
+    if pairs is not None:
+        keep = np.isin(points.ids, pairs.ids)
+        points = FocalPoints(points.rows[keep], points.cols[keep], points.ids[keep])
+        if strengths is not None:
+            strengths = strengths[np.isin(strengths[:, 0], pairs.ids)]
+    rows, cols = points.cells
+    cells = rows * nx + cols
+    ids = points.ids
+    point_map = np.zeros((ny, nx), dtype=np.int64)
+    point_map[rows, cols] = ids
+    unique_ids, first = np.unique(ids, return_index=True)
+    unique_map = np.zeros((ny, nx), dtype=np.int64)
+    unique_map[rows[first], cols[first]] = unique_ids
+    no_regions = len(ids) == len(unique_ids)
+    mode = 0 if pairs is not None and pairs.mode == "include" else 1
+    base_poly = _point_polymap(poly, point_map, ids)
+    res = np.zeros(len(unique_ids))
+    cum = np.zeros((ny, nx)) if opts["cum"] else None
+    mx = np.full((ny, nx), NODATA) if opts["max"] else None
+    policy = "rmvgnd" if one_to_all else "rmvsrc"
+    maps: dict = {}
+
+    def problem(i):
+        n = int(unique_ids[i])
+        pm = point_map.copy()
+        newpoly = base_poly
+        strength = float(strengths[i, 1]) if strengths is not None else 1.0
+        if pairs is not None:
+            row = int(np.nonzero(pairs.ids == n)[0][0])
+            for j in range(len(pairs.ids)):
+                if j != row and pairs.matrix[row, j] == mode:
+                    pm[pm == pairs.ids[j]] = 0
+            if not no_regions:
+                newpoly = _point_polymap(poly, pm, ids)
+        smap = None
+        if strengths is not None:
+            st = strengths[:, 1].copy()
+            st[pm[rows, cols] == 0] = 1.0
+            smap = np.zeros((ny, nx))
+            smap[rows, cols] = st[: len(rows)]
+        if pm.sum() == n:
+            return None
+        if one_to_all:
+            src = np.where(unique_map == n, strength, 0.0)
+            gnd = np.where(pm == n, 0, pm).astype(np.float64)
+            gnd[gnd > 0] = np.inf
+        else:
+            if smap is not None:
+                src = np.where(unique_map == n, 0.0, smap)
+            else:
+                src = np.where(unique_map != 0, 1.0, 0.0)
+                src = np.where(pm == n, 0.0, src)
+            gnd = np.where(pm == n, np.inf, 0.0)
+        sc, gc = np.flatnonzero(src), np.flatnonzero(gnd)
+        return {"n": n, "strength": strength, "poly": newpoly,
+                "src_cells": sc.astype(np.int64), "src_vals": src.ravel()[sc], "gnd_cells": gc.astype(np.int64),
+                "gnd_vals": gnd.ravel()[gc], "check_cell": int(cells[np.nonzero(ids == n)[0][0]])}
+
+    threads = n_threads if n_threads > 0 else (os.cpu_count() or 1)
+    batch = max(1, 4 * threads)
+    for b0 in range(0, len(unique_ids), batch):
+        probs = [(i, problem(i)) for i in range(b0, min(len(unique_ids), b0 + batch))]
+        todo = [(i, q) for i, q in probs if q is not None]
+        for i, q in probs:
+            if q is None:
+                res[i] = -1
+        # One call per graph (focal regions with included pairs rebuild it per point).
+        groups: list[tuple[object, list]] = []
+        for i, q in todo:
+            if groups and groups[-1][0] is q["poly"]:
+                groups[-1][1].append((i, q))
+            else:
+                groups.append((q["poly"], [(i, q)]))
+        solved: dict[int, tuple] = {}
+        for pm_, items in groups:
+            out = core().circuitscape_multi_advanced(np.ascontiguousarray(g, dtype=np.float64),
+                                                     np.ascontiguousarray(pm_, dtype=np.int64), bool(avg), bool(four),
+                                                     [q for _, q in items], policy, int(n_threads))
+            for (i, _), r in zip(items, out["results"]):
+                solved[i] = (out["nodemap"], r)
+        for i, q in todo:
+            nm, r = solved[i]
+            n = q["n"]
+            if not r["solved"]:
+                res[i] = -1
+            elif not one_to_all:
+                res[i] = 0
+            else:
+                node = nm[unique_map == n][0]
+                val = 0.0 if node < 0 else r["voltage"][node] / q["strength"]
+                res[i] = -1 if val == 0 else val
+            on = nm >= 0
+            volt = np.zeros((ny, nx))
+            volt[on] = r["voltage"][nm[on]]
+            cur = np.zeros((ny, nx))
+            cur[on] = r["current"][nm[on]]
+            if opts["focal_zero"]:
+                cur[np.isin(nm, r["active"])] = 0.0
+            if cum is not None:
+                cum += cur
+            if mx is not None:
+                np.maximum(mx, cur, out=mx)
+            emit(n, volt if opts["volt_maps"] else None, cur if opts["cur_maps"] else None)
+    if cum is not None:
+        cum[cum < NODATA] = NODATA
+    if mx is not None:
+        mx[mx < NODATA] = NODATA
+    result = np.column_stack([unique_ids.astype(np.float64), res])
+    return CircuitscapeResult(resistances=result, cum_current=cum, max_current=mx, maps=maps)
+
+
+def circuitscape_one_to_all(habitat, points, *, all_to_one: bool = False, habitat_is_resistance: bool = True,
+                            polygons=None, mask=None, four_neighbors: bool = False, avg_resistances: bool = False,
+                            included_pairs=None, strengths=None, voltage_maps: bool = False,
+                            current_maps: bool = False, cum_map: bool = False, max_map: bool = False,
+                            set_focal_node_currents_to_zero: bool = False, reclass: dict | None = None,
+                            n_threads: int = 0) -> CircuitscapeResult:
+    """Circuitscape's one-to-all (or, with ``all_to_one``, all-to-one) mode on rasters.
+
+    For every focal point in turn (``points`` as in
+    :func:`circuitscape_pairwise`; the focal points and regions are merged
+    into the short-circuit regions): one-to-all injects 1 A (or its
+    ``strengths`` value: a two-column table of id and strength) there with
+    every other focal point a direct ground; all-to-one grounds it and injects
+    1 A (or the strengths) at the others. Only the point's component is
+    solved; the points run in parallel. Circuitscape's quirks are kept
+    (points pruned by ``included_pairs`` in both of its modes, excluded points
+    still sourcing in all-to-one, strengths indexed by position).
+
+    Returns
+    -------
+    CircuitscapeResult
+        ``resistances``: ids and the voltage over the strength at each point
+        (one-to-all; -1 where nothing was solved) or 0 (all-to-one);
+        ``cum_current``, ``max_current``, and the per-point maps in ``maps``.
+    """
+    cells = _array(habitat, "habitat")
+    g = habitat_conductance(cells, is_resistance=habitat_is_resistance, reclass=reclass)
+    poly = _polymap(polygons, g.shape)
+    g = _mask(g, mask)
+    points = _as_points(points, g.shape)
+    if included_pairs is not None and not isinstance(included_pairs, IncludedPairs):
+        included_pairs = read_included_pairs(included_pairs)
+    if strengths is not None and isinstance(strengths, (str, os.PathLike)):
+        strengths = read_point_strengths(strengths)
+    maps: dict = {}
+
+    def emit(n, volt, cur):
+        if volt is not None:
+            maps[("voltage", n)] = volt
+        if cur is not None:
+            maps[("current", n)] = cur
+
+    opts = {"volt_maps": voltage_maps, "cur_maps": current_maps, "cum": current_maps or cum_map, "max": max_map,
+            "focal_zero": set_focal_node_currents_to_zero}
+    r = _one_to_all(g, poly, points, None if strengths is None else np.asarray(strengths, dtype=np.float64),
+                    included_pairs, not all_to_one, four_neighbors, avg_resistances, opts, emit, n_threads)
+    r.maps = maps
+    return r
+
+
+def _as_points(points, shape) -> FocalPoints:
+    if isinstance(points, FocalPoints):
+        return points
+    pm = _cells_from_map(points, "points", shape)
+    pm[pm == NODATA] = 0
+    jj, ii = np.nonzero(pm.T)
+    v = pm[ii, jj]
+    keep = v >= 0
+    order = np.argsort(v[keep], kind="stable")
+    return FocalPoints((ii[keep] + 1)[order], (jj[keep] + 1)[order], v[keep][order].astype(np.int64))
+
+
 # --- INI files --------------------------------------------------------------------------
 
 DEFAULTS = {
@@ -560,12 +770,11 @@ def _write_grid(prefix: str, values: np.ndarray, meta: RasterMeta, tif: bool) ->
                            compress="lzw") as ds:
             ds.write(out, 1)
         return
-    with open(prefix + ".asc", "w", encoding="utf-8") as f:
-        f.write(f"ncols         {meta.ncols}\nnrows         {meta.nrows}\n")
-        f.write(f"xllcorner     {meta.xllcorner!r}\nyllcorner     {meta.yllcorner!r}\n")
-        f.write(f"cellsize      {meta.cellsize!r}\nNODATA_value  -9999\n")
-        for row in out:
-            f.write(" ".join(repr(float(v)) for v in row) + "\n")
+    with open(prefix + ".asc", "wb") as f:
+        f.write(f"ncols         {meta.ncols}\nnrows         {meta.nrows}\n".encode())
+        f.write(f"xllcorner     {meta.xllcorner!r}\nyllcorner     {meta.yllcorner!r}\n".encode())
+        f.write(f"cellsize      {meta.cellsize!r}\nNODATA_value  -9999\n".encode())
+        f.write(core().ascii_grid_rows(np.ascontiguousarray(out, dtype=np.float64)))
     if meta.wkt:
         Path(prefix + ".prj").write_text(meta.wkt)
 
@@ -669,7 +878,31 @@ def circuitscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0) ->
         res, r = _pairwise(g, poly, points, excluded, four, avg, opts, emit, n_threads)
         result = CircuitscapeResult(resistances=res, cum_current=r.get("cum"), max_current=r.get("max"), maps=maps)
     else:
-        raise NotImplementedError(f"scenario = {scenario} is not implemented yet")
+        points = read_point_map(need("point_file"), meta)
+        pairs = read_included_pairs(need("included_pairs_file")) if _flag(cfg, "use_included_pairs") else None
+        strengths = (read_point_strengths(need("variable_source_file"))
+                     if _flag(cfg, "use_variable_source_strengths") else None)
+        cum_only = _flag(cfg, "write_cum_cur_map_only")
+        opts = {"volt_maps": _flag(cfg, "write_volt_maps"),
+                # advanced_kernel writes every point's current map with write_cum_cur_map_only too
+                "cur_maps": _flag(cfg, "write_cur_maps") or cum_only,
+                "cum": _flag(cfg, "write_cur_maps") or cum_only, "max": _flag(cfg, "write_max_cur_maps"),
+                "focal_zero": _flag(cfg, "set_focal_node_currents_to_zero")}
+        prefix, tif = _prefix(cfg) if write_outputs else (None, False)
+        maps = {}
+
+        def emit_point(n, volt, cur):
+            for kind, grid in (("voltmap", volt), ("curmap", cur)):
+                if grid is None:
+                    continue
+                if write_outputs:
+                    _write_grid(f"{prefix}_{kind}_{n}", grid, meta, tif)
+                else:
+                    maps[f"{kind}_{n}"] = grid
+
+        result = _one_to_all(g, poly, points, strengths, pairs, scenario == "one-to-all", four, avg, opts,
+                             emit_point, n_threads)
+        result.maps = maps
 
     if write_outputs:
         _write_outputs(cfg, scenario, result, meta, base)

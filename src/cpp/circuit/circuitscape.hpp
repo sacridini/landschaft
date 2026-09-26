@@ -45,9 +45,24 @@ enum class ConflictPolicy { KeepAll, RemoveSource, RemoveGround, RemoveAll };
 struct NodeSolution {
     std::vector<double> voltage, current;  // per node
     bool solved = false;
+    std::vector<std::int32_t> active;      // nodes with a source or a ground after the policy
 };
+// With only_node >= 0 only its component is solved (check_node of the
+// one-to-all driver); only_node == -2 solves nothing (a focal point off the graph).
 NodeSolution raster_advanced(const RasterGraph& g, std::vector<double> source, std::vector<double> ground,
-                             ConflictPolicy policy, int max_threads);
+                             ConflictPolicy policy, int max_threads, std::int32_t only_node = -1);
+
+// Many advanced-mode problems on one graph (the one-to-all driver), each
+// with its own sources, grounds and check node (-1: every component; -2:
+// nothing). When the nodes that carry a source or a ground in any problem
+// are few, every component is factorised once without them and each problem
+// is solved through the dense Schur complement on them (exact; one more
+// triangular solve per problem); otherwise every problem is factorised. The
+// problems run in parallel.
+std::vector<NodeSolution> raster_advanced_many(const RasterGraph& g, const std::vector<std::vector<double>>& sources,
+                                               const std::vector<std::vector<double>>& grounds,
+                                               const std::vector<std::int32_t>& only_nodes, ConflictPolicy policy,
+                                               int max_threads);
 
 // Per-node sums of a cell map through the node map (column-major, as
 // Circuitscape's fill_sources_and_grounds!).

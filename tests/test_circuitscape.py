@@ -180,3 +180,52 @@ def test_pairwise_matches_circuitscape(ini, in_cs):
     for kind in theirs:
         want = z[f"{name}/{kind}.asc"]
         np.testing.assert_allclose(r.maps[kind], want, rtol=1e-9, atol=1e-11 * max(np.abs(want).max(), 1e-300))
+
+
+def test_one_to_all_api_matches_the_ini(in_cs):
+    ini = "input/raster/one_to_all/1/oneToAllVerify1.ini"
+    cfg = cs.parse_config(ini)
+    a = cs.circuitscape_ini(ini, write_outputs=False)
+    cells, meta = cs.read_raster(cfg["habitat_file"])
+    b = cs.circuitscape_one_to_all(cells, cs.read_point_map(cfg["point_file"], meta),
+                                   polygons=cs.read_raster(cfg["polygon_file"])[0],
+                                   four_neighbors=cfg["connect_four_neighbors_only"] == "True",
+                                   avg_resistances=cfg["connect_using_avg_resistances"] == "True",
+                                   current_maps=True, n_threads=1)
+    np.testing.assert_array_equal(a.resistances, b.resistances)
+    np.testing.assert_array_equal(a.cum_current, b.cum_current)
+    ours = {f"curmap_{n}" for kind, n in b.maps if kind == "current"}
+    assert ours == {k for k in a.maps if k.startswith("curmap_")}
+    for kind, n in b.maps:
+        np.testing.assert_array_equal(b.maps[(kind, n)], a.maps[f"curmap_{n}"])
+
+
+def test_one_to_all_writes_outputs(tmp_path, monkeypatch):
+    monkeypatch.chdir(CS)
+    ini = tmp_path / "run.ini"
+    src = CS / "input/raster/one_to_all/2/oneToAllVerify2.ini"
+    text = src.read_text()
+    out = cs.parse_config(src)["output_file"]
+    ini.write_text(text.replace(out, (tmp_path / "ota.out").as_posix()))
+    r = cs.circuitscape_ini(ini)
+    np.testing.assert_array_equal(cs.read_raster(tmp_path / "ota_cum_curmap.asc")[0], r.cum_current)
+    assert (tmp_path / "ota_curmap_1.asc").exists() and (tmp_path / "ota_voltmap_1.asc").exists()
+
+
+@pytest.mark.reference
+@pytest.mark.parametrize("ini", _inis("one_to_all") + _inis("all_to_one"))
+def test_one_to_all_matches_circuitscape(ini, in_cs):
+    z = np.load(REF / "circuitscape.npz")
+    name = Path(ini).stem
+    r = cs.circuitscape_ini(ini, write_outputs=False)
+    np.testing.assert_allclose(r.resistances, z[f"{name}/result.txt"], rtol=1e-11, atol=1e-13)
+    for key, ours in (("cum_curmap.asc", r.cum_current), ("max_curmap.asc", r.max_current)):
+        if f"{name}/{key}" in z.files:
+            want = z[f"{name}/{key}"]
+            np.testing.assert_allclose(ours, want, rtol=1e-11, atol=1e-12 * np.abs(want).max())
+    theirs = {k.split("/")[1][:-4] for k in z.files if k.startswith(name + "/")
+              and k.split("/")[1].startswith(("curmap_", "voltmap_"))}
+    assert set(r.maps) == theirs
+    for kind in theirs:
+        want = z[f"{name}/{kind}.asc"]
+        np.testing.assert_allclose(r.maps[kind], want, rtol=1e-11, atol=1e-12 * max(np.abs(want).max(), 1e-300))

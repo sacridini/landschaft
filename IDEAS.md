@@ -294,8 +294,14 @@ Fases:
      par (`region_polymap` = `create_new_polymap`), pares em paralelo; sg1–17 batem,
      sgVerify17 a 9e-10 relativo porque o CHOLMOD resolve a laplaciana singular com
      deslocamento 10ε);
-   - 5d. one-to-all e all-to-one (fontes variáveis, `set_focal_node_currents_to_zero`);
+   - 5d. one-to-all e all-to-one (fontes variáveis, `set_focal_node_currents_to_zero`).
+     **Feita** (0.48.0: o driver em Python monta fontes e terras por ponto como o
+     `run_onetoall`, e `circuitscape_multi_advanced` resolve os pontos em paralelo sobre um
+     grafo, só no componente do ponto; os 25 casos a 5e-14);
    - 5e. `ls.circuit.circuitscape_ini(path)` e a gravação das saídas como o Circuitscape.
+     **Feita** junto com 5b–5d (todos os cenários raster; mapas `.asc`/`.tif`,
+     `_resistances.out`, `_resistances_3columns.out`, a configuração em `output_file`).
+     Fase 5 concluída; o modo de rede (grafos) do Circuitscape continua fora.
    O modo de rede (grafos) fica de fora por enquanto.
 
 Referência: Julia 1.13.0 (`C:\Users\eduar\AppData\Local\Programs\Julia-1.13.0`) com

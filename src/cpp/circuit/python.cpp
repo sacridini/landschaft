@@ -9,7 +9,10 @@
 
 #include <pybind11/numpy.h>
 
+#include <algorithm>
+#include <charconv>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <functional>
 #include <string>
@@ -272,6 +275,129 @@ py::dict circuitscape_pairwise(const CArray<double>& gmap, const py::object& pol
     return out;
 }
 
+// A batch of advanced solves on one graph (the one-to-all driver): every
+// problem gives its source and ground cells and values (summed per node in
+// column-major cell order) and the cell of its check node (-1: every
+// component). Problems run in parallel, one thread each.
+py::dict circuitscape_multi_advanced(const CArray<double>& gmap, const py::object& polymap, bool avg_resistances,
+                                     bool four_neighbors, const py::list& problems, const std::string& policy,
+                                     int n_threads) {
+    if (gmap.ndim() != 2) throw py::value_error("expected a 2-D habitat raster");
+    const i64 ny = gmap.shape(0), nx = gmap.shape(1);
+    CArray<std::int64_t> keep;
+    const std::int64_t* pm = polymap_data(polymap, keep, nx, ny);
+    const circuit::ConflictPolicy pol = conflict_policy(policy);
+    struct Problem {
+        std::vector<std::int64_t> src_cells, gnd_cells;
+        std::vector<double> src_vals, gnd_vals;
+        std::int64_t check = -1;
+    };
+    std::vector<Problem> probs;
+    for (const py::handle& h : problems) {
+        const py::dict d = h.cast<py::dict>();
+        Problem q;
+        const auto sc = d["src_cells"].cast<CArray<std::int64_t>>();
+        const auto sv = d["src_vals"].cast<CArray<double>>();
+        const auto gc = d["gnd_cells"].cast<CArray<std::int64_t>>();
+        const auto gv = d["gnd_vals"].cast<CArray<double>>();
+        q.src_cells.assign(sc.data(), sc.data() + sc.size());
+        q.src_vals.assign(sv.data(), sv.data() + sv.size());
+        q.gnd_cells.assign(gc.data(), gc.data() + gc.size());
+        q.gnd_vals.assign(gv.data(), gv.data() + gv.size());
+        q.check = d["check_cell"].cast<std::int64_t>();
+        probs.push_back(std::move(q));
+    }
+    circuit::RasterGraph g;
+    std::vector<circuit::NodeSolution> sols(probs.size());
+    run_parallel(n_threads, [&] {
+        g = circuit::raster_graph(gmap.data(), pm, nx, ny, avg_resistances, four_neighbors);
+        // Per node sums in column-major cell order.
+        auto sums = [&](const std::vector<std::int64_t>& cells, const std::vector<double>& vals) {
+            std::vector<std::size_t> order(cells.size());
+            for (std::size_t k = 0; k < order.size(); ++k) order[k] = k;
+            std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+                const std::int64_t ca = cells[a], cb = cells[b];
+                return std::make_pair(ca % nx, ca / nx) < std::make_pair(cb % nx, cb / nx);
+            });
+            std::vector<double> s(static_cast<std::size_t>(g.n_nodes), 0.0);
+            for (std::size_t k : order) {
+                const std::int32_t v = g.nodemap[static_cast<std::size_t>(cells[k])];
+                if (v >= 0 && vals[k] != 0) s[static_cast<std::size_t>(v)] += vals[k];
+            }
+            return s;
+        };
+        std::vector<std::vector<double>> srcs, gnds;
+        std::vector<std::int32_t> only;
+        for (const Problem& q : probs) {
+            srcs.push_back(sums(q.src_cells, q.src_vals));
+            gnds.push_back(sums(q.gnd_cells, q.gnd_vals));
+            std::int32_t o = -1;
+            if (q.check >= 0) {
+                o = g.nodemap[static_cast<std::size_t>(q.check)];
+                if (o < 0) o = -2;
+            }
+            only.push_back(o);
+        }
+        sols = circuit::raster_advanced_many(g, srcs, gnds, only, pol, n_threads);
+        return 0;
+    });
+    py::dict out;
+    std::vector<std::int32_t> nodemap = g.nodemap;
+    auto* holder = new std::vector<std::int32_t>(std::move(nodemap));
+    py::capsule owner(holder, [](void* q) { delete static_cast<std::vector<std::int32_t>*>(q); });
+    out["nodemap"] = py::array_t<std::int32_t>({ny, nx}, holder->data(), owner);
+    py::list results;
+    for (auto& sol : sols) {
+        py::dict r;
+        r["voltage"] = vector_to_array(std::move(sol.voltage));
+        r["current"] = vector_to_array(std::move(sol.current));
+        r["active"] = vector_to_array(std::move(sol.active));
+        r["solved"] = sol.solved;
+        results.append(r);
+    }
+    out["results"] = results;
+    return out;
+}
+
+// The body of an ESRI ASCII grid: every value in its shortest form that
+// reads back to the same double (NaN written as -9999), rows in parallel.
+py::bytes ascii_grid_rows(const CArray<double>& a) {
+    if (a.ndim() != 2) throw py::value_error("expected a 2-D array");
+    const i64 ny = a.shape(0), nx = a.shape(1);
+    const double* d = a.data();
+    std::vector<std::string> rows(static_cast<std::size_t>(ny));
+    {
+        py::gil_scoped_release release;
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(static)
+#endif
+        for (long long y = 0; y < static_cast<long long>(ny); ++y) {
+            std::string& out = rows[static_cast<std::size_t>(y)];
+            out.reserve(static_cast<std::size_t>(nx) * 12);
+            char buf[64];
+            for (i64 x = 0; x < nx; ++x) {
+                double v = d[y * nx + x];
+                if (std::isnan(v)) v = -9999.0;
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+                const auto r = std::to_chars(buf, buf + sizeof buf, v);
+                const std::size_t len = static_cast<std::size_t>(r.ptr - buf);
+#else
+                const int len = std::snprintf(buf, sizeof buf, "%.17g", v);
+#endif
+                if (x) out.push_back(' ');
+                out.append(buf, static_cast<std::size_t>(len));
+            }
+            out.push_back('\n');
+        }
+    }
+    std::size_t total = 0;
+    for (const auto& r : rows) total += r.size();
+    std::string all;
+    all.reserve(total);
+    for (const auto& r : rows) all += r;
+    return py::bytes(all);
+}
+
 }  // namespace
 
 namespace circuit {
@@ -297,6 +423,11 @@ void register_python(py::module_& m) {
           py::arg("point_cells"), py::arg("excluded"), py::arg("avg_resistances"), py::arg("four_neighbors"),
           py::arg("options"), py::arg("emit") = py::none(), py::arg("n_threads") = 0,
           "Circuitscape's pairwise mode on a raster: resistances and current maps.");
+    m.def("ascii_grid_rows", &ascii_grid_rows, py::arg("values"),
+          "Rows of an ASCII grid: shortest round-trip values, NaN as -9999.");
+    m.def("circuitscape_multi_advanced", &circuitscape_multi_advanced, py::arg("gmap"), py::arg("polymap"),
+          py::arg("avg_resistances"), py::arg("four_neighbors"), py::arg("problems"), py::arg("policy"),
+          py::arg("n_threads") = 0, "Advanced-mode solves of several source/ground sets on one raster graph.");
 }
 
 }  // namespace circuit

@@ -1699,6 +1699,10 @@ p = circuitscape_pairwise("resistance.tif", "sites.asc", included_pairs="pairs.t
 p.resistances          # ids in the first row and column, -1 where not connected
 p.cum_current          # the pairs' current maps summed
 
+# one-to-all (all_to_one=True: all-to-one): every focal point in turn against the others
+o = circuitscape_one_to_all("resistance.tif", "sites.asc", strengths="strengths.txt", cum_map=True)
+o.resistances          # ids and the voltage over the injected strength at each point
+
 r = circuitscape_ini("job.ini")      # a Circuitscape INI file; maps written next to output_file
 ```
 
@@ -1728,8 +1732,17 @@ singular Laplacian shifted by 10ε), and its pairs are solved in parallel batche
 hand sides; without maps and exclusions Circuitscape's shortcut applies (only the pairs of
 the first focal point are solved, the others follow from its voltages, with its quirks).
 Focal regions (several cells of one id) get a graph per pair, the two regions merged with
-the polygons they touch, as Circuitscape does; the pairs run in parallel. The one-to-all
-and all-to-one modes are next (IDEAS.md).
+the polygons they touch, as Circuitscape does; the pairs run in parallel.
+`scenario = one-to-all` / `all-to-one`: the focal points and regions are merged into the
+short-circuit regions; for every focal point one-to-all injects 1 A (or its variable
+source strength) there with every other point a direct ground, all-to-one grounds it
+and injects at the others; only its component is solved (the points in parallel, on one
+graph unless focal regions meet an include file); results `id, resistance` (one-to-all:
+voltage over strength, -1 when not solved; all-to-one: 0), per-point voltage and current
+maps (`_voltmap_<id>`, `_curmap_<id>`), cumulative and maximum maps. Circuitscape's
+quirks are kept: the include file prunes the points in both of its modes, excluded
+points still inject current in all-to-one, variable strengths are taken by position,
+and a point alone on its map is skipped.
 
 Verification: `python tools/make_reference_circuitscape.py` copies Circuitscape's raster
 test inputs (`tests/data/reference/circuit/circuitscape/input/raster`, MIT) and runs every
@@ -1740,4 +1753,23 @@ value, with the same zero cells. In pairwise mode (`sgVerify1`-`17`: polygons, f
 regions, masks, included pairs, 4 and 8 neighbours, voltage, current, cumulative and
 maximum maps) the resistances agree to 1e-12 (to 9e-10 relative on `sgVerify17`,
 resistances up to 3e3, where CHOLMOD's shifted singular solve itself loses digits) and
-every map to 3e-13, with exactly the same set of per-pair maps.
+every map to 3e-13, with exactly the same set of per-pair maps. In one-to-all and
+all-to-one (`oneToAllVerify1`-`13`, `allToOneVerify1`-`12`: polygons, focal regions,
+include files, variable strengths, masks, focal-node currents set to zero) the results
+and every map agree to 5e-14.
+
+Timings (i5-13600K, 20 threads; a 1000×1000 log-normal resistance ASCII grid, 20 focal
+points; reading and writing the ASCII grids included; Circuitscape 6.1 with its default
+cg+amg, after compilation):
+
+| run | Circuitscape | landschaft |
+|---|---|---|
+| pairwise, resistances only | 8.7 s | 2.7 s |
+| pairwise with the cumulative current map (190 pairs) | 76.5 s | 9.5 s |
+| one-to-all with every point's current map | 21.8 s | 4.6 s |
+
+The results agree with Circuitscape's cg+amg to its tolerance (resistances to 7e-7). In
+one-to-all and all-to-one the focal points are the only nodes with sources or grounds, so
+every component is factorised once without them and each point is solved through the
+dense Schur complement on the focal nodes (Circuitscape factorises the graph once per
+point). ASCII grids are written by a parallel C++ formatter (shortest round-trip values).

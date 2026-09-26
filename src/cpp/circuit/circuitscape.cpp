@@ -15,6 +15,9 @@
 #include <omp.h>
 #endif
 
+#include <Eigen/Cholesky>
+#include <Eigen/Core>
+
 #include "circuit/system.hpp"
 
 namespace circuit {
@@ -257,7 +260,7 @@ std::vector<double> node_sums(const RasterGraph& g, const double* cells) {
 }
 
 NodeSolution raster_advanced(const RasterGraph& g, std::vector<double> src, std::vector<double> gnd,
-                             ConflictPolicy policy, int max_threads) {
+                             ConflictPolicy policy, int max_threads, std::int32_t only_node) {
     const double inf = std::numeric_limits<double>::infinity();
     const std::int32_t n = g.n_nodes;
     NodeSolution out;
@@ -277,6 +280,8 @@ NodeSolution raster_advanced(const RasterGraph& g, std::vector<double> src, std:
     }
     for (std::int32_t v = 0; v < n; ++v)
         if (gnd[v] == inf && src[v] > 0) gnd[v] = 0.0;
+    for (std::int32_t v = 0; v < n; ++v)
+        if (src[v] != 0 || gnd[v] != 0) out.active.push_back(v);
 
     // Components in order, their nodes ascending.
     std::vector<std::int64_t> start(static_cast<std::size_t>(g.n_comp) + 1, 0);
@@ -289,6 +294,7 @@ NodeSolution raster_advanced(const RasterGraph& g, std::vector<double> src, std:
     }
     std::vector<std::int32_t> solvable;
     for (std::int32_t k = 0; k < g.n_comp; ++k) {
+        if (only_node == -2 || (only_node >= 0 && g.comp[only_node] != k)) continue;
         double s = 0.0, t = 0.0;
         for (std::int64_t p = start[k]; p < start[k + 1]; ++p) {
             s += src[members[p]];
@@ -676,6 +682,223 @@ PairwiseResult raster_pairwise_regions(const double* gmap, const std::int64_t* p
     for (std::int32_t i = 0; i < np; ++i) out.resistances[static_cast<std::size_t>(i) * np + i] = 0.0;
     if (o.cum)
         for (double& c : out.cum) c = c < -9999 ? -9999 : c;
+    return out;
+}
+
+}  // namespace circuit
+
+namespace circuit {
+
+namespace {
+
+// resolve_conflicts for one problem: the sources and grounds after the policy,
+// the finite grounds taken before it, and whether any node has one.
+struct Resolved {
+    std::vector<double> src, gnd, finite;
+    bool any_finite = false;
+};
+
+Resolved resolve(std::vector<double> src, std::vector<double> gnd, ConflictPolicy policy) {
+    const double inf = std::numeric_limits<double>::infinity();
+    Resolved r;
+    const std::size_t n = src.size();
+    r.finite.assign(n, 0.0);
+    for (std::size_t v = 0; v < n; ++v) {
+        r.finite[v] = gnd[v] < inf ? gnd[v] : 0.0;
+        if (r.finite[v] != 0) r.any_finite = true;
+    }
+    for (std::size_t v = 0; v < n; ++v) {
+        if (!(src[v] != 0 && gnd[v] != 0)) continue;
+        if (policy == ConflictPolicy::RemoveSource || policy == ConflictPolicy::RemoveAll) src[v] = 0.0;
+        else if (policy == ConflictPolicy::RemoveGround) gnd[v] = 0.0;
+    }
+    for (std::size_t v = 0; v < n; ++v)
+        if (gnd[v] == inf && src[v] > 0) gnd[v] = 0.0;
+    r.src = std::move(src);
+    r.gnd = std::move(gnd);
+    return r;
+}
+
+}  // namespace
+
+std::vector<NodeSolution> raster_advanced_many(const RasterGraph& g, const std::vector<std::vector<double>>& sources,
+                                               const std::vector<std::vector<double>>& grounds,
+                                               const std::vector<std::int32_t>& only_nodes, ConflictPolicy policy,
+                                               int max_threads) {
+    const double inf = std::numeric_limits<double>::infinity();
+    const std::size_t np = sources.size();
+    const std::int32_t n = g.n_nodes;
+    const int threads =
+#if defined(_OPENMP)
+        max_threads > 0 ? max_threads : omp_get_max_threads();
+#else
+        1;
+    (void)max_threads;
+#endif
+    std::vector<Resolved> res(np);
+    std::vector<std::uint8_t> special(static_cast<std::size_t>(n), 0);
+    for (std::size_t p = 0; p < np; ++p) {
+        res[p] = resolve(sources[p], grounds[p], policy);
+        for (std::int32_t v = 0; v < n; ++v)
+            if (res[p].src[v] != 0 || res[p].gnd[v] != 0 || res[p].finite[v] != 0) special[v] = 1;
+    }
+    std::vector<NodeSolution> out(np);
+    for (std::size_t p = 0; p < np; ++p) {
+        out[p].voltage.assign(static_cast<std::size_t>(n), 0.0);
+        out[p].current.assign(static_cast<std::size_t>(n), 0.0);
+        for (std::int32_t v = 0; v < n; ++v)
+            if (res[p].src[v] != 0 || res[p].gnd[v] != 0) out[p].active.push_back(v);
+    }
+    // Components, their nodes ascending.
+    std::vector<std::int64_t> start(static_cast<std::size_t>(g.n_comp) + 1, 0);
+    for (std::int32_t v = 0; v < n; ++v) ++start[static_cast<std::size_t>(g.comp[v]) + 1];
+    for (std::int32_t k = 0; k < g.n_comp; ++k) start[k + 1] += start[k];
+    std::vector<std::int32_t> members(static_cast<std::size_t>(n));
+    {
+        std::vector<std::int64_t> fill(start.begin(), start.end() - 1);
+        for (std::int32_t v = 0; v < n; ++v) members[static_cast<std::size_t>(fill[g.comp[v]]++)] = v;
+    }
+    // The problems to solve in every component (advanced_kernel's tests).
+    std::vector<std::vector<std::size_t>> todo(static_cast<std::size_t>(g.n_comp));
+    for (std::size_t p = 0; p < np; ++p) {
+        const std::int32_t only = only_nodes[p];
+        for (std::int32_t k = 0; k < g.n_comp; ++k) {
+            if (only == -2 || (only >= 0 && g.comp[only] != k)) continue;
+            double sum_s = 0.0, sum_g = 0.0;
+            for (std::int64_t q = start[k]; q < start[k + 1]; ++q) {
+                sum_s += res[p].src[members[q]];
+                sum_g += res[p].gnd[members[q]];
+            }
+            if (sum_s != 0 && sum_g != 0) {
+                todo[static_cast<std::size_t>(k)].push_back(p);
+                out[p].solved = true;
+            }
+        }
+    }
+
+    for (std::int32_t k = 0; k < g.n_comp; ++k) {
+        const std::vector<std::size_t>& probs = todo[static_cast<std::size_t>(k)];
+        if (probs.empty()) continue;
+        const std::int64_t p0 = start[k], p1 = start[k + 1];
+        const std::int32_t* mem = members.data() + p0;
+        const std::int64_t count = p1 - p0;
+        std::vector<std::int32_t> F;
+        for (std::int64_t q = 0; q < count; ++q)
+            if (special[mem[q]]) F.push_back(mem[q]);
+        const std::size_t nf = F.size();
+        bool any_finite = false;
+        for (std::size_t p : probs) any_finite = any_finite || res[p].any_finite;
+        if (nf > 2048 || probs.size() < 2) {
+            // Few problems or many special nodes: factorise every problem.
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(dynamic, 1) num_threads(threads) if (probs.size() > 1)
+#endif
+            for (long long t = 0; t < static_cast<long long>(probs.size()); ++t) {
+                const std::size_t p = probs[static_cast<std::size_t>(t)];
+                const Resolved& r = res[p];
+                ComponentSystem cs;
+                if (!factor_component(g, mem, count, r.any_finite ? r.finite.data() : nullptr,
+                                      [&](std::int32_t v) { return r.gnd[v] == inf; }, cs))
+                    throw std::runtime_error("a circuit component is not positive definite");
+                if (!cs.nodes.empty()) {
+                    const std::vector<std::int32_t>& perm = cs.sys.perm();
+                    std::vector<double> b(cs.nodes.size()), y(cs.nodes.size());
+                    for (std::size_t i = 0; i < cs.nodes.size(); ++i) b[i] = r.src[cs.nodes[perm[i]]];
+                    cs.sys.solve(b.data(), y.data());
+                    for (std::size_t i = 0; i < cs.nodes.size(); ++i) out[p].voltage[cs.nodes[perm[i]]] = y[i];
+                }
+                graph_node_currents(g, mem, count, out[p].voltage.data(), r.any_finite ? r.finite.data() : nullptr,
+                                    out[p].current.data());
+            }
+            continue;
+        }
+        // One factorisation without the special nodes (the shift as CHOLMOD's
+        // on every per-problem matrix), and the Schur complement on them.
+        ComponentSystem cs;
+        if (!factor_component(g, mem, count, nullptr, [&](std::int32_t v) { return special[v] != 0; }, cs))
+            throw std::runtime_error("a circuit component is not positive definite");
+        const std::size_t na = cs.nodes.size();
+        std::unordered_map<std::int32_t, std::int32_t> uidx;
+        {
+            const std::vector<std::int32_t>& perm = cs.sys.perm();
+            for (std::size_t e = 0; e < na; ++e) uidx.emplace(cs.nodes[perm[e]], static_cast<std::int32_t>(e));
+        }
+        std::unordered_map<std::int32_t, std::int32_t> fidx;
+        for (std::size_t f = 0; f < nf; ++f) fidx.emplace(F[f], static_cast<std::int32_t>(f));
+        // Z = A⁻¹ B (B: the edges from the special nodes into A, -w), by columns.
+        Eigen::MatrixXd Z(static_cast<Eigen::Index>(na), static_cast<Eigen::Index>(nf));
+        Z.setZero();
+        for (std::size_t f = 0; f < nf; ++f)
+            for (std::int64_t e = g.ptr[F[f]]; e < g.ptr[F[f] + 1]; ++e) {
+                const auto it = uidx.find(g.adj[static_cast<std::size_t>(e)]);
+                if (it != uidx.end()) Z(it->second, static_cast<Eigen::Index>(f)) -= g.w[static_cast<std::size_t>(e)];
+            }
+        Eigen::MatrixXd B = Z;  // keep B for the Schur complement
+        if (na > 0) {
+            std::vector<SolveScratch> scratch(static_cast<std::size_t>(threads));
+            const long long groups = static_cast<long long>((nf + 7) / 8);
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
+#endif
+            for (long long gi = 0; gi < groups; ++gi) {
+                const int tid =
+#if defined(_OPENMP)
+                    omp_get_thread_num();
+#else
+                    0;
+#endif
+                const Eigen::Index c0 = static_cast<Eigen::Index>(gi * 8);
+                const Eigen::Index kk = std::min<Eigen::Index>(8, static_cast<Eigen::Index>(nf) - c0);
+                cs.sys.solve_many(Z.data() + c0 * static_cast<Eigen::Index>(na), kk,
+                                  scratch[static_cast<std::size_t>(tid)]);
+            }
+        }
+        // S = L_FF + shift - Bᵀ Z.
+        Eigen::MatrixXd S = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(nf), static_cast<Eigen::Index>(nf));
+        for (std::size_t f = 0; f < nf; ++f) {
+            S(static_cast<Eigen::Index>(f), static_cast<Eigen::Index>(f)) = g.degree[F[f]];
+            for (std::int64_t e = g.ptr[F[f]]; e < g.ptr[F[f] + 1]; ++e) {
+                const auto it = fidx.find(g.adj[static_cast<std::size_t>(e)]);
+                if (it != fidx.end()) S(static_cast<Eigen::Index>(f), it->second) -= g.w[static_cast<std::size_t>(e)];
+            }
+        }
+        if (na > 0) S.noalias() -= B.transpose() * Z;
+        for (std::size_t f = 0; f < nf; ++f) S(static_cast<Eigen::Index>(f), static_cast<Eigen::Index>(f)) += kShift;
+        // Every problem: the free special nodes (not direct grounds) solve the
+        // Schur system (plus their finite grounds); the rest follows from Z.
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
+#endif
+        for (long long t = 0; t < static_cast<long long>(probs.size()); ++t) {
+            const std::size_t p = probs[static_cast<std::size_t>(t)];
+            const Resolved& r = res[p];
+            std::vector<Eigen::Index> U;
+            for (std::size_t f = 0; f < nf; ++f)
+                if (r.gnd[F[f]] != inf) U.push_back(static_cast<Eigen::Index>(f));
+            const Eigen::Index nu = static_cast<Eigen::Index>(U.size());
+            Eigen::MatrixXd Suu(nu, nu);
+            Eigen::VectorXd rhs(nu);
+            for (Eigen::Index a = 0; a < nu; ++a) {
+                for (Eigen::Index b = 0; b < nu; ++b) Suu(a, b) = S(U[a], U[b]);
+                if (r.any_finite) Suu(a, a) += r.finite[F[U[a]]];
+                rhs(a) = r.src[F[U[a]]];
+            }
+            Eigen::VectorXd y = Suu.llt().solve(rhs);
+            std::vector<double>& v = out[p].voltage;
+            Eigen::VectorXd yf = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(nf));
+            for (Eigen::Index a = 0; a < nu; ++a) {
+                v[F[U[a]]] = y(a);
+                yf(U[a]) = y(a);
+            }
+            if (na > 0) {
+                const Eigen::VectorXd x = -(Z * yf);
+                const std::vector<std::int32_t>& perm = cs.sys.perm();
+                for (std::size_t e = 0; e < na; ++e) v[cs.nodes[perm[e]]] = x(static_cast<Eigen::Index>(e));
+            }
+            graph_node_currents(g, mem, count, v.data(), r.any_finite ? r.finite.data() : nullptr,
+                                out[p].current.data());
+        }
+    }
     return out;
 }
 
