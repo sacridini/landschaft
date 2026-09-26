@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 15, large tables: `Landscape.write_metrics(path, ...)` writes the
   long table of `metrics(...)` one metric at a time and the patch metrics in chunks of
