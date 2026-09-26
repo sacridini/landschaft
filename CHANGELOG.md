@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 11: spatial absorbing Markov chains.
   `ls.conn.settlement_probabilities` and `HabitatGraph.from_samc` are Makurhini's
