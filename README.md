@@ -7,7 +7,7 @@
 Fast Python reimplementation of [GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/)
 raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / dask / rasterio API.
 
-**Current Version (v0.45.0):** Complete reimplementation of all major GuidosToolbox tools:
+**Current Version (v0.46.0):** Complete reimplementation of all major GuidosToolbox tools:
 * **MSPA**: Morphological Spatial Pattern Analysis (bit-identical to GTB `mspa` v2.3, 5-7x faster), and GTB's MSPA Tiling for maps larger than memory (out of core, identical to GTB).
 * **SPA2/3/5/6**: Simplified Pattern Analysis (identical to GTB).
 * **GTN & Connectivity**: Topological Network Components (ECA, DOC), Importance (dPC), and Conefor Sensinode inputs.
@@ -19,7 +19,7 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 * **Restoration & Morphology**: Restoration Status (RSS), Cost Distance, Least-Cost Paths & Corridors, Landscape Parcellation (AWAPS, DIVISION, PARC), and Habitat Contortion.
 * **Change Detection & Convolution**: Simple Change, Morphological Change Detection (MCD with geodesic core reconstruction & elasticity), Fragmentation Change (FOS Delta & 6x6 transition matrix), FAD Multiscale Change (7x7 class transitions per observation scale), Landscape Mosaic Heatmap and Heatmap Change (GTB's heatmap/delta CSV, bit-identical), and Continuous Grayscale Spatial Convolution (GraySpatCon).
 * **Habitat Connectivity Graphs**: Conefor Sensinode's indices (NC, NL, H, CCP, LCP, IIC, F, AWF, PC) and node importances (dI with intra/flux/connector fractions) on tables of nodes and distances, matching Makurhini's `MK_dPCIIC` and Conefor, 270-620x faster than Makurhini.
-* **Circuit Connectivity (Circuitscape / Omniscape)**: Omniscape's moving-window connectivity (`ls.omniscape`: cumulative current, flow potential, normalised current, block-artifact correction, conditional connectivity, reclassification, INI files; matching Omniscape 0.7 with CHOLMOD to 1e-11, 20-45x faster with the same threads), and Circuitscape's advanced mode on rasters (`ls.circuit.advanced`).
+* **Circuit Connectivity (Circuitscape / Omniscape)**: Omniscape's moving-window connectivity (`ls.omniscape`: cumulative current, flow potential, normalised current, block-artifact correction, conditional connectivity, reclassification, INI files; matching Omniscape 0.7 with CHOLMOD to 1e-11, 20-45x faster with the same threads), and Circuitscape 6.1's raster advanced mode with short-circuit regions, masks and INI files (`ls.circuit.circuitscape_advanced`, `circuitscape_ini`; pairwise and one-to-all modes in progress).
 * **Landscape Metrics (FRAGSTATS)**: 133 patch-, class- and landscape-level metrics with the names, options and values (bit for bit) of the R package landscapemetrics (area/edge, shape, core area, aggregation incl. nearest-neighbour distance, diversity, complexity), plus FRAGSTATS' `_am`/`_md`/`_ra` statistics, 100-500x faster.
 
 📖 **For complete documentation and usage examples for every module, see [DOCUMENTATION.md](DOCUMENTATION.md).**
@@ -246,7 +246,7 @@ Parameter correspondence with GuidosToolbox:
 ## Versioning
 
 landschaft follows [Semantic Versioning](https://semver.org/); the current version is
-**0.45.0** (`ls.__version__`). While below 1.0, minor versions may change the API.
+**0.46.0** (`ls.__version__`). While below 1.0, minor versions may change the API.
 Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Performance

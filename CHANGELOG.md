@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-09-26
+
+### Added
+- Circuit connectivity, part 5b: Circuitscape 6.1's raster core and advanced mode.
+  `ls.circuit.circuitscape_advanced` and `ls.circuit.circuitscape_ini` (INI files with
+  `scenario = advanced`): Circuitscape's node map with short-circuit regions, average
+  conductance or resistance edges, masks, reclass tables, sources and grounds from maps
+  or text lists, grounds as resistances, unit currents, direct grounds and the four
+  source/ground conflict policies; voltage and current maps written as Circuitscape
+  names them. ASCII grids are parsed in double as Circuitscape does. The multifrontal
+  solver now also takes general graphs (merged nodes eliminated at the root). Matched
+  with Circuitscape's CHOLMOD runs of its own advanced test cases to 5e-12.
+
 ## [0.45.0] - 2026-09-26
 
 ### Added
