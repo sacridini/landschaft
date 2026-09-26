@@ -118,7 +118,10 @@ ls.connectivity_grid(g, grid_zones(...))
      `protconn_regions`; sem a simplificação do mapshaper, que só muda os nós quando
      altera as formas); ProtConn em raster e índices em grade **feitos** (0.36.0,
      `protconn_raster`, `make_grid`, `connectivity_grid`, `eca_change_grid`);
-  6. centralidades (BC, BCIIC, BCPC, radial, medial) e focais (IICf, PCf, CCI);
+  6. centralidades (BC, BCIIC, BCPC, radial, medial) **feitas** (0.37.0,
+     `node_importance(["BC", "BCIIC", "BCPC"])`, `centrality`; conferidas com o
+     `MK_RMCentrality` e com a linha de comando do Conefor 2.7.1, sem o Louvain, que é
+     aleatório); faltam os focais (IICf, PCf, CCI, `MK_Focal_nodes`);
   7. opcionais: commute-time e SAMC (Fletcher et al. 2023).
 - Decidido: o Makurhini (instalado na biblioteca do RStudio) é a referência, e o
   Conefor 2.2 compilado (`tools/conefor`) é conferido na precisão simples dele.

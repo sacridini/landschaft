@@ -1128,6 +1128,9 @@ g.node_importance(["PC", "IIC"], distance=10_000)      # dPC, dPCintra, dPCflux,
 g.components(distance=10_000)                          # component of every node
 g.link_importance("PC", distance=10_000)               # dPC_removal of every link (MK_dPCIIC_links)
 g.link_change(new_distances, "PC", distance=10_000)    # dPC_change of pairs with new distances
+g.node_importance(["BC", "BCIIC", "BCPC"], distance=10_000)  # Conefor's betweenness centralities
+g.centrality(10_000)                                   # degree, eigen, close, BWC, cluster (MK_RMCentrality)
+g.centrality(10_000, probability=0.5)                  # weighted by p (strength, 1/p as lengths)
 
 # ECA over time (Makurhini's MK_dECA): one graph per time
 ls.conn.eca_change([g_2000, g_2010, g_2020], "PC", distance=10_000, landscape_area=LA)
@@ -1221,6 +1224,26 @@ the loss of the index without it, in % (`varPC` is the loss of PC itself); dI =
 intra + flux + connector. Without `landscape_area`, `IIC`, `PC` and `LCP` are NaN (only
 their numerators, as in Makurhini) under the default convention, and use LA = 1 (as
 Conefor) with `convention="conefor"`.
+
+### Centrality
+
+* `node_importance(["BC", "BCIIC", "BCPC"], ...)` (asked for by name, not in the
+  default list) gives Conefor's betweenness centralities (Bodin & Saura 2010): `BC`,
+  Freeman's betweenness of the links normalised by (n − 1)(n − 2) / 2; `varBC_IIC`, over
+  ordered pairs the share of their shortest paths through the node times
+  a_i a_j / (1 + nl_ij), and `dBC_IIC` in % of IICnum; `varBC_PC`, a_i a_j p*_ij of the
+  pairs whose most probable path runs through the node, and `dBC_PC` in % of PCnum.
+  They come from the same searches as the other indices (Brandes' accumulation).
+* `centrality(distance, probability=None, binary=True)` is Makurhini's
+  `MK_RMCentrality` (igraph): binary, the graph of the links, with `degree`; weighted
+  (`binary=False`, or a `probability`), every pair with its probability p, 1 / p as
+  the length of the edge and the weight of `strength` and eigenvector centrality.
+  `eigen` is the leading eigenvector (the largest 1), `close` igraph's closeness
+  (1 / the sum of the distances to the reached nodes; weighted, normalised: times
+  their number), `BWC` igraph's betweenness (paths equal within 1e-10 all count),
+  `cluster` the component. With python-igraph installed, `memb_rw` holds the walktrap
+  communities (weighted by p, as in Makurhini); Makurhini's Louvain communities
+  depend on a random order and are left out.
 
 ### Links, changes and nodes to add
 
@@ -1389,6 +1412,17 @@ the results do not depend on the number of threads.
   coordinates), `MK_Connect_grid` (ProtConn with its default and with `pij_min = 0`, and
   PC), `MK_ProtConn_raster` (three transboundary settings) and `MK_dECA_grid`; all are
   reproduced after Makurhini's rounding (the dECA grid to 1e-12).
+* `make_reference_conn.py centrality` runs `MK_RMCentrality` (binary and weighted, with
+  and without a probability) on the polygons and the example raster
+  (`makurhini_centrality.csv.gz`): degree, BWC and cluster are the same, the other
+  values agree to 1e-12 (eigenvectors: ARPACK against LAPACK).
+* `make_reference_conn.py betweenness` runs the command line of Conefor 2.7.1
+  (`CONEFOR_EXE`) for BC, BC(IIC) and BC(PC) on the synthetic scenes
+  (`conefor_betweenness.csv.gz`), matched to the 6 digits it prints. Conefor keeps the
+  probabilities in single precision: where a path is shorter than the direct link by
+  less than float precision (near-collinear points, 1e-10 to 8e-8 relative) it counts
+  the path; on the Euclidean scenes BC(PC) is 0 in exact arithmetic, and the tests
+  check that every difference is such a tie.
 * `tests/test_conn.py` checks every index and importance against a brute-force
   recomputation of the graph without each node (and with its attribute set to 0),
   under both conventions, and the input kinds, pair tables, Conefor files and
@@ -1407,3 +1441,4 @@ the results do not depend on the number of threads.
 | 3000×3000 resistance, 300 nodes: least-cost distances, all pairs / up to 500 k cost units | – | 46 s / 1.5 s |
 | 2,000 random patches: importance of every link, IIC (47 k links) / PC (1.2 M edges) | – | 0.1 s / 1.9 s |
 | 5,000 random patches: importance of every link, IIC (134 k) / PC (4.3 M) | – | 0.9 s / 22 s |
+| `habitat_nodes_raster` (398 patches), 20 km: centrality, binary / weighted (79 k edges) | 0.53 s / 1.1 s | 0.07 s / 0.14 s |

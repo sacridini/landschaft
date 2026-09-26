@@ -86,9 +86,14 @@ struct LinkResult {
     // Per edge (edges only): the same changes once the edge is removed.
     std::vector<double> edge_iic;      // ordered pairs: a_i a_j (1/(1+nl) - 1/(1+nl'))
     std::vector<double> edge_h;        // pairs i < j: 1/nl - 1/nl'
+    // Betweenness (betweenness only), Conefor's BC and BC(IIC) (Bodin & Saura
+    // 2010): over ordered pairs i != j, both != k, the share of their
+    // shortest paths through k, unweighted and weighted by a_i a_j / (1 + nl_ij).
+    std::vector<double> bc, bc_iic;
 };
 
-LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool edges = false);
+LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool edges = false,
+                         bool betweenness = false);
 
 struct ProbResult {
     double pc_num = 0;     // sum over ordered pairs (i = j included) of a_i a_j p*_ij
@@ -96,12 +101,14 @@ struct ProbResult {
     std::vector<double> pc_row;   // sum_j a_j p*_kj, j = k included (importance only)
     std::vector<double> pc_conn;  // ordered pairs i, j != k: a_i a_j (p*_ij - p*'_ij) once k is removed
     std::vector<double> edge_pc;  // per edge: ordered pairs a_i a_j (p*_ij - p*'_ij) once it is removed
+    std::vector<double> bc_pc;    // Conefor's BC(PC): ordered pairs whose most probable path runs through k,
+                                  // weighted by a_i a_j p*_ij (betweenness only)
 };
 
 // `expand_limit`: Conefor's minProb heuristic, nodes reached with a cost above
 // it are not expanded (infinity to expand every node).
 ProbResult analyse_probabilities(const Csr& g, const double* area, double expand_limit, bool importance,
-                                 bool edges = false);
+                                 bool edges = false, bool betweenness = false);
 
 // Shortest path lengths between all nodes (hops, or -log p*), n × n row-major,
 // infinity without a path.
@@ -122,5 +129,18 @@ Gains addition_gains(const std::vector<double>& D, std::int32_t n, const double*
 // A new edge ea[k] - eb[k] of length elen[k].
 Gains edge_gains(const std::vector<double>& D, std::int32_t n, const double* area, const std::int32_t* ea,
                  const std::int32_t* eb, const double* elen, std::int32_t n_edges, bool hops);
+
+// igraph's betweenness (Brandes over its weighted single-source search: path
+// lengths compared within a relative 1e-10, equal paths all counted) and the
+// sums of the shortest path lengths for closeness. `unit`: every edge 1.
+struct Centrality {
+    std::vector<double> betweenness, closeness_sum;
+    std::vector<std::int32_t> reached;  // nodes reached from each node, itself included
+};
+Centrality centrality(const Csr& g, bool unit);
+
+// A graph with the given edges and lengths.
+Csr make_length_graph(std::int32_t n, const std::vector<std::int32_t>& ei, const std::vector<std::int32_t>& ej,
+                      const std::vector<double>& length);
 
 }  // namespace conn

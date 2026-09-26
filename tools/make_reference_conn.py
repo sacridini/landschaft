@@ -4,6 +4,7 @@
 Usage::
 
     python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links] [deca] [protconn] [grids]
+        [centrality] [betweenness]
 
 ``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
 in ``tests/lsm_reference.py``; the default R library is used). It exports
@@ -38,6 +39,14 @@ cells, ``MK_Connect_grid`` (ProtConn with its default, which cuts every link,
 and with ``pij_min = 0``, and PC), ``MK_ProtConn_raster`` on a raster of the
 protected areas (``protconn_areas.tif``, ids numbered in scan order) and
 ``MK_dECA_grid`` in ``tests/data/reference/conn/grid``.
+
+``centrality`` (after ``spatial``) runs ``MK_RMCentrality`` (binary and
+weighted graphs, centroid distances; Louvain communities left out) on the
+polygons and the example raster (``makurhini_centrality.csv.gz``).
+
+``betweenness`` runs the command line of Conefor 2.7.1 (``CONEFOR_EXE``, from
+conefor.org; not run by default) for BC, BC(IIC) and BC(PC) on the synthetic
+scenes (``conefor_betweenness.csv.gz``).
 
 ``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
 Sensinode 2.2 sources (the last five nodes of each scene are Conefor's nodes
@@ -419,6 +428,50 @@ def run_grids() -> None:
             print(f.stem, len(table))
 
 
+BETWEENNESS_JOBS = {"points60": (8_000, 0.5), "cost40": (6_000, 0.3), "clusters50": (5_000, 0.5)}
+
+
+def run_betweenness() -> None:
+    """BC, BC(IIC) and BC(PC) of Conefor 2.7.1's command line (``CONEFOR_EXE``)."""
+    exe = os.environ.get("CONEFOR_EXE")
+    if not exe or not Path(exe).exists():
+        raise SystemExit("set CONEFOR_EXE to Conefor's command-line executable (coneforWin64.exe, conefor.org)")
+    scenes = load_scenes()
+    frames = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        for name, (d, p) in BETWEENNESS_JOBS.items():
+            ids, attr, dist = scenes[name]
+            (tmp / "nodes.txt").write_text("".join(f"{i}\t{float(v)!r}\n" for i, v in zip(ids, attr)))
+            i, j = np.triu_indices(len(ids), 1)
+            (tmp / "dist.txt").write_text("".join(f"{ids[x]}\t{ids[y]}\t{float(dist[x, y])!r}\n"
+                                                  for x, y in zip(i, j)))
+            subprocess.run([exe, "-nodeFile", "nodes.txt", "-conFile", "dist.txt", "-t", "dist", "all",
+                            "-confAdj", str(d), "-IIC", "-BC", "-BCIIC", "-confProb", str(d), str(p), "-PC", "-BCPC",
+                            "-prefix", name], cwd=tmp, check=True, capture_output=True)
+            table = pd.read_csv(tmp / f"{name}_node_importances.txt", sep="\t", dtype=str).dropna(axis=1, how="all")
+            table.insert(0, "scene", name)
+            table.insert(1, "distance", d)
+            table.insert(2, "probability", p)
+            frames.append(table)
+    out = pd.concat(frames, ignore_index=True)
+    out.to_csv(OUT / "conefor_betweenness.csv.gz", index=False)
+    print("betweenness", len(out))
+
+
+def run_centrality() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "centrality.csv"
+        subprocess.run([str(rscript), str(R_SCRIPT), "centrality", str(OUT / "polygons.gpkg"),
+                        str(OUT / "habitat_nodes_raster.tif"), str(out)], check=True)
+        table = pd.read_csv(out, keep_default_na=False, dtype=str)
+    table.to_csv(OUT / "makurhini_centrality.csv.gz", index=False)
+    print("centrality", len(table))
+
+
 def run_makurhini() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -528,7 +581,7 @@ def run_conefor() -> None:
 
 
 if __name__ == "__main__":
-    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn", "grids"]
+    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn", "grids", "centrality"]
     if "makurhini" in parts:
         run_makurhini()
     if "conefor" in parts:
@@ -543,3 +596,7 @@ if __name__ == "__main__":
         run_protconn()
     if "grids" in parts:
         run_grids()
+    if "centrality" in parts:
+        run_centrality()
+    if "betweenness" in parts:
+        run_betweenness()

@@ -978,7 +978,7 @@ void bind_landscape(py::module_& m) {
 py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>& pj, const CArray<double>& value,
                       const CArray<double>& area, const std::string& kind, double threshold, double probability,
                       double pij_min, double expand_limit, bool conefor, bool links, bool probabilities,
-                      bool importance, bool edges, int n_threads) {
+                      bool importance, bool edges, bool betweenness, int n_threads) {
     if (pi.ndim() != 1 || pj.ndim() != 1 || value.ndim() != 1 || area.ndim() != 1) {
         throw py::value_error("expected 1-D arrays");
     }
@@ -1005,7 +1005,7 @@ py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>
             const conn::Csr g = conn::make_link_graph(n, pairs, s);
             eu = g.eu;
             ev = g.ev;
-            return conn::analyse_links(g, a.data(), importance, edges);
+            return conn::analyse_links(g, a.data(), importance, edges, betweenness);
         });
         out["nl"] = r.nl;
         out["nc"] = r.nc;
@@ -1025,6 +1025,10 @@ py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>
             out["pieces"] = vector_array(r.pieces);
             out["pieces_sq"] = vector_array(r.pieces_sq);
         }
+        if (betweenness) {
+            out["bc"] = vector_array(r.bc);
+            out["bc_iic"] = vector_array(r.bc_iic);
+        }
         if (edges) {
             out["link_i"] = vector_array(eu);
             out["link_j"] = vector_array(ev);
@@ -1039,7 +1043,7 @@ py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>
             const conn::Csr g = conn::make_prob_graph(n, pairs, s, a.data(), &f_row, &awf_row);
             eu = g.eu;
             ev = g.ev;
-            return conn::analyse_probabilities(g, a.data(), expand_limit, importance, edges);
+            return conn::analyse_probabilities(g, a.data(), expand_limit, importance, edges, betweenness);
         });
         out["pc_num"] = r.pc_num;
         out["pc_direct"] = r.pc_direct;
@@ -1049,6 +1053,7 @@ py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>
             out["pc_row"] = vector_array(r.pc_row);
             out["pc_conn"] = vector_array(r.pc_conn);
         }
+        if (betweenness) out["bc_pc"] = vector_array(r.bc_pc);
         if (edges) {
             out["edge_i"] = vector_array(eu);
             out["edge_j"] = vector_array(ev);
@@ -1134,6 +1139,21 @@ py::dict conn_edge_gains(const CArray<double>& D, const CArray<double>& area, co
     return gains_dict(lsm_call(n_threads, [&] {
         return conn::edge_gains(d, n, area.data(), ea.data(), eb.data(), elen.data(), ne, hops);
     }));
+}
+
+py::dict conn_centrality(const CArray<std::int32_t>& pi, const CArray<std::int32_t>& pj, const CArray<double>& length,
+                         std::int32_t n, bool unit, int n_threads) {
+    std::vector<std::int32_t> ei(pi.data(), pi.data() + pi.shape(0)), ej(pj.data(), pj.data() + pj.shape(0));
+    std::vector<double> len(length.data(), length.data() + length.shape(0));
+    conn::Centrality c = lsm_call(n_threads, [&] {
+        const conn::Csr g = conn::make_length_graph(n, ei, ej, len);
+        return conn::centrality(g, unit);
+    });
+    py::dict out;
+    out["betweenness"] = vector_array(c.betweenness);
+    out["closeness_sum"] = vector_array(c.closeness_sum);
+    out["reached"] = vector_array(c.reached);
+    return out;
 }
 
 py::dict pair_dict(conn::PairList&& p) {
@@ -1230,7 +1250,9 @@ PYBIND11_MODULE(_core, m) {
     m.def("conn_analyse", &conn_analyse, py::arg("pi"), py::arg("pj"), py::arg("value"), py::arg("area"),
           py::arg("kind"), py::arg("threshold"), py::arg("probability"), py::arg("pij_min"), py::arg("expand_limit"),
           py::arg("conefor"), py::arg("links"), py::arg("probabilities"), py::arg("importance"), py::arg("edges") = false,
-          py::arg("n_threads") = 0, "Connectivity indices of one habitat-graph scenario (see src/cpp/conn/graph.hpp).");
+          py::arg("betweenness") = false, py::arg("n_threads") = 0, "Connectivity indices of one habitat-graph scenario (see src/cpp/conn/graph.hpp).");
+    m.def("conn_centrality", &conn_centrality, py::arg("pi"), py::arg("pj"), py::arg("length"), py::arg("n"),
+          py::arg("unit"), py::arg("n_threads") = 0, "igraph's betweenness and closeness sums over given edges.");
     m.def("conn_all_pairs", &conn_all_pairs, py::arg("pi"), py::arg("pj"), py::arg("value"), py::arg("n"),
           py::arg("kind"), py::arg("threshold"), py::arg("probability"), py::arg("pij_min"), py::arg("expand_limit"),
           py::arg("conefor"), py::arg("links"), py::arg("n_threads") = 0, "All-pairs shortest lengths (n x n).");

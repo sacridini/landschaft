@@ -7,6 +7,8 @@
 #       `habitat_nodes_raster` (also written to out_dir) and on the polygons,
 #       least-cost distances over `resistance_matrix` (written too) and over
 #       the given resistance for the polygons, and MK_dPCIIC run end to end
+#   Rscript conn_makurhini_reference.R centrality <polygons.gpkg> <raster.tif> <out.csv>
+#       MK_RMCentrality (binary and weighted) on the polygons and the example raster
 #   Rscript conn_makurhini_reference.R export <out_dir>
 #       writes Makurhini's example `habitat_nodes` (centroid distances, areas
 #       in km2) as habitat_nodes.csv / habitat_pairs.csv
@@ -282,6 +284,36 @@ if (args[1] == "grid") {
         for (col in names(tab)) if (is.numeric(tab[[col]])) tab[[col]] <- fmt(tab[[col]])
         write.csv(tab, file.path(out, paste0("connect_grid_", case, ".csv")), row.names = FALSE, quote = FALSE)
     }
+    quit(save = "no")
+}
+
+if (args[1] == "centrality") {
+    # MK_RMCentrality (centroid distances) on the polygons and the example raster.
+    polygons <- sf::st_read(args[2], quiet = TRUE)
+    r <- terra::rast(args[3])
+    cases <- list(list("vector", polygons, 2000, NULL, TRUE), list("vector", polygons, 5000, NULL, TRUE),
+                  list("vector", polygons, 5000, NULL, FALSE), list("vector", polygons, 5000, 0.5, FALSE),
+                  list("raster", r, 20000, NULL, TRUE), list("raster", r, 20000, 0.5, FALSE))
+    out <- list()
+    for (k in seq_along(cases)) {
+        cs <- cases[[k]]
+        set.seed(1)
+        res <- MK_RMCentrality(nodes = cs[[2]], distance = list(type = "centroid"), distance_thresholds = cs[[3]],
+                               probability = cs[[4]], binary = cs[[5]], intern = FALSE)
+        if (cs[[1]] == "vector") {
+            tab <- sf::st_drop_geometry(res)
+            names(tab)[names(tab) == "id"] <- "node"
+        } else {
+            tab <- unique(terra::as.data.frame(res, na.rm = TRUE))
+            names(tab)[1] <- "node"
+        }
+        tab$memb.louvain <- NULL
+        long <- do.call(rbind, lapply(setdiff(names(tab), "node"), function(col)
+            data.frame(case = k, kind = cs[[1]], distance = cs[[3]], probability = if (is.null(cs[[4]])) "" else cs[[4]],
+                       binary = cs[[5]], node = tab$node, name = col, value = fmt(tab[[col]]))))
+        out[[k]] <- long
+    }
+    write.csv(do.call(rbind, out), args[4], row.names = FALSE)
     quit(save = "no")
 }
 

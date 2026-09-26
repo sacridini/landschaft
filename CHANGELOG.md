@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 8: centrality. `HabitatGraph.node_importance` gives
+  Conefor's betweenness centralities `BC`, `BCIIC` (`dBC_IIC`, `varBC_IIC`) and `BCPC`
+  (`dBC_PC`, `varBC_PC`) when asked for, from the same searches as the other indices;
+  `HabitatGraph.centrality(distance, probability=None, binary=True)` is Makurhini's
+  `MK_RMCentrality` (degree or strength, eigenvector, closeness, igraph's betweenness
+  with its 1e-10 ties, components; walktrap communities with python-igraph).
+  Matched with Makurhini to 1e-12 and with Conefor 2.7.1's command line to its 6 digits.
+
 ## [0.36.0] - 2026-09-26
 
 ### Added

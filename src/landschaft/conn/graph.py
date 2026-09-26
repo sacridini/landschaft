@@ -20,9 +20,11 @@ def r_sum(values) -> float:
 
 CONVENTIONS = ("makurhini", "conefor")
 KINDS = ("distance", "probability", "link")
-METRICS = ("A", "NC", "NL", "H", "CCP", "LCP", "IIC", "F", "AWF", "PC")
-LINK_METRICS = ("NC", "NL", "H", "CCP", "LCP", "IIC")
-PROBABILITY_METRICS = ("F", "AWF", "PC")
+METRICS = ("A", "NC", "NL", "H", "CCP", "LCP", "IIC", "F", "AWF", "PC", "BC", "BCIIC", "BCPC")
+LINK_METRICS = ("NC", "NL", "H", "CCP", "LCP", "IIC", "BC", "BCIIC")
+PROBABILITY_METRICS = ("F", "AWF", "PC", "BCPC")
+# Betweenness metrics: node values only, computed when asked for.
+BETWEENNESS = ("BC", "BCIIC", "BCPC")
 
 # Makurhini stores the hop count of unconnected pairs as this number, so the
 # overall IIC counts a_i a_j / (1 + 16443701) for each of them.
@@ -31,7 +33,7 @@ MAKURHINI_UNCONNECTED = 16443701.0
 
 def _metric_list(metrics, kind: str) -> list[str]:
     if metrics is None:
-        chosen = list(METRICS)
+        chosen = [m for m in METRICS if m not in BETWEENNESS]
         if kind == "link":
             chosen = [m for m in chosen if m not in PROBABILITY_METRICS]
         return chosen
@@ -376,8 +378,10 @@ class HabitatGraph:
         want_links = any(m in LINK_METRICS for m in metrics)
         want_prob = any(m in PROBABILITY_METRICS for m in metrics)
         conefor = self.convention == "conefor"
+        betweenness = importance and any(m in BETWEENNESS for m in metrics)
         r = _core.conn_analyse(self._pi, self._pj, self._value, self.attributes, self.kind, threshold, probability,
-                               pij_min, expand, conefor, want_links, want_prob, importance, edges, self.n_threads)
+                               pij_min, expand, conefor, want_links, want_prob, importance, edges, betweenness,
+                               self.n_threads)
         return distance, r
 
     def _area(self) -> float | None:
@@ -491,6 +495,13 @@ class HabitatGraph:
             dCCP, dLCP, dIIC with dIICintra/dIICflux/dIICconnector, dF, dAWF,
             dPC with dPCintra/dPCflux/dPCconnector and varPC (the loss of PC
             itself). Several distances give one block of rows per distance.
+            Asked for by name (not in the default), Conefor's betweenness
+            centralities: ``"BC"`` (Freeman's, normalised), ``"BCIIC"``
+            (``varBC_IIC``: over ordered pairs the share of their shortest
+            paths through the node times a_i a_j / (1 + nl_ij); ``dBC_IIC`` in %
+            of IICnum) and ``"BCPC"`` (``varBC_PC``: a_i a_j p*_ij of the pairs
+            whose most probable path runs through it; ``dBC_PC`` in % of PCnum),
+            Bodin & Saura (2010).
         """
         chosen = _metric_list(metrics, self.kind)
         frames = [self._importance_frame(chosen, d, probability, pij_min) for d in _as_list(distance)]
@@ -567,6 +578,16 @@ class HabitatGraph:
                 cols["dPCflux"] = 100 * flux / num
                 cols["dPCconnector"] = 100 * conn / num
                 cols["varPC"] = delta / (la * la) if la is not None else np.full(a.size, np.nan)
+            n = a.size
+            if "BC" in chosen:
+                # Conefor's BC: Freeman's, over pairs, normalised by (n - 1)(n - 2) / 2.
+                cols["BC"] = (r["bc"] / 2) / ((n - 1) * (n - 2) / 2) if n > 2 else np.zeros(n)
+            if "BCIIC" in chosen:
+                cols["dBC_IIC"] = 100 * r["bc_iic"] / r["iic_reach"]
+                cols["varBC_IIC"] = r["bc_iic"]
+            if "BCPC" in chosen:
+                cols["dBC_PC"] = 100 * r["bc_pc"] / r["pc_num"]
+                cols["varBC_PC"] = r["bc_pc"]
         return pd.DataFrame(cols)
 
     def components(self, distance=None) -> pd.Series:
@@ -865,3 +886,98 @@ class HabitatGraph:
         v = m[i, j]
         keep = ~((v == current) | (np.isnan(v) & np.isnan(current)))
         return i[keep], j[keep], v[keep]
+
+    # ---------------------------------------------------------- centrality
+    def centrality(self, distance=None, *, probability: float | None = None, binary: bool = True) -> pd.DataFrame:
+        """Radial and medial centrality of every node, as Makurhini's ``MK_RMCentrality`` (igraph).
+
+        Parameters
+        ----------
+        distance
+            Distance (or distances) of the links (``binary``) or of ``probability``
+            (default: the median distance).
+        probability
+            Dispersal probability at ``distance``; giving it makes the graph
+            weighted, as in Makurhini (None: exp(-d / distance)).
+        binary
+            ``True``: the graph of links, pairs closer than ``distance`` (up to
+            it with ``convention="conefor"``). ``False``: every pair, weighted by
+            its probability p, with 1 / p as the length of the edge and the
+            weight of strength and eigenvector centrality.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``id``, ``distance``, ``degree`` (binary) or ``strength`` (the sum of
+            1 / p), ``eigen`` (eigenvector centrality, the largest 1),
+            ``close`` (closeness: 1 / the sum of the distances to the nodes it
+            reaches; weighted, igraph's normalised closeness, times their
+            number), ``BWC`` (betweenness; as igraph, paths equal within 1e-10
+            share it) and ``cluster`` (component). With python-igraph installed
+            also ``memb_rw`` (walktrap communities, weighted by p); Makurhini's
+            Louvain communities are random and left out.
+        """
+        if self.kind != "distance":
+            raise ValueError("centrality needs distances between the nodes (kind='distance')")
+        if probability is not None:
+            binary = False  # as MK_RMCentrality
+        frames = [self._centrality_frame(d, probability, binary) for d in _as_list(distance)]
+        return pd.concat(frames, ignore_index=True)
+
+    def _centrality_frame(self, distance, probability, binary) -> pd.DataFrame:
+        from scipy.sparse import coo_matrix
+        from scipy.sparse.csgraph import connected_components
+
+        n = self.n_nodes
+        t = float(self._defaults(distance, None, None)[0])
+        v = self._value
+        ok = ~np.isnan(v)
+        if binary:
+            keep = ok & ((v <= t) if self.convention == "conefor" else (v < t))
+            weight = np.ones(int(keep.sum()))
+            length = weight
+        else:
+            with np.errstate(divide="ignore"):
+                p = np.exp(-(1 / t) * v) if probability is None else np.exp((v * np.log(probability)) / t)
+            keep = ok & (p > 0)
+            weight = p[keep]
+            length = 1.0 / weight
+        i, j = self._pi[keep], self._pj[keep]
+        c = _core.conn_centrality(np.ascontiguousarray(i, dtype=np.int32), np.ascontiguousarray(j, dtype=np.int32),
+                                  np.ascontiguousarray(length, dtype=np.float64), n, binary, self.n_threads)
+        A = coo_matrix((np.concatenate([length, length]), (np.concatenate([i, j]), np.concatenate([j, i]))),
+                       shape=(n, n)).tocsr()
+        sums, reached = c["closeness_sum"], c["reached"]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            close = np.where(reached > 1, 1.0 / sums, np.nan)
+            if not binary:
+                close = np.where(reached > 1, (reached - 1) / sums, np.nan)
+        frame = pd.DataFrame({"id": self.ids, "distance": t,
+                              "degree" if binary else "strength": np.asarray(A.sum(axis=1)).ravel(),
+                              "eigen": _eigenvector(A), "close": close, "BWC": c["betweenness"],
+                              "cluster": connected_components(A, directed=False)[1] + 1})
+        try:
+            import igraph as ig
+        except ImportError:
+            return frame
+        graph = ig.Graph(n=n, edges=list(zip(i.tolist(), j.tolist())))
+        communities = graph.community_walktrap(weights=None if binary else list(weight))
+        frame["memb_rw"] = np.asarray(communities.as_clustering().membership) + 1
+        return frame
+
+
+def _eigenvector(A) -> np.ndarray:
+    """igraph's eigenvector centrality: the leading eigenvector, its largest entry 1."""
+    n = A.shape[0]
+    if A.nnz == 0:
+        return np.ones(n)
+    if n <= 2000:
+        values, vectors = np.linalg.eigh(A.toarray())
+        vec = vectors[:, -1]
+    else:
+        from scipy.sparse.linalg import eigsh
+
+        vec = eigsh(A, k=1, which="LA")[1][:, 0]
+    vec = vec / vec[np.argmax(np.abs(vec))]
+    vec[np.abs(vec) < 1e-15] = 0.0
+    return vec

@@ -106,6 +106,7 @@ struct Workspace {
     std::vector<D> dist, repaired;
     std::vector<std::int32_t> parent, order, tin, tout, euler, child_start, child;
     std::vector<std::int32_t> sorted, affected, level_count;
+    std::vector<double> bw_sigma, bw_d1, bw_d2;
     std::vector<char> flag;
     std::vector<double> cand_cost;
     std::vector<std::int32_t> cand_node;
@@ -195,9 +196,11 @@ struct Workspace {
 
 // Contributions of one source to the per-node sums (merged in source order so
 // the result does not depend on the threads).
+enum ContributionKind : std::uint8_t { kNode = 0, kEdge = 1, kBetween = 2 };
+
 struct Contribution {
-    i64 index;  // a node, or an edge when `edge`
-    bool edge;
+    i64 index;  // a node, or an edge for kEdge
+    std::uint8_t kind;
     double first, second;
 };
 
@@ -302,7 +305,7 @@ Csr make_prob_graph(std::int32_t n, const Pairs& pairs, const Scenario& s, const
     return build_csr(n, ei, ej, &cost);
 }
 
-LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool edges) {
+LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool edges, bool betweenness) {
     const std::int32_t n = g.n;
     LinkResult r;
     r.nl = g.n_edges();
@@ -379,6 +382,10 @@ LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool
     if (edges) {
         r.edge_iic.assign(static_cast<std::size_t>(g.n_edges()), 0.0);
         r.edge_h.assign(static_cast<std::size_t>(g.n_edges()), 0.0);
+    }
+    if (betweenness) {
+        r.bc.assign(n, 0.0);
+        r.bc_iic.assign(n, 0.0);
     }
 
     double total = 0;
@@ -508,6 +515,41 @@ LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool
         hrow[src] = s_h;
         direct[src] = s_direct;
         reach[src] = s_reach;
+        if (betweenness && w.order.size() > 2) {
+            // Brandes: shortest-path counts, then dependencies back from the far
+            // nodes, unweighted (BC) and weighted by a_s a_t / (1 + nl) (BC(IIC)).
+            std::vector<double>& sigma = w.bw_sigma;
+            std::vector<double>& d1 = w.bw_d1;
+            std::vector<double>& d2 = w.bw_d2;
+            if (sigma.size() < static_cast<std::size_t>(n)) {
+                sigma.assign(n, 0.0);
+                d1.assign(n, 0.0);
+                d2.assign(n, 0.0);
+            }
+            for (const std::int32_t v : w.order) {
+                sigma[v] = v == src ? 1.0 : 0.0;
+                d1[v] = d2[v] = 0.0;
+            }
+            for (std::size_t q = 1; q < w.order.size(); ++q) {
+                const std::int32_t v = w.order[q];
+                for (i64 e = g.start[v]; e < g.start[v + 1]; ++e) {
+                    const std::int32_t u = g.to[e];
+                    if (w.dist[u] == w.dist[v] - 1) sigma[v] += sigma[u];
+                }
+            }
+            for (std::size_t q = w.order.size(); q-- > 1;) {
+                const std::int32_t v = w.order[q];
+                const double own = area[src] * area[v] / (1.0 + w.dist[v]);
+                for (i64 e = g.start[v]; e < g.start[v + 1]; ++e) {
+                    const std::int32_t u = g.to[e];
+                    if (w.dist[u] != w.dist[v] - 1 || u == src) continue;
+                    const double c = sigma[u] / sigma[v];
+                    d1[u] += c * (1.0 + d1[v]);
+                    d2[u] += c * (own + d2[v]);
+                }
+                if (d1[v] != 0 || d2[v] != 0) out.push_back({v, kBetween, d1[v], d2[v]});
+            }
+        }
         if ((!importance && !edges) || w.order.size() < 2) return;
 
         w.number_tree(src);
@@ -519,7 +561,7 @@ LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool
                 const std::int32_t lo = w.tin[k], hi = w.tout[k];
                 if (hi - lo <= 1) continue;  // a leaf: no path runs through it
                 const auto [d_iic, d_h] = repair(w, heap, lo + 1, hi, k, -1);
-                if (d_iic != 0 || d_h != 0) out.push_back({k, false, area[src] * d_iic, d_h});
+                if (d_iic != 0 || d_h != 0) out.push_back({k, kNode, area[src] * d_iic, d_h});
             }
         }
         if (edges) {
@@ -527,15 +569,18 @@ LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool
                 if (c == src) continue;
                 const std::int32_t p = w.parent[c];
                 const auto [d_iic, d_h] = repair(w, heap, w.tin[c], w.tout[c], p, c);
-                if (d_iic != 0 || d_h != 0) out.push_back({g.edge[find_edge(g, c, p)], true, area[src] * d_iic, d_h});
+                if (d_iic != 0 || d_h != 0) out.push_back({g.edge[find_edge(g, c, p)], kEdge, area[src] * d_iic, d_h});
             }
         }
     };
-    over_sources(n, importance || edges, body, [&](std::int32_t, const std::vector<Contribution>& c) {
+    over_sources(n, importance || edges || betweenness, body, [&](std::int32_t, const std::vector<Contribution>& c) {
         for (const Contribution& x : c) {
-            if (x.edge) {
+            if (x.kind == kEdge) {
                 r.edge_iic[x.index] += x.first;
                 r.edge_h[x.index] += x.second;
+            } else if (x.kind == kBetween) {
+                r.bc[x.index] += x.first;
+                r.bc_iic[x.index] += x.second;
             } else {
                 r.iic_conn[x.index] += x.first;
                 r.h_conn[x.index] += x.second;
@@ -562,12 +607,14 @@ LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool
     return r;
 }
 
-ProbResult analyse_probabilities(const Csr& g, const double* area, double expand_limit, bool importance, bool edges) {
+ProbResult analyse_probabilities(const Csr& g, const double* area, double expand_limit, bool importance, bool edges,
+                                 bool betweenness) {
     const std::int32_t n = g.n;
     ProbResult r;
     std::vector<double> row(n), direct(n);
     if (importance) r.pc_conn.assign(n, 0.0);
     if (edges) r.edge_pc.assign(static_cast<std::size_t>(g.n_edges()), 0.0);
+    if (betweenness) r.bc_pc.assign(n, 0.0);
     const bool repairs = importance || edges;
 
     std::vector<Workspace<double>*> spaces(static_cast<std::size_t>(thread_count()), nullptr);
@@ -577,7 +624,7 @@ ProbResult analyse_probabilities(const Csr& g, const double* area, double expand
 #else
         const int t = 0;
 #endif
-        if (!spaces[t]) spaces[t] = new Workspace<double>(n, repairs);
+        if (!spaces[t]) spaces[t] = new Workspace<double>(n, repairs);  // candidates only for repairs
         return *spaces[t];
     };
     struct Cleanup {
@@ -695,6 +742,19 @@ ProbResult analyse_probabilities(const Csr& g, const double* area, double expand
         for (i64 e = g.start[src]; e < g.start[src + 1]; ++e) s_direct += area[g.to[e]] * std::exp(-g.cost[e]);
         row[src] = s_row;
         direct[src] = s_direct;
+        if (betweenness && w.order.size() > 2) {
+            // BC(PC): along the most probable path Dijkstra kept (its parents),
+            // from the far nodes back towards the source.
+            std::vector<double>& d = w.bw_d1;
+            if (d.size() < static_cast<std::size_t>(n)) d.assign(n, 0.0);
+            for (const std::int32_t v : w.order) d[v] = 0.0;
+            for (std::size_t q = w.order.size(); q-- > 1;) {
+                const std::int32_t v = w.order[q];
+                const std::int32_t p = w.parent[v];
+                if (p != src) d[p] += area[src] * area[v] * std::exp(-w.dist[v]) + d[v];
+                if (d[v] != 0) out.push_back({v, kBetween, d[v], 0.0});
+            }
+        }
         if (!repairs || w.order.size() < 2) return;
 
         w.number_tree(src);
@@ -704,7 +764,7 @@ ProbResult analyse_probabilities(const Csr& g, const double* area, double expand
                 const std::int32_t lo = w.tin[k], hi = w.tout[k];
                 if (hi - lo <= 1) continue;
                 const double change = repair(w, heap, lo + 1, hi, k, -1);
-                if (change != 0) out.push_back({k, false, area[src] * change, 0.0});
+                if (change != 0) out.push_back({k, kNode, area[src] * change, 0.0});
             }
         }
         if (edges) {
@@ -712,13 +772,14 @@ ProbResult analyse_probabilities(const Csr& g, const double* area, double expand
                 if (c == src) continue;
                 const std::int32_t p = w.parent[c];
                 const double change = repair(w, heap, w.tin[c], w.tout[c], p, c);
-                if (change != 0) out.push_back({g.edge[find_edge(g, c, p)], true, area[src] * change, 0.0});
+                if (change != 0) out.push_back({g.edge[find_edge(g, c, p)], kEdge, area[src] * change, 0.0});
             }
         }
     };
-    over_sources(n, repairs, body, [&](std::int32_t, const std::vector<Contribution>& c) {
+    over_sources(n, repairs || betweenness, body, [&](std::int32_t, const std::vector<Contribution>& c) {
         for (const Contribution& x : c) {
-            if (x.edge) r.edge_pc[x.index] += x.first;
+            if (x.kind == kEdge) r.edge_pc[x.index] += x.first;
+            else if (x.kind == kBetween) r.bc_pc[x.index] += x.first;
             else r.pc_conn[x.index] += x.first;
         }
     });
@@ -841,6 +902,112 @@ Gains edge_gains(const std::vector<double>& D, std::int32_t n, const double* are
         out.h[k] = h / 2;
     });
     return out;
+}
+
+}  // namespace conn
+
+namespace conn {
+
+namespace {
+
+// igraph_cmp_epsilon: equal within a relative tolerance (igraph's shortest
+// paths use 1e-10).
+int cmp_epsilon(double a, double b, double eps) {
+    if (a == b) return 0;
+    const double diff = a - b;
+    const double abs_diff = std::fabs(diff);
+    const double sum = std::fabs(a) + std::fabs(b);
+    if (a == 0 || b == 0 || sum < std::numeric_limits<double>::min()) {
+        return abs_diff < eps * std::numeric_limits<double>::min() ? 0 : (diff < 0 ? -1 : 1);
+    }
+    if (!std::isfinite(sum)) return abs_diff < eps * std::fabs(a) + eps * std::fabs(b) ? 0 : (diff < 0 ? -1 : 1);
+    return abs_diff / sum < eps ? 0 : (diff < 0 ? -1 : 1);
+}
+
+}  // namespace
+
+Centrality centrality(const Csr& g, bool unit) {
+    const std::int32_t n = g.n;
+    constexpr double eps = 1e-10;  // IGRAPH_SHORTEST_PATH_EPSILON
+    Centrality out;
+    out.betweenness.assign(n, 0.0);
+    out.closeness_sum.assign(n, 0.0);
+    out.reached.assign(n, 0);
+    std::vector<double> closeness(n, 0.0);
+    std::vector<std::int32_t> reached(n, 0);
+    const std::int32_t block = std::max<std::int32_t>(64, 16 * thread_count());
+    std::vector<std::vector<std::pair<std::int32_t, double>>> parts(static_cast<std::size_t>(block));
+    for (std::int32_t b0 = 0; b0 < n; b0 += block) {
+        const std::int32_t count = std::min(block, n - b0);
+        lsm::parallel_for_dynamic(n > 64, count, [&](i64 k) {
+            const std::int32_t src = b0 + static_cast<std::int32_t>(k);
+            auto& part = parts[static_cast<std::size_t>(k)];
+            part.clear();
+            // igraph's weighted single-source search: distances + 1, parents of
+            // equal (within eps) paths, geodesic counts.
+            std::vector<double> dist(n, 0.0), nrgeo(n, 0.0), delta(n, 0.0);
+            std::vector<std::vector<std::int32_t>> parents(n);
+            std::vector<std::int32_t> stack;
+            using Item = std::pair<double, std::int32_t>;
+            std::priority_queue<Item, std::vector<Item>, std::greater<>> queue;
+            std::vector<char> done(n, 0);
+            dist[src] = 1.0;
+            nrgeo[src] = 1.0;
+            queue.emplace(1.0, src);
+            while (!queue.empty()) {
+                const auto [d, v] = queue.top();
+                queue.pop();
+                if (done[v] || d != dist[v]) continue;
+                done[v] = 1;
+                stack.push_back(v);
+                for (i64 e = g.start[v]; e < g.start[v + 1]; ++e) {
+                    const std::int32_t to = g.to[e];
+                    const double alt = d + (unit ? 1.0 : g.cost[e]);
+                    const double cur = dist[to];
+                    if (cur == 0) {
+                        parents[to].assign(1, v);
+                        nrgeo[to] = nrgeo[v];
+                        dist[to] = alt;
+                        queue.emplace(alt, to);
+                    } else {
+                        const int c = cmp_epsilon(alt, cur, eps);
+                        if (c < 0) {
+                            parents[to].assign(1, v);
+                            nrgeo[to] = nrgeo[v];
+                            dist[to] = alt;
+                            queue.emplace(alt, to);
+                        } else if (c == 0) {  // as igraph, even for a node already visited
+                            parents[to].push_back(v);
+                            nrgeo[to] += nrgeo[v];
+                        }
+                    }
+                }
+            }
+            double sum = 0;
+            for (const std::int32_t v : stack) {
+                if (v != src) sum += dist[v] - 1.0;
+            }
+            closeness[src] = sum;
+            reached[src] = static_cast<std::int32_t>(stack.size());
+            for (std::size_t q = stack.size(); q-- > 0;) {
+                const std::int32_t w = stack[q];
+                for (const std::int32_t p : parents[w]) delta[p] += nrgeo[p] / nrgeo[w] * (1.0 + delta[w]);
+                if (w != src && delta[w] != 0) part.emplace_back(w, delta[w]);
+            }
+        });
+        for (std::int32_t k = 0; k < count; ++k) {
+            for (const auto& [w, d] : parts[static_cast<std::size_t>(k)]) out.betweenness[w] += d;
+        }
+    }
+    for (double& b : out.betweenness) b /= 2;  // undirected: each pair counted from both ends
+    out.closeness_sum = std::move(closeness);
+    out.reached = std::move(reached);
+    return out;
+}
+
+Csr make_length_graph(std::int32_t n, const std::vector<std::int32_t>& ei, const std::vector<std::int32_t>& ej,
+                      const std::vector<double>& length) {
+    return build_csr(n, ei, ej, &length);
 }
 
 }  // namespace conn
