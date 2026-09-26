@@ -287,7 +287,13 @@ Fases:
      `set_null_*_to_nodata` e escreve 0 fora dos nós);
    - 5c. pairwise (pontos e regiões focais, pares incluídos/excluídos, matriz de
      resistências `.out`, corrente acumulada e máxima, mapas por par); uma fatoração por
-     componente e muitos lados direitos (`solve_many`);
+     componente e muitos lados direitos (`solve_many`). **Feita** (0.47.0:
+     `raster_pairwise` com um nó aterrado por componente, lotes de 8 colunas por thread,
+     `SolveScratch` por thread sobre o mesmo fator; o atalho do Circuitscape reproduzido
+     com a peculiaridade da linha 1 da matriz de tensões; regiões focais com um grafo por
+     par (`region_polymap` = `create_new_polymap`), pares em paralelo; sg1–17 batem,
+     sgVerify17 a 9e-10 relativo porque o CHOLMOD resolve a laplaciana singular com
+     deslocamento 10ε);
    - 5d. one-to-all e all-to-one (fontes variáveis, `set_focal_node_currents_to_zero`);
    - 5e. `ls.circuit.circuitscape_ini(path)` e a gravação das saídas como o Circuitscape.
    O modo de rede (grafos) fica de fora por enquanto.

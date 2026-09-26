@@ -9,7 +9,9 @@
 
 #include <pybind11/numpy.h>
 
+#include <cmath>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -197,6 +199,79 @@ py::dict circuitscape_advanced(const CArray<double>& gmap, const py::object& pol
     return out;
 }
 
+const std::int64_t* polymap_data(const py::object& polymap, CArray<std::int64_t>& keep, i64 nx, i64 ny) {
+    if (polymap.is_none()) return nullptr;
+    keep = polymap.cast<CArray<std::int64_t>>();
+    if (keep.ndim() != 2 || keep.shape(0) != ny || keep.shape(1) != nx)
+        throw py::value_error("the polygon raster must have the habitat's shape");
+    return keep.data();
+}
+
+py::dict circuitscape_pairwise(const CArray<double>& gmap, const py::object& polymap,
+                               const CArray<std::int64_t>& point_cells, const CArray<std::uint8_t>& excluded,
+                               bool avg_resistances, bool four_neighbors, const py::dict& options,
+                               const py::object& emit, int n_threads) {
+    if (gmap.ndim() != 2) throw py::value_error("expected a 2-D habitat raster");
+    const i64 ny = gmap.shape(0), nx = gmap.shape(1);
+    const std::int64_t np = point_cells.size();
+    CArray<std::int64_t> keep;
+    const std::int64_t* pm = polymap_data(polymap, keep, nx, ny);
+    circuit::PairwiseOptions o;
+    auto flag = [&](const char* k) { return options.contains(k) && options[k].cast<bool>(); };
+    o.volt_maps = flag("volt_maps");
+    o.cur_maps = flag("cur_maps");
+    o.cum = flag("cum");
+    o.max = flag("max");
+    o.focal_zero = flag("focal_zero");
+    o.null_currents = flag("null_currents");
+    o.null_voltages = flag("null_voltages");
+    o.log_transform = flag("log_transform");
+    std::vector<std::uint8_t> ex(excluded.data(), excluded.data() + excluded.size());
+    circuit::RasterGraph g;
+    circuit::PairwiseResult r;
+    std::vector<std::int32_t> nodes(static_cast<std::size_t>(np));
+    // Maps go to Python one at a time, with the GIL.
+    std::function<void(circuit::PairMaps&&)> callback = [&](circuit::PairMaps&& m) {
+        py::gil_scoped_acquire gil;
+        if (emit.is_none()) return;
+        py::object v = py::none(), c = py::none();
+        if (!m.voltage.empty()) v = to_array(std::move(m.voltage), nx, ny);
+        if (!m.current.empty()) c = to_array(std::move(m.current), nx, ny);
+        emit(m.ci, m.cj, v, c);
+    };
+    const bool regions = options.contains("region_ids") && !options["region_ids"].is_none();
+    std::vector<std::int64_t> region_ids;
+    std::vector<circuit::i64> region_cells;
+    if (regions) {
+        const auto a = options["region_ids"].cast<CArray<std::int64_t>>();
+        region_ids.assign(a.data(), a.data() + a.size());
+        region_cells.assign(point_cells.data(), point_cells.data() + point_cells.size());
+    }
+    run_parallel(n_threads, [&] {
+        if (regions) {
+            r = circuit::raster_pairwise_regions(gmap.data(), pm, nx, ny, avg_resistances, four_neighbors, region_cells,
+                                                 region_ids, ex, o, callback, n_threads);
+            return 0;
+        }
+        g = circuit::raster_graph(gmap.data(), pm, nx, ny, avg_resistances, four_neighbors);
+        for (std::int64_t i = 0; i < np; ++i) {
+            const std::int64_t c = point_cells.data()[i];
+            nodes[static_cast<std::size_t>(i)] = c >= 0 && c < nx * ny ? g.nodemap[static_cast<std::size_t>(c)] : -1;
+        }
+        r = circuit::raster_pairwise(g, gmap.data(), nodes, ex, o, callback, n_threads);
+        return 0;
+    });
+    const std::int64_t nr = static_cast<std::int64_t>(std::llround(std::sqrt(static_cast<double>(r.resistances.size()))));
+    py::dict out;
+    auto* holder = new std::vector<double>(std::move(r.resistances));
+    py::capsule owner(holder, [](void* q) { delete static_cast<std::vector<double>*>(q); });
+    out["resistances"] = py::array_t<double>({nr, nr}, holder->data(), owner);
+    if (o.cum) out["cum"] = to_array(std::move(r.cum), nx, ny);
+    if (o.max) out["max"] = to_array(std::move(r.max), nx, ny);
+    out["nodes"] = vector_to_array(std::move(nodes));
+    return out;
+}
+
 }  // namespace
 
 namespace circuit {
@@ -218,6 +293,10 @@ void register_python(py::module_& m) {
           py::arg("ground"), py::arg("avg_resistances"), py::arg("four_neighbors"), py::arg("policy"),
           py::arg("n_threads") = 0,
           "Circuitscape's advanced mode on a raster: node map, and voltages and currents per node.");
+    m.def("circuitscape_pairwise", &circuitscape_pairwise, py::arg("gmap"), py::arg("polymap"),
+          py::arg("point_cells"), py::arg("excluded"), py::arg("avg_resistances"), py::arg("four_neighbors"),
+          py::arg("options"), py::arg("emit") = py::none(), py::arg("n_threads") = 0,
+          "Circuitscape's pairwise mode on a raster: resistances and current maps.");
 }
 
 }  // namespace circuit

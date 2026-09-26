@@ -287,10 +287,10 @@ bool CellSystem::factorize() { return factorize(nullptr); }
 
 bool CellSystem::factorize_solve(const double* b, double* x) {
     const i64 n = size();
-    double* y = rhs_.get(static_cast<std::size_t>(n));
+    double* y = scratch_.rhs.get(static_cast<std::size_t>(n));
     std::copy(b, b + n, y);
     if (!factorize(y)) return false;
-    backward(y, 1);
+    backward(y, 1, scratch_.tmp);
     std::copy(y, y + n, x);
     return true;
 }
@@ -351,7 +351,7 @@ bool CellSystem::factorize(double* y) {
                 Eigen::Map<Eigen::VectorXd> yp(y + node.first, np);
                 L.topRows(np).triangularView<Eigen::Lower>().solveInPlace(yp);
                 if (nu > 0) {
-                    double* tmp = tmp_.get(static_cast<std::size_t>(nu));
+                    double* tmp = scratch_.tmp.get(static_cast<std::size_t>(nu));
                     Eigen::Map<Eigen::MatrixXd> t(tmp, nu, 1);
                     t.col(0).noalias() = L.bottomRows(nu) * yp.col(0);
                     const std::int32_t* rows = s.rows.data() + node.upd;
@@ -374,13 +374,15 @@ void CellSystem::solve(const double* b, double* x) {
     solve_many(x, 1);
 }
 
-void CellSystem::solve_many(double* xout, i64 k) {
+void CellSystem::solve_many(double* xout, i64 k) { solve_many(xout, k, scratch_); }
+
+void CellSystem::solve_many(double* xout, i64 k, SolveScratch& scratch) const {
     const i64 n = size();
-    // Solved in an aligned copy (see Buffer).
-    double* x = rhs_.get(static_cast<std::size_t>(n * k));
+    // Solved in an aligned copy (see AlignedBuffer).
+    double* x = scratch.rhs.get(static_cast<std::size_t>(n * k));
     std::copy(xout, xout + n * k, x);
-    forward(x, k);
-    backward(x, k);
+    forward(x, k, scratch.tmp);
+    backward(x, k, scratch.tmp);
     std::copy(x, x + n * k, xout);
 }
 
@@ -401,13 +403,13 @@ void with_pivots(double* x, std::int64_t first, std::int64_t np, i64 n, i64 k, F
 
 }  // namespace
 
-void CellSystem::forward(double* x, i64 k) {
+void CellSystem::forward(double* x, i64 k, AlignedBuffer& scratch) const {
     const FrontalSymbolic& s = *sym_;
     const i64 n = size();
     const double* lstore = l_.p.get();
     std::int64_t max_upd = 0;
     for (const FrontalSymbolic::Node& node : s.nodes) max_upd = std::max<std::int64_t>(max_upd, node.nupd);
-    double* tmp = tmp_.get(static_cast<std::size_t>(max_upd * k));
+    double* tmp = scratch.get(static_cast<std::size_t>(max_upd * k));
     for (const FrontalSymbolic::Node& node : s.nodes) {
         const std::int64_t np = node.npiv, nu = node.nupd, m = np + nu;
         if (np == 0) continue;
@@ -426,13 +428,13 @@ void CellSystem::forward(double* x, i64 k) {
     }
 }
 
-void CellSystem::backward(double* x, i64 k) {
+void CellSystem::backward(double* x, i64 k, AlignedBuffer& scratch) const {
     const FrontalSymbolic& s = *sym_;
     const i64 n = size();
     const double* lstore = l_.p.get();
     std::int64_t max_upd = 0;
     for (const FrontalSymbolic::Node& node : s.nodes) max_upd = std::max<std::int64_t>(max_upd, node.nupd);
-    double* tmp = tmp_.get(static_cast<std::size_t>(max_upd * k));
+    double* tmp = scratch.get(static_cast<std::size_t>(max_upd * k));
     for (auto it = s.nodes.rbegin(); it != s.nodes.rend(); ++it) {
         const FrontalSymbolic::Node& node = *it;
         const std::int64_t np = node.npiv, nu = node.nupd, m = np + nu;

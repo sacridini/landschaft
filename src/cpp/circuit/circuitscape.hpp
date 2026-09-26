@@ -11,6 +11,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "circuit/grid.hpp"
@@ -51,5 +52,52 @@ NodeSolution raster_advanced(const RasterGraph& g, std::vector<double> source, s
 // Per-node sums of a cell map through the node map (column-major, as
 // Circuitscape's fill_sources_and_grounds!).
 std::vector<double> node_sums(const RasterGraph& g, const double* cells);
+
+// Pairwise mode (single_ground_all_pairs, CHOLMOD). `points`: the node of
+// every focal point (-1: none), in the order of their ids; `excluded`: n × n,
+// pairs of focal points not to solve. Every component is factorised once (one
+// node grounded: the voltage differences are those of Circuitscape's shifted
+// singular solve) and its pairs solved in batches. Without maps and exclusions
+// Circuitscape's shortcut applies: only the pairs of the component's first
+// focal node are solved, the others follow from their voltages. Resistances:
+// -1 where not solved, 0 between focal points on one node and on the diagonal.
+struct PairwiseOptions {
+    bool volt_maps = false;      // write_volt_maps: every pair's voltage map
+    bool cur_maps = false;       // every pair's current map (write_cur_maps without write_cum_cur_map_only)
+    bool cum = false;            // write_cur_maps or write_cum_cur_map_only
+    bool max = false;            // write_max_cur_maps
+    bool focal_zero = false;     // set_focal_node_currents_to_zero
+    bool null_currents = false;  // set_null_currents_to_nodata
+    bool null_voltages = false;  // set_null_voltages_to_nodata
+    bool log_transform = false;  // log_transform_maps
+    bool maps() const { return volt_maps || cur_maps || cum || max; }
+};
+struct PairMaps {
+    int ci = -1, cj = -1;                  // focal point indices (their ids name the maps)
+    std::vector<double> voltage, current;  // grids, when asked for
+};
+struct PairwiseResult {
+    std::vector<double> resistances;  // n × n
+    std::vector<double> cum, max;     // grids (empty unless asked for)
+};
+PairwiseResult raster_pairwise(const RasterGraph& g, const double* gmap, const std::vector<std::int32_t>& points,
+                               const std::vector<std::uint8_t>& excluded, const PairwiseOptions& options,
+                               const std::function<void(PairMaps&&)>& emit, int max_threads);
+
+// Pairwise mode over focal regions (pairwise_regions): every pair of distinct
+// ids (i < j, not excluded) gets its own graph, the cells of its two regions
+// made short-circuit regions (create_new_polymap: merged with the polygons
+// they overlap), and one solve between the nodes of their first cells.
+// `cells` (row-major) and `ids` (sorted) list the focal cells; `excluded` is
+// over the distinct ids, n × n. Pairs run in parallel, summed in order.
+PairwiseResult raster_pairwise_regions(const double* gmap, const std::int64_t* polymap, i64 nx, i64 ny,
+                                       bool avg_resistances, bool four_neighbors, const std::vector<i64>& cells,
+                                       const std::vector<std::int64_t>& ids, const std::vector<std::uint8_t>& excluded,
+                                       const PairwiseOptions& options, const std::function<void(PairMaps&&)>& emit,
+                                       int max_threads);
+
+// create_new_polymap without a point map, for the focal ids pt1 and pt2.
+std::vector<std::int64_t> region_polymap(const std::int64_t* polymap, i64 n, const std::vector<i64>& cells,
+                                         const std::vector<std::int64_t>& ids, std::int64_t pt1, std::int64_t pt2);
 
 }  // namespace circuit

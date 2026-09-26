@@ -128,3 +128,55 @@ def test_advanced_matches_circuitscape(ini, in_cs):
         np.testing.assert_allclose(ours, ref, rtol=1e-9, atol=1e-11 * np.abs(ref).max())
         checked += 1
     assert checked >= 2
+
+
+def test_pairwise_shortcut_matches_full_solves(in_cs):
+    ini = "input/raster/pairwise/1/sgVerify1.ini"
+    cfg = cs.parse_config(ini)
+    cells, meta = cs.read_raster(cfg["habitat_file"])
+    points = cs.read_point_map(cfg["point_file"], meta)
+    poly = cs.read_raster(cfg["polygon_file"])[0]
+    kw = dict(polygons=poly, four_neighbors=cfg["connect_four_neighbors_only"] == "True",
+              avg_resistances=cfg["connect_using_avg_resistances"] == "True")
+    short = cs.circuitscape_pairwise(cells, points, **kw)
+    full = cs.circuitscape_pairwise(cells, points, cum_map=True, n_threads=1, **kw)
+    np.testing.assert_allclose(full.resistances, short.resistances, rtol=1e-11, atol=1e-13)
+    again = cs.circuitscape_pairwise(cells, points, cum_map=True, **kw)
+    np.testing.assert_array_equal(again.resistances, full.resistances)
+    np.testing.assert_array_equal(again.cum_current, full.cum_current)
+
+
+def test_pairwise_writes_outputs(tmp_path, monkeypatch):
+    monkeypatch.chdir(CS)
+    ini = tmp_path / "run.ini"
+    text = (CS / "input/raster/pairwise/1/sgVerify1.ini").read_text()
+    ini.write_text(text.replace("output/sgVerify1.out", (tmp_path / "pw.out").as_posix()))
+    r = cs.circuitscape_ini(ini)
+    written = np.loadtxt(tmp_path / "pw_resistances.out")
+    np.testing.assert_array_equal(written, r.resistances)
+    three = np.loadtxt(tmp_path / "pw_resistances_3columns.out")
+    n = len(r.resistances) - 1
+    assert three.shape == (n * (n - 1) // 2, 3)
+    np.testing.assert_array_equal(cs.read_raster(tmp_path / "pw_cum_curmap.asc")[0], r.cum_current)
+    assert (tmp_path / "pw_curmap_1_2.asc").exists()
+
+
+@pytest.mark.reference
+@pytest.mark.parametrize("ini", _inis("pairwise"))
+def test_pairwise_matches_circuitscape(ini, in_cs):
+    z = np.load(REF / "circuitscape.npz")
+    name = Path(ini).stem
+    r = cs.circuitscape_ini(ini, write_outputs=False)
+    ref = z[f"{name}/result.txt"]
+    # sgVerify17: resistances up to 3e3, where CHOLMOD's shifted singular solve is 1e-9 off.
+    np.testing.assert_allclose(r.resistances, ref, rtol=1e-8, atol=1e-12)
+    for key, ours in (("cum_curmap.asc", r.cum_current), ("max_curmap.asc", r.max_current)):
+        if f"{name}/{key}" in z.files:
+            want = z[f"{name}/{key}"]
+            np.testing.assert_allclose(ours, want, rtol=1e-9, atol=1e-11 * np.abs(want).max())
+    theirs = {k.split("/")[1][:-4] for k in z.files if k.startswith(name + "/")
+              and k.split("/")[1].startswith(("curmap_", "voltmap_"))}
+    assert set(r.maps) == theirs
+    for kind in theirs:
+        want = z[f"{name}/{kind}.asc"]
+        np.testing.assert_allclose(r.maps[kind], want, rtol=1e-9, atol=1e-11 * max(np.abs(want).max(), 1e-300))

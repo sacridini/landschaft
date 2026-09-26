@@ -165,6 +165,90 @@ def read_reclass_table(path) -> dict[float, float]:
     return {float(a): float(b) for a, b in t}
 
 
+@dataclass
+class FocalPoints:
+    """Focal points as Circuitscape's read_point_map: 1-based rows and columns and ids, sorted by id."""
+
+    rows: np.ndarray
+    cols: np.ndarray
+    ids: np.ndarray
+
+    @property
+    def cells(self) -> np.ndarray:
+        return np.asarray(self.rows) - 1, np.asarray(self.cols) - 1
+
+    @property
+    def has_regions(self) -> bool:
+        return len(self.ids) != len(np.unique(self.ids))
+
+
+def read_point_map(path, habitat: RasterMeta) -> FocalPoints:
+    """Circuitscape's read_point_map: a raster of ids (cells of one id: a focal region) or a
+    text list of ``id x y``; negative ids dropped, sorted by id (stably)."""
+    if file_type(path) == "list":
+        pts = _read_list(path)
+        i, j = _list_cells(pts, habitat)
+        v = pts[:, 0]
+    else:
+        a = read_polymap(path, habitat, integer=True)
+        jj, ii = np.nonzero(a.T)  # column-major order
+        i, j, v = ii + 1, jj + 1, a[ii, jj]
+    keep = v >= 0
+    i, j, v = i[keep], j[keep], v[keep]
+    order = np.argsort(v, kind="stable")
+    i, j, v = i[order].astype(np.int64), j[order].astype(np.int64), v[order].astype(np.int64)
+    if len(v) and (i.min() < 0 or j.min() < 0 or i.max() > habitat.nrows or j.max() > habitat.ncols):
+        raise ValueError("At least one focal node location falls outside of habitat map")
+    if len(np.unique(v)) < 2:
+        raise ValueError("Less than two valid focal nodes found. Please check focal node location file.")
+    return FocalPoints(i, j, v)
+
+
+@dataclass
+class IncludedPairs:
+    """Circuitscape's include/exclude pairs: ``mode`` (include or exclude), the ids and the 0/1 matrix."""
+
+    mode: str
+    ids: np.ndarray
+    matrix: np.ndarray
+
+    def excluded(self) -> set[tuple[int, int]]:
+        # exclude_pairs_from: include mode excludes the unmarked pairs, exclude mode the marked ones.
+        target = 0 if self.mode == "include" else 1
+        m = self.matrix
+        n = len(self.ids)
+        return {(int(self.ids[i]), int(self.ids[j])) for j in range(n) for i in range(n)
+                if m[i, j] == target and m[j, i] == target}
+
+
+def read_included_pairs(path) -> IncludedPairs:
+    """Circuitscape's read_included_pairs: a ``min``/``max`` matrix or a ``mode`` list of pairs."""
+    kind = file_type(path)
+    with _open(path) as f:
+        lines = [ln for ln in f.read().splitlines()]
+    if kind == "pairs_aagrid":
+        minval = float(lines[0].split()[1])
+        maxval = float(lines[1].split()[1])
+        rows = [[float(t) for t in ln.split()] for ln in lines[2:] if ln.split()]
+        a = np.array(rows)
+        ids = a[0, 1:].astype(np.int64)
+        m = a[1:, 1:]
+        m = np.where(m > maxval, 0, m)
+        return IncludedPairs("include", ids, (m >= minval).astype(np.int64))
+    if kind == "pairs":
+        mode = lines[0].split()[1]
+        pairs = np.array([[float(t) for t in ln.split()] for ln in lines[1:] if ln.split()]).reshape(-1, 2)
+        ids = np.unique(pairs).astype(np.int64)
+        ids = ids[ids != 0]
+        pos = {int(v): k for k, v in enumerate(ids)}
+        m = np.zeros((len(ids), len(ids)), dtype=np.int64)
+        for a, b in pairs.astype(np.int64):
+            if a in pos and b in pos:
+                m[pos[a], pos[b]] = m[pos[b], pos[a]] = 1
+        return IncludedPairs(mode, ids, m)
+    raise ValueError("Error reading focal node include/exclude pairs file.")
+
+
 def _read_list_n(path, ncol: int) -> np.ndarray:
     rows = []
     with _open(path) as f:
@@ -263,19 +347,8 @@ def circuitscape_advanced(habitat, source, ground, *, habitat_is_resistance: boo
         raise ValueError(f"remove_src_or_gnd must be one of {POLICIES}")
     cells = _array(habitat, "habitat")
     g = habitat_conductance(cells, is_resistance=habitat_is_resistance, reclass=reclass)
-    poly = None
-    if polygons is not None:
-        pm = _cells_from_map(polygons, "polygons", g.shape)
-        pm[pm == NODATA] = 0
-        if not np.all(pm == np.round(pm)):
-            raise ValueError("the polygon raster must hold integer ids")
-        poly = np.ascontiguousarray(pm.astype(np.int64))
-    if mask is not None:
-        m = _cells_from_map(mask, "mask", g.shape)
-        m[m == NODATA] = 0
-        g = g * np.where(m > 0, 1.0, 0.0)
-        if g.sum() == 0:
-            raise ValueError("Mask file deleted everything!")
+    poly = _polymap(polygons, g.shape)
+    g = _mask(g, mask)
     src = _cells_from_map(source, "source", g.shape)
     src[src == NODATA] = 0.0
     gnd = _cells_from_map(ground, "ground", g.shape)
@@ -306,6 +379,129 @@ def _advanced(g, poly, src, gnd, four, avg, policy, unit, direct, n_threads) -> 
     res = CircuitscapeResult(voltage=volt, current=cur, nodemap=nm)
     res.maps["solved"] = bool(r["solved"])
     return res
+
+
+def _pairwise(g, poly, points: FocalPoints, excluded_ids: set, four, avg, options: dict, emit, n_threads):
+    rows, cols = points.cells
+    cells = np.ascontiguousarray(rows * g.shape[1] + cols, dtype=np.int64)
+    if points.has_regions:
+        # pairwise_regions: a graph per pair of distinct ids.
+        options = {**options, "region_ids": np.ascontiguousarray(points.ids, dtype=np.int64)}
+        ids = np.unique(points.ids)
+    else:
+        ids = points.ids
+    n = len(ids)
+    ex = np.zeros((n, n), dtype=np.uint8)
+    if excluded_ids:
+        for a in range(n):
+            for b in range(n):
+                ex[a, b] = (int(ids[a]), int(ids[b])) in excluded_ids
+    r = core().circuitscape_pairwise(np.ascontiguousarray(g, dtype=np.float64), poly, cells, ex, bool(avg), bool(four),
+                                     options, emit, int(n_threads))
+    res = np.zeros((n + 1, n + 1))
+    res[0, 1:] = ids
+    res[1:, 0] = ids
+    res[1:, 1:] = r["resistances"]
+    return res, r
+
+
+def _pair_options(volt_maps, cur_maps, cum_only, max_maps, focal_zero, null_currents, null_voltages, log_transform):
+    return {"volt_maps": bool(volt_maps), "cur_maps": bool(cur_maps and not cum_only),
+            "cum": bool(cur_maps or cum_only), "max": bool(max_maps), "focal_zero": bool(focal_zero),
+            "null_currents": bool(null_currents), "null_voltages": bool(null_voltages),
+            "log_transform": bool(log_transform)}
+
+
+def circuitscape_pairwise(habitat, points, *, habitat_is_resistance: bool = True, polygons=None, mask=None,
+                          four_neighbors: bool = False, avg_resistances: bool = False, included_pairs=None,
+                          voltage_maps: bool = False, current_maps: bool = False, cum_map: bool = False,
+                          max_map: bool = False, set_focal_node_currents_to_zero: bool = False,
+                          set_null_currents_to_nodata: bool = False, set_null_voltages_to_nodata: bool = False,
+                          log_transform_maps: bool = False, reclass: dict | None = None,
+                          n_threads: int = 0) -> CircuitscapeResult:
+    """Circuitscape's pairwise mode on rasters (``scenario = pairwise``).
+
+    Effective resistances between every pair of focal points (``points``: a
+    raster of ids, cells of one id forming a focal region, or a
+    :class:`FocalPoints`), on the graph of :func:`circuitscape_advanced`.
+    Every component is factorised once and its pairs solved in batches
+    (without maps or exclusions, Circuitscape's shortcut: only the pairs of the
+    first focal point are solved). ``included_pairs`` (:class:`IncludedPairs`
+    or a path) restricts the pairs as Circuitscape does. ``current_maps`` and
+    ``voltage_maps`` keep every pair's maps in ``result.maps`` (keyed by the
+    two ids); ``cum_map`` / ``max_map`` sum / take the maximum of the pairs'
+    current maps.
+
+    Returns
+    -------
+    CircuitscapeResult
+        ``resistances`` (ids in the first row and column; -1: not connected),
+        ``cum_current``, ``max_current``, ``maps``.
+    """
+    cells = _array(habitat, "habitat")
+    g = habitat_conductance(cells, is_resistance=habitat_is_resistance, reclass=reclass)
+    poly = _polymap(polygons, g.shape)
+    g = _mask(g, mask)
+    if not isinstance(points, FocalPoints):
+        pm = _cells_from_map(points, "points", g.shape)
+        pm[pm == NODATA] = 0
+        meta = RasterMeta(g.shape[0], g.shape[1], 0.0, 0.0, 1.0)
+        jj, ii = np.nonzero(pm.T)
+        v = pm[ii, jj]
+        keep = v >= 0
+        order = np.argsort(v[keep], kind="stable")
+        points = FocalPoints((ii[keep] + 1)[order], (jj[keep] + 1)[order], v[keep][order].astype(np.int64))
+        del meta
+    if included_pairs is not None and not isinstance(included_pairs, IncludedPairs):
+        included_pairs = read_included_pairs(included_pairs)
+    points, excluded = _apply_included_pairs(points, included_pairs)
+    maps: dict = {}
+
+    ids = np.unique(points.ids) if points.has_regions else points.ids
+
+    def emit(ci, cj, volt, cur):
+        key = (int(ids[ci]), int(ids[cj]))
+        if volt is not None:
+            maps[("voltage", *key)] = volt
+        if cur is not None:
+            maps[("current", *key)] = cur
+
+    opts = _pair_options(voltage_maps, current_maps or cum_map, not current_maps and cum_map, max_map,
+                         set_focal_node_currents_to_zero, set_null_currents_to_nodata, set_null_voltages_to_nodata,
+                         log_transform_maps)
+    res, r = _pairwise(g, poly, points, excluded, four_neighbors, avg_resistances, opts, emit, n_threads)
+    return CircuitscapeResult(resistances=res, cum_current=r.get("cum"), max_current=r.get("max"), maps=maps)
+
+
+def _polymap(polygons, shape):
+    if polygons is None:
+        return None
+    pm = _cells_from_map(polygons, "polygons", shape)
+    pm[pm == NODATA] = 0
+    if not np.all(pm == np.round(pm)):
+        raise ValueError("the polygon raster must hold integer ids")
+    return np.ascontiguousarray(pm.astype(np.int64))
+
+
+def _mask(g, mask):
+    if mask is None:
+        return g
+    m = _cells_from_map(mask, "mask", g.shape)
+    m[m == NODATA] = 0
+    g = g * np.where(m > 0, 1.0, 0.0)
+    if g.sum() == 0:
+        raise ValueError("Mask file deleted everything!")
+    return g
+
+
+def _apply_included_pairs(points: FocalPoints, pairs: IncludedPairs | None):
+    # generate_exclude_pairs: include mode prunes the focal points it does not name.
+    if pairs is None:
+        return points, set()
+    if pairs.mode == "include":
+        keep = np.isin(points.ids, pairs.ids)
+        points = FocalPoints(points.rows[keep], points.cols[keep], points.ids[keep])
+    return points, pairs.excluded()
 
 
 # --- INI files --------------------------------------------------------------------------
@@ -427,6 +623,8 @@ def circuitscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0) ->
     four = _flag(cfg, "connect_four_neighbors_only")
     avg = _flag(cfg, "connect_using_avg_resistances")
     policy = cfg["remove_src_or_gnd"]
+    if policy == "not entered":  # Circuitscape 4's default
+        policy = "keepall"
     if policy not in POLICIES:
         raise ValueError(f"remove_src_or_gnd must be one of {POLICIES}")
 
@@ -435,12 +633,61 @@ def circuitscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0) ->
                                       _flag(cfg, "ground_file_is_resistances"))
         result = _advanced(g, poly, src, gnd, four, avg, policy, _flag(cfg, "use_unit_currents"),
                            _flag(cfg, "use_direct_grounds"), n_threads)
+    elif scenario == "pairwise":
+        points = read_point_map(need("point_file"), meta)
+        pairs = read_included_pairs(need("included_pairs_file")) if _flag(cfg, "use_included_pairs") else None
+        points, excluded = _apply_included_pairs(points, pairs)
+        opts = _pair_options(_flag(cfg, "write_volt_maps"), _flag(cfg, "write_cur_maps"),
+                             _flag(cfg, "write_cum_cur_map_only"), _flag(cfg, "write_max_cur_maps"),
+                             _flag(cfg, "set_focal_node_currents_to_zero"), _flag(cfg, "set_null_currents_to_nodata"),
+                             _flag(cfg, "set_null_voltages_to_nodata"), _flag(cfg, "log_transform_maps"))
+        prefix, tif = _prefix(cfg) if write_outputs else (None, False)
+        maps: dict = {}
+
+        def emit(ci, cj, volt, cur):
+            name = f"_{int(points.ids[ci])}_{int(points.ids[cj])}"
+            for kind, grid in (("voltmap", volt), ("curmap", cur)):
+                if grid is None:
+                    continue
+                if write_outputs:
+                    _write_grid(f"{prefix}_{kind}{name}", grid, meta, tif)
+                else:
+                    maps[kind + name] = grid
+
+        ids = np.unique(points.ids) if points.has_regions else points.ids
+
+        def emit(ci, cj, volt, cur):  # noqa: F811 - map names from the ids solved
+            name = f"_{int(ids[ci])}_{int(ids[cj])}"
+            for kind, grid in (("voltmap", volt), ("curmap", cur)):
+                if grid is None:
+                    continue
+                if write_outputs:
+                    _write_grid(f"{prefix}_{kind}{name}", grid, meta, tif)
+                else:
+                    maps[kind + name] = grid
+
+        res, r = _pairwise(g, poly, points, excluded, four, avg, opts, emit, n_threads)
+        result = CircuitscapeResult(resistances=res, cum_current=r.get("cum"), max_current=r.get("max"), maps=maps)
     else:
         raise NotImplementedError(f"scenario = {scenario} is not implemented yet")
 
     if write_outputs:
         _write_outputs(cfg, scenario, result, meta, base)
     return result
+
+
+def _prefix(cfg):
+    out = cfg["output_file"]
+    if _unset(out):
+        raise ValueError("output_file is not set")
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    return out.split(".out")[0], _flag(cfg, "write_as_tif")
+
+
+def _write_matrix(path: str, a: np.ndarray) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        for row in np.atleast_2d(a):
+            f.write(" ".join(repr(float(v)) for v in row) + "\n")
 
 
 def _source_and_ground(source_path, ground_path, meta: RasterMeta, ground_is_res: bool):
@@ -489,3 +736,14 @@ def _write_outputs(cfg, scenario, result: CircuitscapeResult, meta: RasterMeta, 
             _write_grid(prefix + "_voltmap", result.voltage, meta, tif)
         if _flag(cfg, "write_cur_maps") or _flag(cfg, "write_cum_cur_map_only"):
             _write_grid(prefix + "_curmap", result.current, meta, tif)
+        return
+    if result.cum_current is not None:
+        _write_grid(prefix + "_cum_curmap", result.cum_current, meta, tif)
+    if result.max_current is not None:
+        _write_grid(prefix + "_max_curmap", result.max_current, meta, tif)
+    if scenario == "pairwise":
+        r = result.resistances
+        _write_matrix(prefix + "_resistances.out", r)
+        fp = r[1:, 0]
+        three = [(fp[i], fp[j], r[j + 1, i + 1]) for i in range(len(fp)) for j in range(i + 1, len(fp))]
+        _write_matrix(prefix + "_resistances_3columns.out", np.array(three).reshape(-1, 3))

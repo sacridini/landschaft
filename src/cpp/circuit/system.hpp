@@ -73,6 +73,30 @@ std::shared_ptr<const FrontalSymbolic> frontal_analyze_graph(i64 bx, i64 by, con
                                                              const std::vector<std::int64_t>& adj_ptr,
                                                              const std::vector<std::int32_t>& adj);
 
+// Scratch that keeps its capacity and is not zeroed when resized, aligned to
+// 64 bytes: Eigen's vector kernels split their loops by the alignment of the
+// data, so a fixed alignment keeps the results the same from run to run.
+struct AlignedBuffer {
+    struct Free {
+        void operator()(double* p) const { ::operator delete[](p, std::align_val_t{64}); }
+    };
+    std::unique_ptr<double[], Free> p;
+    std::size_t capacity = 0;
+    double* get(std::size_t n) {
+        if (n > capacity) {
+            p.reset(static_cast<double*>(::operator new[](n * sizeof(double), std::align_val_t{64})));
+            capacity = n;
+        }
+        return p.get();
+    }
+};
+
+// Workspace of the triangular solves, one per thread when several threads
+// solve with one factorization.
+struct SolveScratch {
+    AlignedBuffer rhs, tmp;
+};
+
 class CellSystem {
 public:
     void analyze(i64 bx, i64 by, const std::uint8_t* unknown, bool four_neighbors);
@@ -106,31 +130,17 @@ public:
     void solve(const double* b, double* x);
     // X = A⁻¹ X for k right-hand sides (column-major, size() × k).
     void solve_many(double* x, i64 k);
+    // The same with the caller's workspace: safe from several threads at once.
+    void solve_many(double* x, i64 k, SolveScratch& scratch) const;
 
 private:
-    // Scratch that keeps its capacity and is not zeroed when resized, aligned
-    // to 64 bytes: Eigen's vector kernels split their loops by the alignment of
-    // the data, so a fixed alignment keeps the results the same from run to run.
-    struct Buffer {
-        struct Free {
-            void operator()(double* p) const { ::operator delete[](p, std::align_val_t{64}); }
-        };
-        std::unique_ptr<double[], Free> p;
-        std::size_t capacity = 0;
-        double* get(std::size_t n) {
-            if (n > capacity) {
-                p.reset(static_cast<double*>(::operator new[](n * sizeof(double), std::align_val_t{64})));
-                capacity = n;
-            }
-            return p.get();
-        }
-    };
     std::shared_ptr<const FrontalSymbolic> sym_;
     bool factorize(double* y);  // with y: the forward substitution of y too
-    void forward(double* x, i64 k);
-    void backward(double* x, i64 k);
+    void forward(double* x, i64 k, AlignedBuffer& tmp) const;
+    void backward(double* x, i64 k, AlignedBuffer& tmp) const;
     std::vector<double> diag_, off_;  // the matrix: diagonal, and unknown × direction edge values
-    Buffer l_, stack_, tmp_, rhs_;
+    AlignedBuffer l_, stack_;
+    SolveScratch scratch_;
 };
 
 }  // namespace circuit

@@ -1694,6 +1694,11 @@ r = circuitscape_advanced("resistance.tif", "sources.asc", "grounds.asc",   # pa
                           ground_is_resistance=True, remove_src_or_gnd="keepall")
 r.voltage, r.current, r.nodemap
 
+# effective resistances between focal points (a raster of ids; several cells of one id: a region)
+p = circuitscape_pairwise("resistance.tif", "sites.asc", included_pairs="pairs.txt", cum_map=True)
+p.resistances          # ids in the first row and column, -1 where not connected
+p.cum_current          # the pairs' current maps summed
+
 r = circuitscape_ini("job.ini")      # a Circuitscape INI file; maps written next to output_file
 ```
 
@@ -1711,11 +1716,28 @@ eliminated last.
 
 Implemented: `scenario = advanced` (voltage and current maps; `circuitscape_ini` writes
 `<output>_voltmap` and `<output>_curmap`, ASCII grids or GeoTIFF, and the configuration
-in `output_file`). The pairwise, one-to-all and all-to-one modes are next (IDEAS.md).
+in `output_file`) and `scenario = pairwise`: focal points from a raster or a text list
+(sorted by id, negative ids dropped), include/exclude pair files (a `min`/`max` matrix or
+a `mode` list; include mode drops the points it does not name), resistances with
+Circuitscape's rules (-1 between components, 0 between focal points on one node), every
+pair's voltage and current maps, the cumulative and maximum current maps with
+`set_focal_node_currents_to_zero`, `set_null_*_to_nodata` and `log_transform_maps`, and
+`<output>_resistances.out` / `_resistances_3columns.out`. Each component is factorised
+once, with one node grounded (the voltage differences are exact; Circuitscape solves the
+singular Laplacian shifted by 10ε), and its pairs are solved in parallel batches of right-
+hand sides; without maps and exclusions Circuitscape's shortcut applies (only the pairs of
+the first focal point are solved, the others follow from its voltages, with its quirks).
+Focal regions (several cells of one id) get a graph per pair, the two regions merged with
+the polygons they touch, as Circuitscape does; the pairs run in parallel. The one-to-all
+and all-to-one modes are next (IDEAS.md).
 
 Verification: `python tools/make_reference_circuitscape.py` copies Circuitscape's raster
 test inputs (`tests/data/reference/circuit/circuitscape/input/raster`, MIT) and runs every
 one of its INI files with the `cholmod` solver; in advanced mode (`mgVerify1`-`7`,
 `ex_advanced`: polygons, sources and grounds, finite and direct grounds, 4 and 8
 neighbours, average resistances, a 355×481 map) every map agrees to 5e-12 of its largest
-value, with the same zero cells.
+value, with the same zero cells. In pairwise mode (`sgVerify1`-`17`: polygons, focal
+regions, masks, included pairs, 4 and 8 neighbours, voltage, current, cumulative and
+maximum maps) the resistances agree to 1e-12 (to 9e-10 relative on `sgVerify17`,
+resistances up to 3e3, where CHOLMOD's shifted singular solve itself loses digits) and
+every map to 3e-13, with exactly the same set of per-pair maps.
