@@ -199,7 +199,7 @@ def test_units_and_errors():
     with pytest.raises(ValueError, match="unknown distance unit"):
         ls.conn.distance_table(RASTER, distance_unit="parsec")
     with pytest.raises(ValueError, match="distance must be"):
-        ls.conn.distance_table(RASTER, distance="commute-time")
+        ls.conn.distance_table(RASTER, distance="circuit")
     with pytest.raises(ValueError, match="one value per patch"):
         ls.conn.node_table(RASTER, attribute=[1.0, 2.0])
 
@@ -322,3 +322,79 @@ def test_least_cost_points_outside_or_in_na():
         ls.conn.distance_table(pts, id="id", distance="least-cost")
     with pytest.raises(ValueError, match="positive"):
         ls.conn.distance_table(pts, id="id", distance="least-cost", resistance=np.zeros((3, 3)))
+
+
+# ---------------------------------------------------- commute-time distances
+
+@pytest.mark.parametrize("name,nodes,kw", [
+    ("raster_commute", RASTER, {"resistance": RESISTANCE}),
+    ("vector_commute", "polygons", {"id": "id", "resistance": REF / "polygons_resistance.tif"}),
+    ("vector_commute_4", "polygons", {"id": "id", "resistance": REF / "polygons_resistance.tif", "cost_directions": 4,
+                                      "cost_function": "mean"}),
+])
+def test_commute_time_matches_gdistance(name, nodes, kw):
+    if nodes == "polygons":
+        nodes = gpd.read_file(POLYGONS)
+    ours = ls.conn.distance_table(nodes, distance="commute-time", **kw)
+    ref = _ref(name)
+    m = _merge(ours, ref)
+    # gdistance solves with CHOLMOD, landschaft with SuperLU.
+    np.testing.assert_allclose(m["distance"], m["Distance"], rtol=1e-11)
+    if name != "raster_commute":  # the whole table: nodes on NA cells are left out, as gdistance does
+        assert len(ours) == len(ref)
+
+
+@pytest.mark.parametrize("directions,function", [(8, "makurhini"), (4, "mean")])
+def test_commute_time_against_pseudo_inverse(directions, function):
+    import xarray as xr
+
+    rng = np.random.default_rng(directions)
+    values = rng.uniform(1, 50, (14, 18))
+    values[:, 9] = np.nan  # two separate parts
+    res = (25.0, 40.0)
+    da = xr.DataArray(values, dims=("y", "x"), coords={"y": 14 * res[1] - (np.arange(14) + 0.5) * res[1],
+                                                      "x": (np.arange(18) + 0.5) * res[0]})
+    cells = rng.choice(np.flatnonzero(np.isfinite(values)), 10, replace=False)
+    cells[1] = cells[0]  # two nodes on one cell
+    r, c = np.divmod(cells, 18)
+    x, y = (c + 0.5) * res[0], 14 * res[1] - (r + 0.5) * res[1]
+    pts = gpd.GeoDataFrame({"id": np.arange(10)}, geometry=gpd.points_from_xy(x, y))
+    table = ls.conn.distance_table(pts, id="id", distance="commute-time", resistance=da, cost_directions=directions,
+                                   cost_function=function, unreachable="drop")
+    costs = _gdistance_graph(values, *res, directions, function)
+    W = costs.copy()
+    W.data = 1 / W.data
+    W = (W + W.T).toarray()
+    volume = W.sum()
+    part = (np.arange(18) >= 9)[c]
+    got = {(f, t): d for f, t, d in table.itertuples(index=False)}
+    for side in (False, True):
+        cols = np.flatnonzero(np.isfinite(values).ravel() & ((np.arange(values.size) % 18 >= 9) == side))
+        L = np.diag(W[cols][:, cols].sum(axis=1)) - W[cols][:, cols]
+        Lp = np.linalg.inv(L + 1 / cols.size) - 1 / cols.size  # the pseudo-inverse of a connected graph's Laplacian
+        where = np.searchsorted(cols, cells)
+        for i in range(10):
+            for j in range(i + 1, 10):
+                if part[i] != side or part[j] != side:
+                    continue
+                a, b = where[i], where[j]
+                expected = (Lp[a, a] + Lp[b, b] - 2 * Lp[a, b]) * volume
+                assert got[(i, j)] == pytest.approx(expected, rel=1e-9, abs=1e-6)
+    assert all(part[i] == part[j] for i, j in got)  # separate parts: no pair (dropped)
+    euclid = ls.conn.distance_table(pts, id="id", distance="commute-time", resistance=da, cost_directions=directions,
+                                    cost_function=function)
+    assert len(euclid) == 45  # the separate parts take the centroid distance
+
+
+def test_commute_time_nodes_on_na_or_graph():
+    values = np.ones((10, 10))
+    values[0, 0] = np.nan
+    pts = gpd.GeoDataFrame({"id": [1, 2, 3, 4]},
+                           geometry=gpd.points_from_xy([0.5, 5.5, 50.0, 6.5], [9.5, 5.5, 5.0, 5.5]))
+    t = ls.conn.distance_table(pts, id="id", distance="commute-time", resistance=values)
+    # 1 sits in an NA cell, 3 outside the raster: left out, as gdistance does
+    assert {(f, to) for f, to, _ in t.itertuples(index=False)} == {(2, 4)}
+    g = ls.HabitatGraph.from_vector(pts, id="id", distance="commute-time", resistance=values)
+    assert g.n_nodes == 4
+    with pytest.raises(ValueError, match="commute-time distances need a resistance"):
+        ls.conn.distance_table(pts, id="id", distance="commute-time")

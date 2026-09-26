@@ -4,7 +4,7 @@
 Usage::
 
     python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links] [deca] [protconn] [grids]
-        [centrality] [betweenness] [focal]
+        [centrality] [betweenness] [focal] [commute]
 
 ``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
 in ``tests/lsm_reference.py``; the default R library is used). It exports
@@ -51,6 +51,10 @@ scenes (``conefor_betweenness.csv.gz``).
 ``focal`` (after ``spatial`` and ``protconn``) runs ``MK_Focal_nodes`` (IIC and
 PC, one and two distances) on the polygons and the ProtConn areas
 (``makurhini_focal.csv.gz``).
+
+``commute`` (after ``spatial``) stores ``distancefile(type = "commute-time")``
+(gdistance's ``commuteDistance``) on the polygons (8 and 4 directions) and the
+example raster (every 7th pair) in ``tests/data/reference/conn/spatial``.
 
 ``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
 Sensinode 2.2 sources (the last five nodes of each scene are Conefor's nodes
@@ -476,6 +480,23 @@ def run_centrality() -> None:
     print("centrality", len(table))
 
 
+def run_commute() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    out = OUT / "spatial"
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        subprocess.run([str(rscript), str(R_SCRIPT), "commute", str(tmp), str(OUT / "polygons.gpkg"),
+                        str(OUT / "polygons_resistance.tif")], check=True)
+        for f in sorted(tmp.glob("*.csv")):
+            table = pd.read_csv(f, float_precision="round_trip")
+            if len(table) > 5_000:
+                table = table[np.arange(len(table)) % 7 == 0]
+            table.to_csv(out / f"{f.stem}.csv.gz", index=False, float_format="%.17g")
+            print(f.stem, len(table))
+
+
 def run_focal() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -598,7 +619,7 @@ def run_conefor() -> None:
 
 
 if __name__ == "__main__":
-    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn", "grids", "centrality", "focal"]
+    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn", "grids", "centrality", "focal", "commute"]
     if "makurhini" in parts:
         run_makurhini()
     if "conefor" in parts:
@@ -619,3 +640,5 @@ if __name__ == "__main__":
         run_betweenness()
     if "focal" in parts:
         run_focal()
+    if "commute" in parts:
+        run_commute()

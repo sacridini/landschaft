@@ -11,6 +11,8 @@
 #       MK_RMCentrality (binary and weighted) on the polygons and the example raster
 #   Rscript conn_makurhini_reference.R focal <polygons.gpkg> <protconn_areas.gpkg> <out.csv>
 #       MK_Focal_nodes (IIC and PC, one and two distances) on the polygons and the ProtConn areas
+#   Rscript conn_makurhini_reference.R commute <out_dir> <polygons.gpkg> <polygons_resistance.tif>
+#       commute-time distances (distancefile) on the polygons and the example raster
 #   Rscript conn_makurhini_reference.R export <out_dir>
 #       writes Makurhini's example `habitat_nodes` (centroid distances, areas
 #       in km2) as habitat_nodes.csv / habitat_pairs.csv
@@ -349,6 +351,33 @@ if (args[1] == "focal") {
         }
     }
     write.csv(do.call(rbind, out), args[4], row.names = FALSE)
+    quit(save = "no")
+}
+
+if (args[1] == "commute") {
+    # Commute-time distances (gdistance's commuteDistance) with distancefile.
+    out <- args[2]
+    r <- terra::rast(file.path(dirname(args[3]), "habitat_nodes_raster.tif"))
+    res_r <- raster::raster(terra::rast(file.path(dirname(args[3]), "resistance_matrix.tif")))
+    polygons <- sf::st_read(args[3], quiet = TRUE)
+    res_v <- raster::raster(terra::rast(args[4]))
+    put <- function(what, table) {
+        table <- as.data.frame(table)
+        for (col in names(table)) if (is.numeric(table[[col]])) table[[col]] <- fmt(table[[col]])
+        write.csv(table, file.path(out, paste0(what, ".csv")), row.names = FALSE, quote = FALSE)
+    }
+    t0 <- Sys.time()
+    put("vector_commute", tryCatch(distancefile(polygons, id = "id", type = "commute-time", resistance = res_v),
+                                   error = function(e) data.frame(error = conditionMessage(e))))
+    put("vector_commute_4", tryCatch(distancefile(polygons, id = "id", type = "commute-time", resistance = res_v,
+                                                  ngh = 4, CostFun = function(x) 1 / mean(x)),
+                                     error = function(e) data.frame(error = conditionMessage(e))))
+    cat("vector", format(Sys.time() - t0), "
+")
+    t0 <- Sys.time()
+    put("raster_commute", distancefile(r, type = "commute-time", resistance = res_r))
+    cat("raster", format(Sys.time() - t0), "
+")
     quit(save = "no")
 }
 

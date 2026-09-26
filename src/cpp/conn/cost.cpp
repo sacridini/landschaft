@@ -88,6 +88,41 @@ constexpr Neighbour kQueen[8] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1
 
 }  // namespace
 
+ConductanceEdges conductance_edges(const double* resistance, const CostGrid& grid) {
+    if (grid.directions != 4 && grid.directions != 8) throw std::invalid_argument("directions must be 4 or 8");
+    const i64 nx = grid.nx, ny = grid.ny;
+    const StepLengths steps(grid);
+    // The neighbours after a cell in scan order.
+    constexpr Neighbour kForward8[4] = {{0, 1}, {1, -1}, {1, 0}, {1, 1}};
+    constexpr Neighbour kForward4[2] = {{0, 1}, {1, 0}};
+    const Neighbour* nb = grid.directions == 8 ? kForward8 : kForward4;
+    const int nnb = grid.directions / 2;
+    ConductanceEdges out;
+    for (i64 r = 0; r < ny; ++r) {
+        for (i64 c = 0; c < nx; ++c) {
+            const i64 a = r * nx + c;
+            if (!std::isfinite(resistance[a])) continue;
+            for (int k = 0; k < nnb; ++k) {
+                const i64 r2 = r + nb[k].dr, c2 = c + nb[k].dc;
+                if (r2 >= ny || c2 < 0 || c2 >= nx) continue;
+                const i64 b = r2 * nx + c2;
+                if (!std::isfinite(resistance[b])) continue;
+                double f;
+                if (grid.function == CostFunction::Destination) {
+                    f = 1.0 / resistance[b];
+                } else {
+                    const double pair[2] = {resistance[a], resistance[b]};
+                    f = 1.0 / lsm::r_mean(pair, 2);
+                }
+                out.a.push_back(a);
+                out.b.push_back(b);
+                out.conductance.push_back((1.0 / steps.length(r, c, r2, c2)) * f);
+            }
+        }
+    }
+    return out;
+}
+
 PairList least_cost_distances(const double* resistance, const CostGrid& grid, const i64* node_cell,
                               std::int32_t n_nodes, double max_cost, int max_threads) {
     if (grid.directions != 4 && grid.directions != 8) throw std::invalid_argument("directions must be 4 or 8");

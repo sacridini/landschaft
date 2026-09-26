@@ -1201,6 +1201,16 @@ ls.conn.distance_table(patches_gdf, id="patch_id", distance="edge", max_distance
   the nodes before it are reached or at `max_distance`, and uses the same step costs
   (raster centre coordinates, R's x87 `sqrt`, `r_mean`): the distances are gdistance's
   to the last bit.
+* **Commute-time distances** (`distance="commute-time"`, the same `resistance`,
+  `cost_directions` and `cost_function`) are gdistance's `commuteDistance`: the expected
+  time of a random walk over the same conductances from one node's cell to the other's
+  and back, i.e. their effective resistance (as in Circuitscape) times the total
+  conductance. The Laplacian of every connected part of the conductance graph, grounded
+  at one node cell, is factorised once (SciPy's SuperLU) and solved for the other node
+  cells in blocks; the distances agree with gdistance (CHOLMOD) to 1e-11. As in
+  gdistance, nodes on NA cells or outside the resistance are left out; pairs in
+  separate parts (where gdistance fails) get their centroid distance, or none with
+  `unreachable="drop"`.
 
 `max_distance` keeps the pairs up to that distance (in `distance_unit`), which is
 what Makurhini's `threshold` does in pair tables (in its matrices it drops the
@@ -1413,6 +1423,10 @@ the results do not depend on the number of threads.
   distance) are gdistance's bits, and `MK_dPCIIC` with them is reproduced exactly;
   `tests/test_conn_spatial.py` also checks them against SciPy's Dijkstra on the
   graph built from gdistance's formulas.
+* `make_reference_conn.py commute` stores `distancefile(type = "commute-time")` on the
+  polygons (8 and 4 directions, both cost functions) and on the example raster over
+  `resistance_matrix`; `tests/test_conn_spatial.py` matches them to 1e-11 (the same
+  pairs) and checks commute times against the Laplacian's pseudo-inverse.
 * `make_reference_conn.py links` runs `MK_dPCIIC_links` (removal, and changes of 40
   pairs brought closer or moved apart) and `MK_dPCIIC` with `restoration` on the three
   synthetic scenes (`makurhini_links.csv.gz`): the same rounded values, restoration
@@ -1461,6 +1475,7 @@ the results do not depend on the number of threads.
 | 4000×4000 raster, 8,395 patches: centroid distances, all 35 M pairs / up to 5 km | – | 0.9 s / 0.1 s |
 | same, edge distances up to 5 km / 20 km / all pairs | – | 0.24 s / 1.1 s / 12.5 s |
 | `habitat_nodes_raster` over `resistance_matrix` (222 k cells): least-cost distances | 10.2 s | 0.5 s |
+| same: commute-time distances | 50 s | 3.7 s |
 | 3000×3000 resistance, 300 nodes: least-cost distances, all pairs / up to 500 k cost units | – | 46 s / 1.5 s |
 | 2,000 random patches: importance of every link, IIC (47 k links) / PC (1.2 M edges) | – | 0.1 s / 1.9 s |
 | 5,000 random patches: importance of every link, IIC (134 k) / PC (4.3 M) | – | 0.9 s / 22 s |

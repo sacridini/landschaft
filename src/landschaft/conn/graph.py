@@ -193,7 +193,7 @@ class HabitatGraph:
         The attributes come from :func:`~landschaft.conn.node_table` (the patch
         areas in ``area_unit`` by default) and the connections from
         :func:`~landschaft.conn.distance_table` (``distance="centroid"``,
-        ``"edge"`` or ``"least-cost"`` over ``resistance``, pairs up to
+        ``"edge"``, ``"least-cost"`` or ``"commute-time"`` over ``resistance``, pairs up to
         ``max_distance`` in ``distance_unit``), as
         Makurhini's ``MK_dPCIIC`` does with raster nodes. Other arguments go
         to :class:`HabitatGraph`; :meth:`to_raster` paints node values on the
@@ -222,7 +222,7 @@ class HabitatGraph:
 
         ``id`` names the column of node ids, ``attribute`` a column (default:
         the area in ``area_unit``); distances are ``"centroid"``, ``"edge"``
-        (GEOS) or ``"least-cost"`` over ``resistance``, pairs up to ``max_distance``. :meth:`to_geodataframe` joins
+        (GEOS), ``"least-cost"`` or ``"commute-time"`` over ``resistance``, pairs up to ``max_distance``. :meth:`to_geodataframe` joins
         node values to the geometries.
         """
         from .nodes import distance_table, node_table

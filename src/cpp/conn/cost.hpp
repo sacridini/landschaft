@@ -35,4 +35,13 @@ struct CostGrid {
 PairList least_cost_distances(const double* resistance, const CostGrid& grid, const i64* node_cell,
                               std::int32_t n_nodes, double max_cost, int max_threads);
 
+// The conductance graph itself (gdistance's transition() and geoCorrection()
+// on a projected raster): every pair of neighbouring cells a < b with a
+// resistance, and f(a, b) / (the distance between their centres).
+struct ConductanceEdges {
+    std::vector<i64> a, b;
+    std::vector<double> conductance;
+};
+ConductanceEdges conductance_edges(const double* resistance, const CostGrid& grid);
+
 }  // namespace conn

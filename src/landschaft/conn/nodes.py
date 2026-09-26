@@ -15,7 +15,8 @@ from .. import _core
 AREA_UNITS = {"m2": 1.0, "km2": 0.000001, "ha": 0.0001, "Dam2": 0.01, "inch2": 1550.0, "foot2": 10.7639,
               "yard2": 1.19599, "mile2": 3.861e-7}
 DISTANCE_UNITS = {"m": 1.0, "km": 0.001, "inch": 39.3701, "foot": 3.28084, "yard": 1.09361, "mile": 0.000621371}
-DISTANCE_TYPES = ("centroid", "edge", "least-cost")
+DISTANCE_TYPES = ("centroid", "edge", "least-cost", "commute-time")
+COST_TYPES = ("least-cost", "commute-time")
 COST_FUNCTIONS = ("makurhini", "mean")
 # Each least-cost thread keeps a cost (8 bytes) and a flag per cell.
 _COST_MEMORY = 8e9
@@ -288,6 +289,10 @@ def distance_table(nodes, *, distance: str = "centroid", id: str | None = None, 
         resistance of the cell of larger index (``cost_function="makurhini"``,
         Makurhini's default) or 1 / the mean of both (``"mean"``). Distances are
         in cost units (resistance × map units); ``distance_unit`` does not apply.
+        ``"commute-time"``: gdistance's ``commuteDistance`` over the same
+        conductances (1 / the step cost): the expected time of a random walk
+        from one node's cell to the other's and back, the effective resistance
+        between them (as in Circuitscape) times the total conductance.
     max_distance
         Keep only the pairs up to this distance (in ``distance_unit``).
         Makurhini's ``threshold`` keeps them this way in pair tables.
@@ -297,7 +302,7 @@ def distance_table(nodes, *, distance: str = "centroid", id: str | None = None, 
         The resistance raster of ``"least-cost"`` (path, DataArray or array;
         NA cells cannot be crossed).
     unreachable
-        ``"least-cost"`` pairs without a path: ``"euclidean"`` gives them the
+        ``"least-cost"`` or ``"commute-time"`` pairs without a path: ``"euclidean"`` gives them the
         distance between their centroids, as Makurhini does, ``"drop"``
         leaves them unconnected.
 
@@ -308,10 +313,11 @@ def distance_table(nodes, *, distance: str = "centroid", id: str | None = None, 
     """
     if distance not in DISTANCE_TYPES:
         raise ValueError(f"distance must be one of {DISTANCE_TYPES}, got {distance!r}")
-    if distance == "least-cost":
+    if distance in COST_TYPES:
         return _least_cost_table(nodes, id=id, max_distance=max_distance, habitat=habitat, directions=directions,
                                  nodata=nodata, band=band, resistance=resistance, cost_directions=cost_directions,
-                                 cost_function=cost_function, unreachable=unreachable, n_threads=n_threads)
+                                 cost_function=cost_function, unreachable=unreachable, n_threads=n_threads,
+                                 kind=distance)
     factor = _factor(DISTANCE_UNITS, distance_unit, "distance")
     # The limit in metres, a hair above so the converted distance decides.
     limit = np.inf if max_distance is None else float(max_distance) / factor * (1 + 1e-12)
@@ -369,10 +375,72 @@ def _node_points(nodes, *, id, habitat, directions, nodata, band, n_threads):
     return nd["ids"], nd["cx"], nd["cy"]
 
 
+def _commute_distances(res, cells: np.ndarray, directions: int, function: str):
+    """Commute-time distances between the node cells (pairs i < j in the same component), and which nodes
+    are on the conductance graph."""
+    from scipy import sparse
+    from scipy.sparse.csgraph import connected_components
+    from scipy.sparse.linalg import splu
+
+    xmin, xmax, ymin, ymax = res.extent
+    e = _core.conn_conductance(res.values, xmin, xmax, ymin, ymax, directions, function)
+    a, b, c = e["a"], e["b"], e["conductance"]
+    empty = pd.DataFrame({"i": np.zeros(0, np.int64), "j": np.zeros(0, np.int64), "distance": np.zeros(0)})
+    if a.size == 0:
+        return empty, np.zeros(cells.size, dtype=bool)
+    # Cells with a conductance (gdistance's transitionSolidify), numbered 0..m-1.
+    used = np.unique(np.concatenate([a, b]))
+    ia, ib = np.searchsorted(used, a), np.searchsorted(used, b)
+    m = used.size
+    volume = 2.0 * float(c.sum())  # sum(transitionMatrix): both triangles
+    adjacency = sparse.coo_matrix((np.concatenate([c, c]), (np.concatenate([ia, ib]), np.concatenate([ib, ia]))),
+                                  shape=(m, m)).tocsr()
+    degree = np.asarray(adjacency.sum(axis=1)).ravel()
+    laplacian = (sparse.diags(degree) - adjacency).tocsc()
+    n_comp, label = connected_components(adjacency, directed=False)
+    pos = np.searchsorted(used, cells)
+    inside = (cells >= 0) & (pos < m) & (used[np.clip(pos, 0, m - 1)] == cells)
+    vertex = np.where(inside, pos, -1)
+    frames = []
+    for comp in np.unique(label[vertex[inside]]):
+        nodes = np.flatnonzero(inside & (label[np.clip(vertex, 0, None)] == comp))
+        if nodes.size < 2:
+            continue
+        verts = np.flatnonzero(label == comp)
+        targets = np.unique(vertex[nodes])  # distinct cells
+        local = np.searchsorted(verts, targets)
+        ground = local[-1]
+        keep = np.ones(verts.size, dtype=bool)
+        keep[ground] = False
+        sub = laplacian[verts][:, verts][keep][:, keep].tocsc()
+        # Row of each target in the grounded system (the ground has none).
+        rows = np.searchsorted(np.flatnonzero(keep), local[:-1])
+        k = rows.size
+        G = np.zeros((k + 1, k + 1))  # Laplacian's inverse on the targets, the ground last (0)
+        if k:
+            lu = splu(sub, permc_spec="MMD_AT_PLUS_A", diag_pivot_thresh=0.0, options={"SymmetricMode": True})
+            block = max(1, min(64, int(2e7 // max(1, sub.shape[0]))))
+            for s in range(0, k, block):
+                cols = rows[s:s + block]
+                rhs = np.zeros((sub.shape[0], cols.size))
+                rhs[cols, np.arange(cols.size)] = 1.0
+                G[:k, s:s + cols.size] = lu.solve(rhs)[rows]
+        G = (G + G.T) / 2
+        d = np.diag(G)
+        R = (d[:, None] + d[None, :] - 2 * G) * volume
+        np.fill_diagonal(R, 0.0)
+        where = np.searchsorted(targets, vertex[nodes])
+        i, j = np.triu_indices(nodes.size, 1)
+        frames.append(pd.DataFrame({"i": nodes[i], "j": nodes[j], "distance": R[where[i], where[j]]}))
+    if not frames:
+        return empty, inside
+    return pd.concat(frames).sort_values(["i", "j"], kind="stable").reset_index(drop=True), inside
+
+
 def _least_cost_table(nodes, *, id, max_distance, habitat, directions, nodata, band, resistance, cost_directions,
-                      cost_function, unreachable, n_threads) -> pd.DataFrame:
+                      cost_function, unreachable, n_threads, kind="least-cost") -> pd.DataFrame:
     if resistance is None:
-        raise ValueError("least-cost distances need a resistance raster (resistance=)")
+        raise ValueError(f"{kind} distances need a resistance raster (resistance=)")
     if cost_function not in COST_FUNCTIONS:
         raise ValueError(f"cost_function must be one of {COST_FUNCTIONS}, got {cost_function!r}")
     if cost_directions not in (4, 8):
@@ -385,10 +453,14 @@ def _least_cost_table(nodes, *, id, max_distance, habitat, directions, nodata, b
     cells = cells_of(x, y, res.values.shape, res.extent)
     limit = np.inf if max_distance is None else float(max_distance)
     xmin, xmax, ymin, ymax = res.extent
-    cap = max(1, int(_COST_MEMORY // (9 * res.values.size + 1)))
-    r = _core.conn_least_cost(res.values, xmin, xmax, ymin, ymax, cells, cost_directions, cost_function, limit,
-                              _threads(n_threads), cap)
-    table = pd.DataFrame({"i": r["i"], "j": r["j"], "distance": r["distance"]})
+    if kind == "commute-time":
+        table, on_graph = _commute_distances(res, cells, cost_directions, cost_function)
+        table = table[table["distance"] <= limit]
+    else:
+        cap = max(1, int(_COST_MEMORY // (9 * res.values.size + 1)))
+        r = _core.conn_least_cost(res.values, xmin, xmax, ymin, ymax, cells, cost_directions, cost_function, limit,
+                                  _threads(n_threads), cap)
+        table = pd.DataFrame({"i": r["i"], "j": r["j"], "distance": r["distance"]})
     if unreachable == "euclidean":
         # Makurhini: pairs with an infinite cost (no path at all: different
         # components of the resistance, or a node outside it or on an NA
@@ -401,6 +473,10 @@ def _least_cost_table(nodes, *, id, max_distance, habitat, directions, nodata, b
         e = _core.conn_point_distances(np.ascontiguousarray(x), np.ascontiguousarray(y), limit, _threads(n_threads))
         ei, ej = e["i"].astype(np.int64), e["j"].astype(np.int64)
         cut_off = (component[ei] == 0) | (component[ei] != component[ej])
+        if kind == "commute-time":
+            # gdistance leaves out the nodes off the conductance graph (NA);
+            # it fails on separate components, which get the centroid distance.
+            cut_off &= on_graph[ei] & on_graph[ej]
         n = len(ids)
         found = np.isin(ei * n + ej, table["i"].to_numpy(np.int64) * n + table["j"].to_numpy(np.int64))
         fallback = cut_off & ~found

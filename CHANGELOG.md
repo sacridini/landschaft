@@ -6,6 +6,14 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 10: commute-time distances.
+  `distance="commute-time"` in `ls.conn.distance_table`, `HabitatGraph.from_raster` and
+  `from_vector` is gdistance's `commuteDistance` as Makurhini's `distancefile` uses it
+  (effective resistance times the total conductance over the least-cost conductances),
+  one sparse factorisation per connected part. Matched with Makurhini to 1e-11, 13×
+  faster.
+
 ## [0.38.0] - 2026-09-26
 
 ### Added
