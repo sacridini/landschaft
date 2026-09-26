@@ -101,3 +101,16 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 4. Vários rasters em paralelo, zonas/buffers/amostragem (`sample_lsm`), janela
    móvel (`window_lsm`). **Feita.**
 5. Processamento fora da memória por tiles, juntando patches cortados nas costuras.
+   Proposta (2026-09-26, ainda não aprovada):
+   - ler o raster em blocos de linhas (faixas), rotular cada bloco com o motor atual e
+     juntar os pedaços de patch cortados nas costuras, como já se faz entre as faixas
+     de 64 linhas em memória (union-find sobre os pedaços + soma das estatísticas);
+   - primeira etapa: as métricas que dependem só das estatísticas somáveis por patch e
+     das adjacências entre classes (área, borda, forma, agregação, diversidade,
+     complexidade), exatas e idênticas ao landscapemetrics;
+   - segunda etapa: ENN, círculo e core, que precisam de informação que cruza os
+     blocos (células de borda de patches vizinhos, caixas envolventes, distância à
+     borda com `edge_depth`);
+   - API a definir (p. ex. `landscape_metrics(..., tiled=True)` ou um objeto próprio),
+     no estilo do `mspa_tiled` já existente; testar comparando com o cálculo em memória
+     e com o landscapemetrics em mapas pequenos cortados em blocos pequenos.
