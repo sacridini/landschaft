@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-26
+
 ### Changed
 - Landscape metrics part 13: `pafrac` is now the same bits as landscapemetrics. Its
   regression runs what R's `lm()` runs (LINPACK's `dqrdc2`/`dqrsl` over R's reference
