@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 4: links and nodes to add.
   `HabitatGraph.link_importance(metric)` (Makurhini's `MK_dPCIIC_links` removal: the
