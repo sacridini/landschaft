@@ -77,6 +77,49 @@ if (args[1] == "spatial") {
     quit(save = "no")
 }
 
+if (args[1] == "links") {
+    # MK_dPCIIC_links (removal and change) and MK_dPCIIC with restoration.
+    # jobs.csv: scene, nodes, matrix, change, metric, distance, probability, pij_min, restore
+    jobs <- read.csv(args[2], stringsAsFactors = FALSE, colClasses = "character")
+    rows <- list()
+    for (k in seq_len(nrow(jobs))) {
+        job <- jobs[k, ]
+        nodes <- read.csv(job$nodes)
+        dist <- as.matrix(read.csv(job$matrix, header = FALSE))
+        change <- as.matrix(read.csv(job$change, header = FALSE))
+        rownames(dist) <- colnames(dist) <- nodes$id
+        rownames(change) <- colnames(change) <- seq_len(nrow(change))
+        thr <- as.numeric(job$distance)
+        prob <- if (job$probability == "") NULL else as.numeric(job$probability)
+        pij_min <- if (job$pij_min == "") NULL else as.numeric(job$pij_min)
+        res <- MK_dPCIIC_links(nodes = nodes, distance = dist, metric = job$metric, probability = prob,
+                               pij_min = pij_min, distance_thresholds = thr, removal = TRUE, change = change,
+                               intern = FALSE)
+        for (part in res) {
+            value <- names(part)[ncol(part)]
+            rows[[length(rows) + 1]] <- data.frame(scene = job$scene, metric = job$metric, distance = job$distance,
+                                                   probability = job$probability, pij_min = job$pij_min,
+                                                   level = value, source = nodes$id[part$Source],
+                                                   destination = nodes$id[part$Destination],
+                                                   value = fmt(part[[value]]))
+        }
+        n_res <- as.integer(job$restore)
+        if (n_res > 0) {
+            nodes$restoration <- c(rep(1, nrow(nodes) - n_res), rep(0, n_res))
+            r2 <- MK_dPCIIC(nodes = nodes, distance = dist, metric = job$metric, probability = prob,
+                            pij_min = pij_min, distance_thresholds = thr, restoration = "restoration",
+                            intern = FALSE)
+            col <- paste0("d", job$metric, "res")
+            rows[[length(rows) + 1]] <- data.frame(scene = job$scene, metric = job$metric, distance = job$distance,
+                                                   probability = job$probability, pij_min = job$pij_min,
+                                                   level = col, source = r2[[1]], destination = NA,
+                                                   value = fmt(r2[[col]]))
+        }
+    }
+    write.csv(do.call(rbind, rows), args[3], row.names = FALSE)
+    quit(save = "no")
+}
+
 if (args[1] == "export") {
     data("habitat_nodes", package = "Makurhini")
     d <- distancefile(habitat_nodes, id = "Id", type = "centroid")

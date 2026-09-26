@@ -978,7 +978,7 @@ void bind_landscape(py::module_& m) {
 py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>& pj, const CArray<double>& value,
                       const CArray<double>& area, const std::string& kind, double threshold, double probability,
                       double pij_min, double expand_limit, bool conefor, bool links, bool probabilities,
-                      bool importance, int n_threads) {
+                      bool importance, bool edges, int n_threads) {
     if (pi.ndim() != 1 || pj.ndim() != 1 || value.ndim() != 1 || area.ndim() != 1) {
         throw py::value_error("expected 1-D arrays");
     }
@@ -1000,9 +1000,12 @@ py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>
 
     py::dict out;
     if (links) {
+        std::vector<std::int32_t> eu, ev;
         conn::LinkResult r = lsm_call(n_threads, [&] {
             const conn::Csr g = conn::make_link_graph(n, pairs, s);
-            return conn::analyse_links(g, a.data(), importance);
+            eu = g.eu;
+            ev = g.ev;
+            return conn::analyse_links(g, a.data(), importance, edges);
         });
         out["nl"] = r.nl;
         out["nc"] = r.nc;
@@ -1022,12 +1025,21 @@ py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>
             out["pieces"] = vector_array(r.pieces);
             out["pieces_sq"] = vector_array(r.pieces_sq);
         }
+        if (edges) {
+            out["link_i"] = vector_array(eu);
+            out["link_j"] = vector_array(ev);
+            out["edge_iic"] = vector_array(r.edge_iic);
+            out["edge_h"] = vector_array(r.edge_h);
+        }
     }
     if (probabilities) {
         std::vector<double> f_row, awf_row;
+        std::vector<std::int32_t> eu, ev;
         conn::ProbResult r = lsm_call(n_threads, [&] {
             const conn::Csr g = conn::make_prob_graph(n, pairs, s, a.data(), &f_row, &awf_row);
-            return conn::analyse_probabilities(g, a.data(), expand_limit, importance);
+            eu = g.eu;
+            ev = g.ev;
+            return conn::analyse_probabilities(g, a.data(), expand_limit, importance, edges);
         });
         out["pc_num"] = r.pc_num;
         out["pc_direct"] = r.pc_direct;
@@ -1037,8 +1049,91 @@ py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>
             out["pc_row"] = vector_array(r.pc_row);
             out["pc_conn"] = vector_array(r.pc_conn);
         }
+        if (edges) {
+            out["edge_i"] = vector_array(eu);
+            out["edge_j"] = vector_array(ev);
+            out["edge_pc"] = vector_array(r.edge_pc);
+        }
     }
     return out;
+}
+
+conn::Scenario conn_scenario(const std::string& kind, double threshold, double probability, double pij_min,
+                             bool conefor) {
+    conn::Scenario s;
+    if (kind == "distance") s.kind = conn::Kind::Distance;
+    else if (kind == "probability") s.kind = conn::Kind::Probability;
+    else if (kind == "link") s.kind = conn::Kind::Link;
+    else throw py::value_error("kind must be 'distance', 'probability' or 'link'");
+    s.threshold = threshold;
+    s.probability = probability;
+    s.pij_min = pij_min;
+    s.conefor = conefor;
+    return s;
+}
+
+conn::Pairs conn_pairs(const CArray<std::int32_t>& pi, const CArray<std::int32_t>& pj, const CArray<double>& value) {
+    conn::Pairs pairs;
+    pairs.i.assign(pi.data(), pi.data() + pi.shape(0));
+    pairs.j.assign(pj.data(), pj.data() + pj.shape(0));
+    pairs.value.assign(value.data(), value.data() + value.shape(0));
+    return pairs;
+}
+
+// Shortest path lengths between all nodes of a scenario (hops, or -log p*).
+py::array_t<double> conn_all_pairs(const CArray<std::int32_t>& pi, const CArray<std::int32_t>& pj,
+                                   const CArray<double>& value, std::int32_t n, const std::string& kind,
+                                   double threshold, double probability, double pij_min, double expand_limit,
+                                   bool conefor, bool links, int n_threads) {
+    const conn::Pairs pairs = conn_pairs(pi, pj, value);
+    const conn::Scenario s = conn_scenario(kind, threshold, probability, pij_min, conefor);
+    std::vector<double> d = lsm_call(n_threads, [&] {
+        std::vector<double> zero(static_cast<std::size_t>(n), 0.0);
+        const conn::Csr g = links ? conn::make_link_graph(n, pairs, s)
+                                  : conn::make_prob_graph(n, pairs, s, zero.data(), nullptr, nullptr);
+        return conn::all_pairs(g, links, expand_limit);
+    });
+    return to_array(std::move(d), n, n);
+}
+
+// The length of the edge each pair makes (1 for a link, -log p), NaN for none.
+py::array_t<double> conn_pair_lengths(const CArray<double>& value, const std::string& kind, double threshold,
+                                      double probability, double pij_min, bool conefor, bool links, bool cut) {
+    const conn::Scenario s = conn_scenario(kind, threshold, probability, pij_min, conefor);
+    std::vector<double> out(static_cast<std::size_t>(value.shape(0)));
+    for (py::ssize_t k = 0; k < value.shape(0); ++k) out[k] = conn::pair_length(value.data()[k], s, links, cut);
+    return vector_array(out);
+}
+
+py::dict gains_dict(conn::Gains&& g) {
+    py::dict out;
+    out["num"] = vector_array(g.num);
+    out["h"] = vector_array(g.h);
+    return out;
+}
+
+py::dict conn_addition_gains(const CArray<double>& D, const CArray<double>& area, const CArray<std::int64_t>& cand_start,
+                             const CArray<std::int32_t>& cand_node, const CArray<double>& cand_len,
+                             const CArray<double>& cand_area, bool hops, int n_threads) {
+    const auto n = static_cast<std::int32_t>(area.shape(0));
+    if (D.ndim() != 2 || D.shape(0) != n || D.shape(1) != n) throw py::value_error("D must be n x n");
+    std::vector<double> d(D.data(), D.data() + static_cast<std::size_t>(n) * n);
+    const auto nc = static_cast<std::int32_t>(cand_area.shape(0));
+    return gains_dict(lsm_call(n_threads, [&] {
+        return conn::addition_gains(d, n, area.data(), cand_start.data(), cand_node.data(), cand_len.data(), nc,
+                                    cand_area.data(), hops);
+    }));
+}
+
+py::dict conn_edge_gains(const CArray<double>& D, const CArray<double>& area, const CArray<std::int32_t>& ea,
+                         const CArray<std::int32_t>& eb, const CArray<double>& elen, bool hops, int n_threads) {
+    const auto n = static_cast<std::int32_t>(area.shape(0));
+    if (D.ndim() != 2 || D.shape(0) != n || D.shape(1) != n) throw py::value_error("D must be n x n");
+    std::vector<double> d(D.data(), D.data() + static_cast<std::size_t>(n) * n);
+    const auto ne = static_cast<std::int32_t>(ea.shape(0));
+    return gains_dict(lsm_call(n_threads, [&] {
+        return conn::edge_gains(d, n, area.data(), ea.data(), eb.data(), elen.data(), ne, hops);
+    }));
 }
 
 py::dict pair_dict(conn::PairList&& p) {
@@ -1134,8 +1229,19 @@ PYBIND11_MODULE(_core, m) {
     bind_landscape(m);
     m.def("conn_analyse", &conn_analyse, py::arg("pi"), py::arg("pj"), py::arg("value"), py::arg("area"),
           py::arg("kind"), py::arg("threshold"), py::arg("probability"), py::arg("pij_min"), py::arg("expand_limit"),
-          py::arg("conefor"), py::arg("links"), py::arg("probabilities"), py::arg("importance"),
+          py::arg("conefor"), py::arg("links"), py::arg("probabilities"), py::arg("importance"), py::arg("edges") = false,
           py::arg("n_threads") = 0, "Connectivity indices of one habitat-graph scenario (see src/cpp/conn/graph.hpp).");
+    m.def("conn_all_pairs", &conn_all_pairs, py::arg("pi"), py::arg("pj"), py::arg("value"), py::arg("n"),
+          py::arg("kind"), py::arg("threshold"), py::arg("probability"), py::arg("pij_min"), py::arg("expand_limit"),
+          py::arg("conefor"), py::arg("links"), py::arg("n_threads") = 0, "All-pairs shortest lengths (n x n).");
+    m.def("conn_pair_lengths", &conn_pair_lengths, py::arg("value"), py::arg("kind"), py::arg("threshold"),
+          py::arg("probability"), py::arg("pij_min"), py::arg("conefor"), py::arg("links"), py::arg("cut") = true,
+          "Edge length of each pair (NaN when it makes no edge).");
+    m.def("conn_addition_gains", &conn_addition_gains, py::arg("D"), py::arg("area"), py::arg("cand_start"),
+          py::arg("cand_node"), py::arg("cand_len"), py::arg("cand_area"), py::arg("hops"), py::arg("n_threads") = 0,
+          "Gains of adding each candidate node.");
+    m.def("conn_edge_gains", &conn_edge_gains, py::arg("D"), py::arg("area"), py::arg("ea"), py::arg("eb"),
+          py::arg("elen"), py::arg("hops"), py::arg("n_threads") = 0, "Gains of adding each edge.");
     m.def("conn_raster_nodes", &conn_raster_nodes, py::arg("values"), py::arg("na"), py::arg("xmin"), py::arg("xmax"),
           py::arg("ymin"), py::arg("ymax"), py::arg("centroids"), py::arg("keep_index"), py::arg("n_threads") = 0,
           "Patch ids, cell counts, centroids and node index of a raster of patch ids.");

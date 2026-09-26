@@ -1126,6 +1126,12 @@ g = ls.HabitatGraph(areas, distances, ids=patch_ids, landscape_area=total_area)
 g.overall(distance=[5_000, 10_000], probability=0.5)   # one row per distance
 g.node_importance(["PC", "IIC"], distance=10_000)      # dPC, dPCintra, dPCflux, dPCconnector, dIIC...
 g.components(distance=10_000)                          # component of every node
+g.link_importance("PC", distance=10_000)               # dPC_removal of every link (MK_dPCIIC_links)
+g.link_change(new_distances, "PC", distance=10_000)    # dPC_change of pairs with new distances
+
+# nodes that could be added (restoration: 1 existing, 0 to add)
+g = ls.HabitatGraph(areas, distances, restoration=flags)
+g.node_importance(["PC", "IIC"], distance=10_000)      # + dPCres, dIICres of the nodes to add
 
 g = ls.HabitatGraph.from_conefor("nodes.txt", "distances.txt", convention="conefor")
 g.to_conefor("nodes.txt", "distances.txt")
@@ -1202,6 +1208,30 @@ intra + flux + connector. Without `landscape_area`, `IIC`, `PC` and `LCP` are Na
 their numerators, as in Makurhini) under the default convention, and use LA = 1 (as
 Conefor) with `convention="conefor"`.
 
+### Links, changes and nodes to add
+
+* `link_importance(metric)` is Makurhini's `MK_dPCIIC_links` with `removal`: the loss
+  of IIC or PC (in %) without each link (the links of the IIC graph, the edges above
+  `pij_min` of the PC graph). Other pairs change nothing; Makurhini lists them too, with
+  0 (PC) or, for IIC, the same share of its unconnected pairs as the links carry.
+* `link_change(changes, metric)` is its `change`: for each pair whose value differs
+  in `changes` (a pair table or a matrix), `100 (I - I') / I` (negative for a gain).
+  For IIC a pair that comes closer than the distance gains a link and anything else
+  counts 0; for PC the pair's edge takes the probability of its new value, without the
+  `pij_min` cut, as in Makurhini.
+* `restoration=` (1 existing, 0 to add, as Makurhini's column) rates the nodes to add:
+  with the default convention `node_importance` adds `dPCres` / `dIICres`, the gain of
+  each node on its own over the existing ones in % of the graph with it (Makurhini's
+  code misaligns the attributes unless the nodes to add come last; landschaft uses
+  the definition). With `convention="conefor"` it is Conefor's "adding nodes" mode:
+  `overall` and the removal importances are those of the existing nodes, and every
+  index gets `d...add` = its gain in % of the existing graph (`dAadd` ... `dPCadd`).
+
+Removing a link repairs, in every source's shortest-path tree, the subtree below the
+link (as for a node). Changes that shorten a pair and nodes to add use the lengths
+between all nodes: the new length of a pair is `min(D_ij, D_ia + w + D_bj, ...)`, or
+through the node to add. A longer pair is removed and added back with its new length.
+
 ### Connections and conventions
 
 `connections` holds distances (default), `kind="probability"` direct dispersal
@@ -1265,6 +1295,11 @@ the results do not depend on the number of threads.
   distance) are gdistance's bits, and `MK_dPCIIC` with them is reproduced exactly;
   `tests/test_conn_spatial.py` also checks them against SciPy's Dijkstra on the
   graph built from gdistance's formulas.
+* `make_reference_conn.py links` runs `MK_dPCIIC_links` (removal, and changes of 40
+  pairs brought closer or moved apart) and `MK_dPCIIC` with `restoration` on the three
+  synthetic scenes (`makurhini_links.csv.gz`): the same rounded values, restoration
+  gains to 1e-12. The Conefor driver also replays its "adding nodes" mode (the last
+  five nodes of each scene), matched to its precision for every index.
 * `tests/test_conn.py` checks every index and importance against a brute-force
   recomputation of the graph without each node (and with its attribute set to 0),
   under both conventions, and the input kinds, pair tables, Conefor files and
@@ -1281,3 +1316,5 @@ the results do not depend on the number of threads.
 | same, edge distances up to 5 km / 20 km / all pairs | – | 0.24 s / 1.1 s / 12.5 s |
 | `habitat_nodes_raster` over `resistance_matrix` (222 k cells): least-cost distances | 10.2 s | 0.5 s |
 | 3000×3000 resistance, 300 nodes: least-cost distances, all pairs / up to 500 k cost units | – | 46 s / 1.5 s |
+| 2,000 random patches: importance of every link, IIC (47 k links) / PC (1.2 M edges) | – | 0.1 s / 1.9 s |
+| 5,000 random patches: importance of every link, IIC (134 k) / PC (4.3 M) | – | 0.9 s / 22 s |

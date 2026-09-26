@@ -10,7 +10,9 @@
 //   n adjacentTail kDistanceProb kProbProb minProb landscapeArea
 //   n lines: label size
 //   n lines of n distances
-// Output (stdout, CSV): overall indices, then one row per node.
+//   optionally, nodes to add (Conefor's "adding nodes" mode): m, then m lines
+//   "label size" and m lines of the n distances to the existing nodes
+// Output (stdout, CSV): overall indices, one row per node, one per node to add.
 #include <cstdio>
 #include <vector>
 
@@ -37,6 +39,16 @@ int main(int argc, char** argv) {
             if (std::fscanf(f, "%f", &conn[i][j]) != 1) return 2;
         rows[i] = conn[i].data();
     }
+    int m = 0;
+    if (std::fscanf(f, "%d", &m) != 1) m = 0;
+    std::vector<int> add_label(m);
+    std::vector<float> add_size(m);
+    std::vector<std::vector<float>> add_conn(m, std::vector<float>(n));
+    for (int k = 0; k < m; ++k)
+        if (std::fscanf(f, "%d %f", &add_label[k], &add_size[k]) != 2) return 2;
+    for (int k = 0; k < m; ++k)
+        for (int j = 0; j < n; ++j)
+            if (std::fscanf(f, "%f", &add_conn[k][j]) != 1) return 2;
     std::fclose(f);
     // sensinodeProgram: no landscape area -> 1 (indices = their numerators).
     const int la = area > 0 ? static_cast<int>(area) : 1;
@@ -92,6 +104,29 @@ int main(int argc, char** argv) {
         const float varPC = global.value_index_PC() - del.value_index_PC();
         std::printf("node,%d,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\n", label[i], dA, dNC,
                     dNL, dH, dCCP, dLCP, dIIC, dF, dAWF, dPC, dPCintra, dPCflux, dPCconnector, varPC);
+    }
+    if (m > 0) {
+        std::printf("add,label,dA,dNC,dNL,dH,dCCP,dLCP,dIIC,dF,dAWF,dPC\n");
+        for (int k = 0; k < m; ++k) {
+            landscape add;
+            add.create_land_with_copy_adding_one(add_size[k], add_label[k], add_conn[k].data(), true, true, true, false,
+                                                 false, tail, kprob, kdist, &global);
+            run(add);
+            auto pct = [](float with, float base) {
+                return base != 0 ? 100 * (-base + with) / base : 0.0f;
+            };
+            const float dA = (100 * add_size[k]) / total;
+            const float dNC = 100.0 * (-global.value_index_NC() + add.value_index_NC()) / global.value_index_NC();
+            std::printf("add,%d,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\n", add_label[k], dA, dNC,
+                        pct(static_cast<float>(add.value_index_NL()), static_cast<float>(global.value_index_NL())),
+                        pct(add.value_index_H(), global.value_index_H()),
+                        pct(add.value_index_CCP(), global.value_index_CCP()),
+                        pct(add.value_index_LCPnum(), global.value_index_LCPnum()),
+                        pct(add.value_index_IICnum(), global.value_index_IICnum()),
+                        pct(add.value_index_F(), global.value_index_F()),
+                        pct(add.value_index_AWF(), global.value_index_AWF()),
+                        pct(add.value_index_PCnum(), global.value_index_PCnum()));
+        }
     }
     return 0;
 }

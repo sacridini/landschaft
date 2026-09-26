@@ -109,7 +109,9 @@ ls.connectivity_grid(g, grid_zones(...))
      ficou de fora);
   3. distâncias de menor custo. **Feita** (0.32.0: o `costDistance` do gdistance bit a
      bit, sem o `bounding_circles` nem o caminho em Java do Makurhini);
-  4. importância das ligações, varPC, dECA no tempo e índices em grade;
+  4. importância das ligações, varPC, dECA no tempo e índices em grade. Ligações,
+     mudanças de ligação e nós a adicionar (restauração, modo "adding nodes" do Conefor):
+     **feita** (0.33.0); falta dECA no tempo e índices em grade;
   5. ProtConn completo (uma ou várias regiões);
   6. centralidades (BC, BCIIC, BCPC, radial, medial) e focais (IICf, PCf, CCI);
   7. opcionais: commute-time e SAMC (Fletcher et al. 2023).

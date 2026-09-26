@@ -85,6 +85,14 @@ class HabitatGraph:
         (``d <= t``), no probability cut by default (``pij_min`` is its
         minProb heuristic: probabilities up to it are dropped and paths no
         more probable are not extended) and unconnected pairs add nothing.
+    restoration
+        1 for the existing nodes and 0 for nodes that could be added (for
+        restoration), as Makurhini's ``restoration`` column; then
+        :meth:`node_importance` also rates the nodes to add (``dPCres``,
+        ``dIICres``: the gain in % of the graph with them, Makurhini; with
+        ``convention="conefor"``, Conefor's "adding nodes" mode: the other
+        indices are those of the existing nodes and every index gets its
+        ``d...add`` gain in % of the existing graph).
     n_threads
         OpenMP threads (default: all).
     """
@@ -98,6 +106,7 @@ class HabitatGraph:
         kind: str = "distance",
         landscape_area: float | None = None,
         convention: str = "makurhini",
+        restoration=None,
         n_threads: int | None = None,
     ) -> None:
         if kind not in KINDS:
@@ -122,6 +131,15 @@ class HabitatGraph:
         self.convention = convention
         self.n_threads = 0 if n_threads is None else int(n_threads)
         self._pi, self._pj, self._value, self._dense = self._pairs(connections)
+        if restoration is None:
+            self.restoration = None
+        else:
+            flags = np.asarray(restoration)
+            if flags.shape != (n,) or not np.isin(flags, (0, 1)).all():
+                raise ValueError("restoration must be 1 (existing node) or 0 (node to add) for every node")
+            if not (flags == 1).any():
+                raise ValueError("restoration: no existing node")
+            self.restoration = flags.astype(np.int8)
 
     # ------------------------------------------------------------------ input
     def _pairs(self, connections):
@@ -325,21 +343,26 @@ class HabitatGraph:
             pij_min = 0.01 if self.convention == "makurhini" else 0.0
         return distance, float(probability), float(pij_min)
 
-    def _run(self, metrics, distance, probability, pij_min, importance):
+    def _scenario(self, metrics, distance, probability, pij_min):
+        """Threshold, probability, pij_min and Conefor's expansion limit of a scenario."""
         distance, probability, pij_min = self._defaults(distance, probability, pij_min)
-        want_links = any(m in LINK_METRICS for m in metrics)
-        want_prob = any(m in PROBABILITY_METRICS for m in metrics)
-        if self.kind == "probability" and want_links and distance is None:
+        if self.kind == "probability" and any(m in LINK_METRICS for m in metrics) and distance is None:
             raise ValueError("links between probabilities need a minimum probability (distance=)")
-        conefor = self.convention == "conefor"
         expand = np.inf
-        if conefor and pij_min > 0:
+        if self.convention == "conefor" and pij_min > 0:
             expand = float(-np.log(pij_min))
         threshold = np.nan if distance is None else float(distance)
-        if want_prob and self.kind == "distance" and not threshold > 0:
+        if any(m in PROBABILITY_METRICS for m in metrics) and self.kind == "distance" and not threshold > 0:
             raise ValueError("the distance of the probability must be positive")
+        return distance, threshold, probability, pij_min, expand
+
+    def _run(self, metrics, distance, probability, pij_min, importance, edges=False):
+        distance, threshold, probability, pij_min, expand = self._scenario(metrics, distance, probability, pij_min)
+        want_links = any(m in LINK_METRICS for m in metrics)
+        want_prob = any(m in PROBABILITY_METRICS for m in metrics)
+        conefor = self.convention == "conefor"
         r = _core.conn_analyse(self._pi, self._pj, self._value, self.attributes, self.kind, threshold, probability,
-                               pij_min, expand, conefor, want_links, want_prob, importance, self.n_threads)
+                               pij_min, expand, conefor, want_links, want_prob, importance, edges, self.n_threads)
         return distance, r
 
     def _area(self) -> float | None:
@@ -375,7 +398,11 @@ class HabitatGraph:
             PCnum, EC(PC), PCintra(%), PCdirect(%), PCstep(%).
         """
         chosen = _metric_list(metrics, self.kind)
-        rows = [self._overall_row(chosen, d, probability, pij_min) for d in _as_list(distance)]
+        # Conefor's "adding nodes": the indices are those of the existing nodes.
+        graph = self
+        if self.restoration is not None and self.convention == "conefor":
+            graph = self._subgraph(self.restoration == 1)
+        rows = [graph._overall_row(chosen, d, probability, pij_min) for d in _as_list(distance)]
         return pd.DataFrame(rows)
 
     def _overall_row(self, chosen, distance, probability, pij_min) -> dict:
@@ -455,6 +482,11 @@ class HabitatGraph:
         return pd.concat(frames, ignore_index=True)
 
     def _importance_frame(self, chosen, distance, probability, pij_min) -> pd.DataFrame:
+        if self.restoration is not None:
+            return self._restoration_frame(chosen, distance, probability, pij_min)
+        return self._removal_frame(chosen, distance, probability, pij_min)
+
+    def _removal_frame(self, chosen, distance, probability, pij_min) -> pd.DataFrame:
         d, r = self._run(chosen, distance, probability, pij_min, importance=True)
         a = self.attributes
         la = self._area()
@@ -526,3 +558,294 @@ class HabitatGraph:
         """Component (1, 2, ...) of every node in the graph of links at ``distance``."""
         _, r = self._run(["NC"], distance, None, None, importance=False)
         return pd.Series(r["component"] + 1, index=pd.Index(self.ids, name="id"), name="component")
+
+    # ------------------------------------------------------------ subgraphs
+    def _subgraph(self, keep: np.ndarray) -> "HabitatGraph":
+        """The graph of the nodes where ``keep`` (same kind, convention and area)."""
+        index = np.full(self.n_nodes, -1, dtype=np.int64)
+        index[keep] = np.arange(int(keep.sum()))
+        both = keep[self._pi] & keep[self._pj]
+        sub = HabitatGraph.__new__(HabitatGraph)
+        sub.ids = self.ids[keep]
+        sub.attributes = self.attributes[keep]
+        sub.kind = self.kind
+        sub.landscape_area = self.landscape_area
+        sub.convention = self.convention
+        sub.n_threads = self.n_threads
+        sub.restoration = None
+        sub._pi = index[self._pi[both]].astype(np.int32)
+        sub._pj = index[self._pj[both]].astype(np.int32)
+        sub._value = self._value[both]
+        sub._dense = False
+        return sub
+
+    def _lengths(self, values, threshold, probability, pij_min, links: bool, cut: bool = True) -> np.ndarray:
+        return _core.conn_pair_lengths(np.ascontiguousarray(values, dtype=np.float64), self.kind, threshold,
+                                       probability, pij_min, self.convention == "conefor", links, cut)
+
+    def _all_pairs(self, threshold, probability, pij_min, expand, links: bool) -> np.ndarray:
+        n = self.n_nodes
+        if n * n > 4e8:
+            raise MemoryError(f"all-pairs lengths of {n} nodes do not fit in memory")
+        return _core.conn_all_pairs(self._pi, self._pj, self._value, n, self.kind, threshold, probability, pij_min,
+                                    expand, self.convention == "conefor", links, self.n_threads)
+
+    @staticmethod
+    def _numerator(D: np.ndarray, a: np.ndarray, links: bool) -> float:
+        with np.errstate(divide="ignore", over="ignore"):
+            f = np.where(np.isfinite(D), 1.0 / (1.0 + D), 0.0) if links else np.exp(-D)
+        return float(a @ f @ a)
+
+    # ---------------------------------------------------------- restoration
+    def _restoration_frame(self, chosen, distance, probability, pij_min) -> pd.DataFrame:
+        base = self.restoration == 1
+        cand = ~base
+        existing = self._subgraph(base)
+        a = self.attributes
+        if self.convention == "makurhini":
+            frame = self._removal_frame(chosen, distance, probability, pij_min)
+            for metric in ("IIC", "PC"):
+                if metric not in chosen:
+                    continue
+                gain, num_base, _ = self._addition_gains(existing, base, metric, distance, probability, pij_min)
+                col = np.zeros(self.n_nodes)
+                col[cand] = 100 * gain / (num_base + gain)  # MK_dPCIIC: in % of the graph with the node
+                frame[f"d{metric}res"] = col
+            return frame
+        # Conefor's "adding nodes": the existing graph, and the gain of each node to add.
+        removal = existing._removal_frame(chosen, distance, probability, pij_min)
+        frame = pd.DataFrame({"id": self.ids, "distance": np.full(self.n_nodes, removal["distance"].iloc[0])})
+        for col in removal.columns[2:]:
+            values = np.full(self.n_nodes, np.nan)
+            values[base] = removal[col].to_numpy()
+            frame[col] = values
+        adds = self._conefor_additions(existing, base, chosen, distance, probability, pij_min)
+        for col, values in adds.items():
+            full = np.full(self.n_nodes, np.nan)
+            full[cand] = values
+            frame[col] = full
+        return frame
+
+    def _candidate_edges(self, base, lengths):
+        """Edges from every node to add to the existing nodes: CSR over the candidates."""
+        cand_index = np.full(self.n_nodes, -1, dtype=np.int64)
+        cand_index[~base] = np.arange(int((~base).sum()))
+        base_index = np.full(self.n_nodes, -1, dtype=np.int64)
+        base_index[base] = np.arange(int(base.sum()))
+        ok = ~np.isnan(lengths)
+        rows_c, rows_b = [], []
+        for c_end, b_end in ((self._pi, self._pj), (self._pj, self._pi)):
+            m = ok & ~base[c_end] & base[b_end]
+            rows_c.append(cand_index[c_end[m]])
+            rows_b.append(np.column_stack([base_index[b_end[m]], lengths[m]]))
+        c = np.concatenate(rows_c)
+        b = np.concatenate(rows_b)
+        order = np.argsort(c, kind="stable")
+        c, b = c[order], b[order]
+        start = np.searchsorted(c, np.arange(int((~base).sum()) + 1)).astype(np.int64)
+        return start, b[:, 0].astype(np.int32), np.ascontiguousarray(b[:, 1])
+
+    def _addition_gains(self, existing, base, metric, distance, probability, pij_min):
+        links = metric == "IIC"
+        dist, threshold, prob, pmin, expand = self._scenario([metric], distance, probability, pij_min)
+        D = existing._all_pairs(threshold, prob, pmin, expand, links)
+        lengths = self._lengths(self._value, threshold, prob, pmin, links)
+        start, node, length = self._candidate_edges(base, lengths)
+        g = _core.conn_addition_gains(D, existing.attributes, start, node, length, self.attributes[~base], links,
+                                      self.n_threads)
+        return g["num"], self._numerator(D, existing.attributes, links), g
+
+    def _conefor_additions(self, existing, base, chosen, distance, probability, pij_min) -> dict:
+        a_base = existing.attributes
+        a_cand = self.attributes[~base]
+        total = float(a_base.sum())
+        out = {}
+        dist, threshold, prob, pmin, expand = self._scenario(chosen, distance, probability, pij_min)
+        if "A" in chosen:
+            out["dAadd"] = 100 * a_cand / total
+        if any(m in chosen for m in LINK_METRICS):
+            _, r = existing._run(["NC"], distance, probability, pij_min, importance=False)
+            comp = r["component"]
+            comp_area = np.bincount(comp, weights=a_base, minlength=r["nc"])
+            lengths = self._lengths(self._value, threshold, prob, pmin, True)
+            start, node, _ = self._candidate_edges(base, lengths)
+            degree = np.diff(start)
+            touched = [np.unique(comp[node[start[k]:start[k + 1]]]) for k in range(len(a_cand))]
+            nc_add = np.array([r["nc"] + 1 - len(t) for t in touched], dtype=float)
+            merged = np.array([a_cand[k] + comp_area[t].sum() for k, t in enumerate(touched)])
+            sq_add = np.array([r["comp_sq"] - (comp_area[t] ** 2).sum() for t in touched]) + merged**2
+            if "NC" in chosen:
+                out["dNCadd"] = 100.0 * (nc_add - r["nc"]) / r["nc"]
+            if "NL" in chosen:
+                out["dNLadd"] = 100.0 * degree / r["nl"] if r["nl"] else np.zeros(len(a_cand))
+            if "CCP" in chosen:
+                ccp = r["comp_sq"] / total**2
+                out["dCCPadd"] = 100 * (sq_add / (total + a_cand) ** 2 - ccp) / ccp
+            if "LCP" in chosen:
+                out["dLCPadd"] = 100 * (sq_add - r["comp_sq"]) / r["comp_sq"]
+            if "IIC" in chosen or "H" in chosen:
+                gain, num_base, g = self._addition_gains(existing, base, "IIC", distance, probability, pij_min)
+                if "H" in chosen:
+                    _, rh = existing._run(["H"], distance, probability, pij_min, importance=False)
+                    out["dHadd"] = 100 * g["h"] / rh["h"] if rh["h"] else np.zeros(len(a_cand))
+                if "IIC" in chosen:
+                    out["dIICadd"] = 100 * gain / num_base
+        if any(m in chosen for m in PROBABILITY_METRICS):
+            uncut = self._lengths(self._value, threshold, prob, 0.0, False, cut=False)
+            p = np.exp(-uncut)
+            p = np.where(np.isnan(p), 0.0, p)
+            cand_pos = np.full(self.n_nodes, -1, dtype=np.int64)
+            cand_pos[~base] = np.arange(len(a_cand))
+            f_add = np.zeros(len(a_cand))
+            awf_add = np.zeros(len(a_cand))
+            for c_end, b_end in ((self._pi, self._pj), (self._pj, self._pi)):
+                m = ~base[c_end] & base[b_end]
+                np.add.at(f_add, cand_pos[c_end[m]], p[m])
+                np.add.at(awf_add, cand_pos[c_end[m]], self.attributes[b_end[m]] * p[m])
+            if "F" in chosen or "AWF" in chosen:
+                _, rf = existing._run(["F"], distance, probability, pij_min, importance=False)
+                if "F" in chosen:
+                    out["dFadd"] = 100 * 2 * f_add / rf["f_row"].sum()
+                if "AWF" in chosen:
+                    out["dAWFadd"] = 100 * 2 * a_cand * awf_add / float(a_base @ rf["awf_row"])
+            if "PC" in chosen:
+                gain, num_base, _ = self._addition_gains(existing, base, "PC", distance, probability, pij_min)
+                out["dPCadd"] = 100 * gain / num_base
+        return out
+
+    # --------------------------------------------------------------- links
+    def link_importance(self, metric: str = "PC", *, distance=None, probability: float | None = None,
+                        pij_min: float | None = None) -> pd.DataFrame:
+        """Importance of every link: the loss of the index (in %) once it is removed.
+
+        Makurhini's ``MK_dPCIIC_links`` (``removal``): the links of the IIC
+        graph, or the edges of the PC graph (pairs above ``pij_min``).
+        Other pairs change nothing (0; for IIC Makurhini reports its constant
+        share of the unconnected pairs, as for the links). Parameters as in
+        :meth:`overall`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``from``, ``to`` (node ids), ``distance`` and ``dIIC_removal`` /
+            ``dPC_removal``.
+        """
+        metric = str(metric).upper()
+        if metric not in ("IIC", "PC"):
+            raise ValueError("metric must be 'IIC' or 'PC'")
+        d, r = self._run([metric], distance, probability, pij_min, importance=False, edges=True)
+        if metric == "IIC":
+            whole = self._unconnected(r["unreach_aa"])
+            num = r["iic_reach"] + whole
+            delta = r["edge_iic"] + whole
+            i, j = r["link_i"], r["link_j"]
+        else:
+            num = r["pc_num"]
+            delta = r["edge_pc"]
+            i, j = r["edge_i"], r["edge_j"]
+        return pd.DataFrame({"from": self.ids[i], "to": self.ids[j], "distance": np.nan if d is None else d,
+                             f"d{metric}_removal": 100 * delta / num})
+
+    def link_change(self, changes, metric: str = "PC", *, distance=None, probability: float | None = None,
+                    pij_min: float | None = None) -> pd.DataFrame:
+        """Change of the index when the distance of a pair changes (Makurhini's ``MK_dPCIIC_links(change=)``).
+
+        Parameters
+        ----------
+        changes
+            New values of some pairs: a ``(from, to, value)`` table, or an
+            ``n × n`` matrix (the pairs whose value differs are evaluated).
+        metric, distance, probability, pij_min
+            As in :meth:`link_importance`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``from``, ``to``, ``distance`` and ``dIIC_change`` / ``dPC_change``:
+            ``100 (I - I') / I`` as Makurhini (negative for a gain). IIC: a
+            pair that comes closer than ``distance`` gains a link, any other
+            change counts 0. PC: the pair's edge takes the probability of its
+            new value (not cut by ``pij_min``).
+        """
+        metric = str(metric).upper()
+        if metric not in ("IIC", "PC"):
+            raise ValueError("metric must be 'IIC' or 'PC'")
+        links = metric == "IIC"
+        ci, cj, cv = self._change_pairs(changes)
+        dist, threshold, prob, pmin, expand = self._scenario([metric], distance, probability, pij_min)
+        # Current value and edge of each changed pair.
+        key = self._pi.astype(np.int64) * self.n_nodes + self._pj
+        wanted = ci.astype(np.int64) * self.n_nodes + cj
+        pos = np.minimum(np.searchsorted(key, wanted), max(len(key) - 1, 0))
+        present = key[pos] == wanted if len(key) else np.zeros(len(ci), bool)
+        old_value = np.where(present, self._value[pos], np.nan) if len(key) else np.full(len(ci), np.nan)
+        old_len = self._lengths(old_value, threshold, prob, pmin, links)
+        new_len = self._lengths(cv, threshold, prob, pmin, links, cut=links)
+        D = self._all_pairs(threshold, prob, pmin, expand, links)
+        a = self.attributes
+        num_graph = self._numerator(D, a, links)
+        if links:
+            num = num_graph + (self._unconnected(self._run(["IIC"], distance, probability, pij_min,
+                                                           importance=False)[1]["unreach_aa"]))
+        else:
+            num = num_graph
+        out = np.zeros(len(ci))
+        differs = ~(cv == old_value)
+        if links:
+            apply = differs & ~np.isnan(new_len)
+            new_link = apply & np.isnan(old_len)
+            if new_link.any():
+                g = _core.conn_edge_gains(D, a, ci[new_link].astype(np.int32), cj[new_link].astype(np.int32),
+                                          np.ones(int(new_link.sum())), True, self.n_threads)
+                out[new_link] = g["num"]  # the gains, before the % below
+            # MK: a link added over an existing one changes nothing, but the
+            # graph without unconnected pairs is still compared with the whole.
+            out[apply] = (num - (num_graph + out[apply])) / num * 100
+        else:
+            better = differs & ~np.isnan(new_len) & (np.isnan(old_len) | (new_len < old_len))
+            if better.any():
+                g = _core.conn_edge_gains(D, a, ci[better].astype(np.int32), cj[better].astype(np.int32),
+                                          new_len[better], False, self.n_threads)
+                out[better] = -100 * g["num"] / num
+            worse = differs & ~better & ~np.isnan(old_len)
+            for k in np.flatnonzero(worse):
+                out[k] = 100 * (num - self._replaced(k, pos[k], new_len[k], threshold, prob, pmin, expand)) / num
+        return pd.DataFrame({"from": self.ids[ci], "to": self.ids[cj], "distance": np.nan if dist is None else dist,
+                             f"d{metric}_change": out})
+
+    def _replaced(self, k, pos, new_len, threshold, prob, pmin, expand) -> float:
+        """PC numerator once the edge of pair `pos` takes the length new_len (possibly longer)."""
+        value = self._value.copy()
+        value[pos] = np.nan
+        sub = HabitatGraph.__new__(HabitatGraph)
+        sub.__dict__.update(self.__dict__)
+        sub._value = value
+        D = sub._all_pairs(threshold, prob, pmin, expand, False)
+        num = self._numerator(D, self.attributes, False)
+        if np.isnan(new_len):
+            return num
+        g = _core.conn_edge_gains(D, self.attributes, self._pi[pos:pos + 1].astype(np.int32),
+                                  self._pj[pos:pos + 1].astype(np.int32), np.array([new_len]), False, self.n_threads)
+        return num + float(g["num"][0])
+
+    def _change_pairs(self, changes):
+        n = self.n_nodes
+        if isinstance(changes, pd.DataFrame) or (np.asarray(changes).ndim == 2 and np.asarray(changes).shape[1] == 3
+                                                 and np.asarray(changes).shape != (n, n)):
+            table = changes.to_numpy() if isinstance(changes, pd.DataFrame) else np.asarray(changes)
+            index = pd.Index(self.ids)
+            fi, fj = index.get_indexer(table[:, 0]), index.get_indexer(table[:, 1])
+            if np.any(fi < 0) or np.any(fj < 0) or np.any(fi == fj):
+                raise ValueError("changes must join two different nodes of the graph")
+            v = table[:, 2].astype(np.float64)
+            return np.minimum(fi, fj), np.maximum(fi, fj), v
+        m = np.asarray(changes, dtype=np.float64)
+        if m.shape != (n, n):
+            raise ValueError("changes must be a (from, to, value) table or an n × n matrix")
+        i, j = np.triu_indices(n, 1)
+        current = np.full(len(i), np.nan)
+        key = self._pi.astype(np.int64) * n + self._pj
+        current[np.searchsorted(i.astype(np.int64) * n + j, key)] = self._value
+        v = m[i, j]
+        keep = ~((v == current) | (np.isnan(v) & np.isnan(current)))
+        return i[keep], j[keep], v[keep]

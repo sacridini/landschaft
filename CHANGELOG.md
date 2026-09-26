@@ -6,6 +6,18 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 4: links and nodes to add.
+  `HabitatGraph.link_importance(metric)` (Makurhini's `MK_dPCIIC_links` removal: the
+  loss of IIC or PC without each link) and `link_change(changes, metric)` (its `change`:
+  pairs with new distances); `HabitatGraph(..., restoration=)` rates the nodes to add
+  (Makurhini's `dPCres` / `dIICres`, or with `convention="conefor"` Conefor's "adding
+  nodes" mode with a `d...add` gain for every index). Removing a link repairs the
+  subtree below it in each shortest-path tree; shorter pairs and added nodes use the
+  lengths between all nodes. Matched with Makurhini (the same rounded values, 1e-12
+  for the restoration gains) and with Conefor's "adding nodes" (its precision). All
+  4.3 M PC links of 5,000 patches rated in 22 s.
+
 ## [0.32.0] - 2026-09-26
 
 ### Added

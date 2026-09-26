@@ -38,6 +38,8 @@ SCENES = _scenes()
 MAKURHINI = pd.read_csv(REF / "makurhini.csv.gz", float_precision="round_trip", keep_default_na=False,
                         dtype={"probability": str, "pij_min": str, "la": str, "id": str})
 CONEFOR = pd.read_csv(REF / "conefor.csv.gz", keep_default_na=False, dtype={"id": str})
+LINKS = pd.read_csv(REF / "makurhini_links.csv.gz", float_precision="round_trip", keep_default_na=False,
+                    dtype={"probability": str, "pij_min": str})
 MK_KEYS = ["scene", "metric", "distance", "probability", "pij_min", "la"]
 MK_CASES = sorted(MAKURHINI.groupby(MK_KEYS).groups)
 CF_KEYS = ["scene", "distance", "probability", "la"]
@@ -96,7 +98,10 @@ def test_makurhini_output(case):
 def test_conefor(case):
     scene, d, p, la = case
     ids, attr, D = SCENES[scene]
-    g = ls.HabitatGraph(attr, D, ids=ids, landscape_area=float(la) if la else None, convention="conefor")
+    restoration = np.ones(len(ids), int)
+    restoration[-5:] = 0  # Conefor's "adding nodes": the last five
+    g = ls.HabitatGraph(attr, D, ids=ids, landscape_area=float(la) if la else None, convention="conefor",
+                        restoration=restoration)
     ov = g.overall(distance=float(d), probability=float(p)).iloc[0]
     imp = g.node_importance(distance=float(d), probability=float(p))
     imp.index = imp["id"].astype(str)
@@ -104,7 +109,59 @@ def test_conefor(case):
     # Conefor computes in float: agreement to single precision.
     for _, row in ref[ref["level"] == "overall"].iterrows():
         assert ov[row["name"]] == pytest.approx(float(row["value"]), rel=1e-5), row["name"]
-    for name, sub in ref[ref["level"] == "node"].groupby("name"):
-        values = sub["value"].to_numpy(float)
-        np.testing.assert_allclose(imp.loc[sub["id"], name], values, rtol=1e-3,
-                                   atol=2e-5 * np.abs(values).max() + 1e-6, err_msg=name)
+    for level, suffix in (("node", ""), ("add", "add")):
+        for name, sub in ref[ref["level"] == level].groupby("name"):
+            values = sub["value"].to_numpy(float)
+            np.testing.assert_allclose(imp.loc[sub["id"], name + suffix], values, rtol=1e-3,
+                                       atol=2e-5 * np.abs(values).max() + 1e-6, err_msg=name + suffix)
+
+
+def _changed(dist: np.ndarray, seed: int) -> np.ndarray:
+    """tools/make_reference_conn.changed_matrix."""
+    rng = np.random.default_rng(seed)
+    n = len(dist)
+    i, j = np.triu_indices(n, 1)
+    pick = rng.choice(len(i), 40, replace=False)
+    out = dist.copy()
+    out[i[pick], j[pick]] = dist[i[pick], j[pick]] * rng.uniform(0.3, 1.6, 40)
+    out[j[pick], i[pick]] = out[i[pick], j[pick]]
+    return out
+
+
+LINK_SCENES = ["points60", "cost40", "clusters50"]
+
+
+@pytest.mark.parametrize("key", sorted(LINKS.groupby(["scene", "metric"]).groups))
+def test_makurhini_links_and_restoration(key):
+    scene, metric = key
+    sub = LINKS[(LINKS["scene"] == scene) & (LINKS["metric"] == metric)]
+    first = sub.iloc[0]
+    kw = {"distance": float(first["distance"]), "probability": float(first["probability"]) if first["probability"]
+          else None, "pij_min": float(first["pij_min"]) if first["pij_min"] else 0.0}
+    ids, attr, D = SCENES[scene]
+    g = ls.HabitatGraph(attr, D, ids=ids)
+
+    def pairs(level):
+        t = sub[sub["level"] == level]
+        a, b = t["source"].astype(int).to_numpy(), t["destination"].astype(int).to_numpy()
+        return np.minimum(a, b), np.maximum(a, b), t["value"].astype(float).to_numpy()
+
+    f, t, v = pairs(f"d{metric}_removal")
+    ours = g.link_importance(metric, **kw).set_index(["from", "to"])[f"d{metric}_removal"]
+    linked = pd.MultiIndex.from_arrays([f, t]).isin(ours.index)
+    np.testing.assert_array_equal(np.round(ours.loc[list(zip(f[linked], t[linked]))].to_numpy(), 7), v[linked])
+    # Other pairs: 0, or (IIC) Makurhini's share of the unconnected pairs, the same for all.
+    assert len(set(np.round(v[~linked], 12))) <= 1
+
+    f, t, v = pairs(f"d{metric}_change")
+    change = _changed(D, 100 + LINK_SCENES.index(scene))
+    ch = g.link_change(change, metric, **kw).set_index(["from", "to"])[f"d{metric}_change"]
+    got = ch.reindex(list(zip(f, t))).fillna(0.0).to_numpy()
+    np.testing.assert_array_equal(np.round(got, 7), v)
+
+    rows = sub[sub["level"] == f"d{metric}res"]
+    f, v = rows["source"].astype(int).to_numpy(), rows["value"].astype(float).to_numpy()
+    restoration = np.ones(len(ids), int)
+    restoration[-5:] = 0
+    res = ls.HabitatGraph(attr, D, ids=ids, restoration=restoration).node_importance(metric, **kw).set_index("id")
+    np.testing.assert_allclose(res.loc[f, f"d{metric}res"], v, rtol=1e-11, atol=1e-12)

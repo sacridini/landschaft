@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_conn.py [makurhini] [conefor] [spatial]
+    python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links]
 
 ``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
 in ``tests/lsm_reference.py``; the default R library is used). It exports
@@ -19,8 +19,14 @@ and Makurhini's example raster ``habitat_nodes_raster``
 on them end to end in ``tests/data/reference/conn/spatial`` (pairs up to 30 km
 and every 17th of the others).
 
+``links`` runs ``MK_dPCIIC_links`` (link removal and link change, with some
+pairs brought closer and others moved apart) and ``MK_dPCIIC`` with
+``restoration`` (the last five nodes to add, which Makurhini's code needs to
+align its attributes) on the synthetic scenes (``makurhini_links.csv.gz``).
+
 ``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
-Sensinode 2.2 sources (``LANDSCHAFT_CONEFOR_SRC``, default
+Sensinode 2.2 sources (the last five nodes of each scene are Conefor's nodes
+to add) (``LANDSCHAFT_CONEFOR_SRC``, default
 ``../Conefor Sensinode 2.2/src`` next to the repository) with g++ (Rtools:
 ``LANDSCHAFT_GXX_PATH``, default ``C:/rtools44``) and stores its indices and
 node importances for the synthetic scenes in ``conefor.csv.gz``. The
@@ -204,6 +210,53 @@ def run_spatial() -> None:
             print(f.stem, len(table))
 
 
+LINK_JOBS = {
+    "points60": [("IIC", 8_000, "", ""), ("PC", 8_000, 0.5, 0.01)],
+    "cost40": [("IIC", 6_000, "", ""), ("PC", 6_000, 0.3, 0.01)],
+    "clusters50": [("IIC", 5_000, "", ""), ("PC", 10_000, 0.5, "")],
+}
+
+
+def changed_matrix(dist: np.ndarray, seed: int) -> np.ndarray:
+    """40 pairs brought closer or moved apart (factors 0.3 to 1.6)."""
+    rng = np.random.default_rng(seed)
+    n = len(dist)
+    i, j = np.triu_indices(n, 1)
+    pick = rng.choice(len(i), 40, replace=False)
+    out = dist.copy()
+    factor = rng.uniform(0.3, 1.6, 40)
+    out[i[pick], j[pick]] = dist[i[pick], j[pick]] * factor
+    out[j[pick], i[pick]] = out[i[pick], j[pick]]
+    return out
+
+
+def run_links() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    scenes = load_scenes()
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        jobs = []
+        for k, (name, specs) in enumerate(LINK_JOBS.items()):
+            ids, attr, dist = scenes[name]
+            node_file, matrix_file, change_file = (tmp / f"{name}_{x}.csv" for x in ("nodes", "matrix", "change"))
+            pd.DataFrame({"id": ids, "attribute": [repr(float(v)) for v in attr]}).to_csv(node_file, index=False)
+            np.savetxt(matrix_file, dist, delimiter=",", fmt="%.17g")
+            np.savetxt(change_file, changed_matrix(dist, 100 + k), delimiter=",", fmt="%.17g")
+            for metric, d, p, pij in specs:
+                jobs.append({"scene": name, "nodes": node_file.as_posix(), "matrix": matrix_file.as_posix(),
+                             "change": change_file.as_posix(), "metric": metric, "distance": d, "probability": p,
+                             "pij_min": pij, "restore": 5})
+        pd.DataFrame(jobs).to_csv(tmp / "jobs.csv", index=False)
+        subprocess.run([str(rscript), str(R_SCRIPT), "links", str(tmp / "jobs.csv"), str(tmp / "out.csv")],
+                       check=True)
+        out = pd.read_csv(tmp / "out.csv", float_precision="round_trip", keep_default_na=False,
+                          dtype={"probability": str, "pij_min": str})
+        out.to_csv(OUT / "makurhini_links.csv.gz", index=False)
+        print(f"links: {len(out)} values")
+
+
 def run_makurhini() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -283,11 +336,18 @@ def run_conefor() -> None:
             for d, p, la_factor in jobs:
                 la = int(np.ceil(la_factor * attr.sum())) if la_factor else 0
                 f = tmp / "in.txt"
+                # The last five nodes are the nodes to add (Conefor's "adding nodes").
+                base, extra = slice(0, len(ids) - 5), slice(len(ids) - 5, len(ids))
                 with open(f, "w") as out:
-                    out.write(f"{len(ids)} {d!r} {d!r} {p!r} 0 {la}\n")
-                    for i, a in zip(ids, attr):
+                    out.write(f"{len(ids) - 5} {d!r} {d!r} {p!r} 0 {la}\n")
+                    for i, a in zip(ids[base], attr[base]):
                         out.write(f"{i} {float(a)!r}\n")
-                    for row in dist:
+                    for row in dist[base, base]:
+                        out.write(" ".join(repr(float(v)) for v in row) + "\n")
+                    out.write("5\n")
+                    for i, a in zip(ids[extra], attr[extra]):
+                        out.write(f"{i} {float(a)!r}\n")
+                    for row in dist[extra, base]:
                         out.write(" ".join(repr(float(v)) for v in row) + "\n")
                 text = subprocess.run([str(exe), str(f)], check=True, capture_output=True, text=True).stdout
                 header = None
@@ -295,21 +355,23 @@ def run_conefor() -> None:
                     parts = line.split(",")
                     if parts[0] == "overall":
                         rows.append((name, d, p, la, "overall", "", parts[1], parts[2]))
-                    elif parts[0] == "node" and parts[1] == "label":
+                    elif parts[1] == "label":
                         header = parts[2:]
                     else:
                         for key, value in zip(header, parts[2:]):
-                            rows.append((name, d, p, la, "node", parts[1], key, value))
+                            rows.append((name, d, p, la, parts[0], parts[1], key, value))
     frame = pd.DataFrame(rows, columns=["scene", "distance", "probability", "la", "level", "id", "name", "value"])
     frame.to_csv(OUT / "conefor.csv.gz", index=False)
     print(f"conefor: {len(frame)} values")
 
 
 if __name__ == "__main__":
-    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial"]
+    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links"]
     if "makurhini" in parts:
         run_makurhini()
     if "conefor" in parts:
         run_conefor()
     if "spatial" in parts:
         run_spatial()
+    if "links" in parts:
+        run_links()

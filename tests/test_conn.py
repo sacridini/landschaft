@@ -332,3 +332,95 @@ def test_large_graph_runs_quickly():
     g = ls.HabitatGraph(rng.lognormal(0, 1, n), D)
     imp = g.node_importance(["PC", "IIC"], distance=3_000)
     assert len(imp) == n and np.all(imp["dPC"] >= 0)
+
+
+# ------------------------------------------- links and nodes added (restoration)
+
+
+def _numerators(a, D, t, P, pij_min, conefor, alive=None, pc_cut=None):
+    link, p, keep = _graphs(D, t, P, pij_min, conefor)
+    if pc_cut is not None:  # an edge forced in (Makurhini's changed pairs are not cut)
+        i, j = pc_cut
+        keep[i, j] = keep[j, i] = True
+    alive = np.ones(len(a), bool) if alive is None else alive
+    return _indices(a, link, p, keep, alive, conefor, np.inf)
+
+
+@pytest.mark.parametrize("metric", ["IIC", "PC"])
+def test_link_change_brute_force(metric):
+    a, D = _scene(18, 91, False)
+    t, P = 25.0, 0.5
+    g = ls.HabitatGraph(a, D)
+    rng = np.random.default_rng(3)
+    i, j = np.triu_indices(18, 1)
+    pick = rng.choice(len(i), 25, replace=False)
+    new = D.copy()
+    new[i[pick], j[pick]] = D[i[pick], j[pick]] * rng.uniform(0.2, 1.8, 25)
+    new[j[pick], i[pick]] = new[i[pick], j[pick]]
+    out = g.link_change(new, metric, distance=t, probability=P).set_index(["from", "to"])
+    full = _numerators(a, D, t, P, 0.01, False)
+    sent = 1 / (1 + MAKURHINI_UNCONNECTED)
+    num = full["iic_reach"] + sent * full["unreach_aa"] if metric == "IIC" else full["pc_num"]
+    for k in pick:
+        a_, b_ = i[k], j[k]
+        D2 = D.copy()
+        D2[a_, b_] = D2[b_, a_] = new[a_, b_]
+        if metric == "IIC":
+            if not new[a_, b_] < t:
+                expected = 0.0
+            else:
+                link_d = D.copy()
+                link_d[a_, b_] = link_d[b_, a_] = min(D[a_, b_], new[a_, b_])
+                r = _numerators(a, link_d, t, P, 0.01, False)
+                expected = 100 * (num - r["iic_reach"]) / num
+        else:
+            r = _numerators(a, D2, t, P, 0.01, False, pc_cut=(a_, b_))
+            expected = 100 * (num - r["pc_num"]) / num
+        assert out.loc[(a_ + 1, b_ + 1), f"d{metric}_change"] == pytest.approx(expected, rel=1e-10, abs=1e-11)
+
+
+@pytest.mark.parametrize("convention", ["makurhini", "conefor"])
+def test_nodes_to_add_brute_force(convention):
+    a, D = _scene(22, 93, True)
+    t, P, pmin = 22.0, 0.5, (0.01 if convention == "makurhini" else 0.0)
+    conefor = convention == "conefor"
+    restoration = np.ones(22, int)
+    restoration[[3, 10, 17, 21]] = 0
+    g = ls.HabitatGraph(a, D, restoration=restoration, convention=convention)
+    imp = g.node_importance(distance=t, probability=P, pij_min=pmin).set_index("id")
+    base = restoration == 1
+    b = _numerators(a, D, t, P, pmin, conefor, alive=base)
+    for k in np.flatnonzero(~base):
+        alive = base.copy()
+        alive[k] = True
+        w = _numerators(a, D, t, P, pmin, conefor, alive=alive)
+        if convention == "makurhini":
+            assert imp.loc[k + 1, "dPCres"] == pytest.approx(100 * (w["pc_num"] - b["pc_num"]) / w["pc_num"], rel=1e-10)
+            assert imp.loc[k + 1, "dIICres"] == pytest.approx(
+                100 * (w["iic_reach"] - b["iic_reach"]) / w["iic_reach"], rel=1e-10)
+        else:
+            row = imp.loc[k + 1]
+            assert row["dPCadd"] == pytest.approx(100 * (w["pc_num"] - b["pc_num"]) / b["pc_num"], rel=1e-10)
+            assert row["dIICadd"] == pytest.approx(100 * (w["iic_reach"] - b["iic_reach"]) / b["iic_reach"], rel=1e-10)
+            assert row["dHadd"] == pytest.approx(100 * (w["H"] - b["H"]) / b["H"], rel=1e-10)
+            assert row["dNCadd"] == pytest.approx(100 * (w["NC"] - b["NC"]) / b["NC"])
+            assert row["dNLadd"] == pytest.approx(100 * (w["NL"] - b["NL"]) / b["NL"])
+            ccp_b, ccp_w = b["comp_sq"] / b["total"] ** 2, w["comp_sq"] / w["total"] ** 2
+            assert row["dCCPadd"] == pytest.approx(100 * (ccp_w - ccp_b) / ccp_b, rel=1e-10, abs=1e-12)
+            assert row["dLCPadd"] == pytest.approx(100 * (w["comp_sq"] - b["comp_sq"]) / b["comp_sq"], rel=1e-10)
+            assert row["dFadd"] == pytest.approx(100 * (w["F"] - b["F"]) / b["F"], rel=1e-10)
+            assert row["dAWFadd"] == pytest.approx(100 * (w["AWF"] - b["AWF"]) / b["AWF"], rel=1e-10)
+            assert np.isnan(row["dPC"])  # removal importances belong to the existing nodes
+    if convention == "conefor":
+        assert np.isnan(imp.loc[1, "dPCadd"]) and np.isfinite(imp.loc[1, "dPC"])
+    with pytest.raises(ValueError, match="restoration"):
+        ls.HabitatGraph(a, D, restoration=np.full(22, 2))
+
+
+def test_link_importance_threads_and_errors():
+    a, D = _scene(150, 97, False)
+    one = ls.HabitatGraph(a, D, n_threads=1).link_importance("PC", distance=20.0)
+    many = ls.HabitatGraph(a, D, n_threads=4).link_importance("PC", distance=20.0)
+    pd.testing.assert_frame_equal(one, many, check_exact=True)
+    with pytest.raises(ValueError, match="IIC' or 'PC"):
+        ls.HabitatGraph(a, D).link_importance("H", distance=20.0)

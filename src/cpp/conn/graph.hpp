@@ -28,7 +28,9 @@ struct Csr {
     std::vector<i64> start;
     std::vector<std::int32_t> to;
     std::vector<double> cost;
-    i64 n_edges() const { return static_cast<i64>(to.size()) / 2; }
+    std::vector<i64> edge;              // edge of every slot
+    std::vector<std::int32_t> eu, ev;   // the ends of every edge
+    i64 n_edges() const { return static_cast<i64>(eu.size()); }
 };
 
 // Node pairs (i < j) with a value: a distance, a probability or a link (0/1).
@@ -47,6 +49,10 @@ struct Scenario {
     double pij_min = 0;      // probabilistic edges below it are dropped
     bool conefor = false;    // Conefor's rules instead of Makurhini's (see make_link_graph/make_prob_graph)
 };
+
+// The edge a pair makes: 1 for a link, -log p for a probabilistic edge, NaN
+// for none (with `cut` false, probabilities below pij_min still make edges).
+double pair_length(double value, const Scenario& s, bool links, bool cut = true);
 
 // Binary graph: Makurhini links pairs closer than the threshold (d < t),
 // Conefor up to it (d <= t); probabilities link when p >= t, links when != 0.
@@ -77,19 +83,44 @@ struct LinkResult {
     std::vector<i64> degree;
     std::vector<std::int32_t> pieces;  // components the component of k splits into without k
     std::vector<double> pieces_sq;     // sum of their attributes squared
+    // Per edge (edges only): the same changes once the edge is removed.
+    std::vector<double> edge_iic;      // ordered pairs: a_i a_j (1/(1+nl) - 1/(1+nl'))
+    std::vector<double> edge_h;        // pairs i < j: 1/nl - 1/nl'
 };
 
-LinkResult analyse_links(const Csr& g, const double* area, bool importance);
+LinkResult analyse_links(const Csr& g, const double* area, bool importance, bool edges = false);
 
 struct ProbResult {
     double pc_num = 0;     // sum over ordered pairs (i = j included) of a_i a_j p*_ij
     double pc_direct = 0;  // ordered pairs i != j joined by an edge: a_i a_j p_ij
     std::vector<double> pc_row;   // sum_j a_j p*_kj, j = k included (importance only)
     std::vector<double> pc_conn;  // ordered pairs i, j != k: a_i a_j (p*_ij - p*'_ij) once k is removed
+    std::vector<double> edge_pc;  // per edge: ordered pairs a_i a_j (p*_ij - p*'_ij) once it is removed
 };
 
 // `expand_limit`: Conefor's minProb heuristic, nodes reached with a cost above
 // it are not expanded (infinity to expand every node).
-ProbResult analyse_probabilities(const Csr& g, const double* area, double expand_limit, bool importance);
+ProbResult analyse_probabilities(const Csr& g, const double* area, double expand_limit, bool importance,
+                                 bool edges = false);
+
+// Shortest path lengths between all nodes (hops, or -log p*), n × n row-major,
+// infinity without a path.
+std::vector<double> all_pairs(const Csr& g, bool hops, double expand_limit);
+
+// Gains of the numerator (sum over ordered pairs of a_i a_j f(length), f =
+// 1/(1+hops) or exp(-cost)) and of H when a node or an edge is added to a
+// graph whose all-pairs lengths are D: new lengths min(D_ij, via the new
+// element).
+struct Gains {
+    std::vector<double> num, h;
+};
+// Candidate k (attribute cand_area[k]) joins the nodes
+// cand_node[cand_start[k] .. cand_start[k + 1]) with lengths cand_len.
+Gains addition_gains(const std::vector<double>& D, std::int32_t n, const double* area, const i64* cand_start,
+                     const std::int32_t* cand_node, const double* cand_len, std::int32_t n_cand, const double* cand_area,
+                     bool hops);
+// A new edge ea[k] - eb[k] of length elen[k].
+Gains edge_gains(const std::vector<double>& D, std::int32_t n, const double* area, const std::int32_t* ea,
+                 const std::int32_t* eb, const double* elen, std::int32_t n_edges, bool hops);
 
 }  // namespace conn
