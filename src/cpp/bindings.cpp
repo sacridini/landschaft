@@ -939,6 +939,13 @@ void bind_landscape(py::module_& m) {
         "Mask of polygon rings burnt as GDAL's rasterizer with ALL_TOUCHED=TRUE.");
     m.def("lsm_r_statistics", &lsm::r_statistics, py::arg("x"),
           "R's sum, mean, sd and median of x, log(x[0]) and sqrt(x[0]), as landschaft computes them.");
+    m.def(
+        "lsm_r_lm_slope",
+        [](const std::vector<double>& x, const std::vector<double>& y) {
+            if (x.size() != y.size()) throw py::value_error("x and y must have the same length");
+            return lsm::r_lm_slope(x.data(), y.data(), static_cast<int>(x.size()));
+        },
+        py::arg("x"), py::arg("y"), "The slope of R's lm(y ~ x), as landschaft computes it (NaN for R's NA).");
 
     m.def(
         "lsm_window",

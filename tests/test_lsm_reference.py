@@ -36,12 +36,12 @@ ATOL = 1e-14
 # Metrics whose values agree with landscapemetrics within RTOL but not always
 # to the last bit: circle (landscapemetrics shuffles the points of Welzl's
 # algorithm at random), gyrate (R sums the coordinates and distances of the
-# cells one by one in extended precision), pafrac (R's lm() QR decomposition)
-# and enn (R's pruned search can settle on an equally near cell pair whose
-# distance rounds differently when the cell sides differ). Every other value
-# must be the same bits: sums, means and standard deviations use R's 80-bit
-# accumulation, log and sqrt R's x87 functions.
-NOT_BITWISE = ("circle", "gyrate", "pafrac", "enn")
+# cells one by one in extended precision) and enn (R's pruned search can
+# settle on an equally near cell pair whose distance rounds differently when
+# the cell sides differ). Every other value must be the same bits: sums, means
+# and standard deviations use R's 80-bit accumulation, log and sqrt R's x87
+# functions, pafrac the QR decomposition of R's lm().
+NOT_BITWISE = ("circle", "gyrate", "enn")
 
 
 def compare(ours: pd.DataFrame, ref: pd.DataFrame, label: str) -> None:

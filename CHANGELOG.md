@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+### Changed
+- Landscape metrics part 13: `pafrac` is now the same bits as landscapemetrics. Its
+  regression runs what R's `lm()` runs (LINPACK's `dqrdc2`/`dqrsl` over R's reference
+  BLAS, LAPACK 3.12's `dnrm2`; `src/cpp/lsm/rlm.cpp`), checked on 400 stored `lm()`
+  slopes (166 collinear, NA in R) and random maps; landscape-level `pafrac` regresses
+  the area in hectares as landscapemetrics does. `window_metrics` transposes each
+  window as `window_lsm` does (with the cell sides swapped, keeping the geometry), so
+  the patches come in R's order and window `pafrac` values match too.
+
 ## [0.23.0] - 2026-09-26
 
 ### Changed

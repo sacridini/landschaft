@@ -268,7 +268,9 @@ class TestSample:
 
 def brute_window(data, window, res, what, **options):
     """Every window as a Landscape of its own (shdi and shei with 8
-    directions: window_lsm computes them from 8-connected patch areas)."""
+    directions: window_lsm computes them from 8-connected patch areas),
+    transposed with the cell sides swapped as window_metrics reads it (the
+    patch order of window_lsm)."""
     values = np.ma.getdata(data)
     mask = np.ma.getmaskarray(data)
     hy, hx = window.shape[0] // 2, window.shape[1] // 2
@@ -279,8 +281,10 @@ def brute_window(data, window, res, what, **options):
         for x in range(values.shape[1]):
             sub = padded[y : y + window.shape[0], x : x + window.shape[1]]
             sub_mask = padded_mask[y : y + window.shape[0], x : x + window.shape[1]] | ~window
-            lm = ls.Landscape(np.ma.MaskedArray(sub, mask=sub_mask), res=res, **options)
-            lm8 = ls.Landscape(np.ma.MaskedArray(sub, mask=sub_mask), res=res, **{**options, "directions": 8})
+            sub_t = np.ma.MaskedArray(sub.T, mask=sub_mask.T)
+            res_t = (res[1], res[0])
+            lm = ls.Landscape(sub_t, res=res_t, **options)
+            lm8 = ls.Landscape(sub_t, res=res_t, **{**options, "directions": 8})
             for m in what:
                 out[m][y, x] = (lm8 if m in ("shdi", "shei") else lm).landscape_metrics(m)[m].item()
     return out

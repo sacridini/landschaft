@@ -125,6 +125,10 @@ double r_signif(double x, int digits);
 // R's sum, mean, sd, median of x, and log and sqrt of x[0] (for the tests).
 std::vector<double> r_statistics(const std::vector<double>& x);
 
+// Slope of R's lm(y ~ x) over n points, computed as R does (LINPACK dqrls
+// and R's reference BLAS); NaN where R gives NA (rlm.cpp).
+double r_lm_slope(const double* x, const double* y, int n);
+
 // FRAGSTATS' am (weights w), md or ra of x[0..n) (metrics.cpp).
 double reduce_statistic(const std::string& stat, const double* x, i64 n, const double* w);
 
@@ -238,7 +242,7 @@ private:
     bool res_all_equal() const;
     std::vector<double> class_te();
     double landscape_te();
-    std::vector<double> pafrac_by(const std::vector<i64>& start);
+    std::vector<double> pafrac_by(const std::vector<i64>& start, bool hectares);
 
     i64 nx_ = 0;
     i64 ny_ = 0;

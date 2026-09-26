@@ -12,7 +12,8 @@ of ``calculate_lsm`` for each option set to
 ``tests/data/reference/lsm/<case>__<options>.csv.gz`` and a ``manifest.json``;
 ``sample`` and ``window`` store ``sample_lsm`` and ``window_lsm`` results in
 ``tests/data/reference/lsm_sample`` and ``lsm_window``; ``rmath`` stores R's
-``sum``, ``mean``, ``sd``, ``median``, ``log`` and ``sqrt`` of random vectors
+``sum``, ``mean``, ``sd``, ``median``, ``log`` and ``sqrt`` of random vectors and
+``lm()`` slopes
 (``tests/data/reference/lsm_rmath``), the arithmetic the metrics reproduce;
 ``utils`` stores the results of landscapemetrics' utility functions
 (``get_centroids``, ``get_nearestneighbour``, ``get_circumscribingcircle``,
@@ -96,6 +97,48 @@ def rmath_vectors() -> list[np.ndarray]:
     return out
 
 
+# The slope of lm(y ~ x), as pafrac takes it (NA when R drops x as collinear).
+LM_SCRIPT = r"""
+lines <- readLines(commandArgs(trailingOnly = TRUE)[[1]])
+f <- function(s) {
+    v <- strsplit(s, ";")[[1]]
+    x <- as.numeric(strsplit(v[1], ",")[[1]])
+    y <- as.numeric(strsplit(v[2], ",")[[1]])
+    sprintf("%.17g", stats::lm(y ~ x)$coefficients[[2]])
+}
+writeLines(vapply(lines, f, ""), commandArgs(trailingOnly = TRUE)[[2]])
+"""
+
+
+def lm_pairs() -> list[tuple[np.ndarray, np.ndarray]]:
+    """(x, y) pairs like pafrac's log(perimeter), log(area), with lengths that
+    exercise every remainder of BLAS' unrolled loops, and collinear ones."""
+    rng = np.random.default_rng(2027)
+    out = []
+    for i in range(400):
+        n = int(rng.integers(2, 60)) if i % 4 else int(rng.integers(60, 3000))
+        kind = i % 5
+        if kind == 0:  # patches: cells and their perimeter in cell sides
+            cells = rng.geometric(0.3, n)
+            sides = 2 * cells + 2 + 2 * rng.integers(0, cells + 1)
+            res = float(rng.choice([1.0, 0.3, 30.0, 2.5]))
+            x, y = np.log(sides * res), np.log(cells * res * res / 10000 * 10000)
+        elif kind == 1:  # mostly single cells: nearly collinear
+            cells = np.where(rng.uniform(size=n) < 0.9, 1, rng.integers(2, 5, n))
+            x, y = np.log(2.0 * cells + 2), np.log(cells * 1e-4)
+        elif kind == 2:
+            x = rng.normal(0, 3, n)
+            y = 1.7 * x + rng.normal(0, 0.1, n)
+        elif kind == 3:  # constant x: NA
+            x = np.full(n, float(rng.uniform(1, 9)))
+            y = rng.normal(0, 1, n)
+        else:  # x constant up to the last bits: collinear by R's tolerance
+            x = float(rng.uniform(1, 9)) * (1 + rng.integers(-4, 5, n) * 2.0**-52)
+            y = rng.normal(0, 1, n)
+        out.append((np.asarray(x, float), np.asarray(y, float)))
+    return out
+
+
 def utils_points(tif: Path) -> pd.DataFrame:
     """Points in and around the raster, on cell edges and corners too."""
     import rasterio
@@ -158,8 +201,21 @@ def make_rmath(rscript) -> None:
     df = pd.DataFrame({"x": [",".join(f"{v:.17g}" for v in x) for x in vectors]})
     df[["sum", "mean", "sd", "median", "log", "sqrt"]] = [r.split(",") for r in results]
     df.to_csv(OUT_RMATH / "rmath.csv.gz", index=False, compression={"method": "gzip", "mtime": 0})
-    write_manifest(OUT_RMATH, rscript, {"rmath.csv.gz": {"vectors": len(vectors)}})
     print(f"rmath.csv.gz: {len(vectors)} vectors")
+    pairs = lm_pairs()
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "xy.txt"
+        dst = Path(tmp) / "out.txt"
+        src.write_text("\n".join(";".join(",".join(f"{v:.17g}" for v in a) for a in xy) for xy in pairs) + "\n")
+        script = Path(tmp) / "lm.R"
+        script.write_text(LM_SCRIPT)
+        subprocess.run([str(rscript), str(script), str(src), str(dst)], check=True, env=lsm_reference.r_environment())
+        slopes = dst.read_text().split()
+    df = pd.DataFrame({"x": [",".join(f"{v:.17g}" for v in x) for x, _ in pairs],
+                       "y": [",".join(f"{v:.17g}" for v in y) for _, y in pairs], "slope": slopes})
+    df.to_csv(OUT_RMATH / "lm.csv.gz", index=False, compression={"method": "gzip", "mtime": 0})
+    print(f"lm.csv.gz: {len(pairs)} regressions")
+    write_manifest(OUT_RMATH, rscript, {"rmath.csv.gz": {"vectors": len(vectors)}, "lm.csv.gz": {"pairs": len(pairs)}})
 
 OPTION_SETS = {
     "default": {},

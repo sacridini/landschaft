@@ -6,7 +6,8 @@
 rmath``). R accumulates in 80-bit ``long double`` (emulated here where the
 compiler lacks it) and takes ``log`` and the ``sqrt`` of a vector from the x87
 unit; the ``sqrt`` inside ``sd`` is the correctly rounded one of R's
-byte-code.
+byte-code. ``lm.csv.gz`` holds the slopes of ``lm(y ~ x)`` that pafrac takes
+(LINPACK's QR with R's reference BLAS; NA when R drops ``x`` as collinear).
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from conftest import DATA
 from landschaft import _core
 
 RMATH = DATA / "reference" / "lsm_rmath" / "rmath.csv.gz"
+LM = DATA / "reference" / "lsm_rmath" / "lm.csv.gz"
 COLUMNS = ["sum", "mean", "sd", "median", "log", "sqrt"]
 
 
@@ -53,3 +55,22 @@ def test_edge_cases():
     assert np.isnan(_core.lsm_r_statistics([1.0, nan])[1])
     assert _core.lsm_r_statistics([0.0, 0.0])[4] == -np.inf
     assert _core.lsm_r_statistics([-0.0, 1.0])[0] == 1.0
+
+
+@pytest.mark.reference
+def test_lm_slope_same_bits_as_r():
+    ref = pd.read_csv(LM, dtype=str, keep_default_na=False)
+    ours = np.array([_core.lsm_r_lm_slope([float(v) for v in x.split(",")], [float(v) for v in y.split(",")])
+                     for x, y in zip(ref["x"], ref["y"])])
+    expected = np.array([np.nan if s == "NA" else float(s) for s in ref["slope"]])
+    assert np.isnan(expected).sum() > 100  # the collinear cases are there
+    same = (ours == expected) | (np.isnan(ours) & np.isnan(expected))
+    assert same.all(), f"{(~same).sum()} slopes differ, e.g. row {np.flatnonzero(~same)[:5].tolist()}"
+
+
+def test_lm_slope_edge_cases():
+    assert _core.lsm_r_lm_slope([1.0, 2.0], [3.0, 5.0]) == 2.0
+    assert np.isnan(_core.lsm_r_lm_slope([2.0, 2.0, 2.0], [1.0, 2.0, 3.0]))
+    assert np.isnan(_core.lsm_r_lm_slope([1.0], [1.0]))
+    with pytest.raises(ValueError):
+        _core.lsm_r_lm_slope([1.0, 2.0], [1.0])

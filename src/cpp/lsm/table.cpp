@@ -191,19 +191,26 @@ std::vector<double> window_metrics(const RasterView& raster, const std::uint8_t*
         for (i64 y = 0; y < ny; ++y) {
             error.run([&] {
                 for (i64 x = 0; x < nx; ++x) {
+                    // terra::focal hands window_lsm the values row by row and
+                    // it fills its window matrix column by column: its
+                    // landscape is the window transposed. Ours is too (with
+                    // the cell sides swapped, so the geometry stays right):
+                    // the patches then come in R's order, which pafrac's
+                    // regression rounds by.
                     for (i64 j = 0; j < wy; ++j) {
                         const i64 yy = y - hy + j;
                         for (i64 i = 0; i < wx; ++i) {
                             const i64 xx = x - hx + i;
-                            const i64 b = j * wx + i;
-                            const bool in = window[b] && yy >= 0 && yy < ny && xx >= 0 && xx < nx && !na[yy * nx + xx];
+                            const i64 b = i * wy + j;
+                            const bool in =
+                                window[j * wx + i] && yy >= 0 && yy < ny && xx >= 0 && xx < nx && !na[yy * nx + xx];
                             buf_na[b] = !in;
                             buf[b] = in ? dense[yy * nx + xx] : 0;
                         }
                     }
-                    Landscape l(buf.data(), buf_na.data(), wx, wy, raster.resx, raster.resy, options);
+                    Landscape l(buf.data(), buf_na.data(), wy, wx, raster.resy, raster.resx, options);
                     std::optional<Landscape> l8;
-                    if (any_eight) l8.emplace(buf.data(), buf_na.data(), wx, wy, raster.resx, raster.resy, options8);
+                    if (any_eight) l8.emplace(buf.data(), buf_na.data(), wy, wx, raster.resy, raster.resx, options8);
                     for (i64 k = 0; k < m; ++k) {
                         out[k * n + y * nx + x] = eight[k] ? l8->landscape_metric(names[k]) : l.landscape_metric(names[k]);
                     }

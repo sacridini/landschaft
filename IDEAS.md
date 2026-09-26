@@ -64,9 +64,9 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   (`src/cpp/lsm/extended.hpp`, emulado no MSVC) e `log`/`sqrt` usam o x87 como a
   libm do mingw (`rmath.hpp`, `x87_msvc.asm`). Faltam `gyrate` (o R soma coordenadas
   e distâncias célula a célula em ordem de linha, em 80 bits: exigiria percorrer as
-  células de cada patch em sequência; fora da memória, mais 3 passadas no arquivo),
-  `pafrac` (QR do `lm()`: portar `dqrdc2`/`dqrsl` e o `dnrm2` do BLAS de referência
-  do R 4.4) e alguns `enn` com células quase quadradas (a busca podada do R).
+  células de cada patch em sequência; fora da memória, mais 3 passadas no arquivo)
+  e alguns `enn` com células quase quadradas (a busca podada do R). `pafrac` já é
+  bit a bit (QR do `lm()` portado, `rlm.cpp`).
   `circle` não tem como: o R embaralha os pontos ao acaso.
 - As somas sequenciais em 80 bits custam: num mapa sal-e-pimenta com 10 M de
   patches, as estatísticas de paisagem (uma cadeia sequencial por métrica) levam
@@ -119,3 +119,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
     laços pequenos fora do OpenMP; rasterização "all touched" do GDAL portada para C++
     (plots circulares e polígonos: 10 mil círculos 5,4 s → 2,2 s, as mesmas células).
     **Feita.** O que falta está em "Desempenho e escala".
+13. `pafrac` bit a bit: o `lm()` do R portado (`dqrdc2`/`dqrsl` do LINPACK sobre o BLAS
+    de referência do R, com o `dnrm2` do LAPACK 3.12), e as janelas móveis
+    transpostas como no `window_lsm` (ordem dos patches do R). **Feita.**

@@ -310,9 +310,9 @@ LANDSCHAFT_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live co
   degenerate layouts) and 5 option sets in `tests/data/reference/lsm`, and with
   `Rscript` available the tests also run landscapemetrics live on random maps. All
   values are the same bits, except `circle` (randomised in landscapemetrics),
-  `gyrate`, `pafrac` and a few `enn` values, which agree to a relative 1e-10: sums,
-  means and standard deviations reproduce R's 80-bit accumulation, and `log`/`sqrt`
-  R's x87 functions.
+  `gyrate` and a few `enn` values, which agree to a relative 1e-10: sums, means and
+  standard deviations reproduce R's 80-bit accumulation, `log`/`sqrt` R's x87
+  functions, and `pafrac` the QR decomposition of R's `lm()`.
 * `tests/test_primitives.py` checks each C++ primitive against SciPy or brute
   force. `tests/test_mspa_semantics.py` checks the classes on hand-made patterns.
   The I/O and API tests cover validation, georeferencing, colour tables,

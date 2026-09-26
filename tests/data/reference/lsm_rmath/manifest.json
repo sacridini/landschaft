@@ -4,6 +4,9 @@
   "files": {
     "rmath.csv.gz": {
       "vectors": 600
+    },
+    "lm.csv.gz": {
+      "pairs": 400
     }
   }
 }

@@ -588,7 +588,7 @@ The patch-, class- and landscape-level metrics of FRAGSTATS as implemented by th
 package [landscapemetrics](https://r-spatialecology.github.io/landscapemetrics/):
 same metric names (`lsm_p_area` → `"area"` at the patch level, `lsm_c_ca` →
 `"ca"`, …), same options, same patch ids and the same values: the same bits for all
-metrics but `circle`, `gyrate`, `pafrac` and rare `enn` ties, which agree to a relative
+metrics but `circle`, `gyrate` and rare `enn` ties, which agree to a relative
 1e-10 (see *Bit-identical arithmetic* below). The FRAGSTATS statistics that
 landscapemetrics lacks (`_am`, `_md`, `_ra`) are available as extras.
 
@@ -787,12 +787,17 @@ can differ in the last bit from a correctly rounded result; `rmath.hpp` does the
 (with a small MASM routine under MSVC, which has no x64 inline assembly). R's byte-code
 interpreter computes the `sqrt` of a single number inline and correctly rounded (the one
 inside `sd()`, `cohesion`'s factor, the shape of a single patch), and `x^-1` is `powl`.
+`pafrac` is 2 over the slope of `lm(log(area) ~ log(perimeter))`: `src/cpp/lsm/rlm.cpp`
+runs what `lm()` runs, LINPACK's `dqrdc2` (Householder QR with R's limited pivoting,
+tolerance 1e-7) and `dqrsl` over R's reference BLAS (`ddot`, `daxpy` and `dscal` unrolled
+as in R, LAPACK 3.12's `dnrm2`), so the slope is R's to the last bit and NA exactly when R
+drops the perimeter as collinear.
 
 Values that stay within 1e-10 instead of identical: `circle` (landscapemetrics shuffles
 Welzl's points at random, so its own values change between runs), `gyrate` (R sums the
-coordinates and distances cell by cell in extended precision), `pafrac` (R's `lm()`
-QR decomposition) and the `enn` of rasters whose cell sides differ by rounding only (R's
-pruned search can settle on another pair of cells at the same distance).
+coordinates and distances cell by cell in extended precision) and the `enn` of rasters
+whose cell sides differ by rounding only (R's pruned search can settle on another pair of
+cells at the same distance).
 
 landscapemetrics' own quirks are reproduced: patch perimeters treat cell sides that
 differ by rounding only as equal (`all.equal`), and `window_metrics` computes `shdi` and
@@ -868,10 +873,14 @@ the raster gives NA metrics and 0 % (landscapemetrics stops with an error).
 **`window_metrics`** computes landscape-level metrics for the window centred on every
 cell (cells outside the raster or outside the window shape are NA), in parallel over
 the rows; each window is a small landscape with the class values mapped to dense
-indices once for the whole raster. Differences with `window_lsm`: `terra::focal`
-hands the window values row by row but landscapemetrics fills its matrix column by
-column, so its windows are transposed (no effect on square windows over square
-cells) or scrambled (rectangular windows); landschaft keeps the geometry. And
+indices once for the whole raster. `terra::focal` hands the window values row by
+row but landscapemetrics fills its matrix column by column, so its windows are
+transposed; landschaft transposes them too, with the cell width and height swapped,
+so the patches come in R's order (which `pafrac`'s regression rounds by) and the
+values are R's. Where `window_lsm` breaks the geometry landschaft keeps it:
+rectangular windows (R reshapes them), cells that are not square (R keeps the cell
+sides unswapped) and window shapes that are not symmetric (R masks the transposed
+values with the untransposed shape). And
 `window_lsm` fails for `gyrate_*` (it does not pass `cell_center`), which work here.
 
 **`scale_sample`** runs `sample_metrics` for several buffer sizes (a `size` column),
@@ -1014,9 +1023,10 @@ against `Landscape` objects built on the same cells. `tests/test_lsm_tiled.py` c
 that out-of-core results (`block_rows`) are identical to the in-memory ones on every
 stored reference map and on files with many blocks, patches across every seam, deep
 `edge_depth` context, several data types and nodata values.
-All comparisons with landscapemetrics require the same bits, except for the four
+All comparisons with landscapemetrics require the same bits, except for the three
 families above (relative 1e-10); `tests/test_lsm_rmath.py` checks the arithmetic itself
-against R on 600 stored vectors (`make_reference_lsm.py rmath`).
+against R on 600 stored vectors and the `lm()` slope on 400 regressions, 166 of them
+collinear (`make_reference_lsm.py rmath`).
 `tests/test_lsm_extras.py` checks the extras against numpy and pylandstats, the names
 and the threads. `make_reference_lsm.py utils` stores the results of the utilities
 (`tools/lsm_utils_reference.R`) on 8 maps and option sets, compared by

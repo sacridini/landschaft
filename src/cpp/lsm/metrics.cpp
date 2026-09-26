@@ -10,6 +10,7 @@
 
 #include "lsm/extended.hpp"
 #include "lsm/landscape.hpp"
+#include "lsm/parallel.hpp"
 #include "lsm/rmath.hpp"
 
 namespace lsm {
@@ -95,38 +96,6 @@ double max_adjacency(i64 n) {
     if (m == 0) return 2.0 * s * (s - 1);
     if (m <= s) return 2.0 * s * (s - 1) + 2.0 * m - 1;
     return 2.0 * s * (s - 1) + 2.0 * m - 2;
-}
-
-// Compensated (Neumaier) sum.
-struct Neumaier {
-    double sum = 0, c = 0;
-    void add(double v) {
-        const double t = sum + v;
-        c += std::fabs(sum) >= std::fabs(v) ? (sum - t) + v : (v - t) + sum;
-        sum = t;
-    }
-    double value() const { return sum + c; }
-};
-
-// Slope of lm(y ~ x), NaN when x is collinear with the intercept (as R's
-// QR with tol = 1e-7 decides). Compensated sums: the same value as R's QR
-// within a few ulps.
-double slope(const double* x, const double* y, i64 n) {
-    Neumaier sx, sy;
-    for (i64 i = 0; i < n; ++i) {
-        sx.add(x[i]);
-        sy.add(y[i]);
-    }
-    const double xm = sx.value() / static_cast<double>(n);
-    const double ym = sy.value() / static_cast<double>(n);
-    Neumaier sxx, sxy, sx2;
-    for (i64 i = 0; i < n; ++i) {
-        sxx.add((x[i] - xm) * (x[i] - xm));
-        sxy.add((x[i] - xm) * (y[i] - ym));
-        sx2.add(x[i] * x[i]);
-    }
-    if (sxx.value() <= 0 || std::sqrt(sxx.value() / sx2.value()) < 1e-7) return kNaN;
-    return sxy.value() / sxx.value();
 }
 
 }  // namespace
@@ -552,34 +521,36 @@ double Landscape::landscape_te() {
     return edge_length(h, v);
 }
 
-// PAFRAC per group of patches (groups: patch -> group index).
-// PAFRAC of the groups of patches [start[g], start[g + 1]): 2 / slope of
-// log(area in m2) against log(perimeter).
-std::vector<double> Landscape::pafrac_by(const std::vector<i64>& start) {
+// PAFRAC of the groups of patches [start[g], start[g + 1]): 2 / the slope
+// of R's lm(log(area) ~ log(perim)), area in m2 (landscapemetrics' class
+// level) or in hectares (its landscape level); NaN below 10 patches.
+std::vector<double> Landscape::pafrac_by(const std::vector<i64>& start, bool hectares) {
     static const std::string kLogPerim = "~log perim";
-    static const std::string kLogArea = "~log area";
+    static const std::string kLogAreaM2 = "~log area m2";
+    static const std::string kLogAreaHa = "~log area ha";
+    const std::string& key_area = hectares ? kLogAreaHa : kLogAreaM2;
     if (!patch_cache_.count(kLogPerim)) {
-        const std::vector<double>& area = patch_base("area");
         const std::vector<double>& perim = patch_base("perim");
-        const auto n = static_cast<i64>(area.size());
-        std::vector<double> lp(area.size()), la(area.size());
-#pragma omp parallel for schedule(static) if (n >= kParallelPatches)
-        for (i64 i = 0; i < n; ++i) {
-            lp[i] = r_log(perim[i]);
-            la[i] = r_log(area[i] * 10000);
-        }
+        const auto n = static_cast<i64>(perim.size());
+        std::vector<double> lp(perim.size());
+        parallel_for(n >= kParallelPatches, n, [&](i64 i) { lp[i] = r_log(perim[i]); });
         patch_cache_.emplace(kLogPerim, std::move(lp));
-        patch_cache_.emplace(kLogArea, std::move(la));
+    }
+    if (!patch_cache_.count(key_area)) {
+        const std::vector<double>& area = patch_base("area");
+        const auto n = static_cast<i64>(area.size());
+        std::vector<double> la(area.size());
+        parallel_for(n >= kParallelPatches, n, [&](i64 i) { la[i] = r_log(hectares ? area[i] : area[i] * 10000); });
+        patch_cache_.emplace(key_area, std::move(la));
     }
     const std::vector<double>& lp = patch_cache_.at(kLogPerim);
-    const std::vector<double>& la = patch_cache_.at(kLogArea);
+    const std::vector<double>& la = patch_cache_.at(key_area);
     const auto groups = static_cast<i64>(start.size()) - 1;
     std::vector<double> out(static_cast<std::size_t>(groups), kNaN);
-#pragma omp parallel for schedule(dynamic) if (groups > 1 && start.back() >= kParallelPatches)
-    for (i64 g = 0; g < groups; ++g) {
+    parallel_for_dynamic(groups > 1 && start.back() >= kParallelPatches, groups, [&](i64 g) {
         const i64 n = start[g + 1] - start[g];
-        if (n >= 10) out[g] = 2 / slope(lp.data() + start[g], la.data() + start[g], n);
-    }
+        if (n >= 10) out[g] = 2 / r_lm_slope(lp.data() + start[g], la.data() + start[g], static_cast<int>(n));
+    });
     return out;
 }
 
@@ -683,7 +654,7 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
             return (1 - (num / den)) * factor * 100;
         });
     }
-    if (name == "pafrac") return pafrac_by(start);
+    if (name == "pafrac") return pafrac_by(start, false);
     if (name == "tca" || name == "cpland") {
         const std::vector<double>& core = patch_base("core");
         return per_class([&](int, i64 s, i64 n) {
@@ -831,7 +802,7 @@ double Landscape::landscape_metric_impl(const std::string& name) {
     }
     if (name == "pafrac") {
         if (np < 10) return kNaN;
-        return pafrac_by({0, np})[0];
+        return pafrac_by({0, np}, true)[0];
     }
 
     // Composition.
