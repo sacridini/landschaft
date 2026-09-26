@@ -6,6 +6,17 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 9, export and integration: `ls.write_table()` (CSV, `.csv.gz`,
+  Parquet, and GeoPackage/GeoJSON/Shapefile for GeoDataFrames),
+  `ls.zonal_metrics()` (class and landscape metrics of polygons as a GeoDataFrame with
+  the zones' geometry and attributes, one column per metric and class),
+  `ls.scale_sample()` (landscapemetrics' `scale_sample`: several buffer sizes around
+  points; the same bits, stored references), `Landscape.to_raster()` for class-level
+  metrics, several metrics and writing GeoTIFFs (`path=`), and `batch()` with
+  `"landscape_metrics"` and `"window_metrics"` (tables as CSV or `table_format="parquet"`;
+  `block_rows` reads the files by blocks).
+
 ## [0.19.0] - 2026-09-26
 
 ### Added

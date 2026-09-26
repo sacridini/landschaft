@@ -18,19 +18,11 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 - **Gráficos** (matplotlib opcional): `show_patches`, `show_cores`, `show_lsm`,
   `show_correlation`.
-- **`scale_sample`**: métricas em várias escalas (tamanhos de buffer) ao redor de
-  pontos.
-- **Integração com `batch()`**: `"landscape_metrics"` em `BATCH_TOOLS`, gravando
-  uma tabela por raster (CSV/Parquet) e o JSON de registro.
 
 ## Exportação
 
-- **Parquet** (pyarrow opcional) para tabelas de patch grandes (milhões de linhas).
-- **GeoPackage / GeoDataFrame** (geopandas opcional) para resultados zonais:
-  métricas por polígono já com a geometria.
-- **Rasters de métricas**: `to_raster()` já existe para métricas de patch. Poderia
-  aceitar métricas de classe (pintando cada classe) e gravar direto com
-  `write_raster`.
+- Tabelas de patch muito grandes (dezenas de milhões de linhas) poderiam ir direto
+  para Parquet em pedaços (pyarrow), sem montar o DataFrame inteiro na memória.
 
 ## Análises no estilo pylandstats
 
@@ -122,3 +114,7 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
    `econ`, `cwed`, `teci` e as estatísticas de `prox`/`simi`/`econ`) e
    `convention="fragstats"` (perímetro físico com células não quadradas, `dcore_*`
    sobre os tamanhos das áreas core). **Feita.**
+9. Exportação e integração: `write_table` (CSV, Parquet, GeoPackage...),
+   `zonal_metrics` (GeoDataFrame por zona), `to_raster` de métricas de classe e com
+   gravação, `scale_sample` (bit a bit com o landscapemetrics) e `batch()` com
+   `"landscape_metrics"` / `"window_metrics"` (tabelas CSV ou Parquet). **Feita.**

@@ -27,7 +27,7 @@ suppressPackageStartupMessages({
     library(landscapemetrics)
 })
 
-opts <- list(shape = "square", size = NULL, all_classes = FALSE, vector = FALSE,
+opts <- list(shape = "square", size = NULL, sizes = NULL, all_classes = FALSE, vector = FALSE,
              level = c("patch", "class", "landscape"),
              directions = 8, count_boundary = FALSE, consider_boundary = FALSE,
              edge_depth = 1, cell_center = FALSE, classes_max = NULL,
@@ -39,6 +39,7 @@ for (kv in args[-(1:3)]) {
     opts[[key]] <- switch(key,
         directions = , edge_depth = , neighbourhood = as.integer(value),
         size = , classes_max = if (value == "NULL") NULL else as.numeric(value),
+        sizes = as.numeric(strsplit(value, ",")[[1]]),
         all_classes = , vector = , count_boundary = , consider_boundary = , cell_center = , ordered = as.logical(value),
         shape = , base = value,
         level = strsplit(value, ",")[[1]])
@@ -57,6 +58,20 @@ plot_id <- if ("plot_id" %in% names(plots)) plots$plot_id else NULL
 
 what <- list_lsm(level = opts$level, simplify = TRUE)
 if (!isTRUE(all.equal(terra::res(r)[[1]], terra::res(r)[[2]]))) what <- what[!grepl("circle", what)]
+if (!is.null(opts$sizes)) {
+    # scale_sample: the metrics at several buffer sizes (points only)
+    res <- suppressWarnings(scale_sample(
+        r, y, shape = opts$shape, size = opts$sizes, what = what, verbose = FALSE,
+        directions = opts$directions, count_boundary = opts$count_boundary,
+        consider_boundary = opts$consider_boundary, edge_depth = opts$edge_depth,
+        cell_center = opts$cell_center, classes_max = opts$classes_max,
+        neighbourhood = opts$neighbourhood, ordered = opts$ordered, base = opts$base))
+    out <- data.frame(level = res$level, class = res$class, id = res$id, metric = res$metric,
+                      value = sprintf("%.17g", res$value), size = sprintf("%.17g", res$size),
+                      plot_id = res$plot_id, percentage_inside = sprintf("%.17g", res$percentage_inside))
+    write.csv(out, args[[3]], row.names = FALSE, quote = FALSE, na = "NA")
+    quit(save = "no")
+}
 res <- suppressWarnings(sample_lsm(
     r, y, plot_id = plot_id, shape = opts$shape, size = opts$size,
     all_classes = opts$all_classes, what = what, verbose = FALSE,

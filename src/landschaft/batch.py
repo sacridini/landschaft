@@ -278,12 +278,13 @@ BATCH_TOOLS: tuple[str, ...] = (
     "euclidean_distance", "fad", "fad_multiscale", "fos", "gray_spatial_convolution", "gtn_components", "gtn_importance",
     "influence_zones", "landscape_mosaic", "landscape_mosaic_heatmap", "landscape_mosaic_stats", "mspa",
     "parcellation", "proximity", "reclassify", "restoration_status", "spa", "spatial_entropy",
-    "spatial_entropy_map",
+    "spatial_entropy_map", "landscape_metrics", "window_metrics",
 )
 
 # Peak memory per pixel of the tools that need more than MSPA's 32 bytes.
 _TOOL_BYTES_PER_PIXEL = {"fad_multiscale": 64, "landscape_mosaic": 48, "landscape_mosaic_heatmap": 48,
-                         "influence_zones": 80, "proximity": 96, "gtn_importance": 64, "euclidean_distance": 48}
+                         "influence_zones": 80, "proximity": 96, "gtn_importance": 64, "euclidean_distance": 48,
+                         "landscape_metrics": 64, "window_metrics": 48}
 
 
 def _resolve_tool(tool) -> tuple[str, Callable]:
@@ -335,8 +336,8 @@ def _writable(value):
     return value.copy(data=arr) if isinstance(value, xr.DataArray) else arr
 
 
-def _write_outputs(result, base: Path) -> tuple[list[Path], dict[str, Any]]:
-    """Write every map (GeoTIFF), table (CSV) and report (TXT) of a tool result."""
+def _write_outputs(result, base: Path, table_format: str = "csv") -> tuple[list[Path], dict[str, Any]]:
+    """Write every map (GeoTIFF), table (CSV or Parquet) and report (TXT) of a tool result."""
     outputs: list[Path] = []
     values: dict[str, Any] = {}
 
@@ -349,8 +350,13 @@ def _write_outputs(result, base: Path) -> tuple[list[Path], dict[str, Any]]:
         if _is_map(value):
             outputs.append(write_raster(_writable(value), name_for(key, ".tif")))
         elif isinstance(value, pd.DataFrame):
-            path = name_for(key, ".csv")
-            value.to_csv(path, index=not isinstance(value.index, pd.RangeIndex))
+            if table_format == "parquet":
+                path = name_for(key, ".parquet")
+                frame = value if isinstance(value.index, pd.RangeIndex) else value.reset_index()
+                frame.to_parquet(path, index=False)
+            else:
+                path = name_for(key, ".csv")
+                value.to_csv(path, index=not isinstance(value.index, pd.RangeIndex))
             outputs.append(path)
         elif isinstance(value, dict):
             for k, v in value.items():
@@ -392,6 +398,7 @@ def batch(
     max_memory: int | str | None = None,
     overwrite: bool = False,
     raise_errors: bool = False,
+    table_format: str = "csv",
     **params,
 ) -> list[BatchResult]:
     """Run a landschaft tool on many rasters in parallel and write its outputs.
@@ -402,7 +409,9 @@ def batch(
 
     - maps: ``<name>_<tool>[_<field>].tif`` (GeoTIFF with the input's
       georeferencing and, for GTB products, GTB's colour table);
-    - tables: ``<name>_<tool>_<field>.csv``; the text report (``summary()``):
+    - tables: ``<name>_<tool>_<field>.csv`` (``.parquet`` with
+      ``table_format="parquet"``; ``"landscape_metrics"`` writes its long
+      table as ``<name>_landscape_metrics.csv``); the text report (``summary()``):
       ``<name>_<tool>.txt``; GTB's CSV report when the tool has one:
       ``<name>_<tool>_gtb.csv``;
     - ``<name>_<tool>.json``: tool, parameters, output files, scalar results
@@ -423,6 +432,8 @@ def batch(
     n_workers, threads_per_worker, max_memory, overwrite, raise_errors
         As in :func:`mspa_batch`. ``threads_per_worker`` is passed to the
         tool's ``n_threads``/``threads`` argument.
+    table_format
+        "csv" (default) or "parquet" (needs pyarrow) for the tables.
     **params
         Parameters of the tool, e.g. ``variant=6`` for ``"spa"``.
 
@@ -432,6 +443,8 @@ def batch(
         One entry per input, in input order; ``outputs`` lists every file written.
     """
     name, fn = _resolve_tool(tool)
+    if table_format not in ("csv", "parquet"):
+        raise ValueError("table_format must be 'csv' or 'parquet'")
     if name == "mspa":
         return mspa_batch(inputs, output_dir, n_workers=n_workers, threads_per_worker=threads_per_worker,
                           max_memory=max_memory, overwrite=overwrite, raise_errors=raise_errors, **params)
@@ -456,9 +469,12 @@ def batch(
             if meta_path.exists() and not overwrite:
                 files = [Path(f) for f in json.loads(meta_path.read_text()).get("outputs", [])]
                 return BatchResult(src, files[0] if files else meta_path, 0.0, outputs=files + [meta_path])
-            data = load_raster(src, band=band, validate=None)
+            if name == "landscape_metrics" and call_params.get("block_rows") is not None:
+                data = src  # read by blocks, not into memory
+            else:
+                data = load_raster(src, band=band, validate=None)
             result = fn(data, **call_params)
-            outputs, values = _write_outputs(result, base)
+            outputs, values = _write_outputs(result, base, table_format)
             seconds = time.perf_counter() - start
             meta_path.write_text(json.dumps({
                 "tool": name, "input": str(src), "params": _json_value(params),

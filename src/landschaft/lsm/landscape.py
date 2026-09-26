@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import functools
 import os
+from pathlib import Path
 import warnings
 from collections.abc import Iterable, Sequence
 from typing import Any
@@ -397,14 +398,56 @@ class Landscape:
         if self._tiled is not None:
             self._tiled.ensure(metrics)
 
-    def to_raster(self, metric: str) -> xr.DataArray | np.ndarray:
-        """Patch-level metric painted on its patches (NaN where NA).
+    def to_raster(self, metric, level: str | None = None, path=None, **write_options):
+        """Metric painted on the map (NaN where NA): a patch-level metric on
+        its patches (landscapemetrics' ``spatialize_lsm``), a class-level one
+        on the cells of each class.
 
-        The equivalent of landscapemetrics' ``spatialize_lsm``.
+        Parameters
+        ----------
+        metric
+            A metric name, or a list of them (then a dict ``{name: raster}``).
+        level
+            "patch" or "class"; by default the patch level if the metric
+            exists there, else the class level.
+        path
+            Write the raster to this GeoTIFF (``write_raster``; with a list, a
+            directory: one ``<metric>.tif`` each), and return the path(s).
         """
         self._no_raster("to_raster")
-        values = np.concatenate([[np.nan], self._patch_values(metric)])
-        return self._wrap(values[self._core.labels()], metric)
+        if not isinstance(metric, str):
+            names = list(metric)
+            if path is not None:
+                folder = Path(path)
+                folder.mkdir(parents=True, exist_ok=True)
+                return {m: self.to_raster(m, level, folder / f"{m}.tif", **write_options) for m in names}
+            return {m: self.to_raster(m, level) for m in names}
+        if level is None:
+            level = "patch" if canonical_name(metric, "patch") in _patch_names() else "class"
+        labels = np.asarray(self._core.labels())
+        if level == "patch":
+            values = np.concatenate([[np.nan], self._patch_values(metric)])
+            out = values[labels]
+        elif level == "class":
+            (name,), _ = _names(metric, "class")
+            self._ensure([name])
+            per_class = self._core.class_metric(name)
+            pclass = np.concatenate([[-1], self._core.patch_class()])
+            cell_class = pclass[labels]
+            out = np.where(cell_class >= 0, per_class[np.maximum(cell_class, 0)], np.nan)
+        else:
+            raise ValueError("level must be 'patch' or 'class'")
+        raster = self._wrap(out, metric)
+        if path is None:
+            return raster
+        from ..io import write_raster
+
+        if isinstance(raster, np.ndarray):
+            xmin, _, _, ymax = self._extent
+            from rasterio.transform import Affine
+
+            write_options.setdefault("transform", Affine(self.resolution[0], 0, xmin, 0, -self.resolution[1], ymax))
+        return write_raster(raster, path, colormap=None, **write_options)
 
     @property
     def extent(self) -> tuple[float, float, float, float]:
@@ -618,6 +661,10 @@ class Landscape:
         chosen = chosen_metrics(level, metric, name, type, what, extras)
         self._ensure(chosen["metric"])
         return long_frame(self._core.long_table(*metric_specs(chosen)), chosen)
+
+
+def _patch_names() -> set:
+    return set(select_metrics(level="patch", extras=True)["metric"])
 
 
 def _transform(template):

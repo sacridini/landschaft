@@ -873,6 +873,23 @@ column, so its windows are transposed (no effect on square windows over square
 cells) or scrambled (rectangular windows); landschaft keeps the geometry. And
 `window_lsm` fails for `gyrate_*` (it does not pass `cell_center`), which work here.
 
+**`scale_sample`** runs `sample_metrics` for several buffer sizes (a `size` column),
+ordered like landscapemetrics' `scale_sample` (plot, level, metric, class, id, size);
+points only.
+
+**Zonal results and export.** `zonal_metrics(data, zones)` cuts the polygons out like
+`sample_metrics` and returns a GeoDataFrame: the zones' geometry and attributes, one
+column per landscape metric and one per class metric and class (`ca_11`, `pland_42`...),
+and `percentage_inside`. `write_table(table, path)` writes any metric table by extension:
+`.csv`, `.csv.gz`, `.parquet` (pyarrow; keeps the categorical and nullable columns,
+compact for patch tables with millions of rows) or, for GeoDataFrames, `.gpkg`,
+`.geojson`, `.shp`, `.fgb`. `Landscape.to_raster(metric)` paints a patch metric on the
+patches or a class metric on the cells of each class, several at once with a list, and
+writes GeoTIFFs with `path=`. `batch("landscape_metrics", inputs, out, **options)` writes
+one long table per raster (`<name>_landscape_metrics.csv`, or `.parquet` with
+`table_format="parquet"`) plus the JSON record; with `block_rows` the files are read by
+blocks; `batch("window_metrics", ...)` writes one GeoTIFF per metric.
+
 **Several rasters** (`landscape_metrics(list)`, and lists in `sample_metrics` /
 `window_metrics`) are computed side by side when they are small and one after the
 other, each in parallel, when they are large.

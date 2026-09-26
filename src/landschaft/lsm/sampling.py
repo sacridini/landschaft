@@ -24,7 +24,7 @@ from .landscape import (
     metric_specs,
 )
 
-__all__ = ["sample_metrics", "window_metrics"]
+__all__ = ["sample_metrics", "scale_sample", "window_metrics"]
 
 
 # -- sample plots ---------------------------------------------------------------
@@ -336,6 +336,60 @@ def sample_metrics(
     out = frames[0] if single else pd.concat(frames, ignore_index=True)
     if verbose and (out["percentage_inside"] < 90).any():
         warnings.warn("percentage_inside is below 90% for at least one plot", stacklevel=2)
+    return out
+
+
+def scale_sample(
+    data,
+    y,
+    *,
+    size,
+    shape: str = "square",
+    level=None,
+    metric=None,
+    name=None,
+    type=None,
+    what=None,
+    verbose: bool = True,
+    **options,
+) -> pd.DataFrame:
+    """Landscape metrics of buffers of several sizes around points, like
+    landscapemetrics' ``scale_sample``.
+
+    :func:`sample_metrics` for each buffer size in ``size`` (the plots of all
+    sizes are computed in parallel). ``y``: an ``(n, 2)`` array of
+    coordinates or point geometries; other arguments as in
+    :func:`sample_metrics`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        ``level``, ``class``, ``id``, ``metric``, ``value``, ``size``,
+        ``plot_id``, ``percentage_inside`` (plus ``layer``), ordered by
+        (layer,) plot, level, metric, class, id and size.
+    """
+    sizes = [float(s) for s in np.atleast_1d(size)]
+    if not sizes or any(s <= 0 for s in sizes):
+        raise ValueError("size must be one or more positive buffer sizes")
+    try:
+        coords = np.asarray(y, dtype=float)
+        is_matrix = coords.ndim == 2 and coords.shape[1] == 2
+    except (TypeError, ValueError):
+        is_matrix = False
+    if not is_matrix and any(g["type"] not in ("Point", "MultiPoint") for g in _geometries(y)):
+        raise ValueError("scale_sample takes points")
+    frames = []
+    for s in sizes:
+        df = sample_metrics(data, y, size=s, shape=shape, level=level, metric=metric, name=name, type=type,
+                            what=what, verbose=False, **options)
+        df.insert(df.columns.get_loc("plot_id"), "size", s)
+        frames.append(df)
+    out = pd.concat(frames, ignore_index=True)
+    keys = (["layer"] if "layer" in out.columns else []) + ["plot_id", "level", "metric", "class", "id", "size"]
+    tmp = out.assign(level=out["level"].astype(str), metric=out["metric"].astype(str))
+    out = out.loc[tmp.sort_values(keys, kind="stable", na_position="last").index].reset_index(drop=True)
+    if verbose and (out["percentage_inside"] < 90).any():
+        warnings.warn("percentage_inside is below 90% for at least one buffer", stacklevel=2)
     return out
 
 

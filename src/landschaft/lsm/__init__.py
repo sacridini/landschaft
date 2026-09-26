@@ -3,7 +3,8 @@
 
 from .catalog import list_metrics
 from .landscape import Landscape, landscape_metrics
-from .sampling import sample_metrics, window_metrics
+from .export import write_table, zonal_metrics
+from .sampling import sample_metrics, scale_sample, window_metrics
 from .utils import calculate_correlation, check_landscape, extract_metrics, raster_boundaries
 
 __all__ = [
@@ -15,5 +16,8 @@ __all__ = [
     "list_metrics",
     "raster_boundaries",
     "sample_metrics",
+    "scale_sample",
     "window_metrics",
+    "write_table",
+    "zonal_metrics",
 ]

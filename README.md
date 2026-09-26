@@ -134,6 +134,10 @@ lc.centroids(); lc.nearest_neighbours(return_id=True)            # get_centroids
 lc.adjacencies(8); lc.boundaries(edge_depth=2); lc.circumscribing_circles()
 ls.extract_metrics("landcover.tif", points_xy)                   # extract_lsm
 ls.calculate_correlation(lc.metrics(level="class"))             # calculate_correlation
+ls.scale_sample("landcover.tif", points_xy, size=[250, 500, 1000])  # scale_sample
+ls.write_table(ls.zonal_metrics("landcover.tif", gdf_zones), "zones.gpkg")   # zonal results with geometry
+lc.to_raster("pland", path="pland.tif")                         # class metric as a GeoTIFF
+ls.batch("landscape_metrics", "maps/*.tif", "out", table_format="parquet")
 ```
 
 Options are those of landscapemetrics (`directions`, `count_boundary`,
@@ -207,6 +211,7 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `window_metrics(data, window, level="landscape", metric=None, name=None, type=None, what=None, *, extras=False, n_threads=None, **options)` | landscapemetrics' `window_lsm`: landscape-level metrics in a moving window (odd side or any odd-sized shape), as `{metric: raster}`. |
 | `Landscape.centroids`, `.nearest_neighbours`, `.circumscribing_circles`, `.adjacencies`, `.boundaries`, `.patches`, `.extract_metrics` | landscapemetrics' `get_centroids`, `get_nearestneighbour`, `get_circumscribingcircle`, `get_adjacencies`, `get_boundaries`, `get_patches`, `extract_lsm` (same values). |
 | `extract_metrics(data, y, *, extract_id=None, ...)`, `raster_boundaries(data, ...)`, `check_landscape(data)`, `calculate_correlation(metrics, method="pearson")` | landscapemetrics' `extract_lsm` (lists of rasters too), `get_boundaries` on raster values, `check_landscape`, `calculate_correlation`. |
+| `scale_sample(data, y, *, size, shape="square", ...)`, `zonal_metrics(data, zones, level="landscape", ...)`, `write_table(table, path)` | landscapemetrics' `scale_sample`; class/landscape metrics per polygon as a GeoDataFrame; tables to CSV, Parquet or vector files. |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |

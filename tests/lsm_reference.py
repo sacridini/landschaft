@@ -103,6 +103,8 @@ def run_sample(rscript: os.PathLike, tif: os.PathLike, plots: pd.DataFrame, **op
         _run_r(rscript, R_SAMPLE_SCRIPT, [tif, plots_csv, out], options)
         df = read_reference(out)
         df["percentage_inside"] = df["percentage_inside"].astype(float)
+        if "size" in df.columns:
+            df["size"] = df["size"].astype(float)
         return df
 
 

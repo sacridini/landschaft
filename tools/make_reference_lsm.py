@@ -236,6 +236,10 @@ def sample_cases() -> dict[str, tuple]:
             "synthetic_na.tif", polygons,
             {"consider_boundary": True, "edge_depth": 2, "count_boundary": True, "directions": 4},
         ),
+        # scale_sample: several buffer sizes
+        "augusta_scale_square": ("augusta.tif", points, {"shape": "square", "sizes": "150,450,900"}),
+        "augusta_scale_circle": ("augusta.tif", points.iloc[:4], {"shape": "circle", "sizes": "300,700",
+                                                                   "directions": 4}),
     }
 
 
@@ -261,10 +265,15 @@ def window_cases() -> dict[str, tuple]:
     }
 
 
-def make_sample(rscript) -> None:
+def make_sample(rscript, force: bool = False) -> None:
+    """sample_lsm / scale_sample references; existing ones are kept unless
+    `force` (landscapemetrics' random circles would change their last bits)."""
     OUT_SAMPLE.mkdir(parents=True, exist_ok=True)
-    files = {}
+    manifest = OUT_SAMPLE / "manifest.json"
+    files = json.loads(manifest.read_text())["files"] if manifest.exists() and not force else {}
     for name, (tif, plots, options) in sample_cases().items():
+        if f"{name}.csv.gz" in files and (OUT_SAMPLE / f"{name}.csv.gz").exists():
+            continue
         df = lsm_reference.run_sample(rscript, INPUTS / tif, plots, **options)
         target = OUT_SAMPLE / f"{name}.csv.gz"
         df.to_csv(target, index=False, float_format="%.17g", compression={"method": "gzip", "mtime": 0})
@@ -298,7 +307,7 @@ def write_manifest(folder: Path, rscript, files: dict, extra: dict | None = None
 
 
 def main() -> None:
-    parts = set(sys.argv[1:]) or {"lsm", "sample", "window", "rmath", "utils"}
+    parts = {a for a in sys.argv[1:] if not a.startswith("--")} or {"lsm", "sample", "window", "rmath", "utils"}
     unknown = parts - {"lsm", "sample", "window", "rmath", "utils"}
     if unknown:
         sys.exit(f"unknown part(s): {sorted(unknown)}")
@@ -308,7 +317,7 @@ def main() -> None:
     if "lsm" in parts:
         make_lsm(rscript)
     if "sample" in parts:
-        make_sample(rscript)
+        make_sample(rscript, force="--force" in sys.argv)
     if "rmath" in parts:
         make_rmath(rscript)
     if "utils" in parts:

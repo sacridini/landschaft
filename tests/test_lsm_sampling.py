@@ -27,7 +27,7 @@ SAMPLE_DIR = DATA / "reference" / "lsm_sample"
 WINDOW_DIR = DATA / "reference" / "lsm_window"
 SAMPLE_MANIFEST = json.loads((SAMPLE_DIR / "manifest.json").read_text())
 WINDOW_MANIFEST = json.loads((WINDOW_DIR / "manifest.json").read_text())
-SAMPLE_ARGS = {"shape", "size", "all_classes", "level"}
+SAMPLE_ARGS = {"shape", "size", "sizes", "all_classes", "level"}
 
 
 def assert_window_equal(ours: np.ndarray, ref: np.ndarray, label: str, metric: str) -> None:
@@ -38,7 +38,7 @@ def assert_window_equal(ours: np.ndarray, ref: np.ndarray, label: str, metric: s
 
 
 def compare_sample(ours: pd.DataFrame, ref: pd.DataFrame, label: str) -> None:
-    keys = ["level", "class", "id", "metric", "plot_id"]
+    keys = ["level", "class", "id", "metric", "plot_id"] + (["size"] if "size" in ours.columns else [])
     ours = ours.assign(level=ours["level"].astype(str), metric=ours["metric"].astype(str))
     merged = ours.merge(ref, on=keys, how="outer", suffixes=("", "_ref"), indicator=True)
     missing = merged[merged["_merge"] != "both"]
@@ -87,9 +87,16 @@ def test_sample_matches_landscapemetrics(fname):
     y, kwargs, options = sample_input(info)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        ours = ls.sample_metrics(DATA / "lsm" / info["input"], y, **kwargs, **options)
+        if "sizes" in kwargs:  # scale_sample
+            sizes = [float(v) for v in str(kwargs.pop("sizes")).split(",")]
+            ours = ls.scale_sample(DATA / "lsm" / info["input"], y, size=sizes, **kwargs, **options)
+        else:
+            ours = ls.sample_metrics(DATA / "lsm" / info["input"], y, **kwargs, **options)
     ref = lsm_reference.read_reference(SAMPLE_DIR / fname)
     ref["percentage_inside"] = ref["percentage_inside"].astype(float)
+    if "size" in ref.columns:
+        ref["size"] = ref["size"].astype(float)
+        assert ours["size"].tolist() == ref["size"].tolist()  # scale_sample's row order
     if not ref["metric"].str.startswith("circle").any():  # non-square cells
         ours = ours[~ours["metric"].astype(str).str.startswith("circle")].reset_index(drop=True)
     compare_sample(ours, ref, fname)

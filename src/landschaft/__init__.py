@@ -79,7 +79,10 @@ from .lsm import (
     list_metrics,
     raster_boundaries,
     sample_metrics,
+    scale_sample,
     window_metrics,
+    write_table,
+    zonal_metrics,
 )
 from .lm_heatmap import LMHeatmap, LMHeatmapChange, landscape_mosaic_change, landscape_mosaic_heatmap
 from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
@@ -210,6 +213,7 @@ __all__ = [
     "restoration_corridor",
     "restoration_status",
     "sample_metrics",
+    "scale_sample",
     "simple_change",
     "spa",
     "tile_layout",
@@ -218,7 +222,9 @@ __all__ = [
     "validate_fad_input",
     "validate_mspa_input",
     "window_metrics",
+    "write_table",
     "write_raster",
+    "zonal_metrics",
 ]
 
 

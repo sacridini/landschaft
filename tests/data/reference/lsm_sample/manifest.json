@@ -66,6 +66,25 @@
         "directions": 4
       },
       "rows": 1623
+    },
+    "augusta_scale_square.csv.gz": {
+      "input": "augusta.tif",
+      "plots": "augusta_scale_square__plots.csv",
+      "options": {
+        "shape": "square",
+        "sizes": "150,450,900"
+      },
+      "rows": 30453
+    },
+    "augusta_scale_circle.csv.gz": {
+      "input": "augusta.tif",
+      "plots": "augusta_scale_circle__plots.csv",
+      "options": {
+        "shape": "circle",
+        "sizes": "300,700",
+        "directions": 4
+      },
+      "rows": 14109
     }
   }
 }
