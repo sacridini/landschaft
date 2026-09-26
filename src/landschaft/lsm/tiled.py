@@ -170,6 +170,13 @@ class TiledReader:
     def ensure(self, metric_names) -> None:
         """Run the detail pass for the metrics that need it (once)."""
         families = {name.split("_")[0] for name in metric_names}
+        raster_only = families & {"prox", "simi", "econ", "connect"}
+        if self.options.get("convention") == "fragstats" and "dcore" in families:
+            raster_only.add("dcore (convention='fragstats')")
+        if raster_only:
+            raise NotImplementedError(
+                f"{sorted(raster_only)} are not available for an out-of-core landscape (block_rows)"
+            )
         need = {DETAIL_FAMILIES[f] for f in families if f in DETAIL_FAMILIES} - self.done
         if not need:
             return

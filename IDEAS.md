@@ -6,18 +6,13 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Métricas e estatísticas extras
 
-- **Métricas do FRAGSTATS que não estão no landscapemetrics**: PROX (índice de
-  proximidade, com `search_radius`; o pylandstats tem), SIMI (similaridade),
-  CONNECT (conectância), contraste de borda (CWED, TECI, ECON, com matriz de pesos),
-  RMN.
-- **Modo "FRAGSTATS estrito"** (opção, p. ex. `convention="fragstats"`) que corrija
-  convenções do landscapemetrics:
-  - perímetro com células não quadradas: o landscapemetrics multiplica as arestas
-    entre vizinhos esquerda/direita pela resolução x (fisicamente seria a y);
-  - `dcore_*` resumem o *número* de áreas core por patch (`ncore`), e não o
-    tamanho das áreas core disjuntas como no FRAGSTATS;
-  - `calculate_lsm` usa `neighbourhood` também em `te`, `ed`, `iji` e `contag`
-    (seguimos as funções `lsm_*` individuais, que usam sempre 4 vizinhos).
+- Outras diferenças possíveis no `convention="fragstats"`: SHAPE e LSI na forma
+  raster do FRAGSTATS (perímetro / perímetro mínimo, como o pylandstats) e o círculo
+  circunscrito sobre todos os cantos das células de borda (o landscapemetrics usa só
+  as células das linhas e colunas extremas). PROX com a área só da parte do vizinho
+  dentro do raio (a documentação do FRAGSTATS é ambígua; usamos a área inteira).
+  Sem o FRAGSTATS para comparar, as métricas FRAGSTATS-only foram testadas contra
+  implementações diretas das definições.
 
 ## Uso e API
 
@@ -123,3 +118,7 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
    `get_circumscribingcircle`, `get_adjacencies`, `get_boundaries`, `get_patches`,
    `extract_lsm`, `check_landscape`, `calculate_correlation`), bit a bit. **Feita.**
    Fora da memória (`block_rows`) esses utilitários não existem (precisam do raster).
+8. Métricas do FRAGSTATS que o landscapemetrics não tem (`prox`, `simi`, `connect`,
+   `econ`, `cwed`, `teci` e as estatísticas de `prox`/`simi`/`econ`) e
+   `convention="fragstats"` (perímetro físico com células não quadradas, `dcore_*`
+   sobre os tamanhos das áreas core). **Feita.**

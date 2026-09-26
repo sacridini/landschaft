@@ -734,6 +734,41 @@ the names as asked. The `metric=` filter accepts family aliases (`"shape_index"`
 **Threads.** `n_threads` (in `Landscape`, `landscape_metrics`, `sample_metrics`,
 `window_metrics`) limits the C++ core; the results do not depend on it.
 
+**FRAGSTATS-only metrics** (extras; landscapemetrics has none of them):
+
+```python
+contrast = {(1, 2): 0.2, (1, 3): 0.7, (2, 3): 0.5}        # or a class x class DataFrame
+lc = ls.Landscape("landcover.tif", search_radius=500, connect_threshold=100,
+                  contrast=contrast, boundary_contrast=0.0, similarity={(1, 2): 0.5})
+lc.patch_metrics(["prox", "simi", "econ"])
+lc.class_metrics(["connect", "cwed", "teci", "prox_mn", "econ_am"])
+```
+
+| metric | level | definition |
+|---|---|---|
+| `prox` | patch (+ stats) | Σ over the other patches of the class within `search_radius`: area (m²) / distance² |
+| `simi` | patch (+ stats) | the same over the patches of all classes, weighted by the `similarity` of the classes (1 within a class; without a table `simi = prox`) |
+| `connect` | class, landscape | % of the pairs of patches of a class within `connect_threshold` |
+| `econ` | patch (+ stats) | Σ edge length × contrast / perimeter × 100 (edges to NA and the map edge weigh `boundary_contrast`) |
+| `cwed` | class, landscape | Σ edge length × contrast / total area (m/ha); NA and map-edge edges count with `count_boundary` |
+| `teci` | class, landscape | Σ edge length × contrast / Σ edge length × 100, all edges (FRAGSTATS' E*) |
+
+Distances between patches are the shortest distances between their cell centres, as
+for `enn` and in FRAGSTATS; the neighbour's whole area counts in `prox`/`simi`. Without
+`search_radius`, `connect_threshold` or a `contrast` table the metrics are NaN; contrast
+pairs missing from the table give NaN too. The pairs of patches within reach come from a
+range search over the boundary cells, one focal patch at a time (2000×2000 with 223,000
+patches: `prox` 0.2 s with a 3-cell radius, 2 s with 30 cells). These metrics need the
+raster, except `cwed` and `teci`, which also work out of core. There is no FRAGSTATS to
+compare with here: they are tested against direct implementations of the definitions.
+
+**`convention="fragstats"`** changes two landscapemetrics conventions: with non-square
+cells the sides between left/right neighbours are as long as the cell *height* (the
+physical perimeter; landscapemetrics multiplies them by the width), for `perim`, `te`,
+`ed` and everything built on them; and `dcore_*` summarise the sizes (ha) of the
+disjunct core areas of the class or landscape (`dcore_am` weighted by those sizes),
+not the number of core areas per patch. Both agree with pylandstats.
+
 ### Bit-identical arithmetic
 
 R computes `sum()`, `mean()` and `var()` in `long double`, the 80-bit x87 type with a

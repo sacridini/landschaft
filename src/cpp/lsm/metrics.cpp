@@ -131,6 +131,10 @@ double slope(const double* x, const double* y, i64 n) {
 
 }  // namespace
 
+double reduce_statistic(const std::string& stat, const double* x, i64 n, const double* w) {
+    return reduce(stat, x, n, w);
+}
+
 std::vector<double> r_statistics(const std::vector<double>& x) {
     const auto n = static_cast<i64>(x.size());
     const double mean = r_mean(x.data(), n);
@@ -162,6 +166,9 @@ double r_signif(double x, int digits) {
 }
 
 double Landscape::edge_length(i64 h, i64 v) const {
+    // left/right sides are vertical: FRAGSTATS takes the cell height for
+    // them, landscapemetrics the cell width
+    if (options_.fragstats) return static_cast<double>(h) * resy_ + static_cast<double>(v) * resx_;
     if (resx_ == resy_) return static_cast<double>(h + v) * resx_;
     return static_cast<double>(h) * resx_ + static_cast<double>(v) * resy_;
 }
@@ -205,10 +212,11 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
     if (name == "area") {
         for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(pt.cells[i]) * factor_ha;
     } else if (name == "perim") {
-        const bool equal = res_all_equal();
+        const bool equal = res_all_equal() && !options_.fragstats;
+        const auto [lh, lv] = side_lengths();
         for (i64 i = 0; i < n; ++i) {
             out[i] = equal ? static_cast<double>(pt.edge_h[i] + pt.edge_v[i]) * resx_
-                           : static_cast<double>(pt.edge_h[i]) * resx_ + static_cast<double>(pt.edge_v[i]) * resy_;
+                           : static_cast<double>(pt.edge_h[i]) * lh + static_cast<double>(pt.edge_v[i]) * lv;
         }
     } else if (name == "para" || name == "shape" || name == "frac") {
         const std::vector<double>& area = patch_base("area");
@@ -242,6 +250,12 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
         // landscapemetrics' dcore_* summarise the number of core areas
         const Core& core = this->core();
         for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(core.areas[i]);
+    } else if (name == "econ") {
+        if (tables_only_) throw std::logic_error("econ is not available for an out-of-core landscape");
+        out = econ();
+    } else if (name == "prox" || name == "simi") {
+        if (tables_only_) throw std::logic_error(name + " is not available for an out-of-core landscape");
+        out = proximity(name == "simi");
     } else if (name == "cai") {
         const std::vector<double> area = patch_base("area");
         const std::vector<double> core = patch_base("core");
@@ -351,6 +365,14 @@ std::vector<double> Landscape::patch_metric(const std::string& name) { return pa
 std::vector<double> Landscape::stat_values(const std::string& base, const std::string& stat, bool by_class) {
     const int slot = stat_slot(base, stat, by_class);
     if (slot >= 0 && stat_done_[slot]) return stat_cache_[slot];
+    if (base == "dcore" && options_.fragstats) {
+        std::vector<double> out = dcore_sizes(stat, by_class);
+        if (slot >= 0) {
+            stat_cache_[slot] = out;
+            stat_done_[slot] = true;
+        }
+        return out;
+    }
     const std::vector<double>& x = patch_base(base);
     const std::vector<double>& w = patch_base("area");
     std::vector<double> mean, sd;
@@ -374,8 +396,8 @@ std::vector<double> Landscape::stat_values(const std::string& base, const std::s
 
 // Slot of a summary statistic in stat_cache_, -1 for other patch metrics.
 int Landscape::stat_slot(const std::string& base, const std::string& stat, bool by_class) {
-    static const char* const kBases[] = {"area", "cai",  "circle", "contig", "core",  "dcore", "enn",
-                                         "frac", "gyrate", "ncore", "para", "perim", "shape"};
+    static const char* const kBases[] = {"area",  "cai",  "circle", "contig", "core", "dcore", "enn",   "frac",
+                                         "gyrate", "ncore", "para", "perim", "shape", "prox", "simi", "econ"};
     int b = -1;
     for (int i = 0; i < kStatBases; ++i) {
         if (base == kBases[i]) b = i;
@@ -400,6 +422,7 @@ void Landscape::prepare(const std::vector<MetricSpec>& specs) {
     std::vector<Task> wanted;
     for (const MetricSpec& spec : specs) {
         if (spec.level == kPatch || n_classes() == 0) continue;
+        if (options_.fragstats && spec.name.compare(0, 6, "dcore_") == 0) continue;  // per core area
         for (const char* stat : kStats) {
             const std::string suffix = std::string("_") + stat;
             const std::string& name = spec.name;
@@ -617,6 +640,11 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
         });
     }
     if (name == "te") return class_te();
+    if (name == "connect") {
+        if (tables_only_) throw std::logic_error("connect is not available for an out-of-core landscape");
+        return connectance(true);
+    }
+    if (name == "cwed" || name == "teci") return contrast_edges(name == "teci", true);
     if (name == "ed") {
         std::vector<double> te = class_te();
         for (double& v : te) v = v / ta;
@@ -770,6 +798,11 @@ double Landscape::landscape_metric_impl(const std::string& name) {
         return m;
     }
     if (name == "te") return landscape_te();
+    if (name == "connect") {
+        if (tables_only_) throw std::logic_error("connect is not available for an out-of-core landscape");
+        return connectance(false)[0];
+    }
+    if (name == "cwed" || name == "teci") return contrast_edges(name == "teci", false)[0];
     if (name == "ed") return landscape_te() / ta;
     if (name == "division") {
         return 1 - sum_of(0, np, [&](i64 i) {

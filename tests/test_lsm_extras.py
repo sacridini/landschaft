@@ -156,8 +156,13 @@ class TestSelection:
         default = ls.list_metrics()
         assert len(default) == 133 and not default["extra"].any()
         full = ls.list_metrics(extras=True)
-        assert set(full.loc[full["extra"], "metric"].str.split("_").str[1]) == {"am", "md", "ra", "mn", "sd", "cv"}
-        assert set(full.loc[full["extra"], "level"]) == {"class", "landscape"}
+        extra = full[full["extra"]]
+        stats = extra[extra["metric"].str.contains("_")]
+        assert set(stats["metric"].str.split("_").str[1]) == {"am", "md", "ra", "mn", "sd", "cv"}
+        assert set(stats["level"]) == {"class", "landscape"}
+        assert set(extra.loc[~extra["metric"].str.contains("_"), "metric"]) == {
+            "prox", "simi", "econ", "connect", "cwed", "teci",
+        }
         assert ls.list_metrics(metric="area", level="class", extras=True)["metric"].tolist() == [
             "area_am", "area_cv", "area_md", "area_mn", "area_ra", "area_sd",
         ]
@@ -258,5 +263,7 @@ def test_reference_maps_extras_are_finite():
     sub = df[df["metric"].isin(extra)]
     assert set(sub["metric"]) == extra
     # NA only where landscapemetrics' statistics are NA too (enn of single patches, sd of one value)
-    plain = ~sub["metric"].str.startswith("enn") & ~sub["metric"].str.endswith(("_sd", "_cv"))
+    # (prox, simi, connect and the contrast metrics need their parameters: NaN here)
+    needs = ("enn", "prox", "simi", "connect", "econ", "cwed", "teci")
+    plain = ~sub["metric"].str.startswith(needs) & ~sub["metric"].str.endswith(("_sd", "_cv"))
     assert sub.loc[plain, "value"].notna().all()

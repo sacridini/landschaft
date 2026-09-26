@@ -139,7 +139,9 @@ ls.calculate_correlation(lc.metrics(level="class"))             # calculate_corr
 Options are those of landscapemetrics (`directions`, `count_boundary`,
 `edge_depth`, `neighbourhood`, …); `n_threads` limits the cores. `extras=True` adds
 the FRAGSTATS statistics landscapemetrics lacks (area-weighted mean `_am`, median
-`_md`, range `_ra`, and the `perim` statistics). On landscapemetrics' `augusta_nlcd` (440×678)
+`_md`, range `_ra`, and the `perim` statistics) and FRAGSTATS' proximity, similarity,
+connectance and edge-contrast metrics (`prox`, `simi`, `connect`, `econ`, `cwed`,
+`teci`); `convention="fragstats"` switches to FRAGSTATS' conventions. On landscapemetrics' `augusta_nlcd` (440×678)
 all 133 metrics take 0.03 s instead of 15.6 s in R; a 10,000×10,000 map with 7.7
 million patches takes about 10 s for all of them (92 million values).
 

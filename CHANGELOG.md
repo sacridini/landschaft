@@ -6,6 +6,20 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 8, FRAGSTATS metrics that landscapemetrics lacks (extras):
+  `prox` (proximity index, `search_radius`) and `simi` (similarity index, with a
+  `similarity` table), `connect` (connectance, `connect_threshold`), `econ` (edge
+  contrast index), `cwed` (contrast-weighted edge density) and `teci` (total edge
+  contrast index) with a `contrast` table and `boundary_contrast`, plus the
+  `_mn/_sd/_cv/_am/_md/_ra` of `prox`, `simi` and `econ`. Distances between patches are
+  the shortest cell-centre distances (as for `enn`), found by a range search over the
+  boundary cells, one focal patch at a time. Checked against direct implementations of
+  FRAGSTATS' definitions.
+- `convention="fragstats"`: the physical perimeter with non-square cells (left/right
+  sides as long as the cell height) and `dcore_*` over the sizes of the disjunct core
+  areas; both checked against pylandstats.
+
 ## [0.18.0] - 2026-09-26
 
 ### Added

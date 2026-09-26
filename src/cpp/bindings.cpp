@@ -654,6 +654,18 @@ lsm::Options make_options(const py::dict& o) {
     opt.ordered = o["ordered"].cast<bool>();
     opt.base = o["base"].cast<std::string>();
     if (o.contains("n_threads") && !o["n_threads"].is_none()) opt.n_threads = o["n_threads"].cast<int>();
+    auto number = [&](const char* key, double& target) {
+        if (o.contains(key) && !o[key].is_none()) target = o[key].cast<double>();
+    };
+    auto table = [&](const char* key, std::vector<std::array<double, 3>>& target) {
+        if (o.contains(key) && !o[key].is_none()) target = o[key].cast<std::vector<std::array<double, 3>>>();
+    };
+    if (o.contains("convention")) opt.fragstats = o["convention"].cast<std::string>() == "fragstats";
+    number("search_radius", opt.search_radius);
+    number("connect_threshold", opt.connect_threshold);
+    number("boundary_contrast", opt.boundary_contrast);
+    table("contrast", opt.contrast);
+    table("similarity", opt.similarity);
     return opt;
 }
 

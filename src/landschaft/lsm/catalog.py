@@ -178,13 +178,30 @@ _DISTRIBUTIONS = {
     "para": ("perimeter-area ratio", "shape metric"),
     "perim": ("patch perimeter", "area and edge metric"),
     "shape": ("shape index", "shape metric"),
+    "prox": ("proximity index", "aggregation metric"),
+    "simi": ("similarity index", "aggregation metric"),
+    "econ": ("edge contrast index", "contrast metric"),
 }
+
+# FRAGSTATS metrics that landscapemetrics does not have (besides the
+# statistics above): (metric, name, type, level).
+_FRAGSTATS = [
+    ("prox", "proximity index", "aggregation metric", "patch"),
+    ("simi", "similarity index", "aggregation metric", "patch"),
+    ("econ", "edge contrast index", "contrast metric", "patch"),
+    ("connect", "connectance index", "aggregation metric", "class"),
+    ("cwed", "contrast-weighted edge density", "contrast metric", "class"),
+    ("teci", "total edge contrast index", "contrast metric", "class"),
+    ("connect", "connectance index", "aggregation metric", "landscape"),
+    ("cwed", "contrast-weighted edge density", "contrast metric", "landscape"),
+    ("teci", "total edge contrast index", "contrast metric", "landscape"),
+]
 
 
 def _extras() -> list[tuple[str, str, str, str]]:
     """Metrics beyond landscapemetrics (FRAGSTATS / pylandstats)."""
     known = {(m, lvl) for m, _, _, lvl in _CATALOG}
-    rows = []
+    rows = list(_FRAGSTATS)
     for level in ("class", "landscape"):
         for family, (name, kind) in _DISTRIBUTIONS.items():
             for stat in STATS:
@@ -290,8 +307,10 @@ def list_metrics(level=None, metric=None, name=None, type=None, what=None, *, ex
 
     ``extras=True`` adds the metrics landscapemetrics does not have
     (FRAGSTATS / pylandstats): the area-weighted mean ``_am``, the median
-    ``_md`` and the range ``_ra`` of every patch metric, and the statistics
-    of ``perim``. Extras named in ``what`` are always selected.
+    ``_md`` and the range ``_ra`` of every patch metric, the statistics of
+    ``perim``, and FRAGSTATS' proximity (``prox``), similarity (``simi``),
+    connectance (``connect``) and edge-contrast (``econ``, ``cwed``,
+    ``teci``) metrics. Extras named in ``what`` are always selected.
 
     Returns
     -------
@@ -322,6 +341,10 @@ _PATCH_NAMES = {
     "continguity_index": "contig",  # pylandstats' spelling
     "related_circumscribing_circle": "circle",
     "disjunct_core_area": "dcore",
+    "proximity_index": "prox",
+    "proximity": "prox",
+    "similarity_index": "simi",
+    "edge_contrast_index": "econ",
 }
 _CLASS_NAMES = {
     "total_area": "ca",
@@ -351,6 +374,10 @@ _CLASS_NAMES = {
     "interspersion_and_juxtaposition_index": "iji",
     "percentage_of_like_adjacencies": "pladj",
     "perimeter_area_fractal_dimension": "pafrac",
+    "connectance_index": "connect",
+    "connectance": "connect",
+    "contrast_weighted_edge_density": "cwed",
+    "total_edge_contrast_index": "teci",
 }
 _LANDSCAPE_NAMES = {
     **{k: v for k, v in _CLASS_NAMES.items() if v not in ("ca", "pland", "cpland", "nlsi", "clumpy")},

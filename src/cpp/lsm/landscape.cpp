@@ -494,6 +494,9 @@ const Core& Landscape::core() {
         const i64 y = cores.first_cm[i] % ny;
         ++out.areas[pt.patch(y * nx + x, y)];
     }
+    out.area_cells = cores.cells;
+    out.area_class = cores.cls;
+    out.has_area_cells = true;
     core_ = std::move(out);
     return *core_;
 }

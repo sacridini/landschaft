@@ -38,6 +38,13 @@ struct Options {
     bool ordered = true;            // complexity metrics: ordered pairs
     std::string base = "log2";      // complexity metrics: log2, log or log10
     int n_threads = 0;              // OpenMP threads of the Python calls (0: all)
+    // FRAGSTATS
+    bool fragstats = false;          // convention = "fragstats": physical edge lengths, dcore sizes
+    double search_radius = kNaN;     // prox, simi (map units)
+    double connect_threshold = kNaN; // connect (map units)
+    double boundary_contrast = 0.0;  // econ, cwed, teci: weight of edges to NA and the map edge
+    std::vector<std::array<double, 3>> contrast;    // (class a, class b, weight): edge contrast
+    std::vector<std::array<double, 3>> similarity;  // (class a, class b, weight): simi
 };
 
 // Per-patch statistics, in landscapemetrics' patch order (by class, then by
@@ -74,6 +81,17 @@ struct Patches {
 struct Core {
     std::vector<i64> cells;   // core cells per patch
     std::vector<i64> areas;   // disjunct core areas per patch (connectivity = directions)
+    // every disjunct core area: cells and class index, sorted by class
+    // (in-memory landscapes only)
+    std::vector<i64> area_cells;
+    std::vector<std::int32_t> area_class;
+    bool has_area_cells = false;
+};
+
+// Pairs of patches a < b within some distance, and their distance.
+struct PatchPairs {
+    std::vector<std::int32_t> a, b;
+    std::vector<double> dist;
 };
 
 // Directed cell-pair counts: m[a * dim + b] = number of (cell of class a,
@@ -106,6 +124,9 @@ double r_signif(double x, int digits);
 
 // R's sum, mean, sd, median of x, and log and sqrt of x[0] (for the tests).
 std::vector<double> r_statistics(const std::vector<double>& x);
+
+// FRAGSTATS' am (weights w), md or ra of x[0..n) (metrics.cpp).
+double reduce_statistic(const std::string& stat, const double* x, i64 n, const double* w);
 
 enum Level : std::int8_t { kPatch = 0, kClass = 1, kLandscape = 2 };
 
@@ -200,6 +221,15 @@ private:
     double cohesion_factor() const;
     // utils.cpp
     void order_ties_as_r(std::vector<std::vector<i64>>& nearest);
+    // fragstats.cpp
+    std::vector<double> class_weights(const std::vector<std::array<double, 3>>& table, double diagonal) const;
+    std::pair<double, double> side_lengths() const;
+    std::vector<double> econ();
+    const PatchPairs& patch_pairs(double radius, bool same_class);
+    std::vector<double> proximity(bool similarity);
+    std::vector<double> connectance(bool by_class);
+    std::vector<double> contrast_edges(bool teci, bool by_class);
+    std::vector<double> dcore_sizes(const std::string& stat, bool by_class);
     // geometry.cpp
     std::vector<double> enn();
     std::vector<double> circle();
@@ -226,7 +256,7 @@ private:
     std::optional<Core> core_;
     std::map<std::string, std::vector<double>> patch_cache_; // node-based: references stay valid
     // summary statistics (stat_values): per patch metric, statistic and level
-    static constexpr int kStatBases = 13;
+    static constexpr int kStatBases = 16;
     static constexpr int kStatKinds = 6;
     std::array<std::vector<double>, kStatBases * kStatKinds * 2> stat_cache_;
     std::array<bool, kStatBases * kStatKinds * 2> stat_done_{};
@@ -235,6 +265,7 @@ private:
     std::map<std::string, double> landscape_cache_;
     std::vector<i64> class_start_;
     std::optional<std::vector<EnclosingCircle>> patch_circles_;
+    std::map<std::string, PatchPairs> pair_cache_;
 };
 
 // landscapemetrics' get_boundaries on the values of a raster (see utils.cpp).

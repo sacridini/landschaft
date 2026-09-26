@@ -113,6 +113,12 @@ OPTION_DEFAULTS = {
     "neighbourhood": 4,
     "ordered": True,
     "base": "log2",
+    "convention": "landscapemetrics",
+    "search_radius": None,
+    "connect_threshold": None,
+    "contrast": None,
+    "similarity": None,
+    "boundary_contrast": 0.0,
 }
 _LEVEL_CODE = {"patch": 0, "class": 1, "landscape": 2}
 
@@ -130,7 +136,47 @@ def metric_options(**options) -> dict[str, Any]:
     out["cell_center"] = bool(out["cell_center"])
     out["neighbourhood"] = int(out["neighbourhood"])
     out["ordered"] = bool(out["ordered"])
+    if out["convention"] not in ("landscapemetrics", "fragstats"):
+        raise ValueError(f"convention must be 'landscapemetrics' or 'fragstats', got {out['convention']!r}")
+    for key in ("search_radius", "connect_threshold"):
+        if out[key] is not None:
+            out[key] = float(out[key])
+            if not out[key] >= 0:
+                raise ValueError(f"{key} must be a non-negative distance")
+    out["boundary_contrast"] = float(out["boundary_contrast"])
+    out["contrast"] = weight_table(out["contrast"], "contrast")
+    out["similarity"] = weight_table(out["similarity"], "similarity")
     return out
+
+
+def weight_table(weights, what: str) -> list | None:
+    """(class a, class b, weight) triplets of a class x class table: a
+    DataFrame (index and columns = class values), a dict {(a, b): w} or
+    {a: {b: w}}, or triplets."""
+    if weights is None:
+        return None
+    rows = []
+    if isinstance(weights, pd.DataFrame):
+        for a in weights.index:
+            for b in weights.columns:
+                v = weights.loc[a, b]
+                if pd.notna(v):
+                    rows.append((float(a), float(b), float(v)))
+    elif isinstance(weights, dict):
+        for key, v in weights.items():
+            if isinstance(v, dict):
+                rows += [(float(key), float(b), float(w)) for b, w in v.items()]
+            else:
+                a, b = key
+                rows.append((float(a), float(b), float(v)))
+    else:
+        for t in weights:
+            a, b, v = t
+            rows.append((float(a), float(b), float(v)))
+    for a, b, v in rows:
+        if not (a.is_integer() and b.is_integer()):
+            raise ValueError(f"{what} weights need integer class values, got {(a, b)}")
+    return rows
 
 
 def chosen_metrics(level=None, metric=None, name=None, type=None, what=None, extras: bool = False) -> pd.DataFrame:
@@ -214,6 +260,25 @@ class Landscape:
         ``labels`` and ``to_raster`` are not available.
     n_threads
         Threads of the C++ core (default: all cores).
+    convention
+        ``"landscapemetrics"`` (default) or ``"fragstats"``: with non-square
+        cells, left/right cell sides are as long as the cell height (the
+        physical perimeter; landscapemetrics takes the width), and
+        ``dcore_*`` summarise the sizes (ha) of the disjunct core areas instead
+        of their number per patch.
+    search_radius
+        ``prox`` and ``simi`` (FRAGSTATS extras): patches within this
+        distance, in map units (NaN without it).
+    connect_threshold
+        ``connect``: patches of a class within this distance are connected.
+    contrast, boundary_contrast
+        Edge contrast weights (0-1) between classes for ``econ``, ``cwed`` and
+        ``teci``: a DataFrame (index and columns = class values), a dict
+        ``{(a, b): w}`` or ``{a: {b: w}}`` (symmetric; missing pairs give NaN),
+        and the weight of edges to NA and the map edge (default 0).
+    similarity
+        Similarity weights between classes for ``simi``, as ``contrast``
+        (default: 1 within a class, 0 between classes, i.e. ``simi = prox``).
 
     Metric names are landscapemetrics' abbreviations; FRAGSTATS abbreviations
     in capitals (``"SHDI"``) and the full names of pylandstats / FRAGSTATS
@@ -245,6 +310,12 @@ class Landscape:
         band: int | None = None,
         block_rows: int | str | None = None,
         n_threads: int | None = None,
+        convention: str = "landscapemetrics",
+        search_radius: float | None = None,
+        connect_threshold: float | None = None,
+        contrast=None,
+        similarity=None,
+        boundary_contrast: float = 0.0,
     ):
         self.options = metric_options(
             directions=directions,
@@ -256,6 +327,12 @@ class Landscape:
             neighbourhood=neighbourhood,
             ordered=ordered,
             base=base,
+            convention=convention,
+            search_radius=search_radius,
+            connect_threshold=connect_threshold,
+            contrast=contrast,
+            similarity=similarity,
+            boundary_contrast=boundary_contrast,
         )
         self.n_threads = n_threads
         self._tiled = None
