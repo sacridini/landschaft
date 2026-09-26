@@ -217,15 +217,15 @@ def test_fragstats_dcore_matches_pylandstats(seed, pylandstats):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         pl = pylandstats.Landscape(data, res=(10, 10), nodata=0, neighborhood_rule="8")
-        for stat in ("mn", "am", "md", "ra"):
+        for stat in ("mn", "sd", "cv", "am", "md", "ra"):
             theirs = pl.compute_class_metrics_df(metrics=[f"disjunct_core_area_{stat}"])
             ours = lm.class_metrics(f"dcore_{stat}").set_index("class")[f"dcore_{stat}"]
             np.testing.assert_allclose(ours.to_numpy(), theirs.loc[ours.index].to_numpy(dtype=float).ravel(),
                                        rtol=1e-12, err_msg=stat)
             # (pylandstats' landscape-level _am also averages its class column: use its core sizes)
             sizes = pl._disjunct_core_area()["core_area"].to_numpy()
-            expected = {"mn": sizes.mean(), "am": np.average(sizes, weights=sizes), "md": np.median(sizes),
-                        "ra": np.ptp(sizes)}[stat]
+            expected = {"mn": sizes.mean(), "sd": sizes.std(), "cv": sizes.std() / sizes.mean() * 100,
+                        "am": np.average(sizes, weights=sizes), "md": np.median(sizes), "ra": np.ptp(sizes)}[stat]
             np.testing.assert_allclose(lm.landscape_metrics(f"dcore_{stat}")[f"dcore_{stat}"][0], expected,
                                        rtol=1e-12, err_msg=stat)
     # landscapemetrics' dcore: the number of core areas per patch
@@ -249,3 +249,124 @@ def test_out_of_core(tmp_path):
             tiled.patch_metrics(metric)
     with pytest.raises(NotImplementedError):
         tiled.class_metrics("dcore_mn")
+
+
+@pytest.mark.parametrize("res", [(1.0, 1.0), (3.0, 2.0)])
+def test_out_of_core_convention_identical(tmp_path, res):
+    import lsm_reference
+
+    data = lsm_scenes.clustered((150, 70), [1, 2, 3], seed=9, sigma=2.5, na_fraction=0.03)
+    tif = tmp_path / "m.tif"
+    lsm_reference.write_landscape(tif, data, res)
+    tiled = ls.Landscape(tif, block_rows=16, convention="fragstats")
+    mem = ls.Landscape(tif, convention="fragstats")
+    patch = ["circle", "shape", "perim"]
+    pd.testing.assert_frame_equal(tiled.patch_metrics(patch), mem.patch_metrics(patch))
+    cls = ["circle_mn", "circle_sd", "shape_sd", "shape_cv", "lsi", "area_sd"]
+    pd.testing.assert_frame_equal(tiled.class_metrics(cls), mem.class_metrics(cls))
+    pd.testing.assert_frame_equal(tiled.landscape_metrics(cls), mem.landscape_metrics(cls))
+
+
+@pytest.mark.parametrize("res", [(10.0, 10.0), (30.0, 20.0)])
+@pytest.mark.parametrize("seed", [5, 6])
+def test_fragstats_shape_lsi_sd_match_pylandstats(res, seed, pylandstats):
+    data = lsm_scenes.clustered((25, 30), [1, 2, 3], seed=seed, sigma=1.5).data
+    lm = ls.Landscape(data, res=res, convention="fragstats")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pl = pylandstats.Landscape(data, res=res, nodata=0, neighborhood_rule="8")
+        pp = pl.compute_patch_metrics_df()
+        # raster SHAPE (perimeter / smallest perimeter, in cell sides), .25 p / sqrt(a) for other cells
+        np.testing.assert_allclose(np.sort(lm.patch_metrics("shape")["shape"]), np.sort(pp["shape_index"]),
+                                   rtol=1e-12)
+        cls = pl.compute_class_metrics_df(
+            metrics=["landscape_shape_index", "shape_index_mn", "shape_index_sd", "shape_index_cv", "area_sd",
+                     "area_cv", "perimeter_sd"])
+        land = pl.compute_landscape_metrics_df(metrics=["landscape_shape_index", "shape_index_sd", "area_sd"])
+    pairs = {"lsi": "landscape_shape_index", "shape_mn": "shape_index_mn", "shape_sd": "shape_index_sd",
+             "shape_cv": "shape_index_cv", "area_sd": "area_sd", "area_cv": "area_cv", "perim_sd": "perimeter_sd"}
+    ours = lm.class_metrics(list(pairs)).set_index("class")
+    for name, theirs in pairs.items():
+        np.testing.assert_allclose(ours[name].to_numpy(), cls.loc[ours.index, theirs].to_numpy(dtype=float),
+                                   rtol=1e-12, err_msg=name)
+    ours_land = lm.landscape_metrics(["lsi", "shape_sd", "area_sd"])
+    for name, theirs in {"lsi": "landscape_shape_index", "shape_sd": "shape_index_sd", "area_sd": "area_sd"}.items():
+        np.testing.assert_allclose(ours_land[name][0], float(land[theirs].iloc[0]), rtol=1e-12, err_msg=name)
+
+
+def test_fragstats_sd_over_n():
+    data = lsm_scenes.clustered((20, 24), [1, 2], seed=3).data
+    lm = ls.Landscape(data, res=10, convention="fragstats")
+    area = lm.patch_metrics("area")
+    sd = lm.class_metrics("area_sd").set_index("class")["area_sd"]
+    np.testing.assert_allclose(sd.to_numpy(), area.groupby("class")["area"].std(ddof=0).to_numpy(), rtol=1e-13)
+    np.testing.assert_allclose(lm.landscape_metrics("area_sd")["area_sd"][0], area["area"].std(ddof=0), rtol=1e-13)
+    # landscapemetrics: R's sd(), over n - 1
+    r_sd = ls.Landscape(data, res=10).class_metrics("area_sd")["area_sd"].to_numpy()
+    np.testing.assert_allclose(r_sd, area.groupby("class")["area"].std(ddof=1).to_numpy(), rtol=1e-13)
+    # one patch: 0 over n, NA over n - 1
+    one = np.ones((3, 3), int)
+    assert ls.Landscape(one, res=1, convention="fragstats").class_metrics("area_sd")["area_sd"][0] == 0
+    assert np.isnan(ls.Landscape(one, res=1).class_metrics("area_sd")["area_sd"][0])
+
+
+def _hull(points):
+    pts = sorted(set(points))
+    def half(seq):
+        out = []
+        for p in seq:
+            while len(out) >= 2 and ((out[-1][0] - out[-2][0]) * (p[1] - out[-2][1])
+                                     - (out[-1][1] - out[-2][1]) * (p[0] - out[-2][0])) <= 0:
+                out.pop()
+            out.append(p)
+        return out
+    return half(pts)[:-1] + half(pts[::-1])[:-1]
+
+
+def brute_force_radius(points):
+    """The smallest circle around the points: the smallest of the circles
+    through two (diameter) or three hull points that contain them all."""
+    hull = np.array(_hull(points), dtype=float)
+    best = np.inf
+    candidates = []
+    for a, b in itertools.combinations(hull, 2):
+        candidates.append(((a + b) / 2, np.hypot(*(a - b)) / 2))
+    for a, b, c in itertools.combinations(hull, 3):
+        d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]))
+        if d == 0:
+            continue
+        ux = ((a @ a) * (b[1] - c[1]) + (b @ b) * (c[1] - a[1]) + (c @ c) * (a[1] - b[1])) / d
+        uy = ((a @ a) * (c[0] - b[0]) + (b @ b) * (a[0] - c[0]) + (c @ c) * (b[0] - a[0])) / d
+        center = np.array([ux, uy])
+        candidates.append((center, np.hypot(*(a - center))))
+    for center, r in candidates:
+        if r < best and (np.hypot(*(hull - center).T) <= r * (1 + 1e-12)).all():
+            best = r
+    return best
+
+
+@pytest.mark.parametrize("res", [(1.0, 1.0), (3.0, 2.0)])
+def test_fragstats_circle_encloses_whole_patch(res):
+    data = lsm_scenes.clustered((18, 20), [1, 2, 3], seed=4, sigma=1.2).data
+    lm = ls.Landscape(data, res=res, convention="fragstats")
+    labels = np.asarray(lm.labels())
+    circles = lm.circumscribing_circles()
+    area = lm.patch_metrics("area")["area"].to_numpy() * 10000
+    rx, ry = res
+    for i in range(1, lm.n_patches + 1):
+        ys, xs = np.nonzero(labels == i)
+        corners = [((x + dx) * rx, (y + dy) * ry) for x, y in zip(xs, ys) for dx in (0, 1) for dy in (0, 1)]
+        radius = brute_force_radius(corners)
+        np.testing.assert_allclose(circles["diameter"][i - 1], 2 * radius, rtol=1e-12, err_msg=f"patch {i}")
+    np.testing.assert_allclose(lm.patch_metrics("circle")["circle"], 1 - area / (np.pi * (circles["diameter"] / 2) ** 2),
+                               rtol=1e-12)
+
+
+def test_fragstats_circle_holds_patches_landscapemetrics_cuts():
+    # landscapemetrics' circle only encloses the corners of the first and
+    # last rows and columns: never larger, and too small for some patches
+    data = lsm_scenes.clustered((40, 40), [1, 2, 3], seed=7, sigma=2).data
+    full = ls.Landscape(data, res=1, convention="fragstats").circumscribing_circles()["diameter"].to_numpy()
+    lm_only = ls.Landscape(data, res=1).circumscribing_circles()["diameter"].to_numpy()
+    assert (lm_only <= full * (1 + 1e-12)).all()
+    assert (lm_only < full * (1 - 1e-12)).sum() >= 3

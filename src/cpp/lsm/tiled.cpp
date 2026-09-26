@@ -127,6 +127,7 @@ struct TiledLandscape::State {
     std::vector<std::vector<std::pair<double, double>>> ties;
     std::vector<i64> flag_offset;             // circle: cells on the bounding box edges
     std::vector<std::uint8_t> flags;
+    std::vector<std::pair<std::int32_t, std::int32_t>> row_ext;  // fragstats circle: first/last x per row
     std::vector<std::int32_t> group;          // enn: class -> group (-1: single patch)
     std::vector<std::vector<std::uint64_t>> enn_key;  // edge cells, per block
     std::vector<std::vector<std::int32_t>> enn_patch;
@@ -492,7 +493,15 @@ void TiledLandscape::begin_detail(bool core, bool gyrate, bool circle, bool enn)
             s.gsum.assign(static_cast<std::size_t>(n), 0.0L);
         }
     }
-    if (circle) {
+    if (circle && s.opt.fragstats) {
+        // the first and last cell of each patch in each of its rows
+        s.flag_offset.assign(static_cast<std::size_t>(n + 1), 0);
+        for (i64 i = 0; i < n; ++i) {
+            const Box& b = s.patch_box[i];
+            s.flag_offset[i + 1] = s.flag_offset[i] + (b.y1 - b.y0 + 1);
+        }
+        s.row_ext.assign(static_cast<std::size_t>(s.flag_offset[n]), {std::numeric_limits<std::int32_t>::max(), -1});
+    } else if (circle) {
         s.flag_offset.assign(static_cast<std::size_t>(n + 1), 0);
         for (i64 i = 0; i < n; ++i) {
             const Box& b = s.patch_box[i];
@@ -593,7 +602,21 @@ void TiledLandscape::detail_block(const std::int32_t* values, const std::uint8_t
             }
         }
     }
-    if (s.d_circle) {
+    if (s.d_circle && s.opt.fragstats) {
+        // one row of a patch is only seen by the thread of that row
+#pragma omp parallel for schedule(static) if (parallel)
+        for (i64 yl = 0; yl < rows; ++yl) {
+            const i64 y = y0 + yl;
+            for (i64 x = 0; x < nx; ++x) {
+                const std::int32_t lp = bp.patch(yl * nx + x, yl);
+                if (lp < 0) continue;
+                const std::int32_t k = local_patch[lp];
+                auto& e = s.row_ext[s.flag_offset[k] + y - s.patch_box[k].y0];
+                e.first = std::min(e.first, static_cast<std::int32_t>(x));
+                e.second = std::max(e.second, static_cast<std::int32_t>(x));
+            }
+        }
+    } else if (s.d_circle) {
         // cells on the edges of their patch's bounding box (distinct flags per cell)
 #pragma omp parallel for schedule(static) if (parallel)
         for (i64 yl = 0; yl < rows; ++yl) {
@@ -707,7 +730,33 @@ bool TiledLandscape::end_detail() {
         land.set_patch_values("gyrate", std::move(out));
         s.gsum = {};
     }
-    if (s.d_circle) {
+    if (s.d_circle && s.opt.fragstats) {
+        const double factor_ha = s.resx * s.resy / 10000;
+        std::vector<double> out(static_cast<std::size_t>(n));
+#pragma omp parallel if (n >= 1024)
+        {
+            std::vector<std::pair<i64, i64>> corners;
+#pragma omp for schedule(dynamic, 64)
+            for (i64 i = 0; i < n; ++i) {
+                corners.clear();
+                const i64 py0 = s.patch_box[i].y0;
+                for (i64 r = s.flag_offset[i]; r < s.flag_offset[i + 1]; ++r) {
+                    const auto [x0, x1] = s.row_ext[r];
+                    if (x1 < 0) continue;
+                    const i64 y = py0 + (r - s.flag_offset[i]);
+                    corners.emplace_back(x0, y);
+                    corners.emplace_back(x0, y + 1);
+                    corners.emplace_back(x1 + 1, y);
+                    corners.emplace_back(x1 + 1, y + 1);
+                }
+                const EnclosingCircle c = grid_circle(corners, s.resx, s.resy, static_cast<std::uint64_t>(i));
+                out[i] = 1 - (static_cast<double>(pt.cells[i]) * factor_ha * 10000) / (3.14159265358979323846 * std::pow(c.r, 2));
+            }
+        }
+        land.set_patch_values("circle", std::move(out));
+        s.row_ext = {};
+        s.flag_offset = {};
+    } else if (s.d_circle) {
         const double factor_ha = s.resx * s.resy / 10000;
         const double rx = s.resx;
         const double ry = s.resy;

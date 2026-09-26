@@ -376,7 +376,7 @@ std::vector<double> Landscape::dcore_sizes(const std::string& stat, bool by_clas
         const double* v = x.data() + start[g];
         const i64 n = start[g + 1] - start[g];
         const double mean = r_mean(v, n);
-        const double sd = r_sd(v, n, mean);
+        const double sd = r_sd(v, n, mean, true);
         if (stat == "mn") {
             out[g] = mean;
         } else if (stat == "sd") {

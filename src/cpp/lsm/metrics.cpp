@@ -57,10 +57,12 @@ double reduce(const std::string& stat, const double* x, i64 n, const double* w) 
 
 constexpr const char* kStats[] = {"mn", "sd", "cv", "am", "md", "ra"};
 
-// One summary statistic of x[0..n) (mean and sd: the mn and sd already known).
-double summary(const std::string& stat, const double* x, i64 n, const double* w, double mean, double sd) {
+// One summary statistic of x[0..n) (mean and sd: the mn and sd already known;
+// population: FRAGSTATS' standard deviation over n).
+double summary(const std::string& stat, const double* x, i64 n, const double* w, double mean, double sd,
+               bool population) {
     if (stat == "mn") return r_mean(x, n);
-    if (stat == "sd") return r_sd(x, n, mean);
+    if (stat == "sd") return r_sd(x, n, mean, population);
     if (stat == "cv") return sd / mean * 100;
     return reduce(stat, x, n, w);
 }
@@ -191,10 +193,16 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
         const std::vector<double>& area = patch_base("area");
         const std::vector<double>& perim = patch_base("perim");
         const int kind = name == "para" ? 0 : name == "shape" ? 1 : 2;
+        // FRAGSTATS' raster SHAPE: perimeter over the smallest perimeter of
+        // as many cells, in cell sides (pylandstats keeps .25 p / sqrt(a)
+        // for cells that are not square)
+        const bool raster_shape = options_.fragstats && res_all_equal();
 #pragma omp parallel for schedule(static) if (parallel)
         for (i64 i = 0; i < n; ++i) {
             if (kind == 0) {
                 out[i] = perim[i] / (area[i] * 10000);
+            } else if (kind == 1 && raster_shape) {
+                out[i] = static_cast<double>(pt.edge_h[i] + pt.edge_v[i]) / min_edge(pt.cells[i]);
             } else if (kind == 1) {
                 out[i] = (0.25 * perim[i]) / r_sqrt(area[i] * 10000, n == 1);
             } else {
@@ -354,7 +362,7 @@ std::vector<double> Landscape::stat_values(const std::string& base, const std::s
 #pragma omp parallel for schedule(dynamic) if (groups > 1 && start[groups] >= kParallelPatches)
     for (i64 g = 0; g < groups; ++g) {
         out[g] = summary(stat, x.data() + start[g], start[g + 1] - start[g], w.data() + start[g],
-                         mean.empty() ? kNaN : mean[g], sd.empty() ? kNaN : sd[g]);
+                         mean.empty() ? kNaN : mean[g], sd.empty() ? kNaN : sd[g], options_.fragstats);
     }
     if (slot >= 0) {
         stat_cache_[slot] = out;
@@ -459,7 +467,7 @@ void Landscape::prepare(const std::vector<MetricSpec>& specs) {
             results[unit.task][unit.group] =
                 summary(t.stat, xs[unit.task]->data() + s, unit.size, w.data() + s,
                         means[unit.task] ? (*means[unit.task])[unit.group] : kNaN,
-                        sds[unit.task] ? (*sds[unit.task])[unit.group] : kNaN);
+                        sds[unit.task] ? (*sds[unit.task])[unit.group] : kNaN, options_.fragstats);
         }
         for (std::size_t t = 0; t < tasks.size(); ++t) {
             const int k = key(tasks[t].base, tasks[t].stat, tasks[t].by_class);
@@ -704,6 +712,19 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
             return (g - p) / -p;
         });
     }
+    if (name == "lsi" && options_.fragstats && !res_all_equal()) {
+        // cells that are not square: .25 E / sqrt(A) with the physical edge
+        // lengths (pylandstats; FRAGSTATS needs square cells)
+        return per_class([&](int c, i64, i64) {
+            i64 h = 0, v = 0;
+            for (int b = 0; b < k + 2; ++b) {
+                if (b == c) continue;
+                h += adj.h[c * dim + b];
+                v += adj.v[c * dim + b];
+            }
+            return 0.25 * edge_length(h, v) / std::sqrt(static_cast<double>(class_cells_[c]) * resx_ * resy_);
+        });
+    }
     if (name == "lsi" || name == "nlsi") {
         const double total = static_cast<double>(valid_cells_);
         const double boundary = static_cast<double>((ny_ * 2) + (nx_ * 2));
@@ -852,12 +873,19 @@ double Landscape::landscape_metric_impl(const std::string& name) {
         return static_cast<double>(like) / static_cast<double>(total) * 100;
     }
     if (name == "lsi") {
-        i64 perim = 0;
+        i64 h = 0, v = 0;
         for (int a = 0; a < k; ++a) {
-            for (int b = 0; b < a; ++b) perim += adj.orth(a, b);
-            perim += adj.orth(a, k) + adj.orth(a, k + 1);
+            for (int b = 0; b < a; ++b) {
+                h += adj.h[a * adj.dim + b];
+                v += adj.v[a * adj.dim + b];
+            }
+            h += adj.h[a * adj.dim + k] + adj.h[a * adj.dim + k + 1];
+            v += adj.v[a * adj.dim + k] + adj.v[a * adj.dim + k + 1];
         }
-        return static_cast<double>(perim) / min_edge(valid_cells_);
+        if (options_.fragstats && !res_all_equal()) {
+            return 0.25 * edge_length(h, v) / std::sqrt(static_cast<double>(valid_cells_) * resx_ * resy_);
+        }
+        return static_cast<double>(h + v) / min_edge(valid_cells_);
     }
     if (name == "iji") {
         if (k < 3) return kNaN;

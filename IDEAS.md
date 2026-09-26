@@ -6,13 +6,10 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Métricas e estatísticas extras
 
-- Outras diferenças possíveis no `convention="fragstats"`: SHAPE e LSI na forma
-  raster do FRAGSTATS (perímetro / perímetro mínimo, como o pylandstats) e o círculo
-  circunscrito sobre todos os cantos das células de borda (o landscapemetrics usa só
-  as células das linhas e colunas extremas). PROX com a área só da parte do vizinho
-  dentro do raio (a documentação do FRAGSTATS é ambígua; usamos a área inteira).
-  Sem o FRAGSTATS para comparar, as métricas FRAGSTATS-only foram testadas contra
-  implementações diretas das definições.
+- `convention="fragstats"`: PROX com a área só da parte do vizinho dentro do raio (a
+  documentação do FRAGSTATS é ambígua; usamos a área inteira). Sem o FRAGSTATS para
+  comparar, as métricas FRAGSTATS-only foram testadas contra implementações diretas
+  das definições.
 
 ## Uso e API
 
@@ -122,3 +119,7 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 13. `pafrac` bit a bit: o `lm()` do R portado (`dqrdc2`/`dqrsl` do LINPACK sobre o BLAS
     de referência do R, com o `dnrm2` do LAPACK 3.12), e as janelas móveis
     transpostas como no `window_lsm` (ordem dos patches do R). **Feita.**
+14. `convention="fragstats"` completa: SHAPE raster (perímetro / perímetro mínimo),
+    LSI físico com células não quadradas, desvio padrão sobre n nos `_sd`/`_cv`, e o
+    círculo circunscrito sobre o patch inteiro (fecho convexo exato das extremidades
+    de cada linha, também fora da memória). **Feita.**

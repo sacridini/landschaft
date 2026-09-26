@@ -100,15 +100,17 @@ inline double r_mean(const double* x, i64 n) {
 // R's sd(): sqrt(var()), var as R's cov.c (mean rounded to double, then the
 // sum of squared deviations in LDOUBLE); NA for fewer than 2 values. `mean`
 // is r_mean(x, n).
-inline double r_sd(const double* x, i64 n, double mean) {
-    if (n < 2) return std::numeric_limits<double>::quiet_NaN();
+// With `population`, the standard deviation over n instead of n - 1
+// (FRAGSTATS' and pylandstats'; 0 for one value).
+inline double r_sd(const double* x, i64 n, double mean, bool population = false) {
+    if (n < (population ? 1 : 2)) return std::numeric_limits<double>::quiet_NaN();
     const Extended m = mean;
     Extended ss = 0.0;
     for (i64 i = 0; i < n; ++i) {
         const Extended d = Extended(x[i]) - m;
         ss += d * d;
     }
-    return r_sqrt(static_cast<double>(ss / Extended(n - 1)), true);  // sqrt(var(x)): one number
+    return r_sqrt(static_cast<double>(ss / Extended(population ? n : n - 1)), true);  // sqrt(var(x)): one number
 }
 
 // R's sum() of doubles.

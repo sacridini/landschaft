@@ -6,6 +6,16 @@ between minor versions.
 
 ## [Unreleased]
 
+### Changed
+- Landscape metrics part 14, `convention="fragstats"` completed: `shape` is FRAGSTATS'
+  raster SHAPE (perimeter over the smallest perimeter of as many cells), `_sd`/`_cv` use
+  the standard deviation over n, cells that are not square get pylandstats' .25 p / sqrt(a)
+  for `shape` and `lsi`, and the `circle` encloses the whole patch (landscapemetrics' only
+  encloses the corners of the first and last rows and columns): the convex hull of the
+  first and last cell of each row, exact on the grid, in parallel and out of core with
+  the same values. Checked against pylandstats (shape, lsi, sd, cv, dcore) and a brute-force
+  smallest circle.
+
 ## [0.24.0] - 2026-09-26
 
 ### Changed

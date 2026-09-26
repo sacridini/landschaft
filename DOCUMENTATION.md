@@ -762,12 +762,26 @@ patches: `prox` 0.2 s with a 3-cell radius, 2 s with 30 cells). These metrics ne
 raster, except `cwed` and `teci`, which also work out of core. There is no FRAGSTATS to
 compare with here: they are tested against direct implementations of the definitions.
 
-**`convention="fragstats"`** changes two landscapemetrics conventions: with non-square
-cells the sides between left/right neighbours are as long as the cell *height* (the
-physical perimeter; landscapemetrics multiplies them by the width), for `perim`, `te`,
-`ed` and everything built on them; and `dcore_*` summarise the sizes (ha) of the
-disjunct core areas of the class or landscape (`dcore_am` weighted by those sizes),
-not the number of core areas per patch. Both agree with pylandstats.
+**`convention="fragstats"`** changes five landscapemetrics conventions, all checked
+against pylandstats or brute force:
+
+- with non-square cells the sides between left/right neighbours are as long as the cell
+  *height* (the physical perimeter; landscapemetrics multiplies them by the width), for
+  `perim`, `te`, `ed` and everything built on them;
+- `dcore_*` summarise the sizes (ha) of the disjunct core areas of the class or landscape
+  (`dcore_am` weighted by those sizes), not the number of core areas per patch;
+- `shape` is FRAGSTATS' raster SHAPE, the perimeter over the smallest perimeter of as many
+  cells (in cell sides), instead of .25 p / sqrt(a); cells that are not square keep
+  .25 p / sqrt(a), and `lsi` becomes .25 E / sqrt(A) with the physical edge lengths
+  (pylandstats; FRAGSTATS needs square cells);
+- `_sd` and `_cv` use the standard deviation over n, FRAGSTATS' (landscapemetrics uses
+  R's `sd()`, over n - 1; one patch gives 0 instead of NA);
+- the `circle` encloses the whole patch: landscapemetrics' circle only encloses the
+  corners of the cells in the first and last rows and columns, which can miss the
+  corners that decide it. Here the first and last cell of the patch in every row are
+  gathered in parallel, reduced to their convex hull on the integer grid (exact), and
+  Welzl's algorithm runs on the hull (also out of core, with the same values;
+  `circumscribing_circles` follows the convention too).
 
 ### Bit-identical arithmetic
 

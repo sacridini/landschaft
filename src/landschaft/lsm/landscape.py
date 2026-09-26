@@ -264,9 +264,15 @@ class Landscape:
     convention
         ``"landscapemetrics"`` (default) or ``"fragstats"``: with non-square
         cells, left/right cell sides are as long as the cell height (the
-        physical perimeter; landscapemetrics takes the width), and
-        ``dcore_*`` summarise the sizes (ha) of the disjunct core areas instead
-        of their number per patch.
+        physical perimeter; landscapemetrics takes the width); ``dcore_*``
+        summarise the sizes (ha) of the disjunct core areas instead of their
+        number per patch; ``shape`` is the raster SHAPE (perimeter over the
+        smallest perimeter of as many cells); ``_sd`` and ``_cv`` use the
+        standard deviation over n (landscapemetrics: R's ``sd()``, over n - 1);
+        the ``circle`` encloses the whole patch (landscapemetrics: the corners
+        of its first and last rows and columns only). Cells that are not
+        square keep ``shape`` and ``lsi`` as .25 perimeter / sqrt(area), as
+        pylandstats does.
     search_radius
         ``prox`` and ``simi`` (FRAGSTATS extras): patches within this
         distance, in map units (NaN without it).
@@ -516,7 +522,8 @@ class Landscape:
         """Smallest circle around every patch (or every class), like
         landscapemetrics' ``get_circumscribingcircle``: it encloses the corners
         of the cells in the first and last rows and columns, as for the
-        ``circle`` metric.
+        ``circle`` metric (with ``convention="fragstats"``, every cell of the
+        patch).
 
         Returns
         -------

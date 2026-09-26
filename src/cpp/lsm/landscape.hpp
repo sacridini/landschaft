@@ -237,6 +237,7 @@ private:
     // geometry.cpp
     std::vector<double> enn();
     std::vector<double> circle();
+    std::vector<EnclosingCircle> hull_circles();
     double total_area();
     double edge_length(i64 h, i64 v) const;
     bool res_all_equal() const;
@@ -334,6 +335,11 @@ std::uint64_t morton_code(std::uint32_t x, std::uint32_t y);
 // 1 - area / area of the smallest circle around the points (x0, y0, x1, y1,
 // ...), found with Welzl's algorithm shuffled by `seed` (the patch index).
 double related_circle(const std::vector<double>& xy, std::uint64_t seed, double area_ha);
+
+// Smallest circle around the given cell corners (grid units: x to the right,
+// y down), scaled by (rx, ry): Welzl's algorithm (seeded) on their convex
+// hull, which is exact on the grid. `corners` is sorted in place.
+EnclosingCircle grid_circle(std::vector<std::pair<i64, i64>>& corners, double rx, double ry, std::uint64_t seed);
 
 // Landscape-level metrics in a moving window (window: wy rows x wx columns,
 // odd sizes, non-zero = part of the window) centred on every cell; cells

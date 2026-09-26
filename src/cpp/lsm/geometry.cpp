@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "lsm/landscape.hpp"
+#include "lsm/parallel.hpp"
 
 namespace lsm {
 
@@ -782,10 +783,14 @@ std::vector<double> Landscape::circle() {
 
 // Smallest circle around each patch. As in landscapemetrics, the circle
 // encloses the corners of the patch cells in its first and last rows and
-// columns.
+// columns; with convention = "fragstats" it encloses the whole patch.
 const std::vector<EnclosingCircle>& Landscape::patch_circles() {
     if (patch_circles_) return *patch_circles_;
     if (tables_only_) throw std::logic_error("circles of an out-of-core landscape need a detail pass");
+    if (options_.fragstats) {
+        patch_circles_ = hull_circles();
+        return *patch_circles_;
+    }
     const Patches& pt = patches();
     const i64 n = pt.n;
     const i64 nx = nx_;
@@ -889,6 +894,120 @@ const std::vector<EnclosingCircle>& Landscape::patch_circles() {
     }
     patch_circles_ = std::move(out);
     return *patch_circles_;
+}
+
+// Smallest circle around every cell of each patch (FRAGSTATS' definition;
+// landscapemetrics only looks at the first and last rows and columns, which
+// can miss the corners that decide the circle). The circle of a set of
+// points is the circle of its convex hull, and the hull of the cells is the
+// hull of the outer corners of the first and last cell of the patch in each
+// row: those are found row by row and gathered per patch in parallel, their
+// corners reduced to the hull on the integer grid (exact), and Welzl's
+// algorithm runs on the hull vertices.
+std::vector<EnclosingCircle> Landscape::hull_circles() {
+    const Patches& pt = patches();
+    const i64 n = pt.n;
+    const i64 nx = nx_;
+    const i64 ny = ny_;
+    const bool parallel = nx * ny >= kParallelThreshold;
+    struct Run {
+        std::int32_t y, x0, x1;
+    };
+    struct RowRun {
+        std::int32_t patch, x0, x1;
+    };
+    // the first and last cell of each patch along each row (cells of one
+    // strip piece, i.e. with the same code, are one patch)
+    std::vector<std::vector<RowRun>> rows(static_cast<std::size_t>(ny));
+    parallel_for_dynamic(parallel, ny, [&](i64 y) {
+        const std::int32_t* code = pt.code.data() + y * nx;
+        std::vector<RowRun>& row = rows[y];
+        i64 x = 0;
+        while (x < nx) {
+            const std::int32_t c = code[x];
+            i64 e = x + 1;
+            while (e < nx && code[e] == c) ++e;
+            if (c != -1) {
+                row.push_back({pt.patch(y * nx + x, y), static_cast<std::int32_t>(x), static_cast<std::int32_t>(e - 1)});
+            }
+            x = e;
+        }
+        std::sort(row.begin(), row.end(),
+                  [](const RowRun& a, const RowRun& b) { return a.patch != b.patch ? a.patch < b.patch : a.x0 < b.x0; });
+        std::size_t k = 0;
+        for (std::size_t j = 0; j < row.size(); ++j) {
+            if (k > 0 && row[k - 1].patch == row[j].patch) {
+                row[k - 1].x1 = std::max(row[k - 1].x1, row[j].x1);
+            } else {
+                row[k++] = row[j];
+            }
+        }
+        row.resize(k);
+    });
+    // grouped by patch: count, then place
+    std::vector<std::atomic<i64>> count(static_cast<std::size_t>(n) + 1);
+    for (auto& c : count) c.store(0, std::memory_order_relaxed);
+    parallel_for_dynamic(parallel, ny, [&](i64 y) {
+        for (const RowRun& r : rows[y]) count[r.patch + 1].fetch_add(1, std::memory_order_relaxed);
+    });
+    std::vector<i64> offset(static_cast<std::size_t>(n) + 1, 0);
+    for (i64 i = 0; i < n; ++i) offset[i + 1] = offset[i] + count[i + 1].load(std::memory_order_relaxed);
+    for (i64 i = 0; i <= n; ++i) count[i].store(offset[i], std::memory_order_relaxed);
+    std::vector<Run> runs(static_cast<std::size_t>(offset[n]));
+    parallel_for_dynamic(parallel, ny, [&](i64 y) {
+        for (const RowRun& r : rows[y]) {
+            runs[count[r.patch].fetch_add(1, std::memory_order_relaxed)] = Run{static_cast<std::int32_t>(y), r.x0, r.x1};
+        }
+        std::vector<RowRun>().swap(rows[y]);
+    });
+    count = std::vector<std::atomic<i64>>();
+    rows = {};
+
+    std::vector<EnclosingCircle> out(static_cast<std::size_t>(n));
+#pragma omp parallel if (parallel)
+    {
+        std::vector<std::pair<i64, i64>> corners;
+#pragma omp for schedule(dynamic, 64)
+        for (i64 i = 0; i < n; ++i) {
+            corners.clear();
+            for (i64 r = offset[i]; r < offset[i + 1]; ++r) {
+                const Run& run = runs[r];
+                corners.emplace_back(run.x0, run.y);
+                corners.emplace_back(run.x0, run.y + 1);
+                corners.emplace_back(run.x1 + 1, run.y);
+                corners.emplace_back(run.x1 + 1, run.y + 1);
+            }
+            out[i] = grid_circle(corners, resx_, resy_, static_cast<std::uint64_t>(i));
+        }
+    }
+    return out;
+}
+
+EnclosingCircle grid_circle(std::vector<std::pair<i64, i64>>& corners, double rx, double ry, std::uint64_t seed) {
+    // Andrew's monotone chain
+    std::sort(corners.begin(), corners.end());
+    corners.erase(std::unique(corners.begin(), corners.end()), corners.end());
+    auto cross = [](const std::pair<i64, i64>& o, const std::pair<i64, i64>& a, const std::pair<i64, i64>& b) {
+        return (a.first - o.first) * (b.second - o.second) - (a.second - o.second) * (b.first - o.first);
+    };
+    thread_local std::vector<std::pair<i64, i64>> hull;
+    thread_local std::vector<Point> pts;
+    hull.assign(2 * corners.size(), {});
+    std::size_t k = 0;
+    for (const auto& c : corners) {
+        while (k >= 2 && cross(hull[k - 2], hull[k - 1], c) <= 0) --k;
+        hull[k++] = c;
+    }
+    for (std::size_t j = corners.size() - 1, lower = k + 1; j-- > 0;) {
+        while (k >= lower && cross(hull[k - 2], hull[k - 1], corners[j]) <= 0) --k;
+        hull[k++] = corners[j];
+    }
+    pts.clear();
+    for (std::size_t j = 0; j + 1 < k; ++j) {
+        pts.push_back({static_cast<double>(hull[j].first) * rx, static_cast<double>(hull[j].second) * ry});
+    }
+    const Circle c = smallest_circle(pts, seed);
+    return EnclosingCircle{c.c.x, c.c.y, c.r};
 }
 
 // Smallest circle around all cells of each class (get_circumscribingcircle
