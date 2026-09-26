@@ -140,6 +140,116 @@ ls.connectivity_grid(g, grid_zones(...))
   - vetores com geopandas/shapely como dependências opcionais (extra `vector`);
   - se ProtConn e SAMC entram no escopo.
 
+## Conectividade por teoria de circuitos (Omniscape / Circuitscape)
+
+Análise de 2026-09-26. O Omniscape.jl 0.7 (`C:\Users\eduar\Documents\dev\Omniscape.jl`, Julia,
+~1,7 mil linhas em `src/`) calcula conectividade omnidirecional sobre raster, sem manchas:
+uma janela móvel circular (`radius`, mais `buffer`) centrada em cada alvo (blocos de
+`block_size`², só onde a soma das fontes do bloco é > 0) injeta a força do bloco nas fontes
+da janela (fora do bloco-alvo, proporcional à força de cada uma), aterra o centro e soma a
+corrente dos nós num mapa acumulado (`cum_currmap`). Opcionais: `flow_potential` (a mesma
+coisa com condutância 1), `normalized_cum_currmap` (a razão), correção de artefatos de bloco
+(`calc_correction`, dois solves nulos), conectividade condicional (condições presentes e
+futuras, `within` pela mediana, `equal` pela moda), reclassificação, `source_from_resistance`
+com `r_cutoff`, `precision = single`. O núcleo numérico é o `compute_omniscape_current` do
+Circuitscape.jl 6.1 (Laplaciano do grid, solve `cg+amg` ou `cholmod`, corrente nos nós).
+Completa o módulo `conn` (commute-time e SAMC já são circuitos e cadeias de Markov) e não há
+versão nativa em Python. Todos GPL/MIT, compatíveis.
+
+Critério de igualdade (o bit a bit dos outros módulos não se aplica: o solver padrão é
+iterativo com tolerância ~1e-6, a ordem dos alvos é sorteada com `randperm` e somada por
+fatia de thread, e os testes do próprio Omniscape usam `rtol = 1e-6`):
+- estrutura idêntica: mesmos alvos, máscara de NoData, células nulas e não nulas, bordas;
+- contra `solver = cholmod`: diferença relativa ≤ ~1e-10;
+- contra o padrão `cg+amg`: dentro da tolerância do solver (1e-6, como os testes deles);
+- o nosso determinístico (mesmos bits com qualquer número de threads).
+
+Circuitscape 6.1 (`compute_omniscape_current`, lido no fonte instalado): nós são as células com
+condutância > 0 (os `-9999` do Omniscape caem fora), numeradas em ordem de coluna; arestas para
+direita, baixo e as duas diagonais da direita com `(x+y)/2` e `(x+y)/(2√2)`; componentes conexas
+do grafo inteiro, e só se resolve a que tem fonte e terra (a do centro); terra `Inf` = nó
+removido, tensão 0; `cholmod` fatora com `shift = 10ε` e refina se o resíduo relativo passar
+de 1e-5; `cg+amg` (agregação suavizada, Gauss-Seidel, `Pinv` no nível grosso, sem a
+regularização do modo pairwise) para em `rtol = 1e-6` no resíduo precondicionado e repete com
+`rtol/100` se o resíduo verdadeiro passar de 1e-4. Corrente do nó = `max(entrada, saída)` das
+correntes de ramo `|G[i,j]| (v_i − v_j)`, ignorando ramos com `|b / max| < 1e-8` (máximo com
+sinal separado para o triângulo superior e o inferior da matriz).
+
+Peculiaridades a reproduzir (confirmar no fonte):
+- `get_source` zera o bloco-alvo em `radius+buffer+1` do recorte, que perto das bordas não é
+  o centro (o recorte foi cortado); `xupper_sub` compara com `ncols` do mapa inteiro;
+- `clip` põe `missing` onde a distância ao centro é > raio (fontes no raio, condutância no
+  raio + buffer); o `buffer` só acrescenta colunas/linhas de NoData às fontes;
+- `calc_correction`: limiar `1e-6 * maximum(block_null_current)`, sensível a células perto
+  dele (um solver diferente pode jogá-las do outro lado); zeros viram fator 1;
+- `mode` do StatsBase desempata pela ordem de um `Dict`; `median` com `skipmissing`;
+- `flow_potential` usa o retângulo inteiro com condutância 1 (sem o recorte circular);
+- no Circuitscape: vizinhança 8 (ou 4 com `connect_four_neighbors_only`), média das
+  condutâncias, diagonais /√2, terra `Inf` = nó removido (tensão 0), componentes sem terra,
+  corrente do nó (convenção exata a ler no fonte do Circuitscape.jl, a clonar);
+- `precision = single` faz tudo em `Float32`.
+
+Proposta: motor C++ novo `src/cpp/circuit/` (`circuitcore`: `grid.cpp` Laplaciano como o
+Circuitscape, `solve.cpp`, `omniscape.cpp`), Python `ls.omniscape(resistance, radius=...,
+block_size=..., source=..., ...)` devolvendo um `xarray.Dataset` (`cum_currmap`,
+`flow_potential`, `normalized`) e `ls.omniscape_ini(path)` para os `.ini` existentes. O Eigen
+entra no projeto aqui (ainda não é usado em `src/cpp`; só cabeçalhos, FetchContent ou
+vendorizado).
+
+Desempenho (o Omniscape, por janela, recorta arrays com `missing`, monta o grafo, acha
+componentes, monta o AMG do zero e roda o CG, duas vezes com flow potential):
+- janelas interiores têm o mesmo formato (disco de `radius + buffer`): ordenação por nested
+  dissection geométrica e fatoração simbólica uma vez; por janela só a numérica (NoData como
+  condutância 0 e linha identidade no nó isolado, mantendo o padrão fixo);
+- o Laplaciano nulo (condutância 1) é o mesmo em todas as janelas interiores: fatorar uma
+  vez por formato (cache para as bordas) e o flow potential vira duas substituições
+  triangulares;
+- correção de artefatos calculada uma vez, como no original;
+- OpenMP nos alvos (`schedule(dynamic)`), área de trabalho por thread, zero alocação no laço;
+  acumulação em ordem fixa por blocos com coloração 2D (um acumulador do tamanho do mapa por
+  thread, como no Omniscape, daria ~13 GB em 10k × 10k com 16 threads);
+- risco: Cholesky custa ~n^1,5 e o AMG ~n; para raio grande (≥ ~300 px, ~280 mil nós) o AMG
+  pode ganhar, e aí seria preciso um CG com AMG por agregação suavizada em C++. Medir antes.
+
+Fases:
+0. benchmark rápido: tempo por janela do Omniscape (Julia, várias threads) contra Eigen LDLT
+   com nested dissection, CG+IC e CHOLMOD, com r = 25, 50, 100, 200; decide o solver.
+   **Feita** (`tools/omniscape_window_benchmark.jl`; uma thread, disco de raio r, condutância
+   aleatória, terra no centro, ms por janela):
+
+   | r (nós) | Circuitscape cg+amg | Circuitscape cholmod | Eigen LDLT, ND fixa (monta + fatora) | só a substituição |
+   |---|---|---|---|---|
+   | 25 (2 mil) | 6,1 | 4,0 | 1,0 | 0,07 |
+   | 50 (8 mil) | 20,8 | 15,6 | 4,9 | 0,25 |
+   | 100 (31 mil) | 119 | 67 | 35 | 1,6 |
+   | 200 (126 mil) | 510 | 268 | 234 | 8,9 |
+
+   Eigen com AMD em vez da ND geométrica: 66 ms (r = 100) e 700 ms (r = 200); CG+IC e CG+Jacobi
+   (1e-6) 3–10× mais lentos que o direto; SparseLU 2× mais lento. Decidido: Eigen
+   `SimplicialLDLT` com ordenação por nested dissection geométrica, análise simbólica uma vez
+   por formato de janela e só a fatoração numérica por alvo; o flow potential sai da fatoração
+   nula em cache (só a substituição). Com flow potential o Omniscape paga dois solves: ~11× (r =
+   25) a ~4× (r = 200) por janela. Para r ≥ ~150 um Cholesky supernodal/multifrontal (blocos
+   densos nos separadores) é o próximo ganho, na fase 3. O cg+amg do Circuitscape refaz o solve
+   com `rtol/100` quando o resíduo verdadeiro passa de 1e-4 (aconteceu em r = 100 e 200);
+1. núcleo de circuito (Laplaciano, solve, corrente nos nós), conferido com o
+   `compute_omniscape_current` com `cholmod`;
+2. Omniscape básico (alvos, fontes, terra, correção, flow potential, normalizada,
+   `mask_nodata`, com as peculiaridades), conferido com `test/output_verify` (test1–5) e
+   referências novas;
+3. desempenho (reuso simbólico, cache do nulo, OpenMP, acumulação determinística) e
+   benchmark final contra o Omniscape;
+4. conectividade condicional, reclassificação, `source_from_resistance`, `r_cutoff`, `.ini`,
+   `precision = single`;
+5. opcionais: solver iterativo para raio grande; modos raster do Circuitscape (pairwise,
+   one-to-all, all-to-one, advanced) sobre o mesmo núcleo.
+
+Referência: Julia 1.13.0 (`C:\Users\eduar\AppData\Local\Programs\Julia-1.13.0`) com
+Omniscape 0.7 (o clone local, `Pkg.develop`) e Circuitscape 6.1 num depot separado
+(`C:\Users\eduar\AppData\Local\landschaft-julia`, `JULIA_DEPOT_PATH=...\depot`,
+`--project=...\env`; `jl.sh` lá dentro chama o Julia assim); script
+`tools/make_reference_omniscape.jl` gravando em `tests/data/reference/circuit`.
+
 ## Observações para os testes
 
 - O círculo circunscrito do landscapemetrics usa um algoritmo aleatorizado: regerar
