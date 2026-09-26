@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 16, spatial signatures: `SpatialSignatureAnalysis.nmf(k)`
   (non-negative factors of the min-max scaled metrics, NNDSVDa start and HALS sweeps: the
