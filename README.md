@@ -14,6 +14,7 @@ raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / da
 * **Distance (experimental)**: Influence Zones and Proximity. Not yet identical to GTB, see the CHANGELOG.
 * **Restoration & Morphology**: Restoration Status (RSS), Cost Distance, Least-Cost Paths & Corridors, Landscape Parcellation (AWAPS, DIVISION, PARC), and Habitat Contortion.
 * **Change Detection & Convolution**: Simple Change, Morphological Change Detection (MCD with geodesic core reconstruction & elasticity), Fragmentation Change (FOS Delta & 6x6 transition matrix), FAD Multiscale Change (7x7 class transitions per observation scale), Landscape Mosaic Heatmap and Heatmap Change (GTB's heatmap/delta CSV, bit-identical), and Continuous Grayscale Spatial Convolution (GraySpatCon).
+* **Habitat Connectivity Graphs**: Conefor Sensinode's indices (NC, NL, H, CCP, LCP, IIC, F, AWF, PC) and node importances (dI with intra/flux/connector fractions) on tables of nodes and distances, matching Makurhini's `MK_dPCIIC` and Conefor, 270-620x faster than Makurhini.
 * **Landscape Metrics (FRAGSTATS)**: 133 patch-, class- and landscape-level metrics with the names, options and values (bit for bit) of the R package landscapemetrics (area/edge, shape, core area, aggregation incl. nearest-neighbour distance, diversity, complexity), plus FRAGSTATS' `_am`/`_md`/`_ra` statistics, 100-500x faster.
 
 📖 **For complete documentation and usage examples for every module, see [DOCUMENTATION.md](DOCUMENTATION.md).**
@@ -218,6 +219,7 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `Landscape.centroids`, `.nearest_neighbours`, `.circumscribing_circles`, `.adjacencies`, `.boundaries`, `.patches`, `.extract_metrics` | landscapemetrics' `get_centroids`, `get_nearestneighbour`, `get_circumscribingcircle`, `get_adjacencies`, `get_boundaries`, `get_patches`, `extract_lsm` (same values). |
 | `extract_metrics(data, y, *, extract_id=None, ...)`, `raster_boundaries(data, ...)`, `check_landscape(data)`, `calculate_correlation(metrics, method="pearson")` | landscapemetrics' `extract_lsm` (lists of rasters too), `get_boundaries` on raster values, `check_landscape`, `calculate_correlation`. |
 | `scale_sample(data, y, *, size, shape="square", ...)`, `zonal_metrics(data, zones, level="landscape", ...)`, `write_table(table, path)` | landscapemetrics' `scale_sample`; class/landscape metrics per polygon as a GeoDataFrame; tables to CSV, Parquet or vector files. |
+| `HabitatGraph(attributes, connections, *, ids=None, kind="distance", landscape_area=None, convention="makurhini", n_threads=None)` | Habitat patches and the distances (or probabilities, or links) between them: `.overall(metrics, distance=, probability=, pij_min=)` gives Conefor's NC, NL, H, CCP, LCP, IIC, F, AWF and PC (with EC and Makurhini's intra/direct/step split), `.node_importance(...)` every node's dI and its intra/flux/connector fractions (Makurhini's `MK_dPCIIC`), `.components(distance)`; `HabitatGraph.from_conefor(nodes, connections)` / `.to_conefor(...)` read and write Conefor's files. `convention="conefor"` follows Conefor's rules. |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |
@@ -314,6 +316,12 @@ LANDSCHAFT_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live co
   `gyrate` and a few `enn` values, which agree to a relative 1e-10: sums, means and
   standard deviations reproduce R's 80-bit accumulation, `log`/`sqrt` R's x87
   functions, and `pafrac` the QR decomposition of R's `lm()`.
+* Habitat graphs are compared with Makurhini's `MK_dPCIIC` and with Conefor
+  Sensinode 2.2's own index code: `tools/make_reference_conn.py` stores their results
+  for Makurhini's example patches and three synthetic scenes in
+  `tests/data/reference/conn`. The unrounded values agree with Makurhini to 1e-12
+  (its rounded output is reproduced exactly) and with Conefor to its single
+  precision.
 * `tests/test_primitives.py` checks each C++ primitive against SciPy or brute
   force. `tests/test_mspa_semantics.py` checks the classes on hand-made patterns.
   The I/O and API tests cover validation, georeferencing, colour tables,

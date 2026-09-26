@@ -44,6 +44,12 @@ add_library(lsmcore STATIC
     src/cpp/lsm/rlm.cpp
 )
 target_include_directories(lsmcore PUBLIC src/cpp)
+
+add_library(conncore STATIC
+    src/cpp/conn/graph.cpp
+)
+target_include_directories(conncore PUBLIC src/cpp)
+set_target_properties(conncore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # R's x87 log/sqrt and LDOUBLE sums (see src/cpp/lsm/rmath.hpp): MSVC has no
 # x64 inline assembly. x86-64 only; every other target uses the C++ code.
 if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
@@ -58,6 +64,7 @@ if(LANDSCHAFT_OPENMP)
     if(OpenMP_CXX_FOUND)
         target_link_libraries(gtbcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(lsmcore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(conncore PUBLIC OpenMP::OpenMP_CXX)
     else()
         message(WARNING "OpenMP not found: building single-threaded")
     endif()
@@ -68,13 +75,15 @@ endif()
 if(MSVC)
     target_compile_options(gtbcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(lsmcore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(conncore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(conncore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
 pybind11_add_module(_core MODULE src/cpp/bindings.cpp)
-target_link_libraries(_core PRIVATE gtbcore lsmcore)
+target_link_libraries(_core PRIVATE gtbcore lsmcore conncore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()

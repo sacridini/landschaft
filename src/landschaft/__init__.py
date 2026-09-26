@@ -24,6 +24,8 @@ from .change import (
     simple_change,
 )
 from .collection import RasterCollection, RasterInfo
+from . import conn
+from .conn import HabitatGraph
 from .contagion import clustering_fac, contagion_pff
 from .datasets import EXAMPLE_DATA, example_data
 from .distance import EuclideanDistanceResult, euclidean_distance
@@ -139,6 +141,7 @@ __all__ = [
     "GTNImportanceResult",
     "GTN_COMPONENTS_COLORMAP",
     "GTN_IMPORTANCE_COLORMAP",
+    "HabitatGraph",
     "INFLUENCE_CLASSES",
     "ISOCHRONE_CLASSES",
     "IsochroneResult",

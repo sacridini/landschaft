@@ -21,6 +21,7 @@ It provides a native **C++17 / OpenMP** core exposed through zero-copy **pybind1
 11. [Batch Processing & Raster Collections](#11-batch-processing--raster-collections)
 12. [Accuracy & Bit-for-Bit Verification](#12-accuracy--bit-for-bit-verification)
 13. [Landscape Metrics (FRAGSTATS / landscapemetrics)](#13-landscape-metrics-fragstats--landscapemetrics)
+14. [Habitat Connectivity Graphs (Conefor Sensinode / Makurhini)](#14-habitat-connectivity-graphs-conefor-sensinode--makurhini)
 
 ---
 
@@ -232,6 +233,9 @@ print(importance.link_table.head())
 conefor_inputs(mspa_map, output_dir="./conefor_files")
 # Generates nodes.txt and distances.txt
 ```
+
+Conefor's own indices (NC, NL, H, CCP, LCP, IIC, F, AWF, PC) and node importances on
+any table of nodes and distances are in [section 14](#14-habitat-connectivity-graphs-conefor-sensinode--makurhini).
 
 ---
 
@@ -1102,3 +1106,108 @@ circles through two or three hull points.
 | 20,000×20,000 file (400 M cells, 334 k patches), class and landscape metrics without core/gyrate/circle/enn: in memory / `block_rows="auto"` | – | 3.4 s, 3.7 GB / 3.9 s, 0.8 GB |
 | same, all 133 metrics: in memory / `block_rows="auto"` | – | 8.6 s, 8.7 GB / 13.1 s, 3.3 GB |
 
+
+---
+
+## 14. Habitat Connectivity Graphs (Conefor Sensinode / Makurhini)
+
+The graph-based connectivity indices of Saura and colleagues, as computed by
+[Conefor Sensinode](http://www.conefor.org) and the R package
+[Makurhini](https://github.com/connectscape/Makurhini): habitat patches are the
+nodes (with an attribute, usually their area), and the distances (or dispersal
+probabilities, or links) between them are the connections.
+
+```python
+import landschaft as ls
+
+# nodes: attribute per patch; connections: n × n distance matrix or (from, to, distance) table
+g = ls.HabitatGraph(areas, distances, ids=patch_ids, landscape_area=total_area)
+
+g.overall(distance=[5_000, 10_000], probability=0.5)   # one row per distance
+g.node_importance(["PC", "IIC"], distance=10_000)      # dPC, dPCintra, dPCflux, dPCconnector, dIIC...
+g.components(distance=10_000)                          # component of every node
+
+g = ls.HabitatGraph.from_conefor("nodes.txt", "distances.txt", convention="conefor")
+g.to_conefor("nodes.txt", "distances.txt")
+```
+
+### Indices
+
+| index | meaning | node importance |
+|---|---|---|
+| `NC`, `NL` | number of components and of links | `dNC`, `dNL` |
+| `H` | Harary index: sum of 1 / (links between two nodes) | `dH` |
+| `CCP`, `LCP` (`LCPnum`) | sum of the squared component attributes over the total attribute² / LA² | `dCCP`, `dLCP` |
+| `IIC` (`IICnum`, `EC(IIC)`) | integral index of connectivity: ΣΣ a_i a_j / (1 + nl_ij) / LA² | `dIIC`, `dIICintra`, `dIICflux`, `dIICconnector` |
+| `F`, `AWF` | flux and area-weighted flux: ΣΣ p_ij, ΣΣ a_i a_j p_ij | `dF`, `dAWF` |
+| `PC` (`PCnum`, `EC(PC)`) | probability of connectivity: ΣΣ a_i a_j p*_ij / LA² (p* = most probable path) | `dPC`, `dPCintra`, `dPCflux`, `dPCconnector`, `varPC` |
+| `A` | total attribute | `dA` |
+
+`overall` also gives Makurhini's split of IIC and PC into intra-patch, direct and
+stepping-stone parts (`PCintra(%)`, `PCdirect(%)`, `PCstep(%)`). A node's importance is
+the loss of the index without it, in % (`varPC` is the loss of PC itself); dI =
+intra + flux + connector. Without `landscape_area`, `IIC`, `PC` and `LCP` are NaN (only
+their numerators, as in Makurhini) under the default convention, and use LA = 1 (as
+Conefor) with `convention="conefor"`.
+
+### Connections and conventions
+
+`connections` holds distances (default), `kind="probability"` direct dispersal
+probabilities, or `kind="link"` 0/1 links, as Conefor's connection types. A square
+matrix is read from its upper triangle (NaN = not connected); in a pair table,
+missing pairs are not connected. The probability of a distance d is the negative
+exponential kernel `exp(d log(probability) / distance)`.
+
+| | `convention="makurhini"` (default) | `convention="conefor"` |
+|---|---|---|
+| links (IIC, H, NC...) | pairs closer than `distance` (d < t) | pairs up to `distance` (d ≤ t) |
+| `pij_min` | 0.01: probabilities below it are dropped | 0: Conefor's `minProb` heuristic (links at or below it dropped, paths no more probable not extended) |
+| unconnected pairs in IIC | count as 16443701 links apart (MK_dPCIIC's value for them) in the whole graph, not in the graphs without a node | add nothing |
+| without `landscape_area` | indices NaN, numerators reported | LA = 1 |
+| `PC > 1`, `EC > LA` | capped, as MK_dPCIIC | not capped |
+
+Makurhini's default distance (the median distance, `distance=None`) is also the
+default here. Makurhini rounds its node importances to 7 decimals and its overall
+fractions to 5 (sharing the rounding error out so they add to 100); landschaft
+returns the unrounded values.
+
+### How it works
+
+Each shortest path is found once per source node, in parallel over the sources:
+breadth-first search for links, Dijkstra over −log p for probabilities. The node
+importances (dI) need the index of the graph without each node. Conefor and
+Makurhini recompute the whole graph once per node; here, removing a node k only
+changes the paths that ran through it, which are the subtree of k in each source's
+shortest-path tree. Their new lengths come from a Dijkstra restricted to that
+subtree, seeded from untouched neighbours. For links, most subtree nodes keep their
+level through another neighbour and are skipped. For probabilities, the four best
+ways into every node, kept while the tree is built, give most seeds without
+scanning the neighbours. The per-node contributions are merged in source order, so
+the results do not depend on the number of threads.
+
+### Verification
+
+* `tools/make_reference_conn.py` runs Makurhini's `MK_dPCIIC` (Makurhini 3.0) on its
+  example `habitat_nodes` (404 patches, centroid distances) and three synthetic
+  scenes (random points, non-metric costs, separate clusters) with IIC and PC,
+  several distances, probabilities, `pij_min` and landscape areas
+  (`tests/data/reference/conn/makurhini.csv.gz`). `tests/test_conn_reference.py`
+  compares the unrounded values of its internal steps to 1e-12 and reproduces its
+  rounded output exactly.
+* The same script builds Conefor Sensinode 2.2's own index code (`landscape.cpp`,
+  with `tools/conefor/conefor_harness.cpp` replaying its node-removal loop) with
+  g++ and stores every index and node importance of the synthetic scenes
+  (`conefor.csv.gz`). Conefor computes in single precision: the values agree to
+  its precision (1e-5 relative for the indices).
+* `tests/test_conn.py` checks every index and importance against a brute-force
+  recomputation of the graph without each node (and with its attribute set to 0),
+  under both conventions, and the input kinds, pair tables, Conefor files and
+  thread independence.
+
+### Performance
+
+| graph | Makurhini 3.0 | landschaft |
+|---|---|---|
+| `habitat_nodes` (404 patches), 10 km, IIC / PC with node importance | 1.4 s / 10.6 s | 0.005 s / 0.017 s |
+| 2,000 random patches, 9 km (47 k links; PC: 1.2 M pairs above `pij_min`), IIC / PC | – | 0.09 s / 1.7 s |
+| 5,000 random patches, 6 km (134 k links; PC: 4.3 M pairs), IIC / PC | – | 0.8 s / 19 s |

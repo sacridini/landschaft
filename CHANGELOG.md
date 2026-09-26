@@ -6,6 +6,21 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 1 (Conefor Sensinode / Makurhini): `HabitatGraph`
+  (nodes with an attribute, and distances, dispersal probabilities or links between
+  them, as a matrix or a pair table) with Conefor's indices NC, NL, H, CCP, LCP, IIC, F,
+  AWF and PC (`overall`, with EC and Makurhini's intra/direct/step split of IIC and PC)
+  and the importance of every node (`node_importance`: dA, dNC, dNL, dH, dCCP, dLCP, dF,
+  dAWF, dIIC and dPC with their intra, flux and connector fractions, varPC), for one or
+  several distances; `components`; Conefor's node and connection files
+  (`from_conefor`, `to_conefor`). `convention="makurhini"` (default) matches
+  Makurhini's `MK_dPCIIC` (its unrounded values to 1e-12, its rounded output exactly),
+  `convention="conefor"` Conefor Sensinode 2.2 (to its single precision). The node
+  importances do not recompute the graph once per node: only the shortest paths
+  through the removed node are repaired, in parallel over the sources: Makurhini's
+  example data (404 patches) in 5 ms (IIC) / 17 ms (PC) instead of 1.4 s / 10.6 s.
+
 ## [0.29.0] - 2026-09-26
 
 ### Changed

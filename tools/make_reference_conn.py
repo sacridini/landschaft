@@ -1,0 +1,225 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Generate golden habitat-graph outputs with Makurhini (R) and Conefor Sensinode 2.2.
+
+Usage::
+
+    python tools/make_reference_conn.py [makurhini] [conefor]
+
+``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
+in ``tests/lsm_reference.py``; the default R library is used). It exports
+Makurhini's example ``habitat_nodes`` (centroid distances), builds three
+synthetic scenes, stores them in ``tests/data/reference/conn/scenes.npz`` and
+runs ``MK_dPCIIC`` (public, rounded output and the unrounded internal steps,
+``tools/conn_makurhini_reference.R``) into ``makurhini.csv.gz``.
+
+``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
+Sensinode 2.2 sources (``LANDSCHAFT_CONEFOR_SRC``, default
+``../Conefor Sensinode 2.2/src`` next to the repository) with g++ (Rtools:
+``LANDSCHAFT_GXX_PATH``, default ``C:/rtools44``) and stores its indices and
+node importances for the synthetic scenes in ``conefor.csv.gz``. The
+test-suite compares landschaft against these files, so it runs without R or
+Conefor.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tests"))
+
+import lsm_reference  # noqa: E402
+
+OUT = ROOT / "tests" / "data" / "reference" / "conn"
+R_SCRIPT = ROOT / "tools" / "conn_makurhini_reference.R"
+CONEFOR_SRC = Path(os.environ.get("LANDSCHAFT_CONEFOR_SRC", ROOT.parent / "Conefor Sensinode 2.2" / "src"))
+RTOOLS = Path(os.environ.get("LANDSCHAFT_GXX_PATH", "C:/rtools44"))
+
+
+def _synthetic() -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    rng = np.random.default_rng(20260926)
+    scenes = {}
+    # Random points, lognormal areas, Euclidean distances.
+    xy = rng.uniform(0, 50_000, (60, 2))
+    area = rng.lognormal(0.0, 1.0, 60)
+    scenes["points60"] = (np.arange(1, 61), area, np.hypot(*(xy[:, None, :] - xy[None, :, :]).transpose(2, 0, 1)))
+    # Non-metric costs (least-cost-like): stepping stones beat direct links.
+    n = 40
+    c = rng.uniform(1_000, 20_000, (n, n))
+    c = np.triu(c, 1)
+    c = c + c.T
+    scenes["cost40"] = (np.arange(101, 101 + n), rng.uniform(0.5, 30.0, n), c)
+    # Four far-apart clusters: several components, cut nodes, unconnected pairs.
+    centres = np.array([[0, 0], [40_000, 0], [0, 40_000], [40_000, 40_000]])
+    pts = np.concatenate([centres[k] + rng.normal(0, 2_500, (12, 2)) for k in range(4)] + [rng.uniform(0, 40_000, (2, 2))])
+    area = rng.gamma(2.0, 2.0, len(pts))
+    scenes["clusters50"] = (np.arange(1, len(pts) + 1) * 3, area,
+                            np.hypot(*(pts[:, None, :] - pts[None, :, :]).transpose(2, 0, 1)))
+    return scenes
+
+
+# (metric, distance, probability, pij_min, la) per scene; "" = NULL in R.
+JOBS = {
+    "habitat": [("IIC", 10_000, "", "", ""), ("IIC", 20_000, "", "", ""), ("PC", 10_000, 0.5, 0.01, ""),
+                ("PC", 40_000, 0.05, "", "LA")],
+    "points60": [("IIC", 6_000, "", "", "LA"), ("IIC", 12_000, "", "", ""), ("PC", 8_000, 0.5, 0.01, "LA"),
+                 ("PC", 15_000, 0.5, "", ""), ("PC", 5_000, 0.05, 0.001, "")],
+    "cost40": [("IIC", 4_000, "", "", ""), ("IIC", 8_000, "", "", "LA"), ("PC", 5_000, 0.5, 0.01, ""),
+               ("PC", 10_000, 0.2, "", "LA")],
+    "clusters50": [("IIC", 4_000, "", "", ""), ("IIC", 30_000, "", "", ""), ("PC", 6_000, 0.5, 0.01, "LA"),
+                   ("PC", 20_000, 0.5, "", "")],
+}
+# Conefor runs: (distance, probability, landscape area factor); binary links at
+# the same distance.
+CONEFOR_JOBS = {
+    "points60": [(6_000, 0.5, 0), (12_000, 0.05, 3)],
+    "cost40": [(4_000, 0.5, 0), (8_000, 0.2, 2)],
+    "clusters50": [(4_000, 0.5, 2), (30_000, 0.5, 0)],
+}
+
+
+def landscape_area(attr: np.ndarray) -> float:
+    """The LA of the jobs marked "LA": a round number above the total attribute."""
+    return float(np.ceil(2.5 * attr.sum()))
+
+
+def save_scenes(scenes) -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
+    arrays = {}
+    for name, (ids, attr, dist) in scenes.items():
+        i, j = np.triu_indices(len(ids), 1)
+        arrays[f"{name}__ids"] = ids
+        arrays[f"{name}__attr"] = attr
+        arrays[f"{name}__upper"] = dist[i, j]
+    np.savez_compressed(OUT / "scenes.npz", **arrays)
+
+
+def load_scenes() -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    data = np.load(OUT / "scenes.npz")
+    names = sorted({k.split("__")[0] for k in data.files})
+    out = {}
+    for name in names:
+        ids, attr, upper = data[f"{name}__ids"], data[f"{name}__attr"], data[f"{name}__upper"]
+        n = len(ids)
+        dist = np.zeros((n, n))
+        i, j = np.triu_indices(n, 1)
+        dist[i, j] = upper
+        dist[j, i] = upper
+        out[name] = (ids, attr, dist)
+    return out
+
+
+def run_makurhini() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        subprocess.run([str(rscript), str(R_SCRIPT), "export", str(tmp)], check=True)
+        nodes = pd.read_csv(tmp / "habitat_nodes.csv", float_precision="round_trip")
+        pairs = pd.read_csv(tmp / "habitat_pairs.csv", float_precision="round_trip")
+        ids = nodes["id"].to_numpy()
+        index = pd.Index(ids)
+        dist = np.zeros((len(ids), len(ids)))
+        fi, fj = index.get_indexer(pairs["from"]), index.get_indexer(pairs["to"])
+        dist[fi, fj] = pairs["distance"].to_numpy()
+        dist[fj, fi] = pairs["distance"].to_numpy()
+        scenes = {"habitat": (ids, nodes["attribute"].to_numpy(), dist), **_synthetic()}
+        save_scenes(scenes)
+        scenes = load_scenes()
+        jobs = []
+        for name, (ids, attr, dist) in scenes.items():
+            node_file, matrix_file = tmp / f"{name}_nodes.csv", tmp / f"{name}_matrix.csv"
+            pd.DataFrame({"id": ids, "attribute": [repr(float(v)) for v in attr]}).to_csv(node_file, index=False)
+            np.savetxt(matrix_file, dist, delimiter=",", fmt="%.17g")
+            for metric, d, p, pij, la in JOBS[name]:
+                jobs.append({"scene": name, "nodes": node_file.as_posix(), "matrix": matrix_file.as_posix(),
+                             "metric": metric, "distance": d, "probability": p, "pij_min": pij,
+                             "la": repr(landscape_area(attr)) if la == "LA" else ""})
+        pd.DataFrame(jobs).to_csv(tmp / "jobs.csv", index=False)
+        subprocess.run([str(rscript), str(R_SCRIPT), "run", str(tmp / "jobs.csv"), str(tmp / "out.csv")], check=True)
+        out = pd.read_csv(tmp / "out.csv", float_precision="round_trip", keep_default_na=False,
+                          dtype={"probability": str, "pij_min": str, "la": str, "id": str})
+        out.to_csv(OUT / "makurhini.csv.gz", index=False)
+        print(f"makurhini: {len(out)} values")
+
+
+def build_conefor(exe: Path) -> None:
+    """Compile Conefor's landscape.cpp with tools/conefor/conefor_harness.cpp.
+
+    Borland C++ bound temporaries to non-const references; two calls in
+    landscape.cpp rely on it, so a copy of the file gets named temporaries.
+    """
+    work = exe.parent / "conefor_src"
+    work.mkdir(exist_ok=True)
+    for header in CONEFOR_SRC.glob("*.h"):
+        (work / header.name).write_bytes(header.read_bytes())
+    code = (CONEFOR_SRC / "landscape.cpp").read_bytes().decode("latin-1")
+    patches = {
+        "nodes[i].list_adjacency.inserir(j-1,ite1);":
+            "{ int jm1 = j - 1; nodes[i].list_adjacency.inserir(jm1, ite1); }",
+        "nodes[i].list_adjacency.inserirFi(nNodes-1);":
+            "{ int last = nNodes - 1; nodes[i].list_adjacency.inserirFi(last); }",
+    }
+    for old, new in patches.items():
+        if old not in code:
+            raise SystemExit(f"unexpected Conefor source: {old!r} not found")
+        code = code.replace(old, new)
+    (work / "landscape.cpp").write_bytes(code.encode("latin-1"))
+    env = dict(os.environ)
+    env["PATH"] = os.pathsep.join([str(RTOOLS / "x86_64-w64-mingw32.static.posix" / "bin"), env["PATH"],
+                                   str(RTOOLS / "usr" / "bin")])
+    here = ROOT / "tools" / "conefor"
+    gxx = RTOOLS / "x86_64-w64-mingw32.static.posix" / "bin" / "g++.exe"
+    subprocess.run([str(gxx) if gxx.exists() else "g++", "-std=c++17", "-O2", "-fpermissive", "-w", "-I", str(here / "shim"), "-I", str(work),
+                    str(here / "conefor_harness.cpp"), str(work / "landscape.cpp"), "-o", str(exe)],
+                   check=True, env=env)
+
+
+def run_conefor() -> None:
+    scenes = load_scenes()
+    rows = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        exe = tmp / "conefor_harness.exe"
+        build_conefor(exe)
+        for name, jobs in CONEFOR_JOBS.items():
+            ids, attr, dist = scenes[name]
+            for d, p, la_factor in jobs:
+                la = int(np.ceil(la_factor * attr.sum())) if la_factor else 0
+                f = tmp / "in.txt"
+                with open(f, "w") as out:
+                    out.write(f"{len(ids)} {d!r} {d!r} {p!r} 0 {la}\n")
+                    for i, a in zip(ids, attr):
+                        out.write(f"{i} {float(a)!r}\n")
+                    for row in dist:
+                        out.write(" ".join(repr(float(v)) for v in row) + "\n")
+                text = subprocess.run([str(exe), str(f)], check=True, capture_output=True, text=True).stdout
+                header = None
+                for line in text.splitlines():
+                    parts = line.split(",")
+                    if parts[0] == "overall":
+                        rows.append((name, d, p, la, "overall", "", parts[1], parts[2]))
+                    elif parts[0] == "node" and parts[1] == "label":
+                        header = parts[2:]
+                    else:
+                        for key, value in zip(header, parts[2:]):
+                            rows.append((name, d, p, la, "node", parts[1], key, value))
+    frame = pd.DataFrame(rows, columns=["scene", "distance", "probability", "la", "level", "id", "name", "value"])
+    frame.to_csv(OUT / "conefor.csv.gz", index=False)
+    print(f"conefor: {len(frame)} values")
+
+
+if __name__ == "__main__":
+    parts = sys.argv[1:] or ["makurhini", "conefor"]
+    if "makurhini" in parts:
+        run_makurhini()
+    if "conefor" in parts:
+        run_conefor()

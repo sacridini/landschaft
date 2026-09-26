@@ -13,6 +13,11 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Uso e API
 
+- Próxima parte (o que ainda falta da API do landscapemetrics): `full_name` (colunas
+  `name`, `type` e `function_name` como no `calculate_lsm`), `return_raster` no
+  `sample_metrics` (o recorte do raster de cada plot, como no `sample_lsm`) e os
+  helpers públicos `construct_buffer`, `pad_raster`, `raster_to_points` e
+  `get_unique_values`, conferidos contra o R como nas outras partes.
 
 ## Exportação
 
@@ -39,6 +44,82 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   poderiam gravar direto num GeoTIFF (reescrevendo os rótulos na passada de detalhe).
   Blocos processados em paralelo (hoje um bloco por vez, paralelo por faixas) ajudariam
   em rasters estreitos.
+
+## Conectividade em grafos (Conefor Sensinode / Makurhini)
+
+Análise de 2026-09-26. O Conefor Sensinode 2.2 (`C:\Users\eduar\Documents\dev\Conefor
+Sensinode 2.2`) é o motor original dos índices de Saura: C++ Borland com interface gráfica
+só para Windows (cálculo em `landscape.cpp` e `sensinodeProgram.cpp`, em `float` de 32 bits).
+Lê só tabelas (nós com atributo, conexões como distâncias, probabilidades ou adjacências)
+e calcula NC, NL, H, CCP, LCP, IIC, F, AWF e PC, com `p = exp(ln(k)/d₀ · d)` e caminhos de
+produto máximo (Dijkstra sobre `-log p`, poda por `minProb`), além de dI por remoção de nós
+(frações intra, flux e connector), varPC (adição de nós) e nós de área zero. Não tem
+betweenness (BC, BCIIC, BCPC), que só existe no Conefor 2.6 de linha de comando.
+O Makurhini 3.0 (`C:\Users\eduar\Documents\dev\Makurhini`, R) cobre o fluxo inteiro:
+- nós em vetor ou raster;
+- distâncias (`distancefile`): centroide, borda, menor custo, commute-time;
+- índices: `MK_dPCIIC` (frações intra/direct/step), `MK_dECA`, `MK_dPCIIC_links`,
+  `MK_Focal_nodes` (IICf, PCf, CCI);
+- ProtConn e frações (`MK_ProtConn`, `MK_ProtConnMult`, `MK_ProtConn_raster`);
+- centralidades `MK_BCentrality` (via Conefor 2.6) e `MK_RMCentrality`;
+- versões em grade (`MK_Connect_grid`, `MK_dECA_grid`) e o PC por SAMC (`MK_dPC_SAMC`);
+- `MK_Fragmentation`, `dispersal_distance`, `probability_distance`, `test_metric_distance`.
+
+No dI ele recalcula as distâncias do grafo inteiro a cada nó removido (lento com milhares
+de nós). Todos são GPL, como o landschaft.
+
+Já existe no landschaft: `gtn_components` e `gtn_importance` (ECA, DOC e dPC na versão
+topológica do GTB: cores e bridges do MSPA, `p = 1`), `conefor_inputs`, `cost_distance` e
+`least_cost_path`; no `lsm`, rotulagem, área, core, a árvore do ENN (base da distância borda
+a borda), `grid_zones`, `zonal_metrics` e `SpatioTemporalAnalysis`.
+
+Proposta: módulo novo com a arquitetura do `lsm` (motor C++/OpenMP em `src/cpp/conn/` e um
+objeto Python que guarda os resultados intermediários):
+
+```python
+g = ls.HabitatGraph.from_raster(cover, habitat=[1], min_area=10, distance="edge", threshold=20_000)
+g = ls.HabitatGraph.from_vector(gdf, attribute="area", distance="least-cost", resistance=res)
+g = ls.HabitatGraph.from_conefor("nodes.txt", "distances.txt")
+g.overall(["pc", "iic", "eca", "nc", "h", "awf"], distance=[1000, 5000], probability=0.5)
+g.node_importance("pc", distance=5000, probability=0.5)  # dPC, intra, flux, connector
+g.link_importance("pc", ...); g.centrality(["bc", "bcpc", "radial", "medial"], ...)
+g.add_nodes(candidates)                                  # varPC (restauração)
+ls.eca_change([g_2000, g_2020]); ls.protconn(pas, region, distance=10_000, probability=0.5)
+ls.connectivity_grid(g, grid_zones(...))
+```
+
+- Motor em camadas:
+  1. nós (rotulagem do `lsm`; vetores pela rasterização all-touched ou pela geometria);
+  2. distâncias esparsas até o limiar (borda a borda pela árvore do ENN, menor custo por
+     Dijkstra multi-fonte em paralelo por nó, commute-time por sistema linear esparso
+     com Eigen);
+  3. grafo em CSR, PC por Dijkstra de produto máximo por nó em paralelo, IIC por busca
+     em largura, dI recalculando só os caminhos que passavam pelo nó removido e só no
+     componente dele;
+  4. ProtConn (frações sobre PC e ECA, região e transfronteira).
+- `gtn_importance` vira um caso especial (grafo do MSPA com `p = 1`); `HabitatGraph.to_conefor`
+  generaliza o `conefor_inputs`.
+- Fases:
+  1. motor de grafo (IIC, PC, ECA, NC, NL, H, CCP, LCP, F, AWF, dI com frações) lendo e
+     escrevendo os arquivos do Conefor. **Feita** (0.30.0: `HabitatGraph`, conferido com
+     o Makurhini a 1e-12 e com o Conefor 2.2 compilado, em precisão simples);
+  2. nós de raster e vetor, distâncias euclidianas (centroide e borda) com limiar;
+  3. distâncias de menor custo (reaproveitando o `cost_distance`);
+  4. importância das ligações, varPC, dECA no tempo e índices em grade;
+  5. ProtConn completo (uma ou várias regiões);
+  6. centralidades (BC, BCIIC, BCPC, radial, medial) e focais (IICf, PCf, CCI);
+  7. opcionais: commute-time e SAMC (Fletcher et al. 2023).
+- Decidido: o Makurhini (instalado na biblioteca do RStudio) é a referência, e o
+  Conefor 2.2 compilado (`tools/conefor`) é conferido na precisão simples dele.
+- Desempenho do PC em grafos densos (milhares de nós com `pij_min` baixo): o Dijkstra
+  de todas as fontes é limitado pela memória (5000 nós, 4,3 M pares: 14 s dos 19 s).
+  Ideias: linhas ordenadas por custo com poda (parar a varredura quando
+  `d_v + w` passa do maior custo provisório, depois que todos os nós foram
+  alcançados); custos em `float` só para filtrar; quando as distâncias são métricas
+  (centroides), o caminho direto já é o melhor para os pares ligados.
+- A decidir:
+  - vetores com geopandas/shapely como dependências opcionais (extra `vector`);
+  - se ProtConn e SAMC entram no escopo.
 
 ## Observações para os testes
 

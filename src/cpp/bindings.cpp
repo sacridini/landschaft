@@ -36,6 +36,7 @@
 #include "gtb/primitives.hpp"
 #include "gtb/restoration.hpp"
 #include "gtb/spa.hpp"
+#include "conn/graph.hpp"
 #include "lsm/landscape.hpp"
 
 namespace py = pybind11;
@@ -971,11 +972,82 @@ void bind_landscape(py::module_& m) {
         py::arg("options"));
 }
 
+// One scenario of a habitat graph: the link and/or probabilistic analyses.
+py::dict conn_analyse(const CArray<std::int32_t>& pi, const CArray<std::int32_t>& pj, const CArray<double>& value,
+                      const CArray<double>& area, const std::string& kind, double threshold, double probability,
+                      double pij_min, double expand_limit, bool conefor, bool links, bool probabilities,
+                      bool importance, int n_threads) {
+    if (pi.ndim() != 1 || pj.ndim() != 1 || value.ndim() != 1 || area.ndim() != 1) {
+        throw py::value_error("expected 1-D arrays");
+    }
+    const auto n = static_cast<std::int32_t>(area.shape(0));
+    conn::Pairs pairs;
+    pairs.i.assign(pi.data(), pi.data() + pi.shape(0));
+    pairs.j.assign(pj.data(), pj.data() + pj.shape(0));
+    pairs.value.assign(value.data(), value.data() + value.shape(0));
+    std::vector<double> a(area.data(), area.data() + n);
+    conn::Scenario s;
+    if (kind == "distance") s.kind = conn::Kind::Distance;
+    else if (kind == "probability") s.kind = conn::Kind::Probability;
+    else if (kind == "link") s.kind = conn::Kind::Link;
+    else throw py::value_error("kind must be 'distance', 'probability' or 'link'");
+    s.threshold = threshold;
+    s.probability = probability;
+    s.pij_min = pij_min;
+    s.conefor = conefor;
+
+    py::dict out;
+    if (links) {
+        conn::LinkResult r = lsm_call(n_threads, [&] {
+            const conn::Csr g = conn::make_link_graph(n, pairs, s);
+            return conn::analyse_links(g, a.data(), importance);
+        });
+        out["nl"] = r.nl;
+        out["nc"] = r.nc;
+        out["h"] = r.h;
+        out["iic_reach"] = r.iic_reach;
+        out["iic_direct"] = r.iic_direct;
+        out["unreach_aa"] = r.unreach_aa;
+        out["comp_sq"] = r.comp_sq;
+        out["component"] = vector_array(r.component);
+        if (importance) {
+            out["iic_row"] = vector_array(r.iic_row);
+            out["unreach_a"] = vector_array(r.unreach_a);
+            out["h_row"] = vector_array(r.h_row);
+            out["iic_conn"] = vector_array(r.iic_conn);
+            out["h_conn"] = vector_array(r.h_conn);
+            out["degree"] = vector_array(r.degree);
+            out["pieces"] = vector_array(r.pieces);
+            out["pieces_sq"] = vector_array(r.pieces_sq);
+        }
+    }
+    if (probabilities) {
+        std::vector<double> f_row, awf_row;
+        conn::ProbResult r = lsm_call(n_threads, [&] {
+            const conn::Csr g = conn::make_prob_graph(n, pairs, s, a.data(), &f_row, &awf_row);
+            return conn::analyse_probabilities(g, a.data(), expand_limit, importance);
+        });
+        out["pc_num"] = r.pc_num;
+        out["pc_direct"] = r.pc_direct;
+        out["f_row"] = vector_array(f_row);
+        out["awf_row"] = vector_array(awf_row);
+        if (importance) {
+            out["pc_row"] = vector_array(r.pc_row);
+            out["pc_conn"] = vector_array(r.pc_conn);
+        }
+    }
+    return out;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
     m.doc() = "landschaft C++ core (MSPA, GTN, FAD, distance, entropy and landscape metrics).";
     bind_landscape(m);
+    m.def("conn_analyse", &conn_analyse, py::arg("pi"), py::arg("pj"), py::arg("value"), py::arg("area"),
+          py::arg("kind"), py::arg("threshold"), py::arg("probability"), py::arg("pij_min"), py::arg("expand_limit"),
+          py::arg("conefor"), py::arg("links"), py::arg("probabilities"), py::arg("importance"),
+          py::arg("n_threads") = 0, "Connectivity indices of one habitat-graph scenario (see src/cpp/conn/graph.hpp).");
     m.def("mspa", &mspa, py::arg("input"), py::arg("connectivity") = 8, py::arg("edge_width") = 1,
           py::arg("internal") = true, py::arg("n_threads") = 0,
           "Run MSPA on a uint8 array coded 0=missing, 1=background, 2=foreground.");
