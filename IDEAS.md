@@ -233,7 +233,9 @@ Fases:
    densos nos separadores) é o próximo ganho, na fase 3. O cg+amg do Circuitscape refaz o solve
    com `rtol/100` quando o resíduo verdadeiro passa de 1e-4 (aconteceu em r = 100 e 200);
 1. núcleo de circuito (Laplaciano, solve, corrente nos nós), conferido com o
-   `compute_omniscape_current` com `cholmod`;
+   `compute_omniscape_current` com `cholmod`. **Feita** (0.41.0: `ls.circuit.advanced`,
+   `src/cpp/circuit/` com `CellSystem`, o padrão fixo reaproveitável pelas janelas; a 1,2e-13
+   do CHOLMOD, mesmas células com corrente; o cg+amg fica a 2e-7);
 2. Omniscape básico (alvos, fontes, terra, correção, flow potential, normalizada,
    `mask_nodata`, com as peculiaridades), conferido com `test/output_verify` (test1–5) e
    referências novas;

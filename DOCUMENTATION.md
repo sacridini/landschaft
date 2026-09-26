@@ -22,6 +22,7 @@ It provides a native **C++17 / OpenMP** core exposed through zero-copy **pybind1
 12. [Accuracy & Bit-for-Bit Verification](#12-accuracy--bit-for-bit-verification)
 13. [Landscape Metrics (FRAGSTATS / landscapemetrics)](#13-landscape-metrics-fragstats--landscapemetrics)
 14. [Habitat Connectivity Graphs (Conefor Sensinode / Makurhini)](#14-habitat-connectivity-graphs-conefor-sensinode--makurhini)
+15. [Circuit Connectivity (Circuitscape / Omniscape)](#15-circuit-connectivity-circuitscape--omniscape)
 
 ---
 
@@ -1510,3 +1511,53 @@ the results do not depend on the number of threads.
 | 2,000 random patches: importance of every link, IIC (47 k links) / PC (1.2 M edges) | – | 0.1 s / 1.9 s |
 | 5,000 random patches: importance of every link, IIC (134 k) / PC (4.3 M) | – | 0.9 s / 22 s |
 | `habitat_nodes_raster` (398 patches), 20 km: centrality, binary / weighted (79 k edges) | 0.53 s / 1.1 s | 0.07 s / 0.14 s |
+
+---
+
+## 15. Circuit Connectivity (Circuitscape / Omniscape)
+
+`ls.circuit` treats a conductance raster as an electrical circuit, as
+[Circuitscape](https://circuitscape.org) 6.1 does, and is the base of the port of
+[Omniscape](https://github.com/Circuitscape/Omniscape.jl) 0.7 (omnidirectional
+moving-window connectivity; in progress, see IDEAS.md).
+
+```python
+import numpy as np
+import landschaft as ls
+
+conductance = 1 / resistance            # NaN: no node
+source = np.zeros_like(conductance)     # amps injected per cell
+ground = np.zeros_like(conductance)     # conductance to ground; np.inf: direct ground (0 V)
+source[10, 12] = 1.0
+ground[80, 95] = np.inf
+
+r = ls.circuit.advanced(conductance, source, ground)   # four_neighbors=False, n_threads=0
+r.current   # current through every cell (0 where nothing flows)
+r.voltage   # node voltages (NaN without a node)
+```
+
+### How it works
+
+It is Circuitscape's advanced mode on in-memory rasters (`compute_omniscape_current`,
+the solve behind every Omniscape window):
+
+* every cell with a conductance > 0 is a node, joined to its 8 neighbours (4 with
+  `four_neighbors=True`) by the average conductance of both cells, `(x + y) / 2`, or
+  `(x + y) / (2√2)` on the diagonals;
+* a cell that is both a source and a ground loses its source; every connected component
+  with a source and a ground is solved (finite grounds on the diagonal, direct grounds at
+  0 V), the others carry no current;
+* the grounded Laplacian is factorised exactly (sparse LDLᵀ from Eigen, in a
+  nested-dissection order of the grid cells; independent components in parallel);
+* a node's current is the larger of its inflow and outflow, leaving out branch currents
+  under 1e-8 of the largest one, with Circuitscape's column-major node order.
+
+### Verification
+
+`python tools/make_reference_omniscape.py advanced` (Julia with Circuitscape 6.1, see the
+script) runs `compute_omniscape_current` with the `cholmod` and the default `cg+amg`
+solvers on synthetic rasters: NoData islands, finite and direct grounds, components
+without a source or a ground, 4 and 8 neighbours, an Omniscape window and conductances
+over six orders of magnitude (`tests/data/reference/circuit`). The same cells carry
+current and the values agree with CHOLMOD to 1.2e-13 of the largest current; the
+iterative `cg+amg` itself is 2e-7 away from both.

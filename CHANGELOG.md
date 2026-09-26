@@ -6,6 +6,20 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-09-26
+
+### Added
+- Circuit connectivity, part 1 (port of Omniscape 0.7 / Circuitscape 6.1): the circuit
+  core. `ls.circuit.advanced` is Circuitscape's advanced mode on in-memory rasters
+  (`compute_omniscape_current`, the solve behind every Omniscape window): cells with a
+  conductance > 0 joined to 8 or 4 neighbours, sources, finite and direct grounds, every
+  component with a source and a ground solved exactly (Eigen's sparse LDLT in a
+  nested-dissection order of the cells, components in parallel), node currents with
+  Circuitscape's 1e-8 branch threshold. Matched with Circuitscape's CHOLMOD solve to
+  1.2e-13 of the largest current (its default cg+amg is 2e-7 away).
+- Eigen 3.4.0 (headers only) is fetched by CMake at build time
+  (`FETCHCONTENT_SOURCE_DIR_EIGEN` for offline builds).
+
 ## [0.40.0] - 2026-09-26
 
 ### Added

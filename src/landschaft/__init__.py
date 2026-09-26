@@ -23,6 +23,7 @@ from .change import (
     morphological_change,
     simple_change,
 )
+from . import circuit
 from .collection import RasterCollection, RasterInfo
 from . import conn
 from .conn import HabitatGraph
@@ -170,6 +171,7 @@ __all__ = [
     "accounting",
     "accounting_colormap",
     "change_colormap",
+    "circuit",
     "batch",
     "clustering_fac",
     "conefor_inputs",

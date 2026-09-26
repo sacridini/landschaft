@@ -36,6 +36,7 @@
 #include "gtb/primitives.hpp"
 #include "gtb/restoration.hpp"
 #include "gtb/spa.hpp"
+#include "circuit/grid.hpp"
 #include "conn/cost.hpp"
 #include "conn/graph.hpp"
 #include "conn/nodes.hpp"
@@ -1291,6 +1292,22 @@ py::dict conn_samc_transitions(const CArray<double>& resistance, const CArray<do
     return out;
 }
 
+py::dict circuit_advanced(const CArray<double>& conductance, const CArray<double>& source,
+                          const CArray<double>& ground, bool four_neighbors, int n_threads) {
+    if (conductance.ndim() != 2 || source.ndim() != 2 || ground.ndim() != 2 ||
+        source.shape(0) != conductance.shape(0) || source.shape(1) != conductance.shape(1) ||
+        ground.shape(0) != conductance.shape(0) || ground.shape(1) != conductance.shape(1))
+        throw py::value_error("expected conductance, source and ground rasters of the same shape");
+    const i64 ny = conductance.shape(0), nx = conductance.shape(1);
+    circuit::AdvancedResult r = run_parallel(n_threads, [&] {
+        return circuit::advanced(conductance.data(), source.data(), ground.data(), nx, ny, four_neighbors, n_threads);
+    });
+    py::dict out;
+    out["current"] = to_array(std::move(r.current), nx, ny);
+    out["voltage"] = to_array(std::move(r.voltage), nx, ny);
+    return out;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -1313,6 +1330,9 @@ PYBIND11_MODULE(_core, m) {
           "Gains of adding each candidate node.");
     m.def("conn_edge_gains", &conn_edge_gains, py::arg("D"), py::arg("area"), py::arg("ea"), py::arg("eb"),
           py::arg("elen"), py::arg("hops"), py::arg("n_threads") = 0, "Gains of adding each edge.");
+    m.def("circuit_advanced", &circuit_advanced, py::arg("conductance"), py::arg("source"), py::arg("ground"),
+          py::arg("four_neighbors") = false, py::arg("n_threads") = 0,
+          "Circuitscape's advanced mode on a raster: node currents and voltages.");
     m.def("conn_raster_nodes", &conn_raster_nodes, py::arg("values"), py::arg("na"), py::arg("xmin"), py::arg("xmax"),
           py::arg("ymin"), py::arg("ymax"), py::arg("centroids"), py::arg("keep_index"), py::arg("n_threads") = 0,
           "Patch ids, cell counts, centroids and node index of a raster of patch ids.");

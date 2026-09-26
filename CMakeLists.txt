@@ -45,6 +45,28 @@ add_library(lsmcore STATIC
 )
 target_include_directories(lsmcore PUBLIC src/cpp)
 
+# Eigen 3.4.0 (headers only) for the sparse solvers of the circuit module.
+# FETCHCONTENT_SOURCE_DIR_EIGEN=<path> uses a local copy (offline builds).
+include(FetchContent)
+FetchContent_Declare(eigen
+    URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+    URL_HASH SHA256=8586084f71f9bde545ee7fa6d00288b264a2b7ac3607b974e54d13e7162c1c72
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    # No CMakeLists.txt there: only download, do not configure Eigen's own project.
+    SOURCE_SUBDIR headers-only)
+FetchContent_MakeAvailable(eigen)
+add_library(eigen_headers INTERFACE)
+target_include_directories(eigen_headers SYSTEM INTERFACE ${eigen_SOURCE_DIR})
+target_compile_definitions(eigen_headers INTERFACE EIGEN_MPL2_ONLY)
+
+add_library(circuitcore STATIC
+    src/cpp/circuit/grid.cpp
+    src/cpp/circuit/system.cpp
+)
+target_include_directories(circuitcore PUBLIC src/cpp)
+target_link_libraries(circuitcore PRIVATE eigen_headers)
+set_target_properties(circuitcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 add_library(conncore STATIC
     src/cpp/conn/cost.cpp
     src/cpp/conn/graph.cpp
@@ -69,6 +91,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(gtbcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(lsmcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(conncore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(circuitcore PUBLIC OpenMP::OpenMP_CXX)
     else()
         message(WARNING "OpenMP not found: building single-threaded")
     endif()
@@ -80,14 +103,16 @@ if(MSVC)
     target_compile_options(gtbcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(lsmcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(conncore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(circuitcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(conncore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(circuitcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
 pybind11_add_module(_core MODULE src/cpp/bindings.cpp)
-target_link_libraries(_core PRIVATE gtbcore lsmcore conncore)
+target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()
