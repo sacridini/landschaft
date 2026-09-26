@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 3: least-cost distances.
   `distance_table(..., distance="least-cost", resistance=...)` and the same option in
