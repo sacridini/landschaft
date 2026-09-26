@@ -6,6 +6,25 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-09-26
+
+### Added
+- Circuit connectivity, part 5d/5e: Circuitscape's one-to-all and all-to-one modes on
+  rasters (`ls.circuit.circuitscape_one_to_all`, `circuitscape_ini` with those
+  scenarios): focal points and regions merged into the short-circuit regions, include
+  files, variable source strengths, per-point voltage and current maps, cumulative and
+  maximum maps, with Circuitscape's quirks; the points are solved in parallel on one
+  graph. `circuitscape_ini` now runs every raster scenario and writes Circuitscape's
+  outputs. Matched with Circuitscape's CHOLMOD runs of its 25 one-to-all / all-to-one
+  test cases to 5e-14.
+
+### Changed
+- One-to-all / all-to-one factorise every component once without the focal nodes and
+  solve each point through the Schur complement on them (Circuitscape factorises once
+  per point); ASCII grids are written by a parallel C++ formatter. On a 1000x1000 grid
+  with 20 focal points, against Circuitscape with 20 threads: pairwise 2.7 s (8.7 s),
+  pairwise with the cumulative map 9.5 s (76.5 s), one-to-all with maps 4.6 s (21.8 s).
+
 ## [0.47.0] - 2026-09-26
 
 ### Added
