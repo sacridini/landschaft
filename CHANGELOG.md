@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-26
+
 ### Added
 - Landscape metrics (FRAGSTATS) matching the R package landscapemetrics, part 1:
   `Landscape` (patch/class/landscape tables, long format, patch labels,
