@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 4: `sample_metrics()` (landscapemetrics' `sample_lsm`: square
   or circular plots around points, or polygons, cut exactly as `terra::crop(mask =
