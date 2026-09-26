@@ -29,11 +29,10 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   casos ficam para o processamento por tiles).
 - Janela móvel: reaproveitar rótulos globais e só corrigir os patches cortados pela
   borda da janela (algoritmo incremental). Hoje cada janela é uma paisagem pequena
-  (1000×1000, janela 21×21, 66 métricas: 8,7 s; ~97 µs por janela numa thread).
-  Perfil (py-spy --native, build com /Zi): círculo ~12%, rótulo ~10%, core ~8%, ENN
-  (já com SSE2) menor, alocações ~10% e a soma em 80 bits emulada (`Extended`) ~8%.
-  Reaproveitar os buffers do `Landscape` entre janelas cortaria as alocações; caminhos
-  rápidos para a soma/subtração do `Extended` ajudariam em todo lugar.
+  (1000×1000, janela 21×21, 66 métricas: ~7 s; ~73 µs por janela numa thread).
+  Perfil (py-spy --native, build com /Zi): círculo, rótulo e core são as maiores
+  partes, e as alocações ~10%: reaproveitar os buffers do `Landscape` entre janelas
+  cortaria as alocações.
 - Fora da memória (`block_rows`): o ENN guarda todas as células de borda (~24 B cada);
   um ENN realmente fora da memória (p. ex. árvores por bloco em disco, ou busca por
   anéis de blocos vizinhos) tiraria esse limite. `labels()`/`to_raster()` por blocos
@@ -59,11 +58,15 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   e alguns `enn` com células quase quadradas (a busca podada do R). `pafrac` já é
   bit a bit (QR do `lm()` portado, `rlm.cpp`).
   `circle` não tem como: o R embaralha os pontos ao acaso.
-- As somas sequenciais em 80 bits custam: num mapa sal-e-pimenta com 10 M de
-  patches, as estatísticas de paisagem (uma cadeia sequencial por métrica) levam
-  ~0,7 s. Uma adição de `double` mais rápida (caminho rápido, 5 ns) já existe; a
-  subtração/multiplicação genéricas (~9 ns, latência) poderiam ter caminhos rápidos
-  sem desvios.
+- Plataformas: MSVC x64 usa a x87 via MASM (`x87_msvc.asm`); gcc/clang em x86-64
+  (Linux, macOS Intel) usam `long double` nativo e asm inline para log/sqrt; MinGW no
+  Windows emula (`SoftExtended`), pois o Windows deixa a x87 em 53 bits. Em ARM64
+  (Apple M1–M6, Linux aarch64) as somas são emuladas (os mesmos bits do R em x86),
+  mas `log`/`sqrt` vêm da libm do sistema: podem diferir no último bit do R-Windows
+  nas métricas com logaritmo (shdi, ent, frac...). Falta: CI em Linux/macOS/ARM
+  (cibuildwheel no GitHub Actions) com os testes bit a bit tolerando só essas, ou um
+  `log` x87 emulado em software (`fyl2x`/`fyl2xp1` com 64 bits) para ser bit a bit
+  também em ARM. OpenMP no macOS (Apple clang não traz; libomp) também é pendência.
 
 ## Fases combinadas (referência)
 
@@ -128,3 +131,7 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
     por pares de patches com SSE2, `stat_values` sem cópias, nomes comparados como
     `string_view`, laços `omp if` trocados por `parallel_for` (janelas: 130 → 97 µs
     por janela numa thread; 1000×1000 com 66 métricas: 12,0 s → 8,7 s). **Feita.**
+18. Somas do R na x87 (MSVC x64: `sum`, `mean`, `var` e `sum_of` em MASM, os mesmos
+    bits; estatísticas em 27 M de patches 5–8× mais rápidas, janelas 97 → 73 µs) e
+    portabilidade: o build com gcc (MinGW) passa todos os testes (emulação no Windows,
+    gyrate em `double` em todo lugar), MASM e intrínsecos só em x64. **Feita.**

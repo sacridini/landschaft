@@ -14,8 +14,13 @@
 #include <cstring>
 #include <limits>
 
-#if defined(_MSC_VER) && !defined(__clang__)
+// MSVC on x64 has 128-bit multiply/divide intrinsics; other compilers use
+// unsigned __int128.
+#if defined(_MSC_VER) && !defined(__clang__) && defined(_M_X64)
+#define LSM_MSVC_X64 1
 #include <intrin.h>
+#elif defined(_MSC_VER) && !defined(__clang__)
+#error "SoftExtended needs MSVC x64 or a compiler with unsigned __int128 (clang, gcc)"
 #endif
 
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -92,7 +97,7 @@ private:
     };
 
     static int clz64(std::uint64_t v) {
-#if defined(_MSC_VER) && !defined(__clang__)
+#if defined(LSM_MSVC_X64)
         unsigned long idx;
         _BitScanReverse64(&idx, v);
         return 63 - static_cast<int>(idx);
@@ -101,7 +106,7 @@ private:
 #endif
     }
     static U128 mul64(std::uint64_t a, std::uint64_t b) {
-#if defined(_MSC_VER) && !defined(__clang__)
+#if defined(LSM_MSVC_X64)
         std::uint64_t hi;
         const std::uint64_t lo = _umul128(a, b, &hi);
         return {hi, lo};
@@ -112,7 +117,7 @@ private:
     }
     // (hi:lo) / d with hi < d
     static std::uint64_t div128(std::uint64_t hi, std::uint64_t lo, std::uint64_t d, std::uint64_t* rem) {
-#if defined(_MSC_VER) && !defined(__clang__)
+#if defined(LSM_MSVC_X64)
         return _udiv128(hi, lo, d, rem);
 #else
         const unsigned __int128 n = (static_cast<unsigned __int128>(hi) << 64) | lo;
@@ -318,7 +323,10 @@ inline SoftExtended operator/(const SoftExtended& a, const SoftExtended& b) {
     return SoftExtended::round(hi, lo, e, neg);
 }
 
-#if LDBL_MANT_DIG == 64
+// Windows starts threads with the x87 unit at 53-bit precision (MinGW only
+// switches to 64 bits in programs it builds), so a MinGW module loaded by
+// Python would round every long double to double: emulate there too.
+#if LDBL_MANT_DIG == 64 && !defined(_WIN32)
 using Extended = long double;
 #else
 using Extended = SoftExtended;

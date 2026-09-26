@@ -785,6 +785,20 @@ against pylandstats or brute force:
 
 ### Bit-identical arithmetic
 
+How each platform gets R's bits (all checked by the same tests):
+
+| Build | 80-bit sums (`sum`, `mean`, `var`) | `log`, vector `sqrt` |
+| --- | --- | --- |
+| Windows, MSVC x64 (the wheels) | x87 unit, MASM (`x87_msvc.asm`) | x87 unit, MASM |
+| Linux / macOS on x86-64 (gcc, clang) | native `long double` | x87 inline assembly |
+| Windows, MinGW gcc | emulated (`SoftExtended`): Windows runs the x87 at 53 bits | x87 inline assembly |
+| ARM64 (Apple M1–M6, Linux aarch64) | emulated (`SoftExtended`): the same bits | the system library: may differ in the last bit |
+
+On ARM64 the sums still give R's bits (R's reference values come from R on x86-64
+Windows); only metrics that take a logarithm or a square root may differ in the last bit
+there. The MASM file is only assembled by MSVC on x86-64; every other build uses the C++
+code.
+
 R computes `sum()`, `mean()` and `var()` in `long double`, the 80-bit x87 type with a
 64-bit mantissa (R on Windows is built with gcc/mingw-w64). MSVC has no such type, so
 `src/cpp/lsm/extended.hpp` emulates it with integer arithmetic, correctly rounded (half to

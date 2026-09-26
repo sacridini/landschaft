@@ -122,7 +122,7 @@ struct TiledLandscape::State {
     bool d_core = false, d_gyrate = false, d_circle = false, d_enn = false;
     std::size_t d_block = 0;
     std::vector<double> gx, gy;               // centroids
-    std::vector<long double> gsum;
+    std::vector<double> gsum;
     std::vector<double> best;                  // cell_center: nearest distance (6 digits)
     std::vector<std::vector<std::pair<double, double>>> ties;
     std::vector<i64> flag_offset;             // circle: cells on the bounding box edges
@@ -138,7 +138,7 @@ struct TiledLandscape::State {
     std::vector<i64> prev_core_piece;
     bool tie_pass = false;
     std::size_t t_block = 0;
-    std::vector<long double> tsum;
+    std::vector<double> tsum;
 
     std::vector<std::int32_t> dense(const std::int32_t* values, const std::uint8_t* na, i64 n) const {
         std::vector<std::int32_t> out(static_cast<std::size_t>(n));
@@ -490,7 +490,7 @@ void TiledLandscape::begin_detail(bool core, bool gyrate, bool circle, bool enn)
             s.best.assign(static_cast<std::size_t>(n), std::numeric_limits<double>::infinity());
             s.ties.assign(static_cast<std::size_t>(n), {});
         } else {
-            s.gsum.assign(static_cast<std::size_t>(n), 0.0L);
+            s.gsum.assign(static_cast<std::size_t>(n), 0.0);
         }
     }
     if (circle && s.opt.fragstats) {
@@ -557,12 +557,12 @@ void TiledLandscape::detail_block(const std::int32_t* values, const std::uint8_t
 
     if (s.d_gyrate && !s.opt.cell_center) {
         // as Landscape::gyrate(): sums per strip piece, then per patch in strip order
-        std::vector<std::vector<long double>> pieces(static_cast<std::size_t>(n_strips));
+        std::vector<std::vector<double>> pieces(static_cast<std::size_t>(n_strips));
 #pragma omp parallel for schedule(dynamic) if (parallel && n_strips > 1)
         for (i64 st = 0; st < n_strips; ++st) {
             const i64 off = bp.strip_offset[st];
-            std::vector<long double>& acc = pieces[st];
-            acc.assign(static_cast<std::size_t>(bp.strip_offset[st + 1] - off), 0.0L);
+            std::vector<double>& acc = pieces[st];
+            acc.assign(static_cast<std::size_t>(bp.strip_offset[st + 1] - off), 0.0);
             const i64 y1 = std::min(rows, (st + 1) * bp.strip_rows);
             for (i64 yl = st * bp.strip_rows; yl < y1; ++yl) {
                 for (i64 x = 0; x < nx; ++x) {
@@ -819,7 +819,7 @@ bool TiledLandscape::end_detail() {
     s.tie_pass = s.d_gyrate && s.opt.cell_center;
     if (s.tie_pass) {
         s.t_block = 0;
-        s.tsum.assign(static_cast<std::size_t>(n), 0.0L);
+        s.tsum.assign(static_cast<std::size_t>(n), 0.0);
     }
     return s.tie_pass;
 }
@@ -857,7 +857,7 @@ void TiledLandscape::end_ties() {
     const Patches& pt = s.land->patches();
     std::vector<double> out(static_cast<std::size_t>(pt.n));
     for (i64 i = 0; i < pt.n; ++i) {
-        out[i] = static_cast<double>(s.tsum[i] / (static_cast<long double>(pt.cells[i]) * s.ties[i].size()));
+        out[i] = static_cast<double>(s.tsum[i] / (static_cast<double>(pt.cells[i]) * s.ties[i].size()));
     }
     s.land->set_patch_values("gyrate", std::move(out));
     s.tie_pass = false;

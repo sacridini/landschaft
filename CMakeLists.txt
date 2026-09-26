@@ -44,8 +44,9 @@ add_library(lsmcore STATIC
     src/cpp/lsm/rlm.cpp
 )
 target_include_directories(lsmcore PUBLIC src/cpp)
-# R's x87 log/sqrt (see src/cpp/lsm/rmath.hpp): MSVC has no x64 inline assembly
-if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+# R's x87 log/sqrt and LDOUBLE sums (see src/cpp/lsm/rmath.hpp): MSVC has no
+# x64 inline assembly. x86-64 only; every other target uses the C++ code.
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
     enable_language(ASM_MASM)
     target_sources(lsmcore PRIVATE src/cpp/lsm/x87_msvc.asm)
 endif()

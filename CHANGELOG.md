@@ -6,6 +6,17 @@ between minor versions.
 
 ## [Unreleased]
 
+### Changed
+- Landscape metrics part 18: R's 80-bit sums run on the x87 unit under MSVC x64 (MASM
+  routines for `sum()`, `mean()`, the squared deviations of `sd()` and blocked
+  accumulation for other sums), the same bits as the emulation: summary statistics over
+  27 M patches 5–8 times faster, 21×21 moving windows 97 → 73 µs each on one thread.
+- Portability: a MinGW gcc build now passes every test, bitwise ones included (Windows
+  runs the x87 unit at 53-bit precision, so the 80-bit type is emulated there, and the
+  gyrate sums use `double` on every compiler instead of `long double`); the MASM file and
+  the MSVC 128-bit intrinsics are limited to x86-64. DOCUMENTATION lists how each platform
+  (Windows, Linux, macOS, ARM64) gets R's bits.
+
 ## [0.28.0] - 2026-09-26
 
 ### Changed

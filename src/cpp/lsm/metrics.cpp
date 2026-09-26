@@ -273,11 +273,11 @@ std::vector<double> Landscape::gyrate() {
         const double rx = resx_;
         const double ry = resy_;
         const bool parallel = nx * ny >= (i64(1) << 16) && n_strips > 1;
-        std::vector<std::vector<long double>> pieces(static_cast<std::size_t>(n_strips));
+        std::vector<std::vector<double>> pieces(static_cast<std::size_t>(n_strips));
         parallel_for_dynamic(parallel, n_strips, [&](i64 s) {
             const i64 off = pt.strip_offset[s];
-            std::vector<long double>& acc = pieces[s];
-            acc.assign(static_cast<std::size_t>(pt.strip_offset[s + 1] - off), 0.0L);
+            std::vector<double>& acc = pieces[s];
+            acc.assign(static_cast<std::size_t>(pt.strip_offset[s + 1] - off), 0.0);
             const i64 y1 = std::min(ny, (s + 1) * pt.strip_rows);
             for (i64 y = s * pt.strip_rows; y < y1; ++y) {
                 for (i64 x = 0; x < nx; ++x) {
@@ -291,7 +291,7 @@ std::vector<double> Landscape::gyrate() {
                 }
             }
         });
-        std::vector<long double> sum(n, 0.0L);
+        std::vector<double> sum(n, 0.0);
         for (i64 s = 0; s < n_strips; ++s) {
             for (std::size_t k = 0; k < pieces[s].size(); ++k) {
                 sum[pt.local_to_patch[pt.strip_offset[s] + static_cast<i64>(k)]] += pieces[s][k];
@@ -301,7 +301,7 @@ std::vector<double> Landscape::gyrate() {
     };
     std::vector<double> out(n);
     if (!options_.cell_center) {
-        const std::vector<long double> sum = distance_sums(cx, cy);
+        const std::vector<double> sum = distance_sums(cx, cy);
         for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(sum[i] / pt.cells[i]);
         return out;
     }
@@ -324,7 +324,7 @@ std::vector<double> Landscape::gyrate() {
             }
         }
     }
-    std::vector<long double> sum(n, 0.0L);
+    std::vector<double> sum(n, 0.0);
     for (i64 y = 0; y < ny_; ++y) {
         for (i64 x = 0; x < nx_; ++x) {
             const std::int32_t k = pt.patch(y * nx_ + x, y);
@@ -337,7 +337,7 @@ std::vector<double> Landscape::gyrate() {
         }
     }
     for (i64 i = 0; i < n; ++i) {
-        out[i] = static_cast<double>(sum[i] / (static_cast<long double>(pt.cells[i]) * ties[i].size()));
+        out[i] = static_cast<double>(sum[i] / (static_cast<double>(pt.cells[i]) * ties[i].size()));
     }
     return out;
 }
@@ -590,7 +590,6 @@ double Landscape::landscape_metric(const std::string& name) {
 std::vector<double> Landscape::class_metric_impl(const std::string& name) {
     const int k = n_classes();
     if (k == 0) return {};
-    const Patches& pt = patches();
     const std::vector<i64>& start = class_start();
     auto per_class = [&](auto&& f) {
         std::vector<double> out(k);

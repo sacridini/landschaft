@@ -19,6 +19,11 @@
 #define LSM_X87_MASM 1
 extern "C" double lsm_x87_log(double x);
 extern "C" double lsm_x87_sqrt(double x);
+extern "C" double lsm_x87_sum(const double* x, std::int64_t n);
+extern "C" void lsm_x87_accumulate(const double* x, std::int64_t n, void* acc);
+extern "C" double lsm_x87_to_double(const void* acc);
+extern "C" double lsm_x87_mean(const double* x, std::int64_t n);
+extern "C" double lsm_x87_ssd(const double* x, std::int64_t n, double mean, std::int64_t divisor);
 #elif (defined(__GNUC__) || defined(__clang__)) && (defined(__x86_64__) || defined(__i386__))
 #define LSM_X87_INLINE 1
 #endif
@@ -86,6 +91,9 @@ using i64 = std::int64_t;
 // R's mean(): sum, divide, then add the mean residual, all in R's LDOUBLE.
 inline double r_mean(const double* x, i64 n) {
     if (n == 0) return std::numeric_limits<double>::quiet_NaN();
+#if defined(LSM_X87_MASM)
+    return lsm_x87_mean(x, n);
+#endif
     Extended s = 0.0;
     for (i64 i = 0; i < n; ++i) s += x[i];
     s /= Extended(n);
@@ -104,6 +112,9 @@ inline double r_mean(const double* x, i64 n) {
 // (FRAGSTATS' and pylandstats'; 0 for one value).
 inline double r_sd(const double* x, i64 n, double mean, bool population = false) {
     if (n < (population ? 1 : 2)) return std::numeric_limits<double>::quiet_NaN();
+#if defined(LSM_X87_MASM)
+    return r_sqrt(lsm_x87_ssd(x, n, mean, population ? n : n - 1), true);
+#endif
     const Extended m = mean;
     Extended ss = 0.0;
     for (i64 i = 0; i < n; ++i) {
@@ -115,6 +126,9 @@ inline double r_sd(const double* x, i64 n, double mean, bool population = false)
 
 // R's sum() of doubles.
 inline double r_sum(const double* x, i64 n) {
+#if defined(LSM_X87_MASM)
+    return lsm_x87_sum(x, n);
+#endif
     Extended s = 0.0;
     for (i64 i = 0; i < n; ++i) s += x[i];
     return static_cast<double>(s);
@@ -123,6 +137,23 @@ inline double r_sum(const double* x, i64 n) {
 // R's sum() of f(i) for i in [begin, end), NaN skipped when na_rm.
 template <class F>
 inline double sum_of(i64 begin, i64 end, F&& f, bool na_rm = false) {
+#if defined(LSM_X87_MASM)
+    // the terms in blocks, added on the x87 unit
+    alignas(16) unsigned char acc[16] = {};  // an 80-bit +0
+    double buf[256];
+    int m = 0;
+    for (i64 i = begin; i < end; ++i) {
+        const double v = f(i);
+        if (na_rm && std::isnan(v)) continue;
+        buf[m++] = v;
+        if (m == 256) {
+            lsm_x87_accumulate(buf, m, acc);
+            m = 0;
+        }
+    }
+    lsm_x87_accumulate(buf, m, acc);
+    return lsm_x87_to_double(acc);
+#endif
     Extended s = 0.0;
     for (i64 i = begin; i < end; ++i) {
         const double v = f(i);

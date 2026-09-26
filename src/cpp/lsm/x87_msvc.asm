@@ -62,4 +62,132 @@ lsm_x87_sqrt PROC
     ret
 lsm_x87_sqrt ENDP
 
+; R's LDOUBLE loops (sum(), mean(), var()): accumulated on the x87 unit with
+; 64-bit precision, as R's gcc build does, then rounded to double once.
+; Home space: [rsp+8] temporary, [rsp+16] saved / [rsp+18] new control word,
+; [rsp+24] n as a double.
+
+SET_PRECISION MACRO
+    fnstcw  WORD PTR [rsp+16]
+    mov     ax, WORD PTR [rsp+16]
+    and     ax, 0F0FFh
+    or      ax, 0300h
+    mov     WORD PTR [rsp+18], ax
+    fldcw   WORD PTR [rsp+18]
+ENDM
+
+; double lsm_x87_sum(const double* x, int64 n): sum of x[0..n)
+lsm_x87_sum PROC
+    SET_PRECISION
+    fldz
+    test    rdx, rdx
+    jle     sum_done
+sum_loop:
+    fadd    REAL8 PTR [rcx]
+    add     rcx, 8
+    dec     rdx
+    jnz     sum_loop
+sum_done:
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_sum ENDP
+
+; void lsm_x87_accumulate(const double* x, int64 n, void* acc): *acc (an
+; 80-bit value) += x[0] + ... + x[n-1], in order
+lsm_x87_accumulate PROC
+    SET_PRECISION
+    fld     TBYTE PTR [r8]
+    test    rdx, rdx
+    jle     acc_done
+acc_loop:
+    fadd    REAL8 PTR [rcx]
+    add     rcx, 8
+    dec     rdx
+    jnz     acc_loop
+acc_done:
+    fstp    TBYTE PTR [r8]
+    fldcw   WORD PTR [rsp+16]
+    ret
+lsm_x87_accumulate ENDP
+
+; double lsm_x87_to_double(const void* acc): an 80-bit value rounded to double
+lsm_x87_to_double PROC
+    SET_PRECISION
+    fld     TBYTE PTR [rcx]
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_to_double ENDP
+
+; double lsm_x87_mean(const double* x, int64 n), n > 0: R's mean(): s = sum / n,
+; then, if (double) s is finite, s += sum(x - s) / n
+lsm_x87_mean PROC
+    SET_PRECISION
+    cvtsi2sd xmm1, rdx
+    movsd   REAL8 PTR [rsp+24], xmm1
+    mov     r8, rcx
+    mov     r9, rdx
+    fldz
+mean_loop1:
+    fadd    REAL8 PTR [rcx]
+    add     rcx, 8
+    dec     rdx
+    jnz     mean_loop1
+    fdiv    REAL8 PTR [rsp+24]
+    fst     REAL8 PTR [rsp+8]
+    mov     rax, QWORD PTR [rsp+8]
+    shr     rax, 52
+    and     eax, 7FFh
+    cmp     eax, 7FFh
+    je      mean_done
+    fldz
+    mov     rcx, r8
+    mov     rdx, r9
+mean_loop2:
+    fld     REAL8 PTR [rcx]
+    fsub    st(0), st(2)
+    faddp   st(1), st(0)
+    add     rcx, 8
+    dec     rdx
+    jnz     mean_loop2
+    fdiv    REAL8 PTR [rsp+24]
+    faddp   st(1), st(0)
+mean_done:
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_mean ENDP
+
+; double lsm_x87_ssd(const double* x, int64 n, double mean, int64 divisor):
+; sum((x - mean)^2) / divisor, rounded to double once
+lsm_x87_ssd PROC
+    SET_PRECISION
+    cvtsi2sd xmm1, r9
+    movsd   REAL8 PTR [rsp+24], xmm1
+    movsd   REAL8 PTR [rsp+8], xmm2
+    fld     REAL8 PTR [rsp+8]
+    fldz
+    test    rdx, rdx
+    jle     ssd_done
+ssd_loop:
+    fld     REAL8 PTR [rcx]
+    fsub    st(0), st(2)
+    fmul    st(0), st(0)
+    faddp   st(1), st(0)
+    add     rcx, 8
+    dec     rdx
+    jnz     ssd_loop
+ssd_done:
+    fdiv    REAL8 PTR [rsp+24]
+    fstp    REAL8 PTR [rsp+8]
+    fstp    st(0)
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_ssd ENDP
+
 END
