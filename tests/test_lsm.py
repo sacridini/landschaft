@@ -274,3 +274,70 @@ class TestCaching:
         with threadpool_limits(limits=1, user_api="openmp"):
             b = ls.Landscape(data).metrics(level=["class", "landscape"])
         pd.testing.assert_frame_equal(a, b)
+
+
+def brute_core_cells(values, mask, depth, consider_boundary):
+    """Core cells: taxicab distance to another class / NA (/ outside) above depth."""
+    depth = max(depth, 1)
+    core = np.zeros(values.shape, dtype=bool)
+    for c in np.unique(values[~mask]):
+        inside = (values == c) & ~mask
+        if consider_boundary:
+            dist = ndimage.distance_transform_cdt(inside, metric="taxicab")
+            if inside.all():
+                dist = np.full(values.shape, np.iinfo(np.int32).max)
+        else:
+            dist = ndimage.distance_transform_cdt(np.pad(inside, 1), metric="taxicab")[1:-1, 1:-1]
+        core |= inside & (dist > depth)
+    return core
+
+
+class TestCore:
+    def test_block(self):
+        block = np.ones((5, 5), dtype=int)
+        lm = ls.Landscape(block)
+        p = lm.patch_metrics(["core", "ncore", "cai"])
+        assert p["core"][0] == pytest.approx(9e-4)  # inner 3 x 3
+        assert p["ncore"][0] == 1
+        assert p["cai"][0] == pytest.approx(36)
+        assert ls.Landscape(block, edge_depth=2).patch_metrics("core")["core"][0] == pytest.approx(1e-4)
+        # without other classes and with the map edge ignored everything is core
+        assert ls.Landscape(block, consider_boundary=True).patch_metrics("core")["core"][0] == pytest.approx(25e-4)
+
+    def test_edge_depth_zero_is_one(self):
+        data = lsm_scenes.clustered((30, 30), [1, 2], seed=3, sigma=3).data
+        a = ls.Landscape(data, edge_depth=0).patch_metrics("core")
+        b = ls.Landscape(data, edge_depth=1).patch_metrics("core")
+        pd.testing.assert_frame_equal(a, b)
+
+    def test_dumbbell_has_two_core_areas(self):
+        data = np.full((7, 15), 2, dtype=int)
+        data[1:6, 1:6] = 1
+        data[1:6, 9:14] = 1
+        data[3, 6:9] = 1  # one-cell corridor
+        lm = ls.Landscape(data)
+        p = lm.patch_metrics(["ncore", "core"])
+        one = p[p["class"] == 1]
+        assert one["ncore"].tolist() == [2]
+        # 3 x 3 inner cells per block, plus the block cell touching the corridor
+        assert one["core"].tolist() == pytest.approx([20e-4])
+        c = lm.class_metrics(["ndca", "tca"])
+        assert c.loc[c["class"] == 1, "ndca"].item() == 2
+
+    @pytest.mark.parametrize("depth", [1, 2, 3])
+    @pytest.mark.parametrize("consider_boundary", [False, True])
+    @pytest.mark.parametrize("shape", [(40, 50), (330, 260)])
+    def test_core_cells_brute_force(self, depth, consider_boundary, shape):
+        data = lsm_scenes.clustered(shape, [1, 2, 3], seed=11, sigma=3, na_fraction=0.05)
+        mask = np.ma.getmaskarray(data)
+        lm = ls.Landscape(data, edge_depth=depth, consider_boundary=consider_boundary)
+        core = brute_core_cells(data.data, mask, depth, consider_boundary)
+        labels = lm.labels()
+        expected = np.bincount(labels[core], minlength=lm.n_patches + 1)[1:]
+        np.testing.assert_allclose(lm.patch_metrics("core")["core"], expected / 10000)
+        # disjunct core areas: components of the core cells, per patch
+        structure = np.ones((3, 3))
+        comp, n = ndimage.label(core, structure=structure)
+        owner = ndimage.labeled_comprehension(labels, comp, np.arange(1, n + 1), np.min, int, 0)
+        ncore = np.bincount(owner, minlength=lm.n_patches + 1)[1:]
+        np.testing.assert_array_equal(lm.patch_metrics("ncore")["ncore"], ncore)

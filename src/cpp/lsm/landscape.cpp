@@ -234,7 +234,6 @@ Patches label_patches(const std::vector<std::int32_t>& cls, i64 nx, i64 ny, int 
         key[i] = static_cast<std::uint64_t>(tmp.cls[i]) * static_cast<std::uint64_t>(n) +
                  static_cast<std::uint64_t>(first_cm[i]);
     }
-    first_cm = {};
     const std::vector<i64> order = sort_by_key(std::move(key));
     out.n = tmp.n;
     auto permute = [&](const auto& src, auto& dst) {
@@ -249,6 +248,7 @@ Patches label_patches(const std::vector<std::int32_t>& cls, i64 nx, i64 ny, int 
     permute(tmp.adj_diag, out.adj_diag);
     permute(tmp.sum_x, out.sum_x);
     permute(tmp.sum_y, out.sum_y);
+    permute(first_cm, out.first_cm);
     std::vector<std::int32_t> rank(static_cast<std::size_t>(tmp.n));
     for (i64 i = 0; i < tmp.n; ++i) rank[order[i]] = static_cast<std::int32_t>(i);
     out.local_to_patch.resize(static_cast<std::size_t>(n_local));
@@ -368,6 +368,104 @@ std::vector<std::int32_t> Landscape::labels() {
         }
     }
     return out;
+}
+
+const Core& Landscape::core() {
+    if (core_) return *core_;
+    const Patches& pt = patches();
+    const i64 nx = nx_;
+    const i64 ny = ny_;
+    const i64 n = nx * ny;
+    const bool parallel = n >= kParallelThreshold;
+    // landscapemetrics' get_boundaries always marks one ring of edge cells.
+    const i64 depth = std::max(1, options_.edge_depth);
+    constexpr std::int32_t kFar = std::numeric_limits<std::int32_t>::max() / 2;
+    const std::int32_t outside = options_.consider_boundary ? kFar : 1;
+    const std::int32_t* cls = cls_.data();
+
+    // City-block distance to the nearest cell of another class (or NA):
+    // along rows, then along columns. A path through a cell of another class
+    // would pass a nearer source, so a neighbour of another class is at 1.
+    std::vector<std::int32_t> dist(static_cast<std::size_t>(n));
+    std::int32_t* d = dist.data();
+#pragma omp parallel for schedule(static) if (parallel)
+    for (i64 y = 0; y < ny; ++y) {
+        const i64 row = y * nx;
+        for (i64 x = 0; x < nx; ++x) {
+            const i64 p = row + x;
+            if (cls[p] < 0) continue;
+            d[p] = x == 0 ? outside : (cls[p - 1] != cls[p] ? 1 : std::min(kFar, d[p - 1] + 1));
+        }
+        for (i64 x = nx - 1; x >= 0; --x) {
+            const i64 p = row + x;
+            if (cls[p] < 0) continue;
+            const std::int32_t r = x == nx - 1 ? outside : (cls[p + 1] != cls[p] ? 1 : std::min(kFar, d[p + 1] + 1));
+            d[p] = std::min(d[p], r);
+        }
+    }
+    constexpr i64 kBlock = 256;
+    const i64 n_blocks = (nx + kBlock - 1) / kBlock;
+#pragma omp parallel for schedule(dynamic) if (parallel && n_blocks > 1)
+    for (i64 b = 0; b < n_blocks; ++b) {
+        const i64 x0 = b * kBlock;
+        const i64 x1 = std::min(nx, x0 + kBlock);
+        for (i64 y = 0; y < ny; ++y) {
+            for (i64 x = x0; x < x1; ++x) {
+                const i64 p = y * nx + x;
+                if (cls[p] < 0) continue;
+                const std::int32_t u = y == 0 ? outside : (cls[p - nx] != cls[p] ? 1 : std::min(kFar, d[p - nx] + 1));
+                d[p] = std::min(d[p], u);
+            }
+        }
+        for (i64 y = ny - 1; y >= 0; --y) {
+            for (i64 x = x0; x < x1; ++x) {
+                const i64 p = y * nx + x;
+                if (cls[p] < 0) continue;
+                const std::int32_t v = y == ny - 1 ? outside : (cls[p + nx] != cls[p] ? 1 : std::min(kFar, d[p + nx] + 1));
+                d[p] = std::min(d[p], v);
+            }
+        }
+    }
+
+    // Core cells per patch, summed per strip piece and then per patch.
+    std::vector<std::int32_t> core_cls(static_cast<std::size_t>(n), -1);
+    const i64 n_strips = static_cast<i64>(pt.strip_offset.size()) - 1;
+    std::vector<std::vector<i64>> pieces(static_cast<std::size_t>(n_strips));
+#pragma omp parallel for schedule(dynamic) if (parallel && n_strips > 1)
+    for (i64 s = 0; s < n_strips; ++s) {
+        std::vector<i64>& acc = pieces[s];
+        acc.assign(static_cast<std::size_t>(pt.strip_offset[s + 1] - pt.strip_offset[s]), 0);
+        const i64 y1 = std::min(ny, (s + 1) * pt.strip_rows);
+        for (i64 y = s * pt.strip_rows; y < y1; ++y) {
+            for (i64 x = 0; x < nx; ++x) {
+                const i64 p = y * nx + x;
+                if (cls[p] < 0 || d[p] <= depth) continue;
+                core_cls[p] = cls[p];
+                ++acc[-static_cast<i64>(pt.code[p]) - 2];
+            }
+        }
+    }
+    dist = {};
+    Core out;
+    out.cells.assign(static_cast<std::size_t>(pt.n), 0);
+    out.areas.assign(static_cast<std::size_t>(pt.n), 0);
+    for (i64 s = 0; s < n_strips; ++s) {
+        for (std::size_t k = 0; k < pieces[s].size(); ++k) {
+            out.cells[pt.local_to_patch[pt.strip_offset[s] + static_cast<i64>(k)]] += pieces[s][k];
+        }
+    }
+    pieces = {};
+
+    // Disjunct core areas: core cells labelled like patches; each lies in one
+    // patch (cores of different patches cannot touch).
+    const Patches cores = label_patches(core_cls, nx, ny, options_.directions);
+    for (i64 i = 0; i < cores.n; ++i) {
+        const i64 x = cores.first_cm[i] / ny;
+        const i64 y = cores.first_cm[i] % ny;
+        ++out.areas[pt.patch(y * nx + x, y)];
+    }
+    core_ = std::move(out);
+    return *core_;
 }
 
 const Adjacency& Landscape::adjacency() {

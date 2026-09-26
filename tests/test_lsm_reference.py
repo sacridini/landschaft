@@ -92,6 +92,10 @@ LIVE_CASES = [
     ("clustered", dict(shape=(50, 30), classes=[-3, 4, 70, 71], seed=4, sigma=1.0, na_fraction=0.05), (30.0, 15.0),
      {"directions": 4, "count_boundary": True, "cell_center": True}),
     ("salt", dict(shape=(15, 60), classes=[1, 2], seed=5), (1.0, 1.0), {"ordered": False, "base": "log"}),
+    ("clustered", dict(shape=(45, 45), classes=[1, 2, 3], seed=6, sigma=4.0, na_fraction=0.08), (5.0, 5.0),
+     {"edge_depth": 0, "consider_boundary": True}),
+    ("clustered", dict(shape=(60, 50), classes=[1, 2], seed=7, sigma=5.0), (20.0, 20.0),
+     {"edge_depth": 4, "directions": 4}),
 ]
 
 

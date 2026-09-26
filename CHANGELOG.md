@@ -17,6 +17,15 @@ between minor versions.
   (parallel strips joined at their seams) and accumulates every patch statistic
   and the class adjacencies once. Tested against landscapemetrics 2.2.2 on 12
   stored maps × 4 option sets and live random maps (relative agreement 1e-10).
+- Landscape metrics part 2, core areas: `core`, `ncore`, `cai` (patch), `tca`,
+  `cpland`, `ndca`, `dcad` and `_mn`/`_sd`/`_cv` of `core`, `cai` and `dcore`, with
+  `edge_depth` and `consider_boundary`. The core cells come from a city-block distance
+  computed in two parallel separable passes (equivalent to landscapemetrics' repeated
+  `get_boundaries`); core areas are labelled with the patch engine. 28 more metrics
+  (119), tested on a new stored option set (`edge_depth = 3`, `directions = 4`) and
+  live maps with `edge_depth` 0 to 4.
+- `IDEAS.md`: ideas for later (extra statistics and FRAGSTATS metrics, aliases,
+  exports, pylandstats-style analyses).
 
 ## [0.12.0] - 2026-09-26
 

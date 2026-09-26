@@ -157,7 +157,7 @@ _CATALOG = [
 ]
 
 # Metric families not implemented yet (first part of the metric name).
-_PENDING = {"cai", "circle", "core", "cpland", "dcad", "dcore", "enn", "ncore", "ndca", "tca"}
+_PENDING = {"circle", "enn"}
 
 _PREFIX = {"patch": "lsm_p_", "class": "lsm_c_", "landscape": "lsm_l_"}
 

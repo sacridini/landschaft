@@ -17,6 +17,10 @@
       "base": "log",
       "classes_max": 20,
       "cell_center": true
+    },
+    "core": {
+      "edge_depth": 3,
+      "directions": 4
     }
   },
   "files": {
@@ -52,6 +56,14 @@
       },
       "rows": 14619
     },
+    "augusta__core.csv.gz": {
+      "input": "augusta.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 24315
+    },
     "checker__default.csv.gz": {
       "input": "checker.tif",
       "options": {},
@@ -84,6 +96,14 @@
       },
       "rows": 197
     },
+    "checker__core.csv.gz": {
+      "input": "checker.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 944
+    },
     "column__default.csv.gz": {
       "input": "column.tif",
       "options": {},
@@ -113,6 +133,14 @@
         "base": "log",
         "classes_max": 20,
         "cell_center": true
+      },
+      "rows": 315
+    },
+    "column__core.csv.gz": {
+      "input": "column.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
       },
       "rows": 315
     },
@@ -148,6 +176,14 @@
       },
       "rows": 567
     },
+    "lm_landscape__core.csv.gz": {
+      "input": "lm_landscape.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 591
+    },
     "na_ring__default.csv.gz": {
       "input": "na_ring.tif",
       "options": {},
@@ -177,6 +213,14 @@
         "base": "log",
         "classes_max": 20,
         "cell_center": true
+      },
+      "rows": 197
+    },
+    "na_ring__core.csv.gz": {
+      "input": "na_ring.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
       },
       "rows": 197
     },
@@ -212,6 +256,14 @@
       },
       "rows": 8384
     },
+    "podlasie__core.csv.gz": {
+      "input": "podlasie.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 15743
+    },
     "row__default.csv.gz": {
       "input": "row.tif",
       "options": {},
@@ -241,6 +293,14 @@
         "base": "log",
         "classes_max": 20,
         "cell_center": true
+      },
+      "rows": 327
+    },
+    "row__core.csv.gz": {
+      "input": "row.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
       },
       "rows": 327
     },
@@ -276,6 +336,14 @@
       },
       "rows": 1731
     },
+    "salt_pepper__core.csv.gz": {
+      "input": "salt_pepper.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 3807
+    },
     "single_class__default.csv.gz": {
       "input": "single_class.tif",
       "options": {},
@@ -305,6 +373,14 @@
         "base": "log",
         "classes_max": 20,
         "cell_center": true
+      },
+      "rows": 133
+    },
+    "single_class__core.csv.gz": {
+      "input": "single_class.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
       },
       "rows": 133
     },
@@ -340,6 +416,14 @@
       },
       "rows": 279
     },
+    "stripes__core.csv.gz": {
+      "input": "stripes.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 279
+    },
     "synthetic_na__default.csv.gz": {
       "input": "synthetic_na.tif",
       "options": {},
@@ -372,6 +456,14 @@
       },
       "rows": 689
     },
+    "synthetic_na__core.csv.gz": {
+      "input": "synthetic_na.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 876
+    },
     "two_class__default.csv.gz": {
       "input": "two_class.tif",
       "options": {},
@@ -403,6 +495,14 @@
         "cell_center": true
       },
       "rows": 236
+    },
+    "two_class__core.csv.gz": {
+      "input": "two_class.tif",
+      "options": {
+        "edge_depth": 3,
+        "directions": 4
+      },
+      "rows": 368
     }
   }
 }

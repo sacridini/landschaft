@@ -664,21 +664,26 @@ neighbours). landschaft follows the individual functions; with the default
 
 | level | metrics |
 |---|---|
-| patch | `area`, `perim`, `para`, `shape`, `frac`, `gyrate`, `contig` |
-| class | `ca`, `pland`, `np`, `pd`, `lpi`, `te`, `ed`, `ai`, `clumpy`, `cohesion`, `division`, `mesh`, `split`, `iji`, `lsi`, `nlsi`, `pladj`, `pafrac`, and `_mn`/`_sd`/`_cv` of `area`, `para`, `shape`, `frac`, `gyrate`, `contig` |
-| landscape | `ta`, `np`, `pd`, `lpi`, `te`, `ed`, `ai`, `cohesion`, `contag`, `division`, `mesh`, `split`, `iji`, `lsi`, `pladj`, `pafrac`, `pr`, `prd`, `rpr`, `shdi`, `shei`, `sidi`, `siei`, `msidi`, `msiei`, `ent`, `condent`, `joinent`, `mutinf`, `relmutinf`, and the same `_mn`/`_sd`/`_cv` |
+| patch | `area`, `perim`, `para`, `shape`, `frac`, `gyrate`, `contig`, `core`, `ncore`, `cai` |
+| class | `ca`, `pland`, `np`, `pd`, `lpi`, `te`, `ed`, `ai`, `clumpy`, `cohesion`, `division`, `mesh`, `split`, `iji`, `lsi`, `nlsi`, `pladj`, `pafrac`, `tca`, `cpland`, `ndca`, `dcad`, and `_mn`/`_sd`/`_cv` of `area`, `para`, `shape`, `frac`, `gyrate`, `contig`, `core`, `cai`, `dcore` |
+| landscape | `ta`, `np`, `pd`, `lpi`, `te`, `ed`, `ai`, `cohesion`, `contag`, `division`, `mesh`, `split`, `iji`, `lsi`, `pladj`, `pafrac`, `pr`, `prd`, `rpr`, `shdi`, `shei`, `sidi`, `siei`, `msidi`, `msiei`, `ent`, `condent`, `joinent`, `mutinf`, `relmutinf`, `tca`, `ndca`, `dcad`, and the same `_mn`/`_sd`/`_cv` |
 
 `_sd` is the sample standard deviation and `_cv` = `_sd / _mn · 100`, as in
-landscapemetrics (NA for a single patch). Not implemented yet: core-area metrics
-(`core`, `cai`, `ncore`, `tca`, `cpland`, `ndca`, `dcad`, `dcore_*`), `enn`, and
-`circle`.
+landscapemetrics (NA for a single patch). Not implemented yet: `enn` and `circle`.
+
+Core areas follow landscapemetrics' `get_boundaries`: a cell is core when its
+city-block distance to the nearest cell of another class or NA (and to the map edge,
+unless `consider_boundary=True`) exceeds `edge_depth`; `edge_depth=0` behaves like 1.
+The core engine computes that distance in two parallel separable passes instead of
+repeated erosions. As in landscapemetrics, `dcore_mn/sd/cv` summarise the *number* of
+core areas per patch (`ncore`), not their sizes.
 
 ### Verification
 
 `tools/make_reference_lsm.py` runs landscapemetrics (`tools/lsm_reference.R`) on 12
 maps (its `landscape`, crops of `augusta_nlcd` and `podlasie_ccilc`, synthetic maps
 with NA cells, negative and large class values, non-square cells, salt-and-pepper
-patterns, a checkerboard, single rows and columns, a single class) with 4 option
+patterns, a checkerboard, single rows and columns, a single class) with 5 option
 sets, and stores every value in `tests/data/reference/lsm`. `tests/test_lsm_reference.py`
 compares all of them; with `Rscript` available (`LANDSCHAFT_RSCRIPT`,
 `LANDSCHAFT_R_LIBS` for a specific landscapemetrics library) it also runs
@@ -690,7 +695,8 @@ parallel seams, input handling and metric selection.
 
 | map | landscapemetrics 2.2.2 | landschaft |
 |---|---|---|
-| `augusta_nlcd`, 440×678, all 91 metrics | 8.6 s | 0.1 s |
+| `augusta_nlcd`, 440×678, the 91 metrics of part 1 | 8.6 s | 0.1 s |
 | 10,000×10,000, 10 classes, 7.7 M patches: labelling | – | 1.4 s |
 | same, all class and landscape metrics | – | 2.2 s more |
+| same, core areas (distance, core cells, core labelling) | – | 1.0 s more |
 

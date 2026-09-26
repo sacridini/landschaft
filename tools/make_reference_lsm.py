@@ -36,6 +36,7 @@ OPTION_SETS = {
     "d4": {"directions": 4},
     "boundary": {"count_boundary": True, "consider_boundary": True, "edge_depth": 2},
     "complexity": {"neighbourhood": 8, "ordered": False, "base": "log", "classes_max": 20, "cell_center": True},
+    "core": {"edge_depth": 3, "directions": 4},
 }
 
 # landscapemetrics' own example data, cropped so the reference stays small.

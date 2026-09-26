@@ -9,6 +9,7 @@ landscapemetrics (``lsm_p_*``, ``lsm_c_*``, ``lsm_l_*``).
 
 from __future__ import annotations
 
+import functools
 import os
 import warnings
 from collections.abc import Iterable, Sequence
@@ -195,7 +196,7 @@ class Landscape:
     def n_patches(self) -> int:
         return self._core.n_patches()
 
-    @property
+    @functools.cached_property
     def patch_classes(self) -> np.ndarray:
         """Class value of every patch (patch ``id`` = position + 1)."""
         return self.classes[self._core.patch_class()] if self.classes.size else np.empty(0, np.int32)
@@ -264,37 +265,41 @@ class Landscape:
             Columns ``level``, ``class``, ``id``, ``metric``, ``value``
             (``class``/``id`` are missing where they do not apply).
         """
-        chosen = select_metrics(level, metric, name, type, what)
-        parts = []
-        classes = self.classes
+        # calculate_lsm's order: level, metric, class, id. Every block below is
+        # already ordered by class and id, so the blocks only need ordering.
+        chosen = select_metrics(level, metric, name, type, what).sort_values(["level", "metric"])
+        level_names = sorted(set(chosen["level"]))
+        metric_order = list(dict.fromkeys(chosen["metric"]))
+        levels, metric_names, classes, ids, values = [], [], [], [], []
         for lvl, metric_name in zip(chosen["level"], chosen["metric"]):
             if lvl == "patch":
-                values = self._core.patch_metric(metric_name)
-                cls = self.patch_classes
-                ids = np.arange(1, values.size + 1)
+                v = self._core.patch_metric(metric_name)
+                classes.append(self.patch_classes)
+                ids.append(np.arange(1, v.size + 1))
             elif lvl == "class":
-                values = self._core.class_metric(metric_name)
-                cls = classes
-                ids = np.full(values.size, -1)
+                v = self._core.class_metric(metric_name)
+                classes.append(self.classes)
+                ids.append(np.zeros(v.size, dtype=np.int64))
             else:
-                values = np.array([self._core.landscape_metric(metric_name)])
-                cls = np.array([-1])
-                ids = np.array([-1])
-            parts.append(
-                pd.DataFrame(
-                    {
-                        "level": lvl,
-                        "class": pd.array(cls, dtype="Int64"),
-                        "id": pd.array(ids, dtype="Int64"),
-                        "metric": metric_name,
-                        "value": values,
-                    }
-                )
-            )
-        df = pd.concat(parts, ignore_index=True)
-        df.loc[df["level"] == "landscape", "class"] = pd.NA
-        df.loc[df["level"] != "patch", "id"] = pd.NA
-        return df.sort_values(["level", "metric", "class", "id"], kind="stable").reset_index(drop=True)
+                v = np.array([self._core.landscape_metric(metric_name)])
+                classes.append(np.zeros(1, dtype=np.int64))
+                ids.append(np.zeros(1, dtype=np.int64))
+            levels.append(np.full(v.size, level_names.index(lvl), dtype=np.int8))
+            metric_names.append(np.full(v.size, metric_order.index(metric_name), dtype=np.int16))
+            values.append(v)
+        level_codes = np.concatenate(levels)
+        cls = np.concatenate(classes).astype(np.int64)
+        pid = np.concatenate(ids).astype(np.int64)
+        level_col = pd.Categorical.from_codes(level_codes, level_names)
+        return pd.DataFrame(
+            {
+                "level": level_col,
+                "class": pd.arrays.IntegerArray(cls, np.asarray(level_col == "landscape")),
+                "id": pd.arrays.IntegerArray(pid, np.asarray(level_col != "patch")),
+                "metric": pd.Categorical.from_codes(np.concatenate(metric_names), metric_order),
+                "value": np.concatenate(values),
+            }
+        )
 
 
 def _names(metrics, level: str) -> list[str]:

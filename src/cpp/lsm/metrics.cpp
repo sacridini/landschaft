@@ -169,6 +169,17 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
         }
     } else if (name == "gyrate") {
         out = gyrate();
+    } else if (name == "core") {
+        const Core& core = this->core();
+        for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(core.cells[i]) * (resx_ * resy_) / 10000;
+    } else if (name == "ncore" || name == "dcore") {
+        // landscapemetrics' dcore_* summarise the number of core areas
+        const Core& core = this->core();
+        for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(core.areas[i]);
+    } else if (name == "cai") {
+        const std::vector<double> area = patch_base("area");
+        const std::vector<double> core = patch_base("core");
+        for (i64 i = 0; i < n; ++i) out[i] = core[i] / area[i] * 100;
     } else {
         throw std::invalid_argument("unknown patch metric: " + name);
     }
@@ -399,6 +410,20 @@ std::vector<double> Landscape::class_metric(const std::string& name) {
         });
     }
     if (name == "pafrac") return pafrac_by(pt.cls, k);
+    if (name == "tca" || name == "cpland") {
+        const std::vector<double>& core = patch_base("core");
+        return per_class([&](int, i64 s, i64 n) {
+            const double tca = r_sum(core.data() + s, n);
+            return name == "tca" ? tca : tca / ta * 100;
+        });
+    }
+    if (name == "ndca" || name == "dcad") {
+        const std::vector<double>& ncore = patch_base("ncore");
+        return per_class([&](int, i64 s, i64 n) {
+            const double ndca = r_sum(ncore.data() + s, n);
+            return name == "ndca" ? ndca : ndca / ta * 100;
+        });
+    }
 
     const Adjacency& adj = adjacency();
     const int dim = adj.dim;
@@ -522,6 +547,15 @@ double Landscape::landscape_metric(const std::string& name) {
         }
         return (1 - (static_cast<double>(num) / static_cast<double>(den))) *
                (1 / (1 - (1 / std::sqrt(static_cast<double>(valid_cells_))))) * 100;
+    }
+    if (name == "tca") {
+        const std::vector<double>& core = patch_base("core");
+        return r_sum(core.data(), np);
+    }
+    if (name == "ndca" || name == "dcad") {
+        const std::vector<double>& ncore = patch_base("ncore");
+        const double ndca = r_sum(ncore.data(), np);
+        return name == "ndca" ? ndca : ndca / ta * 100;
     }
     if (name == "pafrac") {
         if (np < 10) return kNaN;

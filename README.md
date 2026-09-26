@@ -128,10 +128,10 @@ ls.list_metrics(level="landscape")               # catalogue (like list_lsm)
 ```
 
 Options are those of landscapemetrics (`directions`, `count_boundary`,
-`edge_depth`, `neighbourhood`, …). Core-area, nearest-neighbour and circle metrics
-are not implemented yet. On landscapemetrics' `augusta_nlcd` (440×678) all 91
-metrics take 0.1 s instead of 8.6 s in R; a 10,000×10,000 map with 7.7 million
-patches takes about 4 s.
+`edge_depth`, `neighbourhood`, …). Nearest-neighbour and circle metrics are not
+implemented yet. On landscapemetrics' `augusta_nlcd` (440×678) the 91 metrics
+without core areas take 0.1 s instead of 8.6 s in R; a 10,000×10,000 map with 7.7
+million patches takes about 5 s for all 119 metrics.
 
 ### Many images
 
@@ -281,7 +281,7 @@ LANDSCHAFT_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live co
 * Landscape metrics are compared with the R package landscapemetrics:
   `tools/make_reference_lsm.py` stores every value of `calculate_lsm` for 12 maps
   (its example data, synthetic maps with NA cells, non-square cells and
-  degenerate layouts) and 4 option sets in `tests/data/reference/lsm`, and with
+  degenerate layouts) and 5 option sets in `tests/data/reference/lsm`, and with
   `Rscript` available the tests also run landscapemetrics live on random maps. All
   values agree to a relative 1e-10 (floating-point summation order).
 * `tests/test_primitives.py` checks each C++ primitive against SciPy or brute

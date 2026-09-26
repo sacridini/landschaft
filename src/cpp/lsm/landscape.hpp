@@ -52,6 +52,7 @@ struct Patches {
     std::vector<i64> adj_diag;       // same-patch diagonal cell pairs
     std::vector<i64> sum_x;          // sum of column indices
     std::vector<i64> sum_y;          // sum of row indices
+    std::vector<i64> first_cm;       // first cell in column-major order (x * ny + y)
 
     i64 strip_rows = 0;
     std::vector<i64> strip_offset;        // first local id of each strip (+ total at the end)
@@ -62,6 +63,13 @@ struct Patches {
     i64 local(i64 p, i64 y) const { return strip_offset[y / strip_rows] + (-static_cast<i64>(code[p]) - 2); }
     // Patch index of pixel p in row y, -1 for NA.
     std::int32_t patch(i64 p, i64 y) const { return code[p] < 0 && code[p] != -1 ? local_to_patch[local(p, y)] : -1; }
+};
+
+// Core areas: cells farther than edge_depth (city-block distance) from any
+// cell of another class or NA (and from the map edge unless consider_boundary).
+struct Core {
+    std::vector<i64> cells;   // core cells per patch
+    std::vector<i64> areas;   // disjunct core areas per patch (connectivity = directions)
 };
 
 // Directed cell-pair counts: m[a * dim + b] = number of (cell of class a,
@@ -90,6 +98,7 @@ public:
 
     const Patches& patches();
     const Adjacency& adjacency();
+    const Core& core();
     // Patch id (1-based, landscapemetrics' id) of every pixel, 0 = NA.
     std::vector<std::int32_t> labels();
 
@@ -121,6 +130,7 @@ private:
 
     std::optional<Patches> patches_;
     std::optional<Adjacency> adjacency_;
+    std::optional<Core> core_;
     std::map<std::string, std::vector<double>> patch_cache_; // node-based: references stay valid
 };
 
