@@ -6,6 +6,18 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-09-26
+
+### Added
+- Circuit connectivity, part 4: the rest of Omniscape's options. Conditional connectivity
+  in `ls.omniscape` (`condition1`/`condition2`, their futures, `compare_to_future`,
+  `"within"` with the block median and `"equal"` with StatsBase's mode, lower and upper
+  limits), `reclass_table` (`ls.circuit.reclassify`, `read_reclass_table`),
+  `precision="single"`, and `ls.circuit.omniscape_ini`, which runs an Omniscape INI file
+  as `run_omniscape(path)` does (Omniscape's parser `ls.circuit.parse_ini`, defaults,
+  alignment checks, outputs in `project_name`). Matched with Omniscape's own test INI
+  files (conditional, reclass, 32 bit) run with CHOLMOD to 5e-13.
+
 ## [0.43.0] - 2026-09-26
 
 ### Changed
