@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 2: nodes from maps. `HabitatGraph.from_raster`
   (a raster of patch ids, or the patches of `habitat` classes) and

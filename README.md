@@ -3,7 +3,7 @@
 Fast Python reimplementation of [GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/)
 raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / dask / rasterio API.
 
-**Current Version (v0.30.0):** Complete reimplementation of all major GuidosToolbox tools:
+**Current Version (v0.31.0):** Complete reimplementation of all major GuidosToolbox tools:
 * **MSPA**: Morphological Spatial Pattern Analysis (bit-identical to GTB `mspa` v2.3, 5-7x faster), and GTB's MSPA Tiling for maps larger than memory (out of core, identical to GTB).
 * **SPA2/3/5/6**: Simplified Pattern Analysis (identical to GTB).
 * **GTN & Connectivity**: Topological Network Components (ECA, DOC), Importance (dPC), and Conefor Sensinode inputs.
@@ -241,7 +241,7 @@ Parameter correspondence with GuidosToolbox:
 ## Versioning
 
 landschaft follows [Semantic Versioning](https://semver.org/); the current version is
-**0.30.0** (`ls.__version__`). While below 1.0, minor versions may change the API.
+**0.31.0** (`ls.__version__`). While below 1.0, minor versions may change the API.
 Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Performance
