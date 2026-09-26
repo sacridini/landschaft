@@ -18,6 +18,7 @@
 #include <omp.h>
 #endif
 
+#include "circuit/circuitscape.hpp"
 #include "circuit/grid.hpp"
 #include "circuit/omniscape.hpp"
 
@@ -145,6 +146,57 @@ py::array_t<double> circuit_omniscape_correction(int radius, int buffer, int blo
     return to_array(std::move(c), w, w);
 }
 
+circuit::ConflictPolicy conflict_policy(const std::string& s) {
+    if (s == "keepall") return circuit::ConflictPolicy::KeepAll;
+    if (s == "rmvsrc") return circuit::ConflictPolicy::RemoveSource;
+    if (s == "rmvgnd") return circuit::ConflictPolicy::RemoveGround;
+    if (s == "rmvall") return circuit::ConflictPolicy::RemoveAll;
+    throw py::value_error("remove_src_or_gnd must be keepall, rmvsrc, rmvgnd or rmvall");
+}
+
+template <class T>
+py::array_t<T> vector_to_array(std::vector<T>&& v) {
+    auto* holder = new std::vector<T>(std::move(v));
+    py::capsule owner(holder, [](void* q) { delete static_cast<std::vector<T>*>(q); });
+    return py::array_t<T>(static_cast<py::ssize_t>(holder->size()), holder->data(), owner);
+}
+
+py::dict circuitscape_advanced(const CArray<double>& gmap, const py::object& polymap, const CArray<double>& source,
+                               const CArray<double>& ground, bool avg_resistances, bool four_neighbors,
+                               const std::string& policy, int n_threads) {
+    if (gmap.ndim() != 2 || source.ndim() != 2 || ground.ndim() != 2 || source.shape(0) != gmap.shape(0) ||
+        source.shape(1) != gmap.shape(1) || ground.shape(0) != gmap.shape(0) || ground.shape(1) != gmap.shape(1))
+        throw py::value_error("expected habitat, source and ground rasters of the same shape");
+    const i64 ny = gmap.shape(0), nx = gmap.shape(1);
+    CArray<std::int64_t> poly;
+    const std::int64_t* pm = nullptr;
+    if (!polymap.is_none()) {
+        poly = polymap.cast<CArray<std::int64_t>>();
+        if (poly.ndim() != 2 || poly.shape(0) != ny || poly.shape(1) != nx)
+            throw py::value_error("the polygon raster must have the habitat's shape");
+        pm = poly.data();
+    }
+    const circuit::ConflictPolicy pol = conflict_policy(policy);
+    circuit::RasterGraph g;
+    circuit::NodeSolution sol;
+    run_parallel(n_threads, [&] {
+        g = circuit::raster_graph(gmap.data(), pm, nx, ny, avg_resistances, four_neighbors);
+        sol = circuit::raster_advanced(g, circuit::node_sums(g, source.data()), circuit::node_sums(g, ground.data()),
+                                       pol, n_threads);
+        return 0;
+    });
+    py::dict out;
+    std::vector<std::int32_t> nodemap = g.nodemap;
+    auto* holder = new std::vector<std::int32_t>(std::move(nodemap));
+    py::capsule owner(holder, [](void* q) { delete static_cast<std::vector<std::int32_t>*>(q); });
+    out["nodemap"] = py::array_t<std::int32_t>({ny, nx}, holder->data(), owner);
+    out["voltage"] = vector_to_array(std::move(sol.voltage));
+    out["current"] = vector_to_array(std::move(sol.current));
+    out["solved"] = sol.solved;
+    out["n_components"] = g.n_comp;
+    return out;
+}
+
 }  // namespace
 
 namespace circuit {
@@ -162,6 +214,10 @@ void register_python(py::module_& m) {
     m.def("circuit_omniscape_correction", &circuit_omniscape_correction, py::arg("radius"), py::arg("buffer"),
           py::arg("block_size"), py::arg("four_neighbors"), py::arg("nx"), py::arg("ny"),
           "Omniscape's block-artifact correction factors.");
+    m.def("circuitscape_advanced", &circuitscape_advanced, py::arg("gmap"), py::arg("polymap"), py::arg("source"),
+          py::arg("ground"), py::arg("avg_resistances"), py::arg("four_neighbors"), py::arg("policy"),
+          py::arg("n_threads") = 0,
+          "Circuitscape's advanced mode on a raster: node map, and voltages and currents per node.");
 }
 
 }  // namespace circuit

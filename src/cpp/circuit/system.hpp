@@ -32,10 +32,24 @@ struct FrontalSymbolic {
     };
     i64 bx = 0, by = 0;
     bool four = false;
-    std::vector<i64> cells;                // unknown -> box cell, in elimination order
+    std::vector<i64> cells;                // unknown -> box cell, in elimination order (-1: a merged node)
     std::vector<std::int32_t> unknown_of;  // box cell -> unknown (-1: none)
-    std::vector<std::int32_t> nbr;         // unknown × direction -> neighbouring unknown (-1: none)
-    std::vector<std::int32_t> amap;        // unknown × direction -> front row of that edge (-1: not stored)
+    // The matrix entries: grids (frontal_analyze) have unknown k's at
+    // [k nd, (k + 1) nd), one per neighbour direction; general graphs
+    // (frontal_analyze_graph) the caller's adjacency of node perm[k] at
+    // [adj_ptr[perm[k]], adj_ptr[perm[k] + 1]), and their values (diagonal,
+    // entries) are indexed by the caller's nodes.
+    std::vector<std::int32_t> perm;        // unknown -> caller's node (empty: the identity)
+    std::vector<std::int64_t> adj_ptr;     // caller's node -> first entry (empty: grid)
+    std::vector<std::int32_t> nbr;         // entry -> neighbouring unknown (-1: none)
+    std::vector<std::int32_t> amap;        // entry -> front row of that edge (-1: not stored)
+    std::int64_t entry_begin(std::int32_t k) const {
+        return adj_ptr.empty() ? static_cast<std::int64_t>(k) * (four ? 4 : 8) : adj_ptr[perm[k]];
+    }
+    std::int64_t entry_end(std::int32_t k) const {
+        return adj_ptr.empty() ? static_cast<std::int64_t>(k + 1) * (four ? 4 : 8) : adj_ptr[perm[k] + 1];
+    }
+    std::int32_t value_index(std::int32_t k) const { return perm.empty() ? k : perm[k]; }
     std::vector<Node> nodes;               // post-order
     std::vector<std::int32_t> children;
     std::vector<std::int32_t> rows;        // update rows of every node (unknowns, ascending)
@@ -48,6 +62,16 @@ struct FrontalSymbolic {
 // The structure for the box cells with unknown[cell] != 0 (row-major bx × by).
 std::shared_ptr<const FrontalSymbolic> frontal_analyze(i64 bx, i64 by, const std::uint8_t* unknown,
                                                        bool four_neighbors);
+
+// The structure of a general graph of n nodes (adjacency in CSR: node c's
+// neighbours adj[adj_ptr[c] .. adj_ptr[c + 1]), -1 ignored; symmetric). Nodes
+// that are one cell (cell[c] >= 0, row-major in a bx × by box) are ordered by
+// the grid's nested dissection; merged nodes (cell[c] < 0, e.g. Circuitscape's
+// short-circuit regions) are eliminated last, in one front at the root. Cells
+// that are neighbours on the grid must be the only edges between cell nodes.
+std::shared_ptr<const FrontalSymbolic> frontal_analyze_graph(i64 bx, i64 by, const std::vector<i64>& cell,
+                                                             const std::vector<std::int64_t>& adj_ptr,
+                                                             const std::vector<std::int32_t>& adj);
 
 class CellSystem {
 public:
@@ -66,6 +90,12 @@ public:
     // extra_diag[cell] when given, plus `shift`; unknowns that are not present
     // get an identity row.
     void assemble(const double* g, const std::uint8_t* present, const double* extra_diag, double shift);
+
+    // The matrix of a general graph: diag[c] and the entries off[k] (in the
+    // caller's adjacency) of frontal_analyze_graph.
+    void set_values(const double* diag, const double* off);
+    // Unknown -> caller's node (general graphs).
+    const std::vector<std::int32_t>& perm() const { return sym_->perm; }
 
     // False when the matrix is not positive definite.
     bool factorize();

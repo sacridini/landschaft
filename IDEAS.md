@@ -277,7 +277,14 @@ Fases:
    - 5b. núcleo raster do Circuitscape e modo advanced completo (mapa de habitat como
      resistência ou condutância, `connect_using_avg_resistances`, polígonos de curto-circuito,
      máscara, fontes e terras de arquivo, as quatro políticas de conflito, terra como
-     resistência, terras diretas, mapas de tensão e corrente, `set_null_*_to_nodata`);
+     resistência, terras diretas, mapas de tensão e corrente, `set_null_*_to_nodata`).
+     **Feita** (0.46.0: `circuitscape.cpp` = mapa de nós e grafo do Circuitscape, solve por
+     componente com `frontal_analyze_graph` (nós de polígono na raiz); leitor ASCII em
+     double (o GDAL daria float32); `circuitscape_advanced`, `circuitscape_ini` com
+     `scenario = advanced`; referências: as entradas de teste do Circuitscape copiadas e
+     rodadas com CHOLMOD (`tools/make_reference_circuitscape.py`, todos os modos já
+     gravados), mg1–7 e ex_advanced a 5e-12; no modo advanced o Circuitscape ignora
+     `set_null_*_to_nodata` e escreve 0 fora dos nós);
    - 5c. pairwise (pontos e regiões focais, pares incluídos/excluídos, matriz de
      resistências `.out`, corrente acumulada e máxima, mapas por par); uma fatoração por
      componente e muitos lados direitos (`solve_many`);

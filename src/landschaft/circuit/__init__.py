@@ -2,8 +2,9 @@
 """Circuit-theory connectivity on rasters (Circuitscape, Omniscape)."""
 
 from .advanced import AdvancedResult, advanced
+from .circuitscape import CircuitscapeResult, circuitscape_advanced, circuitscape_ini
 from .ini import omniscape_ini, parse_ini
 from .omniscape import omniscape, read_reclass_table, reclassify, source_from_resistance
 
-__all__ = ["AdvancedResult", "advanced", "omniscape", "omniscape_ini", "parse_ini", "read_reclass_table",
+__all__ = ["AdvancedResult", "CircuitscapeResult", "advanced", "circuitscape_advanced", "circuitscape_ini", "omniscape", "omniscape_ini", "parse_ini", "read_reclass_table",
            "reclassify", "source_from_resistance"]

@@ -1683,3 +1683,39 @@ The results agree with Omniscape's `cg+amg` to its tolerance (1e-6 of the larges
 current). Large windows are limited by memory bandwidth with many threads (a radius-100
 window writes and reads a 13 MB factor): 6x from 1 to 20 threads there, 10x for radii
 10-25.
+
+### Circuitscape (raster modes)
+
+```python
+from landschaft.circuit import circuitscape_advanced, circuitscape_ini
+
+r = circuitscape_advanced("resistance.tif", "sources.asc", "grounds.asc",   # paths, DataArrays or arrays
+                          polygons="regions.asc", four_neighbors=False, avg_resistances=False,
+                          ground_is_resistance=True, remove_src_or_gnd="keepall")
+r.voltage, r.current, r.nodemap
+
+r = circuitscape_ini("job.ini")      # a Circuitscape INI file; maps written next to output_file
+```
+
+Circuitscape 6.1 on rasters, with its conventions: the node map (habitat cells numbered in
+column-major order; the cells of a short-circuit region that holds habitat merged into one
+node, its non-habitat cells included), edges weighted by the average conductance or, with
+`connect_using_avg_resistances`, the average resistance of the two cells (summed between
+merged nodes), connected components that ignore edges of weight 0, the mask, reclass
+tables applied to the values read, sources and grounds summed per node (maps or text
+lists of `value x y`), grounds as resistances (0: direct ground), unit currents, direct
+grounds and the four `remove_src_or_gnd` policies with their quirks. ASCII grids are read
+in double, as Circuitscape does (GDAL would give float32). Each component is factorised by
+the same multifrontal Cholesky as Omniscape's windows, with the short-circuit regions
+eliminated last.
+
+Implemented: `scenario = advanced` (voltage and current maps; `circuitscape_ini` writes
+`<output>_voltmap` and `<output>_curmap`, ASCII grids or GeoTIFF, and the configuration
+in `output_file`). The pairwise, one-to-all and all-to-one modes are next (IDEAS.md).
+
+Verification: `python tools/make_reference_circuitscape.py` copies Circuitscape's raster
+test inputs (`tests/data/reference/circuit/circuitscape/input/raster`, MIT) and runs every
+one of its INI files with the `cholmod` solver; in advanced mode (`mgVerify1`-`7`,
+`ex_advanced`: polygons, sources and grounds, finite and direct grounds, 4 and 8
+neighbours, average resistances, a 355×481 map) every map agrees to 5e-12 of its largest
+value, with the same zero cells.

@@ -90,35 +90,12 @@ struct TreeBuilder {
 
 }  // namespace
 
-std::shared_ptr<const FrontalSymbolic> frontal_analyze(i64 bx, i64 by, const std::uint8_t* unknown,
-                                                       bool four_neighbors) {
-    auto sym = std::make_shared<FrontalSymbolic>();
-    FrontalSymbolic& s = *sym;
-    s.bx = bx;
-    s.by = by;
-    s.four = four_neighbors;
-    TreeBuilder tb{unknown, bx, {}, {}, {}};
-    tb.build(0, by, 0, bx);
-    s.cells = std::move(tb.cells);
-    s.nodes = std::move(tb.nodes);
-    const i64 n = static_cast<i64>(s.cells.size());
-    s.unknown_of.assign(static_cast<std::size_t>(bx * by), -1);
-    for (i64 k = 0; k < n; ++k) s.unknown_of[static_cast<std::size_t>(s.cells[k])] = static_cast<std::int32_t>(k);
+namespace {
 
-    const Offset* nb = four_neighbors ? kNeighbours4 : kNeighbours8;
-    const int nd = four_neighbors ? 4 : 8;
-    s.nbr.assign(static_cast<std::size_t>(n * nd), -1);
-    for (i64 k = 0; k < n; ++k) {
-        const i64 y = s.cells[k] / bx, x = s.cells[k] % bx;
-        for (int d = 0; d < nd; ++d) {
-            const i64 yy = y + nb[d].dy, xx = x + nb[d].dx;
-            if (yy < 0 || yy >= by || xx < 0 || xx >= bx) continue;
-            s.nbr[static_cast<std::size_t>(k * nd + d)] = s.unknown_of[static_cast<std::size_t>(yy * bx + xx)];
-        }
-    }
-
-    // Front structures, bottom up.
-    s.amap.assign(static_cast<std::size_t>(n * nd), -1);
+// Front structures, bottom up, of a tree whose nodes' children are `kids`.
+void build_fronts(FrontalSymbolic& s, const std::vector<std::vector<std::int32_t>>& kids) {
+    const std::int32_t n = static_cast<std::int32_t>(s.cells.size());
+    s.amap.assign(s.nbr.size(), -1);
     std::vector<std::int32_t> stamp(static_cast<std::size_t>(n), -1), loc(static_cast<std::size_t>(n), -1);
     std::vector<std::int32_t> upd;
     std::int64_t lpos = 0, stack = 0, peak = 0;
@@ -126,13 +103,13 @@ std::shared_ptr<const FrontalSymbolic> frontal_analyze(i64 bx, i64 by, const std
     for (std::int32_t t = 0; t < n_nodes; ++t) {
         FrontalSymbolic::Node& node = s.nodes[t];
         node.child_begin = static_cast<std::int32_t>(s.children.size());
-        for (std::int32_t c : tb.kids[t]) s.children.push_back(c);
+        for (std::int32_t c : kids[t]) s.children.push_back(c);
         node.child_end = static_cast<std::int32_t>(s.children.size());
         const std::int32_t end = node.first + node.npiv;
         upd.clear();
         for (std::int32_t p = node.first; p < end; ++p)
-            for (int d = 0; d < nd; ++d) {
-                const std::int32_t q = s.nbr[static_cast<std::size_t>(p) * nd + d];
+            for (std::int64_t k = s.entry_begin(p); k < s.entry_end(p); ++k) {
+                const std::int32_t q = s.nbr[static_cast<std::size_t>(k)];
                 if (q >= end && stamp[q] != t) {
                     stamp[q] = t;
                     upd.push_back(q);
@@ -161,9 +138,9 @@ std::shared_ptr<const FrontalSymbolic> frontal_analyze(i64 bx, i64 by, const std
                 s.relmap[static_cast<std::size_t>(c.upd + i)] = loc[s.rows[static_cast<std::size_t>(c.upd + i)]];
         }
         for (std::int32_t p = node.first; p < end; ++p)
-            for (int d = 0; d < nd; ++d) {
-                const std::int32_t q = s.nbr[static_cast<std::size_t>(p) * nd + d];
-                if (q > p) s.amap[static_cast<std::size_t>(p) * nd + d] = loc[q];
+            for (std::int64_t k = s.entry_begin(p); k < s.entry_end(p); ++k) {
+                const std::int32_t q = s.nbr[static_cast<std::size_t>(k)];
+                if (q > p) s.amap[static_cast<std::size_t>(k)] = loc[q];
             }
         const std::int64_t m = node.npiv + node.nupd;
         node.lpos = lpos;
@@ -178,6 +155,84 @@ std::shared_ptr<const FrontalSymbolic> frontal_analyze(i64 bx, i64 by, const std
     }
     s.lsize = lpos;
     s.stack_size = peak;
+}
+
+}  // namespace
+
+std::shared_ptr<const FrontalSymbolic> frontal_analyze(i64 bx, i64 by, const std::uint8_t* unknown,
+                                                       bool four_neighbors) {
+    auto sym = std::make_shared<FrontalSymbolic>();
+    FrontalSymbolic& s = *sym;
+    s.bx = bx;
+    s.by = by;
+    s.four = four_neighbors;
+    TreeBuilder tb{unknown, bx, {}, {}, {}};
+    tb.build(0, by, 0, bx);
+    s.cells = std::move(tb.cells);
+    s.nodes = std::move(tb.nodes);
+    const i64 n = static_cast<i64>(s.cells.size());
+    s.unknown_of.assign(static_cast<std::size_t>(bx * by), -1);
+    for (i64 k = 0; k < n; ++k) s.unknown_of[static_cast<std::size_t>(s.cells[k])] = static_cast<std::int32_t>(k);
+
+    const Offset* nb = four_neighbors ? kNeighbours4 : kNeighbours8;
+    const int nd = four_neighbors ? 4 : 8;
+    s.nbr.assign(static_cast<std::size_t>(n * nd), -1);
+    for (i64 k = 0; k < n; ++k) {
+        const i64 y = s.cells[k] / bx, x = s.cells[k] % bx;
+        for (int d = 0; d < nd; ++d) {
+            const i64 yy = y + nb[d].dy, xx = x + nb[d].dx;
+            if (yy < 0 || yy >= by || xx < 0 || xx >= bx) continue;
+            s.nbr[static_cast<std::size_t>(k * nd + d)] = s.unknown_of[static_cast<std::size_t>(yy * bx + xx)];
+        }
+    }
+    build_fronts(s, tb.kids);
+    return sym;
+}
+
+std::shared_ptr<const FrontalSymbolic> frontal_analyze_graph(i64 bx, i64 by, const std::vector<i64>& cell,
+                                                             const std::vector<std::int64_t>& adj_ptr,
+                                                             const std::vector<std::int32_t>& adj) {
+    auto sym = std::make_shared<FrontalSymbolic>();
+    FrontalSymbolic& s = *sym;
+    s.bx = bx;
+    s.by = by;
+    const std::int32_t n = static_cast<std::int32_t>(cell.size());
+    std::vector<std::uint8_t> mark(static_cast<std::size_t>(bx * by), 0);
+    std::vector<std::int32_t> node_of_cell(static_cast<std::size_t>(bx * by), -1);
+    for (std::int32_t c = 0; c < n; ++c)
+        if (cell[c] >= 0) {
+            mark[static_cast<std::size_t>(cell[c])] = 1;
+            node_of_cell[static_cast<std::size_t>(cell[c])] = c;
+        }
+    TreeBuilder tb{mark.data(), bx, {}, {}, {}};
+    const std::int32_t root = tb.build(0, by, 0, bx);
+    s.cells = std::move(tb.cells);
+    s.nodes = std::move(tb.nodes);
+    s.perm.reserve(static_cast<std::size_t>(n));
+    for (i64 b : s.cells) s.perm.push_back(node_of_cell[static_cast<std::size_t>(b)]);
+    // Merged nodes: one front at the root.
+    const std::int32_t first_merged = static_cast<std::int32_t>(s.perm.size());
+    for (std::int32_t c = 0; c < n; ++c)
+        if (cell[c] < 0) {
+            s.perm.push_back(c);
+            s.cells.push_back(-1);
+        }
+    if (static_cast<std::int32_t>(s.perm.size()) > first_merged) {
+        FrontalSymbolic::Node top;
+        top.first = first_merged;
+        top.npiv = static_cast<std::int32_t>(s.perm.size()) - first_merged;
+        s.nodes.push_back(top);
+        tb.kids.push_back(root >= 0 ? std::vector<std::int32_t>{root} : std::vector<std::int32_t>{});
+    }
+    std::vector<std::int32_t> iperm(static_cast<std::size_t>(n), -1);
+    for (std::int32_t k = 0; k < n; ++k) iperm[static_cast<std::size_t>(s.perm[k])] = k;
+    s.unknown_of.assign(static_cast<std::size_t>(bx * by), -1);
+    for (std::int32_t k = 0; k < n; ++k)
+        if (s.cells[k] >= 0) s.unknown_of[static_cast<std::size_t>(s.cells[k])] = k;
+    s.adj_ptr = adj_ptr;
+    s.nbr.resize(adj.size());
+    for (std::size_t k = 0; k < adj.size(); ++k) s.nbr[k] = adj[k] >= 0 ? iperm[static_cast<std::size_t>(adj[k])] : -1;
+    build_fronts(s, tb.kids);
     return sym;
 }
 
@@ -189,7 +244,12 @@ void CellSystem::share(std::shared_ptr<const FrontalSymbolic> symbolic) {
     sym_ = std::move(symbolic);
     const std::size_t n = sym_->cells.size();
     diag_.assign(n, 1.0);
-    off_.assign(n * (sym_->four ? 4 : 8), 0.0);
+    off_.assign(sym_->nbr.size(), 0.0);
+}
+
+void CellSystem::set_values(const double* diag, const double* off) {
+    std::copy(diag, diag + diag_.size(), diag_.begin());
+    std::copy(off, off + off_.size(), off_.begin());
 }
 
 void CellSystem::assemble(const double* g, const std::uint8_t* present, const double* extra_diag, double shift) {
@@ -237,7 +297,6 @@ bool CellSystem::factorize_solve(const double* b, double* x) {
 
 bool CellSystem::factorize(double* y) {
     const FrontalSymbolic& s = *sym_;
-    const int nd = s.four ? 4 : 8;
     double* stack = stack_.get(static_cast<std::size_t>(s.stack_size));
     // Every front is built where its columns of L go: its first npiv columns
     // stay as L, its trailing ones (the update matrix, copied to the stack)
@@ -250,10 +309,10 @@ bool CellSystem::factorize(double* y) {
         for (std::int64_t j = 0; j < m; ++j) std::fill(F + j * m + j, F + j * m + m, 0.0);
         for (std::int32_t p = node.first; p < node.first + node.npiv; ++p) {
             const std::int64_t j = p - node.first;
-            F[j * m + j] += diag_[p];
-            for (int d = 0; d < nd; ++d) {
-                const std::int32_t a = s.amap[static_cast<std::size_t>(p) * nd + d];
-                if (a >= 0) F[j * m + a] += off_[static_cast<std::size_t>(p) * nd + d];
+            F[j * m + j] += diag_[static_cast<std::size_t>(s.value_index(p))];
+            for (std::int64_t k = s.entry_begin(p); k < s.entry_end(p); ++k) {
+                const std::int32_t a = s.amap[static_cast<std::size_t>(k)];
+                if (a >= 0) F[j * m + a] += off_[static_cast<std::size_t>(k)];
             }
         }
         // Extend-add the children's update matrices (the top of the stack, in order).
