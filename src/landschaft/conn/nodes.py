@@ -212,7 +212,7 @@ class Resistance:
     extent: tuple[float, float, float, float]
 
 
-def read_resistance(resistance, *, band=None, nodata=None) -> Resistance:
+def read_resistance(resistance, *, band=None, nodata=None, positive: bool = True) -> Resistance:
     """A resistance raster (path, DataArray or array) as float64 with NaN outside."""
     import xarray as xr
 
@@ -248,7 +248,7 @@ def read_resistance(resistance, *, band=None, nodata=None) -> Resistance:
         xmin, ymax = t.c, t.f
         xmax, ymin = xmin + nx * t.a, ymax + ny * t.e
     finite = values[np.isfinite(values)]
-    if finite.size and finite.min() <= 0:
+    if positive and finite.size and finite.min() <= 0:
         raise ValueError("resistances must be positive")
     return Resistance(np.ascontiguousarray(values), (xmin, xmax, ymin, ymax))
 

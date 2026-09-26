@@ -1268,6 +1268,29 @@ py::dict conn_conductance(const CArray<double>& resistance, double xmin, double 
     return out;
 }
 
+py::dict conn_samc_transitions(const CArray<double>& resistance, const CArray<double>& absorption, int directions,
+                               const std::string& function) {
+    if (resistance.ndim() != 2 || absorption.ndim() != 2 || resistance.shape(0) != absorption.shape(0) ||
+        resistance.shape(1) != absorption.shape(1))
+        throw py::value_error("expected a resistance and an absorption raster of the same shape");
+    conn::CostFunction f;
+    if (function == "makurhini") f = conn::CostFunction::Destination;
+    else if (function == "mean") f = conn::CostFunction::Mean;
+    else throw py::value_error("cost_function must be 'makurhini' or 'mean'");
+    conn::SamcTransitions t;
+    {
+        py::gil_scoped_release release;
+        t = conn::samc_transitions(resistance.data(), absorption.data(), resistance.shape(1), resistance.shape(0),
+                                   directions, f);
+    }
+    py::dict out;
+    out["cell"] = vector_array(t.cell);
+    out["from"] = vector_array(t.from);
+    out["to"] = vector_array(t.to);
+    out["q"] = vector_array(t.q);
+    return out;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -1302,6 +1325,8 @@ PYBIND11_MODULE(_core, m) {
     m.def("conn_conductance", &conn_conductance, py::arg("resistance"), py::arg("xmin"), py::arg("xmax"),
           py::arg("ymin"), py::arg("ymax"), py::arg("directions"), py::arg("function"),
           "Conductances between neighbouring cells (gdistance's transition and geoCorrection).");
+    m.def("conn_samc_transitions", &conn_samc_transitions, py::arg("resistance"), py::arg("absorption"),
+          py::arg("directions"), py::arg("function"), "Transient transition matrix Q of samc's random walk.");
     m.def("conn_point_distances", &conn_point_distances, py::arg("x"), py::arg("y"), py::arg("max_distance"),
           py::arg("n_threads") = 0, "Distances between points, pairs up to max_distance.");
     m.def("conn_raster_edge_distances", &conn_raster_edge_distances, py::arg("node"), py::arg("n_nodes"),

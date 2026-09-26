@@ -13,6 +13,8 @@
 #       MK_Focal_nodes (IIC and PC, one and two distances) on the polygons and the ProtConn areas
 #   Rscript conn_makurhini_reference.R commute <out_dir> <polygons.gpkg> <polygons_resistance.tif>
 #       commute-time distances (distancefile) on the polygons and the example raster
+#   Rscript conn_makurhini_reference.R samc <polygons.gpkg> <resistance.tif> <absorption.tif> <out.csv>
+#       MK_dPC_SAMC (and the settlement probabilities) on the polygons
 #   Rscript conn_makurhini_reference.R export <out_dir>
 #       writes Makurhini's example `habitat_nodes` (centroid distances, areas
 #       in km2) as habitat_nodes.csv / habitat_pairs.csv
@@ -378,6 +380,52 @@ if (args[1] == "commute") {
     put("raster_commute", distancefile(r, type = "commute-time", resistance = res_r))
     cat("raster", format(Sys.time() - t0), "
 ")
+    quit(save = "no")
+}
+
+if (args[1] == "samc") {
+    # MK_dPC_SAMC on the polygons over their resistance, with an explicit
+    # absorption raster (Makurhini's default rasterizes its own example data).
+    polygons <- sf::st_read(args[2], quiet = TRUE)
+    resistance <- terra::rast(args[3])
+    absorption <- terra::rast(args[4])
+    out <- args[5]
+    cases <- list(list(8, sum, "sum", 10, NULL), list(4, mean, "mean", 10, NULL), list(8, sum, "sum", NULL, 0.2),
+                  list(8, mean, "mean", 3, NULL))
+    rows <- list()
+    for (k in seq_along(cases)) {
+        cs <- cases[[k]]
+        res <- MK_dPC_SAMC(nodes = polygons, attribute = NULL, area_unit = "ha", LA = 2e6,
+                           disp_kernel = list(resistance = resistance, CostFun = function(x) 1 / mean(x),
+                                              absorption = absorption, dir = cs[[1]], SettlFunc = cs[[2]],
+                                              nvertices = cs[[4]], pvertices = cs[[5]], systematic = TRUE),
+                           dispersal_dist = 5000, overall = TRUE, intern = FALSE)
+        tab <- sf::st_drop_geometry(res[[1]])
+        for (col in c("dPC", "dPCintra", "dPCflux", "dPCconnector"))
+            rows[[length(rows) + 1]] <- data.frame(case = k, dir = cs[[1]], settle = cs[[3]],
+                                                   nvertices = if (is.null(cs[[4]])) "" else cs[[4]],
+                                                   pvertices = if (is.null(cs[[5]])) "" else cs[[5]],
+                                                   level = "node", id = tab$id, name = col, value = fmt(tab[[col]]))
+        ov <- res[[2]]
+        rows[[length(rows) + 1]] <- data.frame(case = k, dir = cs[[1]], settle = cs[[3]],
+                                               nvertices = if (is.null(cs[[4]])) "" else cs[[4]],
+                                               pvertices = if (is.null(cs[[5]])) "" else cs[[5]],
+                                               level = "overall", id = "", name = ov$Index, value = fmt(ov$Value))
+        # the settlement probabilities themselves
+        s <- terra::rast(args[3]); s <- c(s, absorption); s[any(is.na(s))] <- NA
+        obj <- samc::samc(data = s[[1]], absorption = s[[2]],
+                          model = list(fun = function(x) 1 / mean(x), dir = cs[[1]], sym = TRUE))
+        nodes <- polygons; nodes$IdTemp <- seq_len(nrow(nodes))
+        pij <- Makurhini:::samc_settlement(hn = nodes, samc_class = obj, pvertices = cs[[5]], nvertices = cs[[4]],
+                                           SettlFunc = cs[[2]], sampletype = TRUE, simpl = NULL, intern = FALSE)
+        ij <- which(upper.tri(pij), arr.ind = TRUE)
+        rows[[length(rows) + 1]] <- data.frame(case = k, dir = cs[[1]], settle = cs[[3]],
+                                               nvertices = if (is.null(cs[[4]])) "" else cs[[4]],
+                                               pvertices = if (is.null(cs[[5]])) "" else cs[[5]],
+                                               level = "pij", id = paste(polygons$id[ij[, 1]], polygons$id[ij[, 2]]),
+                                               name = "pij", value = fmt(pij[ij]))
+    }
+    write.csv(do.call(rbind, rows), out, row.names = FALSE)
     quit(save = "no")
 }
 

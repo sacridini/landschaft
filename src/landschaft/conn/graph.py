@@ -241,6 +241,32 @@ class HabitatGraph:
         graph.habitat_area = r_sum(gdal_areas(geoms)) * AREA_UNITS[area_unit]  # MK_dECA: sum, then the unit
         return graph
 
+    @classmethod
+    def from_samc(cls, nodes, resistance, *, dispersal_distance: float | None = None, absorption=None,
+                  directions: int = 8, cost_function: str = "mean", vertices: int | None = 10,
+                  vertex_fraction: float | None = None, settle: str = "sum", id: str | None = None, attribute=None,
+                  area_unit: str = "m2", **kwargs) -> "HabitatGraph":
+        """Polygons connected by settlement probabilities of a spatial absorbing Markov chain (``MK_dPC_SAMC``).
+
+        The probabilities are :func:`landschaft.conn.settlement_probabilities`
+        (samc's random walk over ``resistance``, absorbed with ``absorption``
+        or Fletcher et al.'s rate for ``dispersal_distance``); the attribute is
+        the area in ``area_unit`` or a column. The graph has
+        ``kind="probability"``: ``node_importance("PC", pij_min=0.001)`` is
+        Makurhini's ``MK_dPC_SAMC`` (which cuts at 0.001).
+        """
+        from .nodes import node_table
+        from .samc import settlement_probabilities
+
+        table = node_table(nodes, attribute=attribute, area_unit=area_unit, id=id, n_threads=kwargs.get("n_threads"))
+        ids, P = settlement_probabilities(nodes, resistance, dispersal_distance=dispersal_distance,
+                                          absorption=absorption, directions=directions, cost_function=cost_function,
+                                          vertices=vertices, vertex_fraction=vertex_fraction, settle=settle, id=id)
+        np.fill_diagonal(P, 0.0)
+        graph = cls(table["attribute"].to_numpy(), P, ids=ids, kind="probability", **kwargs)
+        graph._vector = nodes
+        return graph
+
     def to_raster(self, values, name: str | None = None):
         """Node values painted on the patches of :meth:`from_raster` (NaN elsewhere).
 

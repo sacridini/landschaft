@@ -44,4 +44,18 @@ struct ConductanceEdges {
 };
 ConductanceEdges conductance_edges(const double* resistance, const CostGrid& grid);
 
+// The transient part Q of a spatial absorbing Markov chain as the samc package
+// builds it (model RW, no fidelity): the states are the cells with a
+// resistance (row-major); from cell i, a step goes to neighbour j (directions 4
+// or 8, in samc's order) with probability (1 - absorption_i) w_ij / sum_k w_ik,
+// w_ij = f(r_i, r_j) / (1 or sqrt(2) for diagonal steps, in cells), f = 1 / the
+// mean of both (samc's and Makurhini's default) or 1 / r_j.
+struct SamcTransitions {
+    std::vector<i64> cell;               // raster cell of every state
+    std::vector<std::int32_t> from, to;  // states
+    std::vector<double> q;
+};
+SamcTransitions samc_transitions(const double* resistance, const double* absorption, i64 nx, i64 ny, int directions,
+                                 CostFunction function);
+
 }  // namespace conn

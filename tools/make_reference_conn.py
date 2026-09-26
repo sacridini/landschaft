@@ -4,7 +4,7 @@
 Usage::
 
     python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links] [deca] [protconn] [grids]
-        [centrality] [betweenness] [focal] [commute]
+        [centrality] [betweenness] [focal] [commute] [samc]
 
 ``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
 in ``tests/lsm_reference.py``; the default R library is used). It exports
@@ -55,6 +55,12 @@ PC, one and two distances) on the polygons and the ProtConn areas
 ``commute`` (after ``spatial``) stores ``distancefile(type = "commute-time")``
 (gdistance's ``commuteDistance``) on the polygons (8 and 4 directions) and the
 example raster (every 7th pair) in ``tests/data/reference/conn/spatial``.
+
+``samc`` (after ``spatial``) runs ``MK_dPC_SAMC`` on the polygons over
+``polygons_resistance.tif`` with an absorption raster written from them
+(``samc_absorption.tif``: 0 in the polygons, Fletcher et al.'s rate for 5 km
+elsewhere), 4 and 8 directions, sum and mean, and stores its settlement
+probabilities too (``makurhini_samc.csv.gz``).
 
 ``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
 Sensinode 2.2 sources (the last five nodes of each scene are Conefor's nodes
@@ -497,6 +503,41 @@ def run_commute() -> None:
             print(f.stem, len(table))
 
 
+def samc_absorption(path: Path, dispersal: float = 5000.0) -> None:
+    """Absorption for MK_dPC_SAMC: 0 on the polygons (cell centres inside), Fletcher et al.'s rate elsewhere."""
+    import geopandas as gpd
+    import rasterio
+    from rasterio import features
+
+    with rasterio.open(OUT / "polygons_resistance.tif") as src:
+        res = src.read(1, masked=True)
+        transform, crs, shape = src.transform, src.crs, src.shape
+        cell = src.res[0]
+    poly = gpd.read_file(OUT / "polygons.gpkg")
+    inside = features.rasterize(((g, 1) for g in poly.geometry), out_shape=shape, transform=transform, fill=0,
+                                all_touched=False).astype(bool)
+    rate = np.exp(-1.247 - 1.788 * np.log(dispersal / cell))
+    values = np.where(inside, 0.0, rate)
+    values[np.ma.getmaskarray(res)] = np.nan
+    with rasterio.open(path, "w", driver="GTiff", width=shape[1], height=shape[0], count=1, dtype="float64",
+                       crs=crs, transform=transform, nodata=np.nan, compress="deflate") as dst:
+        dst.write(values, 1)
+
+
+def run_samc() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    samc_absorption(OUT / "samc_absorption.tif")
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "samc.csv"
+        subprocess.run([str(rscript), str(R_SCRIPT), "samc", str(OUT / "polygons.gpkg"),
+                        str(OUT / "polygons_resistance.tif"), str(OUT / "samc_absorption.tif"), str(out)], check=True)
+        table = pd.read_csv(out, keep_default_na=False, dtype=str)
+    table.to_csv(OUT / "makurhini_samc.csv.gz", index=False)
+    print("samc", len(table))
+
+
 def run_focal() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -619,7 +660,7 @@ def run_conefor() -> None:
 
 
 if __name__ == "__main__":
-    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn", "grids", "centrality", "focal", "commute"]
+    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn", "grids", "centrality", "focal", "commute", "samc"]
     if "makurhini" in parts:
         run_makurhini()
     if "conefor" in parts:
@@ -642,3 +683,5 @@ if __name__ == "__main__":
         run_focal()
     if "commute" in parts:
         run_commute()
+    if "samc" in parts:
+        run_samc()

@@ -1141,6 +1141,10 @@ ls.conn.protconn(protected_areas, region, distance=[10_000, 50_000], transbounda
 ls.conn.protconn_regions(protected_areas, ecoregions, id="eco_id", distance=10_000)
 ls.conn.protconn_raster("protected_ids.tif", region, distance=10_000, transboundary=20_000)
 
+# settlement probabilities of a spatial absorbing Markov chain (Makurhini's MK_dPC_SAMC)
+g = ls.HabitatGraph.from_samc(patches_gdf, "resistance.tif", dispersal_distance=5_000, area_unit="ha")
+g.node_importance("PC", pij_min=0.001)
+
 # focal connectivity (Makurhini's MK_Focal_nodes): every node in its neighbourhood
 ls.conn.focal_nodes(patches_gdf, id="patch_id", metric="PC", distance=5_000, search_buffer=10_000)
 
@@ -1272,6 +1276,28 @@ area in `area_unit` (Makurhini: always ha), a column or values. Makurhini simpli
 focal polygon with mapshaper before buffering it, which only matters for nodes at the
 very edge of the buffer; landschaft buffers the polygon itself. Makurhini's
 `fragmentation` statistics are not included.
+
+### Spatial absorbing Markov chains (SAMC)
+
+`HabitatGraph.from_samc(polygons, resistance, dispersal_distance=)` is Makurhini's
+`MK_dPC_SAMC` (Fletcher et al. 2023, the samc package): the patches are connected by
+the probability of settling in one when starting from the other, under a random walk
+over the resistance raster. The cells with a resistance are the transient states; from
+a cell the walk steps to a neighbour (`directions` 4 or 8, samc's order) with probability
+(1 − absorption) · w / Σw, w = 1 / the mean resistance of both cells (samc's default;
+`cost_function="makurhini"`: 1 / the neighbour's) over √2 for diagonal steps, and settles
+with the cell's absorption: by default 0 in the patches and exp(−1.247 − 1.788 ·
+log(dispersal distance / cell size)) elsewhere, or an `absorption` raster. With
+F = (I − Q)⁻¹ (one sparse LU factorisation, solved for the vertex cells), settling in cell
+d from cell o has probability F[o, d] · absorption[d]; between two patches it is the
+`settle` (`"sum"` or `"mean"`) of those values from the boundary vertices of the later
+patch to those of the earlier one (`boundary_vertices`: Makurhini's `SR_vertices`,
+`vertices` 10 by default or a `vertex_fraction`, picked systematically). The graph has
+`kind="probability"`; `node_importance("PC", pij_min=0.001)` gives `MK_dPC_SAMC`'s
+values. `ls.conn.settlement_probabilities` returns the matrix itself. Makurhini's default
+absorption rasterizes its own example data (`habitat_nodes`) instead of the given
+patches; landschaft uses the given patches. Random vertex sampling and mapshaper's
+simplification (`keep`) are not ported.
 
 ### Links, changes and nodes to add
 
@@ -1460,6 +1486,10 @@ the results do not depend on the number of threads.
   (`makurhini_focal.csv.gz`): every neighbourhood is the same, the indices agree to
   1e-12 and the importances after Makurhini's 7-digit rounding. (Makurhini fails with a
   `threshold` there.)
+* `make_reference_conn.py samc` runs `MK_dPC_SAMC` on the polygons over their resistance
+  (with an absorption raster written from them), 4 and 8 directions, sum and mean,
+  10 or 3 vertices or a fifth of them, and stores samc's settlement probabilities: they
+  agree to 1e-14, and the PC importances are Makurhini's after its rounding.
 * `tests/test_conn.py` checks every index and importance against a brute-force
   recomputation of the graph without each node (and with its attribute set to 0),
   under both conventions, and the input kinds, pair tables, Conefor files and

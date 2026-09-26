@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 11: spatial absorbing Markov chains.
+  `ls.conn.settlement_probabilities` and `HabitatGraph.from_samc` are Makurhini's
+  `MK_dPC_SAMC` (samc's random walk over a resistance raster, absorbed with an absorption
+  raster or Fletcher et al.'s rate for a dispersal distance; settlement summed or averaged
+  over the patches' boundary vertices, `ls.conn.boundary_vertices`), giving a probability
+  graph for PC and its node importances. Matched with samc to 1e-14 and with Makurhini's
+  importances after its rounding.
+
 ## [0.39.0] - 2026-09-26
 
 ### Added

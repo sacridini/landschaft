@@ -124,8 +124,10 @@ ls.connectivity_grid(g, grid_zones(...))
      aleatório); focais **feitos** (0.38.0, `focal_nodes` = `MK_Focal_nodes`, sem a
      simplificação do mapshaper nem as estatísticas de fragmentação);
   7. opcionais: commute-time **feito** (0.39.0, `distance="commute-time"`, o
-     `commuteDistance` do gdistance a 1e-11); falta o SAMC (`MK_dPCIIC_samc`,
-     Fletcher et al. 2023).
+     `commuteDistance` do gdistance a 1e-11); SAMC **feito** (0.40.0,
+     `settlement_probabilities`, `HabitatGraph.from_samc` = `MK_dPC_SAMC`, a 1e-14 do
+     samc; sem a amostragem aleatória de vértices nem o `keep` do mapshaper).
+     Todas as fases do plano concluídas.
 - Decidido: o Makurhini (instalado na biblioteca do RStudio) é a referência, e o
   Conefor 2.2 compilado (`tools/conefor`) é conferido na precisão simples dele.
 - Desempenho do PC em grafos densos (milhares de nós com `pij_min` baixo): o Dijkstra

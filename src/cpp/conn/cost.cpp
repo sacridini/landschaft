@@ -123,6 +123,53 @@ ConductanceEdges conductance_edges(const double* resistance, const CostGrid& gri
     return out;
 }
 
+SamcTransitions samc_transitions(const double* resistance, const double* absorption, i64 nx, i64 ny, int directions,
+                                 CostFunction function) {
+    if (directions != 4 && directions != 8) throw std::invalid_argument("directions must be 4 or 8");
+    // samc's neighbour order (focal window positions 1-4, 6-9 or 2, 4, 6, 8).
+    const Neighbour* nb = directions == 8 ? kQueen : kRook;
+    const double sqrt2 = std::sqrt(2.0);
+    SamcTransitions out;
+    std::vector<std::int32_t> state(static_cast<std::size_t>(nx * ny), -1);
+    for (i64 k = 0; k < nx * ny; ++k) {
+        if (std::isfinite(resistance[k]) && std::isfinite(absorption[k])) {
+            state[k] = static_cast<std::int32_t>(out.cell.size());
+            out.cell.push_back(k);
+        }
+    }
+    double w[8];
+    std::int32_t target[8];
+    for (const i64 a : out.cell) {
+        const i64 r = a / nx, c = a % nx;
+        double total = 0;
+        int m = 0;
+        for (int k = 0; k < directions; ++k) {
+            const i64 r2 = r + nb[k].dr, c2 = c + nb[k].dc;
+            if (r2 < 0 || r2 >= ny || c2 < 0 || c2 >= nx) continue;
+            const i64 b = r2 * nx + c2;
+            if (state[b] < 0) continue;
+            double f;
+            if (function == CostFunction::Mean) {
+                const double pair[2] = {resistance[a], resistance[b]};
+                f = 1.0 / lsm::r_mean(pair, 2);
+            } else {
+                f = 1.0 / resistance[b];
+            }
+            w[m] = f / (nb[k].dr != 0 && nb[k].dc != 0 ? sqrt2 : 1.0);
+            target[m] = state[b];
+            total += w[m];
+            ++m;
+        }
+        const double stay = 1.0 - absorption[a];
+        for (int k = 0; k < m; ++k) {
+            out.from.push_back(state[a]);
+            out.to.push_back(target[k]);
+            out.q.push_back(w[k] * stay / total);
+        }
+    }
+    return out;
+}
+
 PairList least_cost_distances(const double* resistance, const CostGrid& grid, const i64* node_cell,
                               std::int32_t n_nodes, double max_cost, int max_threads) {
     if (grid.directions != 4 && grid.directions != 8) throw std::invalid_argument("directions must be 4 or 8");
