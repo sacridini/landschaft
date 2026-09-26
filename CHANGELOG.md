@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 5, rasters larger than memory: `Landscape(path,
   block_rows=...)` (and `landscape_metrics(..., block_rows=...)`) reads the file by
