@@ -1,3 +1,7 @@
+<p align="center">
+  <img alt="landschaft logo" src="assets/logos/opcao_2_isometrico.jpg" width="400">
+</p>
+
 # landschaft
 
 Fast Python reimplementation of [GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/)
