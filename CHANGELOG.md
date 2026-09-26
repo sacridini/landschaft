@@ -6,6 +6,20 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-09-26
+
+### Changed
+- Circuit connectivity, part 3: performance. Windows are factorised by a multifrontal
+  Cholesky over the grid's nested dissection (dense fronts on the separator lines, Eigen's
+  dense kernels) instead of Eigen's sparse LDLT: 2x faster at radius 100, 2.7x at 200.
+  Window shapes share one symbolic structure between threads; the forward substitution
+  runs inside the factorisation; flow potentials of up to 8 targets are solved together;
+  buffers keep their capacity. On x86-64 the circuit code is also built for AVX2 and FMA
+  (`landschaft._circuit_avx2`, loaded only on CPUs that have them;
+  `LANDSCHAFT_CIRCUIT_AVX2=0` to keep the baseline), 1.2-1.5x faster dense kernels.
+  Omniscape benchmarks with 20 threads: 800x800 radius 10 in 0.64 s (Omniscape 29.4 s),
+  700x700 radius 25 in 1.36 s (46.7 s), 1000x1000 radius 100 in 12.4 s (275 s).
+
 ## [0.42.0] - 2026-09-26
 
 ### Added
