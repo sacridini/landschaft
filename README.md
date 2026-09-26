@@ -108,6 +108,31 @@ Output classes (`ls.MSPA_CLASSES`):
 | 100 | Core-opening | 220 | Border-opening |
 | 129 | Missing | +100 | the same class inside a core-opening (`internal=True`) |
 
+### Landscape metrics
+
+The FRAGSTATS metrics of the R package
+[landscapemetrics](https://r-spatialecology.github.io/landscapemetrics/), with the
+same names and the same values, computed by a C++ core that labels the patches of
+all classes in one parallel pass:
+
+```python
+lc = ls.Landscape("landcover.tif")               # or a DataArray / numpy array (res=...)
+lc.patch_metrics(["area", "shape", "gyrate"])     # one row per patch
+lc.class_metrics(["ca", "pland", "np", "ed", "ai"])   # one row per class
+lc.landscape_metrics(["shdi", "contag", "lsi"])   # one row
+lc.metrics(level="class", type="aggregation metric")  # long format, like calculate_lsm
+lc.to_raster("area")                              # patch metric as a raster (spatialize_lsm)
+
+ls.landscape_metrics("landcover.tif", what=["lsm_c_ca", "lsm_l_ta"])  # one call
+ls.list_metrics(level="landscape")               # catalogue (like list_lsm)
+```
+
+Options are those of landscapemetrics (`directions`, `count_boundary`,
+`edge_depth`, `neighbourhood`, …). Core-area, nearest-neighbour and circle metrics
+are not implemented yet. On landscapemetrics' `augusta_nlcd` (440×678) all 91
+metrics take 0.1 s instead of 8.6 s in R; a 10,000×10,000 map with 7.7 million
+patches takes about 4 s.
+
 ### Many images
 
 `load_raster` also takes a directory, a glob pattern or a list of paths. It then
@@ -163,6 +188,9 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `distance_to_resistance(data)` | Resistance map growing with the distance to the foreground (GTB Setup Tools). |
 | `spa(data, variant=5)` | GTB SPA2/3/5/6: map in GTB codes (17 core, 3 edge, 5 perforation, 1 margin, 9 islet, 100 core-opening), class table, object counts, porosity, `summary()`. |
 | `batch(tool, inputs, output_dir, *, n_workers=None, threads_per_worker=1, max_memory=None, overwrite=False, **params)` | Any tool (`BATCH_TOOLS`, e.g. `"accounting"`, `"spa"`, `"fad_multiscale"`, or a function) on many rasters in parallel; writes GeoTIFF maps, CSV tables, TXT reports and a JSON record per input. |
+| `Landscape(data, *, res=None, nodata=None, directions=8, count_boundary=False, consider_boundary=False, edge_depth=1, cell_center=False, classes_max=None, neighbourhood=4, ordered=True, base="log2", band=None)` | Categorical map prepared for landscape metrics: `.patch_metrics()`, `.class_metrics()`, `.landscape_metrics()` (wide tables), `.metrics()` (long table), `.labels()`, `.to_raster(metric)`. Values match landscapemetrics. |
+| `landscape_metrics(data, level=None, metric=None, name=None, type=None, what=None, **options)` | landscapemetrics' `calculate_lsm`: long table of the selected metrics for one raster, a list or a `RasterCollection` (`layer` column). |
+| `list_metrics(level=None, metric=None, name=None, type=None, what=None)` | Catalogue of the metrics (`list_lsm`). |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |
@@ -250,6 +278,12 @@ LANDSCHAFT_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live co
   code live on random scenes. Maps and integer statistics are identical; GTB's
   single-precision means and standard deviations agree to 1e-4 (landschaft
   computes them in double precision).
+* Landscape metrics are compared with the R package landscapemetrics:
+  `tools/make_reference_lsm.py` stores every value of `calculate_lsm` for 12 maps
+  (its example data, synthetic maps with NA cells, non-square cells and
+  degenerate layouts) and 4 option sets in `tests/data/reference/lsm`, and with
+  `Rscript` available the tests also run landscapemetrics live on random maps. All
+  values agree to a relative 1e-10 (floating-point summation order).
 * `tests/test_primitives.py` checks each C++ primitive against SciPy or brute
   force. `tests/test_mspa_semantics.py` checks the classes on hand-made patterns.
   The I/O and API tests cover validation, georeferencing, colour tables,

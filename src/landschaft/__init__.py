@@ -70,6 +70,7 @@ from .io import (
     write_raster,
 )
 from .morphology import ParcellationResult, contortion, parcellation
+from .lsm import Landscape, landscape_metrics, list_metrics
 from .lm_heatmap import LMHeatmap, LMHeatmapChange, landscape_mosaic_change, landscape_mosaic_heatmap
 from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
@@ -127,6 +128,7 @@ __all__ = [
     "LMHeatmap",
     "LMHeatmapChange",
     "LM_COLORMAP",
+    "Landscape",
     "MSPA_CLASSES",
     "MorphologicalChangeResult",
     "ParcellationResult",
@@ -171,11 +173,13 @@ __all__ = [
     "influence_zones",
     "isochrone_map",
     "isochrone_map_ab",
+    "landscape_metrics",
     "landscape_mosaic",
     "landscape_mosaic_change",
     "landscape_mosaic_heatmap",
     "landscape_mosaic_stats",
     "least_cost_path",
+    "list_metrics",
     "lm_colormap",
     "load_raster",
     "max_threads",

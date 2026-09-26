@@ -20,6 +20,7 @@ It provides a native **C++17 / OpenMP** core exposed through zero-copy **pybind1
 10. [Change Detection & Spatial Convolution (Simple Change, MCD, FOS Change, GraySpatCon)](#10-change-detection--spatial-convolution-simple-change-mcd-fos-change-grayspatcon)
 11. [Batch Processing & Raster Collections](#11-batch-processing--raster-collections)
 12. [Accuracy & Bit-for-Bit Verification](#12-accuracy--bit-for-bit-verification)
+13. [Landscape Metrics (FRAGSTATS / landscapemetrics)](#13-landscape-metrics-fragstats--landscapemetrics)
 
 ---
 
@@ -578,3 +579,118 @@ To run the verification suite:
 ```bash
 pytest -v
 ```
+
+---
+
+## 13. Landscape Metrics (FRAGSTATS / landscapemetrics)
+
+The patch-, class- and landscape-level metrics of FRAGSTATS as implemented by the R
+package [landscapemetrics](https://r-spatialecology.github.io/landscapemetrics/):
+same metric names (`lsm_p_area` → `"area"` at the patch level, `lsm_c_ca` →
+`"ca"`, …), same options, same patch ids and the same values (relative agreement
+1e-10, the difference being floating-point summation order).
+
+### How it works
+
+`Landscape(data, ...)` maps the class values to dense indices once. On first use the
+C++ core then
+
+1. labels the patches of **all classes in one pass**: the map is cut into strips of
+   64 rows labelled in parallel (union-find), and the pieces are joined across the
+   strip seams;
+2. accumulates, in the same pass, every per-patch statistic the metrics need: cells,
+   cell sides towards other cells (left/right and top/bottom separately, for
+   non-square cells), like adjacencies (orthogonal and diagonal), coordinate sums;
+3. orders the patches like landscapemetrics (by class, then by first cell in
+   column-major order), so patch `id`s are the same;
+4. counts, in one more parallel pass, the 4-neighbour adjacencies between classes,
+   NA and the landscape boundary (plus the diagonal ones when `neighbourhood=8`).
+
+Every metric is a function of these tables, so asking for many metrics costs little
+more than asking for one. The results are cached in the object.
+
+### Usage
+
+```python
+import landschaft as ls
+
+lc = ls.Landscape("landcover.tif")          # path, DataArray, numpy or masked array
+lc                                           # Landscape(shape=..., resolution=..., classes=[...])
+
+lc.patch_metrics(["area", "perim", "shape"])  # class, id, area, perim, shape
+lc.class_metrics()                            # every class-level metric
+lc.landscape_metrics(["shdi", "contag", "ed", "lsi"])
+lc.metrics(level=["class", "landscape"], type="aggregation metric")   # long format
+lc.metrics(what=["lsm_c_ca", "lsm_l_ta"])     # landscapemetrics function names
+
+lc.labels()          # patch ids 1..n (0 = NA), same grid as the input
+lc.to_raster("area") # patch metric painted on the patches (spatialize_lsm)
+
+ls.landscape_metrics(["t1.tif", "t2.tif"], level="landscape")   # adds a `layer` column
+ls.list_metrics(level="class", type="-core area metric")        # "-" excludes
+```
+
+Wide tables (`patch_metrics`, `class_metrics`, `landscape_metrics`) have one column
+per metric; the long table (`metrics`, `landscape_metrics()`) has the columns of
+`calculate_lsm`: `level`, `class`, `id`, `metric`, `value` (plus `layer`), sorted the
+same way. Both are pandas DataFrames, ready for `to_csv` / `to_parquet`.
+
+### Input
+
+* Cell size from the raster (`res=` for numpy arrays, default 1); areas are in
+  hectares and lengths in map units, as in landscapemetrics. A geographic CRS gives
+  a warning (degrees).
+* NA: the raster's nodata value, `nodata=`, masked cells and NaN.
+* Float maps are truncated to integers (like `terra::as.int`), with a warning when
+  values are not whole numbers.
+
+### Options (landscapemetrics arguments)
+
+| option | default | used by |
+|---|---|---|
+| `directions` | 8 | patch connectivity (all patch-based metrics) |
+| `count_boundary` | `False` | `te`, `ed`: landscape boundary and NA count as edge |
+| `consider_boundary`, `edge_depth` | `False`, 1 | core-area metrics |
+| `cell_center` | `False` | `gyrate`: centroid moved to the nearest cell |
+| `classes_max` | `None` | `rpr` (NA without it) |
+| `neighbourhood`, `ordered`, `base` | 4, `True`, `"log2"` | `ent`, `condent`, `joinent`, `mutinf`, `relmutinf` |
+
+`calculate_lsm` also uses `neighbourhood` for `te`, `ed`, `iji` and `contag`,
+unlike the functions `lsm_l_te`, `lsm_c_iji`, `lsm_l_contag`, … (always 4
+neighbours). landschaft follows the individual functions; with the default
+`neighbourhood = 4` both agree.
+
+### Available metrics
+
+| level | metrics |
+|---|---|
+| patch | `area`, `perim`, `para`, `shape`, `frac`, `gyrate`, `contig` |
+| class | `ca`, `pland`, `np`, `pd`, `lpi`, `te`, `ed`, `ai`, `clumpy`, `cohesion`, `division`, `mesh`, `split`, `iji`, `lsi`, `nlsi`, `pladj`, `pafrac`, and `_mn`/`_sd`/`_cv` of `area`, `para`, `shape`, `frac`, `gyrate`, `contig` |
+| landscape | `ta`, `np`, `pd`, `lpi`, `te`, `ed`, `ai`, `cohesion`, `contag`, `division`, `mesh`, `split`, `iji`, `lsi`, `pladj`, `pafrac`, `pr`, `prd`, `rpr`, `shdi`, `shei`, `sidi`, `siei`, `msidi`, `msiei`, `ent`, `condent`, `joinent`, `mutinf`, `relmutinf`, and the same `_mn`/`_sd`/`_cv` |
+
+`_sd` is the sample standard deviation and `_cv` = `_sd / _mn · 100`, as in
+landscapemetrics (NA for a single patch). Not implemented yet: core-area metrics
+(`core`, `cai`, `ncore`, `tca`, `cpland`, `ndca`, `dcad`, `dcore_*`), `enn`, and
+`circle`.
+
+### Verification
+
+`tools/make_reference_lsm.py` runs landscapemetrics (`tools/lsm_reference.R`) on 12
+maps (its `landscape`, crops of `augusta_nlcd` and `podlasie_ccilc`, synthetic maps
+with NA cells, negative and large class values, non-square cells, salt-and-pepper
+patterns, a checkerboard, single rows and columns, a single class) with 4 option
+sets, and stores every value in `tests/data/reference/lsm`. `tests/test_lsm_reference.py`
+compares all of them; with `Rscript` available (`LANDSCHAFT_RSCRIPT`,
+`LANDSCHAFT_R_LIBS` for a specific landscapemetrics library) it also runs
+landscapemetrics live on random maps with other option combinations.
+`tests/test_lsm.py` checks values computed by hand, the labels against SciPy, the
+parallel seams, input handling and metric selection.
+
+### Performance
+
+| map | landscapemetrics 2.2.2 | landschaft |
+|---|---|---|
+| `augusta_nlcd`, 440×678, all 91 metrics | 8.6 s | 0.1 s |
+| 10,000×10,000, 10 classes, 7.7 M patches: labelling | – | 1.4 s |
+| same, all class and landscape metrics | – | 2.2 s more |
+

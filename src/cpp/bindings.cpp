@@ -33,6 +33,7 @@
 #include "gtb/primitives.hpp"
 #include "gtb/restoration.hpp"
 #include "gtb/spa.hpp"
+#include "lsm/landscape.hpp"
 
 namespace py = pybind11;
 using gtb::i64;
@@ -637,10 +638,90 @@ void bind_detail(py::module_& m) {
     });
 }
 
+// ---- landscape metrics ---------------------------------------------------
+
+std::unique_ptr<lsm::Landscape> make_landscape(const CArray<std::int32_t>& values, const py::object& na_mask,
+                                               double resx, double resy, int directions, bool count_boundary,
+                                               bool consider_boundary, int edge_depth, bool cell_center,
+                                               const py::object& classes_max, int neighbourhood, bool ordered,
+                                               const std::string& base) {
+    if (values.ndim() != 2) throw py::value_error("expected a 2-D array");
+    lsm::Options opt;
+    opt.directions = directions;
+    opt.count_boundary = count_boundary;
+    opt.consider_boundary = consider_boundary;
+    opt.edge_depth = edge_depth;
+    opt.cell_center = cell_center;
+    opt.classes_max = classes_max.is_none() ? lsm::kNaN : classes_max.cast<double>();
+    opt.neighbourhood = neighbourhood;
+    opt.ordered = ordered;
+    opt.base = base;
+    const std::uint8_t* mask = nullptr;
+    CArray<std::uint8_t> mask_arr;
+    if (!na_mask.is_none()) {
+        mask_arr = na_mask.cast<CArray<std::uint8_t>>();
+        if (mask_arr.ndim() != 2 || mask_arr.shape(0) != values.shape(0) || mask_arr.shape(1) != values.shape(1)) {
+            throw py::value_error("mask shape does not match the raster");
+        }
+        mask = mask_arr.data();
+    }
+    try {
+        return std::make_unique<lsm::Landscape>(values.data(), mask, values.shape(1), values.shape(0), resx, resy, opt);
+    } catch (const std::invalid_argument& e) {
+        throw py::value_error(e.what());
+    }
+}
+
+template <class F>
+auto lsm_call(F&& f) {
+    try {
+        return run_parallel(0, std::forward<F>(f));
+    } catch (const std::invalid_argument& e) {
+        throw py::value_error(e.what());
+    }
+}
+
+void bind_landscape(py::module_& m) {
+    py::class_<lsm::Landscape>(m, "LsmLandscape")
+        .def(py::init(&make_landscape), py::arg("values"), py::arg("na_mask"), py::arg("resx"), py::arg("resy"),
+             py::arg("directions") = 8, py::arg("count_boundary") = false, py::arg("consider_boundary") = false,
+             py::arg("edge_depth") = 1, py::arg("cell_center") = false, py::arg("classes_max") = py::none(),
+             py::arg("neighbourhood") = 4, py::arg("ordered") = true, py::arg("base") = "log2")
+        .def_property_readonly("class_values", [](const lsm::Landscape& l) {
+            return py::array_t<std::int32_t>(l.class_values().size(), l.class_values().data());
+        })
+        .def_property_readonly("class_cells", [](const lsm::Landscape& l) {
+            return py::array_t<std::int64_t>(l.class_cells().size(), l.class_cells().data());
+        })
+        .def_property_readonly("valid_cells", &lsm::Landscape::valid_cells)
+        .def("n_patches", [](lsm::Landscape& l) { return lsm_call([&] { return l.patches().n; }); })
+        .def("patch_class", [](lsm::Landscape& l) {
+            lsm_call([&] { return l.patches().n; });
+            const lsm::Patches& p = l.patches();
+            return py::array_t<std::int32_t>(p.cls.size(), p.cls.data());
+        })
+        .def("labels", [](lsm::Landscape& l) {
+            auto v = lsm_call([&] { return l.labels(); });
+            return to_array(std::move(v), l.nx(), l.ny());
+        })
+        .def("patch_metric", [](lsm::Landscape& l, const std::string& name) {
+            auto v = lsm_call([&] { return l.patch_metric(name); });
+            return py::array_t<double>(v.size(), v.data());
+        })
+        .def("class_metric", [](lsm::Landscape& l, const std::string& name) {
+            auto v = lsm_call([&] { return l.class_metric(name); });
+            return py::array_t<double>(v.size(), v.data());
+        })
+        .def("landscape_metric", [](lsm::Landscape& l, const std::string& name) {
+            return lsm_call([&] { return l.landscape_metric(name); });
+        });
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
-    m.doc() = "landschaft C++ core (MSPA, GTN, FAD, distance, and entropy).";
+    m.doc() = "landschaft C++ core (MSPA, GTN, FAD, distance, entropy and landscape metrics).";
+    bind_landscape(m);
     m.def("mspa", &mspa, py::arg("input"), py::arg("connectivity") = 8, py::arg("edge_width") = 1,
           py::arg("internal") = true, py::arg("n_threads") = 0,
           "Run MSPA on a uint8 array coded 0=missing, 1=background, 2=foreground.");

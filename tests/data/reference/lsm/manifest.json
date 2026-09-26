@@ -1,0 +1,408 @@
+{
+  "generated": "2026-09-26",
+  "landscapemetrics": "2.2",
+  "option_sets": {
+    "default": {},
+    "d4": {
+      "directions": 4
+    },
+    "boundary": {
+      "count_boundary": true,
+      "consider_boundary": true,
+      "edge_depth": 2
+    },
+    "complexity": {
+      "neighbourhood": 8,
+      "ordered": false,
+      "base": "log",
+      "classes_max": 20,
+      "cell_center": true
+    }
+  },
+  "files": {
+    "augusta__default.csv.gz": {
+      "input": "augusta.tif",
+      "options": {},
+      "rows": 14619
+    },
+    "augusta__d4.csv.gz": {
+      "input": "augusta.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 24315
+    },
+    "augusta__boundary.csv.gz": {
+      "input": "augusta.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 14619
+    },
+    "augusta__complexity.csv.gz": {
+      "input": "augusta.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 14619
+    },
+    "checker__default.csv.gz": {
+      "input": "checker.tif",
+      "options": {},
+      "rows": 197
+    },
+    "checker__d4.csv.gz": {
+      "input": "checker.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 944
+    },
+    "checker__boundary.csv.gz": {
+      "input": "checker.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 197
+    },
+    "checker__complexity.csv.gz": {
+      "input": "checker.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 197
+    },
+    "column__default.csv.gz": {
+      "input": "column.tif",
+      "options": {},
+      "rows": 315
+    },
+    "column__d4.csv.gz": {
+      "input": "column.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 315
+    },
+    "column__boundary.csv.gz": {
+      "input": "column.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 315
+    },
+    "column__complexity.csv.gz": {
+      "input": "column.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 315
+    },
+    "lm_landscape__default.csv.gz": {
+      "input": "lm_landscape.tif",
+      "options": {},
+      "rows": 567
+    },
+    "lm_landscape__d4.csv.gz": {
+      "input": "lm_landscape.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 591
+    },
+    "lm_landscape__boundary.csv.gz": {
+      "input": "lm_landscape.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 567
+    },
+    "lm_landscape__complexity.csv.gz": {
+      "input": "lm_landscape.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 567
+    },
+    "na_ring__default.csv.gz": {
+      "input": "na_ring.tif",
+      "options": {},
+      "rows": 197
+    },
+    "na_ring__d4.csv.gz": {
+      "input": "na_ring.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 197
+    },
+    "na_ring__boundary.csv.gz": {
+      "input": "na_ring.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 197
+    },
+    "na_ring__complexity.csv.gz": {
+      "input": "na_ring.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 197
+    },
+    "podlasie__default.csv.gz": {
+      "input": "podlasie.tif",
+      "options": {},
+      "rows": 8384
+    },
+    "podlasie__d4.csv.gz": {
+      "input": "podlasie.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 15743
+    },
+    "podlasie__boundary.csv.gz": {
+      "input": "podlasie.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 8384
+    },
+    "podlasie__complexity.csv.gz": {
+      "input": "podlasie.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 8384
+    },
+    "row__default.csv.gz": {
+      "input": "row.tif",
+      "options": {},
+      "rows": 327
+    },
+    "row__d4.csv.gz": {
+      "input": "row.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 327
+    },
+    "row__boundary.csv.gz": {
+      "input": "row.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 327
+    },
+    "row__complexity.csv.gz": {
+      "input": "row.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 327
+    },
+    "salt_pepper__default.csv.gz": {
+      "input": "salt_pepper.tif",
+      "options": {},
+      "rows": 1731
+    },
+    "salt_pepper__d4.csv.gz": {
+      "input": "salt_pepper.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 3807
+    },
+    "salt_pepper__boundary.csv.gz": {
+      "input": "salt_pepper.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 1731
+    },
+    "salt_pepper__complexity.csv.gz": {
+      "input": "salt_pepper.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 1731
+    },
+    "single_class__default.csv.gz": {
+      "input": "single_class.tif",
+      "options": {},
+      "rows": 133
+    },
+    "single_class__d4.csv.gz": {
+      "input": "single_class.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 133
+    },
+    "single_class__boundary.csv.gz": {
+      "input": "single_class.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 133
+    },
+    "single_class__complexity.csv.gz": {
+      "input": "single_class.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 133
+    },
+    "stripes__default.csv.gz": {
+      "input": "stripes.tif",
+      "options": {},
+      "rows": 279
+    },
+    "stripes__d4.csv.gz": {
+      "input": "stripes.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 279
+    },
+    "stripes__boundary.csv.gz": {
+      "input": "stripes.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 279
+    },
+    "stripes__complexity.csv.gz": {
+      "input": "stripes.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 279
+    },
+    "synthetic_na__default.csv.gz": {
+      "input": "synthetic_na.tif",
+      "options": {},
+      "rows": 689
+    },
+    "synthetic_na__d4.csv.gz": {
+      "input": "synthetic_na.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 876
+    },
+    "synthetic_na__boundary.csv.gz": {
+      "input": "synthetic_na.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 689
+    },
+    "synthetic_na__complexity.csv.gz": {
+      "input": "synthetic_na.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 689
+    },
+    "two_class__default.csv.gz": {
+      "input": "two_class.tif",
+      "options": {},
+      "rows": 236
+    },
+    "two_class__d4.csv.gz": {
+      "input": "two_class.tif",
+      "options": {
+        "directions": 4
+      },
+      "rows": 368
+    },
+    "two_class__boundary.csv.gz": {
+      "input": "two_class.tif",
+      "options": {
+        "count_boundary": true,
+        "consider_boundary": true,
+        "edge_depth": 2
+      },
+      "rows": 236
+    },
+    "two_class__complexity.csv.gz": {
+      "input": "two_class.tif",
+      "options": {
+        "neighbourhood": 8,
+        "ordered": false,
+        "base": "log",
+        "classes_max": 20,
+        "cell_center": true
+      },
+      "rows": 236
+    }
+  }
+}

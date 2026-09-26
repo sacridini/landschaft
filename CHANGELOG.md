@@ -6,6 +6,18 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics (FRAGSTATS) matching the R package landscapemetrics, part 1:
+  `Landscape` (patch/class/landscape tables, long format, patch labels,
+  `to_raster`), `landscape_metrics()` (`calculate_lsm`) and `list_metrics()`
+  (`list_lsm`, same selection rules). 91 metrics: area and edge, shape (except
+  circle), aggregation (except ENN), diversity and complexity, with the options
+  `directions`, `count_boundary`, `cell_center`, `classes_max`, `neighbourhood`,
+  `ordered` and `base`. A C++ core labels the patches of all classes in one pass
+  (parallel strips joined at their seams) and accumulates every patch statistic
+  and the class adjacencies once. Tested against landscapemetrics 2.2.2 on 12
+  stored maps × 4 option sets and live random maps (relative agreement 1e-10).
+
 ## [0.12.0] - 2026-09-26
 
 ### Added

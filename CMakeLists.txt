@@ -31,12 +31,20 @@ add_library(gtbcore STATIC
     src/cpp/gtb/fos.cpp
 )
 target_include_directories(gtbcore PUBLIC src/cpp)
+
+add_library(lsmcore STATIC
+    src/cpp/lsm/landscape.cpp
+    src/cpp/lsm/metrics.cpp
+)
+target_include_directories(lsmcore PUBLIC src/cpp)
+set_target_properties(lsmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(gtbcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(LANDSCHAFT_OPENMP)
     find_package(OpenMP COMPONENTS CXX)
     if(OpenMP_CXX_FOUND)
         target_link_libraries(gtbcore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(lsmcore PUBLIC OpenMP::OpenMP_CXX)
     else()
         message(WARNING "OpenMP not found: building single-threaded")
     endif()
@@ -46,12 +54,14 @@ endif()
 # (no fast-math, no FMA contraction).
 if(MSVC)
     target_compile_options(gtbcore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(lsmcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
 pybind11_add_module(_core MODULE src/cpp/bindings.cpp)
-target_link_libraries(_core PRIVATE gtbcore)
+target_link_libraries(_core PRIVATE gtbcore lsmcore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()
