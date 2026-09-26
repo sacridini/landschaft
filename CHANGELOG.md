@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 5: `ls.conn.eca_change(graphs, metric, distance=,
   landscape_area=)`, Makurhini's `MK_dECA`: habitat area, ECA (capped at LA), normalised
