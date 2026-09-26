@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 3: `enn` (Euclidean nearest-neighbour distance) and
   `circle` (related circumscribing circle) at patch level, and their
