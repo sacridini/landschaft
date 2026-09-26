@@ -853,7 +853,8 @@ ls.landscape_metrics(["t1.tif", "t2.tif", "t3.tif"])
 **`sample_metrics`** cuts every plot out of the raster as `terra::crop(mask = TRUE)`
 does in `sample_lsm`: the plot's bounding box is snapped to the nearest cell edges
 (one cell if it collapses), every cell the plot touches is kept (GDAL's
-all-touched rasterization) and the others become NA. Point buffers are
+all-touched rasterization, ported to C++ with GDAL's rules and epsilons, so no GDAL
+call per plot) and the others become NA. Point buffers are
 landscapemetrics' squares (half side `size`) or 100-vertex circles (radius `size`).
 Each plot is then a landscape of its own; all plots go to the C++ core at once and are
 computed in parallel. The table has `calculate_lsm`'s columns plus `plot_id` and
@@ -1036,7 +1037,7 @@ circles through two or three hull points.
 | same, core areas (distance, core cells, core labelling) | – | 1.0 s more |
 | same, `enn` / `circle` | – | 2.0 s / 0.5 s more |
 | `augusta_nlcd`, 6 circular plots, all metrics (`sample_lsm`) | 3.7 s | 0.02 s |
-| 4000×4000, 10,000 plots, all metrics (10 M values), squares / circles | – | 1.6 s / 5.4 s |
+| 4000×4000, 10,000 plots, all metrics (10 M values), squares / circles | – | 2.2 s / 2.2 s |
 | 9×11 map, 5×5 window, 10 metrics (`window_lsm`) | ~4 s | 0.003 s |
 | 1000×1000, 21×21 window, all 66 landscape metrics | – | 9 s |
 | 20,000×20,000 file (400 M cells, 334 k patches), class and landscape metrics without core/gyrate/circle/enn: in memory / `block_rows="auto"` | – | 3.4 s, 3.7 GB / 3.9 s, 0.8 GB |

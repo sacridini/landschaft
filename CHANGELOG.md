@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+### Changed
+- Landscape metrics part 12, performance: patch labelling sums the pieces, sorts
+  (parallel radix sort) and permutes the patch tables in parallel (27 M patches on a
+  10,000×10,000 map: 5.0 s → 3.3 s); small loops no longer enter the OpenMP runtime and
+  single-strip maps skip the seam joining (moving windows ~7% faster); GDAL's
+  all-touched polygon rasterization is ported to C++ for `sample_metrics` (and
+  `zonal_metrics`, `scale_sample`): the same cells as GDAL/terra (checked on 3,000 random
+  polygons and the stored references), 10,000 circular plots in 2.2 s instead of 5.4 s.
+
 ## [0.22.0] - 2026-09-26
 
 ### Added

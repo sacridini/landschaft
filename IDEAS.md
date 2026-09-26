@@ -29,30 +29,26 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Desempenho e escala
 
-- Paralelizar a inicialização (mapa de classes, contagens por classe) e a junção
-  das peças entre faixas, que ainda são sequenciais (~0,4 s + 0,3 s em 100 M pixels).
-  Com muitos patches o rótulo pesa mais: 40 M de patches em 100 M pixels levam ~7 s
-  (junção, ordenação e permutação das tabelas por patch).
+- A contagem de classes da inicialização (~0,4 s em 100 M pixels) ainda é
+  sequencial; o rótulo já soma as peças, ordena (radix paralelo) e permuta em
+  paralelo (27 M de patches em 100 M pixels: 5,0 s → 3,3 s).
 - ENN: a construção das árvores e a passada estável por classe ainda são limitadas
   pela memória (~0,5 s cada em 100 M pixels); nós menores (sem `begin`/`end` nos
   nós internos, caixas em 16 bits relativas) reduziriam o tráfego.
 - Rótulos em 64 bits para rasters em memória com mais de 2^31 pixels (hoje esses
   casos ficam para o processamento por tiles).
-- Janela móvel com métricas de patch (reclassificar por janela é caro): reaproveitar
-  rótulos globais e só corrigir patches cortados pela borda da janela. Hoje cada janela
-  é uma paisagem pequena (1000×1000 com janela 21×21 e as 66 métricas: 9 s); o custo
-  restante é montar a paisagem (alocações) e ENN/core. Reaproveitar os buffers do
-  `Landscape` entre janelas cortaria boa parte.
+- Janela móvel: reaproveitar rótulos globais e só corrigir os patches cortados pela
+  borda da janela (algoritmo incremental). Hoje cada janela é uma paisagem pequena
+  (1000×1000, janela 21×21, 66 métricas: 11,8 s; ~80 µs por janela numa thread, dos
+  quais rótulo 5 µs, core 9, enn 15, círculo 7; o resto são as 66 métricas). Os laços
+  pequenos já não entram no OpenMP (`parallel_for`) e o rótulo de uma faixa só evita
+  a junção; reaproveitar os buffers do `Landscape` entre janelas cortaria as alocações.
 - Fora da memória (`block_rows`): o ENN guarda todas as células de borda (~24 B cada);
   um ENN realmente fora da memória (p. ex. árvores por bloco em disco, ou busca por
   anéis de blocos vizinhos) tiraria esse limite. `labels()`/`to_raster()` por blocos
   poderiam gravar direto num GeoTIFF (reescrevendo os rótulos na passada de detalhe).
   Blocos processados em paralelo (hoje um bloco por vez, paralelo por faixas) ajudariam
   em rasters estreitos.
-- `sample_metrics` com círculos e polígonos: a máscara usa `rasterio.features.rasterize`
-  (GDAL, idêntico ao terra), ~0,4 ms por plot só de overhead Python. Portar a
-  rasterização "all touched" do GDAL para C++ (com as mesmas regras de borda) deixaria
-  10 mil plots circulares tão rápidos quanto os quadrados (5,4 s → ~1,6 s).
 
 ## Observações para os testes
 
@@ -119,3 +115,7 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 11. Análises no estilo pylandstats: `SpatioTemporalAnalysis` (séries de métricas no
     tempo, de mapas inteiros, zonas, buffers ou grade, com gráficos) e
     `SpatialSignatureAnalysis` (PCA e k-means das assinaturas, com gráficos). **Feita.**
+12. Desempenho (parte): rótulo com somas, radix sort e permutações em paralelo;
+    laços pequenos fora do OpenMP; rasterização "all touched" do GDAL portada para C++
+    (plots circulares e polígonos: 10 mil círculos 5,4 s → 2,2 s, as mesmas células).
+    **Feita.** O que falta está em "Desempenho e escala".

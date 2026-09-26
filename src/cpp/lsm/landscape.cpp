@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "lsm/landscape.hpp"
+#include "lsm/parallel.hpp"
 
 #include <algorithm>
 #include <numeric>
@@ -53,13 +54,58 @@ void uf_unite(std::int32_t* parent, std::int32_t a, std::int32_t b) {
 }
 
 // Indices 0..n-1 ordered by key (LSD radix sort; keys move with the indices
-// so every pass reads sequentially).
+// so every pass reads sequentially). Large inputs sort in parallel: every
+// thread counts the digits of its chunk and scatters it to its own offsets,
+// which keeps the sort stable.
 std::vector<i64> sort_by_key(std::vector<std::uint64_t> key) {
     const std::size_t n = key.size();
     std::vector<i64> order(n);
     std::iota(order.begin(), order.end(), i64(0));
     if (n < 512) {  // small maps (moving windows, sample plots)
         std::sort(order.begin(), order.end(), [&](i64 a, i64 b) { return key[a] < key[b]; });
+        return order;
+    }
+    const int nt = n >= (std::size_t(1) << 20) ? max_threads() : 1;
+    if (nt > 1) {
+        std::vector<i64> order_tmp(n);
+        std::vector<std::uint64_t> key_tmp(n);
+        std::uint64_t all = 0;
+        for (std::uint64_t k : key) all |= k;
+        constexpr int kBits = 11;
+        constexpr std::size_t kBuckets = std::size_t(1) << kBits;
+        std::vector<std::size_t> count(static_cast<std::size_t>(nt) * kBuckets);
+        const std::size_t chunk = (n + nt - 1) / nt;
+        for (int shift = 0; shift < 64 && (all >> shift) != 0; shift += kBits) {
+#pragma omp parallel num_threads(nt)
+            {
+                const int t = thread_id();
+                std::size_t* c = count.data() + static_cast<std::size_t>(t) * kBuckets;
+                std::fill(c, c + kBuckets, 0);
+                const std::size_t b = std::min(n, t * chunk);
+                const std::size_t e = std::min(n, b + chunk);
+                for (std::size_t i = b; i < e; ++i) ++c[(key[i] >> shift) & (kBuckets - 1)];
+#pragma omp barrier
+#pragma omp single
+                {
+                    std::size_t sum = 0;
+                    for (std::size_t d = 0; d < kBuckets; ++d) {
+                        for (int u = 0; u < nt; ++u) {
+                            std::size_t& v = count[static_cast<std::size_t>(u) * kBuckets + d];
+                            const std::size_t x = v;
+                            v = sum;
+                            sum += x;
+                        }
+                    }
+                }
+                for (std::size_t i = b; i < e; ++i) {
+                    const std::size_t j = c[(key[i] >> shift) & (kBuckets - 1)]++;
+                    key_tmp[j] = key[i];
+                    order_tmp[j] = order[i];
+                }
+            }
+            key.swap(key_tmp);
+            order.swap(order_tmp);
+        }
         return order;
     }
     std::vector<i64> order_tmp(n);
@@ -99,6 +145,12 @@ struct StripStats {
 // `code`, which serves meanwhile as the union-find parent array.
 void label_strip(const std::int32_t* cls, std::int32_t* code, i64 nx, i64 ny, i64 y0, i64 y1,
                  int directions, StripStats& st) {
+    // room for the pieces of small strips at once (one allocation per table)
+    const auto guess = static_cast<std::size_t>(std::min<i64>(nx * (y1 - y0), 256));
+    for (auto* v : {&st.cells, &st.edge_h, &st.edge_v, &st.adj_orth, &st.adj_diag, &st.sum_x, &st.sum_y, &st.first_cm}) {
+        v->reserve(guess);
+    }
+    st.cls.reserve(guess);
     for (i64 p = y0 * nx; p < y1 * nx; ++p) code[p] = static_cast<std::int32_t>(p);
     for (i64 y = y0; y < y1; ++y) {
         const i64 row = y * nx;
@@ -162,6 +214,36 @@ void label_strip(const std::int32_t* cls, std::int32_t* code, i64 nx, i64 ny, i6
 
 }  // namespace
 
+// With 4 directions diagonal cells of one class may or may not be one
+// patch: count the pairs once the patches are known.
+static void count_diagonal_pairs(const std::int32_t* cls, i64 nx, i64 ny, Patches& out, bool parallel) {
+    const std::int32_t* code = out.code.data();
+    const i64 n_strips = static_cast<i64>(out.strip_offset.size()) - 1;
+    std::vector<std::vector<i64>> counts(static_cast<std::size_t>(n_strips));
+    parallel_for_dynamic(parallel, n_strips, [&](i64 s) {
+        const i64 y0 = std::max<i64>(1, s * kStripRows);
+        const i64 y1 = std::min(ny, (s + 1) * kStripRows);
+        std::vector<i64>& cnt = counts[s];
+        cnt.assign(static_cast<std::size_t>(out.strip_offset[s + 1] - out.strip_offset[s]), 0);
+        for (i64 y = y0; y < y1; ++y) {
+            for (i64 x = 0; x < nx; ++x) {
+                const i64 p = y * nx + x;
+                const std::int32_t c = cls[p];
+                if (c < 0) continue;
+                const std::int32_t me = out.patch(p, y);
+                const i64 k = -static_cast<i64>(code[p]) - 2;
+                if (x > 0 && cls[p - nx - 1] == c && out.patch(p - nx - 1, y - 1) == me) ++cnt[k];
+                if (x + 1 < nx && cls[p - nx + 1] == c && out.patch(p - nx + 1, y - 1) == me) ++cnt[k];
+            }
+        }
+    });
+    for (i64 s = 0; s < n_strips; ++s) {
+        for (std::size_t k = 0; k < counts[s].size(); ++k) {
+            out.adj_diag[out.local_to_patch[out.strip_offset[s] + static_cast<i64>(k)]] += counts[s][k];
+        }
+    }
+}
+
 Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions) {
     const i64 n = nx * ny;
     Patches out;
@@ -170,15 +252,46 @@ Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions) {
     out.code.resize(static_cast<std::size_t>(n));
     std::int32_t* code = out.code.data();
     std::vector<StripStats> strips(static_cast<std::size_t>(n_strips));
-#pragma omp parallel for schedule(dynamic) if (n >= kParallelThreshold && n_strips > 1)
-    for (i64 s = 0; s < n_strips; ++s) {
+    const bool parallel = n >= kParallelThreshold && n_strips > 1;
+    parallel_for_dynamic(parallel, n_strips, [&](i64 s) {
         label_strip(cls, code, nx, ny, s * kStripRows, std::min(ny, (s + 1) * kStripRows), directions, strips[s]);
-    }
+    });
     out.strip_offset.assign(static_cast<std::size_t>(n_strips + 1), 0);
     for (i64 s = 0; s < n_strips; ++s) {
         out.strip_offset[s + 1] = out.strip_offset[s] + static_cast<i64>(strips[s].cls.size());
     }
     const i64 n_local = out.strip_offset[n_strips];
+
+    if (n_strips == 1) {
+        // One strip (moving windows, most sample plots): its pieces are the
+        // patches; only their order is left.
+        StripStats& st = strips[0];
+        const i64 m = n_local;
+        std::vector<std::uint64_t> key(static_cast<std::size_t>(m));
+        for (i64 i = 0; i < m; ++i) {
+            key[i] = static_cast<std::uint64_t>(st.cls[i]) * static_cast<std::uint64_t>(n) +
+                     static_cast<std::uint64_t>(st.first_cm[i]);
+        }
+        const std::vector<i64> order = sort_by_key(std::move(key));
+        auto take = [&](auto& src, auto& dst) {
+            dst.resize(static_cast<std::size_t>(m));
+            for (i64 i = 0; i < m; ++i) dst[i] = src[order[i]];
+        };
+        out.n = m;
+        take(st.cls, out.cls);
+        take(st.cells, out.cells);
+        take(st.edge_h, out.edge_h);
+        take(st.edge_v, out.edge_v);
+        take(st.adj_orth, out.adj_orth);
+        take(st.adj_diag, out.adj_diag);
+        take(st.sum_x, out.sum_x);
+        take(st.sum_y, out.sum_y);
+        take(st.first_cm, out.first_cm);
+        out.local_to_patch.resize(static_cast<std::size_t>(m));
+        for (i64 i = 0; i < m; ++i) out.local_to_patch[order[i]] = static_cast<std::int32_t>(i);
+        if (directions == 4) count_diagonal_pairs(cls, nx, ny, out, false);
+        return out;
+    }
 
     // Join the pieces that touch across strip seams.
     std::vector<std::int32_t> parent(static_cast<std::size_t>(n_local));
@@ -201,26 +314,56 @@ Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions) {
         }
     }
 
-    // Patches: the sums of their pieces.
-    std::vector<std::int32_t> gid(static_cast<std::size_t>(n_local), -1);
-    std::vector<i64> first_cm;
+    // Patches: one per root piece, numbered in piece order, with the sums of
+    // their pieces. The roots take their own piece's statistics in parallel;
+    // the other pieces (those joined across a seam) are added afterwards.
+    std::vector<std::int32_t> gid(static_cast<std::size_t>(n_local));
+    std::vector<i64> roots_before(static_cast<std::size_t>(n_strips) + 1, 0);
+    parallel_for(parallel, n_strips, [&](i64 s) {
+        i64 roots = 0;
+        for (i64 l = out.strip_offset[s]; l < out.strip_offset[s + 1]; ++l) {
+            // find without path compression: safe in parallel
+            std::int32_t r = static_cast<std::int32_t>(l);
+            while (parent[r] != r) r = parent[r];
+            gid[l] = r;  // the root, for now
+            roots += r == l;
+        }
+        roots_before[s + 1] = roots;
+    });
+    for (i64 s = 0; s < n_strips; ++s) roots_before[s + 1] += roots_before[s];
     Patches tmp;
+    tmp.n = roots_before[n_strips];
+    for (auto* v : {&tmp.cells, &tmp.edge_h, &tmp.edge_v, &tmp.adj_orth, &tmp.adj_diag, &tmp.sum_x, &tmp.sum_y}) {
+        v->resize(static_cast<std::size_t>(tmp.n));
+    }
+    tmp.cls.resize(static_cast<std::size_t>(tmp.n));
+    std::vector<i64> first_cm(static_cast<std::size_t>(tmp.n));
+    std::vector<std::int32_t> root_id(static_cast<std::size_t>(n_local), -1);
+    parallel_for(parallel, n_strips, [&](i64 s) {
+        const StripStats& st = strips[s];
+        std::int32_t g = static_cast<std::int32_t>(roots_before[s]);
+        for (std::size_t k = 0; k < st.cls.size(); ++k) {
+            const i64 l = out.strip_offset[s] + static_cast<i64>(k);
+            if (gid[l] != l) continue;
+            root_id[l] = g;
+            tmp.cls[g] = st.cls[k];
+            tmp.cells[g] = st.cells[k];
+            tmp.edge_h[g] = st.edge_h[k];
+            tmp.edge_v[g] = st.edge_v[k];
+            tmp.adj_orth[g] = st.adj_orth[k];
+            tmp.adj_diag[g] = st.adj_diag[k];
+            tmp.sum_x[g] = st.sum_x[k];
+            tmp.sum_y[g] = st.sum_y[k];
+            first_cm[g] = st.first_cm[k];
+            ++g;
+        }
+    });
     for (i64 s = 0; s < n_strips; ++s) {
         const StripStats& st = strips[s];
         for (std::size_t k = 0; k < st.cls.size(); ++k) {
-            const auto l = static_cast<std::int32_t>(out.strip_offset[s] + static_cast<i64>(k));
-            const std::int32_t root = uf_find(parent.data(), l);
-            if (gid[root] < 0) {
-                gid[root] = static_cast<std::int32_t>(tmp.n++);
-                tmp.cls.push_back(st.cls[k]);
-                for (auto* v : {&tmp.cells, &tmp.edge_h, &tmp.edge_v, &tmp.adj_orth, &tmp.adj_diag, &tmp.sum_x,
-                                &tmp.sum_y}) {
-                    v->push_back(0);
-                }
-                first_cm.push_back(st.first_cm[k]);
-            }
-            const std::int32_t g = gid[root];
-            gid[l] = g;
+            const i64 l = out.strip_offset[s] + static_cast<i64>(k);
+            if (gid[l] == l) continue;
+            const std::int32_t g = root_id[gid[l]];
             tmp.cells[g] += st.cells[k];
             tmp.edge_h[g] += st.edge_h[k];
             tmp.edge_v[g] += st.edge_v[k];
@@ -231,20 +374,22 @@ Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions) {
             first_cm[g] = std::min(first_cm[g], st.first_cm[k]);
         }
     }
+    parallel_for(parallel, n_local, [&](i64 l) { gid[l] = root_id[gid[l]]; });
+    root_id = {};
     strips = {};
     parent = {};
 
     // landscapemetrics order: by class, then by first cell in column-major order.
     std::vector<std::uint64_t> key(static_cast<std::size_t>(tmp.n));
-    for (i64 i = 0; i < tmp.n; ++i) {
+    parallel_for(parallel, tmp.n, [&](i64 i) {
         key[i] = static_cast<std::uint64_t>(tmp.cls[i]) * static_cast<std::uint64_t>(n) +
                  static_cast<std::uint64_t>(first_cm[i]);
-    }
+    });
     const std::vector<i64> order = sort_by_key(std::move(key));
     out.n = tmp.n;
     auto permute = [&](const auto& src, auto& dst) {
         dst.resize(src.size());
-        for (i64 i = 0; i < tmp.n; ++i) dst[i] = src[order[i]];
+        parallel_for(parallel, tmp.n, [&](i64 i) { dst[i] = src[order[i]]; });
     };
     permute(tmp.cls, out.cls);
     permute(tmp.cells, out.cells);
@@ -256,38 +401,11 @@ Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions) {
     permute(tmp.sum_y, out.sum_y);
     permute(first_cm, out.first_cm);
     std::vector<std::int32_t> rank(static_cast<std::size_t>(tmp.n));
-    for (i64 i = 0; i < tmp.n; ++i) rank[order[i]] = static_cast<std::int32_t>(i);
+    parallel_for(parallel, tmp.n, [&](i64 i) { rank[order[i]] = static_cast<std::int32_t>(i); });
     out.local_to_patch.resize(static_cast<std::size_t>(n_local));
-    for (i64 l = 0; l < n_local; ++l) out.local_to_patch[l] = rank[gid[l]];
+    parallel_for(parallel, n_local, [&](i64 l) { out.local_to_patch[l] = rank[gid[l]]; });
 
-    // With 4 directions diagonal cells of one class may or may not be one
-    // patch: count the pairs once the patches are known.
-    if (directions == 4) {
-        std::vector<std::vector<i64>> counts(static_cast<std::size_t>(n_strips));
-#pragma omp parallel for schedule(dynamic) if (n >= kParallelThreshold && n_strips > 1)
-        for (i64 s = 0; s < n_strips; ++s) {
-            const i64 y0 = std::max<i64>(1, s * kStripRows);
-            const i64 y1 = std::min(ny, (s + 1) * kStripRows);
-            std::vector<i64>& cnt = counts[s];
-            cnt.assign(static_cast<std::size_t>(out.strip_offset[s + 1] - out.strip_offset[s]), 0);
-            for (i64 y = y0; y < y1; ++y) {
-                for (i64 x = 0; x < nx; ++x) {
-                    const i64 p = y * nx + x;
-                    const std::int32_t c = cls[p];
-                    if (c < 0) continue;
-                    const std::int32_t me = out.patch(p, y);
-                    const i64 k = -static_cast<i64>(code[p]) - 2;
-                    if (x > 0 && cls[p - nx - 1] == c && out.patch(p - nx - 1, y - 1) == me) ++cnt[k];
-                    if (x + 1 < nx && cls[p - nx + 1] == c && out.patch(p - nx + 1, y - 1) == me) ++cnt[k];
-                }
-            }
-        }
-        for (i64 s = 0; s < n_strips; ++s) {
-            for (std::size_t k = 0; k < counts[s].size(); ++k) {
-                out.adj_diag[out.local_to_patch[out.strip_offset[s] + static_cast<i64>(k)]] += counts[s][k];
-            }
-        }
-    }
+    if (directions == 4) count_diagonal_pairs(cls, nx, ny, out, parallel);
     return out;
 }
 
@@ -330,10 +448,9 @@ Landscape::Landscape(const std::int32_t* values, const std::uint8_t* na_mask, i6
                 class_values_.push_back(static_cast<std::int32_t>(v + vmin));
             }
         }
-#pragma omp parallel for schedule(static) if (n >= kParallelThreshold)
-        for (i64 p = 0; p < n; ++p) {
+        parallel_for(n >= kParallelThreshold, n, [&](i64 p) {
             if (!(na_mask && na_mask[p])) cls_[p] = lut[static_cast<std::size_t>(values[p] - static_cast<i64>(vmin))];
-        }
+        });
     } else {
         std::vector<std::int32_t> vals;
         for (i64 p = 0; p < n; ++p) {
@@ -342,11 +459,10 @@ Landscape::Landscape(const std::int32_t* values, const std::uint8_t* na_mask, i6
         std::sort(vals.begin(), vals.end());
         vals.erase(std::unique(vals.begin(), vals.end()), vals.end());
         class_values_ = vals;
-#pragma omp parallel for schedule(static) if (n >= kParallelThreshold)
-        for (i64 p = 0; p < n; ++p) {
-            if (na_mask && na_mask[p]) continue;
+        parallel_for(n >= kParallelThreshold, n, [&](i64 p) {
+            if (na_mask && na_mask[p]) return;
             cls_[p] = static_cast<std::int32_t>(std::lower_bound(vals.begin(), vals.end(), values[p]) - vals.begin());
-        }
+        });
     }
     class_cells_.assign(class_values_.size(), 0);
     for (i64 p = 0; p < n; ++p) {
@@ -381,13 +497,12 @@ std::vector<std::int32_t> Landscape::labels() {
     const Patches& pt = patches();
     const i64 n = nx_ * ny_;
     std::vector<std::int32_t> out(static_cast<std::size_t>(n));
-#pragma omp parallel for schedule(static) if (n >= kParallelThreshold)
-    for (i64 y = 0; y < ny_; ++y) {
+    parallel_for(n >= kParallelThreshold, ny_, [&](i64 y) {
         for (i64 x = 0; x < nx_; ++x) {
             const i64 p = y * nx_ + x;
             out[p] = pt.patch(p, y) + 1;
         }
-    }
+    });
     return out;
 }
 
@@ -400,8 +515,7 @@ std::vector<std::int32_t> city_block_distance(const std::int32_t* cls, i64 nx, i
     // would pass a nearer source, so a neighbour of another class is at 1.
     std::vector<std::int32_t> dist(static_cast<std::size_t>(n));
     std::int32_t* d = dist.data();
-#pragma omp parallel for schedule(static) if (parallel)
-    for (i64 y = 0; y < ny; ++y) {
+    parallel_for(parallel, ny, [&](i64 y) {
         const i64 row = y * nx;
         for (i64 x = 0; x < nx; ++x) {
             const i64 p = row + x;
@@ -414,11 +528,10 @@ std::vector<std::int32_t> city_block_distance(const std::int32_t* cls, i64 nx, i
             const std::int32_t r = x == nx - 1 ? sides : (cls[p + 1] != cls[p] ? 1 : std::min(kFar, d[p + 1] + 1));
             d[p] = std::min(d[p], r);
         }
-    }
+    });
     constexpr i64 kBlock = 256;
     const i64 n_blocks = (nx + kBlock - 1) / kBlock;
-#pragma omp parallel for schedule(dynamic) if (parallel && n_blocks > 1)
-    for (i64 b = 0; b < n_blocks; ++b) {
+    parallel_for_dynamic(parallel && n_blocks > 1, n_blocks, [&](i64 b) {
         const i64 x0 = b * kBlock;
         const i64 x1 = std::min(nx, x0 + kBlock);
         for (i64 y = 0; y < ny; ++y) {
@@ -437,7 +550,7 @@ std::vector<std::int32_t> city_block_distance(const std::int32_t* cls, i64 nx, i
                 d[p] = std::min(d[p], v);
             }
         }
-    }
+    });
     return dist;
 }
 
@@ -461,8 +574,7 @@ const Core& Landscape::core() {
     std::vector<std::int32_t> core_cls(static_cast<std::size_t>(n), -1);
     const i64 n_strips = static_cast<i64>(pt.strip_offset.size()) - 1;
     std::vector<std::vector<i64>> pieces(static_cast<std::size_t>(n_strips));
-#pragma omp parallel for schedule(dynamic) if (parallel && n_strips > 1)
-    for (i64 s = 0; s < n_strips; ++s) {
+    parallel_for_dynamic(parallel && n_strips > 1, n_strips, [&](i64 s) {
         std::vector<i64>& acc = pieces[s];
         acc.assign(static_cast<std::size_t>(pt.strip_offset[s + 1] - pt.strip_offset[s]), 0);
         const i64 y1 = std::min(ny, (s + 1) * pt.strip_rows);
@@ -474,7 +586,7 @@ const Core& Landscape::core() {
                 ++acc[-static_cast<i64>(pt.code[p]) - 2];
             }
         }
-    }
+    });
     dist = {};
     Core out;
     out.cells.assign(static_cast<std::size_t>(pt.n), 0);
@@ -517,8 +629,7 @@ const Adjacency& Landscape::adjacency() {
     std::vector<std::vector<i64>> d(diag ? n_threads : 0, std::vector<i64>(cells, 0));
     const i64 nx = nx_;
     const i64 ny = ny_;
-#pragma omp parallel for schedule(static) num_threads(n_threads) if (n_threads > 1)
-    for (i64 y = 0; y < ny; ++y) {
+    auto count_row = [&](i64 y) {
         const int t = n_threads > 1 ? thread_id() : 0;
         i64* hh = h[t].data();
         i64* vv = v[t].data();
@@ -546,6 +657,12 @@ const Adjacency& Landscape::adjacency() {
                 }
             }
         }
+    };
+    if (n_threads > 1) {
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+        for (i64 y = 0; y < ny; ++y) count_row(y);
+    } else {
+        for (i64 y = 0; y < ny; ++y) count_row(y);
     }
     Adjacency adj;
     adj.dim = dim;

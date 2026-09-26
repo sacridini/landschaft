@@ -272,6 +272,12 @@ private:
 std::vector<std::int32_t> raster_boundaries(const std::int32_t* values, const std::uint8_t* na_mask, i64 nx, i64 ny,
                                             bool consider_boundary, int edge_depth, bool patch_id, std::int32_t na);
 
+// Mask (ny x nx, row-major) of polygon rings (map coordinates) burnt as
+// GDAL's rasterizer does with ALL_TOUCHED=TRUE; gt: GDAL geotransform
+// (rasterize.cpp).
+std::vector<std::uint8_t> rasterize_all_touched(const std::vector<std::vector<std::pair<double, double>>>& rings,
+                                                const double* gt, int nx, int ny);
+
 // R's cor(x, method = "pearson" | "kendall" | "spearman") of the columns of
 // the n x m column-major matrix x; returns m x m.
 std::vector<double> r_cor(const std::vector<double>& x, i64 n, i64 m, const std::string& method);

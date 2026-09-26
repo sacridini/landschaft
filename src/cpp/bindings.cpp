@@ -8,6 +8,7 @@
 
 #include <limits>
 
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -921,6 +922,21 @@ void bind_landscape(py::module_& m) {
             return a;
         },
         py::arg("x"), py::arg("method"), "R's cor() of the columns of x.");
+    m.def(
+        "lsm_rasterize",
+        [](const std::vector<CArray<double>>& ring_arrays, const std::array<double, 6>& gt, int nx, int ny) {
+            std::vector<std::vector<std::pair<double, double>>> rings;
+            for (const auto& r : ring_arrays) {
+                if (r.ndim() != 2 || r.shape(1) < 2) throw py::value_error("rings must be (n, 2) arrays");
+                std::vector<std::pair<double, double>> ring(static_cast<std::size_t>(r.shape(0)));
+                for (py::ssize_t i = 0; i < r.shape(0); ++i) ring[i] = {r.at(i, 0), r.at(i, 1)};
+                rings.push_back(std::move(ring));
+            }
+            auto v = lsm_call(0, [&] { return lsm::rasterize_all_touched(rings, gt.data(), nx, ny); });
+            return to_array(std::move(v), nx, ny);
+        },
+        py::arg("rings"), py::arg("geotransform"), py::arg("nx"), py::arg("ny"),
+        "Mask of polygon rings burnt as GDAL's rasterizer with ALL_TOUCHED=TRUE.");
     m.def("lsm_r_statistics", &lsm::r_statistics, py::arg("x"),
           "R's sum, mean, sd and median of x, log(x[0]) and sqrt(x[0]), as landschaft computes them.");
 

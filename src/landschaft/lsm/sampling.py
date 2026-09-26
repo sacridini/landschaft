@@ -9,8 +9,6 @@ from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
-import rasterio
-from rasterio import features
 from rasterio.transform import Affine
 
 from .. import _core
@@ -36,18 +34,25 @@ def _r_seq(start: float, stop: float, n: int) -> np.ndarray:
     return np.concatenate([[start], start + np.arange(1, n - 1) * by, [stop]])
 
 
+_CIRCLE = _r_seq(0.0, 2 * np.pi, 100)
+_CIRCLE_SIN, _CIRCLE_COS = np.sin(_CIRCLE), np.cos(_CIRCLE)
+
+
 def _buffer(x: float, y: float, size: float, shape: str) -> dict:
     """landscapemetrics' construct_buffer: a square (half side `size`) or a
-    100-vertex circle (radius `size`) around (x, y)."""
+    100-vertex circle (radius `size`) around (x, y), as a GeoJSON-like
+    polygon whose ring is a closed (n, 2) array."""
     if shape == "square":
-        ring = [(x - size, y - size), (x - size, y + size), (x + size, y + size), (x + size, y - size)]
-    elif shape == "circle":
-        t = _r_seq(0.0, 2 * np.pi, 100)
-        ring = list(zip(np.sin(t) * size + x, np.cos(t) * size + y))
-    else:
-        raise ValueError(f"shape must be 'square' or 'circle', got {shape!r}")
-    ring = [(float(a), float(b)) for a, b in ring]
-    return {"type": "Polygon", "coordinates": [ring + [ring[0]]]}
+        ring = np.array([(x - size, y - size), (x - size, y + size), (x + size, y + size), (x + size, y - size),
+                         (x - size, y - size)])
+        return {"type": "Polygon", "coordinates": [ring], "rectangle": True}
+    if shape == "circle":
+        ring = np.empty((101, 2))
+        ring[:100, 0] = _CIRCLE_SIN * size + x
+        ring[:100, 1] = _CIRCLE_COS * size + y
+        ring[100] = ring[0]
+        return {"type": "Polygon", "coordinates": [ring]}
+    raise ValueError(f"shape must be 'square' or 'circle', got {shape!r}")
 
 
 def _geometries(y) -> list[dict]:
@@ -139,7 +144,8 @@ def _area_function(crs):
 
 def _crop(geom: dict, transform: Affine, shape: tuple[int, int]):
     """terra::crop(snap = "near", mask = TRUE, touches = TRUE): the grid window
-    around the plot and the cells it touches. None if outside the raster."""
+    around the plot and the cells it touches (GDAL's all-touched
+    rasterization, ported to C++). None if outside the raster."""
     coords = np.concatenate([r for _, r in _rings(geom)])
     xmin, ymin = coords.min(axis=0)
     xmax, ymax = coords.max(axis=0)
@@ -164,16 +170,15 @@ def _crop(geom: dict, transform: Affine, shape: tuple[int, int]):
         return None
     rows = slice(nrow - b1, nrow - b0)
     cols = slice(c0, c1)
-    if not collapsed and _is_rectangle(geom):
+    if not collapsed and (geom.get("rectangle") or _is_rectangle(geom)):
         # the window snapped to the nearest cell edges overlaps an
         # axis-aligned rectangle by at least half a cell in every cell
         inside = np.ones((b1 - b0, c1 - c0), dtype=bool)
     else:
-        sub_transform = Affine(rx, 0.0, x0 + c0 * rx, 0.0, -ry, y0 + b1 * ry)
-        inside = features.rasterize(
-            [(geom, 1)], out_shape=(b1 - b0, c1 - c0), transform=sub_transform, fill=0, all_touched=True,
-            dtype="uint8",
-        ).astype(bool)
+        # GDAL's all-touched rasterization (C++ port: same cells, no GDAL call per plot)
+        rings = [np.ascontiguousarray(r, dtype=float) for _, r in _rings(geom)]
+        gt = (x0 + c0 * rx, rx, 0.0, y0 + b1 * ry, 0.0, -ry)
+        inside = _core.lsm_rasterize(rings, gt, c1 - c0, b1 - b0).astype(bool)
     return rows, cols, inside
 
 
@@ -305,17 +310,16 @@ def sample_metrics(
         values, mask, r, transform = _grid(layer, res, nodata, band)
         rasters, inside_area = [], np.zeros(n_plots)
         empty = (np.zeros((1, 1), np.int32), np.ones((1, 1), np.uint8), r[0], r[1])
-        with rasterio.Env():  # one GDAL environment for all plots
-            for k, geom in enumerate(plots):
-                crop = _crop(geom, transform, values.shape)
-                if crop is None:
-                    rasters.append(empty)
-                    continue
-                rows, cols, inside = crop
-                sub_mask = mask[rows, cols] | ~inside
-                sub = np.ascontiguousarray(values[rows, cols])
-                inside_area[k] = np.count_nonzero(~sub_mask) * r[0] * r[1] / 10000
-                rasters.append((sub, sub_mask.astype(np.uint8), r[0], r[1]))
+        for k, geom in enumerate(plots):
+            crop = _crop(geom, transform, values.shape)
+            if crop is None:
+                rasters.append(empty)
+                continue
+            rows, cols, inside = crop
+            sub_mask = mask[rows, cols] | ~inside
+            sub = np.ascontiguousarray(values[rows, cols])
+            inside_area[k] = np.count_nonzero(~sub_mask) * r[0] * r[1] / 10000
+            rasters.append((sub, sub_mask.astype(np.uint8), r[0], r[1]))
         table = _core.lsm_batch(rasters, opts, *metric_specs(chosen))
         df = long_frame(table, chosen)
         item = table["item"].astype(np.int64)
