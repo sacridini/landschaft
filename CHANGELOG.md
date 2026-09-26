@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 9, export and integration: `ls.write_table()` (CSV, `.csv.gz`,
   Parquet, and GeoPackage/GeoJSON/Shapefile for GeoDataFrames),
