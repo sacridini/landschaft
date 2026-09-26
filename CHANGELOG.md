@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-09-26
+
+### Added
+- Circuit connectivity, part 5a: `ls.omniscape(memory_limit=...)` (default: half of the
+  physical memory) runs fewer threads when each thread's factorisation of a full window
+  would not fit (large radii); `attrs["threads"]` reports the threads used. An iterative
+  solver was considered and dropped: the direct one is faster up to radius 200 at least,
+  and memory is the real limit.
+
 ## [0.44.0] - 2026-09-26
 
 ### Added
