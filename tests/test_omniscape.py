@@ -179,3 +179,12 @@ def test_avx2_build_agrees_with_the_baseline():
     a, b = _core.circuit_omniscape(*args), avx2.circuit_omniscape(*args)
     np.testing.assert_allclose(b["current"], a["current"], rtol=1e-11)
     np.testing.assert_allclose(b["flow_potential"], a["flow_potential"], rtol=1e-11)
+
+
+def test_memory_limit_caps_the_threads():
+    r = _map(10)
+    a = ls.omniscape(r, 8, block_size=3, flow_potential=True, memory_limit=1)
+    b = ls.omniscape(r, 8, block_size=3, flow_potential=True)
+    assert a.attrs["threads"] == 1 and b.attrs["threads"] >= 1
+    np.testing.assert_array_equal(a.cum_currmap.values, b.cum_currmap.values)
+    np.testing.assert_array_equal(a.flow_potential.values, b.flow_potential.values)

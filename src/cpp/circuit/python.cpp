@@ -82,7 +82,8 @@ const double* condition_data(const py::object& a, i64 nx, i64 ny, const char* na
 
 py::dict circuit_omniscape(const CArray<double>& resistance, const CArray<double>& source, int radius, int buffer,
                            int block_size, bool four_neighbors, bool resistance_is_conductance,
-                           bool correct_artifacts, bool flow_potential, int n_threads, const py::dict& conditions) {
+                           bool correct_artifacts, bool flow_potential, int n_threads, const py::dict& conditions,
+                           double memory_limit) {
     if (resistance.ndim() != 2 || source.ndim() != 2 || source.shape(0) != resistance.shape(0) ||
         source.shape(1) != resistance.shape(1))
         throw py::value_error("expected resistance and source rasters of the same shape");
@@ -117,12 +118,14 @@ py::dict circuit_omniscape(const CArray<double>& resistance, const CArray<double
     p.flow_potential = flow_potential;
     p.condition1 = condition(1);
     p.condition2 = condition(2);
+    p.memory_limit = memory_limit;
     circuit::OmniscapeResult r =
         run_parallel(n_threads, [&] { return circuit::omniscape(resistance.data(), source.data(), nx, ny, p, n_threads); });
     py::dict out;
     out["current"] = to_array(std::move(r.current), nx, ny);
     if (flow_potential) out["flow_potential"] = to_array(std::move(r.flow_potential), nx, ny);
     out["n_targets"] = r.n_targets;
+    out["threads"] = r.threads;
     return out;
 }
 
@@ -153,7 +156,7 @@ void register_python(py::module_& m) {
     m.def("circuit_omniscape", &circuit_omniscape, py::arg("resistance"), py::arg("source"), py::arg("radius"),
           py::arg("buffer"), py::arg("block_size"), py::arg("four_neighbors"), py::arg("resistance_is_conductance"),
           py::arg("correct_artifacts"), py::arg("flow_potential"), py::arg("n_threads") = 0,
-          py::arg("conditions") = py::dict(),
+          py::arg("conditions") = py::dict(), py::arg("memory_limit") = 0.0,
           "Omniscape's cumulative current (and flow potential) over moving windows. `conditions`: "
           "condition1/2 (arrays), condition1/2_future, comparison1/2, condition1/2_lower/upper.");
     m.def("circuit_omniscape_correction", &circuit_omniscape_correction, py::arg("radius"), py::arg("buffer"),

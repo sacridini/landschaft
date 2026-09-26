@@ -429,22 +429,44 @@ OmniscapeResult omniscape(const double* resistance, const double* source, i64 nx
     const i64 W = 2 * D + 1;
     if (correct) corr = omniscape_correction(p, nx, ny);
 
-    const int threads = thread_count(max_threads);
+    int threads = thread_count(max_threads);
     const std::size_t window = static_cast<std::size_t>(W * W);
+    SymbolicCache symbolic(D, p.four_neighbors, static_cast<std::size_t>(4 * threads + 4));
+    // Memory of one thread, from the full window (every other shape is smaller):
+    // the factor with its margin and update stack, the flow potential's two
+    // cached factors, and the thread's window buffers.
+    {
+        const Shape full{W, W, D, D};
+        auto bytes = [](const FrontalSymbolic& f) {
+            const double n = static_cast<double>(f.cells.size());
+            return 8.0 * (static_cast<double>(f.lsize + f.max_front + f.stack_size) + 10 * n);
+        };
+        double per_thread = bytes(*symbolic.get(0, full)) + 8.0 * static_cast<double>(window) * 16;
+        if (fp) per_thread += 2 * bytes(*symbolic.get(1, full));
+        if (p.memory_limit > 0) {
+            const double room = p.memory_limit / 2;  // the other half: batch buffers and the maps
+            const int fit = static_cast<int>(std::max(1.0, std::floor(room / per_thread)));
+            threads = std::min(threads, fit);
+        }
+    }
+    out.threads = threads;
     // Windows solved together, then added to the maps in target order. Each
     // thread takes chunks of consecutive targets (mostly of one shape), whose
     // flow potentials are solved together; about twelve chunks per thread and
     // batch, within a memory budget.
     const std::size_t per_target = window * (fp ? 2 : 1) * sizeof(double);
-    const std::size_t budget = std::size_t{768} << 20;
+    std::size_t budget = std::size_t{768} << 20;
+    if (p.memory_limit > 0) budget = std::min(budget, static_cast<std::size_t>(p.memory_limit / 4));
     const std::size_t nt = static_cast<std::size_t>(threads);
-    const std::size_t fit = std::max<std::size_t>(nt, budget / per_target);
-    const std::size_t chunk = std::max<std::size_t>(1, std::min<std::size_t>(8, fit / (12 * nt)));
-    std::size_t batch = std::min(fit, 12 * nt * chunk);
+    // Chunks are 8 consecutive targets of the global order, whatever the
+    // threads: the flow potentials solved together (and so the rounding of
+    // every one) do not depend on the threads or the memory.
+    constexpr std::size_t chunk = 8;
+    const std::size_t fit = budget / per_target;
+    std::size_t batch = std::max<std::size_t>(chunk, std::min(fit, 12 * nt * chunk) / chunk * chunk);
     batch = std::min(batch, targets.size());
     std::vector<std::vector<double>> cur(batch, std::vector<double>(window)), fpcur;
     if (fp) fpcur.assign(batch, std::vector<double>(window));
-    SymbolicCache symbolic(D, p.four_neighbors, static_cast<std::size_t>(4 * threads + 4));
     std::vector<ThreadSystems> systems(static_cast<std::size_t>(threads));
     std::vector<Workspace> spaces(static_cast<std::size_t>(threads));
     std::vector<std::vector<double>> gbuf(static_cast<std::size_t>(threads), std::vector<double>(window)),

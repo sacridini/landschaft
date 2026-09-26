@@ -15,6 +15,31 @@ COMPARE_TO_FUTURE = ("none", "1", "2", "both")
 PRECISIONS = ("double", "single")
 
 
+def physical_memory() -> int:
+    """Bytes of physical memory (0 when unknown)."""
+    import os
+    import sys
+
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            class Status(ctypes.Structure):
+                _fields_ = [("length", ctypes.c_ulong), ("load", ctypes.c_ulong), ("total", ctypes.c_ulonglong),
+                            ("avail", ctypes.c_ulonglong), ("total_page", ctypes.c_ulonglong),
+                            ("avail_page", ctypes.c_ulonglong), ("total_virtual", ctypes.c_ulonglong),
+                            ("avail_virtual", ctypes.c_ulonglong), ("avail_extended", ctypes.c_ulonglong)]
+
+            st = Status()
+            st.length = ctypes.sizeof(Status)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+                return int(st.total)
+            return 0
+        return int(os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES"))
+    except (AttributeError, OSError, ValueError):
+        return 0
+
+
 def _to_int(value, name: str) -> int:
     # Omniscape parses Int64(round(parse(Float64, value))): halves go to even, as Python's round.
     v = float(value)
@@ -97,7 +122,7 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
               condition1_future=None, condition2_future=None, compare_to_future: str = "none",
               comparison1: str = "within", comparison2: str = "within", condition1_lower: float = 0.0,
               condition1_upper: float = 0.0, condition2_lower: float = 0.0, condition2_upper: float = 0.0,
-              precision: str = "double", n_threads: int = 0):
+              precision: str = "double", memory_limit: float | None = None, n_threads: int = 0):
     """Omnidirectional connectivity with Omniscape's moving-window circuits.
 
     Omniscape 0.7 (``run_omniscape``; McRae et al. 2016, Landau et al. 2021):
@@ -163,6 +188,10 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
     precision
         ``"single"`` reads the rasters as float32 and returns float32 maps, as
         Omniscape's ``precision = single``; the arithmetic stays double.
+    memory_limit
+        Bytes the solves may use (default: half of the physical memory); with
+        large windows fewer threads run when each thread's factorisation of a
+        full window would not fit (``attrs["threads"]``).
     n_threads
         OpenMP threads (0 = all).
 
@@ -171,7 +200,7 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
     xarray.Dataset
         ``cum_currmap`` and, when asked for, ``flow_potential`` and
         ``normalized_cum_currmap``, on the resistance's grid; ``attrs``
-        records the options and the number of targets.
+        records the options, the number of targets and of threads used.
     """
     import xarray as xr
 
@@ -243,7 +272,7 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
     compute_fp = bool(flow_potential or normalized_current)
     out = core().circuit_omniscape(r, s, radius, buffer, block_size, bool(four_neighbors),
                                    bool(resistance_is_conductance), bool(correct_artifacts), compute_fp, int(n_threads),
-                                   conditions)
+                                   conditions, float(physical_memory() / 2 if memory_limit is None else memory_limit))
     cum = out["current"]
     data = {"cum_currmap": cum}
     nodata = np.isnan(r)
@@ -263,7 +292,7 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
         data = {k: v.astype(np.float32) for k, v in data.items()}
     attrs = {"radius": radius, "block_size": block_size, "buffer": buffer, "n_targets": int(out["n_targets"]),
              "four_neighbors": int(bool(four_neighbors)), "correct_artifacts": int(bool(correct_artifacts)),
-             "precision": precision, "conditional": int(condition1 is not None)}
+             "precision": precision, "conditional": int(condition1 is not None), "threads": int(out["threads"])}
     order = ["cum_currmap", "flow_potential", "normalized_cum_currmap"]
     if like is None:
         return xr.Dataset({k: (("y", "x"), data[k]) for k in order if k in data}, attrs=attrs)

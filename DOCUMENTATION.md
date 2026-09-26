@@ -1610,7 +1610,11 @@ How it is fast:
   build): the dense kernels are 1.2-1.5x faster. Both builds give the same results to
   1e-11 and are each deterministic (buffers aligned to 64 bytes);
 * windows are solved in parallel and added to the maps row by row in a fixed order, so
-  the result does not depend on the number of threads.
+  the result does not depend on the number of threads;
+* very large windows: each thread keeps the factor of a window (about 145 MB at radius
+  300, plus twice that for the flow potential), so fewer threads run when they would not
+  fit in `memory_limit` (default: half of the physical memory; `attrs["threads"]` tells
+  how many ran).
 
 Verification: `python tools/make_reference_omniscape.py omniscape` runs Omniscape 0.7's
 `run_omniscape` (INI files, `cholmod` and `cg+amg`) on its own test rasters with its

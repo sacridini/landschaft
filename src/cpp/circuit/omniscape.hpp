@@ -41,12 +41,16 @@ struct OmniscapeParams {
     bool correct_artifacts = true;
     bool flow_potential = false;
     OmniscapeCondition condition1, condition2;
+    // Bytes the run may use (0: no limit): fewer threads when every thread's
+    // factor of a full window would not fit.
+    double memory_limit = 0;
 };
 
 struct OmniscapeResult {
     std::vector<double> current;         // cumulative current
     std::vector<double> flow_potential;  // empty unless asked for
     i64 n_targets = 0;
+    int threads = 0;  // threads used
 };
 
 // `resistance`: row-major ny × nx, NaN = NoData (values must be > 0);

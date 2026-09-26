@@ -264,7 +264,26 @@ Fases:
    `config7` tem resistência 0 e o Omniscape recusa, como nós; em `single` a aritmética
    fica em double: o Omniscape em float32 fica a até 2,4e-4);
 5. opcionais: solver iterativo para raio grande; modos raster do Circuitscape (pairwise,
-   one-to-all, all-to-one, advanced) sobre o mesmo núcleo.
+   one-to-all, all-to-one, advanced) sobre o mesmo núcleo. Decidido (2026-09-26): o solver
+   iterativo não compensa (o direto ganha até em r = 200; o limite real é a memória); a
+   fase vira o port dos modos raster do Circuitscape 6.1, conferido com a suíte de
+   verificação dele (`test/output_verify`: `sg` pairwise, `mg` advanced, `oneToAll`,
+   `allToOne`, com polígonos, máscara, pares incluídos, fontes variáveis, média de
+   resistências, 4/8 vizinhos, mapas de tensão/corrente/acumulada/máxima e a matriz de
+   resistências) e com o CHOLMOD dele:
+   - 5a. Omniscape com janelas enormes: threads limitadas pela memória do fator por thread.
+     **Feita** (0.45.0: `memory_limit`, metade da RAM por padrão, estimado pela estrutura
+     simbólica da janela cheia; `attrs["threads"]`);
+   - 5b. núcleo raster do Circuitscape e modo advanced completo (mapa de habitat como
+     resistência ou condutância, `connect_using_avg_resistances`, polígonos de curto-circuito,
+     máscara, fontes e terras de arquivo, as quatro políticas de conflito, terra como
+     resistência, terras diretas, mapas de tensão e corrente, `set_null_*_to_nodata`);
+   - 5c. pairwise (pontos e regiões focais, pares incluídos/excluídos, matriz de
+     resistências `.out`, corrente acumulada e máxima, mapas por par); uma fatoração por
+     componente e muitos lados direitos (`solve_many`);
+   - 5d. one-to-all e all-to-one (fontes variáveis, `set_focal_node_currents_to_zero`);
+   - 5e. `ls.circuit.circuitscape_ini(path)` e a gravação das saídas como o Circuitscape.
+   O modo de rede (grafos) fica de fora por enquanto.
 
 Referência: Julia 1.13.0 (`C:\Users\eduar\AppData\Local\Programs\Julia-1.13.0`) com
 Omniscape 0.7 (o clone local, `Pkg.develop`) e Circuitscape 6.1 num depot separado
