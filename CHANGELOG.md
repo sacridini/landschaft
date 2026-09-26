@@ -6,6 +6,21 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-09-26
+
+### Added
+- Circuit connectivity, part 2: Omniscape. `ls.omniscape` is Omniscape 0.7's
+  `run_omniscape`: targets every `block_size` cells with a positive block of sources,
+  circular moving windows of `radius` + `buffer`, the block's strength shared among the
+  sources and grounded at the target, cumulative current, flow potential and normalised
+  current, the block-artifact correction, `source_threshold`, `r_cutoff`
+  (`ls.circuit.source_from_resistance`), conductance input, four neighbours and NoData
+  masking, with Omniscape's edge quirks. Windows of one shape share their ordering and
+  symbolic analysis, the flow potential its whole factorisation; windows are solved in
+  parallel and summed in a fixed order (the result does not depend on the threads).
+  Matched with Omniscape run with CHOLMOD to 1.7e-11 on its own test configurations and
+  synthetic maps; about 20x faster than Omniscape with the same 20 threads.
+
 ## [0.41.0] - 2026-09-26
 
 ### Added
