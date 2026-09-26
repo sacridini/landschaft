@@ -12,6 +12,7 @@
 #include <stdexcept>
 
 #include "lsm/landscape.hpp"
+#include "lsm/parallel.hpp"
 #include "lsm/rmath.hpp"
 
 namespace lsm {
@@ -117,8 +118,7 @@ std::vector<double> Landscape::econ() {
     const i64 ny = ny_;
     const i64 n_strips = static_cast<i64>(pt.strip_offset.size()) - 1;
     std::vector<std::vector<double>> wh(static_cast<std::size_t>(n_strips)), wv(static_cast<std::size_t>(n_strips));
-#pragma omp parallel for schedule(dynamic) if (nx * ny >= kParallel && n_strips > 1)
-    for (i64 s = 0; s < n_strips; ++s) {
+    parallel_for_dynamic(nx * ny >= kParallel && n_strips > 1, n_strips, [&](i64 s) {
         const i64 off = pt.strip_offset[s];
         wh[s].assign(static_cast<std::size_t>(pt.strip_offset[s + 1] - off), 0.0);
         wv[s].assign(static_cast<std::size_t>(pt.strip_offset[s + 1] - off), 0.0);
@@ -139,7 +139,7 @@ std::vector<double> Landscape::econ() {
                 wv[s][piece] += w(x, y - 1) + w(x, y + 1);
             }
         }
-    }
+    });
     std::vector<double> h(static_cast<std::size_t>(pt.n), 0.0), v(static_cast<std::size_t>(pt.n), 0.0);
     for (i64 s = 0; s < n_strips; ++s) {
         for (std::size_t j = 0; j < wh[s].size(); ++j) {

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <numeric>
 #include <stdexcept>
+#include <string_view>
 
 #include "lsm/extended.hpp"
 #include "lsm/landscape.hpp"
@@ -15,11 +16,9 @@
 
 namespace lsm {
 
-namespace {
+using namespace std::string_view_literals;
 
-bool ends_with(const std::string& s, const std::string& suffix) {
-    return s.size() > suffix.size() && s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
+namespace {
 
 // R's median(): the middle value, or the mean() of the two middle values.
 double r_median(const double* x, i64 n) {
@@ -39,11 +38,11 @@ double r_median(const double* x, i64 n) {
 // am (area-weighted mean, as R's weighted.mean), md (median) and ra (range)
 // as FRAGSTATS. NA propagates. (mn, sd and cv: Landscape::stat_values.)
 double reduce(const std::string& stat, const double* x, i64 n, const double* w) {
-    if (stat == "am") {
+    if (stat == "am"sv) {
         if (n == 0) return kNaN;
         return sum_of(0, n, [&](i64 i) { return x[i] * w[i]; }) / r_sum(w, n);
     }
-    if (stat == "md") return r_median(x, n);
+    if (stat == "md"sv) return r_median(x, n);
     // ra
     if (n == 0) return kNaN;
     double lo = x[0], hi = x[0];
@@ -57,13 +56,25 @@ double reduce(const std::string& stat, const double* x, i64 n, const double* w) 
 
 constexpr const char* kStats[] = {"mn", "sd", "cv", "am", "md", "ra"};
 
+// "<base>_<stat>" split into base and stat (stat empty when the name has no
+// summary-statistic suffix).
+std::pair<std::string, std::string> split_stat(const std::string& name) {
+    const std::size_t pos = name.rfind('_');
+    if (pos == std::string::npos || pos == 0 || name.size() - pos != 3) return {};
+    const std::string_view suffix(name.data() + pos + 1, 2);
+    for (const char* stat : kStats) {
+        if (suffix == stat) return {name.substr(0, pos), std::string(suffix)};
+    }
+    return {};
+}
+
 // One summary statistic of x[0..n) (mean and sd: the mn and sd already known;
 // population: FRAGSTATS' standard deviation over n).
 double summary(const std::string& stat, const double* x, i64 n, const double* w, double mean, double sd,
                bool population) {
-    if (stat == "mn") return r_mean(x, n);
-    if (stat == "sd") return r_sd(x, n, mean, population);
-    if (stat == "cv") return sd / mean * 100;
+    if (stat == "mn"sv) return r_mean(x, n);
+    if (stat == "sd"sv) return r_sd(x, n, mean, population);
+    if (stat == "cv"sv) return sd / mean * 100;
     return reduce(stat, x, n, w);
 }
 
@@ -77,8 +88,8 @@ double entropy(const std::vector<double>& x, const std::string& base) {
         const double p = v / s;
         if (p > 0.0) r -= p * r_log(p);
     }
-    if (base == "log10") return r / r_log(10.0);
-    if (base == "log2") return r / r_log(2.0);
+    if (base == "log10"sv) return r / r_log(10.0);
+    if (base == "log2"sv) return r / r_log(2.0);
     return r;
 }
 
@@ -180,25 +191,24 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
     std::vector<double> out(static_cast<std::size_t>(n));
     const double factor_ha = resx_ * resy_ / 10000;
     const bool parallel = n >= kParallelPatches;
-    if (name == "area") {
+    if (name == "area"sv) {
         for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(pt.cells[i]) * factor_ha;
-    } else if (name == "perim") {
+    } else if (name == "perim"sv) {
         const bool equal = res_all_equal() && !options_.fragstats;
         const auto [lh, lv] = side_lengths();
         for (i64 i = 0; i < n; ++i) {
             out[i] = equal ? static_cast<double>(pt.edge_h[i] + pt.edge_v[i]) * resx_
                            : static_cast<double>(pt.edge_h[i]) * lh + static_cast<double>(pt.edge_v[i]) * lv;
         }
-    } else if (name == "para" || name == "shape" || name == "frac") {
+    } else if (name == "para"sv || name == "shape"sv || name == "frac"sv) {
         const std::vector<double>& area = patch_base("area");
         const std::vector<double>& perim = patch_base("perim");
-        const int kind = name == "para" ? 0 : name == "shape" ? 1 : 2;
+        const int kind = name == "para"sv ? 0 : name == "shape"sv ? 1 : 2;
         // FRAGSTATS' raster SHAPE: perimeter over the smallest perimeter of
         // as many cells, in cell sides (pylandstats keeps .25 p / sqrt(a)
         // for cells that are not square)
         const bool raster_shape = options_.fragstats && res_all_equal();
-#pragma omp parallel for schedule(static) if (parallel)
-        for (i64 i = 0; i < n; ++i) {
+        parallel_for(parallel, n, [&](i64 i) {
             if (kind == 0) {
                 out[i] = perim[i] / (area[i] * 10000);
             } else if (kind == 1 && raster_shape) {
@@ -209,31 +219,31 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
                 const double f = 2 * r_log(0.25 * perim[i]) / r_log(area[i] * 10000);
                 out[i] = std::isnan(f) ? 1.0 : f;
             }
-        }
-    } else if (name == "contig") {
+        });
+    } else if (name == "contig"sv) {
         for (i64 i = 0; i < n; ++i) {
             const double cells = static_cast<double>(pt.cells[i]);
             const double diagonal = 2.0 * static_cast<double>(pt.adj_diag[i]);
             const double straight = 2.0 * static_cast<double>(pt.adj_orth[i]) * 2;
             out[i] = (((diagonal + straight + cells) / cells) - 1) / 12;
         }
-    } else if (name == "gyrate" || name == "enn" || name == "circle") {
+    } else if (name == "gyrate"sv || name == "enn"sv || name == "circle"sv) {
         if (tables_only_) throw std::logic_error(name + " of an out-of-core landscape needs a detail pass");
-        out = name == "gyrate" ? gyrate() : name == "enn" ? enn() : circle();
-    } else if (name == "core") {
+        out = name == "gyrate"sv ? gyrate() : name == "enn"sv ? enn() : circle();
+    } else if (name == "core"sv) {
         const Core& core = this->core();
         for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(core.cells[i]) * (resx_ * resy_) / 10000;
-    } else if (name == "ncore" || name == "dcore") {
+    } else if (name == "ncore"sv || name == "dcore"sv) {
         // landscapemetrics' dcore_* summarise the number of core areas
         const Core& core = this->core();
         for (i64 i = 0; i < n; ++i) out[i] = static_cast<double>(core.areas[i]);
-    } else if (name == "econ") {
+    } else if (name == "econ"sv) {
         if (tables_only_) throw std::logic_error("econ is not available for an out-of-core landscape");
         out = econ();
-    } else if (name == "prox" || name == "simi") {
+    } else if (name == "prox"sv || name == "simi"sv) {
         if (tables_only_) throw std::logic_error(name + " is not available for an out-of-core landscape");
-        out = proximity(name == "simi");
-    } else if (name == "cai") {
+        out = proximity(name == "simi"sv);
+    } else if (name == "cai"sv) {
         const std::vector<double> area = patch_base("area");
         const std::vector<double> core = patch_base("core");
         for (i64 i = 0; i < n; ++i) out[i] = core[i] / area[i] * 100;
@@ -264,8 +274,7 @@ std::vector<double> Landscape::gyrate() {
         const double ry = resy_;
         const bool parallel = nx * ny >= (i64(1) << 16) && n_strips > 1;
         std::vector<std::vector<long double>> pieces(static_cast<std::size_t>(n_strips));
-#pragma omp parallel for schedule(dynamic) if (parallel)
-        for (i64 s = 0; s < n_strips; ++s) {
+        parallel_for_dynamic(parallel, n_strips, [&](i64 s) {
             const i64 off = pt.strip_offset[s];
             std::vector<long double>& acc = pieces[s];
             acc.assign(static_cast<std::size_t>(pt.strip_offset[s + 1] - off), 0.0L);
@@ -281,7 +290,7 @@ std::vector<double> Landscape::gyrate() {
                     acc[k] += std::sqrt(dx * dx + dy * dy);
                 }
             }
-        }
+        });
         std::vector<long double> sum(n, 0.0L);
         for (i64 s = 0; s < n_strips; ++s) {
             for (std::size_t k = 0; k < pieces[s].size(); ++k) {
@@ -339,49 +348,49 @@ std::vector<double> Landscape::patch_metric(const std::string& name) { return pa
 // landscape (one value). Cached for large landscapes: mn is shared by sd and
 // cv, sd by cv. The classes are computed in parallel when there are many
 // patches (R's sums are sequential within a class).
-std::vector<double> Landscape::stat_values(const std::string& base, const std::string& stat, bool by_class) {
+const std::vector<double>& Landscape::stat_values(const std::string& base, const std::string& stat, bool by_class) {
     const int slot = stat_slot(base, stat, by_class);
-    if (slot >= 0 && stat_done_[slot]) return stat_cache_[slot];
-    if (base == "dcore" && options_.fragstats) {
-        std::vector<double> out = dcore_sizes(stat, by_class);
-        if (slot >= 0) {
-            stat_cache_[slot] = out;
-            stat_done_[slot] = true;
-        }
-        return out;
+    if (slot < 0) {
+        patch_base(base);  // unknown metric: throws
+        throw std::invalid_argument("unknown summary statistic: " + base + "_" + stat);
+    }
+    if (stat_done_[slot]) return stat_cache_[slot];
+    if (base == "dcore"sv && options_.fragstats) {
+        stat_cache_[slot] = dcore_sizes(stat, by_class);
+        stat_done_[slot] = true;
+        return stat_cache_[slot];
     }
     const std::vector<double>& x = patch_base(base);
     const std::vector<double>& w = patch_base("area");
-    std::vector<double> mean, sd;
-    if (stat == "sd" || stat == "cv") mean = stat_values(base, "mn", by_class);
-    if (stat == "cv") sd = stat_values(base, "sd", by_class);
+    // other slots: references into stat_cache_ stay valid
+    static const std::vector<double> kNone;
+    const std::vector<double>& mean = stat == "sd"sv || stat == "cv"sv ? stat_values(base, "mn", by_class) : kNone;
+    const std::vector<double>& sd = stat == "cv"sv ? stat_values(base, "sd", by_class) : kNone;
     const i64 whole[2] = {0, patches().n};
     const i64* start = by_class ? class_start().data() : whole;
     const i64 groups = by_class ? n_classes() : 1;
     std::vector<double> out(static_cast<std::size_t>(groups));
-#pragma omp parallel for schedule(dynamic) if (groups > 1 && start[groups] >= kParallelPatches)
-    for (i64 g = 0; g < groups; ++g) {
+    parallel_for_dynamic(groups > 1 && start[groups] >= kParallelPatches, groups, [&](i64 g) {
         out[g] = summary(stat, x.data() + start[g], start[g + 1] - start[g], w.data() + start[g],
                          mean.empty() ? kNaN : mean[g], sd.empty() ? kNaN : sd[g], options_.fragstats);
-    }
-    if (slot >= 0) {
-        stat_cache_[slot] = out;
-        stat_done_[slot] = true;
-    }
-    return out;
+    });
+    stat_cache_[slot] = std::move(out);
+    stat_done_[slot] = true;
+    return stat_cache_[slot];
 }
 
 // Slot of a summary statistic in stat_cache_, -1 for other patch metrics.
 int Landscape::stat_slot(const std::string& base, const std::string& stat, bool by_class) {
-    static const char* const kBases[] = {"area",  "cai",  "circle", "contig", "core", "dcore", "enn",   "frac",
-                                         "gyrate", "ncore", "para", "perim", "shape", "prox", "simi", "econ"};
+    static constexpr std::string_view kBases[] = {"area",   "cai",   "circle", "contig", "core",  "dcore",
+                                                  "enn",    "frac",  "gyrate", "ncore",  "para",  "perim",
+                                                  "shape",  "prox",  "simi",   "econ"};
     int b = -1;
-    for (int i = 0; i < kStatBases; ++i) {
+    for (int i = 0; i < kStatBases && b < 0; ++i) {
         if (base == kBases[i]) b = i;
     }
     int st = -1;
-    for (int i = 0; i < kStatKinds; ++i) {
-        if (stat == kStats[i]) st = i;
+    for (int i = 0; i < kStatKinds && st < 0; ++i) {
+        if (stat == std::string_view(kStats[i], 2)) st = i;
     }
     if (b < 0 || st < 0) return -1;
     return (b * kStatKinds + st) * 2 + (by_class ? 1 : 0);
@@ -420,9 +429,9 @@ void Landscape::prepare(const std::vector<MetricSpec>& specs) {
     for (int round = 0; round < 3; ++round) {
         std::vector<Task> todo;
         for (const Task& t : wanted) {
-            const bool needs_mean = t.stat == "sd" || t.stat == "cv";
-            const bool needs_sd = t.stat == "cv";
-            const int r = t.stat == "cv" ? 2 : t.stat == "sd" ? 1 : 0;
+            const bool needs_mean = t.stat == "sd"sv || t.stat == "cv"sv;
+            const bool needs_sd = t.stat == "cv"sv;
+            const int r = t.stat == "cv"sv ? 2 : t.stat == "sd"sv ? 1 : 0;
             if (r == round) todo.push_back(t);
             if (round == 0 && needs_mean) todo.push_back({t.base, "mn", t.by_class});
             if (round == 1 && needs_sd) todo.push_back({t.base, "sd", t.by_class});
@@ -450,17 +459,16 @@ void Landscape::prepare(const std::vector<MetricSpec>& specs) {
             const auto groups = static_cast<i64>(start.size()) - 1;
             results[t].assign(static_cast<std::size_t>(groups), kNaN);
             xs[t] = &patch_base(tasks[t].base);
-            if (tasks[t].stat == "sd" || tasks[t].stat == "cv") {
+            if (tasks[t].stat == "sd"sv || tasks[t].stat == "cv"sv) {
                 means[t] = &stat_cache_[key(tasks[t].base, "mn", tasks[t].by_class)];
             }
-            if (tasks[t].stat == "cv") sds[t] = &stat_cache_[key(tasks[t].base, "sd", tasks[t].by_class)];
+            if (tasks[t].stat == "cv"sv) sds[t] = &stat_cache_[key(tasks[t].base, "sd", tasks[t].by_class)];
             for (i64 g = 0; g < groups; ++g) units.push_back({t, g, start[g + 1] - start[g]});
         }
         std::sort(units.begin(), units.end(), [](const Unit& a, const Unit& b) { return a.size > b.size; });
         const std::vector<double>& w = patch_base("area");
         const auto n_units = static_cast<i64>(units.size());
-#pragma omp parallel for schedule(dynamic) if (n_units > 1 && whole.back() >= kParallelPatches)
-        for (i64 u = 0; u < n_units; ++u) {
+        parallel_for_dynamic(n_units > 1 && whole.back() >= kParallelPatches, n_units, [&](i64 u) {
             const Unit& unit = units[u];
             const Task& t = tasks[unit.task];
             const i64 s = (t.by_class ? by_class : whole)[unit.group];
@@ -468,7 +476,7 @@ void Landscape::prepare(const std::vector<MetricSpec>& specs) {
                 summary(t.stat, xs[unit.task]->data() + s, unit.size, w.data() + s,
                         means[unit.task] ? (*means[unit.task])[unit.group] : kNaN,
                         sds[unit.task] ? (*sds[unit.task])[unit.group] : kNaN, options_.fragstats);
-        }
+        });
         for (std::size_t t = 0; t < tasks.size(); ++t) {
             const int k = key(tasks[t].base, tasks[t].stat, tasks[t].by_class);
             stat_cache_[k] = std::move(results[t]);
@@ -485,8 +493,7 @@ std::vector<double> Landscape::cohesion_terms() {
     const auto n = static_cast<i64>(area.size());
     std::vector<double> out(area.size());
     const double cell = resx_ * resy_;
-#pragma omp parallel for schedule(static) if (n >= kParallelPatches)
-    for (i64 i = 0; i < n; ++i) out[i] = perim[i] * r_sqrt(area[i] * 10000 / cell, n == 1);
+    parallel_for(n >= kParallelPatches, n, [&](i64 i) { out[i] = perim[i] * r_sqrt(area[i] * 10000 / cell, n == 1); });
     return out;
 }
 
@@ -591,45 +598,40 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
         return out;
     };
 
-    for (const char* stat : kStats) {
-        const std::string suffix = std::string("_") + stat;
-        if (ends_with(name, suffix)) {
-            return stat_values(name.substr(0, name.size() - suffix.size()), stat, true);
-        }
-    }
+    if (const auto [base, stat] = split_stat(name); !stat.empty()) return stat_values(base, stat, true);
 
     const std::vector<double>& area = patch_base("area");
     const double ta = total_area();
     auto ca = [&](int c) { return r_sum(area.data() + start[c], start[c + 1] - start[c]); };
 
-    if (name == "ca") return per_class([&](int c, i64, i64) { return ca(c); });
-    if (name == "pland") {
+    if (name == "ca"sv) return per_class([&](int c, i64, i64) { return ca(c); });
+    if (name == "pland"sv) {
         std::vector<double> sums = per_class([&](int c, i64, i64) { return ca(c); });
         const double total = r_sum(sums.data(), k);
         for (double& v : sums) v = v / total * 100;
         return sums;
     }
-    if (name == "np") return per_class([](int, i64, i64 n) { return static_cast<double>(n); });
-    if (name == "pd") return per_class([&](int, i64, i64 n) { return (static_cast<double>(n) / ta) * 100; });
-    if (name == "lpi") {
+    if (name == "np"sv) return per_class([](int, i64, i64 n) { return static_cast<double>(n); });
+    if (name == "pd"sv) return per_class([&](int, i64, i64 n) { return (static_cast<double>(n) / ta) * 100; });
+    if (name == "lpi"sv) {
         return per_class([&](int, i64 s, i64 n) {
             double m = -std::numeric_limits<double>::infinity();
             for (i64 i = s; i < s + n; ++i) m = std::max(m, area[i] / ta * 100);
             return m;
         });
     }
-    if (name == "te") return class_te();
-    if (name == "connect") {
+    if (name == "te"sv) return class_te();
+    if (name == "connect"sv) {
         if (tables_only_) throw std::logic_error("connect is not available for an out-of-core landscape");
         return connectance(true);
     }
-    if (name == "cwed" || name == "teci") return contrast_edges(name == "teci", true);
-    if (name == "ed") {
+    if (name == "cwed"sv || name == "teci"sv) return contrast_edges(name == "teci"sv, true);
+    if (name == "ed"sv) {
         std::vector<double> te = class_te();
         for (double& v : te) v = v / ta;
         return te;
     }
-    if (name == "division") {
+    if (name == "division"sv) {
         return per_class([&](int, i64 s, i64 n) {
             return 1 - sum_of(s, s + n, [&](i64 i) {
                 const double r = area[i] / ta;
@@ -637,7 +639,7 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
             });
         });
     }
-    if (name == "mesh") {
+    if (name == "mesh"sv) {
         const double total = ta * 10000;
         return per_class([&](int, i64 s, i64 n) {
             const double sum = sum_of(s, s + n, [&](i64 i) {
@@ -647,12 +649,12 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
             return (sum / total) * (1.0 / 10000);
         });
     }
-    if (name == "split") {
+    if (name == "split"sv) {
         return per_class([&](int, i64 s, i64 n) {
             return (ta * ta) / sum_of(s, s + n, [&](i64 i) { return area[i] * area[i]; });
         });
     }
-    if (name == "cohesion") {
+    if (name == "cohesion"sv) {
         const std::vector<double>& perim = patch_base("perim");
         const std::vector<double> den_i = cohesion_terms();
         const double factor = cohesion_factor();
@@ -662,19 +664,19 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
             return (1 - (num / den)) * factor * 100;
         });
     }
-    if (name == "pafrac") return pafrac_by(start, false);
-    if (name == "tca" || name == "cpland") {
+    if (name == "pafrac"sv) return pafrac_by(start, false);
+    if (name == "tca"sv || name == "cpland"sv) {
         const std::vector<double>& core = patch_base("core");
         return per_class([&](int, i64 s, i64 n) {
             const double tca = r_sum(core.data() + s, n);
-            return name == "tca" ? tca : tca / ta * 100;
+            return name == "tca"sv ? tca : tca / ta * 100;
         });
     }
-    if (name == "ndca" || name == "dcad") {
+    if (name == "ndca"sv || name == "dcad"sv) {
         const std::vector<double>& ncore = patch_base("ncore");
         return per_class([&](int, i64 s, i64 n) {
             const double ndca = r_sum(ncore.data() + s, n);
-            return name == "ndca" ? ndca : ndca / ta * 100;
+            return name == "ndca"sv ? ndca : ndca / ta * 100;
         });
     }
 
@@ -689,19 +691,19 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
         if (with_out) s += adj.orth(c, k + 1);
         return s;
     };
-    if (name == "ai") {
+    if (name == "ai"sv) {
         return per_class([&](int c, i64, i64) {
             const double like = static_cast<double>(adj.orth(c, c)) / 2;
             const double ai = (like / max_adjacency(class_cells_[c])) * 100;
             return std::isnan(ai) ? kNaN : ai;
         });
     }
-    if (name == "pladj") {
+    if (name == "pladj"sv) {
         return per_class([&](int c, i64, i64) {
             return static_cast<double>(adj.orth(c, c)) / static_cast<double>(row_sum(c, true, true, true)) * 100;
         });
     }
-    if (name == "clumpy") {
+    if (name == "clumpy"sv) {
         return per_class([&](int c, i64, i64) {
             const double p = static_cast<double>(class_cells_[c]) / static_cast<double>(valid_cells_);
             const double g = static_cast<double>(adj.orth(c, c)) /
@@ -712,7 +714,7 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
             return (g - p) / -p;
         });
     }
-    if (name == "lsi" && options_.fragstats && !res_all_equal()) {
+    if (name == "lsi"sv && options_.fragstats && !res_all_equal()) {
         // cells that are not square: .25 E / sqrt(A) with the physical edge
         // lengths (pylandstats; FRAGSTATS needs square cells)
         return per_class([&](int c, i64, i64) {
@@ -725,14 +727,14 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
             return 0.25 * edge_length(h, v) / std::sqrt(static_cast<double>(class_cells_[c]) * resx_ * resy_);
         });
     }
-    if (name == "lsi" || name == "nlsi") {
+    if (name == "lsi"sv || name == "nlsi"sv) {
         const double total = static_cast<double>(valid_cells_);
         const double boundary = static_cast<double>((ny_ * 2) + (nx_ * 2));
         return per_class([&](int c, i64, i64) {
             const double perim = static_cast<double>(row_sum(c, true, true, false));
             const double cells = static_cast<double>(class_cells_[c]);
             const double lo = min_edge(class_cells_[c]);
-            if (name == "lsi") return perim / lo;
+            if (name == "lsi"sv) return perim / lo;
             const double pi = cells / total;
             const double limit = (0.5 * total + 0.5 * boundary) / total;
             const bool even = std::fmod(total, 2.0) == 0;
@@ -750,7 +752,7 @@ std::vector<double> Landscape::class_metric_impl(const std::string& name) {
             return std::isfinite(nlsi) ? nlsi : kNaN;
         });
     }
-    if (name == "iji") {
+    if (name == "iji"sv) {
         if (k < 3) return std::vector<double>(k, kNaN);
         return per_class([&](int c, i64, i64) {
             const double rs = static_cast<double>(row_sum(c, false, false, false));
@@ -771,57 +773,52 @@ double Landscape::landscape_metric_impl(const std::string& name) {
     if (k == 0) return kNaN;
     const Patches& pt = patches();
 
-    for (const char* stat : kStats) {
-        const std::string suffix = std::string("_") + stat;
-        if (ends_with(name, suffix)) {
-            return stat_values(name.substr(0, name.size() - suffix.size()), stat, false)[0];
-        }
-    }
+    if (const auto [base, stat] = split_stat(name); !stat.empty()) return stat_values(base, stat, false)[0];
 
     const std::vector<double>& area = patch_base("area");
     const double ta = total_area();
     const i64 np = pt.n;
-    if (name == "ta") return ta;
-    if (name == "np") return static_cast<double>(np);
-    if (name == "pd") return static_cast<double>(np) / ta * 100;
-    if (name == "lpi") {
+    if (name == "ta"sv) return ta;
+    if (name == "np"sv) return static_cast<double>(np);
+    if (name == "pd"sv) return static_cast<double>(np) / ta * 100;
+    if (name == "lpi"sv) {
         double m = -std::numeric_limits<double>::infinity();
         for (double a : area) m = std::max(m, a / ta * 100);
         return m;
     }
-    if (name == "te") return landscape_te();
-    if (name == "connect") {
+    if (name == "te"sv) return landscape_te();
+    if (name == "connect"sv) {
         if (tables_only_) throw std::logic_error("connect is not available for an out-of-core landscape");
         return connectance(false)[0];
     }
-    if (name == "cwed" || name == "teci") return contrast_edges(name == "teci", false)[0];
-    if (name == "ed") return landscape_te() / ta;
-    if (name == "division") {
+    if (name == "cwed"sv || name == "teci"sv) return contrast_edges(name == "teci"sv, false)[0];
+    if (name == "ed"sv) return landscape_te() / ta;
+    if (name == "division"sv) {
         return 1 - sum_of(0, np, [&](i64 i) {
             const double r = area[i] / ta;
             return r * r;
         });
     }
-    if (name == "mesh" || name == "split") {
+    if (name == "mesh"sv || name == "split"sv) {
         const double s = sum_of(0, np, [&](i64 i) { return area[i] * area[i]; });
-        return name == "mesh" ? s / ta : (ta * ta) / s;
+        return name == "mesh"sv ? s / ta : (ta * ta) / s;
     }
-    if (name == "cohesion") {
+    if (name == "cohesion"sv) {
         const std::vector<double>& perim = patch_base("perim");
         const std::vector<double> den_i = cohesion_terms();
         const double den = r_sum(den_i.data(), np);
         return (1 - (r_sum(perim.data(), np) / den)) * cohesion_factor() * 100;
     }
-    if (name == "tca") {
+    if (name == "tca"sv) {
         const std::vector<double>& core = patch_base("core");
         return r_sum(core.data(), np);
     }
-    if (name == "ndca" || name == "dcad") {
+    if (name == "ndca"sv || name == "dcad"sv) {
         const std::vector<double>& ncore = patch_base("ncore");
         const double ndca = r_sum(ncore.data(), np);
-        return name == "ndca" ? ndca : ndca / ta * 100;
+        return name == "ndca"sv ? ndca : ndca / ta * 100;
     }
-    if (name == "pafrac") {
+    if (name == "pafrac"sv) {
         if (np < 10) return kNaN;
         return pafrac_by({0, np}, true)[0];
     }
@@ -834,36 +831,36 @@ double Landscape::landscape_metric_impl(const std::string& name) {
         for (int c = 0; c < k; ++c) p[c] = (class_area[c] / ca_total * 100) / 100;
         return p;
     };
-    if (name == "pr") return static_cast<double>(k);
-    if (name == "prd") return static_cast<double>(k) / ta * 100;
-    if (name == "rpr") return std::isnan(options_.classes_max) ? kNaN : static_cast<double>(k) / options_.classes_max * 100;
-    if (name == "shdi" || name == "shei") {
+    if (name == "pr"sv) return static_cast<double>(k);
+    if (name == "prd"sv) return static_cast<double>(k) / ta * 100;
+    if (name == "rpr"sv) return std::isnan(options_.classes_max) ? kNaN : static_cast<double>(k) / options_.classes_max * 100;
+    if (name == "shdi"sv || name == "shei"sv) {
         const std::vector<double> p = proportions();
-        if (name == "shdi") return sum_of(0, k, [&](i64 c) { return -p[c] * r_log(p[c]); });
+        if (name == "shdi"sv) return sum_of(0, k, [&](i64 c) { return -p[c] * r_log(p[c]); });
         if (k == 1) return 0.0;
         return -sum_of(0, k, [&](i64 c) { return p[c] * r_log(p[c]); }) / r_log(static_cast<double>(k));
     }
-    if (name == "sidi" || name == "siei") {
+    if (name == "sidi"sv || name == "siei"sv) {
         const std::vector<double> p = proportions();
         const double sidi = 1 - sum_of(0, k, [&](i64 c) { return p[c] * p[c]; });
-        return name == "sidi" ? sidi : sidi / (1 - (1 / static_cast<double>(k)));
+        return name == "sidi"sv ? sidi : sidi / (1 - (1 / static_cast<double>(k)));
     }
-    if (name == "msidi" || name == "msiei") {
+    if (name == "msidi"sv || name == "msiei"sv) {
         const double msidi = -r_log(sum_of(0, k, [&](i64 c) {
             const double r = class_area[c] / ca_total;
             return r * r;
         }));
-        return name == "msidi" ? msidi : msidi / r_log(static_cast<double>(k));
+        return name == "msidi"sv ? msidi : msidi / r_log(static_cast<double>(k));
     }
 
     // Configuration.
     const Adjacency& adj = adjacency();
-    if (name == "ai") {
+    if (name == "ai"sv) {
         const std::vector<double> ai = class_metric("ai");
         const std::vector<double> pland = class_metric("pland");
         return sum_of(0, k, [&](i64 c) { return ai[c] * (pland[c] / 100); }, true);
     }
-    if (name == "pladj") {
+    if (name == "pladj"sv) {
         i64 like = 0, total = 0;
         for (int a = 0; a < k; ++a) {
             like += adj.orth(a, a);
@@ -872,7 +869,7 @@ double Landscape::landscape_metric_impl(const std::string& name) {
         }
         return static_cast<double>(like) / static_cast<double>(total) * 100;
     }
-    if (name == "lsi") {
+    if (name == "lsi"sv) {
         i64 h = 0, v = 0;
         for (int a = 0; a < k; ++a) {
             for (int b = 0; b < a; ++b) {
@@ -887,7 +884,7 @@ double Landscape::landscape_metric_impl(const std::string& name) {
         }
         return static_cast<double>(h + v) / min_edge(valid_cells_);
     }
-    if (name == "iji") {
+    if (name == "iji"sv) {
         if (k < 3) return kNaN;
         i64 e_total = 0;
         for (int a = 0; a < k; ++a) {
@@ -904,7 +901,7 @@ double Landscape::landscape_metric_impl(const std::string& name) {
         }
         return (-static_cast<double>(s) / r_log(0.5 * (k * (k - 1.0)))) * 100;
     }
-    if (name == "contag") {
+    if (name == "contag"sv) {
         if (k < 2) return kNaN;
         i64 total = 0;
         for (int a = 0; a < k; ++a) {
@@ -921,7 +918,7 @@ double Landscape::landscape_metric_impl(const std::string& name) {
         const double emax = 2 * r_log(static_cast<double>(k));
         return (1 + static_cast<double>(esum) / emax) * 100;
     }
-    if (name == "ent" || name == "condent" || name == "joinent" || name == "mutinf" || name == "relmutinf") {
+    if (name == "ent"sv || name == "condent"sv || name == "joinent"sv || name == "mutinf"sv || name == "relmutinf"sv) {
         const bool eight = options_.neighbourhood == 8;
         auto cooc = [&](int a, int b) {
             return static_cast<double>(adj.orth(a, b) + (eight ? adj.diag[a * adj.dim + b] : 0));
@@ -931,7 +928,7 @@ double Landscape::landscape_metric_impl(const std::string& name) {
             for (int b = 0; b < k; ++b) col[b] += cooc(a, b);
         }
         const double comp = entropy(col, options_.base);
-        if (name == "ent") return comp;
+        if (name == "ent"sv) return comp;
         std::vector<double> pairs;
         if (options_.ordered) {
             for (int b = 0; b < k; ++b) {
@@ -943,11 +940,11 @@ double Landscape::landscape_metric_impl(const std::string& name) {
             }
         }
         const double cplx = entropy(pairs, options_.base);
-        if (name == "joinent") return cplx;
+        if (name == "joinent"sv) return cplx;
         const double conf = cplx - comp;
-        if (name == "condent") return conf;
+        if (name == "condent"sv) return conf;
         const double aggr = comp - conf;
-        if (name == "mutinf") return aggr;
+        if (name == "mutinf"sv) return aggr;
         return aggr == 0 ? 1.0 : aggr / comp;
     }
     throw std::invalid_argument("unknown landscape metric: " + name);

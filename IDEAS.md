@@ -22,9 +22,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Desempenho e escala
 
-- A contagem de classes da inicialização (~0,4 s em 100 M pixels) ainda é
-  sequencial; o rótulo já soma as peças, ordena (radix paralelo) e permuta em
-  paralelo (27 M de patches em 100 M pixels: 5,0 s → 3,3 s).
 - ENN: a construção das árvores e a passada estável por classe ainda são limitadas
   pela memória (~0,5 s cada em 100 M pixels); nós menores (sem `begin`/`end` nos
   nós internos, caixas em 16 bits relativas) reduziriam o tráfego.
@@ -32,10 +29,11 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   casos ficam para o processamento por tiles).
 - Janela móvel: reaproveitar rótulos globais e só corrigir os patches cortados pela
   borda da janela (algoritmo incremental). Hoje cada janela é uma paisagem pequena
-  (1000×1000, janela 21×21, 66 métricas: 11,8 s; ~80 µs por janela numa thread, dos
-  quais rótulo 5 µs, core 9, enn 15, círculo 7; o resto são as 66 métricas). Os laços
-  pequenos já não entram no OpenMP (`parallel_for`) e o rótulo de uma faixa só evita
-  a junção; reaproveitar os buffers do `Landscape` entre janelas cortaria as alocações.
+  (1000×1000, janela 21×21, 66 métricas: 8,7 s; ~97 µs por janela numa thread).
+  Perfil (py-spy --native, build com /Zi): círculo ~12%, rótulo ~10%, core ~8%, ENN
+  (já com SSE2) menor, alocações ~10% e a soma em 80 bits emulada (`Extended`) ~8%.
+  Reaproveitar os buffers do `Landscape` entre janelas cortaria as alocações; caminhos
+  rápidos para a soma/subtração do `Extended` ajudariam em todo lugar.
 - Fora da memória (`block_rows`): o ENN guarda todas as células de borda (~24 B cada);
   um ENN realmente fora da memória (p. ex. árvores por bloco em disco, ou busca por
   anéis de blocos vizinhos) tiraria esse limite. `labels()`/`to_raster()` por blocos
@@ -125,3 +123,8 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 16. `SpatialSignatureAnalysis`: NMF (NNDSVDa + HALS, como o scikit-learn), agrupamento
     hierárquico (ligações do scipy) e o clustergrama (`clustergram`,
     `plot_clustergram`, como o `get_cgram` do pylandstats). **Feita.**
+17. Desempenho: inicialização paralela (faixa de valores, histograma por thread, sem
+    zerar o raster de classes; 100 M pixels: 0,43 s → 0,07 s), ENN de mapas pequenos
+    por pares de patches com SSE2, `stat_values` sem cópias, nomes comparados como
+    `string_view`, laços `omp if` trocados por `parallel_for` (janelas: 130 → 97 µs
+    por janela numa thread; 1000×1000 com 66 métricas: 12,0 s → 8,7 s). **Feita.**

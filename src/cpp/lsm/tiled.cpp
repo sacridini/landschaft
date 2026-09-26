@@ -730,7 +730,8 @@ bool TiledLandscape::end_detail() {
         land.set_patch_values("gyrate", std::move(out));
         s.gsum = {};
     }
-    if (s.d_circle && s.opt.fragstats) {
+    if (s.d_circle) {
+        // the corners of Landscape::patch_circles(), then the same circle
         const double factor_ha = s.resx * s.resy / 10000;
         std::vector<double> out(static_cast<std::size_t>(n));
 #pragma omp parallel if (n >= 1024)
@@ -738,67 +739,50 @@ bool TiledLandscape::end_detail() {
             std::vector<std::pair<i64, i64>> corners;
 #pragma omp for schedule(dynamic, 64)
             for (i64 i = 0; i < n; ++i) {
+                const Box& b = s.patch_box[i];
                 corners.clear();
-                const i64 py0 = s.patch_box[i].y0;
-                for (i64 r = s.flag_offset[i]; r < s.flag_offset[i + 1]; ++r) {
-                    const auto [x0, x1] = s.row_ext[r];
-                    if (x1 < 0) continue;
-                    const i64 y = py0 + (r - s.flag_offset[i]);
-                    corners.emplace_back(x0, y);
-                    corners.emplace_back(x0, y + 1);
-                    corners.emplace_back(x1 + 1, y);
-                    corners.emplace_back(x1 + 1, y + 1);
+                if (s.opt.fragstats) {
+                    for (i64 r = s.flag_offset[i]; r < s.flag_offset[i + 1]; ++r) {
+                        const auto [x0, x1] = s.row_ext[r];
+                        if (x1 < 0) continue;
+                        const i64 y = b.y0 + (r - s.flag_offset[i]);
+                        corners.emplace_back(x0, y);
+                        corners.emplace_back(x0, y + 1);
+                        corners.emplace_back(x1 + 1, y);
+                        corners.emplace_back(x1 + 1, y + 1);
+                    }
+                } else {
+                    const i64 w = b.x1 - b.x0 + 1;
+                    const i64 h = b.y1 - b.y0 + 1;
+                    const std::uint8_t* f = s.flags.data() + s.flag_offset[i];
+                    for (i64 x = b.x0; x <= b.x1; ++x) {
+                        if (f[x - b.x0]) {
+                            corners.emplace_back(x, b.y0);
+                            corners.emplace_back(x + 1, b.y0);
+                        }
+                        if (f[w + x - b.x0]) {
+                            corners.emplace_back(x, b.y1 + 1);
+                            corners.emplace_back(x + 1, b.y1 + 1);
+                        }
+                    }
+                    for (i64 y = b.y0; y <= b.y1; ++y) {
+                        if (f[2 * w + y - b.y0]) {
+                            corners.emplace_back(b.x0, y);
+                            corners.emplace_back(b.x0, y + 1);
+                        }
+                        if (f[2 * w + h + y - b.y0]) {
+                            corners.emplace_back(b.x1 + 1, y);
+                            corners.emplace_back(b.x1 + 1, y + 1);
+                        }
+                    }
                 }
                 const EnclosingCircle c = grid_circle(corners, s.resx, s.resy, static_cast<std::uint64_t>(i));
                 out[i] = 1 - (static_cast<double>(pt.cells[i]) * factor_ha * 10000) / (3.14159265358979323846 * std::pow(c.r, 2));
             }
         }
         land.set_patch_values("circle", std::move(out));
-        s.row_ext = {};
-        s.flag_offset = {};
-    } else if (s.d_circle) {
-        const double factor_ha = s.resx * s.resy / 10000;
-        const double rx = s.resx;
-        const double ry = s.resy;
-        std::vector<double> out(static_cast<std::size_t>(n));
-#pragma omp parallel if (n >= 1024)
-        {
-            std::vector<double> xy;
-#pragma omp for schedule(dynamic, 64)
-            for (i64 i = 0; i < n; ++i) {
-                const Box& b = s.patch_box[i];
-                const i64 w = b.x1 - b.x0 + 1;
-                const i64 h = b.y1 - b.y0 + 1;
-                const std::uint8_t* f = s.flags.data() + s.flag_offset[i];
-                xy.clear();
-                // the points in the order of Landscape::circle()
-                for (i64 x = b.x0; x <= b.x1; ++x) {
-                    const double X = static_cast<double>(x) * rx;
-                    if (f[x - b.x0]) {
-                        const double Y = static_cast<double>(b.y0) * ry;
-                        xy.insert(xy.end(), {X, Y, X + rx, Y});
-                    }
-                    if (f[w + x - b.x0]) {
-                        const double Y = static_cast<double>(b.y1) * ry + ry;
-                        xy.insert(xy.end(), {X, Y, X + rx, Y});
-                    }
-                }
-                for (i64 y = b.y0; y <= b.y1; ++y) {
-                    const double Y = static_cast<double>(y) * ry;
-                    if (f[2 * w + y - b.y0]) {
-                        const double X = static_cast<double>(b.x0) * rx;
-                        xy.insert(xy.end(), {X, Y, X, Y + ry});
-                    }
-                    if (f[2 * w + h + y - b.y0]) {
-                        const double X = static_cast<double>(b.x1) * rx + rx;
-                        xy.insert(xy.end(), {X, Y, X, Y + ry});
-                    }
-                }
-                out[i] = related_circle(xy, static_cast<std::uint64_t>(i), static_cast<double>(pt.cells[i]) * factor_ha);
-            }
-        }
-        land.set_patch_values("circle", std::move(out));
         s.flags = {};
+        s.row_ext = {};
         s.flag_offset = {};
     }
     if (s.d_enn) {

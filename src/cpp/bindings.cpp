@@ -690,8 +690,12 @@ std::unique_ptr<lsm::Landscape> make_landscape(const CArray<std::int32_t>& value
                                                double resx, double resy, const py::dict& options) {
     CArray<std::uint8_t> mask_arr;
     const lsm::RasterView r = raster_view(values, na_mask, mask_arr, resx, resy);
+    lsm::Options opts = make_options(options);
+    const int n_threads = opts.n_threads;
     try {
-        return std::make_unique<lsm::Landscape>(r.values, r.na_mask, r.nx, r.ny, resx, resy, make_options(options));
+        return run_parallel(n_threads, [&] {
+            return std::make_unique<lsm::Landscape>(r.values, r.na_mask, r.nx, r.ny, resx, resy, std::move(opts));
+        });
     } catch (const std::invalid_argument& e) {
         throw py::value_error(e.what());
     }

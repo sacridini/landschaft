@@ -424,49 +424,116 @@ Landscape::Landscape(const std::int32_t* values, const std::uint8_t* na_mask, i6
     const i64 n = nx * ny;
     if (n >= (i64(1) << 31) - 2) throw std::invalid_argument("raster too large for in-memory metrics");
 
-    // Class values in increasing order, mapped to dense indices.
-    std::int32_t vmin = std::numeric_limits<std::int32_t>::max();
-    std::int32_t vmax = std::numeric_limits<std::int32_t>::min();
-    for (i64 p = 0; p < n; ++p) {
-        if (na_mask && na_mask[p]) continue;
-        vmin = std::min(vmin, values[p]);
-        vmax = std::max(vmax, values[p]);
-    }
-    cls_.assign(static_cast<std::size_t>(n), -1);
-    if (vmin > vmax) return;  // all NA
-
-    const i64 range = static_cast<i64>(vmax) - vmin + 1;
-    if (range <= (i64(1) << 24)) {
-        std::vector<std::int32_t> lut(static_cast<std::size_t>(range), -1);
-        for (i64 p = 0; p < n; ++p) {
-            if (na_mask && na_mask[p]) continue;
-            lut[static_cast<std::size_t>(values[p] - static_cast<i64>(vmin))] = 0;
-        }
-        for (i64 v = 0; v < range; ++v) {
-            if (lut[v] == 0) {
-                lut[v] = static_cast<std::int32_t>(class_values_.size());
-                class_values_.push_back(static_cast<std::int32_t>(v + vmin));
+    // Class values in increasing order, mapped to dense indices: the value
+    // range and a histogram of the values (per thread), then the map.
+    const bool parallel = n >= kParallelThreshold;
+    const i64 n_chunks = parallel ? std::min<i64>(256, n / 65536 + 1) : 1;
+    std::vector<std::int32_t> chunk_min(static_cast<std::size_t>(n_chunks), std::numeric_limits<std::int32_t>::max());
+    std::vector<std::int32_t> chunk_max(static_cast<std::size_t>(n_chunks), std::numeric_limits<std::int32_t>::min());
+    parallel_for(parallel, n_chunks, [&](i64 c) {
+        const i64 p0 = n * c / n_chunks;
+        const i64 p1 = n * (c + 1) / n_chunks;
+        std::int32_t lo = std::numeric_limits<std::int32_t>::max();
+        std::int32_t hi = std::numeric_limits<std::int32_t>::min();
+        if (na_mask) {
+            for (i64 p = p0; p < p1; ++p) {
+                if (na_mask[p]) continue;
+                lo = std::min(lo, values[p]);
+                hi = std::max(hi, values[p]);
+            }
+        } else {
+            for (i64 p = p0; p < p1; ++p) {
+                lo = std::min(lo, values[p]);
+                hi = std::max(hi, values[p]);
             }
         }
-        parallel_for(n >= kParallelThreshold, n, [&](i64 p) {
-            if (!(na_mask && na_mask[p])) cls_[p] = lut[static_cast<std::size_t>(values[p] - static_cast<i64>(vmin))];
+        chunk_min[c] = lo;
+        chunk_max[c] = hi;
+    });
+    const std::int32_t vmin = *std::min_element(chunk_min.begin(), chunk_min.end());
+    const std::int32_t vmax = *std::max_element(chunk_max.begin(), chunk_max.end());
+    cls_.resize(static_cast<std::size_t>(n));
+    if (vmin > vmax) {  // all NA
+        parallel_for(parallel, n, [&](i64 p) { cls_[p] = -1; });
+        return;
+    }
+    if (vmin == std::numeric_limits<std::int32_t>::min()) {
+        throw std::invalid_argument("class values must fit in a 32-bit integer (above -2147483648)");
+    }
+
+    const i64 range = static_cast<i64>(vmax) - vmin + 1;
+    std::int32_t* cls = cls_.data();
+    if (range <= (i64(1) << 16)) {
+        std::vector<i64> count(static_cast<std::size_t>(range), 0);
+        auto histogram = [&](i64 p0, i64 p1, i64* h) {
+            for (i64 p = p0; p < p1; ++p) {
+                if (!(na_mask && na_mask[p])) ++h[values[p] - static_cast<i64>(vmin)];
+            }
+        };
+        if (parallel) {
+#pragma omp parallel
+            {
+                std::vector<i64> local(static_cast<std::size_t>(range), 0);
+#pragma omp for schedule(static)
+                for (i64 c = 0; c < n_chunks; ++c) histogram(n * c / n_chunks, n * (c + 1) / n_chunks, local.data());
+#pragma omp critical
+                for (i64 v = 0; v < range; ++v) count[v] += local[v];
+            }
+        } else {
+            histogram(0, n, count.data());
+        }
+        std::vector<std::int32_t> lut(static_cast<std::size_t>(range), -1);
+        for (i64 v = 0; v < range; ++v) {
+            if (count[v] == 0) continue;
+            lut[v] = static_cast<std::int32_t>(class_values_.size());
+            class_values_.push_back(static_cast<std::int32_t>(v + vmin));
+            class_cells_.push_back(count[v]);
+        }
+        parallel_for(parallel, n, [&](i64 p) {
+            cls[p] = na_mask && na_mask[p] ? -1 : lut[static_cast<std::size_t>(values[p] - static_cast<i64>(vmin))];
         });
     } else {
+        // wide range: the distinct values of each chunk, merged
+        std::vector<std::vector<std::int32_t>> distinct(static_cast<std::size_t>(n_chunks));
+        parallel_for(parallel, n_chunks, [&](i64 c) {
+            std::vector<std::int32_t>& d = distinct[c];
+            for (i64 p = n * c / n_chunks, p1 = n * (c + 1) / n_chunks; p < p1; ++p) {
+                if (!(na_mask && na_mask[p])) d.push_back(values[p]);
+            }
+            std::sort(d.begin(), d.end());
+            d.erase(std::unique(d.begin(), d.end()), d.end());
+        });
         std::vector<std::int32_t> vals;
-        for (i64 p = 0; p < n; ++p) {
-            if (!(na_mask && na_mask[p])) vals.push_back(values[p]);
+        for (auto& d : distinct) {
+            vals.insert(vals.end(), d.begin(), d.end());
+            std::vector<std::int32_t>().swap(d);
         }
         std::sort(vals.begin(), vals.end());
         vals.erase(std::unique(vals.begin(), vals.end()), vals.end());
         class_values_ = vals;
-        parallel_for(n >= kParallelThreshold, n, [&](i64 p) {
-            if (na_mask && na_mask[p]) return;
-            cls_[p] = static_cast<std::int32_t>(std::lower_bound(vals.begin(), vals.end(), values[p]) - vals.begin());
+        parallel_for(parallel, n, [&](i64 p) {
+            cls[p] = na_mask && na_mask[p]
+                         ? -1
+                         : static_cast<std::int32_t>(std::lower_bound(vals.begin(), vals.end(), values[p]) - vals.begin());
         });
-    }
-    class_cells_.assign(class_values_.size(), 0);
-    for (i64 p = 0; p < n; ++p) {
-        if (cls_[p] >= 0) ++class_cells_[cls_[p]];
+        const auto k = static_cast<i64>(vals.size());
+        class_cells_.assign(static_cast<std::size_t>(k), 0);
+        if (parallel && k <= (i64(1) << 16)) {
+#pragma omp parallel
+            {
+                std::vector<i64> local(static_cast<std::size_t>(k), 0);
+#pragma omp for schedule(static)
+                for (i64 p = 0; p < n; ++p) {
+                    if (cls[p] >= 0) ++local[cls[p]];
+                }
+#pragma omp critical
+                for (i64 c = 0; c < k; ++c) class_cells_[c] += local[c];
+            }
+        } else {
+            for (i64 p = 0; p < n; ++p) {
+                if (cls[p] >= 0) ++class_cells_[cls[p]];
+            }
+        }
     }
     valid_cells_ = std::accumulate(class_cells_.begin(), class_cells_.end(), i64(0));
 }

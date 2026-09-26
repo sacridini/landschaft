@@ -6,6 +6,17 @@ between minor versions.
 
 ## [Unreleased]
 
+### Changed
+- Landscape metrics part 17, performance: a `Landscape` is prepared in parallel (value
+  range, per-thread class histogram, no zero-filling of the class raster; the int32 range
+  check moved to C++): 100 M cells in 0.07 s instead of 0.43 s. Moving windows: the ENN
+  of small maps takes the minimum per pair of patches with SSE2, summary statistics are
+  returned without copies, metric names are compared as `string_view`s and the remaining
+  `omp if` loops use the `parallel_for` helpers (no OpenMP runtime on small maps): 130 →
+  97 µs per 21×21 window on one thread, 1000×1000 with all 66 metrics in 8.7 s instead
+  of 12.0 s, with the same values. Circles are found on the convex hull of their corner
+  points, in memory and out of core alike.
+
 ## [0.27.0] - 2026-09-26
 
 ### Added

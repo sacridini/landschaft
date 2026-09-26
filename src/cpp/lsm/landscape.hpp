@@ -132,6 +132,27 @@ double r_lm_slope(const double* x, const double* y, int n);
 // FRAGSTATS' am (weights w), md or ra of x[0..n) (metrics.cpp).
 double reduce_statistic(const std::string& stat, const double* x, i64 n, const double* w);
 
+// An allocator whose resize() leaves the elements uninitialised (they are
+// all written right after, in parallel).
+template <class T>
+struct DefaultInit : std::allocator<T> {
+    template <class U>
+    struct rebind {
+        using other = DefaultInit<U>;
+    };
+    DefaultInit() = default;
+    template <class U>
+    DefaultInit(const DefaultInit<U>&) noexcept {}
+    template <class U>
+    void construct(U* p) noexcept {
+        ::new (static_cast<void*>(p)) U;
+    }
+    template <class U, class... Args>
+    void construct(U* p, Args&&... args) {
+        ::new (static_cast<void*>(p)) U(std::forward<Args>(args)...);
+    }
+};
+
 enum Level : std::int8_t { kPatch = 0, kClass = 1, kLandscape = 2 };
 
 // Smallest circle around a patch or a class: centre in map units from the
@@ -219,7 +240,7 @@ private:
     std::vector<double> class_metric_impl(const std::string& name);
     double landscape_metric_impl(const std::string& name);
     std::vector<double> cohesion_terms();
-    std::vector<double> stat_values(const std::string& base, const std::string& stat, bool by_class);
+    const std::vector<double>& stat_values(const std::string& base, const std::string& stat, bool by_class);
     int stat_slot(const std::string& base, const std::string& stat, bool by_class);
     const std::vector<i64>& class_start();
     double cohesion_factor() const;
@@ -250,7 +271,7 @@ private:
     double resx_ = 1.0;
     double resy_ = 1.0;
     Options options_;
-    std::vector<std::int32_t> cls_; // class index per pixel, -1 = NA
+    std::vector<std::int32_t, DefaultInit<std::int32_t>> cls_;  // class index per pixel, -1 = NA
     std::vector<std::int32_t> class_values_;
     std::vector<i64> class_cells_;
     i64 valid_cells_ = 0;
@@ -331,10 +352,6 @@ std::vector<double> enn_from_edge_cells(std::unique_ptr<std::uint64_t[]> key, st
                                         i64 m, const std::vector<std::int32_t>& patch_cls, int n_classes, i64 nx,
                                         i64 ny, double resx, double resy, int directions);
 std::uint64_t morton_code(std::uint32_t x, std::uint32_t y);
-
-// 1 - area / area of the smallest circle around the points (x0, y0, x1, y1,
-// ...), found with Welzl's algorithm shuffled by `seed` (the patch index).
-double related_circle(const std::vector<double>& xy, std::uint64_t seed, double area_ha);
 
 // Smallest circle around the given cell corners (grid units: x to the right,
 // y down), scaled by (rx, ry): Welzl's algorithm (seeded) on their convex

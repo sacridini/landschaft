@@ -77,21 +77,23 @@ def _prepare(data, res, nodata, band) -> tuple[np.ndarray, np.ndarray | None, tu
     if values.ndim != 2:
         raise ValueError(f"expected a 2-D raster, got shape {values.shape}")
 
-    if mask is None:
-        mask = np.zeros(values.shape, dtype=bool)
     if nodata is not None and not (isinstance(nodata, float) and np.isnan(nodata)):
-        mask |= values == nodata
+        mask = values == nodata if mask is None else mask | (values == nodata)
     if np.issubdtype(values.dtype, np.floating):
-        mask |= np.isnan(values)
+        nan = np.isnan(values)
+        mask = nan if mask is None else mask | nan
         valid = values[~mask]
         if valid.size and not np.array_equal(valid, np.trunc(valid)):
             warnings.warn("non-integer values are truncated to integers (as terra::as.int)", stacklevel=3)
         values = np.trunc(np.where(mask, 0, values))
     elif not (np.issubdtype(values.dtype, np.integer) or values.dtype == bool):
         raise TypeError(f"expected a numeric raster, got dtype {values.dtype}")
-    valid = values[~mask]
-    if valid.size and (valid.min() < _INT32.min + 1 or valid.max() > _INT32.max):
-        raise ValueError("class values must fit in a 32-bit integer")
+    if values.dtype.kind == "f" or (values.dtype.kind in "iu" and values.dtype.itemsize >= 4
+                                    and not values.dtype == np.int32):
+        # wider than int32 (int32 itself is checked by the C++ core)
+        valid = values if mask is None else values[~mask]
+        if valid.size and (valid.min() < _INT32.min + 1 or valid.max() > _INT32.max):
+            raise ValueError("class values must fit in a 32-bit integer")
     values = np.ascontiguousarray(values, dtype=np.int32)
     if res is None:
         res = (1.0, 1.0)
@@ -100,7 +102,7 @@ def _prepare(data, res, nodata, band) -> tuple[np.ndarray, np.ndarray | None, tu
     res = (float(res[0]), float(res[1]))
     if res[0] <= 0 or res[1] <= 0:
         raise ValueError(f"cell size must be positive, got {res}")
-    return values, (mask.astype(np.uint8) if mask.any() else None), res, template
+    return values, (mask.view(np.uint8) if mask is not None and mask.any() else None), res, template
 
 
 # landscapemetrics' metric options and their defaults.

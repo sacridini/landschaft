@@ -16,6 +16,10 @@
 #include <utility>
 #include <vector>
 
+#if defined(__SSE2__) || defined(_M_X64)
+#include <emmintrin.h>
+#endif
+
 #include "lsm/landscape.hpp"
 #include "lsm/parallel.hpp"
 
@@ -281,13 +285,12 @@ void radix_pass(std::int64_t n, int n_buckets, bool parallel, std::unique_ptr<st
                  : 1;
     const std::int64_t block = (n + n_blocks - 1) / n_blocks;
     std::vector<std::int64_t> count(static_cast<std::size_t>(n_blocks * n_buckets));
-#pragma omp parallel for schedule(static) if (n_blocks > 1)
-    for (std::int64_t b = 0; b < n_blocks; ++b) {
+    parallel_for(n_blocks > 1, n_blocks, [&](i64 b) {
         std::int64_t* cnt = count.data() + b * n_buckets;
         std::fill(cnt, cnt + n_buckets, 0);
         const std::int64_t end = std::min(n, (b + 1) * block);
         for (std::int64_t i = b * block; i < end; ++i) ++cnt[digit(key[i], patch[i])];
-    }
+    });
     std::int64_t sum = 0;
     for (int d = 0; d < n_buckets; ++d) {
         for (std::int64_t b = 0; b < n_blocks; ++b) {
@@ -297,8 +300,7 @@ void radix_pass(std::int64_t n, int n_buckets, bool parallel, std::unique_ptr<st
             sum += v;
         }
     }
-#pragma omp parallel for schedule(static) if (n_blocks > 1)
-    for (std::int64_t b = 0; b < n_blocks; ++b) {
+    parallel_for(n_blocks > 1, n_blocks, [&](i64 b) {
         std::int64_t* cnt = count.data() + b * n_buckets;
         const std::int64_t end = std::min(n, (b + 1) * block);
         for (std::int64_t i = b * block; i < end; ++i) {
@@ -306,7 +308,7 @@ void radix_pass(std::int64_t n, int n_buckets, bool parallel, std::unique_ptr<st
             key_tmp[j] = key[i];
             patch_tmp[j] = patch[i];
         }
-    }
+    });
     key.swap(key_tmp);
     patch.swap(patch_tmp);
 }
@@ -340,7 +342,7 @@ struct Circle {
 constexpr Circle kInvalid{{0, 0}, -1};
 constexpr double kMultiplicativeEpsilon = 1 + 1e-14;
 
-double distance(const Point& a, const Point& b) { return std::hypot(a.x - b.x, a.y - b.y); }
+double distance(const Point& a, const Point& b) { return std::sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
 
 double cross(const Point& a, const Point& b) { return a.x * b.y - a.y * b.x; }
 
@@ -417,6 +419,43 @@ Circle smallest_circle(std::vector<Point>& pts, std::uint64_t seed) {
     return c;
 }
 
+// Smallest squared distance between the points (ax, ay)[0..na) and
+// (bx, by)[0..nb): (bx - ax)^2 + (by - ay)^2 rounded as written, so the
+// minimum is exact whatever the order.
+double min_cross_d2(const double* ax, const double* ay, i64 na, const double* bx, const double* by, i64 nb) {
+    double best = std::numeric_limits<double>::infinity();
+#if defined(__SSE2__) || defined(_M_X64)
+    __m128d acc = _mm_set1_pd(best);
+    const i64 pairs = nb & ~i64(1);
+    for (i64 i = 0; i < na; ++i) {
+        const __m128d xa = _mm_set1_pd(ax[i]);
+        const __m128d ya = _mm_set1_pd(ay[i]);
+        for (i64 j = 0; j < pairs; j += 2) {
+            const __m128d dx = _mm_sub_pd(_mm_loadu_pd(bx + j), xa);
+            const __m128d dy = _mm_sub_pd(_mm_loadu_pd(by + j), ya);
+            acc = _mm_min_pd(acc, _mm_add_pd(_mm_mul_pd(dx, dx), _mm_mul_pd(dy, dy)));
+        }
+        if (pairs < nb) {
+            const double dx = bx[pairs] - ax[i];
+            const double dy = by[pairs] - ay[i];
+            best = std::min(best, dx * dx + dy * dy);
+        }
+    }
+    double lanes[2];
+    _mm_storeu_pd(lanes, acc);
+    return std::min(best, std::min(lanes[0], lanes[1]));
+#else
+    for (i64 i = 0; i < na; ++i) {
+        for (i64 j = 0; j < nb; ++j) {
+            const double dx = bx[j] - ax[i];
+            const double dy = by[j] - ay[i];
+            best = std::min(best, dx * dx + dy * dy);
+        }
+    }
+    return best;
+#endif
+}
+
 // Nearest cell of another patch of the class, for every patch, from the
 // edge cells sorted by class group and Morton code. cls / pt (optional)
 // give the raster for the 5x5 look-up shortcut.
@@ -442,11 +481,10 @@ std::vector<double> enn_search(EdgeCells& cells, const std::int32_t* patch_cls, 
     }
     cells.x.reset(new std::int32_t[m]);
     cells.y.reset(new std::int32_t[m]);
-#pragma omp parallel for schedule(static) if (m >= kParallelThreshold)
-    for (i64 i = 0; i < m; ++i) {
+    parallel_for(m >= kParallelThreshold, m, [&](i64 i) {
         cells.x[i] = static_cast<std::int32_t>(morton_part(cells.key[i]));
         cells.y[i] = static_cast<std::int32_t>(morton_part(cells.key[i] >> 1));
-    }
+    });
 
     std::vector<double> X(static_cast<std::size_t>(nx)), Y(static_cast<std::size_t>(ny));
     for (i64 x = 0; x < nx; ++x) X[x] = static_cast<double>(x + 1) * resx;
@@ -466,8 +504,7 @@ std::vector<double> enn_search(EdgeCells& cells, const std::int32_t* patch_cls, 
     {
         const auto n_jobs = static_cast<i64>(jobs.size());
         std::vector<std::vector<CellTree::Node>> sub(jobs.size());
-#pragma omp parallel for schedule(dynamic) if (m >= kParallelThreshold)
-        for (i64 j = 0; j < n_jobs; ++j) sub[j] = trees[job_tree[j]].build_job(jobs[j]);
+        parallel_for_dynamic(m >= kParallelThreshold, n_jobs, [&](i64 j) { sub[j] = trees[job_tree[j]].build_job(jobs[j]); });
 #pragma omp parallel for schedule(dynamic) if (m >= kParallelThreshold && n_groups > 1)
         for (std::int32_t g = 0; g < n_groups; ++g) trees[g].finish(sub);
     }
@@ -476,8 +513,7 @@ std::vector<double> enn_search(EdgeCells& cells, const std::int32_t* patch_cls, 
     // Searches from every edge cell; positive doubles order like their bits.
     std::unique_ptr<std::atomic<std::uint64_t>[]> best(new std::atomic<std::uint64_t>[static_cast<std::size_t>(n)]);
     const std::uint64_t inf = double_bits(std::numeric_limits<double>::infinity());
-#pragma omp parallel for schedule(static) if (parallel)
-    for (i64 i = 0; i < n; ++i) best[i].store(inf, std::memory_order_relaxed);
+    parallel_for(parallel, n, [&](i64 i) { best[i].store(inf, std::memory_order_relaxed); });
 
     // Two shortcuts, both exact. (1) Smallest distance two patches of one
     // class can have (offsets of at most 2 cells, minus those joining them
@@ -565,10 +601,9 @@ std::vector<double> enn_search(EdgeCells& cells, const std::int32_t* patch_cls, 
             }
         }
     }
-#pragma omp parallel for schedule(static) if (parallel)
-    for (i64 i = 0; i < n; ++i) {
+    parallel_for(parallel, n, [&](i64 i) {
         if (group[patch_cls[i]] >= 0) out[i] = std::sqrt(bits_double(best[i].load(std::memory_order_relaxed)));
-    }
+    });
     return out;
 }
 
@@ -601,10 +636,15 @@ std::vector<double> Landscape::enn() {
     }
     if (n_groups == 0) return out;
 
-    // Small maps (moving windows, sample plots): every pair of edge cells.
+    // Small maps (moving windows, sample plots): every pair of edge cells of
+    // two patches of a class. The edge cells are grouped by patch (the
+    // patches of a class are consecutive), and each pair of patches is one
+    // minimum over their cross distances, two at a time.
     if (nx * ny <= kSmallMap) {
         const std::int32_t* cls = cls_.data();
-        std::vector<std::vector<std::array<std::int32_t, 3>>> edge(static_cast<std::size_t>(n_groups));
+        std::vector<std::int32_t> start(static_cast<std::size_t>(n) + 1, 0);
+        std::vector<std::int32_t> edge_patch;
+        std::vector<std::int32_t> edge_cell;
         for (i64 y = 0; y < ny; ++y) {
             for (i64 x = 0; x < nx; ++x) {
                 const i64 p = y * nx + x;
@@ -612,25 +652,40 @@ std::vector<double> Landscape::enn() {
                 if (c < 0 || group[c] < 0) continue;
                 if (x == 0 || x == nx - 1 || y == 0 || y == ny - 1 || cls[p - 1] != c || cls[p + 1] != c ||
                     cls[p - nx] != c || cls[p + nx] != c) {
-                    edge[group[c]].push_back({static_cast<std::int32_t>(x), static_cast<std::int32_t>(y), pt.patch(p, y)});
+                    const std::int32_t patch = pt.patch(p, y);
+                    edge_patch.push_back(patch);
+                    edge_cell.push_back(static_cast<std::int32_t>(p));
+                    ++start[patch + 1];
                 }
             }
         }
+        for (i64 i = 0; i < n; ++i) start[i + 1] += start[i];
+        std::vector<double> ex(edge_patch.size()), ey(edge_patch.size());
+        {
+            std::vector<std::int32_t> at(start.begin(), start.end() - 1);
+            for (std::size_t e = 0; e < edge_patch.size(); ++e) {
+                const std::int32_t k = at[edge_patch[e]]++;
+                // as landscapemetrics' compute_d2 (the sign does not matter)
+                ex[k] = static_cast<double>(edge_cell[e] % nx + 1) * resx_;
+                ey[k] = static_cast<double>(edge_cell[e] / nx + 1) * resy_;
+            }
+        }
         std::vector<double> best(static_cast<std::size_t>(n), std::numeric_limits<double>::infinity());
-        for (const auto& cells : edge) {
-            for (std::size_t i = 0; i < cells.size(); ++i) {
-                const double xi = static_cast<double>(cells[i][0] + 1) * resx_;
-                const double yi = static_cast<double>(cells[i][1] + 1) * resy_;
-                for (std::size_t j = i + 1; j < cells.size(); ++j) {
-                    if (cells[j][2] == cells[i][2]) continue;
-                    // as landscapemetrics' compute_d2 (the sign does not matter)
-                    const double dx = static_cast<double>(cells[j][0] + 1) * resx_ - xi;
-                    const double dy = static_cast<double>(cells[j][1] + 1) * resy_ - yi;
-                    const double d2 = dx * dx + dy * dy;
-                    best[cells[i][2]] = std::min(best[cells[i][2]], d2);
-                    best[cells[j][2]] = std::min(best[cells[j][2]], d2);
+        i64 first = 0;
+        while (first < n) {
+            i64 last = first;
+            while (last < n && pt.cls[last] == pt.cls[first]) ++last;
+            if (group[pt.cls[first]] >= 0) {
+                for (i64 a = first; a < last; ++a) {
+                    for (i64 b = a + 1; b < last; ++b) {
+                        const double d2 = min_cross_d2(ex.data() + start[a], ey.data() + start[a], start[a + 1] - start[a],
+                                                       ex.data() + start[b], ey.data() + start[b], start[b + 1] - start[b]);
+                        best[a] = std::min(best[a], d2);
+                        best[b] = std::min(best[b], d2);
+                    }
                 }
             }
+            first = last;
         }
         for (i64 i = 0; i < n; ++i) {
             if (group[pt.cls[i]] >= 0) out[i] = std::sqrt(best[i]);
@@ -655,14 +710,13 @@ std::vector<double> Landscape::enn() {
     const i64 ntx = (nx + tile - 1) / tile;
     const i64 n_tiles = ntx * n_strips;
     std::vector<i64> tile_count(static_cast<std::size_t>(n_tiles), 0);
-#pragma omp parallel for schedule(dynamic) if (parallel && n_strips > 1)
-    for (i64 s = 0; s < n_strips; ++s) {
+    parallel_for_dynamic(parallel && n_strips > 1, n_strips, [&](i64 s) {
         i64* count = tile_count.data() + s * ntx;
         const i64 y1 = std::min(ny, (s + 1) * tile);
         for (i64 y = s * tile; y < y1; ++y) {
             for (i64 x = 0; x < nx; ++x) count[x / tile] += is_edge(y * nx + x, x, y);
         }
-    }
+    });
     std::vector<i64> tile_start(static_cast<std::size_t>(n_tiles));
     {
         std::vector<std::uint64_t> code(static_cast<std::size_t>(n_tiles));
@@ -684,8 +738,7 @@ std::vector<double> Landscape::enn() {
     // uninitialised buffers, first touched by the parallel loops
     cells.key.reset(new std::uint64_t[m]);
     cells.patch.reset(new std::int32_t[m]);
-#pragma omp parallel for schedule(dynamic) if (parallel && n_strips > 1)
-    for (i64 s = 0; s < n_strips; ++s) {
+    parallel_for_dynamic(parallel && n_strips > 1, n_strips, [&](i64 s) {
         std::vector<i64> pos(tile_start.begin() + s * ntx, tile_start.begin() + (s + 1) * ntx);
         const i64 y1 = std::min(ny, (s + 1) * tile);
         for (i64 y = s * tile; y < y1; ++y) {
@@ -710,7 +763,7 @@ std::vector<double> Landscape::enn() {
                 cells.patch[j] = buf[j - b].second;
             }
         }
-    }
+    });
     tile_count = {};
     tile_start = {};
     // Then (stable) by class.
@@ -763,13 +816,6 @@ std::vector<double> enn_from_edge_cells(std::unique_ptr<std::uint64_t[]> key, st
     return enn_search(cells, patch_cls.data(), n, group, n_groups, nx, ny, resx, resy, directions, nullptr, nullptr);
 }
 
-double related_circle(const std::vector<double>& xy, std::uint64_t seed, double area_ha) {
-    std::vector<Point> pts(xy.size() / 2);
-    for (std::size_t i = 0; i < pts.size(); ++i) pts[i] = Point{xy[2 * i], xy[2 * i + 1]};
-    const Circle c = smallest_circle(pts, seed);
-    return 1 - (area_ha * 10000) / (kPi * std::pow(c.r, 2));
-}
-
 // 1 - patch area / area of the smallest circle around the patch.
 std::vector<double> Landscape::circle() {
     const std::vector<EnclosingCircle>& circles = patch_circles();
@@ -783,7 +829,8 @@ std::vector<double> Landscape::circle() {
 
 // Smallest circle around each patch. As in landscapemetrics, the circle
 // encloses the corners of the patch cells in its first and last rows and
-// columns; with convention = "fragstats" it encloses the whole patch.
+// columns (reduced to their convex hull first: the same circle, found on
+// fewer points); with convention = "fragstats" it encloses the whole patch.
 const std::vector<EnclosingCircle>& Landscape::patch_circles() {
     if (patch_circles_) return *patch_circles_;
     if (tables_only_) throw std::logic_error("circles of an out-of-core landscape need a detail pass");
@@ -855,41 +902,34 @@ const std::vector<EnclosingCircle>& Landscape::patch_circles() {
     std::vector<EnclosingCircle> out(static_cast<std::size_t>(n));
 #pragma omp parallel if (parallel)
     {
-        std::vector<Point> pts;  // reused by the patches of one thread
+        std::vector<std::pair<i64, i64>> corners;  // reused by the patches of one thread
 #pragma omp for schedule(dynamic, 64)
         for (i64 i = 0; i < n; ++i) {
             const Box& b = box[i];
             const auto me = static_cast<std::int32_t>(i);
-            pts.clear();
-            // corners as landscapemetrics computes them: col * res (+ res)
+            corners.clear();
+            // the outer corners of the cells in the first and last rows and columns
             for (i64 x = b.x0; x <= b.x1; ++x) {
-                const double X = static_cast<double>(x) * rx;
                 if (pt.patch(b.y0 * nx + x, b.y0) == me) {
-                    const double Y = static_cast<double>(b.y0) * ry;
-                    pts.push_back({X, Y});
-                    pts.push_back({X + rx, Y});
+                    corners.emplace_back(x, b.y0);
+                    corners.emplace_back(x + 1, b.y0);
                 }
                 if (pt.patch(b.y1 * nx + x, b.y1) == me) {
-                    const double Y = static_cast<double>(b.y1) * ry + ry;
-                    pts.push_back({X, Y});
-                    pts.push_back({X + rx, Y});
+                    corners.emplace_back(x, b.y1 + 1);
+                    corners.emplace_back(x + 1, b.y1 + 1);
                 }
             }
             for (i64 y = b.y0; y <= b.y1; ++y) {
-                const double Y = static_cast<double>(y) * ry;
                 if (pt.patch(y * nx + b.x0, y) == me) {
-                    const double X = static_cast<double>(b.x0) * rx;
-                    pts.push_back({X, Y});
-                    pts.push_back({X, Y + ry});
+                    corners.emplace_back(b.x0, y);
+                    corners.emplace_back(b.x0, y + 1);
                 }
                 if (pt.patch(y * nx + b.x1, y) == me) {
-                    const double X = static_cast<double>(b.x1) * rx + rx;
-                    pts.push_back({X, Y});
-                    pts.push_back({X, Y + ry});
+                    corners.emplace_back(b.x1 + 1, y);
+                    corners.emplace_back(b.x1 + 1, y + 1);
                 }
             }
-            const Circle c = smallest_circle(pts, static_cast<std::uint64_t>(i));
-            out[i] = EnclosingCircle{c.c.x, c.c.y, c.r};
+            out[i] = grid_circle(corners, rx, ry, static_cast<std::uint64_t>(i));
         }
     }
     patch_circles_ = std::move(out);

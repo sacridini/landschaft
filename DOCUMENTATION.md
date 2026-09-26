@@ -1076,6 +1076,7 @@ circles through two or three hull points.
 | `augusta_nlcd`, 440×678, the 91 metrics of part 1 | 8.6 s | 0.1 s |
 | `augusta_nlcd`, all 133 metrics | 15.6 s | 0.03 s |
 | `augusta_nlcd`, `enn` / `circle` | 2.4 s / 0.14 s | 0.014 s / 0.008 s |
+| 10,000×10,000: preparing the map (class values, NA, per-class counts) | – | 0.07 s |
 | 10,000×10,000, 10 classes, 7.7 M patches: labelling | – | 1.4 s |
 | same, all class and landscape metrics | – | 2.2 s more |
 | same, core areas (distance, core cells, core labelling) | – | 1.0 s more |
@@ -1083,7 +1084,7 @@ circles through two or three hull points.
 | `augusta_nlcd`, 6 circular plots, all metrics (`sample_lsm`) | 3.7 s | 0.02 s |
 | 4000×4000, 10,000 plots, all metrics (10 M values), squares / circles | – | 2.2 s / 2.2 s |
 | 9×11 map, 5×5 window, 10 metrics (`window_lsm`) | ~4 s | 0.003 s |
-| 1000×1000, 21×21 window, all 66 landscape metrics | – | 9 s |
+| 1000×1000, 21×21 window, all 66 landscape metrics | – | 8.7 s |
 | 20,000×20,000 file (400 M cells, 334 k patches), class and landscape metrics without core/gyrate/circle/enn: in memory / `block_rows="auto"` | – | 3.4 s, 3.7 GB / 3.9 s, 0.8 GB |
 | same, all 133 metrics: in memory / `block_rows="auto"` | – | 8.6 s, 8.7 GB / 13.1 s, 3.3 GB |
 

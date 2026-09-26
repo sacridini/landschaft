@@ -12,6 +12,7 @@
 #include <stdexcept>
 
 #include "lsm/landscape.hpp"
+#include "lsm/parallel.hpp"
 #include "lsm/rmath.hpp"
 
 #if defined(_OPENMP)
@@ -55,28 +56,26 @@ PatchCells Landscape::patch_cells() {
     // cells per strip piece, then where each piece starts in its patch
     std::vector<i64> piece(static_cast<std::size_t>(n_local), 0);
     const bool parallel = nx_ * ny_ >= kParallel && n_strips > 1;
-#pragma omp parallel for schedule(dynamic) if (parallel)
-    for (i64 s = 0; s < n_strips; ++s) {
+    parallel_for_dynamic(parallel, n_strips, [&](i64 s) {
         const i64 y1 = std::min(ny_, (s + 1) * pt.strip_rows);
         for (i64 p = s * pt.strip_rows * nx_; p < y1 * nx_; ++p) {
             if (pt.code[p] != -1) ++piece[pt.strip_offset[s] + (-static_cast<i64>(pt.code[p]) - 2)];
         }
-    }
+    });
     std::vector<i64> cursor(out.offset.begin(), out.offset.end() - 1);
     for (i64 l = 0; l < n_local; ++l) {
         const i64 cells = piece[l];
         piece[l] = cursor[pt.local_to_patch[l]];
         cursor[pt.local_to_patch[l]] += cells;
     }
-#pragma omp parallel for schedule(dynamic) if (parallel)
-    for (i64 s = 0; s < n_strips; ++s) {
+    parallel_for_dynamic(parallel, n_strips, [&](i64 s) {
         const i64 y1 = std::min(ny_, (s + 1) * pt.strip_rows);
         for (i64 p = s * pt.strip_rows * nx_; p < y1 * nx_; ++p) {
             if (pt.code[p] != -1) {
                 out.cell[piece[pt.strip_offset[s] + (-static_cast<i64>(pt.code[p]) - 2)]++] = p;
             }
         }
-    }
+    });
     return out;
 }
 
@@ -364,8 +363,7 @@ std::vector<std::int8_t> Landscape::patch_boundaries(bool consider_boundary, int
     const i64 n = nx_ * ny_;
     const std::int32_t depth = std::max(1, edge_depth);
     std::vector<std::int8_t> out(static_cast<std::size_t>(n));
-#pragma omp parallel for schedule(static) if (n >= kParallel)
-    for (i64 p = 0; p < n; ++p) out[p] = cls_[p] < 0 ? -1 : (d[p] <= depth ? 1 : 0);
+    parallel_for(n >= kParallel, n, [&](i64 p) { out[p] = cls_[p] < 0 ? -1 : (d[p] <= depth ? 1 : 0); });
     return out;
 }
 
@@ -424,8 +422,7 @@ std::vector<std::int32_t> raster_boundaries(const std::int32_t* values, const st
     }
     auto boundaries = [&](const std::vector<std::int32_t>& val, const std::vector<std::uint8_t>& nan) {
         std::vector<std::uint8_t> b(static_cast<std::size_t>(gx * gy), 0);
-#pragma omp parallel for schedule(static) if (gx * gy >= kParallel)
-        for (i64 y = 0; y < gy; ++y) {
+        parallel_for(gx * gy >= kParallel, gy, [&](i64 y) {
             for (i64 x = 0; x < gx; ++x) {
                 const i64 g = y * gx + x;
                 if (nan[g]) continue;
@@ -436,7 +433,7 @@ std::vector<std::int32_t> raster_boundaries(const std::int32_t* values, const st
                 if (!edge && x + 1 < gx) edge = nan[g + 1];
                 b[g] = edge;
             }
-        }
+        });
         return b;
     };
     std::vector<std::uint8_t> b = boundaries(v, isna);
