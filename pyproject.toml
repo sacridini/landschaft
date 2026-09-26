@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "landschaft"
-version = "0.34.0"
+version = "0.35.0"
 description = "Fast Python reimplementation of GuidosToolbox (GTB) raster analysis, starting with MSPA."
 readme = "README.md"
 license = "GPL-3.0-or-later"

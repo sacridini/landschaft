@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 6: ProtConn. `ls.conn.protconn(protected_areas,
   region, distance=...)` (Makurhini's `MK_ProtConn`: ECA, Prot, ProtConn, ProtUnconn,
