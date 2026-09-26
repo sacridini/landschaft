@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 10: commute-time distances.
   `distance="commute-time"` in `ls.conn.distance_table`, `HabitatGraph.from_raster` and
