@@ -698,6 +698,49 @@ The core engine computes that distance in two parallel separable passes instead 
 repeated erosions. As in landscapemetrics, `dcore_mn/sd/cv` summarise the *number* of
 core areas per patch (`ncore`), not their sizes.
 
+### Sample plots, moving windows and several rasters
+
+```python
+# metrics of sample plots (sample_lsm): squares or circles around points, or polygons
+ls.sample_metrics("landcover.tif", points_xy, size=500, shape="circle", level="landscape")
+ls.sample_metrics("landcover.tif", gdf_polygons, plot_id=gdf_polygons["name"], all_classes=True)
+
+# landscape-level metrics in a moving window (window_lsm): {metric: raster}
+maps = ls.window_metrics("landcover.tif", window=21, what=["lsm_l_shdi", "lsm_l_ed"])
+disk = np.hypot(*np.mgrid[-5:6, -5:6]) <= 5          # any odd-sized shape
+maps = ls.window_metrics("landcover.tif", window=disk, metric="contag")
+
+# several rasters, computed side by side
+ls.landscape_metrics(["t1.tif", "t2.tif", "t3.tif"])
+```
+
+**`sample_metrics`** cuts every plot out of the raster as `terra::crop(mask = TRUE)`
+does in `sample_lsm`: the plot's bounding box is snapped to the nearest cell edges
+(one cell if it collapses), every cell the plot touches is kept (GDAL's
+all-touched rasterization) and the others become NA. Point buffers are
+landscapemetrics' squares (half side `size`) or 100-vertex circles (radius `size`).
+Each plot is then a landscape of its own; all plots go to the C++ core at once and are
+computed in parallel. The table has `calculate_lsm`'s columns plus `plot_id` and
+`percentage_inside` (area of the plot's cells over the plot area, in %; the plot area
+is geodesic when `y` has a CRS, like a GeoDataFrame, and planar otherwise, as
+`terra::expanse(transform = TRUE)` does), ordered like `sample_lsm`. `all_classes`
+adds NA rows for the classes of the whole raster missing in a plot, including a row
+for class NA when the raster has NA cells, as landscapemetrics does. A plot outside
+the raster gives NA metrics and 0 % (landscapemetrics stops with an error).
+
+**`window_metrics`** computes landscape-level metrics for the window centred on every
+cell (cells outside the raster or outside the window shape are NA), in parallel over
+the rows; each window is a small landscape with the class values mapped to dense
+indices once for the whole raster. Differences with `window_lsm`: `terra::focal`
+hands the window values row by row but landscapemetrics fills its matrix column by
+column, so its windows are transposed (no effect on square windows over square
+cells) or scrambled (rectangular windows); landschaft keeps the geometry. And
+`window_lsm` fails for `gyrate_*` (it does not pass `cell_center`), which work here.
+
+**Several rasters** (`landscape_metrics(list)`, and lists in `sample_metrics` /
+`window_metrics`) are computed side by side when they are small and one after the
+other, each in parallel, when they are large.
+
 ### Verification
 
 `tools/make_reference_lsm.py` runs landscapemetrics (`tools/lsm_reference.R`) on 14
@@ -708,6 +751,11 @@ rows and columns, a single class) with 5 option sets, and stores every value in 
 compares all of them; with `Rscript` available (`LANDSCHAFT_RSCRIPT`,
 `LANDSCHAFT_R_LIBS` for a specific landscapemetrics library) it also runs
 landscapemetrics live on random maps with other option combinations.
+`make_reference_lsm.py sample window` also stores `sample_lsm` (square, circle and
+polygon plots, with and without `all_classes`, a CRS and boundary options) and
+`window_lsm` (square and circular windows) results, which `tests/test_lsm_sampling.py`
+compares, plus live runs on random maps; sample plots and windows are also checked
+against `Landscape` objects built on the same cells.
 `tests/test_lsm.py` checks values computed by hand, the labels against SciPy, the
 parallel seams, input handling and metric selection; `enn` against SciPy's exact
 Euclidean distance transform and `circle` against an exhaustive search over the
@@ -724,4 +772,8 @@ circles through two or three hull points.
 | same, all class and landscape metrics | – | 2.2 s more |
 | same, core areas (distance, core cells, core labelling) | – | 1.0 s more |
 | same, `enn` / `circle` | – | 2.0 s / 0.5 s more |
+| `augusta_nlcd`, 6 circular plots, all metrics (`sample_lsm`) | 3.7 s | 0.02 s |
+| 4000×4000, 10,000 plots, all metrics (10 M values), squares / circles | – | 1.6 s / 5.4 s |
+| 9×11 map, 5×5 window, 10 metrics (`window_lsm`) | ~4 s | 0.003 s |
+| 1000×1000, 21×21 window, all 66 landscape metrics | – | 9 s |
 

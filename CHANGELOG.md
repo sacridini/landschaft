@@ -6,6 +6,23 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 4: `sample_metrics()` (landscapemetrics' `sample_lsm`: square
+  or circular plots around points, or polygons, cut exactly as `terra::crop(mask =
+  TRUE)` does, `plot_id`, `all_classes`, `percentage_inside` with geodesic plot areas
+  for data with a CRS) and `window_metrics()` (`window_lsm`: landscape-level metrics in
+  any odd-sized window shape). Plots, windows and lists of rasters
+  (`landscape_metrics(list)`) are computed in parallel by the C++ core, which also
+  builds the long table directly. Identical to landscapemetrics on stored and live
+  cases; thousands of times faster (a `sample_lsm` call on 6 plots of `augusta_nlcd`:
+  3.7 s in R, 0.02 s here).
+- `Landscape.metrics()` returns one NA row per metric for an all-NA map, as
+  `calculate_lsm` does.
+
+### Changed
+- Small maps (windows, plots) compute ENN from all pairs of edge cells and sort their
+  patches with a comparison sort: 2-3× faster there, same values.
+
 ## [0.14.0] - 2026-09-26
 
 ### Added

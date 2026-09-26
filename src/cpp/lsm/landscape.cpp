@@ -57,9 +57,14 @@ void uf_unite(std::int32_t* parent, std::int32_t a, std::int32_t b) {
 // so every pass reads sequentially).
 std::vector<i64> sort_by_key(std::vector<std::uint64_t> key) {
     const std::size_t n = key.size();
-    std::vector<i64> order(n), order_tmp(n);
-    std::vector<std::uint64_t> key_tmp(n);
+    std::vector<i64> order(n);
     std::iota(order.begin(), order.end(), i64(0));
+    if (n < 512) {  // small maps (moving windows, sample plots)
+        std::sort(order.begin(), order.end(), [&](i64 a, i64 b) { return key[a] < key[b]; });
+        return order;
+    }
+    std::vector<i64> order_tmp(n);
+    std::vector<std::uint64_t> key_tmp(n);
     std::uint64_t all = 0;
     for (std::uint64_t k : key) all |= k;
     constexpr int kBits = 11;

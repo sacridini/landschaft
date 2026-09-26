@@ -70,7 +70,7 @@ from .io import (
     write_raster,
 )
 from .morphology import ParcellationResult, contortion, parcellation
-from .lsm import Landscape, landscape_metrics, list_metrics
+from .lsm import Landscape, landscape_metrics, list_metrics, sample_metrics, window_metrics
 from .lm_heatmap import LMHeatmap, LMHeatmapChange, landscape_mosaic_change, landscape_mosaic_heatmap
 from .mosaic import LM19_CLASSES, landscape_mosaic, landscape_mosaic_stats
 from .mspa import MSPA_CLASSES, mspa, mspa_stats
@@ -195,6 +195,7 @@ __all__ = [
     "resistance_colormap",
     "restoration_corridor",
     "restoration_status",
+    "sample_metrics",
     "simple_change",
     "spa",
     "tile_layout",
@@ -202,6 +203,7 @@ __all__ = [
     "spatial_entropy_map",
     "validate_fad_input",
     "validate_mspa_input",
+    "window_metrics",
     "write_raster",
 ]
 

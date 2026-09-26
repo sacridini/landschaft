@@ -1,0 +1,71 @@
+{
+  "generated": "2026-09-26",
+  "landscapemetrics": "2.2",
+  "files": {
+    "augusta_square.csv.gz": {
+      "input": "augusta.tif",
+      "plots": "augusta_square__plots.csv",
+      "options": {
+        "shape": "square",
+        "size": 450
+      },
+      "rows": 8500
+    },
+    "augusta_circle.csv.gz": {
+      "input": "augusta.tif",
+      "plots": "augusta_circle__plots.csv",
+      "options": {
+        "shape": "circle",
+        "size": 600
+      },
+      "rows": 10403
+    },
+    "augusta_circle_all.csv.gz": {
+      "input": "augusta.tif",
+      "plots": "augusta_circle_all__plots.csv",
+      "options": {
+        "shape": "circle",
+        "size": 1000,
+        "all_classes": true,
+        "directions": 4
+      },
+      "rows": 28362
+    },
+    "augusta_vector.csv.gz": {
+      "input": "augusta.tif",
+      "plots": "augusta_vector__plots.csv",
+      "options": {
+        "shape": "circle",
+        "size": 500,
+        "vector": true,
+        "level": "landscape"
+      },
+      "rows": 198
+    },
+    "synthetic_polygons.csv.gz": {
+      "input": "synthetic_na.tif",
+      "plots": "synthetic_polygons__plots.csv",
+      "options": {},
+      "rows": 1557
+    },
+    "synthetic_polygons_all.csv.gz": {
+      "input": "synthetic_na.tif",
+      "plots": "synthetic_polygons_all__plots.csv",
+      "options": {
+        "all_classes": true
+      },
+      "rows": 1765
+    },
+    "synthetic_polygons_boundary.csv.gz": {
+      "input": "synthetic_na.tif",
+      "plots": "synthetic_polygons_boundary__plots.csv",
+      "options": {
+        "consider_boundary": true,
+        "edge_depth": 2,
+        "count_boundary": true,
+        "directions": 4
+      },
+      "rows": 1623
+    }
+  }
+}

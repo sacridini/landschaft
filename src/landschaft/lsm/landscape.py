@@ -101,6 +101,64 @@ def _prepare(data, res, nodata, band) -> tuple[np.ndarray, np.ndarray | None, tu
     return values, (mask.astype(np.uint8) if mask.any() else None), res, template
 
 
+# landscapemetrics' metric options and their defaults.
+OPTION_DEFAULTS = {
+    "directions": 8,
+    "count_boundary": False,
+    "consider_boundary": False,
+    "edge_depth": 1,
+    "cell_center": False,
+    "classes_max": None,
+    "neighbourhood": 4,
+    "ordered": True,
+    "base": "log2",
+}
+_LEVEL_CODE = {"patch": 0, "class": 1, "landscape": 2}
+
+
+def metric_options(**options) -> dict[str, Any]:
+    """The metric options (defaults filled in, types checked)."""
+    unknown = set(options) - set(OPTION_DEFAULTS)
+    if unknown:
+        raise TypeError(f"unknown option(s): {sorted(unknown)}; expected {sorted(OPTION_DEFAULTS)}")
+    out = {**OPTION_DEFAULTS, **options}
+    out["directions"] = int(out["directions"])
+    out["count_boundary"] = bool(out["count_boundary"])
+    out["consider_boundary"] = bool(out["consider_boundary"])
+    out["edge_depth"] = int(out["edge_depth"])
+    out["cell_center"] = bool(out["cell_center"])
+    out["neighbourhood"] = int(out["neighbourhood"])
+    out["ordered"] = bool(out["ordered"])
+    return out
+
+
+def chosen_metrics(level=None, metric=None, name=None, type=None, what=None) -> pd.DataFrame:
+    """Selected catalogue rows in calculate_lsm's order (level, metric)."""
+    return select_metrics(level, metric, name, type, what).sort_values(["level", "metric"]).reset_index(drop=True)
+
+
+def metric_specs(chosen: pd.DataFrame) -> tuple[list[int], list[str]]:
+    return [_LEVEL_CODE[lv] for lv in chosen["level"]], list(chosen["metric"])
+
+
+def long_frame(table: dict, chosen: pd.DataFrame) -> pd.DataFrame:
+    """calculate_lsm's table from the C++ long table of the metrics `chosen`."""
+    level_names = sorted(set(chosen["level"]))
+    metric_order = list(dict.fromkeys(chosen["metric"]))
+    spec_level = np.array([level_names.index(lv) for lv in chosen["level"]], dtype=np.int8)
+    spec_metric = np.array([metric_order.index(m) for m in chosen["metric"]], dtype=np.int16)
+    spec = table["metric"]
+    return pd.DataFrame(
+        {
+            "level": pd.Categorical.from_codes(spec_level[spec], level_names),
+            "class": pd.arrays.IntegerArray(table["class"].astype(np.int64), table["class_na"]),
+            "id": pd.arrays.IntegerArray(table["id"].astype(np.int64), table["id_na"]),
+            "metric": pd.Categorical.from_codes(spec_metric[spec], metric_order),
+            "value": table["value"],
+        }
+    )
+
+
 class Landscape:
     """Categorical raster prepared for landscape metrics.
 
@@ -166,18 +224,18 @@ class Landscape:
         self._template = template
         self.resolution = res
         self.shape = values.shape
-        self.options = {
-            "directions": int(directions),
-            "count_boundary": bool(count_boundary),
-            "consider_boundary": bool(consider_boundary),
-            "edge_depth": int(edge_depth),
-            "cell_center": bool(cell_center),
-            "classes_max": classes_max,
-            "neighbourhood": int(neighbourhood),
-            "ordered": bool(ordered),
-            "base": base,
-        }
-        self._core = _core.LsmLandscape(values, mask, res[0], res[1], **self.options)
+        self.options = metric_options(
+            directions=directions,
+            count_boundary=count_boundary,
+            consider_boundary=consider_boundary,
+            edge_depth=edge_depth,
+            cell_center=cell_center,
+            classes_max=classes_max,
+            neighbourhood=neighbourhood,
+            ordered=ordered,
+            base=base,
+        )
+        self._core = _core.LsmLandscape(values, mask, res[0], res[1], self.options)
 
     def __repr__(self) -> str:
         return (
@@ -263,53 +321,11 @@ class Landscape:
         -------
         pandas.DataFrame
             Columns ``level``, ``class``, ``id``, ``metric``, ``value``
-            (``class``/``id`` are missing where they do not apply).
+            (``class``/``id`` are missing where they do not apply). An all-NA
+            map gives one missing value per metric, as in landscapemetrics.
         """
-        # calculate_lsm's order: level, metric, class, id. Every block below is
-        # already ordered by class and id, so the blocks only need ordering.
-        chosen = select_metrics(level, metric, name, type, what).sort_values(["level", "metric"])
-        level_names = sorted(set(chosen["level"]))
-        metric_order = list(dict.fromkeys(chosen["metric"]))
-        levels, metric_names, classes, class_na, ids, values = [], [], [], [], [], []
-        for lvl, metric_name in zip(chosen["level"], chosen["metric"]):
-            if lvl == "patch":
-                v = self._core.patch_metric(metric_name)
-                classes.append(self.patch_classes)
-                class_na.append(np.zeros(v.size, dtype=bool))
-                ids.append(np.arange(1, v.size + 1))
-            elif lvl == "class":
-                v = self._core.class_metric(metric_name)
-                if metric_name.startswith("enn_") and v.size and np.isnan(v).all():
-                    # every class has a single patch: landscapemetrics gives one
-                    # row without class
-                    v = v[:1]
-                    classes.append(np.zeros(1, dtype=np.int64))
-                    class_na.append(np.ones(1, dtype=bool))
-                else:
-                    classes.append(self.classes)
-                    class_na.append(np.zeros(v.size, dtype=bool))
-                ids.append(np.zeros(v.size, dtype=np.int64))
-            else:
-                v = np.array([self._core.landscape_metric(metric_name)])
-                classes.append(np.zeros(1, dtype=np.int64))
-                class_na.append(np.ones(1, dtype=bool))
-                ids.append(np.zeros(1, dtype=np.int64))
-            levels.append(np.full(v.size, level_names.index(lvl), dtype=np.int8))
-            metric_names.append(np.full(v.size, metric_order.index(metric_name), dtype=np.int16))
-            values.append(v)
-        level_codes = np.concatenate(levels)
-        cls = np.concatenate(classes).astype(np.int64)
-        pid = np.concatenate(ids).astype(np.int64)
-        level_col = pd.Categorical.from_codes(level_codes, level_names)
-        return pd.DataFrame(
-            {
-                "level": level_col,
-                "class": pd.arrays.IntegerArray(cls, np.concatenate(class_na)),
-                "id": pd.arrays.IntegerArray(pid, np.asarray(level_col != "patch")),
-                "metric": pd.Categorical.from_codes(np.concatenate(metric_names), metric_order),
-                "value": np.concatenate(values),
-            }
-        )
+        chosen = chosen_metrics(level, metric, name, type, what)
+        return long_frame(self._core.long_table(*metric_specs(chosen)), chosen)
 
 
 def _names(metrics, level: str) -> list[str]:
@@ -361,19 +377,30 @@ def landscape_metrics(
     -------
     pandas.DataFrame
         ``level``, ``class``, ``id``, ``metric``, ``value`` (plus ``layer``
-        for several rasters).
+        for several rasters). Several rasters are computed in parallel.
     """
+    layers = as_layers(data)
+    if layers is None:
+        return Landscape(data, **options).metrics(level, metric, name, type, what)
+    res, nodata, band = options.pop("res", None), options.pop("nodata", None), options.pop("band", None)
+    opts = metric_options(**options)
+    chosen = chosen_metrics(level, metric, name, type, what)
+    rasters = []
+    for layer in layers:
+        values, mask, r, _ = _prepare(layer, res, nodata, band)
+        rasters.append((values, mask, r[0], r[1]))
+    table = _core.lsm_batch(rasters, opts, *metric_specs(chosen))
+    df = long_frame(table, chosen)
+    df.insert(0, "layer", table["item"].astype(np.int64) + 1)
+    return df
+
+
+def as_layers(data) -> list | None:
+    """The rasters of a list / RasterCollection; None for a single raster."""
     from ..collection import RasterCollection
 
     if isinstance(data, RasterCollection):
-        layers = [data.load(i) for i in range(len(data))]
-    elif isinstance(data, (list, tuple)):
-        layers = list(data)
-    else:
-        return Landscape(data, **options).metrics(level, metric, name, type, what)
-    frames = []
-    for i, layer in enumerate(layers, start=1):
-        df = Landscape(layer, **options).metrics(level, metric, name, type, what)
-        df.insert(0, "layer", i)
-        frames.append(df)
-    return pd.concat(frames, ignore_index=True)
+        return [data.load(i) for i in range(len(data))]
+    if isinstance(data, (list, tuple)):
+        return list(data)
+    return None

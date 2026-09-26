@@ -1,0 +1,463 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Landscape metrics of sample plots and moving windows (landscapemetrics'
+``sample_lsm`` and ``window_lsm``)."""
+
+from __future__ import annotations
+
+import warnings
+from collections.abc import Iterable
+
+import numpy as np
+import pandas as pd
+import rasterio
+from rasterio import features
+from rasterio.transform import Affine
+
+from .. import _core
+from .landscape import (
+    _prepare,
+    as_layers,
+    chosen_metrics,
+    long_frame,
+    metric_options,
+    metric_specs,
+)
+
+__all__ = ["sample_metrics", "window_metrics"]
+
+
+# -- sample plots ---------------------------------------------------------------
+
+
+def _r_seq(start: float, stop: float, n: int) -> np.ndarray:
+    """R's seq(start, stop, length.out = n)."""
+    by = (stop - start) / (n - 1)
+    return np.concatenate([[start], start + np.arange(1, n - 1) * by, [stop]])
+
+
+def _buffer(x: float, y: float, size: float, shape: str) -> dict:
+    """landscapemetrics' construct_buffer: a square (half side `size`) or a
+    100-vertex circle (radius `size`) around (x, y)."""
+    if shape == "square":
+        ring = [(x - size, y - size), (x - size, y + size), (x + size, y + size), (x + size, y - size)]
+    elif shape == "circle":
+        t = _r_seq(0.0, 2 * np.pi, 100)
+        ring = list(zip(np.sin(t) * size + x, np.cos(t) * size + y))
+    else:
+        raise ValueError(f"shape must be 'square' or 'circle', got {shape!r}")
+    ring = [(float(a), float(b)) for a, b in ring]
+    return {"type": "Polygon", "coordinates": [ring + [ring[0]]]}
+
+
+def _geometries(y) -> list[dict]:
+    """GeoJSON-like geometries of `y` (objects with __geo_interface__, dicts,
+    or lists of them)."""
+    if hasattr(y, "__geo_interface__"):
+        gi = y.__geo_interface__
+        if gi.get("type") == "FeatureCollection":
+            return [f["geometry"] for f in gi["features"]]
+        if gi.get("type") == "Feature":
+            return [gi["geometry"]]
+        return [gi]
+    if isinstance(y, dict):
+        if y.get("type") == "FeatureCollection":
+            return [f["geometry"] for f in y["features"]]
+        return [y.get("geometry", y)]
+    if isinstance(y, Iterable) and not isinstance(y, (str, bytes)):
+        out = []
+        for g in y:
+            out += _geometries(g)
+        return out
+    raise TypeError(f"expected coordinates or geometries, got {type(y).__name__}")
+
+
+def _plots(y, size, shape) -> list[dict]:
+    """Sample plots: buffers around points (coordinate matrix or point
+    geometries) or polygons as given."""
+    arr = None
+    if not hasattr(y, "__geo_interface__") and not isinstance(y, dict):
+        try:
+            arr = np.asarray(y, dtype=float)
+        except (TypeError, ValueError):
+            arr = None
+    if arr is not None and arr.ndim == 2 and arr.shape[1] == 2:
+        points = [tuple(p) for p in arr]
+        geoms = [{"type": "Point", "coordinates": p} for p in points]
+    else:
+        geoms = _geometries(y)
+    plots = []
+    for g in geoms:
+        kind = g["type"]
+        if kind in ("Point", "MultiPoint"):
+            if size is None or size <= 0:
+                raise ValueError("points need a buffer size > 0 (size=)")
+            pts = [g["coordinates"]] if kind == "Point" else g["coordinates"]
+            for p in pts:
+                plots.append(_buffer(float(p[0]), float(p[1]), float(size), shape))
+        elif kind in ("Polygon", "MultiPolygon"):
+            plots.append(g)
+        else:
+            raise ValueError(f"sample plots must be points or polygons, got {kind}")
+    return plots
+
+
+def _rings(geom: dict):
+    polys = [geom["coordinates"]] if geom["type"] == "Polygon" else geom["coordinates"]
+    for poly in polys:
+        for k, ring in enumerate(poly):
+            yield k == 0, np.asarray(ring, dtype=float)[:, :2]
+
+
+def _area_function(crs):
+    """Polygon area as terra::expanse(transform = TRUE): geodesic (WGS84
+    ellipsoid) when the plots have a CRS, else planar."""
+    if crs is None:
+
+        def ring_area(r):
+            return abs(np.sum(r[:, 0] * np.roll(r[:, 1], -1) - np.roll(r[:, 0], -1) * r[:, 1])) / 2
+
+    else:
+        from pyproj import CRS, Geod, Transformer
+
+        to_lonlat = Transformer.from_crs(CRS.from_user_input(crs), "EPSG:4326", always_xy=True)
+        geod = Geod(ellps="WGS84")
+
+        def ring_area(r):
+            lon, lat = to_lonlat.transform(r[:, 0], r[:, 1])
+            return abs(geod.polygon_area_perimeter(lon, lat)[0])
+
+    def area(geom: dict) -> float:
+        total = 0.0
+        for exterior, r in _rings(geom):
+            a = ring_area(r)
+            total += a if exterior else -a
+        return total
+
+    return area
+
+
+def _crop(geom: dict, transform: Affine, shape: tuple[int, int]):
+    """terra::crop(snap = "near", mask = TRUE, touches = TRUE): the grid window
+    around the plot and the cells it touches. None if outside the raster."""
+    coords = np.concatenate([r for _, r in _rings(geom)])
+    xmin, ymin = coords.min(axis=0)
+    xmax, ymax = coords.max(axis=0)
+    rx, ry = transform.a, -transform.e
+    nrow, ncol = shape
+    x0, ytop = transform.c, transform.f
+    y0 = ytop - nrow * ry
+
+    def near(v):
+        return int(np.floor(v + 0.5))
+
+    c0, c1 = near((xmin - x0) / rx), near((xmax - x0) / rx)
+    b0, b1 = near((ymin - y0) / ry), near((ymax - y0) / ry)  # rows counted from the bottom
+    collapsed = c0 == c1 or b0 == b1
+    if c0 == c1:
+        c0 -= 1
+    if b0 == b1:
+        b0 -= 1
+    c0, c1 = max(c0, 0), min(c1, ncol)
+    b0, b1 = max(b0, 0), min(b1, nrow)
+    if c1 <= c0 or b1 <= b0:
+        return None
+    rows = slice(nrow - b1, nrow - b0)
+    cols = slice(c0, c1)
+    if not collapsed and _is_rectangle(geom):
+        # the window snapped to the nearest cell edges overlaps an
+        # axis-aligned rectangle by at least half a cell in every cell
+        inside = np.ones((b1 - b0, c1 - c0), dtype=bool)
+    else:
+        sub_transform = Affine(rx, 0.0, x0 + c0 * rx, 0.0, -ry, y0 + b1 * ry)
+        inside = features.rasterize(
+            [(geom, 1)], out_shape=(b1 - b0, c1 - c0), transform=sub_transform, fill=0, all_touched=True,
+            dtype="uint8",
+        ).astype(bool)
+    return rows, cols, inside
+
+
+def _is_rectangle(geom: dict) -> bool:
+    """An axis-aligned rectangle (e.g. a square buffer)."""
+    if geom["type"] != "Polygon" or len(geom["coordinates"]) != 1:
+        return False
+    ring = np.asarray(geom["coordinates"][0], dtype=float)[:, :2]
+    if len(ring) != 5 or not np.array_equal(ring[0], ring[-1]):
+        return False
+    xs, ys = np.unique(ring[:, 0]), np.unique(ring[:, 1])
+    if len(xs) != 2 or len(ys) != 2:
+        return False
+    # consecutive vertices differ in exactly one coordinate
+    step = np.diff(ring, axis=0) != 0
+    return bool(np.all(step.sum(axis=1) == 1))
+
+
+def _grid(data, res, nodata, band):
+    """Class values, NA mask (bool), cell size and geotransform of a raster."""
+    values, mask, r, template = _prepare(data, res, nodata, band)
+    mask = np.zeros(values.shape, dtype=bool) if mask is None else mask.astype(bool)
+    if template is not None:
+        try:
+            transform = template.rio.transform()
+        except Exception:
+            transform = None
+    else:
+        transform = None
+    if transform is None:
+        # as terra::rast(matrix): origin at 0, first row on top
+        transform = Affine(r[0], 0.0, 0.0, 0.0, -r[1], values.shape[0] * r[1])
+    if transform.b != 0 or transform.d != 0:
+        raise ValueError("rotated rasters are not supported")
+    return values, mask, r, transform
+
+
+def sample_metrics(
+    data,
+    y,
+    *,
+    size: float | None = None,
+    shape: str = "square",
+    plot_id=None,
+    all_classes: bool = False,
+    level=None,
+    metric=None,
+    name=None,
+    type=None,
+    what=None,
+    res=None,
+    nodata=None,
+    band: int | None = None,
+    verbose: bool = True,
+    **options,
+) -> pd.DataFrame:
+    """Landscape metrics of sample plots, like landscapemetrics' ``sample_lsm``.
+
+    Each plot is cut from the raster as ``terra::crop(mask = TRUE)`` does
+    (grid window snapped to the nearest cell edges; every cell the plot
+    touches is kept, the others become NA) and its metrics are computed as
+    a landscape of its own. All plots are computed in parallel.
+
+    Parameters
+    ----------
+    data
+        A raster (see :class:`Landscape`) or a list of rasters /
+        :class:`~landschaft.RasterCollection` (``layer`` column).
+    y
+        Sample plots: an ``(n, 2)`` array of x/y coordinates or point
+        geometries (buffers of ``shape`` and ``size`` around them), or
+        polygons. Geometries can be shapely objects, a GeoSeries /
+        GeoDataFrame (anything with ``__geo_interface__``) or GeoJSON-like
+        dicts, in the raster's coordinates. As in landscapemetrics, the plot
+        area behind ``percentage_inside`` is geodesic when ``y`` has a CRS
+        (``y.crs``, e.g. a GeoDataFrame) and planar otherwise.
+    size
+        Buffer size around points: half the side of a square, or the radius
+        of a circle (landscapemetrics' 100-vertex polygon).
+    shape
+        ``"square"`` (default) or ``"circle"``.
+    plot_id
+        Identifiers of the plots (default 1..n).
+    all_classes
+        Add class-level rows (NA) for the classes of the whole raster that are
+        missing in a plot (with a row for class NA when the raster has NA
+        cells, as landscapemetrics does).
+    level, metric, name, type, what
+        Metric selection, as in :func:`landschaft.list_metrics`.
+    res, nodata, band
+        Raster reading options (see :class:`Landscape`).
+    verbose
+        Warn when a plot lies less than 90 % inside the raster.
+    **options
+        Metric options (``directions``, ``edge_depth``, ...).
+
+    Returns
+    -------
+    pandas.DataFrame
+        ``level``, ``class``, ``id``, ``metric``, ``value``, ``plot_id`` and
+        ``percentage_inside`` (area of the plot's cells over the plot area,
+        in %), ordered by plot, level, metric, class and id; plus ``layer``
+        for several rasters. A plot outside the raster (an error in
+        landscapemetrics) gives NA metrics and 0 %.
+    """
+    opts = metric_options(**options)
+    chosen = chosen_metrics(level, metric, name, type, what)
+    plots = _plots(y, size, shape)
+    n_plots = len(plots)
+    if plot_id is not None:
+        plot_id = list(plot_id)
+        if len(plot_id) != n_plots:
+            warnings.warn("plot_id does not have one value per plot; using 1..n", stacklevel=2)
+            plot_id = None
+    ids = np.arange(1, n_plots + 1) if plot_id is None else np.asarray(plot_id)
+    area = _area_function(getattr(y, "crs", None))
+    areas = np.array([area(g) for g in plots])
+
+    layers = as_layers(data)
+    single = layers is None
+    frames = []
+    for layer_no, layer in enumerate([data] if single else layers, start=1):
+        values, mask, r, transform = _grid(layer, res, nodata, band)
+        rasters, inside_area = [], np.zeros(n_plots)
+        empty = (np.zeros((1, 1), np.int32), np.ones((1, 1), np.uint8), r[0], r[1])
+        with rasterio.Env():  # one GDAL environment for all plots
+            for k, geom in enumerate(plots):
+                crop = _crop(geom, transform, values.shape)
+                if crop is None:
+                    rasters.append(empty)
+                    continue
+                rows, cols, inside = crop
+                sub_mask = mask[rows, cols] | ~inside
+                sub = np.ascontiguousarray(values[rows, cols])
+                inside_area[k] = np.count_nonzero(~sub_mask) * r[0] * r[1] / 10000
+                rasters.append((sub, sub_mask.astype(np.uint8), r[0], r[1]))
+        table = _core.lsm_batch(rasters, opts, *metric_specs(chosen))
+        df = long_frame(table, chosen)
+        item = table["item"].astype(np.int64)
+        df["plot_id"] = ids[item]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            pct = np.where(inside_area > 0, inside_area / (areas / 10000) * 100, 0.0)
+        df["percentage_inside"] = pct[item]
+        if all_classes:
+            df = _sort(_add_all_classes(df, values, mask), True)
+        elif np.any(ids[1:] < ids[:-1]):
+            # rows come per plot, each in sample_lsm's order: order the plots
+            rank = np.empty(n_plots, dtype=np.int64)
+            rank[np.argsort(ids, kind="stable")] = np.arange(n_plots)
+            df = df.iloc[np.argsort(rank[item], kind="stable")].reset_index(drop=True)
+        if not single:
+            df.insert(0, "layer", layer_no)
+        frames.append(df)
+    out = frames[0] if single else pd.concat(frames, ignore_index=True)
+    if verbose and (out["percentage_inside"] < 90).any():
+        warnings.warn("percentage_inside is below 90% for at least one plot", stacklevel=2)
+    return out
+
+
+def _add_all_classes(df: pd.DataFrame, values: np.ndarray, mask: np.ndarray) -> pd.DataFrame:
+    """Class-level rows for every class of the raster (and NA if it has NA
+    cells) in every plot, NA where the plot lacks the class."""
+    is_class = (df["level"] == "class").to_numpy()
+    if not is_class.any():
+        return df
+    cls_rows = df[is_class]
+    classes = [int(c) for c in np.unique(values[~mask])]
+    if mask.any():
+        classes.append(None)
+    known = {
+        (None if pd.isna(c) else int(c), m, p): v
+        for c, m, p, v in zip(cls_rows["class"], cls_rows["metric"], cls_rows["plot_id"], cls_rows["value"])
+    }
+    pct = dict(zip(df["plot_id"], df["percentage_inside"]))
+    metrics = list(dict.fromkeys(cls_rows["metric"]))
+    plots = list(dict.fromkeys(cls_rows["plot_id"]))
+    grid = [(c, m, p) for c in classes for m in metrics for p in plots]
+    added = pd.DataFrame(
+        {
+            "level": pd.Categorical(["class"] * len(grid), categories=df["level"].cat.categories),
+            "class": pd.array([c for c, _, _ in grid], dtype="Int64"),
+            "id": pd.array([None] * len(grid), dtype="Int64"),
+            "metric": pd.Categorical([m for _, m, _ in grid], categories=df["metric"].cat.categories),
+            "value": [known.get(key, np.nan) for key in grid],
+            "plot_id": [p for _, _, p in grid],
+            "percentage_inside": [pct[p] for _, _, p in grid],
+        }
+    )
+    return pd.concat([df[~is_class], added], ignore_index=True)
+
+
+def _sort(df: pd.DataFrame, single: bool) -> pd.DataFrame:
+    """sample_lsm's order: (layer,) plot_id, level, metric, class, id (NA last)."""
+    keys = [] if single else ["layer"]
+    keys += ["plot_id", "level", "metric", "class", "id"]
+    tmp = df.assign(
+        level=df["level"].astype(str), metric=df["metric"].astype(str)
+    )  # alphabetical, as R's order()
+    order = tmp.sort_values(keys, kind="stable", na_position="last").index
+    return df.loc[order].reset_index(drop=True)
+
+
+# -- moving windows -------------------------------------------------------------
+
+
+def _window(window) -> np.ndarray:
+    if np.isscalar(window):
+        side = int(window)
+        if side != window or side < 1:
+            raise ValueError(f"window size must be a positive odd integer, got {window!r}")
+        w = np.ones((side, side), dtype=bool)
+    else:
+        w = np.asarray(window)
+        if w.ndim != 2:
+            raise ValueError("the window must be a 2-D array")
+        w = ~np.isnan(w) & (w != 0) if np.issubdtype(w.dtype, np.floating) else w.astype(bool)
+    if w.shape[0] % 2 == 0 or w.shape[1] % 2 == 0:
+        raise ValueError(f"the window must have odd sides, got {w.shape}")
+    return w
+
+
+def window_metrics(
+    data,
+    window,
+    level="landscape",
+    metric=None,
+    name=None,
+    type=None,
+    what=None,
+    *,
+    res=None,
+    nodata=None,
+    band: int | None = None,
+    **options,
+):
+    """Landscape-level metrics in a moving window, like landscapemetrics'
+    ``window_lsm``.
+
+    For every cell, the cells of the window centred on it form a landscape
+    (cells outside the raster or outside the window shape are NA), and its
+    metrics become the cell's values. Windows are computed in parallel.
+
+    Parameters
+    ----------
+    data
+        A raster (see :class:`Landscape`) or a list of rasters /
+        :class:`~landschaft.RasterCollection`.
+    window
+        Odd side of a square window, or a 2-D array with odd sides whose
+        cells that are True / non-zero (and not NaN) form the window, e.g. a
+        circle.
+    level, metric, name, type, what
+        Metric selection, as in :func:`landschaft.list_metrics`; only
+        landscape-level metrics are possible (all of them by default).
+    res, nodata, band
+        Raster reading options (see :class:`Landscape`).
+    **options
+        Metric options (``directions``, ``edge_depth``, ...).
+
+    Returns
+    -------
+    dict
+        ``{metric: raster}`` (a DataArray on the input grid, or a numpy
+        array), or a list of such dicts for several rasters.
+    """
+    opts = metric_options(**options)
+    chosen = chosen_metrics(level, metric, name, type, what)
+    if set(chosen["level"]) != {"landscape"}:
+        raise ValueError("window_metrics computes landscape-level metrics only")
+    names = list(chosen["metric"])
+    w = _window(window).astype(np.uint8)
+    layers = as_layers(data)
+    results = []
+    for layer in [data] if layers is None else layers:
+        values, mask, r, template = _prepare(layer, res, nodata, band)
+        out = _core.lsm_window(values, mask, r[0], r[1], w, names, opts)
+        maps = {}
+        for k, m in enumerate(names):
+            if template is None:
+                maps[m] = out[k]
+            else:
+                da = template.copy(data=out[k])
+                da.name = m
+                da.attrs = {}
+                da.encoding = {}
+                maps[m] = da.rio.write_nodata(np.nan, encoded=False)
+        results.append(maps)
+    return results[0] if layers is None else results

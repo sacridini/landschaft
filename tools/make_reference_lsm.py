@@ -3,14 +3,16 @@
 
 Usage::
 
-    python tools/make_reference_lsm.py
+    python tools/make_reference_lsm.py [lsm] [sample] [window]
 
 Needs Rscript with landscapemetrics and terra (see ``tests/lsm_reference.py``
-for ``LANDSCHAFT_RSCRIPT`` / ``LANDSCHAFT_R_LIBS``). Writes the input rasters
-to ``tests/data/lsm/*.tif``, every value of ``calculate_lsm`` for each option
-set to ``tests/data/reference/lsm/<case>__<options>.csv.gz`` and a
-``manifest.json``. The test-suite compares landschaft against these files, so
-it runs anywhere without R.
+for ``LANDSCHAFT_RSCRIPT`` / ``LANDSCHAFT_R_LIBS``). ``lsm`` (default: all
+three parts) writes the input rasters to ``tests/data/lsm/*.tif``, every value
+of ``calculate_lsm`` for each option set to
+``tests/data/reference/lsm/<case>__<options>.csv.gz`` and a ``manifest.json``;
+``sample`` and ``window`` store ``sample_lsm`` and ``window_lsm`` results in
+``tests/data/reference/lsm_sample`` and ``lsm_window``. The test-suite
+compares landschaft against these files, so it runs anywhere without R.
 """
 
 from __future__ import annotations
@@ -22,6 +24,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 
@@ -30,6 +35,8 @@ import lsm_scenes  # noqa: E402
 
 INPUTS = ROOT / "tests" / "data" / "lsm"
 OUT = ROOT / "tests" / "data" / "reference" / "lsm"
+OUT_SAMPLE = ROOT / "tests" / "data" / "reference" / "lsm_sample"
+OUT_WINDOW = ROOT / "tests" / "data" / "reference" / "lsm_window"
 
 OPTION_SETS = {
     "default": {},
@@ -73,10 +80,117 @@ def synthetic_cases() -> dict[str, tuple]:
     return cases
 
 
+def sample_cases() -> dict[str, tuple]:
+    """name: (input raster, plots table, sample_lsm options)."""
+    import rasterio
+
+    with rasterio.open(INPUTS / "augusta.tif") as src:
+        b = src.bounds
+    rng = np.random.default_rng(3)
+    points = pd.DataFrame({"x": rng.uniform(b.left - 100, b.right + 100, 6), "y": rng.uniform(b.bottom - 100, b.top + 100, 6)})
+    points.loc[0] = [(b.left + b.right) / 2, (b.bottom + b.top) / 2]
+    polygons = pd.DataFrame(
+        {
+            "wkt": [
+                "POLYGON ((100 100, 700 120, 650 600, 150 500, 100 100))",
+                "POLYGON ((900 200, 1500 200, 1500 800, 900 800, 900 200), "
+                "(1100 400, 1300 400, 1300 600, 1100 600, 1100 400))",
+                "MULTIPOLYGON (((10 10, 200 10, 200 200, 10 200, 10 10)), "
+                "((1600 700, 1790 700, 1790 890, 1600 890, 1600 700)))",
+                "POLYGON ((1000 850, 1700 880, 1750 950, 1000 950, 1000 850))",
+            ],
+            "plot_id": [40, 10, 30, 20],
+        }
+    )
+    return {
+        "augusta_square": ("augusta.tif", points, {"shape": "square", "size": 450}),
+        "augusta_circle": ("augusta.tif", points, {"shape": "circle", "size": 600}),
+        "augusta_circle_all": ("augusta.tif", points, {"shape": "circle", "size": 1000, "all_classes": True, "directions": 4}),
+        "augusta_vector": ("augusta.tif", points.iloc[:3], {"shape": "circle", "size": 500, "vector": True, "level": "landscape"}),
+        "synthetic_polygons": ("synthetic_na.tif", polygons, {}),
+        "synthetic_polygons_all": ("synthetic_na.tif", polygons, {"all_classes": True}),
+        "synthetic_polygons_boundary": (
+            "synthetic_na.tif", polygons,
+            {"consider_boundary": True, "edge_depth": 2, "count_boundary": True, "directions": 4},
+        ),
+    }
+
+
+# window_lsm is slow: small rasters and a selection of landscape metrics
+# (gyrate_* fail in window_lsm, which does not pass cell_center).
+WINDOW_METRICS = [
+    "ta", "np", "pd", "lpi", "te", "ed", "shdi", "sidi", "msiei", "contag", "pr", "lsi", "ai", "area_mn", "enn_mn",
+    "core_mn", "mesh", "iji", "ent", "condent", "cohesion", "pafrac", "circle_mn", "pladj", "division", "split",
+    "ndca", "shape_mn", "rpr",
+]
+
+
+def window_cases() -> dict[str, tuple]:
+    """name: (data, cell size, window, window_lsm options)."""
+    circle = np.hypot(*np.meshgrid(np.arange(-2, 3), np.arange(-2, 3))) <= 2.2
+    return {
+        "square3": (lsm_scenes.clustered((14, 17), [1, 2, 3], seed=1, sigma=1.2, na_fraction=0.08), (10.0, 10.0),
+                    np.ones((3, 3), bool), {"classes_max": 5}),
+        "circle5_d4": (lsm_scenes.clustered((12, 15), [2, 5, 7, 9], seed=2, sigma=1.0), (1.0, 1.0), circle,
+                       {"directions": 4}),
+        "square5_boundary": (lsm_scenes.salt_and_pepper((11, 13), [1, 2], seed=3, na_fraction=0.1), (5.0, 5.0),
+                             np.ones((5, 5), bool), {"count_boundary": True, "edge_depth": 2, "consider_boundary": True}),
+    }
+
+
+def make_sample(rscript) -> None:
+    OUT_SAMPLE.mkdir(parents=True, exist_ok=True)
+    files = {}
+    for name, (tif, plots, options) in sample_cases().items():
+        df = lsm_reference.run_sample(rscript, INPUTS / tif, plots, **options)
+        target = OUT_SAMPLE / f"{name}.csv.gz"
+        df.to_csv(target, index=False, float_format="%.17g", compression={"method": "gzip", "mtime": 0})
+        plots.to_csv(OUT_SAMPLE / f"{name}__plots.csv", index=False, float_format="%.17g")
+        files[target.name] = {"input": tif, "plots": f"{name}__plots.csv", "options": options, "rows": len(df)}
+        print(f"{target.name}: {len(df)} values")
+    write_manifest(OUT_SAMPLE, rscript, files)
+
+
+def make_window(rscript) -> None:
+    OUT_WINDOW.mkdir(parents=True, exist_ok=True)
+    files = {}
+    for name, (data, res, window, options) in window_cases().items():
+        tif = OUT_WINDOW / f"{name}.tif"
+        lsm_reference.write_landscape(tif, data, res)
+        maps = lsm_reference.run_window(rscript, tif, window, ["lsm_l_" + m for m in WINDOW_METRICS], **options)
+        target = OUT_WINDOW / f"{name}.npz"
+        np.savez_compressed(target, window=window, **maps)
+        files[target.name] = {"input": tif.name, "options": options, "metrics": sorted(maps)}
+        print(f"{target.name}: {len(maps)} metrics")
+    write_manifest(OUT_WINDOW, rscript, files)
+
+
+def write_manifest(folder: Path, rscript, files: dict, extra: dict | None = None) -> None:
+    version = subprocess.run(
+        [str(rscript), "-e", "cat(as.character(packageVersion('landscapemetrics')))"],
+        capture_output=True, text=True, env=lsm_reference.r_environment(), check=True,
+    ).stdout.strip()
+    manifest = {"generated": dt.date.today().isoformat(), "landscapemetrics": version, **(extra or {}), "files": files}
+    (folder / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+
+
 def main() -> None:
+    parts = set(sys.argv[1:]) or {"lsm", "sample", "window"}
+    unknown = parts - {"lsm", "sample", "window"}
+    if unknown:
+        sys.exit(f"unknown part(s): {sorted(unknown)}")
     rscript = lsm_reference.find_rscript()
     if rscript is None:
         sys.exit("Rscript not found: set LANDSCHAFT_RSCRIPT")
+    if "lsm" in parts:
+        make_lsm(rscript)
+    if "sample" in parts:
+        make_sample(rscript)
+    if "window" in parts:
+        make_window(rscript)
+
+
+def make_lsm(rscript) -> None:
     INPUTS.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
 
@@ -87,11 +201,6 @@ def main() -> None:
     for name, (data, res) in synthetic_cases().items():
         lsm_reference.write_landscape(INPUTS / f"{name}.tif", data, res)
 
-    version = subprocess.run(
-        [str(rscript), "-e", "cat(as.character(packageVersion('landscapemetrics')))"],
-        capture_output=True, text=True, env=lsm_reference.r_environment(), check=True,
-    ).stdout.strip()
-
     files = {}
     for tif in sorted(INPUTS.glob("*.tif")):
         for opt_name, options in OPTION_SETS.items():
@@ -101,13 +210,7 @@ def main() -> None:
             files[target.name] = {"input": tif.name, "options": options, "rows": len(df)}
             print(f"{target.name}: {len(df)} values")
 
-    manifest = {
-        "generated": dt.date.today().isoformat(),
-        "landscapemetrics": version,
-        "option_sets": OPTION_SETS,
-        "files": files,
-    }
-    (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    write_manifest(OUT, rscript, files, {"option_sets": OPTION_SETS})
 
 
 if __name__ == "__main__":

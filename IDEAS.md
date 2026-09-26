@@ -70,7 +70,14 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 - Rótulos em 64 bits para rasters em memória com mais de 2^31 pixels (hoje esses
   casos ficam para o processamento por tiles).
 - Janela móvel com métricas de patch (reclassificar por janela é caro): reaproveitar
-  rótulos globais e só corrigir patches cortados pela borda da janela.
+  rótulos globais e só corrigir patches cortados pela borda da janela. Hoje cada janela
+  é uma paisagem pequena (1000×1000 com janela 21×21 e as 66 métricas: 9 s); o custo
+  restante é montar a paisagem (alocações) e ENN/core. Reaproveitar os buffers do
+  `Landscape` entre janelas cortaria boa parte.
+- `sample_metrics` com círculos e polígonos: a máscara usa `rasterio.features.rasterize`
+  (GDAL, idêntico ao terra), ~0,4 ms por plot só de overhead Python. Portar a
+  rasterização "all touched" do GDAL para C++ (com as mesmas regras de borda) deixaria
+  10 mil plots circulares tão rápidos quanto os quadrados (5,4 s → ~1,6 s).
 
 ## Observações para os testes
 
@@ -92,5 +99,5 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 2. Área core (`core`, `cai`, `ncore`, `tca`, `cpland`, `ndca`, `dcad`, `dcore_*`). **Feita.**
 3. ENN, círculo circunscrito. **Feita** (PROX continua nas ideias acima).
 4. Vários rasters em paralelo, zonas/buffers/amostragem (`sample_lsm`), janela
-   móvel (`window_lsm`).
+   móvel (`window_lsm`). **Feita.**
 5. Processamento fora da memória por tiles, juntando patches cortados nas costuras.

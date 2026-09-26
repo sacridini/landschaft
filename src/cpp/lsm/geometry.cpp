@@ -24,6 +24,7 @@ namespace {
 
 constexpr i64 kParallelThreshold = i64(1) << 16;
 constexpr double kPi = 3.14159265358979323846;
+constexpr i64 kSmallMap = 4096;  // cells up to which enn compares all pairs of edge cells
 
 // -- nearest neighbour --------------------------------------------------------
 
@@ -443,6 +444,43 @@ std::vector<double> Landscape::enn() {
         if (class_np[c] >= 2) group[c] = n_groups++;
     }
     if (n_groups == 0) return out;
+
+    // Small maps (moving windows, sample plots): every pair of edge cells.
+    if (nx * ny <= kSmallMap) {
+        const std::int32_t* cls = cls_.data();
+        std::vector<std::vector<std::array<std::int32_t, 3>>> edge(static_cast<std::size_t>(n_groups));
+        for (i64 y = 0; y < ny; ++y) {
+            for (i64 x = 0; x < nx; ++x) {
+                const i64 p = y * nx + x;
+                const std::int32_t c = cls[p];
+                if (c < 0 || group[c] < 0) continue;
+                if (x == 0 || x == nx - 1 || y == 0 || y == ny - 1 || cls[p - 1] != c || cls[p + 1] != c ||
+                    cls[p - nx] != c || cls[p + nx] != c) {
+                    edge[group[c]].push_back({static_cast<std::int32_t>(x), static_cast<std::int32_t>(y), pt.patch(p, y)});
+                }
+            }
+        }
+        std::vector<double> best(static_cast<std::size_t>(n), std::numeric_limits<double>::infinity());
+        for (const auto& cells : edge) {
+            for (std::size_t i = 0; i < cells.size(); ++i) {
+                const double xi = static_cast<double>(cells[i][0] + 1) * resx_;
+                const double yi = static_cast<double>(cells[i][1] + 1) * resy_;
+                for (std::size_t j = i + 1; j < cells.size(); ++j) {
+                    if (cells[j][2] == cells[i][2]) continue;
+                    // as landscapemetrics' compute_d2 (the sign does not matter)
+                    const double dx = static_cast<double>(cells[j][0] + 1) * resx_ - xi;
+                    const double dy = static_cast<double>(cells[j][1] + 1) * resy_ - yi;
+                    const double d2 = dx * dx + dy * dy;
+                    best[cells[i][2]] = std::min(best[cells[i][2]], d2);
+                    best[cells[j][2]] = std::min(best[cells[j][2]], d2);
+                }
+            }
+        }
+        for (i64 i = 0; i < n; ++i) {
+            if (group[pt.cls[i]] >= 0) out[i] = std::sqrt(best[i]);
+        }
+        return out;
+    }
 
     // Edge cells in Morton order. A strip (a power of two of rows) is a row
     // of square tiles: the cells are counted per tile, written straight into

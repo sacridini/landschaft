@@ -1,0 +1,119 @@
+{
+  "generated": "2026-09-26",
+  "landscapemetrics": "2.2",
+  "files": {
+    "square3.npz": {
+      "input": "square3.tif",
+      "options": {
+        "classes_max": 5
+      },
+      "metrics": [
+        "ai",
+        "area_mn",
+        "circle_mn",
+        "cohesion",
+        "condent",
+        "contag",
+        "core_mn",
+        "division",
+        "ed",
+        "enn_mn",
+        "ent",
+        "iji",
+        "lpi",
+        "lsi",
+        "mesh",
+        "msiei",
+        "ndca",
+        "np",
+        "pafrac",
+        "pd",
+        "pladj",
+        "pr",
+        "rpr",
+        "shape_mn",
+        "shdi",
+        "sidi",
+        "split",
+        "ta",
+        "te"
+      ]
+    },
+    "circle5_d4.npz": {
+      "input": "circle5_d4.tif",
+      "options": {
+        "directions": 4
+      },
+      "metrics": [
+        "ai",
+        "area_mn",
+        "circle_mn",
+        "cohesion",
+        "condent",
+        "contag",
+        "core_mn",
+        "division",
+        "ed",
+        "enn_mn",
+        "ent",
+        "iji",
+        "lpi",
+        "lsi",
+        "mesh",
+        "msiei",
+        "ndca",
+        "np",
+        "pafrac",
+        "pd",
+        "pladj",
+        "pr",
+        "rpr",
+        "shape_mn",
+        "shdi",
+        "sidi",
+        "split",
+        "ta",
+        "te"
+      ]
+    },
+    "square5_boundary.npz": {
+      "input": "square5_boundary.tif",
+      "options": {
+        "count_boundary": true,
+        "edge_depth": 2,
+        "consider_boundary": true
+      },
+      "metrics": [
+        "ai",
+        "area_mn",
+        "circle_mn",
+        "cohesion",
+        "condent",
+        "contag",
+        "core_mn",
+        "division",
+        "ed",
+        "enn_mn",
+        "ent",
+        "iji",
+        "lpi",
+        "lsi",
+        "mesh",
+        "msiei",
+        "ndca",
+        "np",
+        "pafrac",
+        "pd",
+        "pladj",
+        "pr",
+        "rpr",
+        "shape_mn",
+        "shdi",
+        "sidi",
+        "split",
+        "ta",
+        "te"
+      ]
+    }
+  }
+}

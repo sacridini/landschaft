@@ -137,4 +137,53 @@ private:
     std::map<std::string, std::vector<double>> patch_cache_; // node-based: references stay valid
 };
 
+// -- many metrics, many rasters (table.cpp) --------------------------------
+
+enum Level : std::int8_t { kPatch = 0, kClass = 1, kLandscape = 2 };
+
+struct MetricSpec {
+    Level level;
+    std::string name;
+};
+
+// Long table as landscapemetrics' calculate_lsm: one row per value, ordered
+// by item, then by metric (in the order requested), class and patch id.
+struct LongTable {
+    std::vector<std::int32_t> item;
+    std::vector<std::int16_t> metric;  // index of the MetricSpec
+    std::vector<std::int32_t> cls;     // class value
+    std::vector<std::uint8_t> cls_na;
+    std::vector<std::int32_t> id;      // patch id (1-based)
+    std::vector<std::uint8_t> id_na;
+    std::vector<double> value;
+
+    std::size_t size() const { return value.size(); }
+    void append(const LongTable& other);
+};
+
+// Rows of the metrics `specs` of one landscape, as item `item`. As in
+// landscapemetrics, an all-NA landscape gives one NA row per metric, and a
+// class-level enn_* whose values are all NA gives one row without class.
+void append_long_table(Landscape& landscape, const std::vector<MetricSpec>& specs, std::int32_t item,
+                       LongTable& out);
+
+// A raster given to the batch functions (not owned).
+struct RasterView {
+    const std::int32_t* values;
+    const std::uint8_t* na_mask;  // may be null
+    i64 nx, ny;
+    double resx, resy;
+};
+
+// Long table of several rasters (items 0..n-1): small rasters side by side
+// in parallel, large ones one after the other (each in parallel).
+LongTable batch_long_table(const std::vector<RasterView>& rasters, const Options& options,
+                           const std::vector<MetricSpec>& specs);
+
+// Landscape-level metrics in a moving window (window: wy rows x wx columns,
+// odd sizes, non-zero = part of the window) centred on every cell; cells
+// outside the raster are NA. Returns names.size() x ny x nx values.
+std::vector<double> window_metrics(const RasterView& raster, const std::uint8_t* window, i64 wx, i64 wy,
+                                   const std::vector<std::string>& names, const Options& options);
+
 }  // namespace lsm

@@ -24,6 +24,8 @@ from rasterio.transform import Affine
 
 ROOT = Path(__file__).resolve().parents[1]
 R_SCRIPT = ROOT / "tools" / "lsm_reference.R"
+R_SAMPLE_SCRIPT = ROOT / "tools" / "lsm_sample_reference.R"
+R_WINDOW_SCRIPT = ROOT / "tools" / "lsm_window_reference.R"
 NODATA = np.iinfo(np.int32).min
 DEFAULT_R_LIBS = Path.home() / "AppData" / "Local" / "R" / "landschaft-lsm-lib"
 
@@ -70,19 +72,51 @@ def run_tif(rscript: os.PathLike, tif: os.PathLike, **options) -> pd.DataFrame:
     """calculate_lsm on a raster file; returns level, class, id, metric, value."""
     with tempfile.TemporaryDirectory(prefix="lsm_ref_") as tmp:
         out = Path(tmp) / "out.csv"
-        cmd = [str(rscript), str(R_SCRIPT), str(tif), str(out)]
-        for key, value in options.items():
-            if isinstance(value, bool):
-                value = "TRUE" if value else "FALSE"
-            elif value is None:
-                value = "NULL"
-            elif isinstance(value, (list, tuple)):
-                value = ",".join(value)
-            cmd.append(f"{key}={value}")
-        proc = subprocess.run(cmd, capture_output=True, env=r_environment(), timeout=3600)
-        if proc.returncode != 0 or not out.exists():
-            raise RuntimeError(f"Rscript failed ({proc.returncode}): {proc.stderr.decode(errors='replace')}")
+        _run_r(rscript, R_SCRIPT, [tif, out], options)
         return read_reference(out)
+
+
+def _run_r(rscript: os.PathLike, script: Path, files: list, options: dict) -> None:
+    cmd = [str(rscript), str(script)] + [str(f) for f in files]
+    for key, value in options.items():
+        if isinstance(value, bool):
+            value = "TRUE" if value else "FALSE"
+        elif value is None:
+            value = "NULL"
+        elif isinstance(value, (list, tuple)):
+            value = ",".join(value)
+        cmd.append(f"{key}={value}")
+    proc = subprocess.run(cmd, capture_output=True, env=r_environment(), timeout=3600)
+    if proc.returncode != 0 or not Path(files[-1]).exists():
+        raise RuntimeError(f"Rscript failed ({proc.returncode}): {proc.stderr.decode(errors='replace')}")
+
+
+def run_sample(rscript: os.PathLike, tif: os.PathLike, plots: pd.DataFrame, **options) -> pd.DataFrame:
+    """sample_lsm on a raster file; `plots` has x, y (points) or wkt, and
+    optionally plot_id. Returns level, class, id, metric, value, plot_id,
+    percentage_inside."""
+    with tempfile.TemporaryDirectory(prefix="lsm_sample_") as tmp:
+        plots_csv = Path(tmp) / "plots.csv"
+        plots.to_csv(plots_csv, index=False, float_format="%.17g")
+        out = Path(tmp) / "out.csv"
+        _run_r(rscript, R_SAMPLE_SCRIPT, [tif, plots_csv, out], options)
+        df = read_reference(out)
+        df["percentage_inside"] = df["percentage_inside"].astype(float)
+        return df
+
+
+def run_window(rscript: os.PathLike, tif: os.PathLike, window: np.ndarray, what: list[str], **options) -> dict:
+    """window_lsm on a raster file; returns {metric: values (rows x columns)}."""
+    with rasterio.open(tif) as src:
+        shape = (src.height, src.width)
+    with tempfile.TemporaryDirectory(prefix="lsm_window_") as tmp:
+        window_csv = Path(tmp) / "window.csv"
+        w = np.where(np.asarray(window, dtype=bool), "1", "NA")
+        window_csv.write_text("\n".join(",".join(row) for row in w) + "\n")
+        out = Path(tmp) / "out.csv"
+        _run_r(rscript, R_WINDOW_SCRIPT, [tif, window_csv, out], {"what": list(what), **options})
+        df = pd.read_csv(out, na_values=["NA", ""], keep_default_na=False, float_precision="round_trip")
+    return {m: g.sort_values("cell")["value"].to_numpy(float).reshape(shape) for m, g in df.groupby("metric")}
 
 
 def run_array(rscript: os.PathLike, data: np.ndarray, res=(1.0, 1.0), **options) -> pd.DataFrame:

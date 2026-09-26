@@ -640,24 +640,26 @@ void bind_detail(py::module_& m) {
 
 // ---- landscape metrics ---------------------------------------------------
 
-std::unique_ptr<lsm::Landscape> make_landscape(const CArray<std::int32_t>& values, const py::object& na_mask,
-                                               double resx, double resy, int directions, bool count_boundary,
-                                               bool consider_boundary, int edge_depth, bool cell_center,
-                                               const py::object& classes_max, int neighbourhood, bool ordered,
-                                               const std::string& base) {
-    if (values.ndim() != 2) throw py::value_error("expected a 2-D array");
+lsm::Options make_options(const py::dict& o) {
     lsm::Options opt;
-    opt.directions = directions;
-    opt.count_boundary = count_boundary;
-    opt.consider_boundary = consider_boundary;
-    opt.edge_depth = edge_depth;
-    opt.cell_center = cell_center;
-    opt.classes_max = classes_max.is_none() ? lsm::kNaN : classes_max.cast<double>();
-    opt.neighbourhood = neighbourhood;
-    opt.ordered = ordered;
-    opt.base = base;
+    opt.directions = o["directions"].cast<int>();
+    opt.count_boundary = o["count_boundary"].cast<bool>();
+    opt.consider_boundary = o["consider_boundary"].cast<bool>();
+    opt.edge_depth = o["edge_depth"].cast<int>();
+    opt.cell_center = o["cell_center"].cast<bool>();
+    opt.classes_max = o["classes_max"].is_none() ? lsm::kNaN : o["classes_max"].cast<double>();
+    opt.neighbourhood = o["neighbourhood"].cast<int>();
+    opt.ordered = o["ordered"].cast<bool>();
+    opt.base = o["base"].cast<std::string>();
+    return opt;
+}
+
+// A raster and its NA mask (None or uint8 of the same shape); the arrays
+// must outlive the view.
+lsm::RasterView raster_view(const CArray<std::int32_t>& values, const py::object& na_mask,
+                            CArray<std::uint8_t>& mask_arr, double resx, double resy) {
+    if (values.ndim() != 2) throw py::value_error("expected a 2-D array");
     const std::uint8_t* mask = nullptr;
-    CArray<std::uint8_t> mask_arr;
     if (!na_mask.is_none()) {
         mask_arr = na_mask.cast<CArray<std::uint8_t>>();
         if (mask_arr.ndim() != 2 || mask_arr.shape(0) != values.shape(0) || mask_arr.shape(1) != values.shape(1)) {
@@ -665,11 +667,45 @@ std::unique_ptr<lsm::Landscape> make_landscape(const CArray<std::int32_t>& value
         }
         mask = mask_arr.data();
     }
+    return lsm::RasterView{values.data(), mask, values.shape(1), values.shape(0), resx, resy};
+}
+
+std::unique_ptr<lsm::Landscape> make_landscape(const CArray<std::int32_t>& values, const py::object& na_mask,
+                                               double resx, double resy, const py::dict& options) {
+    CArray<std::uint8_t> mask_arr;
+    const lsm::RasterView r = raster_view(values, na_mask, mask_arr, resx, resy);
     try {
-        return std::make_unique<lsm::Landscape>(values.data(), mask, values.shape(1), values.shape(0), resx, resy, opt);
+        return std::make_unique<lsm::Landscape>(r.values, r.na_mask, r.nx, r.ny, resx, resy, make_options(options));
     } catch (const std::invalid_argument& e) {
         throw py::value_error(e.what());
     }
+}
+
+std::vector<lsm::MetricSpec> metric_specs(const std::vector<int>& levels, const std::vector<std::string>& names) {
+    if (levels.size() != names.size()) throw py::value_error("levels and names differ in length");
+    std::vector<lsm::MetricSpec> specs;
+    for (std::size_t i = 0; i < levels.size(); ++i) {
+        if (levels[i] < 0 || levels[i] > 2) throw py::value_error("level must be 0, 1 or 2");
+        specs.push_back({static_cast<lsm::Level>(levels[i]), names[i]});
+    }
+    return specs;
+}
+
+template <class T>
+py::array_t<T> vector_array(const std::vector<T>& v) {
+    return py::array_t<T>(static_cast<py::ssize_t>(v.size()), v.data());
+}
+
+py::dict long_table_dict(const lsm::LongTable& t) {
+    py::dict d;
+    d["item"] = vector_array(t.item);
+    d["metric"] = vector_array(t.metric);
+    d["class"] = vector_array(t.cls);
+    d["class_na"] = vector_array(t.cls_na).attr("astype")("bool");
+    d["id"] = vector_array(t.id);
+    d["id_na"] = vector_array(t.id_na).attr("astype")("bool");
+    d["value"] = vector_array(t.value);
+    return d;
 }
 
 template <class F>
@@ -684,9 +720,7 @@ auto lsm_call(F&& f) {
 void bind_landscape(py::module_& m) {
     py::class_<lsm::Landscape>(m, "LsmLandscape")
         .def(py::init(&make_landscape), py::arg("values"), py::arg("na_mask"), py::arg("resx"), py::arg("resy"),
-             py::arg("directions") = 8, py::arg("count_boundary") = false, py::arg("consider_boundary") = false,
-             py::arg("edge_depth") = 1, py::arg("cell_center") = false, py::arg("classes_max") = py::none(),
-             py::arg("neighbourhood") = 4, py::arg("ordered") = true, py::arg("base") = "log2")
+             py::arg("options"))
         .def_property_readonly("class_values", [](const lsm::Landscape& l) {
             return py::array_t<std::int32_t>(l.class_values().size(), l.class_values().data());
         })
@@ -714,7 +748,56 @@ void bind_landscape(py::module_& m) {
         })
         .def("landscape_metric", [](lsm::Landscape& l, const std::string& name) {
             return lsm_call([&] { return l.landscape_metric(name); });
+        })
+        .def("long_table", [](lsm::Landscape& l, const std::vector<int>& levels, const std::vector<std::string>& names) {
+            const std::vector<lsm::MetricSpec> specs = metric_specs(levels, names);
+            const lsm::LongTable t = lsm_call([&] {
+                lsm::LongTable out;
+                lsm::append_long_table(l, specs, 0, out);
+                return out;
+            });
+            return long_table_dict(t);
         });
+
+    // rasters: list of (values, na_mask or None, resx, resy)
+    m.def(
+        "lsm_batch",
+        [](const py::list& rasters, const py::dict& options, const std::vector<int>& levels,
+           const std::vector<std::string>& names) {
+            const std::vector<lsm::MetricSpec> specs = metric_specs(levels, names);
+            const lsm::Options opt = make_options(options);
+            std::vector<CArray<std::int32_t>> values;
+            std::vector<CArray<std::uint8_t>> masks(rasters.size());
+            std::vector<lsm::RasterView> views;
+            values.reserve(rasters.size());
+            for (std::size_t i = 0; i < rasters.size(); ++i) {
+                const py::tuple t = rasters[i].cast<py::tuple>();
+                values.push_back(t[0].cast<CArray<std::int32_t>>());
+                views.push_back(raster_view(values.back(), t[1], masks[i], t[2].cast<double>(), t[3].cast<double>()));
+            }
+            const lsm::LongTable t = lsm_call([&] { return lsm::batch_long_table(views, opt, specs); });
+            return long_table_dict(t);
+        },
+        py::arg("rasters"), py::arg("options"), py::arg("levels"), py::arg("names"));
+
+    m.def(
+        "lsm_window",
+        [](const CArray<std::int32_t>& values, const py::object& na_mask, double resx, double resy,
+           const CArray<std::uint8_t>& window, const std::vector<std::string>& names, const py::dict& options) {
+            if (window.ndim() != 2) throw py::value_error("the window must be a 2-D array");
+            CArray<std::uint8_t> mask_arr;
+            const lsm::RasterView r = raster_view(values, na_mask, mask_arr, resx, resy);
+            const lsm::Options opt = make_options(options);
+            const std::vector<double> out = lsm_call([&] {
+                return lsm::window_metrics(r, window.data(), window.shape(1), window.shape(0), names, opt);
+            });
+            py::array_t<double> a({static_cast<py::ssize_t>(names.size()), static_cast<py::ssize_t>(r.ny),
+                                   static_cast<py::ssize_t>(r.nx)});
+            std::copy(out.begin(), out.end(), a.mutable_data());
+            return a;
+        },
+        py::arg("values"), py::arg("na_mask"), py::arg("resx"), py::arg("resy"), py::arg("window"), py::arg("names"),
+        py::arg("options"));
 }
 
 }  // namespace

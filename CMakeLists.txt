@@ -36,6 +36,7 @@ add_library(lsmcore STATIC
     src/cpp/lsm/geometry.cpp
     src/cpp/lsm/landscape.cpp
     src/cpp/lsm/metrics.cpp
+    src/cpp/lsm/table.cpp
 )
 target_include_directories(lsmcore PUBLIC src/cpp)
 set_target_properties(lsmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
