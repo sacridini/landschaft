@@ -50,7 +50,8 @@ def _explode(geom) -> list:
 
 
 def protconn_nodes(protected_areas, region, *, transboundary: float | None = None,
-                   transboundary_type: str = "nodes", bound: bool = False, area_unit: str = "m2") -> ProtConnNodes:
+                   transboundary_type: str = "nodes", bound: bool = False, area_unit: str = "m2",
+                   preselect: bool = True) -> ProtConnNodes:
     """Nodes of ProtConn in a region, as Makurhini's ``Protconn_nodes`` builds them.
 
     The protected areas that overlap the region are cut to it, dissolved and
@@ -61,6 +62,9 @@ def protconn_nodes(protected_areas, region, *, transboundary: float | None = Non
     that zone, become transboundary nodes (attribute 0: stepping stones);
     ``bound`` adds the parts of the region itself (ProtConn[Bound]), as
     Makurhini does only when there are transboundary nodes.
+
+    ``preselect=False`` uses all the given areas as candidates (the grid's
+    selection, made once for its whole region).
 
     Makurhini simplifies the polygons of the zones with mapshaper (5 % of the
     vertices) before buffering them; landschaft buffers the exact polygons
@@ -78,9 +82,13 @@ def protconn_nodes(protected_areas, region, *, transboundary: float | None = Non
     la = float(r_sum(gdal_areas(region_geoms))) * factor
     pas = np.asarray(protected_areas.geometry.values if hasattr(protected_areas, "geometry") else protected_areas)
     pas = shapely.make_valid(pas)
-    # input_grid: the protected areas within `transboundary` of the region.
-    zone = region_geom if not transboundary else shapely.buffer(region_geom, transboundary, quad_segs=QUAD_SEGS)
-    y = pas[shapely.intersects(pas, zone)]
+    # input_grid: the protected areas within `transboundary` of the region
+    # (MK_Connect_grid selects them once for the whole region: preselect=False).
+    if preselect:
+        zone = region_geom if not transboundary else shapely.buffer(region_geom, transboundary, quad_segs=QUAD_SEGS)
+        y = pas[shapely.intersects(pas, zone)]
+    else:
+        y = pas
     inside = shapely.intersects(y, region_geom)
     y1, y2 = y[inside], y[~inside]
     empty = gpd.GeoDataFrame({"type": [], "attribute": []}, geometry=[], crs=crs)
@@ -134,8 +142,9 @@ def _pair_matrix(n: int, distances) -> np.ndarray:
     return m
 
 
-def _pstar(dist: np.ndarray, keep: np.ndarray, distance: float, probability: float | None) -> np.ndarray:
-    """Most probable paths between the nodes where `keep` (MK: exp(d log(p) / t), no cut)."""
+def _pstar(dist: np.ndarray, keep: np.ndarray, distance: float, probability: float | None,
+           pij_min: float | None = None) -> np.ndarray:
+    """Most probable paths between the nodes where `keep` (MK: exp(d log(p) / t), cut below pij_min)."""
     idx = np.flatnonzero(keep)
     n = len(idx)
     if n == 0:
@@ -146,13 +155,17 @@ def _pstar(dist: np.ndarray, keep: np.ndarray, distance: float, probability: flo
     if probability is None:
         # Makurhini: exp(-d / t), a probability of exp(-1) at the distance.
         probability = float(np.exp(-1.0))
+    cut = 0.0 if pij_min is None else float(pij_min)
+    if np.isinf(cut):  # every link cut (Makurhini's grid default): each node alone
+        return np.eye(n)
     D = _core.conn_all_pairs(i.astype(np.int32), j.astype(np.int32), np.ascontiguousarray(value), n, "distance",
-                             float(distance), float(probability), 0.0, np.inf, False, False, 0)
+                             float(distance), float(probability), cut, np.inf, False, False, 0)
     return np.exp(-D)
 
 
 def protconn_indicators(nodes, distances, *, distance: float, la: float, pieces=None,
-                        probability: float | None = 0.5, transboundary_weight: float = 1.0) -> dict:
+                        probability: float | None = 0.5, transboundary_weight: float = 1.0,
+                        pij_min: float | None = None) -> dict:
     """ProtConn and its fractions from prepared nodes and distances (Makurhini's ``get_protconn_grid``).
 
     Parameters
@@ -173,6 +186,8 @@ def protconn_indicators(nodes, distances, *, distance: float, la: float, pieces=
     transboundary_weight
         a_i a_j of the pairs with a transboundary (or region) node: Makurhini
         uses 1; 0 counts them as stepping stones only (Saura et al. 2017).
+    pij_min
+        Links with a lower probability are cut (None: none).
     """
     types = np.asarray(nodes["type"])
     a = np.asarray(nodes["attribute"], dtype=np.float64)
@@ -192,7 +207,7 @@ def protconn_indicators(nodes, distances, *, distance: float, la: float, pieces=
     w = float(transboundary_weight)
 
     def numerator(keep: np.ndarray, weighted: np.ndarray) -> float:
-        p = _pstar(dist, keep, distance, probability)
+        p = _pstar(dist, keep, distance, probability, pij_min)
         b = a[keep]
         aiaj = np.outer(b, b)
         special = weighted[keep]
@@ -278,7 +293,8 @@ def _node_distances(prep: ProtConnNodes, distance_type: str, resistance, cost_kw
 def protconn(protected_areas, region, *, distance, probability: float | None = 0.5,
              transboundary: float | None = None, transboundary_type: str = "nodes", bound: bool = False,
              area_unit: str = "m2", distance_type: str = "edge", resistance=None, delta: bool = False,
-             transboundary_weight: float = 1.0, cost_directions: int = 8, cost_function: str = "makurhini"):
+             transboundary_weight: float = 1.0, cost_directions: int = 8, cost_function: str = "makurhini",
+             preselect: bool = True, pij_min: float | None = None):
     """Protected Connected land (ProtConn) of a region, as Makurhini's ``MK_ProtConn``.
 
     Parameters
@@ -320,19 +336,23 @@ def protconn(protected_areas, region, *, distance, probability: float | None = 0
         ``_Within``, ``_Contig`` and their ``_land`` shares (in % of the region).
     """
     prep = protconn_nodes(protected_areas, region, transboundary=transboundary,
-                          transboundary_type=transboundary_type, bound=bound, area_unit=area_unit)
+                          transboundary_type=transboundary_type, bound=bound, area_unit=area_unit,
+                          preselect=preselect)
     cost_kwargs = {"cost_directions": cost_directions, "cost_function": cost_function}
     dist = _node_distances(prep, distance_type, resistance, cost_kwargs) if len(prep.nodes) else np.zeros((0, 0))
-    single = int((prep.nodes["type"] == "Non-Transboundary").sum()) == 1 if len(prep.nodes) else False
+    non = prep.nodes["type"] == "Non-Transboundary" if len(prep.nodes) else np.zeros(0, bool)
+    # Makurhini: one dissolved node, or one protected area (whatever its parts),
+    # is a single node of area min(area, LA).
+    single = int(non.sum()) == 1 or len(prep.clipped) == 1
     rows = []
     for d in _as_list(distance):
         row = {"distance": d}
         if single:
-            row.update(_single_node(float(prep.nodes.loc[prep.nodes["type"] == "Non-Transboundary", "attribute"]
-                                          .iloc[0]), prep.la))
+            row.update(_single_node(min(r_sum(prep.nodes.loc[non, "attribute"].to_numpy()), prep.la), prep.la))
         else:
             row.update(protconn_indicators(prep.nodes, dist, distance=d, la=prep.la, pieces=prep.pieces,
-                                           probability=probability, transboundary_weight=transboundary_weight))
+                                           probability=probability, transboundary_weight=transboundary_weight,
+                                           pij_min=pij_min))
         rows.append(row)
     table = pd.DataFrame(rows)
     if not delta:
@@ -390,3 +410,143 @@ def protconn_regions(protected_areas, regions, *, id: str | None = None, **kwarg
         table.insert(0, "region", ids[k])
         frames.append(table)
     return pd.concat(frames, ignore_index=True)
+
+
+def _rasterize(geoms, transform, shape, values=None) -> np.ndarray:
+    """terra::rasterize of polygons: the cells whose centre is inside (0 outside)."""
+    from rasterio import features
+
+    if values is None:
+        values = [1] * len(geoms)
+    shapes = [(g, int(v)) for g, v in zip(geoms, values) if g is not None and not g.is_empty]
+    if not shapes:
+        return np.zeros(shape, dtype=np.int32)
+    return features.rasterize(shapes, out_shape=shape, transform=transform, fill=0, all_touched=False,
+                              dtype="int32")
+
+
+def _cell_polygons(mask: np.ndarray, transform):
+    """The cells of a mask as polygons (terra::as.polygons, dissolved)."""
+    import shapely
+    from rasterio import features
+
+    polys = [shapely.geometry.shape(g) for g, v in features.shapes(mask.astype(np.uint8), mask=mask,
+                                                                    transform=transform) if v == 1]
+    return shapely.union_all(np.array(polys, dtype=object)) if polys else None
+
+
+def protconn_raster(protected_areas, region, *, distance, probability: float | None = 0.5,
+                    transboundary: float | None = None, transboundary_type: str = "nodes", bound: bool = False,
+                    area_unit: str = "m2", pij_min: float | None = None, nodata=None, band=None) -> pd.DataFrame:
+    """ProtConn of a region from a raster of protected areas, as Makurhini's ``MK_ProtConn_raster``.
+
+    Parameters
+    ----------
+    protected_areas
+        Raster of protected-area ids (NA / ``nodata`` elsewhere).
+    region
+        Polygons of the region (rasterized on the protected areas' grid,
+        cells whose centre is inside; with ``bound`` each part is a region
+        node), or a raster of it (its 4-connected patches).
+    distance, probability, transboundary, transboundary_type, bound,
+    area_unit, pij_min
+        As in :func:`protconn`.
+
+    Every protected-area id inside the region is a node (not dissolved), its
+    attribute the area of its cells there; transboundary nodes are the ids
+    outside the region within ``transboundary`` of the region's protected
+    cells (``"nodes"``) or of the region (``"region"``), when there are at
+    least two of them (as Makurhini). Distances run between the nodes'
+    centroids (R's means of the cell centres). Makurhini's quirks are kept:
+    ProtConn[Within] sums every node's attribute (transboundary and region
+    ones included). Makurhini pairs the attributes (by id) with centroids in
+    the order ids first appear in the raster; landschaft keeps each id with
+    its own centroid (the same when ids appear in increasing order).
+    """
+    import geopandas as gpd
+    import shapely
+
+    from .nodes import read_patches
+
+    if transboundary_type not in ("nodes", "region"):
+        raise ValueError("transboundary_type must be 'nodes' or 'region'")
+    patches = read_patches(protected_areas, nodata=nodata, band=band)
+    values, mask = patches.values, patches.mask
+    ny, nx = values.shape
+    xmin, xmax, ymin, ymax = patches.extent
+    from rasterio.transform import Affine
+
+    transform = Affine((xmax - xmin) / nx, 0.0, xmin, 0.0, -(ymax - ymin) / ny, ymax)
+    res_x = (xmax - xmin) / nx
+    factor = AREA_UNITS[area_unit]
+    cell_area = (res_x**2) * factor
+    if isinstance(region, (gpd.GeoDataFrame, gpd.GeoSeries)) or hasattr(region, "geometry"):
+        geoms = np.asarray(region.geometry.values)
+        if bound:
+            parts = [p for g in geoms for p in _explode(g)]
+            region_ids = _rasterize(parts, transform, (ny, nx), range(1, len(parts) + 1))
+        else:
+            region_ids = _rasterize(list(geoms), transform, (ny, nx))
+    else:
+        from scipy import ndimage
+
+        rp = read_patches(region, nodata=nodata)
+        inside = ~rp.mask
+        region_ids = ndimage.label(inside)[0].astype(np.int32)  # terra::patches, 4 directions
+    in_region = region_ids > 0
+    pa = ~mask
+
+    def nodes_of(cells: np.ndarray, kind: str):
+        v = np.where(cells, values, 0)
+        m = (~cells).view(np.uint8)
+        r = _core.conn_raster_nodes(np.ascontiguousarray(v, dtype=np.int32), np.ascontiguousarray(m), xmin, xmax,
+                                    ymin, ymax, True, False, 0)
+        return pd.DataFrame({"type": kind, "attribute": r["cells"] * cell_area, "x": r["cx"], "y": r["cy"]})
+
+    non = nodes_of(pa & in_region, "Non-Transboundary")
+    la = r_sum(np.bincount(region_ids[in_region])[1:] * cell_area)
+    rows = []
+    if len(non) == 0:
+        for d in _as_list(distance):
+            row = dict.fromkeys(INDICATORS, np.nan)
+            row.update(distance=d, LA=la, Protected_surface=0.0, Prot=0.0, Unprotected=100.0)
+            rows.append(row)
+        return pd.DataFrame(rows)[["distance"] + INDICATORS]
+    if len(non) == 1:
+        for d in _as_list(distance):
+            row = {"distance": d}
+            row.update(_single_node(min(float(non["attribute"].iloc[0]), la), la))
+            rows.append(row)
+        return pd.DataFrame(rows)
+    frames = [non]
+    if transboundary:
+        reference = (pa & in_region) if transboundary_type == "nodes" else in_region
+        poly = _cell_polygons(reference, transform)
+        zone = _rasterize([shapely.buffer(shapely.buffer(poly, 0), transboundary, quad_segs=QUAD_SEGS)], transform,
+                          (ny, nx)) > 0
+        trans = nodes_of(pa & ~in_region & zone, "Transboundary")
+        if len(trans) > 1:  # Makurhini keeps them only when there are two or more
+            frames.append(trans)
+            if bound:
+                reg = pd.DataFrame({"type": "Region",
+                                    "attribute": np.bincount(region_ids[in_region])[1:] * cell_area})
+                r = _core.conn_raster_nodes(np.ascontiguousarray(region_ids), np.ascontiguousarray((~in_region).view(
+                    np.uint8)), xmin, xmax, ymin, ymax, True, False, 0)
+                reg["x"], reg["y"] = r["cx"], r["cy"]
+                frames.append(reg)
+    nodes = pd.concat(frames, ignore_index=True)
+    n = len(nodes)
+    e = _core.conn_point_distances(nodes["x"].to_numpy(), nodes["y"].to_numpy(), np.inf, 0)
+    m = np.zeros((n, n))
+    m[e["i"], e["j"]] = m[e["j"], e["i"]] = e["distance"]
+    types = nodes["type"].to_numpy()
+    region_nodes = np.flatnonzero(types == "Region")
+    if len(region_nodes) == 1:
+        other = np.flatnonzero(types != "Non-Transboundary")
+        m[region_nodes[0], other] = m[other, region_nodes[0]] = 0.0
+    for d in _as_list(distance):
+        row = {"distance": d}
+        row.update(protconn_indicators(nodes, m, distance=d, la=la, pieces=nodes["attribute"].to_numpy(),
+                                       probability=probability, pij_min=pij_min))
+        rows.append(row)
+    return pd.DataFrame(rows)

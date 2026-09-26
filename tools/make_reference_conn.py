@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links] [deca] [protconn]
+    python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links] [deca] [protconn] [grids]
 
 ``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
 in ``tests/lsm_reference.py``; the default R library is used). It exports
@@ -32,6 +32,12 @@ raster, some nodes removed at each time (``deca_steps.csv`` lists them;
 (``protconn_areas.gpkg``, ``protconn_regions.gpkg``: densified boxes, which
 mapshaper's simplification leaves as they are) with and without transboundary
 zones and ProtConn[Bound], with its inner steps (``makurhini_protconn.csv.gz``).
+
+``grids`` (after ``protconn`` and ``deca``) stores Makurhini's ``make_grid``
+cells, ``MK_Connect_grid`` (ProtConn with its default, which cuts every link,
+and with ``pij_min = 0``, and PC), ``MK_ProtConn_raster`` on a raster of the
+protected areas (``protconn_areas.tif``, ids numbered in scan order) and
+``MK_dECA_grid`` in ``tests/data/reference/conn/grid``.
 
 ``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
 Sensinode 2.2 sources (the last five nodes of each scene are Conefor's nodes
@@ -371,6 +377,48 @@ def run_protconn() -> None:
         print(f"protconn: {len(out)} values")
 
 
+def protconn_raster_file() -> None:
+    """The protected areas rasterized at 100 m, ids renumbered in the order they appear."""
+    import geopandas as gpd
+    import rasterio
+    from rasterio import features
+    from rasterio.transform import from_origin
+
+    pas = gpd.read_file(OUT / "protconn_areas.gpkg")
+    transform = from_origin(-8000.0, 21000.0, 100.0, 100.0)
+    lab = features.rasterize([(g, int(i)) for g, i in zip(pas.geometry, pas["id"])], out_shape=(240, 360),
+                             transform=transform, fill=0, dtype="int32")
+    flat = lab.ravel()
+    _, first = np.unique(flat[flat > 0], return_index=True)
+    order = np.unique(flat[flat > 0])[np.argsort(first)]
+    remap = np.zeros(lab.max() + 1, dtype=np.int32)
+    remap[order] = np.arange(1, len(order) + 1)
+    with rasterio.open(OUT / "protconn_areas.tif", "w", driver="GTiff", width=360, height=240, count=1,
+                       dtype="int32", crs=pas.crs, transform=transform, nodata=0, compress="deflate") as dst:
+        dst.write(remap[lab], 1)
+
+
+def run_grids() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    out = OUT / "grid"
+    out.mkdir(parents=True, exist_ok=True)
+    protconn_raster_file()
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        subprocess.run([str(rscript), str(R_SCRIPT), "grid", str(OUT / "protconn_areas.gpkg"),
+                        str(OUT / "protconn_regions.gpkg"), str(tmp)], check=True)
+        subprocess.run([str(rscript), str(R_SCRIPT), "protconn_raster", str(OUT / "protconn_areas.tif"),
+                        str(OUT / "protconn_regions.gpkg"), str(tmp / "protconn_raster.csv")], check=True)
+        subprocess.run([str(rscript), str(R_SCRIPT), "deca_grid", str(OUT / "polygons.gpkg"),
+                        str(OUT / "deca_steps.csv"), str(tmp / "deca_grid.csv")], check=True)
+        for f in sorted(tmp.glob("*.csv")):
+            table = pd.read_csv(f, keep_default_na=False, dtype=str)
+            table.to_csv(out / f"{f.stem}.csv.gz", index=False)
+            print(f.stem, len(table))
+
+
 def run_makurhini() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -480,7 +528,7 @@ def run_conefor() -> None:
 
 
 if __name__ == "__main__":
-    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn"]
+    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn", "grids"]
     if "makurhini" in parts:
         run_makurhini()
     if "conefor" in parts:
@@ -493,3 +541,5 @@ if __name__ == "__main__":
         run_deca()
     if "protconn" in parts:
         run_protconn()
+    if "grids" in parts:
+        run_grids()

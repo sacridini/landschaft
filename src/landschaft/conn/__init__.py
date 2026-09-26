@@ -3,8 +3,11 @@
 
 from .change import eca_change
 from .graph import CONVENTIONS, METRICS, HabitatGraph
+from .grid import connectivity_grid, eca_change_grid, make_grid
 from .nodes import AREA_UNITS, DISTANCE_UNITS, distance_table, node_table
-from .protconn import ProtConnNodes, protconn, protconn_indicators, protconn_nodes, protconn_regions
+from .protconn import (ProtConnNodes, protconn, protconn_indicators, protconn_nodes, protconn_raster,
+                       protconn_regions)
 
-__all__ = ["AREA_UNITS", "CONVENTIONS", "DISTANCE_UNITS", "METRICS", "HabitatGraph", "ProtConnNodes", "distance_table",
-           "eca_change", "node_table", "protconn", "protconn_indicators", "protconn_nodes", "protconn_regions"]
+__all__ = ["AREA_UNITS", "CONVENTIONS", "DISTANCE_UNITS", "METRICS", "HabitatGraph", "ProtConnNodes",
+           "connectivity_grid", "distance_table", "eca_change", "eca_change_grid", "make_grid", "node_table", "protconn",
+           "protconn_indicators", "protconn_nodes", "protconn_raster", "protconn_regions"]

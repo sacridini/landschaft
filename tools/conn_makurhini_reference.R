@@ -219,6 +219,72 @@ if (args[1] == "protconn") {
     quit(save = "no")
 }
 
+if (args[1] == "protconn_raster") {
+    # MK_ProtConn_raster on a raster of protected-area ids (ids in scan order). It
+    # needs two or more transboundary nodes (it numbers the centroids only then).
+    pas <- raster::raster(terra::rast(args[2]))
+    regions <- sf::st_read(args[3], quiet = TRUE)
+    region <- regions[regions$id == 1, ]
+    out <- list()
+    for (case in c("nodes", "region", "bound")) {
+        res <- MK_ProtConn_raster(nodes = pas, region = region, area_unit = "ha", distance = list(type = "edge"),
+                                  distance_thresholds = c(2000, 6000), probability = 0.5,
+                                  transboundary = if (case == "bound") 6000 else 4000,
+                                  transboundary_type = if (case == "region") "region" else "nodes",
+                                  protconn_bound = case == "bound", intern = FALSE)
+        for (i in seq_along(res)) {
+            tab <- as.data.frame(res[[i]])
+            out[[length(out) + 1]] <- data.frame(case = case, distance = c(2000, 6000)[i], name = tab[[3]],
+                                                 value = fmt(as.numeric(tab[[4]])))
+        }
+    }
+    write.csv(do.call(rbind, out), args[4], row.names = FALSE)
+    quit(save = "no")
+}
+
+if (args[1] == "deca_grid") {
+    # MK_dECA_grid on the three times of the polygons (deca_steps.csv), over their bounding box.
+    polygons <- sf::st_read(args[2], quiet = TRUE)
+    steps <- read.csv(args[3])
+    times <- sort(unique(steps$time))
+    vec <- lapply(times, function(t) polygons[polygons$id %in% steps$id[steps$kind == "vector" & steps$time == t], ])
+    region <- sf::st_sf(geometry = sf::st_as_sfc(sf::st_bbox(polygons)))
+    res <- MK_dECA_grid(nodes = vec, region = region, grid = list(hexagonal = TRUE, cellsize = 6e7),
+                        area_unit = "km2", distance = list(type = "centroid"), metric = "PC",
+                        distance_threshold = 3000, probability = 0.5, intern = FALSE)
+    out <- do.call(rbind, lapply(res, function(x) {
+        tab <- sf::st_drop_geometry(x)
+        for (col in names(tab)) if (is.numeric(tab[[col]])) tab[[col]] <- fmt(tab[[col]])
+        tab
+    }))
+    write.csv(out, args[4], row.names = FALSE)
+    quit(save = "no")
+}
+
+if (args[1] == "grid") {
+    # make_grid and MK_Connect_grid (ProtConn and PC) on the ProtConn polygons.
+    pas <- sf::st_read(args[2], quiet = TRUE)
+    region <- sf::st_read(args[3], quiet = TRUE)
+    region <- region[region$id == 1, ]
+    out <- args[4]
+    for (hex in c(TRUE, FALSE)) {
+        g <- Makurhini::make_grid(region, hexagonal = hex, cell_area = 2.5e7)
+        write.csv(data.frame(OBJECTID = g$OBJECTID, wkt = sf::st_as_text(sf::st_geometry(g), digits = 17)),
+                  file.path(out, paste0("grid_", if (hex) "hex" else "square", ".csv")), row.names = FALSE)
+    }
+    for (case in c("protconn", "protconn_pij0", "pc")) {
+        res <- MK_Connect_grid(nodes = pas, region = region, area_unit = "ha",
+                               grid = list(hexagonal = TRUE, cellsize = 2.5e7), protconn = case != "pc",
+                               distance_threshold = 3000, probability = 0.5, transboundary = 2000,
+                               pij_min = if (case == "protconn_pij0") 0 else NULL,
+                               distance = list(type = "edge"), intern = FALSE)
+        tab <- sf::st_drop_geometry(res)
+        for (col in names(tab)) if (is.numeric(tab[[col]])) tab[[col]] <- fmt(tab[[col]])
+        write.csv(tab, file.path(out, paste0("connect_grid_", case, ".csv")), row.names = FALSE, quote = FALSE)
+    }
+    quit(save = "no")
+}
+
 if (args[1] == "export") {
     data("habitat_nodes", package = "Makurhini")
     d <- distancefile(habitat_nodes, id = "Id", type = "centroid")

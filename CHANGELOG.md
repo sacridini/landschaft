@@ -6,6 +6,16 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 7: raster ProtConn and grids.
+  `ls.conn.protconn_raster` (Makurhini's `MK_ProtConn_raster`), `ls.conn.make_grid`
+  (hexagons of sf's `st_make_grid` and raster squares, the same coordinates),
+  `ls.conn.connectivity_grid` (`MK_Connect_grid`: ProtConn, or PC and ECA, of every cell;
+  `pij_min=np.inf` reproduces Makurhini's default, which cuts every link) and
+  `ls.conn.eca_change_grid` (`MK_dECA_grid`). `protconn` and `protconn_nodes` gain
+  `pij_min` and `preselect`; one protected area touching the region is a single node, as
+  in Makurhini. Matched with Makurhini after its rounding.
+
 ## [0.35.0] - 2026-09-26
 
 ### Added

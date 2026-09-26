@@ -1136,6 +1136,12 @@ ls.conn.eca_change([g_2000, g_2010, g_2020], "PC", distance=10_000, landscape_ar
 ls.conn.protconn(protected_areas, region, distance=[10_000, 50_000], transboundary=50_000,
                  bound=True, area_unit="ha", delta=True)
 ls.conn.protconn_regions(protected_areas, ecoregions, id="eco_id", distance=10_000)
+ls.conn.protconn_raster("protected_ids.tif", region, distance=10_000, transboundary=20_000)
+
+# grids (Makurhini's make_grid, MK_Connect_grid, MK_dECA_grid)
+cells = ls.conn.make_grid(region, cell_area=1e8)            # hexagons of 100 km2
+ls.conn.connectivity_grid(protected_areas, region, grid=cells, distance=10_000)
+ls.conn.eca_change_grid([forest_2000, forest_2020], region, grid=cells, distance=5_000, metric="PC")
 
 # nodes that could be added (restoration: 1 existing, 0 to add)
 g = ls.HabitatGraph(areas, distances, restoration=flags)
@@ -1268,6 +1274,30 @@ buffering them (Visvalingam, 5 % of the vertices); landschaft buffers the exact
 polygons (30 segments per quarter circle, as sf), so both select the same areas when
 the simplification keeps the shapes (as for the reference polygons).
 
+### ProtConn from rasters and on grids
+
+* `protconn_raster(protected_ids, region, ...)` is `MK_ProtConn_raster`: every
+  protected-area id inside the region (rasterized on the protected areas' grid, cells
+  whose centre is inside) is a node with the area of its cells there; transboundary
+  nodes are the ids outside the region within `transboundary` (Makurhini keeps them only
+  when there are two or more); distances run between the nodes' centroids. As in
+  Makurhini, ProtConn[Within] sums the attributes of every node. (Makurhini pairs the
+  attributes, sorted by id, with the centroids in the order the ids appear in the
+  raster, and fails without two transboundary nodes; landschaft keeps each id with its
+  centroid.)
+* `make_grid(region, cell_area)` gives Makurhini's grid: sf's `st_make_grid(square =
+  FALSE)` hexagons (the same coordinates) or raster squares over the region's extent,
+  the cells touching the region (`clip`, `grid_boundary` as in Makurhini).
+* `connectivity_grid(protected_areas, region, grid=|cell_area=, distance=)` is
+  `MK_Connect_grid`: ProtConn of every cell (the cell as the region, the areas selected
+  once for the whole region, the other cells' areas transboundary), or with
+  `protconn_index=False` PC, ECA and normalised ECA of the patches dissolved in each
+  cell. Makurhini's default `pij_min` becomes infinity there and cuts every link (each
+  node alone): `pij_min=np.inf` reproduces it, the default keeps every link.
+* `eca_change_grid(times, region, ...)` is `MK_dECA_grid`: the ECA change between
+  consecutive times in each cell, with Makurhini's rules for cells where the habitat
+  appears or disappears.
+
 ### ECA over time
 
 `ls.conn.eca_change(graphs, metric, distance=, landscape_area=)` is Makurhini's `MK_dECA`:
@@ -1355,6 +1385,10 @@ the results do not depend on the number of threads.
   ProtConn[Bound]) with its inner steps: fed Makurhini's own nodes and distances,
   `protconn_indicators` gives `get_protconn_grid`'s bits; landschaft's own nodes have
   the same areas (1e-14) and its rounded ProtConn table is Makurhini's, value for value.
+* `make_reference_conn.py grids` stores `make_grid` (hexagons and squares: the same
+  coordinates), `MK_Connect_grid` (ProtConn with its default and with `pij_min = 0`, and
+  PC), `MK_ProtConn_raster` (three transboundary settings) and `MK_dECA_grid`; all are
+  reproduced after Makurhini's rounding (the dECA grid to 1e-12).
 * `tests/test_conn.py` checks every index and importance against a brute-force
   recomputation of the graph without each node (and with its attribute set to 0),
   under both conventions, and the input kinds, pair tables, Conefor files and

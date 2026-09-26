@@ -116,8 +116,8 @@ ls.connectivity_grid(g, grid_zones(...))
      áreas transfronteiriças) e passam para a fase 5;
   5. ProtConn completo (uma ou várias regiões). **Feito** (0.35.0, `protconn`,
      `protconn_regions`; sem a simplificação do mapshaper, que só muda os nós quando
-     altera as formas); faltam o ProtConn em raster (`MK_ProtConn_raster`) e os índices
-     em grade (`MK_Connect_grid`, `MK_dECA_grid`);
+     altera as formas); ProtConn em raster e índices em grade **feitos** (0.36.0,
+     `protconn_raster`, `make_grid`, `connectivity_grid`, `eca_change_grid`);
   6. centralidades (BC, BCIIC, BCPC, radial, medial) e focais (IICf, PCf, CCI);
   7. opcionais: commute-time e SAMC (Fletcher et al. 2023).
 - Decidido: o Makurhini (instalado na biblioteca do RStudio) é a referência, e o
