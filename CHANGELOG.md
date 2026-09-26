@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 11, pylandstats-style analyses: `ls.SpatioTemporalAnalysis`
   (metrics along a time series of rasters, for whole maps, polygons, buffers around
