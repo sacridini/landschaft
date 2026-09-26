@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-09-26
+
+### Added
+- Circuit connectivity, part 5c: Circuitscape's pairwise mode on rasters.
+  `ls.circuit.circuitscape_pairwise` and `circuitscape_ini` with `scenario = pairwise`:
+  focal points and focal regions (a graph per pair, the regions merged with the polygons
+  they touch), include/exclude pair files, resistances with Circuitscape's shortcut and
+  its -1 / 0 rules, per-pair voltage and current maps, cumulative and maximum current
+  maps with Circuitscape's null, log and focal-zero options, and the resistance files.
+  One factorisation per component (a node grounded) and parallel batches of pair solves;
+  focal-region pairs in parallel. Matched with Circuitscape's CHOLMOD runs of its 17
+  pairwise test cases (resistances to 1e-12, maps to 3e-13).
+
 ## [0.46.0] - 2026-09-26
 
 ### Added
