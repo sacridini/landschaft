@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-26
+
 ### Added
 - Landscape metrics part 7, landscapemetrics' utilities, the same bits as in R:
   `Landscape.centroids()` (`get_centroids`, also `cell_center` with R's order of
