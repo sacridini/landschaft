@@ -647,6 +647,75 @@ class Landscape:
             df[col] = self._core.patch_metric(m)
         return df
 
+    def write_patch_metrics(self, path, metrics: Iterable[str] | str | None = None, *,
+                            chunk_rows: int = 1_000_000, **kwargs) -> Path:
+        """Write :meth:`patch_metrics` to a file chunk by chunk, without
+        building the table in memory: ``.parquet`` (one row group per chunk;
+        needs pyarrow), ``.csv`` or ``.csv.gz``. For maps with tens of millions
+        of patches. Extra keyword arguments go to the CSV / Parquet writer.
+
+        Returns the path written.
+        """
+        from .export import TableSink
+
+        metrics, columns = _names(metrics, "patch")
+        chunk_rows = _chunk_rows(chunk_rows)
+        self._ensure(metrics)
+        values = [self._core.patch_metric(m) for m in metrics]
+        classes = self.patch_classes
+        n = self.n_patches
+        with TableSink(path, **kwargs) as sink:
+            for start in range(0, max(n, 1), chunk_rows):
+                end = min(n, start + chunk_rows)
+                frame = pd.DataFrame({"class": classes[start:end], "id": np.arange(start + 1, end + 1)})
+                for v, col in zip(values, columns):
+                    frame[col] = v[start:end]
+                sink.write(frame)
+        return sink.path
+
+    def write_metrics(self, path, level=None, metric=None, name=None, type=None, what=None, *,
+                      extras: bool = False, chunk_rows: int = 1_000_000, **kwargs) -> Path:
+        """Write :meth:`metrics` (long format, same rows and types) to a file,
+        one metric at a time and the patch metrics chunk by chunk, without
+        building the table in memory: ``.parquet`` (needs pyarrow), ``.csv``
+        or ``.csv.gz``. Extra keyword arguments go to the CSV / Parquet writer.
+
+        Returns the path written.
+        """
+        from .export import TableSink
+
+        chosen = chosen_metrics(level, metric, name, type, what, extras)
+        chunk_rows = _chunk_rows(chunk_rows)
+        self._ensure(chosen["metric"])
+        level_names = sorted(set(chosen["level"]))
+        metric_order = list(dict.fromkeys(chosen["metric"]))
+        n = self.n_patches
+        with TableSink(path, **kwargs) as sink:
+            for lv, m in zip(chosen["level"], chosen["metric"]):
+                if lv == "patch" and n > 0:
+                    values = self._core.patch_metric(m)
+                    classes = self.patch_classes.astype(np.int64)
+                    for start in range(0, n, chunk_rows):
+                        end = min(n, start + chunk_rows)
+                        rows = end - start
+                        no_na = np.zeros(rows, dtype=bool)
+                        sink.write(pd.DataFrame({
+                            "level": pd.Categorical.from_codes(np.full(rows, level_names.index(lv), np.int8),
+                                                               level_names),
+                            "class": pd.arrays.IntegerArray(classes[start:end], no_na),
+                            "id": pd.arrays.IntegerArray(np.arange(start + 1, end + 1, dtype=np.int64), no_na.copy()),
+                            "metric": pd.Categorical.from_codes(np.full(rows, metric_order.index(m), np.int16),
+                                                                metric_order),
+                            "value": values[start:end],
+                        }))
+                else:
+                    one = chosen[(chosen["level"] == lv) & (chosen["metric"] == m)]
+                    frame = long_frame(self._core.long_table(*metric_specs(one)), one)
+                    frame["level"] = pd.Categorical(frame["level"].astype(str), categories=level_names)
+                    frame["metric"] = pd.Categorical(frame["metric"].astype(str), categories=metric_order)
+                    sink.write(frame)
+        return sink.path
+
     def class_metrics(self, metrics: Iterable[str] | str | None = None, *, extras: bool = False) -> pd.DataFrame:
         """Class-level metrics: one row per class (``class``, metrics...).
 
@@ -687,6 +756,13 @@ class Landscape:
         chosen = chosen_metrics(level, metric, name, type, what, extras)
         self._ensure(chosen["metric"])
         return long_frame(self._core.long_table(*metric_specs(chosen)), chosen)
+
+
+def _chunk_rows(chunk_rows) -> int:
+    chunk_rows = int(chunk_rows)
+    if chunk_rows < 1:
+        raise ValueError(f"chunk_rows must be >= 1, got {chunk_rows}")
+    return chunk_rows
 
 
 def _patch_names() -> set:

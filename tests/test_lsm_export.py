@@ -36,6 +36,53 @@ class TestWriteTable:
         csv = pd.read_csv(tmp_path / "m.csv.gz", float_precision="round_trip")
         np.testing.assert_array_equal(csv["value"].to_numpy(), df["value"].to_numpy())
 
+    @pytest.mark.parametrize("chunk_rows", [1, 7, 10**6])
+    def test_write_metrics_chunked(self, tmp_path, chunk_rows):
+        pytest.importorskip("pyarrow")
+        lm = ls.Landscape(DATA, res=10)
+        df = lm.metrics(extras=True)
+        path = lm.write_metrics(tmp_path / "m.parquet", extras=True, chunk_rows=chunk_rows)
+        pd.testing.assert_frame_equal(pd.read_parquet(path), df)
+        # CSV: the same text as write_table
+        ls.write_table(df, tmp_path / "whole.csv")
+        lm.write_metrics(tmp_path / "chunked.csv", extras=True, chunk_rows=chunk_rows)
+        assert (tmp_path / "chunked.csv").read_bytes() == (tmp_path / "whole.csv").read_bytes()
+        lm.write_metrics(tmp_path / "chunked.csv.gz", level="patch", what="lsm_p_area", chunk_rows=chunk_rows)
+        back = pd.read_csv(tmp_path / "chunked.csv.gz", float_precision="round_trip")
+        np.testing.assert_array_equal(back["value"], lm.patch_metrics("area")["area"])
+        assert back["id"].tolist() == list(range(1, lm.n_patches + 1))
+
+    def test_write_patch_metrics_chunked(self, tmp_path):
+        pytest.importorskip("pyarrow")
+        lm = ls.Landscape(DATA, res=10)
+        path = lm.write_patch_metrics(tmp_path / "p.parquet", chunk_rows=9)
+        pd.testing.assert_frame_equal(pd.read_parquet(path), lm.patch_metrics())
+        lm.write_patch_metrics(tmp_path / "p.csv", ["AREA", "shape"], chunk_rows=4)
+        pd.testing.assert_frame_equal(pd.read_csv(tmp_path / "p.csv", float_precision="round_trip"),
+                                      lm.patch_metrics(["AREA", "shape"]), check_dtype=False)
+        import pyarrow.parquet as pq
+
+        assert pq.ParquetFile(path).num_row_groups == -(-lm.n_patches // 9)
+
+    def test_write_metrics_all_na_and_out_of_core(self, tmp_path):
+        pytest.importorskip("pyarrow")
+        empty = ls.Landscape(np.ma.masked_all((4, 5), dtype=int))
+        path = empty.write_metrics(tmp_path / "e.parquet", level="patch", what=["lsm_p_area", "lsm_p_perim"])
+        pd.testing.assert_frame_equal(pd.read_parquet(path),
+                                      empty.metrics(level="patch", what=["lsm_p_area", "lsm_p_perim"]))
+        tif = tmp_path / "m.tif"
+        lsm_reference.write_landscape(tif, DATA, (10.0, 10.0))
+        tiled = ls.Landscape(tif, block_rows=8)
+        path = tiled.write_metrics(tmp_path / "t.parquet", level=["patch", "class"], chunk_rows=50)
+        pd.testing.assert_frame_equal(pd.read_parquet(path), ls.Landscape(tif).metrics(level=["patch", "class"]))
+
+    def test_chunked_errors(self, tmp_path):
+        lm = ls.Landscape(DATA)
+        with pytest.raises(ValueError, match="chunk"):
+            lm.write_metrics(tmp_path / "m.gpkg")
+        with pytest.raises(ValueError, match="chunk_rows"):
+            lm.write_patch_metrics(tmp_path / "m.csv", chunk_rows=0)
+
     def test_errors(self, tmp_path):
         df = ls.Landscape(DATA).metrics(level="landscape")
         with pytest.raises(ValueError, match="format"):

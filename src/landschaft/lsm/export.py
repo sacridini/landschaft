@@ -16,6 +16,71 @@ _TABLE_SUFFIXES = {".csv": "csv", ".gz": "csv", ".parquet": "parquet", ".pq": "p
                    ".geojson": "vector", ".shp": "vector", ".fgb": "vector"}
 
 
+class TableSink:
+    """A table written chunk by chunk (CSV, ``.csv.gz`` or Parquet), for
+    tables too large to build in memory at once.
+
+    Every chunk must have the same columns and types (categoricals with the
+    same categories); a Parquet file gets one row group per chunk.
+    """
+
+    def __init__(self, path: str | os.PathLike, **kwargs):
+        self.path = Path(path)
+        self.kind = _TABLE_SUFFIXES.get(self.path.suffix.lower())
+        if self.kind not in ("csv", "parquet"):
+            raise ValueError(f"chunked tables are written as .csv, .csv.gz or .parquet, got {self.path.suffix!r}")
+        self.kwargs = kwargs
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._handle = None
+        self._writer = None
+        self._schema = None
+
+    def write(self, frame: pd.DataFrame) -> None:
+        if self.kind == "csv":
+            if self._handle is None:
+                if self.path.suffix.lower() == ".gz":
+                    import gzip
+
+                    self._handle = gzip.open(self.path, "wt", newline="", encoding="utf-8")
+                else:
+                    self._handle = open(self.path, "w", newline="", encoding="utf-8")
+                frame.to_csv(self._handle, index=False, **self.kwargs)
+            else:
+                frame.to_csv(self._handle, index=False, header=False, **self.kwargs)
+            return
+        pa, pq = _pyarrow()
+        if self._writer is None:
+            table = pa.Table.from_pandas(frame, preserve_index=False)
+            self._schema = table.schema
+            self._writer = pq.ParquetWriter(self.path, self._schema, **self.kwargs)
+        else:
+            table = pa.Table.from_pandas(frame, schema=self._schema, preserve_index=False)
+        self._writer.write_table(table)
+
+    def close(self) -> None:
+        if self._handle is not None:
+            self._handle.close()
+            self._handle = None
+        if self._writer is not None:
+            self._writer.close()
+            self._writer = None
+
+    def __enter__(self) -> TableSink:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+
+def _pyarrow():
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError as err:  # pragma: no cover - depends on the environment
+        raise ImportError("writing Parquet needs pyarrow (pip install pyarrow)") from err
+    return pa, pq
+
+
 def write_table(table: pd.DataFrame, path: str | os.PathLike, **kwargs) -> Path:
     """Write a metric table, the format given by the file extension.
 
@@ -34,10 +99,7 @@ def write_table(table: pd.DataFrame, path: str | os.PathLike, **kwargs) -> Path:
     if kind == "csv":
         table.to_csv(path, index=False, **kwargs)
     elif kind == "parquet":
-        try:
-            import pyarrow  # noqa: F401
-        except ImportError as err:  # pragma: no cover - depends on the environment
-            raise ImportError("writing Parquet needs pyarrow (pip install pyarrow)") from err
+        _pyarrow()
         table.to_parquet(path, index=False, **kwargs)
     else:
         if not hasattr(table, "to_file"):

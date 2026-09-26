@@ -907,11 +907,19 @@ column per landscape metric and one per class metric and class (`ca_11`, `pland_
 and `percentage_inside`. `write_table(table, path)` writes any metric table by extension:
 `.csv`, `.csv.gz`, `.parquet` (pyarrow; keeps the categorical and nullable columns,
 compact for patch tables with millions of rows) or, for GeoDataFrames, `.gpkg`,
-`.geojson`, `.shp`, `.fgb`. `Landscape.to_raster(metric)` paints a patch metric on the
+`.geojson`, `.shp`, `.fgb`. For maps with tens of millions of patches,
+`Landscape.write_metrics(path, ...)` writes the table of `metrics(...)` (same rows and
+types) one metric at a time and the patch metrics `chunk_rows` rows at a time, and
+`Landscape.write_patch_metrics(path, metrics)` the wide patch table the same way, to
+`.parquet` (one row group per chunk), `.csv` or `.csv.gz`, never building the whole
+table: the 9 patch metrics of 9 M patches (81 M rows) go to Parquet in 8.0 s with
+1.0 GB of extra memory, instead of 10.3 s and 6.1 GB through a DataFrame. The CSV
+text is the same as `write_table`'s. `Landscape.to_raster(metric)` paints a patch metric on the
 patches or a class metric on the cells of each class, several at once with a list, and
 writes GeoTIFFs with `path=`. `batch("landscape_metrics", inputs, out, **options)` writes
 one long table per raster (`<name>_landscape_metrics.csv`, or `.parquet` with
-`table_format="parquet"`) plus the JSON record; with `block_rows` the files are read by
+`table_format="parquet"`, streamed by `write_metrics`) plus the JSON record; with
+`block_rows` the files are read by
 blocks; `batch("window_metrics", ...)` writes one GeoTIFF per metric.
 
 **Several rasters** (`landscape_metrics(list)`, and lists in `sample_metrics` /

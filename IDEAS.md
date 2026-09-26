@@ -16,8 +16,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Exportação
 
-- Tabelas de patch muito grandes (dezenas de milhões de linhas) poderiam ir direto
-  para Parquet em pedaços (pyarrow), sem montar o DataFrame inteiro na memória.
 
 ## Análises no estilo pylandstats
 
@@ -123,3 +121,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
     LSI físico com células não quadradas, desvio padrão sobre n nos `_sd`/`_cv`, e o
     círculo circunscrito sobre o patch inteiro (fecho convexo exato das extremidades
     de cada linha, também fora da memória). **Feita.**
+15. Tabelas grandes em pedaços: `Landscape.write_metrics` / `write_patch_metrics`
+    (Parquet com um row group por pedaço, CSV, CSV.gz) e o `batch("landscape_metrics")`
+    gravando assim. **Feita.**

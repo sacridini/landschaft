@@ -336,6 +336,16 @@ def _writable(value):
     return value.copy(data=arr) if isinstance(value, xr.DataArray) else arr
 
 
+def _stream_landscape_metrics(data, params: dict, base: Path, table_format: str) -> Path:
+    """landscape_metrics' long table, written by Landscape.write_metrics."""
+    from .lsm.landscape import Landscape
+
+    selection = ("level", "metric", "name", "type", "what", "extras")
+    landscape = Landscape(data, **{k: v for k, v in params.items() if k not in selection})
+    path = base.with_name(base.name + (".parquet" if table_format == "parquet" else ".csv"))
+    return landscape.write_metrics(path, **{k: v for k, v in params.items() if k in selection})
+
+
 def _write_outputs(result, base: Path, table_format: str = "csv") -> tuple[list[Path], dict[str, Any]]:
     """Write every map (GeoTIFF), table (CSV or Parquet) and report (TXT) of a tool result."""
     outputs: list[Path] = []
@@ -473,8 +483,12 @@ def batch(
                 data = src  # read by blocks, not into memory
             else:
                 data = load_raster(src, band=band, validate=None)
-            result = fn(data, **call_params)
-            outputs, values = _write_outputs(result, base, table_format)
+            if name == "landscape_metrics":
+                # written metric by metric, never as one table in memory
+                outputs, values = [_stream_landscape_metrics(data, call_params, base, table_format)], {}
+            else:
+                result = fn(data, **call_params)
+                outputs, values = _write_outputs(result, base, table_format)
             seconds = time.perf_counter() - start
             meta_path.write_text(json.dumps({
                 "tool": name, "input": str(src), "params": _json_value(params),

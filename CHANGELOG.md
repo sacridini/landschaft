@@ -6,6 +6,14 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 15, large tables: `Landscape.write_metrics(path, ...)` writes the
+  long table of `metrics(...)` one metric at a time and the patch metrics in chunks of
+  `chunk_rows`, and `Landscape.write_patch_metrics(path, metrics)` the wide patch table, to
+  Parquet (one row group per chunk), CSV or CSV.gz without building the table in memory
+  (9 patch metrics of 9 M patches: 8.0 s and 1.0 GB instead of 10.3 s and 6.1 GB).
+  `batch("landscape_metrics")` writes its tables this way.
+
 ## [0.25.0] - 2026-09-26
 
 ### Changed
