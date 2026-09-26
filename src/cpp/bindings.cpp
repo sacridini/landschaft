@@ -36,6 +36,7 @@
 #include "gtb/primitives.hpp"
 #include "gtb/restoration.hpp"
 #include "gtb/spa.hpp"
+#include "conn/cost.hpp"
 #include "conn/graph.hpp"
 #include "conn/nodes.hpp"
 #include "lsm/landscape.hpp"
@@ -1105,6 +1106,27 @@ py::array_t<double> conn_gdal_areas(const CArray<double>& x, const CArray<double
     return vector_array(a);
 }
 
+py::dict conn_least_cost(const CArray<double>& resistance, double xmin, double xmax, double ymin, double ymax,
+                         const CArray<std::int64_t>& node_cell, int directions, const std::string& function,
+                         double max_cost, int n_threads, int max_threads) {
+    if (resistance.ndim() != 2) throw py::value_error("expected a 2-D resistance raster");
+    conn::CostGrid grid;
+    grid.ny = resistance.shape(0);
+    grid.nx = resistance.shape(1);
+    grid.xmin = xmin;
+    grid.xmax = xmax;
+    grid.ymin = ymin;
+    grid.ymax = ymax;
+    grid.directions = directions;
+    if (function == "makurhini") grid.function = conn::CostFunction::Destination;
+    else if (function == "mean") grid.function = conn::CostFunction::Mean;
+    else throw py::value_error("cost_function must be 'makurhini' or 'mean'");
+    const auto n = static_cast<std::int32_t>(node_cell.shape(0));
+    return pair_dict(lsm_call(n_threads, [&] {
+        return conn::least_cost_distances(resistance.data(), grid, node_cell.data(), n, max_cost, max_threads);
+    }));
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_core, m) {
@@ -1119,6 +1141,10 @@ PYBIND11_MODULE(_core, m) {
           "Patch ids, cell counts, centroids and node index of a raster of patch ids.");
     m.def("conn_gdal_areas", &conn_gdal_areas, py::arg("x"), py::arg("y"), py::arg("ring_start"),
           py::arg("poly_start"), py::arg("geom_start"), "Polygon areas as GDAL (sf::st_area) computes them.");
+    m.def("conn_least_cost", &conn_least_cost, py::arg("resistance"), py::arg("xmin"), py::arg("xmax"),
+          py::arg("ymin"), py::arg("ymax"), py::arg("node_cell"), py::arg("directions"), py::arg("function"),
+          py::arg("max_cost"), py::arg("n_threads") = 0, py::arg("max_threads") = 0,
+          "Least-cost distances between node cells over a resistance raster (gdistance's costDistance).");
     m.def("conn_point_distances", &conn_point_distances, py::arg("x"), py::arg("y"), py::arg("max_distance"),
           py::arg("n_threads") = 0, "Distances between points, pairs up to max_distance.");
     m.def("conn_raster_edge_distances", &conn_raster_edge_distances, py::arg("node"), py::arg("n_nodes"),

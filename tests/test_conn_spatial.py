@@ -199,6 +199,126 @@ def test_units_and_errors():
     with pytest.raises(ValueError, match="unknown distance unit"):
         ls.conn.distance_table(RASTER, distance_unit="parsec")
     with pytest.raises(ValueError, match="distance must be"):
-        ls.conn.distance_table(RASTER, distance="least-cost")
+        ls.conn.distance_table(RASTER, distance="commute-time")
     with pytest.raises(ValueError, match="one value per patch"):
         ls.conn.node_table(RASTER, attribute=[1.0, 2.0])
+
+
+# ------------------------------------------------------- least-cost distances
+
+RESISTANCE = REF / "resistance_matrix.tif"
+
+
+@pytest.mark.parametrize("name,kw", [
+    ("raster_lcd", {}),
+    ("raster_lcd_4", {"cost_directions": 4}),
+    ("raster_lcd_mean", {"cost_function": "mean"}),
+])
+def test_raster_least_cost(name, kw):
+    ours = ls.conn.distance_table(RASTER, distance="least-cost", resistance=RESISTANCE, **kw)
+    m = _merge(ours, _ref(name))
+    np.testing.assert_array_equal(m["distance"], m["Distance"])  # gdistance's bits
+
+
+def test_vector_least_cost_with_unreachable_pairs():
+    v = gpd.read_file(POLYGONS)
+    ours = ls.conn.distance_table(v, id="id", distance="least-cost", resistance=REF / "polygons_resistance.tif")
+    ref = _ref("vector_lcd")
+    assert len(ours) == len(ref)
+    m = _merge(ours, ref)
+    np.testing.assert_array_equal(m["distance"], m["Distance"])
+    # Pairs cut off by the NA walls take their centroid distance (Makurhini).
+    dropped = ls.conn.distance_table(v, id="id", distance="least-cost", resistance=REF / "polygons_resistance.tif",
+                                     unreachable="drop")
+    assert 0 < len(dropped) < len(ours)
+    # A limit keeps pairs beyond it out, it does not make them unreachable.
+    limit = float(np.median(ours["distance"]))
+    limited = ls.conn.distance_table(v, id="id", distance="least-cost", resistance=REF / "polygons_resistance.tif",
+                                     max_distance=limit)
+    pd.testing.assert_frame_equal(limited, ours[ours["distance"] <= limit].reset_index(drop=True))
+
+
+def test_least_cost_end_to_end():
+    g = ls.HabitatGraph.from_raster(RASTER, area_unit="ha", distance="least-cost", resistance=RESISTANCE)
+    imp = g.node_importance("PC", distance=250000, probability=0.5).set_index("id")
+    ref = _ref("raster_lcd_pc_nodes").set_index("id")
+    for col in ("dPC", "dPCintra", "dPCflux"):
+        np.testing.assert_array_equal(np.round(imp.loc[ref.index, col].to_numpy(), 7), ref[col].to_numpy())
+
+
+def _gdistance_graph(values, xres, yres, directions, function):
+    """The graph gdistance builds (brute force, with numpy): edges and costs."""
+    from scipy.sparse import coo_matrix
+
+    ny, nx = values.shape
+    xs = (np.arange(nx) + 0.5) * xres
+    ys = ny * yres - (np.arange(ny) + 0.5) * yres
+    offsets = [(0, 1), (1, 0)] + ([(1, 1), (1, -1)] if directions == 8 else [])
+    rows, cols, costs = [], [], []
+    for r in range(ny):
+        for c in range(nx):
+            for dr, dc in offsets:
+                r2, c2 = r + dr, c + dc
+                if not (0 <= r2 < ny and 0 <= c2 < nx):
+                    continue
+                a, b = r * nx + c, r2 * nx + c2
+                va, vb = values[r, c], values[r2, c2]
+                if not (np.isfinite(va) and np.isfinite(vb)):
+                    continue
+                lo, hi = min(a, b), max(a, b)
+                v_lo, v_hi = values.flat[lo], values.flat[hi]
+                cond = 1 / v_hi if function == "makurhini" else 1 / ((v_lo + v_hi) / 2)
+                d = np.sqrt((xs[c] - xs[c2]) ** 2 + (ys[r] - ys[r2]) ** 2)
+                rows.append(a)
+                cols.append(b)
+                costs.append(1 / ((1 / d) * cond))
+    return coo_matrix((costs, (rows, cols)), shape=(nx * ny, nx * ny)).tocsr()
+
+
+@pytest.mark.parametrize("directions,function", [(8, "makurhini"), (4, "makurhini"), (8, "mean")])
+def test_least_cost_against_scipy(directions, function):
+    import xarray as xr
+    from scipy.sparse.csgraph import dijkstra
+
+    rng = np.random.default_rng(directions + len(function))
+    values = rng.uniform(1, 50, (30, 40))
+    values[10, 5:35] = np.nan  # a wall with a gap
+    values[20:, 20] = np.nan
+    res = (25.0, 40.0)
+    da = xr.DataArray(values, dims=("y", "x"), coords={"y": 30 * res[1] - (np.arange(30) + 0.5) * res[1],
+                                                      "x": (np.arange(40) + 0.5) * res[0]})
+    cells = rng.choice(np.flatnonzero(np.isfinite(values)), 15, replace=False)
+    r, c = np.divmod(cells, 40)
+    x, y = (c + 0.5) * res[0], 30 * res[1] - (r + 0.5) * res[1]
+    pts = gpd.GeoDataFrame({"id": np.arange(15)}, geometry=gpd.points_from_xy(x, y))
+    table = ls.conn.distance_table(pts, id="id", distance="least-cost", resistance=da, cost_directions=directions,
+                                   cost_function=function, unreachable="drop")
+    graph = _gdistance_graph(values, *res, directions, function)
+    full = dijkstra(graph, directed=False, indices=cells)[:, cells]
+    got = {(f, t): d for f, t, d in table.itertuples(index=False)}
+    for i in range(15):
+        for j in range(i + 1, 15):
+            if np.isfinite(full[i, j]):
+                assert got[(i, j)] == pytest.approx(full[i, j], rel=1e-13)
+            else:
+                assert (i, j) not in got
+    limited = ls.conn.distance_table(pts, id="id", distance="least-cost", resistance=da, cost_directions=directions,
+                                     cost_function=function, unreachable="drop", max_distance=float(np.nanmedian(full)))
+    assert {(f, t) for f, t, _ in limited.itertuples(index=False)} == {
+        k for k, d in got.items() if d <= float(np.nanmedian(full))}
+
+
+def test_least_cost_points_outside_or_in_na():
+    values = np.ones((10, 10))
+    values[0, 0] = np.nan
+    pts = gpd.GeoDataFrame({"id": [1, 2, 3, 4]},
+                           geometry=gpd.points_from_xy([0.5, 5.5, 50.0, 6.5], [9.5, 5.5, 5.0, 5.5]))
+    t = ls.conn.distance_table(pts, id="id", distance="least-cost", resistance=values, unreachable="drop")
+    pairs = {(f, to) for f, to, _ in t.itertuples(index=False)}
+    assert pairs == {(2, 4)}  # 1 sits in an NA cell, 3 outside the raster
+    t = ls.conn.distance_table(pts, id="id", distance="least-cost", resistance=values)
+    assert len(t) == 6  # the others fall back to centroid distances
+    with pytest.raises(ValueError, match="resistance raster"):
+        ls.conn.distance_table(pts, id="id", distance="least-cost")
+    with pytest.raises(ValueError, match="positive"):
+        ls.conn.distance_table(pts, id="id", distance="least-cost", resistance=np.zeros((3, 3)))

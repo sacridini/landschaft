@@ -161,6 +161,25 @@ def synthetic_polygons():
     return gpd.GeoDataFrame({"id": ids}, geometry=geoms, crs="EPSG:3857")
 
 
+def synthetic_resistance(path: Path) -> None:
+    """A smooth resistance (1-100) over the polygons, with NA walls that cut some of them off."""
+    import rasterio
+    from rasterio.transform import from_origin
+    from scipy import ndimage
+
+    rng = np.random.default_rng(11)
+    ny, nx, res = 95, 95, 400.0  # covers every polygon (gdistance drops points outside, shifting its rows)
+    values = ndimage.gaussian_filter(rng.random((ny, nx)), 3)
+    values = 1 + 99 * (values - values.min()) / (values.max() - values.min())
+    values[20:22, 5:60] = np.nan   # a wall
+    values[40:70, 50:52] = np.nan  # another, closing a corner
+    values[40:42, 50:85] = np.nan
+    with rasterio.open(path, "w", driver="GTiff", width=nx, height=ny, count=1, dtype="float64",
+                       crs="EPSG:3857", transform=from_origin(-2_000.0, 36_000.0, res, res), nodata=np.nan,
+                       compress="deflate") as dst:
+        dst.write(values, 1)
+
+
 def run_spatial() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -169,10 +188,13 @@ def run_spatial() -> None:
     out.mkdir(parents=True, exist_ok=True)
     polygons = OUT / "polygons.gpkg"
     synthetic_polygons().to_file(polygons, driver="GPKG")
+    resistance = OUT / "polygons_resistance.tif"
+    synthetic_resistance(resistance)
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        subprocess.run([str(rscript), str(R_SCRIPT), "spatial", str(tmp), str(polygons)], check=True)
-        (OUT / "habitat_nodes_raster.tif").write_bytes((tmp / "habitat_nodes_raster.tif").read_bytes())
+        subprocess.run([str(rscript), str(R_SCRIPT), "spatial", str(tmp), str(polygons), str(resistance)], check=True)
+        for name in ("habitat_nodes_raster.tif", "resistance_matrix.tif"):
+            (OUT / name).write_bytes((tmp / name).read_bytes())
         for f in sorted(tmp.glob("*.csv")):
             table = pd.read_csv(f, float_precision="round_trip")
             if {"From", "To", "Distance"} <= set(table.columns) and len(table) > 5_000:

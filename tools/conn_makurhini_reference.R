@@ -2,10 +2,11 @@
 #
 # Reference values of Makurhini's MK_dPCIIC for landschaft's habitat graphs.
 #
-#   Rscript conn_makurhini_reference.R spatial <out_dir> <polygons.gpkg>
+#   Rscript conn_makurhini_reference.R spatial <out_dir> <polygons.gpkg> <resistance.tif>
 #       nodesfile / distancefile (centroid, edge) on Makurhini's example raster
 #       `habitat_nodes_raster` (also written to out_dir) and on the polygons,
-#       and MK_dPCIIC run on both end to end
+#       least-cost distances over `resistance_matrix` (written too) and over
+#       the given resistance for the polygons, and MK_dPCIIC run end to end
 #   Rscript conn_makurhini_reference.R export <out_dir>
 #       writes Makurhini's example `habitat_nodes` (centroid distances, areas
 #       in km2) as habitat_nodes.csv / habitat_pairs.csv
@@ -43,6 +44,24 @@ if (args[1] == "spatial") {
     put("vector_centroid", distancefile(polygons, id = "id", type = "centroid"))
     put("vector_edge", distancefile(polygons, id = "id", type = "edge"))
     put("vector_edge_2km", distancefile(polygons, id = "id", type = "edge", threshold = 2, distance_unit = "km"))
+    # Least-cost distances (gdistance), on the rasters as written to disk.
+    data("resistance_matrix", package = "Makurhini")
+    terra::writeRaster(terra::rast(resistance_matrix), file.path(out, "resistance_matrix.tif"), overwrite = TRUE,
+                       datatype = "FLT8S", gdal = c("COMPRESS=DEFLATE"))
+    res_r <- raster::raster(terra::rast(file.path(out, "resistance_matrix.tif")))
+    r_disk <- terra::rast(file.path(out, "habitat_nodes_raster.tif"))
+    put("raster_lcd", distancefile(r_disk, type = "least-cost", resistance = res_r))
+    put("raster_lcd_4", distancefile(r_disk, type = "least-cost", resistance = res_r, ngh = 4))
+    put("raster_lcd_mean", distancefile(r_disk, type = "least-cost", resistance = res_r,
+                                        CostFun = function(x) 1 / mean(x)))
+    res_v <- raster::raster(terra::rast(args[4]))
+    put("vector_lcd", distancefile(polygons, id = "id", type = "least-cost", resistance = res_v))
+    res <- MK_dPCIIC(nodes = r_disk, area_unit = "ha", distance = list(type = "least-cost", resistance = res_r),
+                     metric = "PC", probability = 0.5, distance_thresholds = 250000, overall = TRUE, intern = FALSE)
+    z <- terra::zonal(res[[1]][[-1]], r_disk, fun = "min")
+    names(z)[1] <- "id"
+    put("raster_lcd_pc_nodes", z)
+    put("raster_lcd_pc_overall", res[[2]])
     # End to end: importance rasters read back per node id.
     res <- MK_dPCIIC(nodes = r, area_unit = "ha", distance = list(type = "edge"), metric = "PC",
                      probability = 0.5, distance_thresholds = 5000, overall = TRUE, intern = FALSE)

@@ -15,7 +15,10 @@ from .. import _core
 AREA_UNITS = {"m2": 1.0, "km2": 0.000001, "ha": 0.0001, "Dam2": 0.01, "inch2": 1550.0, "foot2": 10.7639,
               "yard2": 1.19599, "mile2": 3.861e-7}
 DISTANCE_UNITS = {"m": 1.0, "km": 0.001, "inch": 39.3701, "foot": 3.28084, "yard": 1.09361, "mile": 0.000621371}
-DISTANCE_TYPES = ("centroid", "edge")
+DISTANCE_TYPES = ("centroid", "edge", "least-cost")
+COST_FUNCTIONS = ("makurhini", "mean")
+# Each least-cost thread keeps a cost (8 bytes) and a flag per cell.
+_COST_MEMORY = 8e9
 
 
 def _factor(table: dict, unit: str, what: str) -> float:
@@ -202,9 +205,71 @@ def vector_centroids(geometries) -> np.ndarray:
     return points
 
 
+@dataclass
+class Resistance:
+    values: np.ndarray  # float64, NaN outside
+    extent: tuple[float, float, float, float]
+
+
+def read_resistance(resistance, *, band=None, nodata=None) -> Resistance:
+    """A resistance raster (path, DataArray or array) as float64 with NaN outside."""
+    import xarray as xr
+
+    if isinstance(resistance, Resistance):
+        return resistance
+    if isinstance(resistance, (str, bytes)) or hasattr(resistance, "__fspath__"):
+        from ..io import load_raster
+
+        resistance = load_raster(resistance, band=band, validate=None)
+    if isinstance(resistance, xr.DataArray):
+        da = resistance.squeeze(drop=True) if "band" in resistance.dims else resistance
+        if nodata is None:
+            nodata = da.rio.nodata
+        values = np.asarray(da.values, dtype=np.float64)
+        try:
+            t = da.rio.transform()
+        except Exception:
+            t = None
+    else:
+        values = np.asarray(np.ma.filled(np.ma.asarray(resistance, dtype=np.float64), np.nan), dtype=np.float64)
+        t = None
+    if values.ndim != 2:
+        raise ValueError("the resistance must be a 2-D raster")
+    values = values.copy()
+    if nodata is not None and not np.isnan(nodata):
+        values[values == nodata] = np.nan
+    ny, nx = values.shape
+    if t is None:  # as terra::rast(matrix): unit cells, origin at 0, first row on top
+        xmin, xmax, ymin, ymax = 0.0, float(nx), 0.0, float(ny)
+    else:
+        if t.b != 0 or t.d != 0:
+            raise ValueError("rotated rasters are not supported")
+        xmin, ymax = t.c, t.f
+        xmax, ymin = xmin + nx * t.a, ymax + ny * t.e
+    finite = values[np.isfinite(values)]
+    if finite.size and finite.min() <= 0:
+        raise ValueError("resistances must be positive")
+    return Resistance(np.ascontiguousarray(values), (xmin, xmax, ymin, ymax))
+
+
+def cells_of(x: np.ndarray, y: np.ndarray, shape: tuple[int, int], extent) -> np.ndarray:
+    """raster::cellFromXY (0-based, -1 outside)."""
+    ny, nx = shape
+    xmin, xmax, ymin, ymax = extent
+    yres_inv = ny / (ymax - ymin)
+    xres_inv = nx / (xmax - xmin)
+    row = np.floor((ymax - y) * yres_inv)
+    row = np.where(y == ymin, ny - 1, row)
+    col = np.floor((x - xmin) * xres_inv)
+    col = np.where(x == xmax, nx - 1, col)
+    outside = (row < 0) | (row >= ny) | (col < 0) | (col >= nx) | np.isnan(row) | np.isnan(col)
+    return np.where(outside, -1, row * nx + col).astype(np.int64)
+
+
 def distance_table(nodes, *, distance: str = "centroid", id: str | None = None, max_distance: float | None = None,
                    distance_unit: str = "m", habitat=None, directions: int = 8, nodata=None, band=None,
-                   n_threads=None) -> pd.DataFrame:
+                   resistance=None, cost_directions: int = 8, cost_function: str = "makurhini",
+                   unreachable: str = "euclidean", n_threads=None) -> pd.DataFrame:
     """Euclidean distances between nodes, as Makurhini's ``distancefile``.
 
     Parameters
@@ -215,12 +280,26 @@ def distance_table(nodes, *, distance: str = "centroid", id: str | None = None, 
         ``"centroid"``: between centroids (rasters: the mean of the cell
         centres; polygons: the centroid of the largest part, or a point on
         the surface when it falls outside). ``"edge"``: between the closest
-        edges (0 for touching patches).
+        edges (0 for touching patches). ``"least-cost"``: the cheapest path
+        between the cells of the centroids over ``resistance``, as
+        gdistance's ``costDistance`` does for Makurhini: the cost of a step
+        between neighbouring cells (``cost_directions`` 4 or 8) is the step
+        length (between cell centres) over the conductance, 1 / the
+        resistance of the cell of larger index (``cost_function="makurhini"``,
+        Makurhini's default) or 1 / the mean of both (``"mean"``). Distances are
+        in cost units (resistance × map units); ``distance_unit`` does not apply.
     max_distance
         Keep only the pairs up to this distance (in ``distance_unit``).
         Makurhini's ``threshold`` keeps them this way in pair tables.
     distance_unit
         ``"m"``, ``"km"``... (the map units must be metres).
+    resistance
+        The resistance raster of ``"least-cost"`` (path, DataArray or array;
+        NA cells cannot be crossed).
+    unreachable
+        ``"least-cost"`` pairs without a path: ``"euclidean"`` gives them the
+        distance between their centroids, as Makurhini does, ``"drop"``
+        leaves them unconnected.
 
     Returns
     -------
@@ -229,6 +308,10 @@ def distance_table(nodes, *, distance: str = "centroid", id: str | None = None, 
     """
     if distance not in DISTANCE_TYPES:
         raise ValueError(f"distance must be one of {DISTANCE_TYPES}, got {distance!r}")
+    if distance == "least-cost":
+        return _least_cost_table(nodes, id=id, max_distance=max_distance, habitat=habitat, directions=directions,
+                                 nodata=nodata, band=band, resistance=resistance, cost_directions=cost_directions,
+                                 cost_function=cost_function, unreachable=unreachable, n_threads=n_threads)
     factor = _factor(DISTANCE_UNITS, distance_unit, "distance")
     # The limit in metres, a hair above so the converted distance decides.
     limit = np.inf if max_distance is None else float(max_distance) / factor * (1 + 1e-12)
@@ -270,3 +353,62 @@ def distance_table(nodes, *, distance: str = "centroid", id: str | None = None, 
     if max_distance is not None:
         table = table[table["distance"] <= max_distance].reset_index(drop=True)
     return table
+
+
+def _node_points(nodes, *, id, habitat, directions, nodata, band, n_threads):
+    """Node ids and centroid coordinates (Makurhini's)."""
+    if _is_vector(nodes):
+        import shapely
+
+        frame, ids = _vector_frame(nodes, id)
+        points = vector_centroids(frame.geometry.values)
+        return np.asarray(ids), shapely.get_x(points), shapely.get_y(points)
+    patches = nodes if isinstance(nodes, RasterPatches) else read_patches(
+        nodes, habitat=habitat, directions=directions, nodata=nodata, band=band)
+    nd = patches.read_nodes(n_threads, centroids=True)
+    return nd["ids"], nd["cx"], nd["cy"]
+
+
+def _least_cost_table(nodes, *, id, max_distance, habitat, directions, nodata, band, resistance, cost_directions,
+                      cost_function, unreachable, n_threads) -> pd.DataFrame:
+    if resistance is None:
+        raise ValueError("least-cost distances need a resistance raster (resistance=)")
+    if cost_function not in COST_FUNCTIONS:
+        raise ValueError(f"cost_function must be one of {COST_FUNCTIONS}, got {cost_function!r}")
+    if cost_directions not in (4, 8):
+        raise ValueError("cost_directions must be 4 or 8")
+    if unreachable not in ("euclidean", "drop"):
+        raise ValueError("unreachable must be 'euclidean' or 'drop'")
+    ids, x, y = _node_points(nodes, id=id, habitat=habitat, directions=directions, nodata=nodata, band=band,
+                             n_threads=n_threads)
+    res = read_resistance(resistance)
+    cells = cells_of(x, y, res.values.shape, res.extent)
+    limit = np.inf if max_distance is None else float(max_distance)
+    xmin, xmax, ymin, ymax = res.extent
+    cap = max(1, int(_COST_MEMORY // (9 * res.values.size + 1)))
+    r = _core.conn_least_cost(res.values, xmin, xmax, ymin, ymax, cells, cost_directions, cost_function, limit,
+                              _threads(n_threads), cap)
+    table = pd.DataFrame({"i": r["i"], "j": r["j"], "distance": r["distance"]})
+    if unreachable == "euclidean":
+        # Makurhini: pairs with an infinite cost (no path at all: different
+        # components of the resistance, or a node outside it or on an NA
+        # cell) get their centroid distance. Pairs only beyond the limit do not.
+        from scipy import ndimage
+
+        structure = np.ones((3, 3), bool) if cost_directions == 8 else None
+        labels = ndimage.label(np.isfinite(res.values), structure=structure)[0].ravel()
+        component = np.where(cells >= 0, labels[np.clip(cells, 0, None)], 0)
+        e = _core.conn_point_distances(np.ascontiguousarray(x), np.ascontiguousarray(y), limit, _threads(n_threads))
+        ei, ej = e["i"].astype(np.int64), e["j"].astype(np.int64)
+        cut_off = (component[ei] == 0) | (component[ei] != component[ej])
+        n = len(ids)
+        found = np.isin(ei * n + ej, table["i"].to_numpy(np.int64) * n + table["j"].to_numpy(np.int64))
+        fallback = cut_off & ~found
+        if fallback.any():
+            euclid = pd.DataFrame({"i": ei[fallback], "j": ej[fallback], "distance": e["distance"][fallback]})
+            table = pd.concat([table, euclid]).sort_values(["i", "j"], kind="stable")
+    out = pd.DataFrame({"from": ids[table["i"].to_numpy()], "to": ids[table["j"].to_numpy()],
+                        "distance": table["distance"].to_numpy(np.float64)})
+    if max_distance is not None:
+        out = out[out["distance"] <= max_distance]
+    return out.reset_index(drop=True)

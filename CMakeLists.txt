@@ -46,10 +46,13 @@ add_library(lsmcore STATIC
 target_include_directories(lsmcore PUBLIC src/cpp)
 
 add_library(conncore STATIC
+    src/cpp/conn/cost.cpp
     src/cpp/conn/graph.cpp
     src/cpp/conn/nodes.cpp
 )
 target_include_directories(conncore PUBLIC src/cpp)
+# R's x87 sqrt and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp).
+target_link_libraries(conncore PUBLIC lsmcore)
 set_target_properties(conncore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # R's x87 log/sqrt and LDOUBLE sums (see src/cpp/lsm/rmath.hpp): MSVC has no
 # x64 inline assembly. x86-64 only; every other target uses the C++ code.

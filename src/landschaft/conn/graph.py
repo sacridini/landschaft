@@ -156,13 +156,16 @@ class HabitatGraph:
     @classmethod
     def from_raster(cls, nodes, *, attribute=None, weighted: bool = False, area_unit: str = "m2",
                     distance: str = "centroid", max_distance: float | None = None, distance_unit: str = "m",
-                    habitat=None, directions: int = 8, nodata=None, band=None, **kwargs) -> "HabitatGraph":
+                    habitat=None, directions: int = 8, nodata=None, band=None, resistance=None,
+                    cost_directions: int = 8, cost_function: str = "makurhini", unreachable: str = "euclidean",
+                    **kwargs) -> "HabitatGraph":
         """Nodes from a raster of patch ids (or the patches of ``habitat`` classes).
 
         The attributes come from :func:`~landschaft.conn.node_table` (the patch
         areas in ``area_unit`` by default) and the connections from
-        :func:`~landschaft.conn.distance_table` (``distance="centroid"`` or
-        ``"edge"``, pairs up to ``max_distance`` in ``distance_unit``), as
+        :func:`~landschaft.conn.distance_table` (``distance="centroid"``,
+        ``"edge"`` or ``"least-cost"`` over ``resistance``, pairs up to
+        ``max_distance`` in ``distance_unit``), as
         Makurhini's ``MK_dPCIIC`` does with raster nodes. Other arguments go
         to :class:`HabitatGraph`; :meth:`to_raster` paints node values on the
         patches.
@@ -173,7 +176,8 @@ class HabitatGraph:
         threads = kwargs.get("n_threads")
         table = node_table(patches, attribute=attribute, weighted=weighted, area_unit=area_unit, n_threads=threads)
         pairs = distance_table(patches, distance=distance, max_distance=max_distance, distance_unit=distance_unit,
-                               n_threads=threads)
+                               resistance=resistance, cost_directions=cost_directions, cost_function=cost_function,
+                               unreachable=unreachable, n_threads=threads)
         graph = cls(table["attribute"].to_numpy(), pairs, ids=table["id"].to_numpy(), **kwargs)
         graph._patches = patches
         return graph
@@ -181,12 +185,13 @@ class HabitatGraph:
     @classmethod
     def from_vector(cls, nodes, *, id: str | None = None, attribute=None, weighted: bool = False,
                     area_unit: str = "m2", distance: str = "centroid", max_distance: float | None = None,
-                    distance_unit: str = "m", **kwargs) -> "HabitatGraph":
+                    distance_unit: str = "m", resistance=None, cost_directions: int = 8,
+                    cost_function: str = "makurhini", unreachable: str = "euclidean", **kwargs) -> "HabitatGraph":
         """Nodes from polygons or points (GeoDataFrame), as Makurhini's ``MK_dPCIIC``.
 
         ``id`` names the column of node ids, ``attribute`` a column (default:
-        the area in ``area_unit``); distances are ``"centroid"`` or ``"edge"``
-        (GEOS), pairs up to ``max_distance``. :meth:`to_geodataframe` joins
+        the area in ``area_unit``); distances are ``"centroid"``, ``"edge"``
+        (GEOS) or ``"least-cost"`` over ``resistance``, pairs up to ``max_distance``. :meth:`to_geodataframe` joins
         node values to the geometries.
         """
         from .nodes import distance_table, node_table
@@ -195,7 +200,8 @@ class HabitatGraph:
         table = node_table(nodes, attribute=attribute, weighted=weighted, area_unit=area_unit, id=id,
                            n_threads=threads)
         pairs = distance_table(nodes, distance=distance, id=id, max_distance=max_distance,
-                               distance_unit=distance_unit, n_threads=threads)
+                               distance_unit=distance_unit, resistance=resistance, cost_directions=cost_directions,
+                               cost_function=cost_function, unreachable=unreachable, n_threads=threads)
         graph = cls(table["attribute"].to_numpy(), pairs, ids=table["id"].to_numpy(), **kwargs)
         graph._vector = nodes
         return graph

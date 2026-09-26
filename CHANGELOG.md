@@ -6,6 +6,20 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 3: least-cost distances.
+  `distance_table(..., distance="least-cost", resistance=...)` and the same option in
+  `HabitatGraph.from_raster` / `from_vector`: gdistance's `costDistance` as Makurhini
+  calls it (conductance 1 / the resistance of the cell of larger index, or 1 / the mean
+  with `cost_function="mean"`, over the distance between cell centres; 8 or 4
+  directions; NA cells cannot be crossed), from the cells of the node centroids, with
+  Makurhini's fallback to the centroid distance for pairs without any path
+  (`unreachable="drop"` to leave them out). A parallel Dijkstra per node over the
+  raster with the same step costs (raster centre coordinates, R's x87 `sqrt`,
+  `r_mean`) and pair direction (summed from the later node, as `as.dist` keeps the
+  lower triangle) gives gdistance's distances to the last bit. Makurhini's example
+  (398 patches, 222 k cells) in 0.5 s instead of 10.2 s.
+
 ## [0.31.0] - 2026-09-26
 
 ### Added

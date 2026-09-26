@@ -1138,6 +1138,8 @@ imp = g.node_importance("PC", distance=10_000)
 g.to_raster(imp, "dPC")            # node values on the patches (from_raster)
 g.to_geodataframe(imp)             # node values with the geometries (from_vector)
 
+g = ls.HabitatGraph.from_raster("patches.tif", distance="least-cost", resistance="resistance.tif")
+
 ls.conn.node_table("patches.tif", area_unit="ha")              # Makurhini's nodesfile
 ls.conn.distance_table(patches_gdf, id="patch_id", distance="edge", max_distance=5_000)  # distancefile
 ```
@@ -1158,6 +1160,21 @@ ls.conn.distance_table(patches_gdf, id="patch_id", distance="edge", max_distance
   `st_area` computes it (GDAL's shoelace sums), or a column. Centroids are those
   of the largest part, or a point on the surface when that centroid falls outside
   (Makurhini's `st_centroid_within_poly`); edge distances come from GEOS.
+
+* **Least-cost distances** (`distance="least-cost"`, `resistance=` a raster; NA cells
+  cannot be crossed) are gdistance's `costDistance` as Makurhini calls it: between
+  neighbouring cells (`cost_directions` 8 or 4) the conductance is 1 / the resistance of
+  the cell of larger index (`cost_function="makurhini"`, its default `1/x[2]`) or
+  1 / the mean of both (`"mean"`), divided by the distance between the cell centres;
+  a step costs its reciprocal, and the distance between two nodes is the cheapest
+  path between the cells of their centroids, in cost units (resistance × map units).
+  Pairs without any path (other components of the resistance, nodes outside it or on
+  NA cells) get their centroid distance, as in Makurhini (`unreachable="drop"` leaves
+  them unconnected). Dijkstra runs from every node in parallel over the raster (each
+  pair summed from its later node, as gdistance keeps the lower triangle), stops when
+  the nodes before it are reached or at `max_distance`, and uses the same step costs
+  (raster centre coordinates, R's x87 `sqrt`, `r_mean`): the distances are gdistance's
+  to the last bit.
 
 `max_distance` keeps the pairs up to that distance (in `distance_unit`), which is
 what Makurhini's `threshold` does in pair tables (in its matrices it drops the
@@ -1243,6 +1260,11 @@ the results do not depend on the number of threads.
   (GEOS measures between terra's polygon vertices: 1 in 80,000 values differs by 1
   ulp). It also checks raster edge distances against brute force (non-square
   cells too) and GEOS on the cell polygons.
+* Least-cost distances (`resistance_matrix`, 8 and 4 directions, `1/mean(x)`; the
+  polygons over a resistance with NA walls, whose unreachable pairs take the centroid
+  distance) are gdistance's bits, and `MK_dPCIIC` with them is reproduced exactly;
+  `tests/test_conn_spatial.py` also checks them against SciPy's Dijkstra on the
+  graph built from gdistance's formulas.
 * `tests/test_conn.py` checks every index and importance against a brute-force
   recomputation of the graph without each node (and with its attribute set to 0),
   under both conventions, and the input kinds, pair tables, Conefor files and
@@ -1257,3 +1279,5 @@ the results do not depend on the number of threads.
 | 5,000 random patches, 6 km (134 k links; PC: 4.3 M pairs), IIC / PC | – | 0.8 s / 19 s |
 | 4000×4000 raster, 8,395 patches: centroid distances, all 35 M pairs / up to 5 km | – | 0.9 s / 0.1 s |
 | same, edge distances up to 5 km / 20 km / all pairs | – | 0.24 s / 1.1 s / 12.5 s |
+| `habitat_nodes_raster` over `resistance_matrix` (222 k cells): least-cost distances | 10.2 s | 0.5 s |
+| 3000×3000 resistance, 300 nodes: least-cost distances, all pairs / up to 500 k cost units | – | 46 s / 1.5 s |

@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Least-cost distances between habitat nodes over a resistance raster, as
+// gdistance computes them for Makurhini (transition(), geoCorrection(),
+// costDistance()): between two neighbouring cells (4 or 8 directions) the
+// conductance is f(neighbour, cell) with the cell of larger index last
+// (Makurhini's default f = 1 / x[2], or 1 / mean(x)), divided by the
+// distance between the cell centres (raster::pointDistance, R's vector sqrt);
+// the cost of the step is its reciprocal, and a node's distance to another is
+// the cheapest sum of steps between their cells (Dijkstra). With the same
+// step costs every correct Dijkstra gives the same sums, so the distances are
+// gdistance's to the last bit.
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+#include "conn/nodes.hpp"
+
+namespace conn {
+
+enum class CostFunction { Destination, Mean };
+
+struct CostGrid {
+    i64 nx = 0, ny = 0;
+    double xmin = 0, xmax = 0, ymin = 0, ymax = 0;
+    int directions = 8;
+    CostFunction function = CostFunction::Destination;
+};
+
+// `resistance`: row-major, NaN where there is no cell. `node_cell`: the cell
+// of every node (-1 outside the raster). Pairs i < j with a finite cost up to
+// max_cost (unreachable pairs are left out). `max_threads` caps the threads
+// (each keeps a cost per cell); 0 = all.
+PairList least_cost_distances(const double* resistance, const CostGrid& grid, const i64* node_cell,
+                              std::int32_t n_nodes, double max_cost, int max_threads);
+
+}  // namespace conn
