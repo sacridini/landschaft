@@ -20,7 +20,7 @@ import pandas as pd
 import xarray as xr
 
 from .. import _core
-from .catalog import LEVELS, select_metrics
+from .catalog import LEVELS, canonical_name, select_metrics
 
 __all__ = ["Landscape", "landscape_metrics"]
 
@@ -132,9 +132,20 @@ def metric_options(**options) -> dict[str, Any]:
     return out
 
 
-def chosen_metrics(level=None, metric=None, name=None, type=None, what=None) -> pd.DataFrame:
+def chosen_metrics(level=None, metric=None, name=None, type=None, what=None, extras: bool = False) -> pd.DataFrame:
     """Selected catalogue rows in calculate_lsm's order (level, metric)."""
-    return select_metrics(level, metric, name, type, what).sort_values(["level", "metric"]).reset_index(drop=True)
+    return (
+        select_metrics(level, metric, name, type, what, extras).sort_values(["level", "metric"]).reset_index(drop=True)
+    )
+
+
+def core_options(options: dict, n_threads: int | None) -> dict:
+    """Options passed to the C++ core: the metric options and the threads."""
+    if n_threads is not None:
+        n_threads = int(n_threads)
+        if n_threads < 0:
+            raise ValueError(f"n_threads must be >= 0, got {n_threads}")
+    return {**options, "n_threads": n_threads or 0}
 
 
 def metric_specs(chosen: pd.DataFrame) -> tuple[list[int], list[str]]:
@@ -200,6 +211,12 @@ class Landscape:
         of 64; ``"auto"``: about 4 million cells per block). Only the patch
         tables stay in memory. Results are identical to the in-memory ones;
         ``labels`` and ``to_raster`` are not available.
+    n_threads
+        Threads of the C++ core (default: all cores).
+
+    Metric names are landscapemetrics' abbreviations; FRAGSTATS abbreviations
+    in capitals (``"SHDI"``) and the full names of pylandstats / FRAGSTATS
+    (``"shannon_diversity_index"``, ``"total_area"``) are accepted too.
 
     Examples
     --------
@@ -226,6 +243,7 @@ class Landscape:
         base: str = "log2",
         band: int | None = None,
         block_rows: int | str | None = None,
+        n_threads: int | None = None,
     ):
         self.options = metric_options(
             directions=directions,
@@ -238,12 +256,14 @@ class Landscape:
             ordered=ordered,
             base=base,
         )
+        self.n_threads = n_threads
         self._tiled = None
         if block_rows is not None:
             from .tiled import TiledReader
 
             self._tiled = TiledReader(
-                data, band=band, nodata=nodata, res=res, block_rows=block_rows, options=self.options
+                data, band=band, nodata=nodata, res=res, block_rows=block_rows,
+                options=core_options(self.options, n_threads),
             )
             self._template = None
             self.resolution = self._tiled.res
@@ -254,7 +274,7 @@ class Landscape:
         self._template = template
         self.resolution = res
         self.shape = values.shape
-        self._core = _core.LsmLandscape(values, mask, res[0], res[1], self.options)
+        self._core = _core.LsmLandscape(values, mask, res[0], res[1], core_options(self.options, n_threads))
 
     def __repr__(self) -> str:
         return (
@@ -322,39 +342,48 @@ class Landscape:
     # -- metrics ------------------------------------------------------------
 
     def _patch_values(self, metric: str) -> np.ndarray:
-        _check_level([metric], "patch")
+        (metric,), _ = _names(metric, "patch")
         self._ensure([metric])
         return self._core.patch_metric(metric)
 
     def patch_metrics(self, metrics: Iterable[str] | str | None = None) -> pd.DataFrame:
         """Patch-level metrics: one row per patch (``class``, ``id``, metrics...)."""
-        metrics = _names(metrics, "patch")
+        metrics, columns = _names(metrics, "patch")
         self._ensure(metrics)
         df = pd.DataFrame({"class": self.patch_classes, "id": np.arange(1, self.n_patches + 1)})
-        for m in metrics:
-            df[m] = self._core.patch_metric(m)
+        for m, col in zip(metrics, columns):
+            df[col] = self._core.patch_metric(m)
         return df
 
-    def class_metrics(self, metrics: Iterable[str] | str | None = None) -> pd.DataFrame:
-        """Class-level metrics: one row per class (``class``, metrics...)."""
-        metrics = _names(metrics, "class")
+    def class_metrics(self, metrics: Iterable[str] | str | None = None, *, extras: bool = False) -> pd.DataFrame:
+        """Class-level metrics: one row per class (``class``, metrics...).
+
+        All landscapemetrics metrics by default (``extras=True``: also the
+        FRAGSTATS ones, see :func:`landschaft.list_metrics`).
+        """
+        metrics, columns = _names(metrics, "class", extras)
         self._ensure(metrics)
+        self._core.prepare([1] * len(metrics), metrics)
         df = pd.DataFrame({"class": self.classes})
-        for m in metrics:
-            df[m] = self._core.class_metric(m)
+        for m, col in zip(metrics, columns):
+            df[col] = self._core.class_metric(m)
         return df
 
-    def landscape_metrics(self, metrics: Iterable[str] | str | None = None) -> pd.DataFrame:
-        """Landscape-level metrics: a single row."""
-        metrics = _names(metrics, "landscape")
+    def landscape_metrics(self, metrics: Iterable[str] | str | None = None, *, extras: bool = False) -> pd.DataFrame:
+        """Landscape-level metrics: a single row (``extras`` as in
+        :meth:`class_metrics`)."""
+        metrics, columns = _names(metrics, "landscape", extras)
         self._ensure(metrics)
-        return pd.DataFrame({m: [self._core.landscape_metric(m)] for m in metrics})
+        self._core.prepare([2] * len(metrics), metrics)
+        return pd.DataFrame({col: [self._core.landscape_metric(m)] for m, col in zip(metrics, columns)})
 
-    def metrics(self, level=None, metric=None, name=None, type=None, what=None) -> pd.DataFrame:
+    def metrics(
+        self, level=None, metric=None, name=None, type=None, what=None, *, extras: bool = False
+    ) -> pd.DataFrame:
         """Selected metrics in long format, like landscapemetrics' ``calculate_lsm``.
 
-        Selection as in :func:`landschaft.list_metrics` (all metrics by
-        default).
+        Selection as in :func:`landschaft.list_metrics` (all landscapemetrics
+        metrics by default; ``extras=True`` adds the FRAGSTATS ones).
 
         Returns
         -------
@@ -363,26 +392,35 @@ class Landscape:
             (``class``/``id`` are missing where they do not apply). An all-NA
             map gives one missing value per metric, as in landscapemetrics.
         """
-        chosen = chosen_metrics(level, metric, name, type, what)
+        chosen = chosen_metrics(level, metric, name, type, what, extras)
         self._ensure(chosen["metric"])
         return long_frame(self._core.long_table(*metric_specs(chosen)), chosen)
 
 
-def _names(metrics, level: str) -> list[str]:
+def _names(metrics, level: str, extras: bool = False) -> tuple[list[str], list[str]]:
+    """Canonical metric names at `level` and the column names (as asked)."""
     if metrics is None:
-        return list(select_metrics(level=level)["metric"])
+        names = list(select_metrics(level=level, extras=extras)["metric"])
+        return names, names
     if isinstance(metrics, str):
         metrics = [metrics]
-    metrics = list(metrics)
-    _check_level(metrics, level)
-    return metrics
+    columns = [str(m) for m in metrics]
+    names = [canonical_name(m, level) for m in columns]
+    _check_level(names, level, columns)
+    return names, columns
 
 
-def _check_level(metrics: Sequence[str], level: str) -> None:
-    available = set(select_metrics(level=level)["metric"])
-    unknown = [m for m in metrics if m not in available]
+def _check_level(metrics: Sequence[str], level: str, asked: Sequence[str] | None = None) -> None:
+    available = set(select_metrics(level=level, extras=True)["metric"])
+    asked = metrics if asked is None else asked
+    unknown = [a for m, a in zip(metrics, asked) if m not in available]
     if unknown:
-        other = [lv for lv in LEVELS if lv != level and set(unknown) & set(select_metrics(level=lv)["metric"])]
+        other = [
+            lv
+            for lv in LEVELS
+            if lv != level
+            and {canonical_name(u, lv) for u in unknown} & set(select_metrics(level=lv, extras=True)["metric"])
+        ]
         hint = f" (available at the {' and '.join(other)} level)" if other else ""
         raise ValueError(f"not {level}-level metric(s): {unknown}{hint}; see list_metrics(level={level!r})")
 
@@ -394,6 +432,9 @@ def landscape_metrics(
     name=None,
     type=None,
     what=None,
+    *,
+    extras: bool = False,
+    n_threads: int | None = None,
     **options,
 ) -> pd.DataFrame:
     """Landscape metrics of one or several rasters, in long format.
@@ -409,6 +450,11 @@ def landscape_metrics(
     level, metric, name, type, what
         Metric selection, as in :func:`landschaft.list_metrics`; all metrics
         by default.
+    extras
+        Also select the FRAGSTATS metrics missing in landscapemetrics
+        (``_am``, ``_md``, ``_ra``, ...; see :func:`landschaft.list_metrics`).
+    n_threads
+        Threads of the C++ core (default: all cores).
     **options
         :class:`Landscape` options (``directions``, ``count_boundary``,
         ``edge_depth``, ``res``, ``nodata``, ``block_rows`` for files larger
@@ -422,15 +468,18 @@ def landscape_metrics(
     """
     layers = as_layers(data)
     if layers is None:
-        return Landscape(data, **options).metrics(level, metric, name, type, what)
+        return Landscape(data, n_threads=n_threads, **options).metrics(level, metric, name, type, what, extras=extras)
     if options.get("block_rows") is not None:
-        frames = [Landscape(layer, **options).metrics(level, metric, name, type, what) for layer in layers]
+        frames = [
+            Landscape(layer, n_threads=n_threads, **options).metrics(level, metric, name, type, what, extras=extras)
+            for layer in layers
+        ]
         for i, df in enumerate(frames, start=1):
             df.insert(0, "layer", i)
         return pd.concat(frames, ignore_index=True)
     res, nodata, band = options.pop("res", None), options.pop("nodata", None), options.pop("band", None)
-    opts = metric_options(**options)
-    chosen = chosen_metrics(level, metric, name, type, what)
+    opts = core_options(metric_options(**options), n_threads)
+    chosen = chosen_metrics(level, metric, name, type, what, extras)
     rasters = []
     for layer in layers:
         values, mask, r, _ = _prepare(layer, res, nodata, band)

@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Iterable
 
 import pandas as pd
 
-__all__ = ["list_metrics", "LEVELS", "TYPES"]
+__all__ = ["list_metrics", "canonical_name", "canonical_family", "LEVELS", "TYPES", "STATS"]
 
 LEVELS = ("patch", "class", "landscape")
 TYPES = (
@@ -156,17 +157,64 @@ _CATALOG = [
     ("te", "total edge", "area and edge metric", "landscape"),
 ]
 
+# Summary statistics of the patch metrics at the class and landscape level:
+# landscapemetrics has mn, sd and cv; FRAGSTATS (and pylandstats) also the
+# area-weighted mean, the median and the range.
+STATS = ("mn", "sd", "cv", "am", "md", "ra")
+
+# Patch metrics with summary statistics: (name, type). The perim statistics
+# only exist in pylandstats; dcore is landscapemetrics' number of core areas
+# per patch.
+_DISTRIBUTIONS = {
+    "area": ("patch area", "area and edge metric"),
+    "cai": ("core area index", "core area metric"),
+    "circle": ("related circumscribing circle", "shape metric"),
+    "contig": ("contiguity index", "shape metric"),
+    "core": ("core area", "core area metric"),
+    "dcore": ("disjunct core area", "core area metric"),
+    "enn": ("euclidean nearest neighbor distance", "aggregation metric"),
+    "frac": ("fractal dimension index", "shape metric"),
+    "gyrate": ("radius of gyration", "area and edge metric"),
+    "para": ("perimeter-area ratio", "shape metric"),
+    "perim": ("patch perimeter", "area and edge metric"),
+    "shape": ("shape index", "shape metric"),
+}
+
+
+def _extras() -> list[tuple[str, str, str, str]]:
+    """Metrics beyond landscapemetrics (FRAGSTATS / pylandstats)."""
+    known = {(m, lvl) for m, _, _, lvl in _CATALOG}
+    rows = []
+    for level in ("class", "landscape"):
+        for family, (name, kind) in _DISTRIBUTIONS.items():
+            for stat in STATS:
+                if (f"{family}_{stat}", level) not in known:
+                    rows.append((f"{family}_{stat}", name, kind, level))
+    return rows
+
+
 _PREFIX = {"patch": "lsm_p_", "class": "lsm_c_", "landscape": "lsm_l_"}
+_LEVEL_ORDER = {lvl: i for i, lvl in enumerate(LEVELS)}
 
 
-def _table() -> pd.DataFrame:
-    df = pd.DataFrame(_CATALOG, columns=["metric", "name", "type", "level"])
+def _sorted(df: pd.DataFrame) -> pd.DataFrame:
+    return df.sort_values(
+        ["level", "metric"], key=lambda s: s.map(_LEVEL_ORDER) if s.name == "level" else s
+    ).reset_index(drop=True)
+
+
+@functools.lru_cache(maxsize=None)
+def _full_table() -> pd.DataFrame:
+    rows = [(*r, False) for r in _CATALOG] + [(*r, True) for r in _extras()]
+    df = pd.DataFrame(rows, columns=["metric", "name", "type", "level", "extra"])
     df["function_name"] = [_PREFIX[lvl] + m for m, lvl in zip(df["metric"], df["level"])]
     df["family"] = df["metric"].str.split("_").str[0]
-    order = {lvl: i for i, lvl in enumerate(LEVELS)}
-    return df.sort_values(["level", "metric"], key=lambda s: s.map(order) if s.name == "level" else s).reset_index(
-        drop=True
-    )
+    return _sorted(df)
+
+
+def _table(extras: bool = False) -> pd.DataFrame:
+    df = _full_table()
+    return df if extras else df[~df["extra"]].reset_index(drop=True)
 
 
 def _as_list(value) -> list[str] | None:
@@ -191,20 +239,23 @@ def _subset(values: pd.Series, spec: list[str] | None, what: str) -> pd.Series:
     return values.isin(spec)
 
 
-def select_metrics(
-    level=None, metric=None, name=None, type=None, what=None
-) -> pd.DataFrame:
-    """Catalogue rows chosen like landscapemetrics' ``list_lsm``."""
-    table = _table()
+def select_metrics(level=None, metric=None, name=None, type=None, what=None, extras: bool = False) -> pd.DataFrame:
+    """Catalogue rows chosen like landscapemetrics' ``list_lsm`` (plus the
+    extras when ``extras``; extras named in ``what`` are always kept)."""
+    table = _table(extras)
     what = _as_list(what)
     if what is not None:
         if any(w.startswith("-") for w in what):
             raise ValueError("negative names are not allowed in 'what'; use level/metric/name/type instead")
         levels = [w for w in what if w in LEVELS]
         rest = [w for w in what if w not in LEVELS]
-        unknown = set(rest) - set(table["function_name"])
+        full = _full_table()
+        unknown = set(rest) - set(full["function_name"])
         if unknown:
             raise ValueError(f"unknown metric function(s): {sorted(unknown)}; see list_metrics()")
+        named = full[full["function_name"].isin(rest) & full["extra"]]
+        if not named.empty:
+            table = _sorted(pd.concat([table, named]).drop_duplicates("function_name"))
         keep = table["function_name"].isin(rest) | table["level"].isin(levels)
     else:
         level = _as_list(level)
@@ -212,9 +263,12 @@ def select_metrics(
             bad = {lv.lstrip("-") for lv in level} - set(LEVELS)
             if bad:
                 raise ValueError(f"level must be one of {LEVELS}, got {sorted(bad)}")
+        metric = _as_list(metric)
+        if metric is not None:
+            metric = [("-" if m.startswith("-") else "") + canonical_family(m.lstrip("-")) for m in metric]
         keep = (
             _subset(table["level"], level, "level")
-            & _subset(table["family"], _as_list(metric), "metric")
+            & _subset(table["family"], metric, "metric")
             & _subset(table["name"], _as_list(name), "name")
             & _subset(table["type"], _as_list(type), "type")
         )
@@ -224,7 +278,7 @@ def select_metrics(
     return result.reset_index(drop=True)
 
 
-def list_metrics(level=None, metric=None, name=None, type=None, what=None) -> pd.DataFrame:
+def list_metrics(level=None, metric=None, name=None, type=None, what=None, *, extras: bool = False) -> pd.DataFrame:
     """Available landscape metrics.
 
     Filters work as in landscapemetrics' ``list_lsm``: ``level`` ("patch",
@@ -234,9 +288,113 @@ def list_metrics(level=None, metric=None, name=None, type=None, what=None) -> pd
     with ``-`` exclude. ``what`` lists levels and/or function names such as
     ``"lsm_c_ca"`` and overrides the other filters.
 
+    ``extras=True`` adds the metrics landscapemetrics does not have
+    (FRAGSTATS / pylandstats): the area-weighted mean ``_am``, the median
+    ``_md`` and the range ``_ra`` of every patch metric, and the statistics
+    of ``perim``. Extras named in ``what`` are always selected.
+
     Returns
     -------
     pandas.DataFrame
-        Columns ``metric``, ``name``, ``type``, ``level`` and ``function_name``.
+        Columns ``metric``, ``name``, ``type``, ``level``, ``extra`` (not in
+        landscapemetrics) and ``function_name``.
     """
-    return select_metrics(level, metric, name, type, what).drop(columns="family")
+    return select_metrics(level, metric, name, type, what, extras).drop(columns="family")
+
+
+# -- aliases ----------------------------------------------------------------------
+
+# Full names (pylandstats' methods, FRAGSTATS' metric names) of the
+# landscapemetrics abbreviations, per level.
+_PATCH_NAMES = {
+    "perimeter": "perim",
+    "perimeter_area_ratio": "para",
+    "shape_index": "shape",
+    "fractal_dimension": "frac",
+    "fractal_dimension_index": "frac",
+    "core_area": "core",
+    "number_of_core_areas": "ncore",
+    "core_area_index": "cai",
+    "euclidean_nearest_neighbor": "enn",
+    "euclidean_nearest_neighbor_distance": "enn",
+    "radius_of_gyration": "gyrate",
+    "contiguity_index": "contig",
+    "continguity_index": "contig",  # pylandstats' spelling
+    "related_circumscribing_circle": "circle",
+    "disjunct_core_area": "dcore",
+}
+_CLASS_NAMES = {
+    "total_area": "ca",
+    "class_area": "ca",
+    "proportion_of_landscape": "pland",
+    "percentage_of_landscape": "pland",
+    "number_of_patches": "np",
+    "patch_density": "pd",
+    "largest_patch_index": "lpi",
+    "total_edge": "te",
+    "edge_density": "ed",
+    "total_core_area": "tca",
+    "core_area_proportion_of_landscape": "cpland",
+    "core_area_percentage_of_landscape": "cpland",
+    "number_of_disjunct_core_areas": "ndca",
+    "disjunct_core_area_density": "dcad",
+    "landscape_shape_index": "lsi",
+    "normalized_landscape_shape_index": "nlsi",
+    "effective_mesh_size": "mesh",
+    "splitting_index": "split",
+    "landscape_division_index": "division",
+    "division_index": "division",
+    "aggregation_index": "ai",
+    "clumpiness_index": "clumpy",
+    "patch_cohesion_index": "cohesion",
+    "interspersion_juxtaposition_index": "iji",
+    "interspersion_and_juxtaposition_index": "iji",
+    "percentage_of_like_adjacencies": "pladj",
+    "perimeter_area_fractal_dimension": "pafrac",
+}
+_LANDSCAPE_NAMES = {
+    **{k: v for k, v in _CLASS_NAMES.items() if v not in ("ca", "pland", "cpland", "nlsi", "clumpy")},
+    "total_area": "ta",
+    "entropy": "ent",
+    "shannon_diversity_index": "shdi",
+    "shannon_evenness_index": "shei",
+    "simpson_diversity_index": "sidi",
+    "simpson_evenness_index": "siei",
+    "modified_simpson_diversity_index": "msidi",
+    "modified_simpson_evenness_index": "msiei",
+    "patch_richness": "pr",
+    "patch_richness_density": "prd",
+    "relative_patch_richness": "rpr",
+    "joint_entropy": "joinent",
+    "conditional_entropy": "condent",
+    "mutual_information": "mutinf",
+    "relative_mutual_information": "relmutinf",
+    "contagion": "contag",
+}
+_LEVEL_NAMES = {"patch": _PATCH_NAMES, "class": _CLASS_NAMES, "landscape": _LANDSCAPE_NAMES}
+
+
+def canonical_family(family: str) -> str:
+    """landscapemetrics family of a family name or alias (``"shape_index"``
+    -> ``"shape"``, ``"AREA"`` -> ``"area"``)."""
+    low = family.lower()
+    return _PATCH_NAMES.get(low, low)
+
+
+def canonical_name(name: str, level: str) -> str:
+    """landscapemetrics abbreviation of a metric name at ``level``.
+
+    Accepts FRAGSTATS abbreviations in any case (``"SHDI"``, ``"AREA_MN"``)
+    and the full names of pylandstats / FRAGSTATS (``"shannon_diversity_index"``,
+    ``"shape_index_am"``, ``"total_area"``: ``ca`` at the class level, ``ta``
+    at the landscape level). Other names are returned lower-cased.
+    """
+    low = name.lower()
+    table = _LEVEL_NAMES[level]
+    if low in table:
+        return table[low]
+    if level != "patch":
+        base, _, stat = low.rpartition("_")
+        if base and stat in STATS:
+            return f"{_PATCH_NAMES.get(base, base)}_{stat}"
+    return low

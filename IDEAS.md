@@ -6,15 +6,10 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Métricas e estatísticas extras
 
-- **`_am`, `_md`, `_ra`** (média ponderada pela área, mediana, amplitude), como no
-  pylandstats e no FRAGSTATS. O landscapemetrics só tem `_mn`, `_sd` e `_cv`. As
-  reduções são genéricas no C++ (`reduce()` em `src/cpp/lsm/metrics.cpp`), então
-  bastaria somar as três ao catálogo, sem referência do R (conferir contra o
-  pylandstats).
 - **Métricas do FRAGSTATS que não estão no landscapemetrics**: PROX (índice de
   proximidade, com `search_radius`; o pylandstats tem), SIMI (similaridade),
   CONNECT (conectância), contraste de borda (CWED, TECI, ECON, com matriz de pesos),
-  GYRATE_AM (correlation length), RMN/FRAGSTATS "related circumscribing circle" _am.
+  RMN.
 - **Modo "FRAGSTATS estrito"** (opção, p. ex. `convention="fragstats"`) que corrija
   convenções do landscapemetrics:
   - perímetro com células não quadradas: o landscapemetrics multiplica as arestas
@@ -26,9 +21,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Uso e API
 
-- **Nomes completos como aliases** (`total_area`, `shannon_diversity_index`, ...)
-  e abreviações FRAGSTATS em maiúsculas (`TA`, `SHDI`), para quem vem do pylandstats
-  ou do FRAGSTATS.
 - **`check_landscape()`**: relatório de validade como o do landscapemetrics (CRS
   projetado, valores inteiros, número de classes).
 - **Utilitários do landscapemetrics**: `get_centroids`, `get_nearestneighbour`,
@@ -40,7 +32,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   pontos.
 - **Integração com `batch()`**: `"landscape_metrics"` em `BATCH_TOOLS`, gravando
   uma tabela por raster (CSV/Parquet) e o JSON de registro.
-- **`n_threads`** por chamada (hoje o núcleo usa todas as threads do OpenMP).
 
 ## Exportação
 
@@ -95,9 +86,19 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   O landschaft calcula com a largura e a altura reais da célula.
 - Ler as referências sempre com `float_precision="round_trip"` (o parser rápido do
   pandas muda o último bit de alguns valores).
-- `_sd`/`_cv` diferem do R no último bit: o R (mingw) acumula em `long double` de
-  80 bits e o MSVC não tem esse tipo. Para bater bit a bit, acumular com soma
-  compensada (double-double) nas reduções.
+- Bit a bit: somas, médias e desvios reproduzem o `long double` de 80 bits do R
+  (`src/cpp/lsm/extended.hpp`, emulado no MSVC) e `log`/`sqrt` usam o x87 como a
+  libm do mingw (`rmath.hpp`, `x87_msvc.asm`). Faltam `gyrate` (o R soma coordenadas
+  e distâncias célula a célula em ordem de linha, em 80 bits: exigiria percorrer as
+  células de cada patch em sequência; fora da memória, mais 3 passadas no arquivo),
+  `pafrac` (QR do `lm()`: portar `dqrdc2`/`dqrsl` e o `dnrm2` do BLAS de referência
+  do R 4.4) e alguns `enn` com células quase quadradas (a busca podada do R).
+  `circle` não tem como: o R embaralha os pontos ao acaso.
+- As somas sequenciais em 80 bits custam: num mapa sal-e-pimenta com 10 M de
+  patches, as estatísticas de paisagem (uma cadeia sequencial por métrica) levam
+  ~0,7 s. Uma adição de `double` mais rápida (caminho rápido, 5 ns) já existe; a
+  subtração/multiplicação genéricas (~9 ns, latência) poderiam ter caminhos rápidos
+  sem desvios.
 
 ## Fases combinadas (referência)
 
@@ -121,3 +122,5 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
    - API a definir (p. ex. `landscape_metrics(..., tiled=True)` ou um objeto próprio),
      no estilo do `mspa_tiled` já existente; testar comparando com o cálculo em memória
      e com o landscapemetrics em mapas pequenos cortados em blocos pequenos.
+6. Estatísticas extras do FRAGSTATS (`_am`, `_md`, `_ra`, `perim_*`), nomes do
+   FRAGSTATS/pylandstats, `n_threads` e valores bit a bit iguais ao R. **Feita.**

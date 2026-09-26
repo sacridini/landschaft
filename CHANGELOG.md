@@ -6,6 +6,35 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 6, FRAGSTATS extras: the area-weighted mean (`_am`), median
+  (`_md`) and range (`_ra`) of every patch metric at the class and landscape level
+  (`gyrate_am` is FRAGSTATS' correlation length), and the `perim_*` statistics of
+  pylandstats; 78 more metrics, selected with `extras=True` in `list_metrics`,
+  `metrics`, `landscape_metrics`, `sample_metrics` and `window_metrics` (or by name).
+  Checked against numpy and against pylandstats' `_mn`/`_am`/`_md`/`_ra`.
+- Metric names as FRAGSTATS abbreviations in capitals (`"SHDI"`, `"AREA_MN"`) and as
+  the full names of pylandstats / FRAGSTATS (`"shannon_diversity_index"`,
+  `"total_area"`, `"shape_index_am"`, ...); wide tables keep the names as asked.
+- `n_threads` for `Landscape`, `landscape_metrics`, `sample_metrics` and
+  `window_metrics` (default: all cores).
+
+### Changed
+- Landscape metrics are now the same bits as landscapemetrics' for everything but
+  `circle`, `gyrate`, `pafrac` and rare `enn` ties (still within 1e-10): sums, means
+  and standard deviations reproduce R's 80-bit `long double` accumulation (emulated
+  in software, MSVC has no such type; validated against gcc's native type on 40
+  million random operations), and `log`/`sqrt` are computed on the x87 unit as
+  R's mingw-w64 math library does (a MASM routine under MSVC). The reference tests
+  now require identical bits.
+- Summary statistics of all requested metrics are computed side by side, and
+  class-level statistics per class in parallel; per-patch formulas run in parallel.
+
+### Fixed
+- Patch perimeters (and `para`, `shape`, `frac`, ...) of rasters whose cell width
+  and height differ by rounding only (e.g. geographic rasters) use landscapemetrics'
+  `all.equal` rule.
+
 ## [0.16.0] - 2026-09-26
 
 ### Added

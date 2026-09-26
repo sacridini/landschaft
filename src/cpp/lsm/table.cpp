@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <exception>
+#include <optional>
 #include <stdexcept>
 
 #include "lsm/landscape.hpp"
@@ -62,6 +63,7 @@ void LongTable::append(const LongTable& o) {
 
 void append_long_table(Landscape& l, const std::vector<MetricSpec>& specs, std::int32_t item, LongTable& out) {
     const bool empty = l.n_classes() == 0;
+    if (!empty) l.prepare(specs);
     const std::vector<std::int32_t>& values = l.class_values();
     for (std::size_t s = 0; s < specs.size(); ++s) {
         const auto m = static_cast<std::int16_t>(s);
@@ -165,6 +167,21 @@ std::vector<double> window_metrics(const RasterView& raster, const std::uint8_t*
     std::vector<double> out(static_cast<std::size_t>(m * n));
     const i64 hx = wx / 2;
     const i64 hy = wy / 2;
+    // window_lsm computes shdi and shei from the class areas of
+    // 8-connected patches whatever `directions` is (their _calc functions
+    // hard-code it; calculate_lsm hides it with patches it has already
+    // labelled). The sums round differently: with 4 directions these metrics
+    // come from an 8-direction copy of the window.
+    std::vector<char> eight(static_cast<std::size_t>(m), 0);
+    bool any_eight = false;
+    if (options.directions == 4) {
+        for (i64 k = 0; k < m; ++k) {
+            eight[k] = names[k] == "shdi" || names[k] == "shei";
+            any_eight = any_eight || eight[k];
+        }
+    }
+    Options options8 = options;
+    options8.directions = 8;
     FirstError error;
 #pragma omp parallel
     {
@@ -185,7 +202,11 @@ std::vector<double> window_metrics(const RasterView& raster, const std::uint8_t*
                         }
                     }
                     Landscape l(buf.data(), buf_na.data(), wx, wy, raster.resx, raster.resy, options);
-                    for (i64 k = 0; k < m; ++k) out[k * n + y * nx + x] = l.landscape_metric(names[k]);
+                    std::optional<Landscape> l8;
+                    if (any_eight) l8.emplace(buf.data(), buf_na.data(), wx, wy, raster.resx, raster.resy, options8);
+                    for (i64 k = 0; k < m; ++k) {
+                        out[k * n + y * nx + x] = eight[k] ? l8->landscape_metric(names[k]) : l.landscape_metric(names[k]);
+                    }
                 }
             });
         }

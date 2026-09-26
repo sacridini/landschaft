@@ -651,6 +651,7 @@ lsm::Options make_options(const py::dict& o) {
     opt.neighbourhood = o["neighbourhood"].cast<int>();
     opt.ordered = o["ordered"].cast<bool>();
     opt.base = o["base"].cast<std::string>();
+    if (o.contains("n_threads") && !o["n_threads"].is_none()) opt.n_threads = o["n_threads"].cast<int>();
     return opt;
 }
 
@@ -719,9 +720,9 @@ void tiled_check(const lsm::TiledLandscape& t, const CArray<std::int32_t>& value
 }
 
 template <class F>
-auto lsm_call(F&& f) {
+auto lsm_call(int n_threads, F&& f) {
     try {
-        return run_parallel(0, std::forward<F>(f));
+        return run_parallel(n_threads, std::forward<F>(f));
     } catch (const std::invalid_argument& e) {
         throw py::value_error(e.what());
     }
@@ -738,30 +739,34 @@ void bind_landscape(py::module_& m) {
             return py::array_t<std::int64_t>(l.class_cells().size(), l.class_cells().data());
         })
         .def_property_readonly("valid_cells", &lsm::Landscape::valid_cells)
-        .def("n_patches", [](lsm::Landscape& l) { return lsm_call([&] { return l.patches().n; }); })
+        .def("n_patches", [](lsm::Landscape& l) { return lsm_call(l.options().n_threads, [&] { return l.patches().n; }); })
         .def("patch_class", [](lsm::Landscape& l) {
-            lsm_call([&] { return l.patches().n; });
+            lsm_call(l.options().n_threads, [&] { return l.patches().n; });
             const lsm::Patches& p = l.patches();
             return py::array_t<std::int32_t>(p.cls.size(), p.cls.data());
         })
         .def("labels", [](lsm::Landscape& l) {
-            auto v = lsm_call([&] { return l.labels(); });
+            auto v = lsm_call(l.options().n_threads, [&] { return l.labels(); });
             return to_array(std::move(v), l.nx(), l.ny());
         })
         .def("patch_metric", [](lsm::Landscape& l, const std::string& name) {
-            auto v = lsm_call([&] { return l.patch_metric(name); });
+            auto v = lsm_call(l.options().n_threads, [&] { return l.patch_metric(name); });
             return py::array_t<double>(v.size(), v.data());
         })
         .def("class_metric", [](lsm::Landscape& l, const std::string& name) {
-            auto v = lsm_call([&] { return l.class_metric(name); });
+            auto v = lsm_call(l.options().n_threads, [&] { return l.class_metric(name); });
             return py::array_t<double>(v.size(), v.data());
         })
         .def("landscape_metric", [](lsm::Landscape& l, const std::string& name) {
-            return lsm_call([&] { return l.landscape_metric(name); });
+            return lsm_call(l.options().n_threads, [&] { return l.landscape_metric(name); });
+        })
+        .def("prepare", [](lsm::Landscape& l, const std::vector<int>& levels, const std::vector<std::string>& names) {
+            const std::vector<lsm::MetricSpec> specs = metric_specs(levels, names);
+            lsm_call(l.options().n_threads, [&] { l.prepare(specs); });
         })
         .def("long_table", [](lsm::Landscape& l, const std::vector<int>& levels, const std::vector<std::string>& names) {
             const std::vector<lsm::MetricSpec> specs = metric_specs(levels, names);
-            const lsm::LongTable t = lsm_call([&] {
+            const lsm::LongTable t = lsm_call(l.options().n_threads, [&] {
                 lsm::LongTable out;
                 lsm::append_long_table(l, specs, 0, out);
                 return out;
@@ -784,27 +789,27 @@ void bind_landscape(py::module_& m) {
         .def("add_block", [](lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
                              const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below) {
             tiled_check(t, values, na, rows + above + below);
-            lsm_call([&] { t.add_block(values.data(), na.data(), y0, rows, above, below); });
+            lsm_call(t.n_threads(), [&] { t.add_block(values.data(), na.data(), y0, rows, above, below); });
         })
-        .def("finish", [](lsm::TiledLandscape& t) { lsm_call([&] { t.finish(); }); })
+        .def("finish", [](lsm::TiledLandscape& t) { lsm_call(t.n_threads(), [&] { t.finish(); }); })
         .def("landscape", [](lsm::TiledLandscape& t) -> lsm::Landscape& { return t.landscape(); },
              py::return_value_policy::reference_internal)
         .def("detail_halo", &lsm::TiledLandscape::detail_halo, py::arg("core"), py::arg("enn"))
         .def("begin_detail", [](lsm::TiledLandscape& t, bool core, bool gyrate, bool circle, bool enn) {
-            lsm_call([&] { t.begin_detail(core, gyrate, circle, enn); });
+            lsm_call(t.n_threads(), [&] { t.begin_detail(core, gyrate, circle, enn); });
         })
         .def("detail_block", [](lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
                                 const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below) {
             tiled_check(t, values, na, rows + above + below);
-            lsm_call([&] { t.detail_block(values.data(), na.data(), y0, rows, above, below); });
+            lsm_call(t.n_threads(), [&] { t.detail_block(values.data(), na.data(), y0, rows, above, below); });
         })
-        .def("end_detail", [](lsm::TiledLandscape& t) { return lsm_call([&] { return t.end_detail(); }); })
+        .def("end_detail", [](lsm::TiledLandscape& t) { return lsm_call(t.n_threads(), [&] { return t.end_detail(); }); })
         .def("tie_block", [](lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
                              const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below) {
             tiled_check(t, values, na, rows + above + below);
-            lsm_call([&] { t.tie_block(values.data(), na.data(), y0, rows, above, below); });
+            lsm_call(t.n_threads(), [&] { t.tie_block(values.data(), na.data(), y0, rows, above, below); });
         })
-        .def("end_ties", [](lsm::TiledLandscape& t) { lsm_call([&] { t.end_ties(); }); });
+        .def("end_ties", [](lsm::TiledLandscape& t) { lsm_call(t.n_threads(), [&] { t.end_ties(); }); });
 
     // rasters: list of (values, na_mask or None, resx, resy)
     m.def(
@@ -822,10 +827,13 @@ void bind_landscape(py::module_& m) {
                 values.push_back(t[0].cast<CArray<std::int32_t>>());
                 views.push_back(raster_view(values.back(), t[1], masks[i], t[2].cast<double>(), t[3].cast<double>()));
             }
-            const lsm::LongTable t = lsm_call([&] { return lsm::batch_long_table(views, opt, specs); });
+            const lsm::LongTable t = lsm_call(opt.n_threads, [&] { return lsm::batch_long_table(views, opt, specs); });
             return long_table_dict(t);
         },
         py::arg("rasters"), py::arg("options"), py::arg("levels"), py::arg("names"));
+
+    m.def("lsm_r_statistics", &lsm::r_statistics, py::arg("x"),
+          "R's sum, mean, sd and median of x, log(x[0]) and sqrt(x[0]), as landschaft computes them.");
 
     m.def(
         "lsm_window",
@@ -835,7 +843,7 @@ void bind_landscape(py::module_& m) {
             CArray<std::uint8_t> mask_arr;
             const lsm::RasterView r = raster_view(values, na_mask, mask_arr, resx, resy);
             const lsm::Options opt = make_options(options);
-            const std::vector<double> out = lsm_call([&] {
+            const std::vector<double> out = lsm_call(opt.n_threads, [&] {
                 return lsm::window_metrics(r, window.data(), window.shape(1), window.shape(0), names, opt);
             });
             py::array_t<double> a({static_cast<py::ssize_t>(names.size()), static_cast<py::ssize_t>(r.ny),

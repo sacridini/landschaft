@@ -223,6 +223,7 @@ TiledLandscape::~TiledLandscape() = default;
 
 i64 TiledLandscape::nx() const { return s_->nx; }
 i64 TiledLandscape::ny() const { return s_->ny; }
+int TiledLandscape::n_threads() const { return s_->opt.n_threads; }
 
 void TiledLandscape::add_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above,
                                i64 below) {

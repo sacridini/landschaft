@@ -18,6 +18,7 @@ from .landscape import (
     _prepare,
     as_layers,
     chosen_metrics,
+    core_options,
     long_frame,
     metric_options,
     metric_specs,
@@ -227,6 +228,8 @@ def sample_metrics(
     nodata=None,
     band: int | None = None,
     verbose: bool = True,
+    extras: bool = False,
+    n_threads: int | None = None,
     **options,
 ) -> pd.DataFrame:
     """Landscape metrics of sample plots, like landscapemetrics' ``sample_lsm``.
@@ -266,6 +269,10 @@ def sample_metrics(
         Raster reading options (see :class:`Landscape`).
     verbose
         Warn when a plot lies less than 90 % inside the raster.
+    extras
+        Also select the FRAGSTATS metrics missing in landscapemetrics.
+    n_threads
+        Threads of the C++ core (default: all cores).
     **options
         Metric options (``directions``, ``edge_depth``, ...).
 
@@ -278,8 +285,8 @@ def sample_metrics(
         for several rasters. A plot outside the raster (an error in
         landscapemetrics) gives NA metrics and 0 %.
     """
-    opts = metric_options(**options)
-    chosen = chosen_metrics(level, metric, name, type, what)
+    opts = core_options(metric_options(**options), n_threads)
+    chosen = chosen_metrics(level, metric, name, type, what, extras)
     plots = _plots(y, size, shape)
     n_plots = len(plots)
     if plot_id is not None:
@@ -406,6 +413,8 @@ def window_metrics(
     res=None,
     nodata=None,
     band: int | None = None,
+    extras: bool = False,
+    n_threads: int | None = None,
     **options,
 ):
     """Landscape-level metrics in a moving window, like landscapemetrics'
@@ -429,6 +438,10 @@ def window_metrics(
         landscape-level metrics are possible (all of them by default).
     res, nodata, band
         Raster reading options (see :class:`Landscape`).
+    extras
+        Also select the FRAGSTATS metrics missing in landscapemetrics.
+    n_threads
+        Threads of the C++ core (default: all cores).
     **options
         Metric options (``directions``, ``edge_depth``, ...).
 
@@ -438,8 +451,8 @@ def window_metrics(
         ``{metric: raster}`` (a DataArray on the input grid, or a numpy
         array), or a list of such dicts for several rasters.
     """
-    opts = metric_options(**options)
-    chosen = chosen_metrics(level, metric, name, type, what)
+    opts = core_options(metric_options(**options), n_threads)
+    chosen = chosen_metrics(level, metric, name, type, what, extras)
     if set(chosen["level"]) != {"landscape"}:
         raise ValueError("window_metrics computes landscape-level metrics only")
     names = list(chosen["metric"])

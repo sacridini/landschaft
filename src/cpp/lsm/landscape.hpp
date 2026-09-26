@@ -11,6 +11,7 @@
 // cheap function of these tables.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -35,6 +36,7 @@ struct Options {
     int neighbourhood = 4;          // complexity metrics: 4 or 8 neighbours
     bool ordered = true;            // complexity metrics: ordered pairs
     std::string base = "log2";      // complexity metrics: log2, log or log10
+    int n_threads = 0;              // OpenMP threads of the Python calls (0: all)
 };
 
 // Per-patch statistics, in landscapemetrics' patch order (by class, then by
@@ -101,6 +103,16 @@ std::vector<std::int32_t> city_block_distance(const std::int32_t* cls, i64 nx, i
 // R's signif(x, digits) for ordinary magnitudes.
 double r_signif(double x, int digits);
 
+// R's sum, mean, sd, median of x, and log and sqrt of x[0] (for the tests).
+std::vector<double> r_statistics(const std::vector<double>& x);
+
+enum Level : std::int8_t { kPatch = 0, kClass = 1, kLandscape = 2 };
+
+struct MetricSpec {
+    Level level;
+    std::string name;
+};
+
 class Landscape {
 public:
     Landscape(const std::int32_t* values, const std::uint8_t* na_mask, i64 nx, i64 ny, double resx, double resy,
@@ -132,6 +144,9 @@ public:
     // Metric values. Patch: one per patch; class: one per class; landscape:
     // a single value. Unknown names throw std::invalid_argument.
     std::vector<double> patch_metric(const std::string& name);
+    // Compute the summary statistics (_mn, _sd, ...) of these metrics in
+    // parallel ahead of time; optional, it only saves time.
+    void prepare(const std::vector<MetricSpec>& specs);
     std::vector<double> class_metric(const std::string& name);
     double landscape_metric(const std::string& name);
 
@@ -139,14 +154,22 @@ private:
     // metrics.cpp
     const std::vector<double>& patch_base(const std::string& name);
     std::vector<double> gyrate();
+    std::vector<double> class_metric_impl(const std::string& name);
+    double landscape_metric_impl(const std::string& name);
+    std::vector<double> cohesion_terms();
+    std::vector<double> stat_values(const std::string& base, const std::string& stat, bool by_class);
+    int stat_slot(const std::string& base, const std::string& stat, bool by_class);
+    const std::vector<i64>& class_start();
+    double cohesion_factor() const;
     // geometry.cpp
     std::vector<double> enn();
     std::vector<double> circle();
     double total_area();
     double edge_length(i64 h, i64 v) const;
+    bool res_all_equal() const;
     std::vector<double> class_te();
     double landscape_te();
-    std::vector<double> pafrac_by(const std::vector<std::int32_t>& groups, int n_groups);
+    std::vector<double> pafrac_by(const std::vector<i64>& start);
 
     i64 nx_ = 0;
     i64 ny_ = 0;
@@ -163,16 +186,18 @@ private:
     std::optional<Adjacency> adjacency_;
     std::optional<Core> core_;
     std::map<std::string, std::vector<double>> patch_cache_; // node-based: references stay valid
+    // summary statistics (stat_values): per patch metric, statistic and level
+    static constexpr int kStatBases = 13;
+    static constexpr int kStatKinds = 6;
+    std::array<std::vector<double>, kStatBases * kStatKinds * 2> stat_cache_;
+    std::array<bool, kStatBases * kStatKinds * 2> stat_done_{};
+    std::optional<double> total_area_;
+    std::map<std::string, std::vector<double>> class_cache_;
+    std::map<std::string, double> landscape_cache_;
+    std::vector<i64> class_start_;
 };
 
 // -- many metrics, many rasters (table.cpp) --------------------------------
-
-enum Level : std::int8_t { kPatch = 0, kClass = 1, kLandscape = 2 };
-
-struct MetricSpec {
-    Level level;
-    std::string name;
-};
 
 // Long table as landscapemetrics' calculate_lsm: one row per value, ordered
 // by item, then by metric (in the order requested), class and patch id.
@@ -244,6 +269,7 @@ public:
 
     i64 nx() const;
     i64 ny() const;
+    int n_threads() const;
 
     // pass 1
     void add_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above, i64 below);

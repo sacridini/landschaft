@@ -366,6 +366,9 @@ Landscape::Landscape(i64 nx, i64 ny, double resx, double resy, Options options, 
 void Landscape::set_patch_values(const std::string& name, std::vector<double> values) {
     if (static_cast<i64>(values.size()) != patches().n) throw std::invalid_argument("one value per patch expected");
     patch_cache_[name] = std::move(values);
+    stat_done_.fill(false);
+    class_cache_.clear();
+    landscape_cache_.clear();
 }
 
 const Patches& Landscape::patches() {

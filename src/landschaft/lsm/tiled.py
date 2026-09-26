@@ -29,13 +29,13 @@ _CORE = {"core", "ncore", "cai", "tca", "cpland", "ndca", "dcad", "dcore"}
 DETAIL_FAMILIES = {**{f: "core" for f in _CORE}, "gyrate": "gyrate", "circle": "circle", "enn": "enn"}
 
 
-def block_size(block_rows, width: int) -> int:
+def block_size(block_rows, width: int, n_threads: int = 0) -> int:
     """Rows per block, a multiple of 64. "auto": 64 rows per thread (the
     strips labelled in parallel) and at least 4 million cells, but at most
     32 million cells."""
     width = max(width, 1)
     if block_rows == "auto" or block_rows is True:
-        rows = max(_STRIP * _core.max_threads(), (1 << 22) // width)
+        rows = max(_STRIP * (n_threads or _core.max_threads()), (1 << 22) // width)
         rows = min(rows, (1 << 25) // width)
     else:
         rows = int(block_rows)
@@ -72,7 +72,8 @@ class TiledReader:
                 )
             self.nodata = src.nodata if nodata is None else nodata
             self.float = np.issubdtype(np.dtype(src.dtypes[self.band - 1]), np.floating)
-        self.block_rows = block_size(block_rows, self.shape[1])
+        self.n_threads = int(options.get("n_threads") or 0)
+        self.block_rows = block_size(block_rows, self.shape[1], self.n_threads)
         self._warned = False
         self.done: set[str] = set()
         classes = self._class_values()
@@ -84,6 +85,10 @@ class TiledReader:
         self.options = options
 
     # -- reading -------------------------------------------------------------
+
+    @property
+    def _gdal_threads(self) -> str:
+        return str(self.n_threads) if self.n_threads else "ALL_CPUS"
 
     def _read(self, src, row0: int, row1: int) -> tuple[np.ndarray, np.ndarray]:
         """Rows [row0, row1): class values (int32) and NA mask (uint8)."""
@@ -118,7 +123,7 @@ class TiledReader:
         context rows."""
         ny = self.shape[0]
         # GDAL decodes compressed blocks on all cores
-        with rasterio.Env(GDAL_NUM_THREADS="ALL_CPUS"), rasterio.open(self.path) as src:
+        with rasterio.Env(GDAL_NUM_THREADS=self._gdal_threads), rasterio.open(self.path) as src:
             for y0 in range(0, ny, self.block_rows):
                 rows = min(self.block_rows, ny - y0)
                 above = min(halo, y0)
@@ -135,7 +140,7 @@ class TiledReader:
             info = np.iinfo(dtype)
             counts = np.zeros(int(info.max) - int(info.min) + 1, dtype=np.int64)
             ny = self.shape[0]
-            with rasterio.Env(GDAL_NUM_THREADS="ALL_CPUS"), rasterio.open(self.path) as src:
+            with rasterio.Env(GDAL_NUM_THREADS=self._gdal_threads), rasterio.open(self.path) as src:
                 for y0 in range(0, ny, self.block_rows):
                     rows = min(self.block_rows, ny - y0)
                     arr = src.read(self.band, window=Window(0, y0, self.shape[1], rows)).ravel()

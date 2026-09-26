@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_lsm.py [lsm] [sample] [window]
+    python tools/make_reference_lsm.py [lsm] [sample] [window] [rmath]
 
 Needs Rscript with landscapemetrics and terra (see ``tests/lsm_reference.py``
 for ``LANDSCHAFT_RSCRIPT`` / ``LANDSCHAFT_R_LIBS``). ``lsm`` (default: all
@@ -11,7 +11,9 @@ three parts) writes the input rasters to ``tests/data/lsm/*.tif``, every value
 of ``calculate_lsm`` for each option set to
 ``tests/data/reference/lsm/<case>__<options>.csv.gz`` and a ``manifest.json``;
 ``sample`` and ``window`` store ``sample_lsm`` and ``window_lsm`` results in
-``tests/data/reference/lsm_sample`` and ``lsm_window``. The test-suite
+``tests/data/reference/lsm_sample`` and ``lsm_window``; ``rmath`` stores R's
+``sum``, ``mean``, ``sd``, ``median``, ``log`` and ``sqrt`` of random vectors
+(``tests/data/reference/lsm_rmath``), the arithmetic the metrics reproduce. The test-suite
 compares landschaft against these files, so it runs anywhere without R.
 """
 
@@ -37,6 +39,58 @@ INPUTS = ROOT / "tests" / "data" / "lsm"
 OUT = ROOT / "tests" / "data" / "reference" / "lsm"
 OUT_SAMPLE = ROOT / "tests" / "data" / "reference" / "lsm_sample"
 OUT_WINDOW = ROOT / "tests" / "data" / "reference" / "lsm_window"
+OUT_RMATH = ROOT / "tests" / "data" / "reference" / "lsm_rmath"
+
+# R's arithmetic on vectors like the metrics' (sd uses a scalar sqrt, which
+# R's byte-code computes inline; sqrt of a vector goes through the x87 libm).
+RMATH_SCRIPT = r"""
+lines <- readLines(commandArgs(trailingOnly = TRUE)[[1]])
+f <- function(s) {
+    x <- as.numeric(strsplit(s, ",")[[1]])
+    sprintf("%.17g,%.17g,%.17g,%.17g,%.17g,%.17g", sum(x), mean(x), sd(x), median(x), log(x)[1], sqrt(x)[1])
+}
+writeLines(vapply(lines, f, ""), commandArgs(trailingOnly = TRUE)[[2]])
+"""
+
+
+def rmath_vectors() -> list[np.ndarray]:
+    rng = np.random.default_rng(2026)
+    out = []
+    for i in range(600):
+        n = int(rng.integers(2, 80))
+        kind = i % 6
+        if kind == 0:
+            x = rng.integers(0, 5, n).astype(float)  # counts (ncore)
+        elif kind == 1:
+            x = rng.integers(1, 400, n) * (0.09 / 10000)  # areas in ha, 0.3 m cells
+        elif kind == 2:
+            x = rng.uniform(0.001, 3, n)
+        elif kind == 3:
+            x = np.exp(rng.normal(0, 4, n))
+        elif kind == 4:
+            x = rng.integers(1, 3000, n) * 0.25 + rng.uniform(0, 1e-9, n)
+        else:
+            x = 1 + rng.uniform(-0.3, 0.3, n)  # log near 1 (fyl2xp1)
+        out.append(x)
+    return out
+
+
+def make_rmath(rscript) -> None:
+    OUT_RMATH.mkdir(parents=True, exist_ok=True)
+    vectors = rmath_vectors()
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "x.txt"
+        dst = Path(tmp) / "out.txt"
+        src.write_text("\n".join(",".join(f"{v:.17g}" for v in x) for x in vectors) + "\n")
+        script = Path(tmp) / "rmath.R"
+        script.write_text(RMATH_SCRIPT)
+        subprocess.run([str(rscript), str(script), str(src), str(dst)], check=True, env=lsm_reference.r_environment())
+        results = dst.read_text().split()
+    df = pd.DataFrame({"x": [",".join(f"{v:.17g}" for v in x) for x in vectors]})
+    df[["sum", "mean", "sd", "median", "log", "sqrt"]] = [r.split(",") for r in results]
+    df.to_csv(OUT_RMATH / "rmath.csv.gz", index=False, compression={"method": "gzip", "mtime": 0})
+    write_manifest(OUT_RMATH, rscript, {"rmath.csv.gz": {"vectors": len(vectors)}})
+    print(f"rmath.csv.gz: {len(vectors)} vectors")
 
 OPTION_SETS = {
     "default": {},
@@ -175,8 +229,8 @@ def write_manifest(folder: Path, rscript, files: dict, extra: dict | None = None
 
 
 def main() -> None:
-    parts = set(sys.argv[1:]) or {"lsm", "sample", "window"}
-    unknown = parts - {"lsm", "sample", "window"}
+    parts = set(sys.argv[1:]) or {"lsm", "sample", "window", "rmath"}
+    unknown = parts - {"lsm", "sample", "window", "rmath"}
     if unknown:
         sys.exit(f"unknown part(s): {sorted(unknown)}")
     rscript = lsm_reference.find_rscript()
@@ -186,6 +240,8 @@ def main() -> None:
         make_lsm(rscript)
     if "sample" in parts:
         make_sample(rscript)
+    if "rmath" in parts:
+        make_rmath(rscript)
     if "window" in parts:
         make_window(rscript)
 

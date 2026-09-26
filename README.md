@@ -113,8 +113,8 @@ Output classes (`ls.MSPA_CLASSES`):
 
 The FRAGSTATS metrics of the R package
 [landscapemetrics](https://r-spatialecology.github.io/landscapemetrics/), with the
-same names and the same values, computed by a C++ core that labels the patches of
-all classes in one parallel pass:
+same names and the same values (to the last bit for nearly all of them), computed by
+a C++ core that labels the patches of all classes in one parallel pass:
 
 ```python
 lc = ls.Landscape("landcover.tif")               # or a DataArray / numpy array (res=...)
@@ -129,10 +129,13 @@ ls.list_metrics(level="landscape")               # catalogue (like list_lsm)
 ls.sample_metrics("landcover.tif", points_xy, size=500, shape="circle")  # sample plots (sample_lsm)
 ls.window_metrics("landcover.tif", window=21, what="lsm_l_shdi")         # moving window (window_lsm)
 ls.Landscape("huge.tif", block_rows="auto").metrics()                   # larger than memory, same values
+lc.class_metrics(["AREA_AM", "shape_index_md", "gyrate_am"])  # FRAGSTATS extras, pylandstats/FRAGSTATS names
 ```
 
 Options are those of landscapemetrics (`directions`, `count_boundary`,
-`edge_depth`, `neighbourhood`, …). On landscapemetrics' `augusta_nlcd` (440×678)
+`edge_depth`, `neighbourhood`, …); `n_threads` limits the cores. `extras=True` adds
+the FRAGSTATS statistics landscapemetrics lacks (area-weighted mean `_am`, median
+`_md`, range `_ra`, and the `perim` statistics). On landscapemetrics' `augusta_nlcd` (440×678)
 all 133 metrics take 0.03 s instead of 15.6 s in R; a 10,000×10,000 map with 7.7
 million patches takes about 10 s for all of them (92 million values).
 
@@ -191,11 +194,11 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `distance_to_resistance(data)` | Resistance map growing with the distance to the foreground (GTB Setup Tools). |
 | `spa(data, variant=5)` | GTB SPA2/3/5/6: map in GTB codes (17 core, 3 edge, 5 perforation, 1 margin, 9 islet, 100 core-opening), class table, object counts, porosity, `summary()`. |
 | `batch(tool, inputs, output_dir, *, n_workers=None, threads_per_worker=1, max_memory=None, overwrite=False, **params)` | Any tool (`BATCH_TOOLS`, e.g. `"accounting"`, `"spa"`, `"fad_multiscale"`, or a function) on many rasters in parallel; writes GeoTIFF maps, CSV tables, TXT reports and a JSON record per input. |
-| `Landscape(data, *, res=None, nodata=None, directions=8, count_boundary=False, consider_boundary=False, edge_depth=1, cell_center=False, classes_max=None, neighbourhood=4, ordered=True, base="log2", band=None, block_rows=None)` | Categorical map prepared for landscape metrics: `.patch_metrics()`, `.class_metrics()`, `.landscape_metrics()` (wide tables), `.metrics()` (long table), `.labels()`, `.to_raster(metric)`. Values match landscapemetrics. `block_rows` reads a file by blocks for rasters larger than memory (identical results). |
-| `landscape_metrics(data, level=None, metric=None, name=None, type=None, what=None, **options)` | landscapemetrics' `calculate_lsm`: long table of the selected metrics for one raster, a list or a `RasterCollection` (`layer` column). |
-| `list_metrics(level=None, metric=None, name=None, type=None, what=None)` | Catalogue of the metrics (`list_lsm`). |
-| `sample_metrics(data, y, *, size=None, shape="square", plot_id=None, all_classes=False, level=None, metric=None, name=None, type=None, what=None, **options)` | landscapemetrics' `sample_lsm`: metrics of sample plots (buffers around points, or polygons), with `plot_id` and `percentage_inside`. |
-| `window_metrics(data, window, level="landscape", metric=None, name=None, type=None, what=None, **options)` | landscapemetrics' `window_lsm`: landscape-level metrics in a moving window (odd side or any odd-sized shape), as `{metric: raster}`. |
+| `Landscape(data, *, res=None, nodata=None, directions=8, count_boundary=False, consider_boundary=False, edge_depth=1, cell_center=False, classes_max=None, neighbourhood=4, ordered=True, base="log2", band=None, block_rows=None, n_threads=None)` | Categorical map prepared for landscape metrics: `.patch_metrics()`, `.class_metrics()`, `.landscape_metrics()` (wide tables), `.metrics()` (long table), `.labels()`, `.to_raster(metric)`. Values match landscapemetrics. `block_rows` reads a file by blocks for rasters larger than memory (identical results). Metric names also as FRAGSTATS abbreviations (`"SHDI"`) or pylandstats/FRAGSTATS full names (`"shannon_diversity_index"`). |
+| `landscape_metrics(data, level=None, metric=None, name=None, type=None, what=None, *, extras=False, n_threads=None, **options)` | landscapemetrics' `calculate_lsm`: long table of the selected metrics for one raster, a list or a `RasterCollection` (`layer` column). |
+| `list_metrics(level=None, metric=None, name=None, type=None, what=None, *, extras=False)` | Catalogue of the metrics (`list_lsm`); `extras=True` adds the FRAGSTATS `_am`/`_md`/`_ra` statistics and `perim_*`. |
+| `sample_metrics(data, y, *, size=None, shape="square", plot_id=None, all_classes=False, level=None, metric=None, name=None, type=None, what=None, extras=False, n_threads=None, **options)` | landscapemetrics' `sample_lsm`: metrics of sample plots (buffers around points, or polygons), with `plot_id` and `percentage_inside`. |
+| `window_metrics(data, window, level="landscape", metric=None, name=None, type=None, what=None, *, extras=False, n_threads=None, **options)` | landscapemetrics' `window_lsm`: landscape-level metrics in a moving window (odd side or any odd-sized shape), as `{metric: raster}`. |
 | `mspa_stats(result)` | DataFrame of pixels, % of data area and % of foreground per MSPA class group. |
 | `validate_mspa_input(data)` | The input checks on their own. |
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |
@@ -288,7 +291,10 @@ LANDSCHAFT_MSPA_EXE=/path/to/mspa_win64.exe pytest -m live_reference   # live co
   (its example data, synthetic maps with NA cells, non-square cells and
   degenerate layouts) and 5 option sets in `tests/data/reference/lsm`, and with
   `Rscript` available the tests also run landscapemetrics live on random maps. All
-  values agree to a relative 1e-10 (floating-point summation order).
+  values are the same bits, except `circle` (randomised in landscapemetrics),
+  `gyrate`, `pafrac` and a few `enn` values, which agree to a relative 1e-10: sums,
+  means and standard deviations reproduce R's 80-bit accumulation, and `log`/`sqrt`
+  R's x87 functions.
 * `tests/test_primitives.py` checks each C++ primitive against SciPy or brute
   force. `tests/test_mspa_semantics.py` checks the classes on hand-made patterns.
   The I/O and API tests cover validation, georeferencing, colour tables,

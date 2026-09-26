@@ -21,13 +21,20 @@ import landschaft as ls
 import lsm_reference
 import lsm_scenes
 from conftest import DATA
-from test_lsm_reference import ATOL, NEIGHBOURHOOD_QUIRK, RTOL
+from test_lsm_reference import ATOL, NEIGHBOURHOOD_QUIRK, NOT_BITWISE, RTOL
 
 SAMPLE_DIR = DATA / "reference" / "lsm_sample"
 WINDOW_DIR = DATA / "reference" / "lsm_window"
 SAMPLE_MANIFEST = json.loads((SAMPLE_DIR / "manifest.json").read_text())
 WINDOW_MANIFEST = json.loads((WINDOW_DIR / "manifest.json").read_text())
 SAMPLE_ARGS = {"shape", "size", "all_classes", "level"}
+
+
+def assert_window_equal(ours: np.ndarray, ref: np.ndarray, label: str, metric: str) -> None:
+    np.testing.assert_allclose(ours, ref, rtol=RTOL, atol=ATOL, err_msg=label)
+    if not metric.startswith(NOT_BITWISE):
+        same = (ours == ref) | (np.isnan(ours) & np.isnan(ref))
+        assert same.all(), f"{label}: not the same bits at {np.argwhere(~same)[:5].tolist()}"
 
 
 def compare_sample(ours: pd.DataFrame, ref: pd.DataFrame, label: str) -> None:
@@ -42,6 +49,10 @@ def compare_sample(ours: pd.DataFrame, ref: pd.DataFrame, label: str) -> None:
         b = merged[col + "_ref"].to_numpy(float)
         ok = np.isclose(a, b, rtol=rtol, atol=ATOL, equal_nan=True)
         assert ok.all(), f"{label}: {col} differs:\n{merged.loc[~ok, keys + [col, col + '_ref']].head(10)}"
+        if col == "value":
+            bitwise = ~merged["metric"].str.startswith(NOT_BITWISE).to_numpy()
+            bad = bitwise & ~((a == b) | (np.isnan(a) & np.isnan(b)))
+            assert not bad.any(), f"{label}: not the same bits:\n{merged.loc[bad, keys + [col, col + '_ref']].head(10)}"
     # sample_lsm's row order (plot, level, metric, class, id)
     assert ours["plot_id"].tolist() == ref["plot_id"].tolist()
     assert ours["level"].tolist() == ref["level"].tolist()
@@ -93,7 +104,7 @@ def test_window_matches_landscapemetrics(fname):
     ours = ls.window_metrics(WINDOW_DIR / info["input"], ref["window"], what=["lsm_l_" + m for m in metrics],
                              **info["options"])
     for m in metrics:
-        np.testing.assert_allclose(np.asarray(ours[m]), ref[m], rtol=RTOL, atol=ATOL, err_msg=f"{fname}: {m}")
+        assert_window_equal(np.asarray(ours[m]), ref[m], f"{fname}: {m}", m)
 
 
 # -- live comparison ---------------------------------------------------------
@@ -159,7 +170,7 @@ def test_window_live(rscript, tmp_path, seed, window, res, options):
     ref = lsm_reference.run_window(rscript, tif, window, what, **options)
     ours = ls.window_metrics(data, window, what=what, res=res, **options)
     for m in ref:
-        np.testing.assert_allclose(ours[m], ref[m], rtol=RTOL, atol=ATOL, err_msg=m)
+        assert_window_equal(np.asarray(ours[m]), ref[m], m, m)
 
 
 # -- sample plots --------------------------------------------------------------
@@ -249,7 +260,8 @@ class TestSample:
 
 
 def brute_window(data, window, res, what, **options):
-    """Every window as a Landscape of its own."""
+    """Every window as a Landscape of its own (shdi and shei with 8
+    directions: window_lsm computes them from 8-connected patch areas)."""
     values = np.ma.getdata(data)
     mask = np.ma.getmaskarray(data)
     hy, hx = window.shape[0] // 2, window.shape[1] // 2
@@ -261,9 +273,9 @@ def brute_window(data, window, res, what, **options):
             sub = padded[y : y + window.shape[0], x : x + window.shape[1]]
             sub_mask = padded_mask[y : y + window.shape[0], x : x + window.shape[1]] | ~window
             lm = ls.Landscape(np.ma.MaskedArray(sub, mask=sub_mask), res=res, **options)
-            row = lm.landscape_metrics(what)
+            lm8 = ls.Landscape(np.ma.MaskedArray(sub, mask=sub_mask), res=res, **{**options, "directions": 8})
             for m in what:
-                out[m][y, x] = row[m].item()
+                out[m][y, x] = (lm8 if m in ("shdi", "shei") else lm).landscape_metrics(m)[m].item()
     return out
 
 

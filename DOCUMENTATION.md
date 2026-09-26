@@ -587,8 +587,10 @@ pytest -v
 The patch-, class- and landscape-level metrics of FRAGSTATS as implemented by the R
 package [landscapemetrics](https://r-spatialecology.github.io/landscapemetrics/):
 same metric names (`lsm_p_area` → `"area"` at the patch level, `lsm_c_ca` →
-`"ca"`, …), same options, same patch ids and the same values (relative agreement
-1e-10, the difference being floating-point summation order).
+`"ca"`, …), same options, same patch ids and the same values: the same bits for all
+metrics but `circle`, `gyrate`, `pafrac` and rare `enn` ties, which agree to a relative
+1e-10 (see *Bit-identical arithmetic* below). The FRAGSTATS statistics that
+landscapemetrics lacks (`_am`, `_md`, `_ra`) are available as extras.
 
 ### How it works
 
@@ -698,6 +700,70 @@ The core engine computes that distance in two parallel separable passes instead 
 repeated erosions. As in landscapemetrics, `dcore_mn/sd/cv` summarise the *number* of
 core areas per patch (`ncore`), not their sizes.
 
+### FRAGSTATS extras, metric names and threads
+
+```python
+lc.class_metrics(["area_am", "gyrate_am", "shape_md", "enn_ra"])   # FRAGSTATS statistics
+lc.metrics(level="class", metric="shape", extras=True)              # shape_mn ... shape_ra
+ls.list_metrics(extras=True)                                        # 211 metrics ("extra" column)
+lc.class_metrics(["CA", "AREA_MN", "total_area", "shape_index_am"]) # FRAGSTATS / pylandstats names
+lc.landscape_metrics(["SHDI", "shannon_diversity_index", "contagion"])
+ls.Landscape("landcover.tif", n_threads=4)                          # limit the cores
+```
+
+**Extras.** For every patch metric with summary statistics (`area`, `cai`, `circle`,
+`contig`, `core`, `dcore`, `enn`, `frac`, `gyrate`, `para`, `shape`) the class and
+landscape levels also have the area-weighted mean `_am` (Σ x·a / Σ a, as R's
+`weighted.mean`), the median `_md` and the range `_ra` of FRAGSTATS and pylandstats, and
+`perim` gets `_mn`, `_sd`, `_cv`, `_am`, `_md`, `_ra` (pylandstats). `gyrate_am` is
+FRAGSTATS' correlation length. `dcore` follows landscapemetrics (number of core areas per
+patch), weighted by patch area. As for `_mn`, NA propagates (pylandstats skips NA at the
+landscape level). These 78 metrics are not part of landscapemetrics, so they are only
+selected with `extras=True` (or by name, or in `what`); without it every selection gives
+the same rows as `calculate_lsm`. They were checked against numpy and against
+pylandstats' `_mn`/`_am`/`_md`/`_ra` of `area`, `perimeter`, `fractal_dimension` (and
+`euclidean_nearest_neighbor`, `core_area` where pylandstats' patch values agree).
+
+**Names.** Wide tables and `to_raster` accept FRAGSTATS abbreviations in capitals
+(`"SHDI"`, `"AREA_MN"`, `"ENN_AM"`), pylandstats' method names (`"total_area"` → `ca` at
+the class level and `ta` at the landscape level, `"proportion_of_landscape"`,
+`"shape_index_am"`, `"disjunct_core_area_mn"`, `"continguity_index"`, …) and FRAGSTATS'
+full names (`"shannon_diversity_index"`, `"effective_mesh_size"`, …); the columns keep
+the names as asked. The `metric=` filter accepts family aliases (`"shape_index"`).
+
+**Threads.** `n_threads` (in `Landscape`, `landscape_metrics`, `sample_metrics`,
+`window_metrics`) limits the C++ core; the results do not depend on it.
+
+### Bit-identical arithmetic
+
+R computes `sum()`, `mean()` and `var()` in `long double`, the 80-bit x87 type with a
+64-bit mantissa (R on Windows is built with gcc/mingw-w64). MSVC has no such type, so
+`src/cpp/lsm/extended.hpp` emulates it with integer arithmetic, correctly rounded (half to
+even); it was checked against gcc's native type on 40 million random operations, and
+gcc/clang builds use the native type. The metrics then follow landscapemetrics' R code
+operation by operation: `mean()` sums, divides and adds the mean residual; `sd()` squares
+the deviations from the mean rounded to double; `sum()` inside `aggregate()` runs per
+class in patch order; `weighted.mean`, `median` and the range are computed the same way
+for the extras.
+
+R's `log()` and the `sqrt()` of a vector come from mingw-w64's math library, which runs
+them on the x87 unit (glibc's `fyl2x`/`fyl2xp1` code for `log`) and rounds twice, so they
+can differ in the last bit from a correctly rounded result; `rmath.hpp` does the same
+(with a small MASM routine under MSVC, which has no x64 inline assembly). R's byte-code
+interpreter computes the `sqrt` of a single number inline and correctly rounded (the one
+inside `sd()`, `cohesion`'s factor, the shape of a single patch), and `x^-1` is `powl`.
+
+Values that stay within 1e-10 instead of identical: `circle` (landscapemetrics shuffles
+Welzl's points at random, so its own values change between runs), `gyrate` (R sums the
+coordinates and distances cell by cell in extended precision), `pafrac` (R's `lm()`
+QR decomposition) and the `enn` of rasters whose cell sides differ by rounding only (R's
+pruned search can settle on another pair of cells at the same distance).
+
+landscapemetrics' own quirks are reproduced: patch perimeters treat cell sides that
+differ by rounding only as equal (`all.equal`), and `window_metrics` computes `shdi` and
+`shei` from 8-connected patch areas whatever `directions` is, as `window_lsm` does (their
+functions hard-code it; `calculate_lsm` hides it).
+
 ### Rasters larger than memory (`block_rows`)
 
 ```python
@@ -794,7 +860,11 @@ against `Landscape` objects built on the same cells. `tests/test_lsm_tiled.py` c
 that out-of-core results (`block_rows`) are identical to the in-memory ones on every
 stored reference map and on files with many blocks, patches across every seam, deep
 `edge_depth` context, several data types and nodata values.
-`tests/test_lsm.py` checks values computed by hand, the labels against SciPy, the
+All comparisons with landscapemetrics require the same bits, except for the four
+families above (relative 1e-10); `tests/test_lsm_rmath.py` checks the arithmetic itself
+against R on 600 stored vectors (`make_reference_lsm.py rmath`).
+`tests/test_lsm_extras.py` checks the extras against numpy and pylandstats, the names
+and the threads. `tests/test_lsm.py` checks values computed by hand, the labels against SciPy, the
 parallel seams, input handling and metric selection; `enn` against SciPy's exact
 Euclidean distance transform and `circle` against an exhaustive search over the
 circles through two or three hull points.

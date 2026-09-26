@@ -40,6 +40,11 @@ add_library(lsmcore STATIC
     src/cpp/lsm/tiled.cpp
 )
 target_include_directories(lsmcore PUBLIC src/cpp)
+# R's x87 log/sqrt (see src/cpp/lsm/rmath.hpp): MSVC has no x64 inline assembly
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+    enable_language(ASM_MASM)
+    target_sources(lsmcore PRIVATE src/cpp/lsm/x87_msvc.asm)
+endif()
 set_target_properties(lsmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(gtbcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
