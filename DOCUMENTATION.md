@@ -1132,6 +1132,11 @@ g.link_change(new_distances, "PC", distance=10_000)    # dPC_change of pairs wit
 # ECA over time (Makurhini's MK_dECA): one graph per time
 ls.conn.eca_change([g_2000, g_2010, g_2020], "PC", distance=10_000, landscape_area=LA)
 
+# Protected Connected land (Makurhini's MK_ProtConn, MK_ProtConnMult)
+ls.conn.protconn(protected_areas, region, distance=[10_000, 50_000], transboundary=50_000,
+                 bound=True, area_unit="ha", delta=True)
+ls.conn.protconn_regions(protected_areas, ecoregions, id="eco_id", distance=10_000)
+
 # nodes that could be added (restoration: 1 existing, 0 to add)
 g = ls.HabitatGraph(areas, distances, restoration=flags)
 g.node_importance(["PC", "IIC"], distance=10_000)      # + dPCres, dIICres of the nodes to add
@@ -1235,6 +1240,34 @@ link (as for a node). Changes that shorten a pair and nodes to add use the lengt
 between all nodes: the new length of a pair is `min(D_ij, D_ia + w + D_bj, ...)`, or
 through the node to add. A longer pair is removed and added back with its new length.
 
+### ProtConn
+
+`ls.conn.protconn(protected_areas, region, distance=...)` is Makurhini's `MK_ProtConn`
+(Saura et al. 2017, 2018), one row per distance: `ECA`, `PC`, `LA` (the region's area),
+`Protected_surface`, `Prot`, `ProtConn`, `ProtUnconn`, `RelConn`, `Unprotected`, the
+fractions `ProtConn_Prot`, `_Trans`, `_Unprot`, `_Within`, `_Contig` and their `_land`
+shares, and with `bound=True` `ProtUnconn_Design` and `ProtConn_Bound`. The nodes
+(`protconn_nodes`) are Makurhini's: the protected areas that touch the region, cut to
+it, dissolved and split into separate polygons (their area in the region); with
+`transboundary` the parts of them outside the region and the protected areas within
+that distance (`transboundary_type="nodes"`: of the region's areas; `"region"`: of the
+region), cut to that zone, are transboundary nodes (attribute 0); the region itself
+joins them with `bound` (only next to transboundary nodes, as in Makurhini). Distances
+run between polygon edges (GEOS) or are least-cost over a `resistance`, probabilities are
+`exp(d log(p) / t)` without a cut, and `protconn_indicators` applies
+`get_protconn_grid`'s formulas to any prepared nodes and distances. Makurhini weighs the
+pairs with a transboundary node 1 instead of a_i a_j (`transboundary_weight=1`, the
+default; 0 makes them stepping stones only). `delta=True` also rates each protected area
+(`dProt`, `dProtConn`, `varProtConn` once removed; Makurhini weighs the transboundary
+pairs 0 in the region's ECA but 1 without the area, landschaft uses one weight).
+`protconn_regions` runs every region of a GeoDataFrame (`MK_ProtConnMult`). A region
+with one dissolved node gets MK_ProtConn's fixed values for it.
+
+Makurhini simplifies the region and the zones' polygons with mapshaper before
+buffering them (Visvalingam, 5 % of the vertices); landschaft buffers the exact
+polygons (30 segments per quarter circle, as sf), so both select the same areas when
+the simplification keeps the shapes (as for the reference polygons).
+
 ### ECA over time
 
 `ls.conn.eca_change(graphs, metric, distance=, landscape_area=)` is Makurhini's `MK_dECA`:
@@ -1317,6 +1350,11 @@ the results do not depend on the number of threads.
 * `make_reference_conn.py deca` runs `MK_dECA` on three times of the polygons (PC and IIC,
   two distances) and of the example raster (`deca_steps.csv`, `makurhini_deca.csv.gz`):
   `dA` has the same bits and the other values agree to 1e-13.
+* `make_reference_conn.py protconn` runs `MK_ProtConn` on 36 synthetic protected
+  areas and two regions (without and with transboundary zones of both types, and
+  ProtConn[Bound]) with its inner steps: fed Makurhini's own nodes and distances,
+  `protconn_indicators` gives `get_protconn_grid`'s bits; landschaft's own nodes have
+  the same areas (1e-14) and its rounded ProtConn table is Makurhini's, value for value.
 * `tests/test_conn.py` checks every index and importance against a brute-force
   recomputation of the graph without each node (and with its attribute set to 0),
   under both conventions, and the input kinds, pair tables, Conefor files and

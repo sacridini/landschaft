@@ -114,7 +114,10 @@ ls.connectivity_grid(g, grid_zones(...))
      **feita** (0.33.0); dECA no tempo **feito** (0.34.0, `eca_change`); os índices em grade
      (`MK_Connect_grid`, `MK_dECA_grid`) dependem do ProtConn (recorte dos nós por célula,
      áreas transfronteiriças) e passam para a fase 5;
-  5. ProtConn completo (uma ou várias regiões);
+  5. ProtConn completo (uma ou várias regiões). **Feito** (0.35.0, `protconn`,
+     `protconn_regions`; sem a simplificação do mapshaper, que só muda os nós quando
+     altera as formas); faltam o ProtConn em raster (`MK_ProtConn_raster`) e os índices
+     em grade (`MK_Connect_grid`, `MK_dECA_grid`);
   6. centralidades (BC, BCIIC, BCPC, radial, medial) e focais (IICf, PCf, CCI);
   7. opcionais: commute-time e SAMC (Fletcher et al. 2023).
 - Decidido: o Makurhini (instalado na biblioteca do RStudio) é a referência, e o

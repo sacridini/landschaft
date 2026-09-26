@@ -161,6 +161,64 @@ if (args[1] == "deca") {
     quit(save = "no")
 }
 
+if (args[1] == "protconn") {
+    # MK_ProtConn on synthetic protected areas and regions, with its inner steps
+    # (Protconn_nodes, protconn_dist, get_protconn_grid unrounded) and the delta.
+    # jobs.csv: case, region, distance (";"-separated), transboundary, type, bound
+    pas <- sf::st_read(args[2], quiet = TRUE)
+    regions <- sf::st_read(args[3], quiet = TRUE)
+    jobs <- read.csv(args[4], stringsAsFactors = FALSE)
+    out <- list()
+    add <- function(case, level, name, value, extra = NA) {
+        out[[length(out) + 1]] <<- data.frame(case = case, level = level, name = name, extra = extra,
+                                              value = fmt(as.numeric(value)))
+    }
+    for (k in seq_len(nrow(jobs))) {
+        job <- jobs[k, ]
+        region <- regions[regions$id == job$region, ]
+        d <- as.numeric(strsplit(as.character(job$distance), ";")[[1]])
+        tb <- if (is.na(job$transboundary)) NULL else job$transboundary
+        res <- MK_ProtConn(nodes = pas, region = region, area_unit = "ha", distance = list(type = "edge"),
+                           distance_thresholds = d, probability = 0.5, transboundary = tb,
+                           transboundary_type = job$type, protconn_bound = as.logical(job$bound),
+                           delta = TRUE, intern = FALSE)
+        if (length(d) == 1) res <- list(res)
+        for (i in seq_along(d)) {
+            r <- res[[i]]
+            tab <- as.data.frame(r[[1]])
+            add(job$case, "public", tab[[3]], tab[[4]], d[i])
+            dl <- sf::st_drop_geometry(r[[2]])
+            if (is.data.frame(dl) && "dProtConn" %in% names(dl)) {
+                add(job$case, "dProt", dl$id, dl$dProt, d[i])
+                add(job$case, "dProtConn", dl$id, dl$dProtConn, d[i])
+            }
+        }
+        # Inner steps, as MK_ProtConn runs them.
+        bp1 <- Makurhini:::input_grid(node = pas, landscape = region, unit = "ha",
+                                      bdist = if (is.null(tb)) 0 else tb)
+        nodes <- Makurhini:::Protconn_nodes(x = bp1@region, y = bp1@nodes, buff = if (is.null(tb)) -Inf else tb,
+                                            method = job$type, metrunit = "ha",
+                                            protconn_bound = as.logical(job$bound), delta = FALSE)
+        if (is.list(nodes)) {
+            la <- as.numeric(sf::st_area(bp1@region)) * 0.0001
+            add(job$case, "LA", "LA", la)
+            nd <- nodes[[1]]
+            add(job$case, "node_attribute", nd$type, nd$attribute, nd$OBJECTID)
+            add(job$case, "piece", "piece", nodes[[2]]$attribute)
+            dist <- Makurhini:::protconn_dist(nd, id = "OBJECTID", y = list(type = "edge"), r = bp1@region)
+            ij <- which(upper.tri(dist), arr.ind = TRUE)
+            add(job$case, "distance", paste(ij[, 1], ij[, 2]), dist[ij])
+            for (dd in d) {
+                raw <- Makurhini:::get_protconn_grid(x = nodes, y = dist, p = 0.5, pij_min = NULL, d = dd,
+                                                     th = FALSE, LA = la, bound = as.logical(job$bound))
+                add(job$case, "raw", names(raw), unlist(raw[1, ]), dd)
+            }
+        }
+    }
+    write.csv(do.call(rbind, out), args[5], row.names = FALSE)
+    quit(save = "no")
+}
+
 if (args[1] == "export") {
     data("habitat_nodes", package = "Makurhini")
     d <- distancefile(habitat_nodes, id = "Id", type = "centroid")

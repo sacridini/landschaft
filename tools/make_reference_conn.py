@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links] [deca]
+    python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links] [deca] [protconn]
 
 ``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
 in ``tests/lsm_reference.py``; the default R library is used). It exports
@@ -27,6 +27,11 @@ align its attributes) on the synthetic scenes (``makurhini_links.csv.gz``).
 ``deca`` runs ``MK_dECA`` on three times of the polygons and of the example
 raster, some nodes removed at each time (``deca_steps.csv`` lists them;
 ``makurhini_deca.csv.gz``).
+
+``protconn`` runs ``MK_ProtConn`` on synthetic protected areas and regions
+(``protconn_areas.gpkg``, ``protconn_regions.gpkg``: densified boxes, which
+mapshaper's simplification leaves as they are) with and without transboundary
+zones and ProtConn[Bound], with its inner steps (``makurhini_protconn.csv.gz``).
 
 ``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
 Sensinode 2.2 sources (the last five nodes of each scene are Conefor's nodes
@@ -301,6 +306,71 @@ def run_deca() -> None:
         print(f"deca: {len(out)} rows")
 
 
+def densified_box(x0, y0, x1, y1, per_edge=40, angle=0.0):
+    """A box with `per_edge` points on each side (mapshaper keeps its corners)."""
+    import shapely
+    from shapely import affinity
+
+    t = np.linspace(0, 1, per_edge, endpoint=False)
+    xs = np.concatenate([x0 + (x1 - x0) * t, np.full_like(t, x1), x1 - (x1 - x0) * t, np.full_like(t, x0)])
+    ys = np.concatenate([np.full_like(t, y0), y0 + (y1 - y0) * t, np.full_like(t, y1), y1 - (y1 - y0) * t])
+    poly = shapely.Polygon(np.column_stack([xs, ys]))
+    return affinity.rotate(poly, angle, origin="centroid") if angle else poly
+
+
+def protconn_geometry():
+    import geopandas as gpd
+
+    rng = np.random.default_rng(17)
+    regions = gpd.GeoDataFrame({"id": [1, 2]}, geometry=[densified_box(0, 0, 20_000, 15_000, 80),
+                                                         densified_box(25_000, 0, 32_000, 6_000, 80)],
+                               crs="EPSG:3857")
+    boxes = []
+    for _ in range(22):  # inside the first region (some touch or overlap)
+        x, y = rng.uniform(500, 17_500), rng.uniform(500, 12_500)
+        w, h = rng.uniform(300, 2_000, 2)
+        boxes.append(densified_box(x, y, x + w, y + h))
+    boxes.append(densified_box(18_500, 6_000, 21_500, 8_000))   # across the edge
+    for _ in range(8):  # outside: transboundary candidates
+        x, y = rng.uniform(-6_000, 26_000), rng.uniform(15_500, 19_000)
+        w, h = rng.uniform(400, 1_800, 2)
+        boxes.append(densified_box(x, y, x + w, y + h))
+    for _ in range(5):  # in the second region
+        x, y = rng.uniform(25_300, 30_500), rng.uniform(300, 4_800)
+        w, h = rng.uniform(300, 900, 2)
+        boxes.append(densified_box(x, y, x + w, y + h))
+    pas = gpd.GeoDataFrame({"id": np.arange(1, len(boxes) + 1)}, geometry=boxes, crs="EPSG:3857")
+    return pas, regions
+
+
+PROTCONN_JOBS = [
+    # case, region, distances, transboundary, type, bound
+    ("plain", 1, "1000;5000", None, "nodes", False),
+    ("trans_nodes", 1, "1000;5000", 3000.0, "nodes", False),
+    ("trans_region", 1, "2000", 3000.0, "region", False),
+    ("bound", 1, "2000", 3000.0, "nodes", True),
+    ("second", 2, "1500", None, "nodes", True),
+]
+
+
+def run_protconn() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    pas, regions = protconn_geometry()
+    pas.to_file(OUT / "protconn_areas.gpkg", driver="GPKG")
+    regions.to_file(OUT / "protconn_regions.gpkg", driver="GPKG")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        pd.DataFrame(PROTCONN_JOBS, columns=["case", "region", "distance", "transboundary", "type", "bound"]).to_csv(
+            tmp / "jobs.csv", index=False)
+        subprocess.run([str(rscript), str(R_SCRIPT), "protconn", str(OUT / "protconn_areas.gpkg"),
+                        str(OUT / "protconn_regions.gpkg"), str(tmp / "jobs.csv"), str(tmp / "out.csv")], check=True)
+        out = pd.read_csv(tmp / "out.csv", float_precision="round_trip", keep_default_na=False)
+        out.to_csv(OUT / "makurhini_protconn.csv.gz", index=False)
+        print(f"protconn: {len(out)} values")
+
+
 def run_makurhini() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -410,7 +480,7 @@ def run_conefor() -> None:
 
 
 if __name__ == "__main__":
-    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca"]
+    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca", "protconn"]
     if "makurhini" in parts:
         run_makurhini()
     if "conefor" in parts:
@@ -421,3 +491,5 @@ if __name__ == "__main__":
         run_links()
     if "deca" in parts:
         run_deca()
+    if "protconn" in parts:
+        run_protconn()

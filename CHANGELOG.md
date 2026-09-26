@@ -6,6 +6,17 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 6: ProtConn. `ls.conn.protconn(protected_areas,
+  region, distance=...)` (Makurhini's `MK_ProtConn`: ECA, Prot, ProtConn, ProtUnconn,
+  RelConn, the Prot/Trans/Unprot/Within/Contig fractions and their land shares,
+  ProtUnconn[Design] and ProtConn[Bound], with transboundary zones around the nodes or
+  the region, edge or least-cost distances, and `delta` for the importance of each
+  protected area), `protconn_regions` (`MK_ProtConnMult`), `protconn_nodes` (the nodes,
+  built with shapely/GEOS) and `protconn_indicators` (`get_protconn_grid`'s formulas on
+  any nodes and distances). The formulas give Makurhini's bits on its own nodes, and the
+  whole pipeline reproduces its rounded table on synthetic protected areas.
+
 ## [0.34.0] - 2026-09-26
 
 ### Added
