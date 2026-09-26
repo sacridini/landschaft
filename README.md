@@ -143,7 +143,7 @@ lc.show_patches("all"); lc.show_lsm("shape"); ls.show_correlation(lc.metrics()) 
 sta = ls.SpatioTemporalAnalysis(["lc2000.tif", "lc2010.tif", "lc2020.tif"], [2000, 2010, 2020])
 sta.landscape_metrics(["shdi", "ed"]); sta.plot_metric("pland", classes="all")
 sig = ls.SpatialSignatureAnalysis("landcover.tif", grid=1000, landscape_metrics=["shdi", "ed", "contag"])
-sig.pca(); sig.cluster(4)                                        # signatures of 1 km cells
+sig.pca(); sig.cluster(4); sig.nmf(3); sig.plot_clustergram(method="ward")  # signatures of 1 km cells
 ```
 
 Options are those of landscapemetrics (`directions`, `count_boundary`,

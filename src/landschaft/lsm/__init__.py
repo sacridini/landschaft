@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Landscape metrics (FRAGSTATS) matching the R package landscapemetrics."""
 
-from .analysis import PCAResult, SpatialSignatureAnalysis, SpatioTemporalAnalysis, grid_zones
+from .analysis import (ClustergramResult, NMFResult, PCAResult, SpatialSignatureAnalysis, SpatioTemporalAnalysis,
+                       grid_zones)
 from .catalog import list_metrics
 from .landscape import Landscape, landscape_metrics
 from .export import write_table, zonal_metrics
@@ -11,6 +12,8 @@ from .utils import calculate_correlation, check_landscape, extract_metrics, rast
 
 __all__ = [
     "Landscape",
+    "ClustergramResult",
+    "NMFResult",
     "PCAResult",
     "SpatialSignatureAnalysis",
     "SpatioTemporalAnalysis",

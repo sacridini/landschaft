@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Analyses of many landscapes, as in pylandstats: spatial signatures
-(principal components and clusters of landscapes or zones described by their
-metrics) and spatio-temporal series of metrics (whole maps, zones, buffers
-around points or a grid of zones)."""
+(principal components, non-negative factors, clusters and clustergrams of
+landscapes or zones described by their metrics) and spatio-temporal series
+of metrics (whole maps, zones, buffers around points or a grid of zones)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,10 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-__all__ = ["PCAResult", "SpatialSignatureAnalysis", "SpatioTemporalAnalysis", "grid_zones"]
+__all__ = ["ClustergramResult", "NMFResult", "PCAResult", "SpatialSignatureAnalysis", "SpatioTemporalAnalysis",
+           "grid_zones"]
+
+_LINKAGES = ("ward", "average", "complete", "single", "centroid", "median", "weighted")
 
 # Class metrics that are 0 (not NA) for a class absent from a landscape.
 _ZERO_WHEN_ABSENT = {"ca", "pland", "np", "pd", "lpi", "te", "ed", "tca", "cpland", "ndca", "dcad"}
@@ -202,6 +205,29 @@ class PCAResult:
     dropped: list  #: rows left out (NaN values)
 
 
+@dataclass
+class NMFResult:
+    """Non-negative factors of the spatial signatures (min-max scaled
+    metrics ~ scores @ components.T)."""
+
+    scores: pd.DataFrame  #: one row per landscape / zone, one column per factor (W)
+    components: pd.DataFrame  #: one row per metric, one column per factor (H transposed)
+    reconstruction_error: float  #: Frobenius norm of the residual
+    n_iter: int
+    dropped: list  #: rows left out (NaN values)
+
+
+@dataclass
+class ClustergramResult:
+    """Clusters for a range of k (Schonlau's clustergram, as the clustergram
+    package that pylandstats' ``get_cgram`` uses)."""
+
+    labels: pd.DataFrame  #: one row per landscape / zone, one column per k: its cluster
+    means: pd.DataFrame  #: the same shape: the mean of its cluster (see ``pca_weighted``)
+    pca_weighted: bool  #: means projected on the first principal axis (else averaged over the columns)
+    dropped: list  #: rows left out (NaN values)
+
+
 class SpatialSignatureAnalysis:
     """Landscapes (or zones) described by their metrics: the "spatial
     signature" matrix, its principal components and clusters (pylandstats'
@@ -286,18 +312,130 @@ class SpatialSignatureAnalysis:
         loadings = pd.DataFrame(vt[:k].T, index=z.columns, columns=names)
         return PCAResult(scores, loadings, (s**2 / np.sum(s**2))[:k], dropped)
 
-    def cluster(self, n_clusters: int, *, n_components: int | None = None, n_init: int = 10,
-                seed: int = 0) -> pd.Series:
-        """k-means clusters of the landscapes on the standardised metrics (or
-        on the first ``n_components`` principal components), k-means++
-        starts, the best of ``n_init``. Returns the cluster (0..k-1) of every
-        row."""
-        if n_components is not None:
-            x = self.pca(n_components).scores
+    def nmf(self, n_components: int, *, max_iter: int = 1000, tol: float = 1e-6) -> NMFResult:
+        """Non-negative matrix factorisation of the metrics, each scaled to
+        [0, 1] (min-max; constant metrics left out): scores (W) times
+        components (H) approximates them, both non-negative, with the
+        Frobenius loss. NNDSVDa start and HALS (coordinate descent) updates,
+        as scikit-learn's ``NMF(init="nndsvda", solver="cd")``; stops when the
+        loss improves by less than ``tol`` (relative) or after ``max_iter``
+        sweeps. Deterministic."""
+        x, dropped = self._minmax()
+        k = int(n_components)
+        if not 1 <= k <= min(x.shape):
+            raise ValueError(f"n_components must be between 1 and {min(x.shape)}")
+        w, h, err, n_iter = _nmf(x.to_numpy(), k, int(max_iter), float(tol))
+        names = [f"NMF{i + 1}" for i in range(k)]
+        return NMFResult(pd.DataFrame(w, index=x.index, columns=names),
+                         pd.DataFrame(h.T, index=x.columns, columns=names), err, n_iter, dropped)
+
+    def cluster(self, n_clusters: int, *, method: str = "kmeans", n_components: int | None = None,
+                n_init: int = 10, seed: int = 0) -> pd.Series:
+        """Clusters of the landscapes on the standardised metrics (or on the
+        first ``n_components`` principal components). ``method``:
+        ``"kmeans"`` (k-means++ starts, the best of ``n_init``) or a
+        hierarchical linkage of scipy (``"ward"``, ``"average"``,
+        ``"complete"``, ``"single"``, ``"centroid"``, ``"median"``,
+        ``"weighted"``; Euclidean distances, the tree cut into
+        ``n_clusters``). Returns the cluster of every row, numbered 0..k-1 in
+        order of first appearance."""
+        x = self._cluster_data(n_components)
+        k = int(n_clusters)
+        if not 1 <= k <= len(x):
+            raise ValueError(f"n_clusters must be between 1 and the number of rows ({len(x)})")
+        if method == "kmeans":
+            labels = _kmeans(x.to_numpy(), k, n_init, seed)
         else:
-            x, _ = self._standardised()
-        labels = _kmeans(x.to_numpy(), int(n_clusters), n_init, seed)
+            labels = _hierarchical(x.to_numpy(), [k], method)[0]
         return pd.Series(labels, index=x.index, name="cluster")
+
+    def clustergram(self, k_range=range(1, 9), *, method: str = "kmeans", n_components: int | None = None,
+                    pca_weighted: bool = True, n_init: int = 10, seed: int = 0) -> ClustergramResult:
+        """Clusters for every k in ``k_range`` (``method`` as in
+        :meth:`cluster`) and the mean of each row's cluster: the cluster centre
+        projected on the first principal axis of the clustered data
+        (``pca_weighted``) or averaged over its columns, as the clustergram
+        package computes them (pylandstats' ``get_cgram``). See
+        :meth:`plot_clustergram`."""
+        x = self._cluster_data(n_components)
+        data = x.to_numpy()
+        ks = [int(k) for k in k_range]
+        if not ks or min(ks) < 1 or max(ks) > len(data):
+            raise ValueError(f"k_range must hold values between 1 and the number of rows ({len(data)})")
+        if method == "kmeans":
+            all_labels = [_kmeans(data, k, n_init, seed) for k in ks]
+        else:
+            all_labels = _hierarchical(data, ks, method)
+        if pca_weighted:
+            centred = data - data.mean(axis=0)
+            _, _, vt = np.linalg.svd(centred, full_matrices=False)
+            axis = vt[0] * (np.sign(vt[0][np.argmax(np.abs(vt[0]))]) or 1)
+        labels = pd.DataFrame(index=x.index)
+        means = pd.DataFrame(index=x.index)
+        for k, lab in zip(ks, all_labels):
+            centres = np.array([data[lab == j].mean(axis=0) for j in range(lab.max() + 1)])
+            value = centres @ axis if pca_weighted else centres.mean(axis=1)
+            labels[k] = lab
+            means[k] = value[lab]
+        labels.columns.name = means.columns.name = "k"
+        return ClustergramResult(labels, means, pca_weighted, self._dropped())
+
+    def plot_clustergram(self, result: ClustergramResult | None = None, *, ax=None, size: float = 1.0,
+                         linewidth: float = 1.0, **kwargs):
+        """Clustergram: for every k, a dot per cluster at its mean (size by
+        its rows), and lines between the clusters of k and k + 1 as wide as
+        the rows they share (as the clustergram package draws it). Computes
+        :meth:`clustergram` with ``kwargs`` unless ``result`` is given.
+        Returns the Figure."""
+        from matplotlib.ticker import MaxNLocator
+
+        from .plotting import _plt
+
+        plt = _plt()
+        if result is None:
+            result = self.clustergram(**kwargs)
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 5))
+        else:
+            fig = ax.figure
+        means = result.means
+        n = len(means)
+        ks = list(means.columns)
+        for i, k in enumerate(ks):
+            counts = means[k].value_counts()
+            ax.scatter([k] * len(counts), counts.index, counts.to_numpy() * (500 / n) * size, zorder=2, color="r",
+                       edgecolor="w", linewidth=2)
+            if i + 1 < len(ks) and ks[i + 1] == k + 1:
+                moves = means.groupby([k, k + 1]).size()
+                for (a, b), m in moves.items():
+                    ax.plot([k, k + 1], [a, b], linewidth=m * (50 / n) * linewidth, color="k", zorder=1,
+                            solid_capstyle="butt")
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.set_xlabel("Number of clusters (k)")
+        ax.set_ylabel("PCA weighted mean of the clusters" if result.pca_weighted else "Mean of the clusters")
+        return fig
+
+    def _cluster_data(self, n_components) -> pd.DataFrame:
+        if n_components is not None:
+            return self.pca(n_components).scores
+        return self._standardised()[0]
+
+    def _dropped(self) -> list:
+        return self.table.index[self.table.isna().any(axis=1)].tolist()
+
+    def _minmax(self) -> tuple[pd.DataFrame, list]:
+        x = self.table
+        bad = self._dropped()
+        if bad:
+            warnings.warn(f"{len(bad)} rows with NaN values are left out", RuntimeWarning, stacklevel=3)
+            x = x.dropna()
+        lo, hi = x.min(), x.max()
+        span = hi - lo
+        constant = span[span <= 1e-12 * np.maximum(hi.abs(), lo.abs())].index.tolist()
+        if constant:
+            x = x.drop(columns=constant)
+            lo, span = lo.drop(constant), span.drop(constant)
+        return (x - lo) / span, bad
 
     def plot_pca(self, clusters: pd.Series | None = None, components=(1, 2), *, ax=None, labels: bool = False):
         """Scatter plot of two principal components (coloured by cluster),
@@ -340,6 +478,66 @@ class SpatialSignatureAnalysis:
         return fig
 
 
+def _first_appearance(labels: np.ndarray) -> np.ndarray:
+    order: dict = {}
+    for lab in labels:
+        order.setdefault(lab, len(order))
+    return np.array([order[lab] for lab in labels], dtype=np.int64)
+
+
+def _hierarchical(x: np.ndarray, ks: list[int], method: str) -> list[np.ndarray]:
+    """scipy's linkage tree of the rows, cut into k clusters for each k."""
+    from scipy.cluster import hierarchy
+
+    if method not in _LINKAGES:
+        raise ValueError(f"method must be 'kmeans' or one of {', '.join(_LINKAGES)}, got {method!r}")
+    if len(x) == 1:
+        return [np.zeros(1, dtype=np.int64) for _ in ks]
+    tree = hierarchy.linkage(x, method=method)
+    return [_first_appearance(hierarchy.fcluster(tree, k, criterion="maxclust")) for k in ks]
+
+
+def _nmf(x: np.ndarray, k: int, max_iter: int, tol: float):
+    """W, H >= 0 minimising ||x - W H||_F: NNDSVDa start, HALS sweeps."""
+    n, m = x.shape
+    # NNDSVD (Boutsidis & Gallopoulos), zeros filled with the mean ("a")
+    u, s, vt = np.linalg.svd(x, full_matrices=False)
+    w = np.zeros((n, k))
+    h = np.zeros((k, m))
+    w[:, 0] = np.sqrt(s[0]) * np.abs(u[:, 0])
+    h[0] = np.sqrt(s[0]) * np.abs(vt[0])
+    for j in range(1, k):
+        a, b = u[:, j], vt[j]
+        ap, an = np.maximum(a, 0), np.maximum(-a, 0)
+        bp, bn = np.maximum(b, 0), np.maximum(-b, 0)
+        pos = np.linalg.norm(ap) * np.linalg.norm(bp)
+        neg = np.linalg.norm(an) * np.linalg.norm(bn)
+        if pos >= neg:
+            uu, vv, sigma = ap / (np.linalg.norm(ap) or 1), bp / (np.linalg.norm(bp) or 1), pos
+        else:
+            uu, vv, sigma = an / (np.linalg.norm(an) or 1), bn / (np.linalg.norm(bn) or 1), neg
+        w[:, j] = np.sqrt(s[j] * sigma) * uu
+        h[j] = np.sqrt(s[j] * sigma) * vv
+    w[w == 0] = x.mean()
+    h[h == 0] = x.mean()
+    eps = 1e-16
+    previous = np.linalg.norm(x - w @ h)
+    it = 0
+    for it in range(1, max_iter + 1):
+        # H rows, then W columns: each the exact minimiser with the others fixed
+        wtw, wtx = w.T @ w, w.T @ x
+        for j in range(k):
+            h[j] = np.maximum(eps, h[j] + (wtx[j] - wtw[j] @ h) / max(wtw[j, j], eps))
+        hht, xht = h @ h.T, x @ h.T
+        for j in range(k):
+            w[:, j] = np.maximum(eps, w[:, j] + (xht[:, j] - w @ hht[:, j]) / max(hht[j, j], eps))
+        err = np.linalg.norm(x - w @ h)
+        if previous - err <= tol * max(previous, eps):
+            break
+        previous = err
+    return w, h, float(np.linalg.norm(x - w @ h)), it
+
+
 def _kmeans(x: np.ndarray, k: int, n_init: int, seed: int) -> np.ndarray:
     n = len(x)
     if not 1 <= k <= n:
@@ -365,8 +563,4 @@ def _kmeans(x: np.ndarray, k: int, n_init: int, seed: int) -> np.ndarray:
         inertia = ((x - centres[labels]) ** 2).sum()
         if inertia < best_inertia - 1e-12:
             best_labels, best_inertia = labels, inertia
-    # clusters numbered by first appearance
-    order = {}
-    for lab in best_labels:
-        order.setdefault(lab, len(order))
-    return np.array([order[lab] for lab in best_labels])
+    return _first_appearance(best_labels)

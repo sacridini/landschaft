@@ -941,6 +941,10 @@ sig = ls.SpatialSignatureAnalysis(files, landscape_metrics=["shdi", "ed"], class
 sig.table                     # the signature matrix: rows = landscapes (or zones), columns = metrics
 res = sig.pca()               # scores, loadings, explained_variance_ratio
 labels = sig.cluster(3)       # k-means (k-means++, best of 10)
+sig.cluster(3, method="ward") # hierarchical: ward, average, complete, single, centroid, median, weighted
+nmf = sig.nmf(3)              # non-negative factors: scores (W), components (H), reconstruction_error
+cg = sig.clustergram(range(1, 9), method="ward")   # labels and cluster means for each k
+sig.plot_clustergram(cg)      # Schonlau's clustergram, as pylandstats' get_cgram draws it
 sig.plot_pca(labels); sig.plot_cluster_metrics(labels)
 ls.SpatialSignatureAnalysis("map.tif", grid=1000, landscape_metrics=[...])   # zones of one map
 ```
@@ -949,9 +953,17 @@ The series are computed with `landscape_metrics` / `sample_metrics` (so they are
 values). The signature matrix has one column per landscape metric and one per class
 metric and class (`pland_11`); the PCA works on z-scores (population standard deviation,
 as scikit-learn's `StandardScaler`), leaves out constant metrics and rows with NaN (with a
-warning), and orients each component so that its largest loading is positive; k-means runs
-on the z-scores or on the first principal components. Both agree with scikit-learn, which
-is not needed.
+warning), and orients each component so that its largest loading is positive; k-means and
+the hierarchical linkages (scipy, Euclidean, the tree cut into k clusters) run on the
+z-scores or on the first principal components, and clusters are numbered by first
+appearance. `nmf` scales each metric to [0, 1] (min-max) and factorises it into two
+non-negative matrices with scikit-learn's method (NNDSVDa start, coordinate-descent/HALS
+sweeps, Frobenius loss): the same loss as `sklearn.decomposition.NMF(init="nndsvda",
+solver="cd")` to the stopping tolerance. `clustergram` gives, for each k, every row's
+cluster and the mean of that cluster: its centre projected on the first principal axis of
+the clustered data (`pca_weighted=True`) or averaged over the columns, the values the
+clustergram package draws (pylandstats' `get_cgram`); `plot_clustergram` draws them the
+same way. All agree with scikit-learn / clustergram, which are not needed.
 
 ### Plots
 

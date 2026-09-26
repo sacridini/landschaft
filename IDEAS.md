@@ -19,8 +19,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Análises no estilo pylandstats
 
-- Outros métodos de decomposição/agrupamento (NMF, agrupamento hierárquico) e o
-  `get_cgram` do pylandstats (correlogramas) na `SpatialSignatureAnalysis`.
 
 ## Desempenho e escala
 
@@ -124,3 +122,6 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 15. Tabelas grandes em pedaços: `Landscape.write_metrics` / `write_patch_metrics`
     (Parquet com um row group por pedaço, CSV, CSV.gz) e o `batch("landscape_metrics")`
     gravando assim. **Feita.**
+16. `SpatialSignatureAnalysis`: NMF (NNDSVDa + HALS, como o scikit-learn), agrupamento
+    hierárquico (ligações do scipy) e o clustergrama (`clustergram`,
+    `plot_clustergram`, como o `get_cgram` do pylandstats). **Feita.**

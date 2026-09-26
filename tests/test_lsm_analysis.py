@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -135,3 +137,87 @@ class TestSpatialSignature:
         with pytest.warns(RuntimeWarning, match="left out"):
             res = ls.SpatialSignatureAnalysis.from_table(table).pca()
         assert res.dropped == [2] and len(res.scores) == 3
+
+
+class TestSignatureFactorsAndClusters:
+    TABLE = pd.DataFrame(np.random.default_rng(0).gamma(2, 1, (40, 6)), columns=list("abcdef"))
+
+    @pytest.mark.parametrize("k", [1, 2, 3, 4])
+    def test_nmf_matches_scikit_learn(self, k):
+        pytest.importorskip("sklearn")
+        from sklearn.decomposition import NMF
+
+        res = ls.SpatialSignatureAnalysis.from_table(self.TABLE).nmf(k)
+        x = (self.TABLE - self.TABLE.min()) / (self.TABLE.max() - self.TABLE.min())
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ref = NMF(k, init="nndsvda", solver="cd", max_iter=5000, tol=1e-10).fit(x.to_numpy())
+        # the same local optimum from the same start, to the stopping tolerance
+        assert res.reconstruction_error == pytest.approx(ref.reconstruction_err_, rel=1e-4)
+        assert (res.scores.to_numpy() >= 0).all() and (res.components.to_numpy() >= 0).all()
+        np.testing.assert_allclose(np.linalg.norm(x.to_numpy() - res.scores.to_numpy() @ res.components.to_numpy().T),
+                                   res.reconstruction_error)
+        assert list(res.components.index) == list("abcdef") and list(res.scores.columns)[0] == "NMF1"
+
+    def test_nmf_recovers_non_negative_low_rank(self):
+        rng = np.random.default_rng(1)
+        w = rng.uniform(size=(30, 3))
+        w[0] = 0  # a zero row: min-max scaling is a column scaling, rank 3 stays exact
+        table = pd.DataFrame(w @ rng.uniform(size=(3, 8)))
+        res = ls.SpatialSignatureAnalysis.from_table(table).nmf(3, max_iter=20000, tol=1e-14)
+        assert res.reconstruction_error < 1e-10
+        with pytest.raises(ValueError, match="n_components"):
+            ls.SpatialSignatureAnalysis.from_table(table).nmf(9)
+
+    @pytest.mark.parametrize("method", ["ward", "average", "complete", "single"])
+    def test_hierarchical_matches_scipy(self, method):
+        from scipy.cluster import hierarchy
+
+        sig = ls.SpatialSignatureAnalysis.from_table(self.TABLE)
+        labels = sig.cluster(4, method=method)
+        z = (self.TABLE - self.TABLE.mean()) / self.TABLE.std(ddof=0)
+        ref = hierarchy.fcluster(hierarchy.linkage(z.to_numpy(), method=method), 4, criterion="maxclust")
+        # the same partition, numbered by first appearance
+        mapping = dict(zip(ref, labels))
+        assert [mapping[r] for r in ref] == labels.tolist()
+        assert len(set(zip(ref, labels))) == len(set(ref)) and labels.iloc[0] == 0
+        with pytest.raises(ValueError, match="method"):
+            sig.cluster(3, method="spectral")
+
+    def test_clustergram_matches_clustergram_package(self):
+        clustergram = pytest.importorskip("clustergram")
+        pytest.importorskip("sklearn")
+        sig = ls.SpatialSignatureAnalysis.from_table(self.TABLE)
+        ks = range(1, 7)
+        res = sig.clustergram(ks, method="ward")
+        z = (self.TABLE - self.TABLE.mean()) / self.TABLE.std(ddof=0)
+        for k in ks:
+            np.testing.assert_array_equal(res.labels[k], sig.cluster(k, method="ward"))
+        # the package's means from our partitions (from_data) and its PCA weighting
+        ref = clustergram.Clustergram.from_data(z, res.labels, method="mean")
+        ref._compute_means(True, {"n_components": 1})
+        theirs = ref.plot_data_pca[1]
+        for k in ks:
+            a, b = res.means[k].to_numpy(), theirs[k].to_numpy()
+            assert np.allclose(a, b, atol=1e-12) or np.allclose(a, -b, atol=1e-12)  # PCA sign
+        flat = sig.clustergram(ks, method="ward", pca_weighted=False)
+        ref._compute_means(False, {})
+        for k in ks:
+            np.testing.assert_allclose(flat.means[k].to_numpy(), ref.plot_data[k].to_numpy(), atol=1e-12)
+        km = sig.clustergram(range(2, 5))
+        for k in range(2, 5):
+            np.testing.assert_array_equal(km.labels[k], sig.cluster(k))
+        with pytest.raises(ValueError, match="k_range"):
+            sig.clustergram([0, 1])
+
+    def test_plot_clustergram(self):
+        matplotlib = pytest.importorskip("matplotlib")
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        sig = ls.SpatialSignatureAnalysis.from_table(self.TABLE)
+        fig = sig.plot_clustergram(k_range=range(1, 6), method="average")
+        ax = fig.axes[0]
+        assert len(ax.collections) == 5 and len(ax.lines) >= 4
+        assert ax.get_xlabel() == "Number of clusters (k)"
+        plt.close("all")

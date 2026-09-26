@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Landscape metrics part 16, spatial signatures: `SpatialSignatureAnalysis.nmf(k)`
+  (non-negative factors of the min-max scaled metrics, NNDSVDa start and HALS sweeps: the
+  loss of scikit-learn's `NMF(init="nndsvda", solver="cd")`), hierarchical clusters
+  (`cluster(k, method="ward" | "average" | "complete" | "single" | ...)`, scipy's linkages)
+  and the clustergram (`clustergram(k_range)` with every row's cluster and cluster mean per
+  k, `plot_clustergram`), as pylandstats' `decompose` / `get_cgram` and the clustergram
+  package compute them; `NMFResult` and `ClustergramResult`.
+
 ## [0.26.0] - 2026-09-26
 
 ### Added
