@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-09-26
+
 ### Added
 - Habitat connectivity graphs, part 1 (Conefor Sensinode / Makurhini): `HabitatGraph`
   (nodes with an attribute, and distances, dispersal probabilities or links between
