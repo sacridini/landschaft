@@ -10,6 +10,14 @@ import pandas as pd
 
 from .. import _core
 
+
+def r_sum(values) -> float:
+    """R's sum() (80-bit accumulation)."""
+    v = np.asarray(values, dtype=np.float64).ravel()
+    if v.size == 0:
+        return 0.0
+    return float(_core.lsm_r_statistics(v.tolist())[0])
+
 CONVENTIONS = ("makurhini", "conefor")
 KINDS = ("distance", "probability", "link")
 METRICS = ("A", "NC", "NL", "H", "CCP", "LCP", "IIC", "F", "AWF", "PC")
@@ -114,8 +122,8 @@ class HabitatGraph:
         if convention not in CONVENTIONS:
             raise ValueError(f"convention must be one of {CONVENTIONS}, got {convention!r}")
         a = np.asarray(attributes, dtype=np.float64).ravel()
-        if a.size < 2:
-            raise ValueError("a habitat graph needs at least two nodes")
+        if a.size < 1:
+            raise ValueError("a habitat graph needs at least one node")
         if not np.all(np.isfinite(a)) or np.any(a < 0):
             raise ValueError("node attributes must be finite and non-negative")
         n = a.size
@@ -130,6 +138,7 @@ class HabitatGraph:
         self.landscape_area = None if landscape_area is None else float(landscape_area)
         self.convention = convention
         self.n_threads = 0 if n_threads is None else int(n_threads)
+        self.habitat_area = None  # set by from_raster / from_vector (Makurhini's habitat area)
         self._pi, self._pj, self._value, self._dense = self._pairs(connections)
         if restoration is None:
             self.restoration = None
@@ -198,6 +207,8 @@ class HabitatGraph:
                                unreachable=unreachable, n_threads=threads)
         graph = cls(table["attribute"].to_numpy(), pairs, ids=table["id"].to_numpy(), **kwargs)
         graph._patches = patches
+        areas = node_table(patches, area_unit=area_unit, n_threads=threads)["attribute"].to_numpy()
+        graph.habitat_area = r_sum(areas)  # MK_dECA: sum of the cells' areas
         return graph
 
     @classmethod
@@ -222,6 +233,10 @@ class HabitatGraph:
                                cost_function=cost_function, unreachable=unreachable, n_threads=threads)
         graph = cls(table["attribute"].to_numpy(), pairs, ids=table["id"].to_numpy(), **kwargs)
         graph._vector = nodes
+        from .nodes import AREA_UNITS, gdal_areas
+
+        geoms = nodes.geometry.values if hasattr(nodes, "geometry") else np.asarray(nodes)
+        graph.habitat_area = r_sum(gdal_areas(geoms)) * AREA_UNITS[area_unit]  # MK_dECA: sum, then the unit
         return graph
 
     def to_raster(self, values, name: str | None = None):
@@ -573,6 +588,7 @@ class HabitatGraph:
         sub.convention = self.convention
         sub.n_threads = self.n_threads
         sub.restoration = None
+        sub.habitat_area = None
         sub._pi = index[self._pi[both]].astype(np.int32)
         sub._pj = index[self._pj[both]].astype(np.int32)
         sub._value = self._value[both]

@@ -308,8 +308,8 @@ def test_conefor_files_round_trip(tmp_path):
 
 
 def test_invalid_input():
-    with pytest.raises(ValueError, match="at least two"):
-        ls.HabitatGraph([1.0], np.zeros((1, 1)))
+    with pytest.raises(ValueError, match="at least one"):
+        ls.HabitatGraph([], np.zeros((0, 0)))
     with pytest.raises(ValueError, match="non-negative"):
         ls.HabitatGraph([1.0, -1.0], np.zeros((2, 2)))
     with pytest.raises(ValueError, match="convention"):

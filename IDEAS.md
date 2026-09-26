@@ -111,7 +111,9 @@ ls.connectivity_grid(g, grid_zones(...))
      bit, sem o `bounding_circles` nem o caminho em Java do Makurhini);
   4. importância das ligações, varPC, dECA no tempo e índices em grade. Ligações,
      mudanças de ligação e nós a adicionar (restauração, modo "adding nodes" do Conefor):
-     **feita** (0.33.0); falta dECA no tempo e índices em grade;
+     **feita** (0.33.0); dECA no tempo **feito** (0.34.0, `eca_change`); os índices em grade
+     (`MK_Connect_grid`, `MK_dECA_grid`) dependem do ProtConn (recorte dos nós por célula,
+     áreas transfronteiriças) e passam para a fase 5;
   5. ProtConn completo (uma ou várias regiões);
   6. centralidades (BC, BCIIC, BCPC, radial, medial) e focais (IICf, PCf, CCI);
   7. opcionais: commute-time e SAMC (Fletcher et al. 2023).

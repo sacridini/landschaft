@@ -1129,6 +1129,9 @@ g.components(distance=10_000)                          # component of every node
 g.link_importance("PC", distance=10_000)               # dPC_removal of every link (MK_dPCIIC_links)
 g.link_change(new_distances, "PC", distance=10_000)    # dPC_change of pairs with new distances
 
+# ECA over time (Makurhini's MK_dECA): one graph per time
+ls.conn.eca_change([g_2000, g_2010, g_2020], "PC", distance=10_000, landscape_area=LA)
+
 # nodes that could be added (restoration: 1 existing, 0 to add)
 g = ls.HabitatGraph(areas, distances, restoration=flags)
 g.node_importance(["PC", "IIC"], distance=10_000)      # + dPCres, dIICres of the nodes to add
@@ -1232,6 +1235,17 @@ link (as for a node). Changes that shorten a pair and nodes to add use the lengt
 between all nodes: the new length of a pair is `min(D_ij, D_ia + w + D_bj, ...)`, or
 through the node to add. A longer pair is removed and added back with its new length.
 
+### ECA over time
+
+`ls.conn.eca_change(graphs, metric, distance=, landscape_area=)` is Makurhini's `MK_dECA`:
+for one graph per time (or scenario) the habitat area (the node areas of graphs made
+by `from_raster` / `from_vector`, summed as R does, else the sum of the attributes),
+the ECA (EC(PC) or EC(IIC), capped at LA), both in % of LA and of the habitat area,
+`dA` and `dECA` (change from the previous time, the first from LA), `rECA = dECA / dA`
+and Makurhini's reading of them ("+ Connectivity loss", "+ Habitat loss", ...). A graph
+may hold a single node (its ECA is its attribute). Makurhini rounds some columns to
+3 decimals (which ones depends on the number of times); landschaft does not round.
+
 ### Connections and conventions
 
 `connections` holds distances (default), `kind="probability"` direct dispersal
@@ -1300,6 +1314,9 @@ the results do not depend on the number of threads.
   synthetic scenes (`makurhini_links.csv.gz`): the same rounded values, restoration
   gains to 1e-12. The Conefor driver also replays its "adding nodes" mode (the last
   five nodes of each scene), matched to its precision for every index.
+* `make_reference_conn.py deca` runs `MK_dECA` on three times of the polygons (PC and IIC,
+  two distances) and of the example raster (`deca_steps.csv`, `makurhini_deca.csv.gz`):
+  `dA` has the same bits and the other values agree to 1e-13.
 * `tests/test_conn.py` checks every index and importance against a brute-force
   recomputation of the graph without each node (and with its attribute set to 0),
   under both conventions, and the input kinds, pair tables, Conefor files and

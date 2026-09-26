@@ -120,6 +120,47 @@ if (args[1] == "links") {
     quit(save = "no")
 }
 
+if (args[1] == "deca") {
+    # MK_dECA on time series: subsets of the polygons and of the patch raster.
+    # steps.csv: kind (vector / raster), time, id (the nodes kept at that time)
+    polygons <- sf::st_read(args[2], quiet = TRUE)
+    r <- terra::rast(args[3])
+    steps <- read.csv(args[4])
+    out <- list()
+    keep <- function(kind, metric, tab) {
+        tab <- as.data.frame(tab)
+        names(tab) <- c("time", "LA", "area", "distance", "ECA", "ECA_LA", "ECA_area", "dA", "dECA", "rECA",
+                         "comparison", "change")
+        for (col in c("LA", "area", "distance", "ECA", "ECA_LA", "ECA_area", "dA", "dECA", "rECA")) {
+            tab[[col]] <- fmt(as.numeric(tab[[col]]))
+        }
+        out[[length(out) + 1]] <<- cbind(kind = kind, metric = metric, tab)
+    }
+    times <- sort(unique(steps$time))
+    vec <- lapply(times, function(t) polygons[polygons$id %in% steps$id[steps$kind == "vector" & steps$time == t], ])
+    la_v <- as.numeric(args[5])
+    for (m in c("PC", "IIC")) {
+        res <- MK_dECA(nodes = vec, area_unit = "km2", distance = list(type = "centroid"), metric = m,
+                       probability = if (m == "PC") 0.5 else NULL, distance_thresholds = c(2000, 6000),
+                       LA = la_v, plot = FALSE, intern = FALSE)
+        for (tab in res) keep("vector", m, tab)
+    }
+    ras <- lapply(times, function(t) {
+        ids <- steps$id[steps$kind == "raster" & steps$time == t]
+        x <- terra::deepcopy(r)
+        v <- terra::values(x, mat = FALSE)
+        v[!(v %in% ids)] <- NA
+        terra::values(x) <- v
+        raster::raster(x)
+    })
+    res <- MK_dECA(nodes = ras, area_unit = "ha", distance = list(type = "centroid"), metric = "PC",
+                   probability = 0.5, distance_thresholds = 10000, LA = as.numeric(args[6]), plot = FALSE,
+                   intern = FALSE)
+    keep("raster", "PC", res)
+    write.csv(do.call(rbind, out), args[7], row.names = FALSE)
+    quit(save = "no")
+}
+
 if (args[1] == "export") {
     data("habitat_nodes", package = "Makurhini")
     d <- distancefile(habitat_nodes, id = "Id", type = "centroid")

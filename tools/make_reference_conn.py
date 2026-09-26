@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links]
+    python tools/make_reference_conn.py [makurhini] [conefor] [spatial] [links] [deca]
 
 ``makurhini`` needs Rscript with Makurhini installed (``LANDSCHAFT_RSCRIPT`` as
 in ``tests/lsm_reference.py``; the default R library is used). It exports
@@ -23,6 +23,10 @@ and every 17th of the others).
 pairs brought closer and others moved apart) and ``MK_dPCIIC`` with
 ``restoration`` (the last five nodes to add, which Makurhini's code needs to
 align its attributes) on the synthetic scenes (``makurhini_links.csv.gz``).
+
+``deca`` runs ``MK_dECA`` on three times of the polygons and of the example
+raster, some nodes removed at each time (``deca_steps.csv`` lists them;
+``makurhini_deca.csv.gz``).
 
 ``conefor`` builds ``tools/conefor/conefor_harness.cpp`` with the Conefor
 Sensinode 2.2 sources (the last five nodes of each scene are Conefor's nodes
@@ -257,6 +261,46 @@ def run_links() -> None:
         print(f"links: {len(out)} values")
 
 
+DECA_LA_VECTOR = 400.0   # km2
+DECA_LA_RASTER = 3.5e6   # ha
+
+
+def deca_steps() -> pd.DataFrame:
+    """The nodes kept at each of three times."""
+    import geopandas as gpd
+    import rasterio
+
+    rows = []
+    poly_ids = gpd.read_file(OUT / "polygons.gpkg")["id"].to_numpy()
+    with rasterio.open(OUT / "habitat_nodes_raster.tif") as src:
+        values = src.read(1)
+        nodata = src.nodata
+    raster_ids = np.unique(values[values != nodata]) if nodata is not None else np.unique(values)
+    for kind, ids in (("vector", poly_ids), ("raster", raster_ids)):
+        for time, drop in ((1, 0), (2, 5), (3, 3)):
+            kept = ids if drop == 0 else ids[np.arange(len(ids)) % drop != 1]
+            if time == 3:
+                kept = kept[np.arange(len(kept)) % 4 != 2]
+            rows += [(kind, time, int(i)) for i in kept]
+    return pd.DataFrame(rows, columns=["kind", "time", "id"])
+
+
+def run_deca() -> None:
+    rscript = lsm_reference.find_rscript()
+    if rscript is None:
+        raise SystemExit("Rscript not found")
+    steps = deca_steps()
+    steps.to_csv(OUT / "deca_steps.csv", index=False)
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        subprocess.run([str(rscript), str(R_SCRIPT), "deca", str(OUT / "polygons.gpkg"),
+                        str(OUT / "habitat_nodes_raster.tif"), str(OUT / "deca_steps.csv"), repr(DECA_LA_VECTOR),
+                        repr(DECA_LA_RASTER), str(tmp / "out.csv")], check=True)
+        out = pd.read_csv(tmp / "out.csv", float_precision="round_trip")
+        out.to_csv(OUT / "makurhini_deca.csv.gz", index=False, float_format="%.17g")
+        print(f"deca: {len(out)} rows")
+
+
 def run_makurhini() -> None:
     rscript = lsm_reference.find_rscript()
     if rscript is None:
@@ -366,7 +410,7 @@ def run_conefor() -> None:
 
 
 if __name__ == "__main__":
-    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links"]
+    parts = sys.argv[1:] or ["makurhini", "conefor", "spatial", "links", "deca"]
     if "makurhini" in parts:
         run_makurhini()
     if "conefor" in parts:
@@ -375,3 +419,5 @@ if __name__ == "__main__":
         run_spatial()
     if "links" in parts:
         run_links()
+    if "deca" in parts:
+        run_deca()

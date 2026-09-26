@@ -133,8 +133,8 @@ def _vector_frame(nodes, id):
         if id not in nodes.columns:
             raise ValueError(f"no column {id!r} in the nodes")
         ids = nodes[id].to_numpy()
-    if len(nodes) < 2:
-        raise ValueError("a habitat graph needs at least two nodes")
+    if len(nodes) < 1:
+        raise ValueError("a habitat graph needs at least one node")
     return nodes, ids
 
 

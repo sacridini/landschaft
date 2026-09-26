@@ -6,6 +6,14 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Habitat connectivity graphs, part 5: `ls.conn.eca_change(graphs, metric, distance=,
+  landscape_area=)`, Makurhini's `MK_dECA`: habitat area, ECA (capped at LA), normalised
+  ECA, `dA`, `dECA`, `rECA` and Makurhini's change classes for one graph per time. Graphs
+  from `from_raster` / `from_vector` keep their habitat area (`habitat_area`, summed as R
+  does); a graph may now hold a single node. Matched with `MK_dECA` on polygon and raster
+  time series (`dA` to the bit, the rest to 1e-13).
+
 ## [0.33.0] - 2026-09-26
 
 ### Added
