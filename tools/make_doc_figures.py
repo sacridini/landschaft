@@ -454,6 +454,34 @@ def learn_percolation():
     save(fig, "learn_percolation")
 
 
+def mspa_toy():
+    """The drawn landscape of the Learn chapter on the shape of habitat."""
+    toy = np.ones((24, 40), dtype="uint8")
+    toy[3:15, 2:14] = 2
+    toy[5:19, 24:37] = 2
+    toy[8:10, 14:24] = 2
+    toy[9:12, 29:32] = 1
+    toy[7:17, 38] = 2
+    toy[7, 37] = toy[16, 37] = 2
+    toy[14:22, 9] = 2
+    toy[19:22, 4:6] = 2
+    toy[1:3, 20:34] = 2
+    return toy
+
+
+@figure
+def learn_mspa_toy():
+    toy = mspa_toy()
+    morph = ls.mspa(toy, edge_width=1, internal=False)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 3.4))
+    palette_map(axes[0], toy, BINARY, None, "Habitat map")
+    for text, (row, col) in {"A": (8.5, 7.5), "B": (15.5, 30)}.items():
+        axes[0].text(col, row, text, ha="center", va="center", fontsize=9, color="white", fontweight="bold")
+    names = {code: name for code, name in ls.MSPA_CLASSES.items() if code in (0, 1, 3, 5, 9, 17, 33, 65)}
+    palette_map(axes[1], morph, ls.mspa_colormap(), names, "MSPA classes, edge_width=1")
+    save(fig, "learn_mspa_toy")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:
