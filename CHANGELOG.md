@@ -6,6 +6,24 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-09-27
+
+### Added
+- The rest of landscapemetrics' API: `full_name=True` in `landscape_metrics`,
+  `Landscape.metrics`, `sample_metrics`, `scale_sample` and `extract_metrics` (the
+  columns `name`, `type` and `function_name` of `calculate_lsm(full_name = TRUE)`);
+  `sample_metrics(return_raster=True)` (each plot's raster, `raster_sample_plots`, on
+  terra's crop extent); the public helpers `construct_buffer`, `pad_raster`,
+  `unpad_raster`, `raster_to_points` and `get_unique_values` (parallel C++). Matched
+  bit for bit with landscapemetrics on four maps (`make_reference_lsm.py api`,
+  `tests/data/reference/lsm_api`).
+
+### Changed
+- Circular sample plots use R's `sin`/`cos` bits (the x87 `fsin`/`fcos` of mingw-w64;
+  `np.sin` differed in the last bit at 5 of the 100 vertices). The `siei` catalogue
+  name is landscapemetrics' ("simspon's evenness index"); `list_metrics(name=)` takes
+  both spellings.
+
 ## [0.48.0] - 2026-09-26
 
 ### Added
