@@ -39,9 +39,10 @@ tables below (logarithmic scale). The original's time is its own run,
 including its input and output where noted; landschaft is timed in memory.
 
 !!! info "How these were measured"
-    The MSPA table was measured for this page with `tools/benchmark.py` on a
+    The MSPA table was measured with `tools/benchmark.py` (version 0.53) on a
     desktop Intel Core i5-13600K (14 cores, 20 threads, 64 GB, Windows 11),
-    the best of several runs. The other timings were recorded in the
+    the fastest of 10 alternating runs, with both programs kept on the
+    performance cores. The other timings were recorded in the
     [changelog](about/changelog.md) when each tool was written, with the
     version given ("Since"). Times depend on the computer, the map and the options: treat them as
     orders of magnitude.
@@ -51,22 +52,33 @@ including its input and output where noted; landschaft is timed in memory.
 Against GuidosToolbox's `mspa` executable (v2.3, whose time includes reading
 and writing its TIFF files) on its sample map and on the CORINE forest map;
 landschaft with 1 thread and with the default 19. Every output was compared
-pixel by pixel.
+pixel by pixel. landschaft is 10 to 17 times faster.
 
 | Map | Connectivity, edge width | GuidosToolbox | 1 thread | 19 threads | Identical |
 |---|---|---|---|---|---|
-| Sample, 1000² | 8, 1 | 0.45 s | 0.09 s | 0.08 s | yes |
-| Sample, 1000² | 8, 5 | 0.55 s | 0.11 s | 0.15 s | yes |
-| Sample, 1000² | 4, 20 | 0.66 s | 0.20 s | 0.16 s | yes |
-| CORINE, 2000² | 8, 1 | 1.21 s | 0.49 s | 0.35 s | yes |
-| CORINE, 2000² | 8, 5 | 1.41 s | 0.59 s | 0.41 s | yes |
-| CORINE, 2000² | 4, 20 | 1.69 s | 0.65 s | 0.49 s | yes |
+| Sample, 1000² | 8, 1 | 0.46 s | 0.040 s | 0.029 s | yes |
+| Sample, 1000² | 8, 5 | 0.56 s | 0.065 s | 0.054 s | yes |
+| Sample, 1000² | 4, 20 | 0.68 s | 0.079 s | 0.068 s | yes |
+| CORINE, 2000² | 8, 1 | 1.30 s | 0.095 s | 0.078 s | yes |
+| CORINE, 2000² | 8, 5 | 1.53 s | 0.151 s | 0.137 s | yes |
+| CORINE, 2000² | 4, 20 | 1.70 s | 0.213 s | 0.174 s | yes |
+
+At scale, the CORINE map repeated 3 × 3 (6000 × 6000, 36 million pixels)
+takes GuidosToolbox 20 to 26 s and landschaft 1.4 to 2.3 s, again with
+identical outputs.
 
 MSPA's longest steps (geodesic distances, thinning, watershed) are ordered
-propagations that must run in sequence to stay bit-exact, so one map gains
-little from many threads, and on a small map they can even cost a little time. Many maps gain fully: run them side by side with
+propagations that must run in sequence to stay bit-exact, so one map takes
+only 10 to 30 % less time with more threads. Many maps gain fully: run them side by side with
 [`mspa_batch`](api/batch.md#landschaft.mspa_batch) or
 [`batch`](api/batch.md#landschaft.batch).
+
+!!! note "Hybrid processors"
+    On processors with performance and efficiency cores (Intel 12th
+    generation and later), Windows may move a busy process to the slower
+    efficiency cores, especially when it runs in the background; any program
+    then takes up to twice as long. Keep the terminal in the foreground for
+    timings, and compare runs made side by side.
 
 ### Landscape metrics
 

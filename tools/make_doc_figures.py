@@ -362,7 +362,7 @@ def change_maps():
 
 # Timings of docs/benchmarks.md: (task, reference tool, original [s], landschaft [s]).
 BENCHMARKS = [
-    ("MSPA, CORINE 2000×2000", "GuidosToolbox", 1.21, 0.35),
+    ("MSPA, CORINE 2000×2000", "GuidosToolbox", 1.30, 0.078),
     ("All 133 landscape metrics", "landscapemetrics", 15.6, 0.03),
     ("sample_lsm, 6 plots", "landscapemetrics", 3.7, 0.02),
     ("PC and importances, 404 patches", "Makurhini", 10.6, 0.017),

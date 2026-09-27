@@ -6,6 +6,33 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-09-27
+
+### Changed
+- MSPA is 3 times faster than in 0.52 (10-17 times faster than GuidosToolbox's `mspa`),
+  with the same bits: on the 2000×2000 CORINE map 95 ms instead of 312 ms with one
+  thread and 78 ms instead of 239 ms with the default threads (performance cores).
+  - The disk dilation behind every thresholded distance works on rows packed into
+    64-bit words for radii up to 24 (4× faster).
+  - The per-pixel operations between the stages (masks, saturated arithmetic, shifts,
+    levels, thresholds, the missing-data and input checks) use SSE2; MSVC left them
+    scalar.
+  - Large buffers are reused within a call (`gtb::PoolScope`) instead of being
+    requested from the operating system, which zeroed fresh pages for each of the
+    ~85 intermediate images.
+  - The geodesic distance is skipped for edge width 1, where it provably selects no
+    pixel, touches only the pixels its front reaches, returns MSPA's 0/1 band directly
+    and keeps each queued pixel's distance instead of recomputing it every round.
+  - The external boundary of the core is computed once for the openings and the
+    perforations; independent steps of the preprocessing, the edges and the corridors
+    run as parallel tasks; the watershed skips blocks of seeds without empty
+    neighbours; the thinning's initial scan runs in parallel from 1 Mpx.
+- `tools/benchmark.py` alternates the one-thread and default-thread runs and reports
+  the fastest of each (`--repeats`). Run one after the other, the operating system
+  moving a busy process to the efficiency cores of a hybrid CPU made the later runs
+  look slower, e.g. more threads slower than one; side by side, the default threads
+  were faster in 178 of 180 paired runs.
+
 ## [0.52.0] - 2026-09-27
 
 ### Changed

@@ -14,8 +14,8 @@ FRAGSTATS, Conefor / Makurhini, Circuitscape / Omniscape).
 📘 **Documentation website:** built from `docs/` with `mkdocs build` (see
 [Building these docs](docs/about/docs.md)); open `site/index.html`.
 
-**Current Version (v0.52.0):** Complete reimplementation of all major GuidosToolbox tools:
-* **MSPA**: Morphological Spatial Pattern Analysis (bit-identical to GTB `mspa` v2.3, 5-7x faster), and GTB's MSPA Tiling for maps larger than memory (out of core, identical to GTB).
+**Current Version (v0.53.0):** Complete reimplementation of all major GuidosToolbox tools:
+* **MSPA**: Morphological Spatial Pattern Analysis (bit-identical to GTB `mspa` v2.3, 10-17x faster), and GTB's MSPA Tiling for maps larger than memory (out of core, identical to GTB).
 * **SPA2/3/5/6**: Simplified Pattern Analysis (identical to GTB).
 * **GTN & Connectivity**: Topological Network Components (ECA, DOC), Importance (dPC), and Conefor Sensinode inputs.
 * **Fragmentation & Distance**: Forest Area Density (single & multiscale FAD, $O(1)$ integral images), FOS (Fixed Observation Scale: FAD/FED/FAC in 5 or 6 classes, binary or grayscale input, identical to GTB), Euclidean Distance Transform ($O(N)$), and Directional Spatial Entropy.
@@ -254,41 +254,54 @@ Parameter correspondence with GuidosToolbox:
 ## Versioning
 
 landschaft follows [Semantic Versioning](https://semver.org/); the current version is
-**0.52.0** (`ls.__version__`). While below 1.0, minor versions may change the API.
+**0.53.0** (`ls.__version__`). While below 1.0, minor versions may change the API.
 Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Performance
 
-`python tools/benchmark.py --exe <mspa executable>` (bundled example maps), on a laptop Ryzen 7 7730U
-(8 cores, 15 W). The original's time includes its TIFF I/O. landschaft's is in memory:
+`python tools/benchmark.py --exe <mspa executable>` (bundled example maps), on a desktop
+Intel Core i5-13600K (14 cores, 20 threads), both programs on the performance cores,
+the fastest of 10 alternating runs. The original's time includes its TIFF I/O.
+landschaft's is in memory:
 
-| map | FGconn_EdgeWidth | GTB mspa | landschaft, 1 thread | landschaft, 16 threads | identical |
+| map | FGconn_EdgeWidth | GTB mspa | landschaft, 1 thread | landschaft, 19 threads | identical |
 |---|---|---|---|---|---|
-| GTB input.tif 1000×1000 | 8_1 | 0.64 s | 0.11 s | 0.09 s | yes |
-| GTB input.tif 1000×1000 | 4_20 | 0.97 s | 0.14 s | 0.13 s | yes |
-| CORINE forest 2000×2000 | 8_1 | 1.64 s | 0.33 s | 0.29 s | yes |
-| CORINE forest 2000×2000 | 8_5 | 2.04 s | 0.37 s | 0.38 s | yes |
-| CORINE forest 2000×2000 | 4_20 | 2.48 s | 0.45 s | 0.36 s | yes |
+| GTB input.tif 1000×1000 | 8_1 | 0.46 s | 0.040 s | 0.029 s | yes |
+| GTB input.tif 1000×1000 | 8_5 | 0.56 s | 0.065 s | 0.054 s | yes |
+| GTB input.tif 1000×1000 | 4_20 | 0.68 s | 0.079 s | 0.068 s | yes |
+| CORINE forest 2000×2000 | 8_1 | 1.30 s | 0.095 s | 0.078 s | yes |
+| CORINE forest 2000×2000 | 8_5 | 1.53 s | 0.151 s | 0.137 s | yes |
+| CORINE forest 2000×2000 | 4_20 | 1.70 s | 0.213 s | 0.174 s | yes |
+
+A 6000×6000 map (CORINE repeated 3×3) takes GTB 20-26 s and landschaft 1.4-2.3 s.
 
 Where the speed comes from, and why threads help less than one might expect:
 
 * Every Euclidean distance transform in MSPA is only compared with a threshold.
   `sqrt(float(d²)) <= s` is monotone in `d²`, so it is replaced by the exact
-  integer test `d² <= T`. That test is a dilation by a digital disk, computed
-  with clipped column distances and two sweeps per row, instead of a full EDT.
+  integer test `d² <= T`: a dilation by a digital disk. For the usual radii it
+  runs on rows packed into 64-bit words (shift-ORs over the disk's rows, 64 pixels
+  per operation); large radii use clipped column distances and two sweeps per row.
+* The per-pixel operations between the stages (masks, saturated arithmetic,
+  shifts, thresholds) use SSE2 on 16 pixels at a time.
+* The intermediate images reuse each other's memory within a call instead of
+  asking the operating system for fresh pages each time.
+* With edge width 1 the geodesic distance cannot select any pixel (every reached
+  pixel is at least 1 away, above the threshold), so it is skipped; otherwise
+  only the pixels the front reaches are touched.
 * Hole filling, reconstruction and labelling use run-length union-find instead of
   pixel queues.
 * The geodesic distance, the anchored thinning and the watershed are
   *order-dependent* FIFO propagations. Their queue order decides ties, so they
-  stay sequential to remain bit-exact. They are the critical path of one image.
-* Independent stages run concurrently as tasks. OpenMP data-parallel loops are
-  enabled only for maps above 16 Mpx: for smaller maps, the short parallel regions
-  cost more than they save, because idle OpenMP workers keep spinning and slow
-  down the sequential stages that follow.
+  stay sequential to remain bit-exact. They are the critical path of one image,
+  which is why more threads save only 10-30 % on one map.
+* Independent stages run concurrently as tasks; OpenMP data-parallel loops run
+  for maps above 16 Mpx (1 Mpx for heavy scans).
 
-For many images the throughput scales like independent processes. On the laptop
-above, 16 workers give about 4× (the CPU drops its clock under all-core load).
-Expect more on workstations and servers.
+For many images the throughput scales like independent processes: use
+`mspa_batch`. On hybrid CPUs (performance and efficiency cores) Windows may move a
+busy background process to the efficiency cores, which roughly doubles any run
+time; benchmark in the foreground and compare runs made side by side.
 
 ## Exactness and tests
 
@@ -346,13 +359,11 @@ Set `LANDSCHAFT_PROFILE=1` to print the time of every MSPA stage.
 ## Limitations
 
 * MSPA is a global operator: the whole map must fit in memory (≈30 bytes/pixel).
-  There is no tiling yet. GTB's "MSPA tiling" is approximate by design.
+  `mspa_tiled` reproduces GTB's MSPA Tiling for larger maps, which is approximate
+  near the tile seams by design.
 * The original stores geodesic offsets in 16-bit integers and distances in 32 bits.
   landschaft reproduces them. For maps with a side of 46,000 px or more, the fast
   distance path is disabled and the original arithmetic is used.
-* Eigen is not used yet: MSPA's hot paths are queue propagations and byte
-  operations that the compiler already vectorises. Eigen will be considered for
-  GTB tools with floating-point kernels (moving windows, distances, costs).
 
 ## License and credits
 
