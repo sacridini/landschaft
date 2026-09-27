@@ -549,6 +549,32 @@ def learn_circuit_gaps():
     save(fig, "learn_circuit_gaps")
 
 
+@figure
+def learn_processes():
+    def initial():
+        m = np.ones((100, 100), dtype="uint8")
+        m[20:80, 20:80] = 2
+        m[5:12, 85:92] = 2
+        m[88:94, 6:12] = 2
+        return m
+
+    scenarios = {"initial": initial()}
+    m = initial(); m[35:40, 35:40] = 1; m[55:62, 60:66] = 1
+    scenarios["perforation"] = m
+    m = initial(); m[20:80, 49:51] = 1
+    scenarios["dissection"] = m
+    m = initial(); m[20:80, 39:41] = 1; m[20:80, 59:61] = 1; m[39:41, 20:80] = 1; m[59:61, 20:80] = 1
+    scenarios["fragmentation"] = m
+    m = initial(); m[20:80, 20:80] = 1; m[24:76, 24:76] = 2
+    scenarios["shrinkage"] = m
+    m = initial(); m[5:12, 85:92] = 1; m[88:94, 6:12] = 1
+    scenarios["attrition"] = m
+    fig, axes = plt.subplots(1, 6, figsize=(13, 2.5))
+    for ax, (name, m) in zip(axes, scenarios.items()):
+        palette_map(ax, m, BINARY, None, name)
+    save(fig, "learn_processes")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:
