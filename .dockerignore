@@ -1,0 +1,12 @@
+.git
+.venv
+build
+dist
+site
+docs
+assets
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+.pytest_cache
+tests/prof.out
