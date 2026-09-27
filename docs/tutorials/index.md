@@ -11,6 +11,11 @@ and follow along.
     and read [core concepts](../getting-started/concepts.md): it explains how
     habitat maps are coded, which all tutorials rely on.
 
+!!! info "New to landscape ecology?"
+    The [Learn](../learn/index.md) course explains what each analysis
+    measures, the theory behind it and when to use it. The tutorials focus on
+    how to run the tools.
+
 <div class="grid cards" markdown>
 
 -   :material-shape-outline:{ .lg .middle } **[Habitat patterns](patterns.md)**

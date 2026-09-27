@@ -22,6 +22,7 @@ from a single raster on a laptop to continental maps larger than memory.
 
 [Get started](getting-started/index.md){ .md-button .md-button--primary }
 [Tutorials](tutorials/index.md){ .md-button }
+[Learn](learn/index.md){ .md-button }
 [GitHub :fontawesome-brands-github:](https://github.com/sacridini/landschaft){ .md-button }
 
 <div class="ls-badges">
@@ -196,4 +197,6 @@ from a single raster on a laptop to continental maps larger than memory.
     FRAGSTATS (landscape metrics), Conefor Sensinode and Makurhini (habitat
     networks), and Circuitscape and Omniscape (circuit connectivity), and is
     [tested against their outputs](benchmarks.md#accuracy). You do not need to know any of them to use
-    it: the [tutorials](tutorials/index.md) start from scratch.
+    it: the [tutorials](tutorials/index.md) start from scratch, and the
+    [Learn](learn/index.md) course explains the landscape ecology behind every
+    tool.

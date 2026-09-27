@@ -73,8 +73,8 @@ and pairs further apart in the network count less.
 ### The probability of connectivity
 
 <div class="ls-formula" markdown>
-PC = Σ<sub>i</sub> Σ<sub>j</sub> a<sub>i</sub> a<sub>j</sub> p*<sub>ij</sub> &nbsp;/&nbsp; A<sub>L</sub>²
-<small>p*<sub>ij</sub>: the maximum product probability of all paths between i and j (1 when i = j), from direct probabilities p<sub>ij</sub> = e<sup>−k d<sub>ij</sub></sup>.</small>
+PC = Σ<sub>i</sub> Σ<sub>j</sub> a<sub>i</sub> a<sub>j</sub> p<sup>∗</sup><sub>ij</sub> &nbsp;/&nbsp; A<sub>L</sub>²
+<small>p<sup>∗</sup><sub>ij</sub>: the maximum product probability of all paths between i and j (1 when i = j), from direct probabilities p<sub>ij</sub> = e<sup>−k d<sub>ij</sub></sup>.</small>
 </div>
 
 PC is the probability that two points placed at random in the landscape
