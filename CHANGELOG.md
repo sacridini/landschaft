@@ -6,6 +6,21 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-09-27
+
+### Changed
+- Circuit connectivity: large components are factorised in parallel (subtrees of the
+  nested dissection on separate threads, the fronts above them by heights, large fronts
+  by a blocked Cholesky over fixed blocks), the same bits with any number of threads.
+  1000×1000 raster, 20 threads: factorisation 3.4 s -> 0.7 s, advanced mode 5.2 s ->
+  2.6 s; the 1 M-node network pairwise run of 0.50.0: 7.2 s -> 5.0 s. Eigen's own GEMM
+  threads are turned off (`EIGEN_DONT_PARALLELIZE`).
+
+### Fixed
+- Documentation: the network benchmark compared the resistances with CHOLMOD's to
+  "3e-15" by dividing by the largest node id in the matrix; they agree to 5e-10
+  (relative), the conditioning of that 1 M-node problem.
+
 ## [0.50.0] - 2026-09-27
 
 ### Added
