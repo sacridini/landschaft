@@ -4,8 +4,15 @@
 
 # landschaft
 
-Fast Python reimplementation of [GuidosToolbox (GTB)](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/)
-raster image analysis, with a C++17/OpenMP core and a modern numpy / xarray / dask / rasterio API.
+Fast, exact landscape analysis for Python: habitat patterns, fragmentation, landscape
+metrics and ecological connectivity (habitat networks and circuit theory), from a single
+raster to maps larger than memory. A C++17/OpenMP core behind a numpy / xarray / dask /
+rasterio API, validated against the reference implementations of every method
+([GuidosToolbox](https://forest.jrc.ec.europa.eu/en/activities/lpa/gtb/), landscapemetrics /
+FRAGSTATS, Conefor / Makurhini, Circuitscape / Omniscape).
+
+📘 **Documentation website:** built from `docs/` with `mkdocs build` (see
+[Building these docs](docs/about/docs.md)); open `site/index.html`.
 
 **Current Version (v0.52.0):** Complete reimplementation of all major GuidosToolbox tools:
 * **MSPA**: Morphological Spatial Pattern Analysis (bit-identical to GTB `mspa` v2.3, 5-7x faster), and GTB's MSPA Tiling for maps larger than memory (out of core, identical to GTB).

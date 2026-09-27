@@ -1,0 +1,136 @@
+site_name: landschaft
+site_description: >-
+  Fast, exact landscape pattern, fragmentation, landscape-metric and connectivity
+  analysis for Python.
+site_author: Eduardo Lacerda
+copyright: Copyright &copy; 2026 Eduardo Lacerda &middot; GPL-3.0-or-later
+repo_url: https://github.com/sacridini/landschaft
+repo_name: sacridini/landschaft
+edit_uri: ""
+
+# Plain .html links: the built site opens straight from disk (file://) as well
+# as from a web server (GitHub Pages later).
+use_directory_urls: false
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  language: en
+  font: false                       # system fonts: nothing fetched from the web
+  logo: assets/images/mark.svg
+  favicon: assets/images/mark.svg
+  icon:
+    repo: fontawesome/brands/github
+    admonition:
+      note: material/information-outline
+      tip: material/lightbulb-on-outline
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - navigation.path
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+
+plugins:
+  - search
+  - offline                         # search and navigation work from file://
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: numpy
+            docstring_section_style: table
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            separate_signature: true
+            show_signature_annotations: true
+            signature_crossrefs: true
+            merge_init_into_class: true
+            members_order: source
+            heading_level: 2
+            filters: ["!^_"]
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.snippets:
+      base_path: [".", "docs"]
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/sacridini/landschaft
+
+exclude_docs: |
+  /overrides/
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - Configuration: getting-started/configuration.md
+      - Core concepts: getting-started/concepts.md
+  - About:
+      - Changelog: about/changelog.md
+      - License: about/license.md
+      - Building these docs: about/docs.md
