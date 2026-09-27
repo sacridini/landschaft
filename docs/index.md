@@ -32,7 +32,7 @@ from a single raster on a laptop to continental maps larger than memory.
 </div>
 
 <div class="ls-hero__image" markdown>
-![Landschaft](assets/images/logo-block.png)
+![Landschaft](assets/images/logo-icon-dark.svg)
 </div>
 
 </div>

@@ -17,8 +17,8 @@ theme:
   custom_dir: docs/overrides
   language: en
   font: false                       # system fonts: nothing fetched from the web
-  logo: assets/images/mark.svg
-  favicon: assets/images/mark.svg
+  logo: assets/images/logo-icon-dark.svg
+  favicon: assets/images/logo-icon.svg
   icon:
     repo: fontawesome/brands/github
     admonition:

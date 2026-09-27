@@ -1,8 +1,9 @@
 <p align="center">
-  <img alt="Landschaft" src="assets/logos/opcao_2_isometrico.jpg" width="360">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logos/landschaft_ridge_stacked_dark.svg">
+    <img alt="Landschaft" src="assets/logos/landschaft_ridge_stacked_light.svg" width="320">
+  </picture>
 </p>
-
-<h1 align="center">Landschaft</h1>
 
 <p align="center">
   <b>Fast, exact landscape analysis for Python.</b><br>
