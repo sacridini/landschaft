@@ -151,6 +151,7 @@ nav:
       - Fragmentation: api/fragmentation.md
       - Landscape metrics: api/landscape-metrics.md
       - Habitat networks: api/networks.md
+      - Circuit connectivity: api/circuits.md
   - About:
       - Changelog: about/changelog.md
       - License: about/license.md

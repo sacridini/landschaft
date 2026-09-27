@@ -12,12 +12,18 @@ from ._backend import core
 
 @dataclass
 class AdvancedResult:
-    """Node currents and voltages of an advanced-mode solve.
+    """Node currents and voltages of :func:`advanced`.
 
-    ``current`` is the current through every cell (``max(inflow, outflow)``
-    at its node, 0 where nothing was solved); ``voltage`` the node voltages (0
-    in components without a source or a ground, NaN on cells without a node).
-    DataArrays when the conductance was one.
+    DataArrays when the conductance was one, arrays otherwise.
+
+    Attributes
+    ----------
+    current
+        Current through every cell (``max(inflow, outflow)`` at its node; 0
+        where nothing was solved).
+    voltage
+        Node voltages (0 in components without a source or a ground, NaN on
+        cells without a node).
     """
 
     current: object
@@ -81,12 +87,37 @@ def advanced(conductance, source, ground, *, four_neighbors: bool = False, n_thr
     four_neighbors
         Connect the four orthogonal neighbours only.
     n_threads
-        OpenMP threads (0: all cores but one).
+        Threads (0 or ``None``: all cores but one).
 
     Returns
     -------
     AdvancedResult
         ``current`` and ``voltage``.
+
+    See Also
+    --------
+    circuitscape_advanced : the same with Circuitscape's options and inputs.
+
+    Examples
+    --------
+    One amp injected on the left of a 3 x 5 grid, grounded on the right:
+
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> conductance = np.ones((3, 5))
+    >>> source = np.zeros((3, 5))
+    >>> source[1, 0] = 1.0
+    >>> ground = np.zeros((3, 5))
+    >>> ground[1, 4] = np.inf
+    >>> result = circuit.advanced(conductance, source, ground)
+    >>> result.voltage.round(3)
+    array([[0.716, 0.615, 0.444, 0.272, 0.172],
+           [0.887, 0.615, 0.444, 0.272, 0.   ],
+           [0.716, 0.615, 0.444, 0.272, 0.172]])
+    >>> result.current.round(3)
+    array([[0.172, 0.293, 0.293, 0.293, 0.172],
+           [1.   , 0.414, 0.414, 0.414, 1.   ],
+           [0.172, 0.293, 0.293, 0.293, 0.172]])
     """
     g, like = _grid(conductance, "conductance")
     s, _ = _grid(source, "source")

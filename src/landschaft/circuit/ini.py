@@ -39,8 +39,30 @@ DEFAULTS = {
 
 
 def parse_ini(path) -> dict[str, str]:
-    """Omniscape's ``parse_cfg``: lines starting with ``[`` are skipped, every other one is
-    split at its first ``=`` (key right-stripped, value stripped)."""
+    """Read an INI file as Omniscape's ``parse_cfg`` does.
+
+    Lines starting with ``[`` are skipped; every other line is split at its
+    first ``=`` (key right-stripped, value stripped).
+
+    Parameters
+    ----------
+    path
+        The INI file.
+
+    Returns
+    -------
+    dict of str to str
+
+    Examples
+    --------
+    >>> from landschaft import circuit
+    >>> _ = open("run.ini", "w").write('''[Required]
+    ... radius = 3
+    ... project_name = corridors
+    ... ''')
+    >>> circuit.parse_ini("run.ini")
+    {'radius': '3', 'project_name': 'corridors'}
+    """
     cfg: dict[str, str] = {}
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -139,11 +161,41 @@ def omniscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0):
     ``suppress_cs_messages`` have no effect: windows are always solved exactly,
     with ``n_threads`` threads (0: all cores but one).
 
+    Parameters
+    ----------
+    path
+        The INI file.
+    write_outputs
+        Write the outputs to the project folder.
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
     Returns
     -------
     xarray.Dataset
         As :func:`landschaft.omniscape`, plus ``classified_resistance`` when
         the resistance was reclassified.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import xarray as xr
+    >>> import landschaft as ls
+    >>> from landschaft import circuit
+    >>> from rasterio.transform import from_origin
+    >>> resistance = xr.DataArray(np.ones((10, 10)), dims=("y", "x")).rio.write_transform(
+    ...     from_origin(0, 10, 1, 1)).rio.write_crs("EPSG:3035")
+    >>> _ = ls.write_raster(resistance, "resistance.tif")
+    >>> _ = open("omniscape.ini", "w").write('''[Required]
+    ... resistance_file = resistance.tif
+    ... radius = 3
+    ... project_name = corridors
+    ... source_from_resistance = true
+    ... ''')
+    >>> flow = circuit.omniscape_ini("omniscape.ini")
+    >>> import os
+    >>> sorted(os.listdir("corridors"))
+    ['config.ini', 'cum_currmap.tif']
     """
     path = Path(path)
     base = path.resolve().parent

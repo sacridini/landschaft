@@ -15,6 +15,12 @@ import re
 import griffe
 
 ROLE = re.compile(r":(?:py:)?(func|class|meth|attr|data|mod|obj|exc):`(~?)([^`]+)`")
+# Functions that share their name with their module are documented under their full path.
+ALIASES = {
+    "landschaft.omniscape": "landschaft.circuit.omniscape.omniscape",
+    "landschaft.circuit.omniscape": "landschaft.circuit.omniscape.omniscape",
+    "landschaft.circuit.advanced": "landschaft.circuit.advanced.advanced",
+}
 _PUBLIC: set[str] | None = None
 
 
@@ -49,7 +55,8 @@ def _resolve(target: str, context: str) -> str | None:
         candidates += [f"landschaft.{target}", f"landschaft.conn.{target}", f"landschaft.circuit.{target}"]
         if context:
             candidates.insert(0, f"{context}.{target}")
-    return next((c for c in candidates if c in public), None)
+    found = next((c for c in candidates if c in public), None)
+    return ALIASES.get(found, found)
 
 
 def convert(text: str, context: str = "") -> str:

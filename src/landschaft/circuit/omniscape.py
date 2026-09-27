@@ -49,7 +49,33 @@ def _to_int(value, name: str) -> int:
 
 
 def read_reclass_table(path) -> np.ndarray:
-    """An Omniscape reclass table: two whitespace-separated columns, ``missing`` for NoData."""
+    """Read an Omniscape reclass table.
+
+    Two whitespace-separated columns (value, new value); ``missing`` in the new
+    column makes NoData.
+
+    Parameters
+    ----------
+    path
+        The text file.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(k, 2)`` array (NaN for ``missing``).
+
+    Examples
+    --------
+    >>> from landschaft import circuit
+    >>> _ = open("reclass.txt", "w").write('''1 10
+    ... 2 50
+    ... 3 missing
+    ... ''')
+    >>> circuit.read_reclass_table("reclass.txt")
+    array([[ 1., 10.],
+           [ 2., 50.],
+           [ 3., nan]])
+    """
     rows = []
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -74,8 +100,32 @@ def _reclass_table(table) -> np.ndarray:
 
 
 def reclassify(resistance: np.ndarray, table) -> np.ndarray:
-    """Omniscape's ``reclassify_resistance!``: every row (value, new value) in turn, matched
-    against the original values (NaN in the new column: NoData)."""
+    """Reclassify a resistance array, as Omniscape's ``reclassify_resistance!``.
+
+    Every row (value, new value) is applied in turn, matched against the
+    original values; NaN in the new column makes NoData. Values not in the table
+    are kept.
+
+    Parameters
+    ----------
+    resistance
+        The array.
+    table
+        ``(k, 2)`` table, e.g. from :func:`read_reclass_table`.
+
+    Returns
+    -------
+    numpy.ndarray
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> table = np.array([[1, 10], [2, 50], [3, np.nan]])
+    >>> circuit.reclassify(np.array([[1.0, 2.0], [3.0, 4.0]]), table)
+    array([[10., 50.],
+           [nan,  4.]])
+    """
     t = _reclass_table(table)
     out = resistance.copy()
     for old, new in t:
@@ -90,6 +140,30 @@ def source_from_resistance(resistance, *, r_cutoff: float = np.inf, resistance_i
     The conductance (1 / resistance, or the values themselves with
     ``resistance_is_conductance``) after the optional reclassification, set to
     0 where it is below ``1 / r_cutoff`` and on NoData.
+
+    Parameters
+    ----------
+    resistance
+        Resistance (or conductance) raster.
+    r_cutoff
+        Resistances above this give no source.
+    resistance_is_conductance
+        The raster holds conductances.
+    reclass_table
+        Reclassification applied first (see :func:`landschaft.omniscape`).
+
+    Returns
+    -------
+    numpy.ndarray or xarray.DataArray
+        Source strengths.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> circuit.source_from_resistance(np.array([[1.0, 2.0], [4.0, np.nan]]))
+    array([[1.  , 0.5 ],
+           [0.25, 0.  ]])
     """
     r, like = _grid(resistance, "resistance")
     if reclass_table is not None:
@@ -193,7 +267,7 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
         large windows fewer threads run when each thread's factorisation of a
         full window would not fit (``attrs["threads"]``).
     n_threads
-        OpenMP threads (0: all cores but one).
+        Threads (0 or ``None``: all cores but one).
 
     Returns
     -------
@@ -201,6 +275,31 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
         ``cum_currmap`` and, when asked for, ``flow_potential`` and
         ``normalized_cum_currmap``, on the resistance's grid; ``attrs``
         records the options, the number of targets and of threads used.
+
+    See Also
+    --------
+    landschaft.circuit.omniscape_ini : run an Omniscape INI file.
+    landschaft.circuit.circuitscape_pairwise : current between focal points.
+
+    Examples
+    --------
+    A 30 x 30 map with a hard barrier (resistance 20) that has a gap in the
+    middle:
+
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> resistance = np.ones((30, 30))
+    >>> resistance[:, 14:16] = 20
+    >>> resistance[10:20, 14:16] = 1                 # the gap
+    >>> flow = ls.omniscape(resistance, radius=6, flow_potential=True, normalized_current=True)
+    >>> list(flow.data_vars)
+    ['cum_currmap', 'flow_potential', 'normalized_cum_currmap']
+
+    Current concentrates in the gap:
+
+    >>> current = flow["cum_currmap"]
+    >>> round(float(current[15, 14]), 2), round(float(current[2, 14]), 2)
+    (5.16, 1.55)
     """
     import xarray as xr
 

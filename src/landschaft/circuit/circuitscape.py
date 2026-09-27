@@ -167,7 +167,26 @@ def read_reclass_table(path) -> dict[float, float]:
 
 @dataclass
 class FocalPoints:
-    """Focal points as Circuitscape's read_point_map: 1-based rows and columns and ids, sorted by id."""
+    """Focal points as Circuitscape reads them: 1-based rows and columns and ids, sorted by id.
+
+    Cells sharing an id form a focal region.
+
+    Attributes
+    ----------
+    rows, cols
+        1-based row and column of every cell.
+    ids
+        Focal-point id of every cell.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> points = circuit.FocalPoints(rows=np.array([2, 9, 6]), cols=np.array([2, 2, 9]),
+    ...                              ids=np.array([1, 2, 3]))
+    >>> points.has_regions
+    False
+    """
 
     rows: np.ndarray
     cols: np.ndarray
@@ -175,10 +194,14 @@ class FocalPoints:
 
     @property
     def cells(self) -> np.ndarray:
+        """0-based ``(rows, cols)`` of the cells, for indexing arrays.
+        """
         return np.asarray(self.rows) - 1, np.asarray(self.cols) - 1
 
     @property
     def has_regions(self) -> bool:
+        """Whether an id covers several cells (focal regions).
+        """
         return len(self.ids) != len(np.unique(self.ids))
 
 
@@ -206,7 +229,36 @@ def read_point_map(path, habitat: RasterMeta) -> FocalPoints:
 
 @dataclass
 class IncludedPairs:
-    """Circuitscape's include/exclude pairs: ``mode`` (include or exclude), the ids and the 0/1 matrix."""
+    """Circuitscape's include / exclude pairs.
+
+    Attributes
+    ----------
+    mode
+        ``"include"`` (only the marked pairs are solved) or ``"exclude"`` (the
+        marked pairs are skipped).
+    ids
+        Focal-point ids.
+    matrix
+        ``len(ids) x len(ids)`` 0/1 matrix marking the pairs.
+
+    Examples
+    --------
+    Solve only the pairs of point 1:
+
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> resistance = np.ones((10, 10))
+    >>> resistance[:, 5] = 10                       # a harder column in the middle
+    >>> points = np.zeros((10, 10), dtype=int)
+    >>> points[1, 1], points[8, 1], points[5, 8] = 1, 2, 3
+    >>> pairs = circuit.IncludedPairs("include", np.array([1, 2, 3]),
+    ...                               np.array([[1, 1, 1], [1, 1, 0], [1, 0, 1]]))
+    >>> sorted(pairs.excluded())
+    [(2, 3), (3, 2)]
+    >>> result = circuit.circuitscape_pairwise(resistance, points, included_pairs=pairs)
+    >>> float(result.resistances[2, 3])
+    -1.0
+    """
 
     mode: str
     ids: np.ndarray
@@ -214,6 +266,12 @@ class IncludedPairs:
 
     def excluded(self) -> set[tuple[int, int]]:
         # exclude_pairs_from: include mode excludes the unmarked pairs, exclude mode the marked ones.
+        """The pairs of ids that are not solved.
+
+        Returns
+        -------
+        set of (int, int)
+        """
         target = 0 if self.mode == "include" else 1
         m = self.matrix
         n = len(self.ids)
@@ -305,11 +363,35 @@ def _cells_from_map(values, name, shape) -> np.ndarray:
 
 @dataclass
 class CircuitscapeResult:
-    """Circuitscape's maps: ``voltage`` and ``current`` (per cell; 0 on cells without a node,
-    as Circuitscape writes them in advanced mode), the node map (-1: no node), and, by
-    mode, ``resistances`` (the matrix Circuitscape returns and writes, ids in the first
-    row and column), the cumulative and maximum current maps and the per-pair (or per
-    focal node) maps."""
+    """Circuitscape's outputs of a raster run.
+
+    Attributes
+    ----------
+    voltage, current
+        Per-cell maps (0 on cells without a node, as Circuitscape writes them
+        in advanced mode).
+    nodemap
+        Node number of every cell (-1: no node).
+    resistances
+        Pairwise and one-to-all: the matrix Circuitscape returns and writes,
+        ids in the first row and column (-1: not connected).
+    cum_current, max_current
+        Sum and maximum of the pairs' (or points') current maps.
+    maps
+        Per-pair (or per-point) maps, keyed by the ids.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> resistance = np.ones((10, 10))
+    >>> resistance[:, 5] = 10                       # a harder column in the middle
+    >>> points = np.zeros((10, 10), dtype=int)
+    >>> points[1, 1], points[8, 1], points[5, 8] = 1, 2, 3
+    >>> result = circuit.circuitscape_pairwise(resistance, points, cum_map=True)
+    >>> result.resistances[0, 1:].tolist()
+    [1.0, 2.0, 3.0]
+    """
 
     voltage: np.ndarray | None = None
     current: np.ndarray | None = None
@@ -340,11 +422,60 @@ def circuitscape_advanced(habitat, source, ground, *, habitat_is_resistance: boo
     grounds dropped by ``rmvgnd`` stay on the matrix diagonal). Every connected
     component with a source and a ground is solved exactly.
 
+    Parameters
+    ----------
+    habitat
+        Resistance (or conductance) raster: path, DataArray or array.
+    source
+        Current injected per cell (NoData: none).
+    ground
+        Resistance (or conductance) to ground per cell (NoData: no ground; 0
+        resistance: a direct ground).
+    habitat_is_resistance
+        ``habitat`` holds resistances (default) or conductances.
+    polygons
+        Short-circuit regions: a raster of ids (> 0); the habitat cells of one
+        region are merged into one node.
+    mask
+        Raster; cells where it is NoData or not positive are removed.
+    four_neighbors
+        Connect the four orthogonal neighbours only.
+    avg_resistances
+        Join neighbours by the average of their resistances instead of their
+        conductances.
+    ground_is_resistance
+        ``ground`` holds resistances (default) or conductances.
+    remove_src_or_gnd
+        Nodes that are both a source and a ground: ``"keepall"``, ``"rmvsrc"``,
+        ``"rmvgnd"`` or ``"rmvall"``.
+    unit_currents
+        Every source injects 1 A.
+    direct_grounds
+        Every ground is a direct ground (0 V).
+    reclass
+        ``{value: new value}`` applied to ``habitat`` first (Circuitscape's
+        reclass table).
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
     Returns
     -------
     CircuitscapeResult
         ``voltage`` and ``current`` maps (0 off the nodes and in components
         not solved), ``nodemap``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> resistance = np.ones((3, 5))
+    >>> source = np.full((3, 5), np.nan)
+    >>> source[1, 0] = 1.0                          # 1 A on the left
+    >>> ground = np.full((3, 5), np.nan)
+    >>> ground[1, 4] = 0.0                          # a direct ground on the right
+    >>> result = circuit.circuitscape_advanced(resistance, source, ground)
+    >>> result.voltage[1].round(3)
+    array([0.887, 0.615, 0.444, 0.272, 0.   ])
     """
     if remove_src_or_gnd not in POLICIES:
         raise ValueError(f"remove_src_or_gnd must be one of {POLICIES}")
@@ -435,11 +566,73 @@ def circuitscape_pairwise(habitat, points, *, habitat_is_resistance: bool = True
     two ids); ``cum_map`` / ``max_map`` sum / take the maximum of the pairs'
     current maps.
 
+    Parameters
+    ----------
+    habitat
+        Resistance (or conductance) raster: path, DataArray or array.
+    points
+        Raster of focal-point ids (0 / NoData elsewhere; the cells of one id form
+        a focal region) or a :class:`FocalPoints`.
+    habitat_is_resistance
+        ``habitat`` holds resistances (default) or conductances.
+    polygons
+        Short-circuit regions: a raster of ids (> 0); the habitat cells of one
+        region are merged into one node.
+    mask
+        Raster; cells where it is NoData or not positive are removed.
+    four_neighbors
+        Connect the four orthogonal neighbours only.
+    avg_resistances
+        Join neighbours by the average of their resistances instead of their
+        conductances.
+    included_pairs
+        :class:`IncludedPairs` (or the path of a Circuitscape include/exclude
+        file) restricting the pairs.
+    voltage_maps, current_maps
+        Keep the voltage / current map of every pair (or point) in
+        ``result.maps``.
+    cum_map, max_map
+        Sum / maximum of the current maps (``result.cum_current``,
+        ``result.max_current``).
+    set_focal_node_currents_to_zero
+        Current 0 on the focal nodes in the maps.
+    set_null_currents_to_nodata, set_null_voltages_to_nodata
+        NoData instead of 0 where the current / voltage is 0 in the maps.
+    log_transform_maps
+        log10 of the current maps.
+    reclass
+        ``{value: new value}`` applied to ``habitat`` first.
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
     Returns
     -------
     CircuitscapeResult
         ``resistances`` (ids in the first row and column; -1: not connected),
         ``cum_current``, ``max_current``, ``maps``.
+
+    See Also
+    --------
+    omniscape : omnidirectional current without focal points.
+
+    Examples
+    --------
+    Three focal points on a map with a harder column in the middle:
+
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> resistance = np.ones((10, 10))
+    >>> resistance[:, 5] = 10                       # a harder column in the middle
+    >>> points = np.zeros((10, 10), dtype=int)
+    >>> points[1, 1], points[8, 1], points[5, 8] = 1, 2, 3
+    >>> result = circuit.circuitscape_pairwise(resistance, points, cum_map=True)
+    >>> result.resistances.round(4)
+    array([[0.    , 1.    , 2.    , 3.    ],
+           [1.    , 0.    , 0.8515, 0.8567],
+           [2.    , 0.8515, 0.    , 0.8409],
+           [3.    , 0.8567, 0.8409, 0.    ]])
+    >>> result.cum_current.shape
+    (10, 10)
     """
     cells = _array(habitat, "habitat")
     g = habitat_conductance(cells, is_resistance=habitat_is_resistance, reclass=reclass)
@@ -675,12 +868,64 @@ def circuitscape_one_to_all(habitat, points, *, all_to_one: bool = False, habita
     (points pruned by ``included_pairs`` in both of its modes, excluded points
     still sourcing in all-to-one, strengths indexed by position).
 
+    Parameters
+    ----------
+    habitat
+        Resistance (or conductance) raster: path, DataArray or array.
+    points
+        Raster of focal-point ids or a :class:`FocalPoints`.
+    all_to_one
+        All-to-one instead of one-to-all.
+    habitat_is_resistance
+        ``habitat`` holds resistances (default) or conductances.
+    polygons
+        Short-circuit regions: a raster of ids (> 0); the habitat cells of one
+        region are merged into one node.
+    mask
+        Raster; cells where it is NoData or not positive are removed.
+    four_neighbors
+        Connect the four orthogonal neighbours only.
+    avg_resistances
+        Join neighbours by the average of their resistances instead of their
+        conductances.
+    strengths
+        Two-column table (id, strength) of the current of every point.
+    included_pairs
+        :class:`IncludedPairs` (or the path of a Circuitscape include/exclude
+        file) restricting the pairs.
+    voltage_maps, current_maps
+        Keep the voltage / current map of every pair (or point) in
+        ``result.maps``.
+    cum_map, max_map
+        Sum / maximum of the current maps (``result.cum_current``,
+        ``result.max_current``).
+    set_focal_node_currents_to_zero
+        Current 0 on the focal nodes in the maps.
+    reclass
+        ``{value: new value}`` applied to ``habitat`` first.
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
     Returns
     -------
     CircuitscapeResult
         ``resistances``: ids and the voltage over the strength at each point
         (one-to-all; -1 where nothing was solved) or 0 (all-to-one);
         ``cum_current``, ``max_current``, and the per-point maps in ``maps``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> resistance = np.ones((10, 10))
+    >>> resistance[:, 5] = 10                       # a harder column in the middle
+    >>> points = np.zeros((10, 10), dtype=int)
+    >>> points[1, 1], points[8, 1], points[5, 8] = 1, 2, 3
+    >>> result = circuit.circuitscape_one_to_all(resistance, points, cum_map=True)
+    >>> result.resistances.round(4)
+    array([[1.    , 0.6438],
+           [2.    , 0.632 ],
+           [3.    , 0.6359]])
     """
     cells = _array(habitat, "habitat")
     g = habitat_conductance(cells, is_resistance=habitat_is_resistance, reclass=reclass)
@@ -804,6 +1049,52 @@ def circuitscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0):
     GeoTIFF with ``write_as_tif``) and ``output_file`` holds the configuration.
     ``solver``, ``precision`` and ``parallelize`` have no effect: every solve is
     exact, in double precision, with ``n_threads`` threads.
+
+    Parameters
+    ----------
+    path
+        The INI file (Circuitscape 5 / 6 options).
+    write_outputs
+        Write the output files, as Circuitscape does.
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
+    Returns
+    -------
+    CircuitscapeResult or NetworkResult
+
+    Examples
+    --------
+    A pairwise run from GeoTIFF inputs:
+
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> resistance = np.ones((10, 10))
+    >>> resistance[:, 5] = 10                       # a harder column in the middle
+    >>> points = np.zeros((10, 10), dtype=int)
+    >>> points[1, 1], points[8, 1], points[5, 8] = 1, 2, 3
+    >>> import xarray as xr
+    >>> import landschaft as ls
+    >>> from rasterio.transform import from_origin
+    >>> def as_raster(values):
+    ...     grid = xr.DataArray(values.astype("float64"), dims=("y", "x"))
+    ...     return grid.rio.write_transform(from_origin(0, 10, 1, 1)).rio.write_crs("EPSG:3035")
+    >>> _ = ls.write_raster(as_raster(resistance), "resistance.tif")
+    >>> _ = ls.write_raster(as_raster(points), "points.tif")
+    >>> _ = open("pairwise.ini", "w").write('''[Options]
+    ... data_type = raster
+    ... scenario = pairwise
+    ... habitat_file = resistance.tif
+    ... habitat_map_is_resistances = True
+    ... point_file = points.tif
+    ... output_file = out/pairwise.out
+    ... ''')
+    >>> result = circuit.circuitscape_ini("pairwise.ini")
+    >>> round(float(result.resistances[1, 2]), 4)
+    0.8515
+    >>> import os
+    >>> sorted(os.listdir("out"))
+    ['pairwise.out', 'pairwise_resistances.out', 'pairwise_resistances_3columns.out']
     """
     path = Path(path)
     base = path.resolve().parent

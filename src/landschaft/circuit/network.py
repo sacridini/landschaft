@@ -45,9 +45,30 @@ def _as_table(value, ncol: int, name: str) -> np.ndarray:
 
 
 def read_graph(edges) -> tuple[np.ndarray, np.ndarray, np.ndarray, bool]:
-    """Circuitscape's load_graph: an edge list (node, node, value), a path or a
-    ``(k, 3)`` array. Node numbers from 0 are shifted to 1 (the ``bool``
-    returned); numbers must start at 0 or 1."""
+    """Read a Circuitscape edge list, as its ``load_graph``.
+
+    Parameters
+    ----------
+    edges
+        Path of a text file or ``(k, 3)`` array: node, node, value.
+
+    Returns
+    -------
+    tuple
+        ``(from, to, value, shifted)``: node numbers (shifted to start at 1 when
+        they start at 0; ``shifted`` says so) and edge values.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> graph = np.array([[1, 2, 1.0],             # node, node, resistance
+    ...                   [2, 3, 1.0],
+    ...                   [1, 3, 2.0],
+    ...                   [3, 4, 0.5]])
+    >>> circuit.read_graph(graph)
+    (array([1, 2, 1, 3]), array([2, 3, 3, 4]), array([1. , 1. , 2. , 0.5]), False)
+    """
     t = _as_table(edges, 3, "graph")
     if len(t) == 0:
         raise ValueError("the graph has no edges")
@@ -94,14 +115,35 @@ def _read_strengths(value, starts_from_zero: bool) -> np.ndarray:
 class NetworkResult:
     """Circuitscape's network outputs, with the node numbers it writes (from 1).
 
-    ``voltages`` (advanced: ``(n, 2)`` node, voltage), ``node_currents`` and
-    ``branch_currents`` (advanced: ``(n, 2)`` node, current and ``(k, 3)``
-    node, node, current), ``resistances`` (pairwise: ids in the first row and
-    column; -1: not connected), the cumulative node and branch currents of a
-    pairwise run (``cum_node_currents``, ``cum_branch_currents``) and the
-    per-pair tables in ``maps`` keyed ``("voltages" | "node_currents" |
-    "branch_currents", id1, id2)``. Branch tables keep the currents above
-    1e-6, as Circuitscape writes them.
+    Attributes
+    ----------
+    voltages
+        Advanced: ``(n, 2)`` node, voltage.
+    node_currents, branch_currents
+        Advanced: ``(n, 2)`` node, current and ``(k, 3)`` node, node, current
+        (branch currents above 1e-6, as Circuitscape writes them).
+    resistances
+        Pairwise: effective resistances, ids in the first row and column (-1:
+        not connected).
+    cum_node_currents, cum_branch_currents
+        Pairwise with maps: node and branch currents summed over the pairs.
+    maps
+        Per-pair tables keyed ``("voltages" | "node_currents" |
+        "branch_currents", id1, id2)``.
+    n_components
+        Number of connected components of the graph.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> graph = np.array([[1, 2, 1.0],             # node, node, resistance
+    ...                   [2, 3, 1.0],
+    ...                   [1, 3, 2.0],
+    ...                   [3, 4, 0.5]])
+    >>> result = circuit.circuitscape_network_advanced(graph, [[1, 1.0]], [[4, 0.0]])
+    >>> result.n_components
+    1
     """
 
     voltages: np.ndarray | None = None
@@ -148,11 +190,51 @@ def circuitscape_network_advanced(graph, sources, grounds, *, graph_is_resistanc
     a source and a ground is solved exactly (``remove_src_or_gnd`` as in
     :func:`~landschaft.circuit.circuitscape_advanced`).
 
+    Parameters
+    ----------
+    graph
+        Edge list: path or ``(k, 3)`` array of node, node and resistance (or
+        conductance).
+    sources
+        ``(node, current)`` rows: path or array.
+    grounds
+        ``(node, resistance or conductance to ground)`` rows; 0 resistance is a
+        direct ground.
+    graph_is_resistance, ground_is_resistance
+        The values are resistances (default) or conductances.
+    remove_src_or_gnd
+        Nodes that are both: ``"keepall"``, ``"rmvsrc"``, ``"rmvgnd"`` or
+        ``"rmvall"``.
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
     Returns
     -------
     NetworkResult
         ``voltages`` (every node; 0 where not solved), ``node_currents`` and
         ``branch_currents`` of the whole graph.
+
+    Examples
+    --------
+    One amp into node 1, node 4 grounded:
+
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> graph = np.array([[1, 2, 1.0],             # node, node, resistance
+    ...                   [2, 3, 1.0],
+    ...                   [1, 3, 2.0],
+    ...                   [3, 4, 0.5]])
+    >>> result = circuit.circuitscape_network_advanced(graph, [[1, 1.0]], [[4, 0.0]])
+    >>> result.voltages
+    array([[1. , 1.5],
+           [2. , 1. ],
+           [3. , 0.5],
+           [4. , 0. ]])
+    >>> result.branch_currents
+    array([[1. , 2. , 0.5],
+           [1. , 3. , 0.5],
+           [2. , 3. , 0.5],
+           [3. , 4. , 1. ]])
     """
     if remove_src_or_gnd not in POLICIES:
         raise ValueError(f"remove_src_or_gnd must be one of {POLICIES}")
@@ -196,11 +278,43 @@ def circuitscape_network_pairwise(graph, points, *, graph_is_resistance: bool = 
     currents (as Circuitscape writes them) go to ``result.maps``, and the node
     and branch currents are summed over the pairs.
 
+    Parameters
+    ----------
+    graph
+        Edge list: path or ``(k, 3)`` array of node, node and resistance (or
+        conductance).
+    points
+        Focal node numbers: path or array.
+    graph_is_resistance
+        The edge values are resistances (default) or conductances.
+    included_pairs
+        :class:`IncludedPairs` or the path of an include/exclude file.
+    voltage_maps, current_maps
+        Keep every pair's node voltages / node and branch currents in
+        ``result.maps``.
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
     Returns
     -------
     NetworkResult
         ``resistances`` (ids in the first row and column), ``maps``,
         ``cum_node_currents`` and ``cum_branch_currents``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from landschaft import circuit
+    >>> graph = np.array([[1, 2, 1.0],             # node, node, resistance
+    ...                   [2, 3, 1.0],
+    ...                   [1, 3, 2.0],
+    ...                   [3, 4, 0.5]])
+    >>> result = circuit.circuitscape_network_pairwise(graph, [1, 3, 4])
+    >>> result.resistances
+    array([[0. , 1. , 3. , 4. ],
+           [1. , 0. , 1. , 1.5],
+           [3. , 1. , 0. , 0.5],
+           [4. , 1.5, 0.5, 0. ]])
     """
     i, j, w, zero = read_graph(graph)
     a, b, w, m = _edges(i, j, w, graph_is_resistance)
