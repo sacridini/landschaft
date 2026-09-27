@@ -516,7 +516,7 @@ Image<std::uint32_t> compute_contortion(
             const auto u_dxb = collapse_consecutive(dxb);
             const auto u_dyb = collapse_consecutive(dyb);
 
-            contortion = std::max(2LL, static_cast<i64>(u_dxb.size() + u_dyb.size()) - 7);
+            contortion = std::max(i64{2}, static_cast<i64>(u_dxb.size() + u_dyb.size()) - 7);
         }
 
         // Assign contortion to all pixels of component (contortion + 1 for GTB palette scaling)

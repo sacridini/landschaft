@@ -174,7 +174,7 @@ Image<float> compute_gray_convolution(
 #pragma omp parallel for schedule(dynamic)
 #endif
     for (i64 y = 0; y < ny; ++y) {
-        const i64 y0 = std::max(0LL, y - hw);
+        const i64 y0 = std::max(i64{0}, y - hw);
         const i64 y1 = std::min(ny - 1, y + hw);
 
         int freq[101] = {0};
@@ -207,7 +207,7 @@ Image<float> compute_gray_convolution(
                     for (i64 wy = y0; wy <= y1; ++wy) {
                         const i64 r_off = wy * nx;
                         const i64 nr_off = (wy + 1) * nx;
-                        for (i64 wx = std::max(0LL, x - hw); wx <= std::min(nx - 1, x + hw); ++wx) {
+                        for (i64 wx = std::max(i64{0}, x - hw); wx <= std::min(nx - 1, x + hw); ++wx) {
                             const u8 v = im.px[static_cast<std::size_t>(r_off + wx)];
                             if (v > 100) continue;
                             // Horizontal neighbor

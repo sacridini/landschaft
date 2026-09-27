@@ -130,7 +130,9 @@ def test_effective_resistances_match_the_pseudo_inverse(seed):
         L[b, a] -= 1 / w
         L[a, a] += 1 / w
         L[b, b] += 1 / w
-    P = np.linalg.pinv(L)
+    # pinv(L) plus a constant, which cancels below; pinv itself may keep the null
+    # space's eigenvalue (OpenBLAS) and lose the digits of the differences
+    P = np.linalg.inv(L + 1.0 / n)
     idx = pts - 1
     want = P[idx][:, idx].diagonal()[:, None] + P[idx][:, idx].diagonal()[None, :] - 2 * P[idx][:, idx]
     np.testing.assert_allclose(r.resistances[1:, 1:], want, rtol=1e-9, atol=1e-12)
