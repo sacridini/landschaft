@@ -6,6 +6,26 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-09-27
+
+### Added
+- Circuit connectivity: Circuitscape's network (graph) mode.
+  `ls.circuit.circuitscape_network_pairwise`, `circuitscape_network_advanced` and
+  `circuitscape_ini` with `data_type = network`: edge lists numbered from 0 or 1,
+  duplicate edges and cancelling edges as Circuitscape builds its graph, focal nodes,
+  include / exclude pairs, sources and grounds by node, per-pair voltages, node and branch
+  currents, cumulative currents and Circuitscape's output files. Matched with
+  Circuitscape's CHOLMOD runs of its network test cases and six synthetic ones
+  (`make_reference_circuitscape.py network`) to 1.1e-14.
+
+### Changed
+- The circuit solver orders graphs without geometry by a nested dissection of their own
+  (breadth-first level separators, split in parallel, the same tree with any number of
+  threads) instead of one dense front. On a 1 M-node network with 20 focal nodes:
+  7.2 s against Circuitscape's 27.7 s (CHOLMOD) and 182 s (cg+amg).
+- Pairwise solves without maps keep only the voltages of the focal nodes per pair (they
+  kept the whole component's), and batches with maps are capped at about 256 MB.
+
 ## [0.49.0] - 2026-09-27
 
 ### Added
