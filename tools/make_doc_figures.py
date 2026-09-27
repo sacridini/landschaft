@@ -396,6 +396,27 @@ def bench_speedup():
     save(fig, "bench_speedup")
 
 
+# ---- Learn (the course) ---------------------------------------------------
+
+
+def coarsen_habitat(habitat, k):
+    """Majority aggregation of k x k blocks of a 0/1/2 habitat map (as in the Scale chapter)."""
+    n_rows, n_cols = habitat.shape[0] // k, habitat.shape[1] // k
+    blocks = habitat[: n_rows * k, : n_cols * k].reshape(n_rows, k, n_cols, k)
+    return np.where((blocks == 2).mean(axis=(1, 3)) >= 0.5, 2, 1).astype("uint8")
+
+
+@figure
+def learn_grain():
+    forest = ls.load_raster(ls.example_data("input")).values
+    fig, axes = plt.subplots(1, 3, figsize=(10.5, 3.7))
+    for ax, k in zip(axes, (1, 4, 16)):
+        coarse = coarsen_habitat(forest, k)
+        n = ls.Landscape(coarse, res=25 * k).class_metrics(["np"]).set_index("class").loc[2, "np"]
+        palette_map(ax, coarse, BINARY, None, f"{25 * k} m cells: {n:,.0f} forest patches")
+    save(fig, "learn_grain")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:
