@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-09-27
+
 ### Changed
 - Threads: every parallel function now uses all cores but one by default (it used all
   of them), so the machine stays responsive, and takes `n_threads` (thread pools:
