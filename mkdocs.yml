@@ -134,6 +134,21 @@ nav:
       - Quickstart: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
       - Core concepts: getting-started/concepts.md
+  - Learn:
+      - learn/index.md
+      - 1 · What is a landscape?: learn/landscape-ecology.md
+      - 2 · Scale: learn/scale.md
+      - 3 · Habitat loss and fragmentation: learn/fragmentation.md
+      - 4 · The shape of habitat: learn/morphology.md
+      - 5 · Landscape metrics: learn/metrics.md
+      - 6 · Landscape connectivity: learn/connectivity.md
+      - 7 · Habitat networks: learn/networks.md
+      - 8 · Circuit theory: learn/circuits.md
+      - 9 · Distance, cost and restoration: learn/restoration.md
+      - 10 · Landscape change: learn/change.md
+      - 11 · From question to tool: learn/choosing.md
+      - Glossary: learn/glossary.md
+      - Further reading: learn/reading.md
   - Tutorials:
       - tutorials/index.md
       - Habitat patterns: tutorials/patterns.md

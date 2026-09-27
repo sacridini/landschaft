@@ -266,3 +266,57 @@ code, kbd, pre {
 .md-typeset table:not([class]) td:first-child code {
   white-space: nowrap;
 }
+
+/* ---- Learn: the course pages ------------------------------------------------ */
+
+/* a displayed formula, typeset without a maths engine (the site works offline) */
+.md-typeset .ls-formula {
+  margin: 1rem 0 1.2rem;
+  padding: 0.8rem 1rem;
+  border-left: 3px solid var(--ls-green);
+  background-color: var(--md-code-bg-color);
+  border-radius: 0 0.4rem 0.4rem 0;
+  font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", Cambria, Georgia, serif;
+  font-size: 0.95rem;
+  text-align: center;
+  overflow-x: auto;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .ls-formula {
+  border-left-color: var(--ls-lime);
+}
+
+.md-typeset .ls-formula small {
+  display: block;
+  margin-top: 0.4rem;
+  font-family: var(--md-text-font-family);
+  font-size: 0.68rem;
+  color: var(--md-default-fg-color--light);
+  text-align: left;
+}
+
+/* the chapter number above a chapter title */
+.md-typeset .ls-chapter {
+  margin: 0 0 -1.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ls-green);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .ls-chapter {
+  color: var(--ls-lime);
+}
+
+/* reference lists (<div class="ls-refs" markdown> around a list): hanging indent */
+.md-typeset .ls-refs ul {
+  list-style: none;
+  margin-left: 0;
+  font-size: 0.72rem;
+}
+
+.md-typeset .ls-refs ul li {
+  margin-left: 1.6em;
+  text-indent: -1.6em;
+}

@@ -7,6 +7,8 @@ between minor versions.
 ## [Unreleased]
 
 ### Added
+- Documentation website: a *Learn* section, a course on landscape ecology for newcomers
+  (concepts, theory and academic references behind every tool, and when to use each).
 - `Dockerfile`: a multi-stage image with the package built from source and every
   optional feature (`docker build -t landschaft .`); `--target test` builds an image
   that runs the test suite.
