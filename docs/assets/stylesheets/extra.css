@@ -248,6 +248,13 @@ code, kbd, pre {
   }
 }
 
+/* three cards per row on wide screens */
+@media screen and (min-width: 60em) {
+  .md-typeset .grid.cards.ls-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 /* page titles: full contrast */
 .md-typeset h1 {
   color: var(--md-default-fg-color);

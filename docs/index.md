@@ -162,15 +162,15 @@ from a single raster on a laptop to continental maps larger than memory.
 
     A C++17 core with OpenMP, cache-friendly algorithms and exact sparse
     solvers. Typical runs take seconds where the original tools take minutes
-    or hours. [See the benchmarks](getting-started/index.md)
+    or hours. [See the benchmarks](benchmarks.md)
 
 -   :material-check-decagram-outline:{ .lg .middle } **Exact**
 
     ---
 
-    Every tool is checked against the reference implementation of its method,
-    to the last bit where the method allows it and to the solver's precision
-    where it does not. Results do not depend on the number of threads.
+    The tools are checked against the reference implementations of their
+    methods, to the last bit where the method allows it and to the solver's
+    precision where it does not. [How each tool is checked](benchmarks.md#accuracy)
 
 -   :material-language-python:{ .lg .middle } **Pythonic**
 
@@ -195,5 +195,5 @@ from a single raster on a laptop to continental maps larger than memory.
     accounting, restoration planning), the R package landscapemetrics and
     FRAGSTATS (landscape metrics), Conefor Sensinode and Makurhini (habitat
     networks), and Circuitscape and Omniscape (circuit connectivity), and is
-    tested against their outputs. You do not need to know any of them to use
+    [tested against their outputs](benchmarks.md#accuracy). You do not need to know any of them to use
     it: the [tutorials](tutorials/index.md) start from scratch.

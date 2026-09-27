@@ -155,6 +155,7 @@ nav:
       - Distance & restoration: api/distance.md
       - Change detection: api/change.md
       - Large data & batch: api/batch.md
+  - Benchmarks: benchmarks.md
   - About:
       - Changelog: about/changelog.md
       - License: about/license.md

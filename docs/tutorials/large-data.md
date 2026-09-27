@@ -152,4 +152,4 @@ needed.
 ## Next steps
 
 - The [API reference](../api/batch.md) lists every option.
-- The [benchmarks](../index.md) show the speed you can expect.
+- The [benchmarks](../benchmarks.md) show the speed you can expect.

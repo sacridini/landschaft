@@ -360,6 +360,42 @@ def change_maps():
     save(fig, "change_maps")
 
 
+# Timings of docs/benchmarks.md: (task, reference tool, original [s], landschaft [s]).
+BENCHMARKS = [
+    ("MSPA, CORINE 2000×2000", "GuidosToolbox", 1.21, 0.35),
+    ("All 133 landscape metrics", "landscapemetrics", 15.6, 0.03),
+    ("sample_lsm, 6 plots", "landscapemetrics", 3.7, 0.02),
+    ("PC and importances, 404 patches", "Makurhini", 10.6, 0.017),
+    ("IIC and importances, 404 patches", "Makurhini", 1.4, 0.005),
+    ("Least-cost distances, 398 patches", "Makurhini", 10.2, 0.5),
+    ("Omniscape 800×800, radius 10", "Omniscape", 29.4, 0.64),
+    ("Omniscape 1000×1000, radius 100", "Omniscape", 275, 12.4),
+    ("Pairwise with current map, 1000×1000", "Circuitscape", 76.5, 9.5),
+    ("Network pairwise, 1 M nodes", "Circuitscape", 27.7, 5.0),
+]
+
+
+@figure
+def bench_speedup():
+    rows = sorted(BENCHMARKS, key=lambda r: r[2] / r[3])
+    speedup = [orig / ours for _, _, orig, ours in rows]
+    labels = [f"{task}  ·  {tool}" for task, tool, _, _ in rows]
+    fig, ax = plt.subplots(figsize=(9, 4.6))
+    bars = ax.barh(range(len(rows)), speedup, color="#15803d", height=0.62)
+    ax.set_xscale("log")
+    ax.set_yticks(range(len(rows)), labels)
+    for bar, s in zip(bars, speedup):
+        ax.text(bar.get_width() * 1.08, bar.get_y() + bar.get_height() / 2, f"{s:.1f}×" if s < 10 else f"{s:,.0f}×", va="center", fontsize=8.5,
+                fontweight="bold", color="#0f172a")
+    ax.set_xlim(1, max(speedup) * 3)
+    ax.set_xticks([1, 10, 100, 1000], ["1", "10", "100", "1000"])
+    ax.set_xlabel("times faster than the original (log scale)")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="x", which="major", color="#e2e8f0")
+    ax.set_axisbelow(True)
+    save(fig, "bench_speedup")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:
