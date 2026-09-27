@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <b>Fast, exact landscape analysis for Python.</b><br>
+  <b>Fast, landscape analysis for Python.</b><br>
   Habitat patterns, fragmentation, landscape metrics and ecological connectivity,<br>
   from a single raster to maps larger than memory.
 </p>
