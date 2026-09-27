@@ -6,6 +6,22 @@ between minor versions.
 
 ## [Unreleased]
 
+### Changed
+- Threads: every parallel function now uses all cores but one by default (it used all
+  of them), so the machine stays responsive, and takes `n_threads` (thread pools:
+  `n_workers`). `ls.default_threads()` gives the default and `ls.set_default_threads(n)`
+  changes it for the process. The rule reaches the compiled code even where a function
+  has no thread argument (every call sets the OpenMP thread count of the calling thread,
+  in any Python thread), the thread pools of `batch`, `RasterCollection`, `mspa_tiled`
+  and the one-to-all driver, and GDAL's block decoding in out-of-core metrics.
+- `n_threads` added to `fad`, `fad_multiscale`, `landscape_mosaic`,
+  `landscape_mosaic_stats`, `spatial_entropy`, `spatial_entropy_map`, `contagion_pff`,
+  `clustering_fac`, `euclidean_distance` (which keep `threads` as an alias),
+  `morphological_change`, `fos_change`, `parcellation`, `isochrone_map_ab`,
+  `distance_to_resistance`, `raster_boundaries`, `conn.protconn_raster`,
+  `conn.settlement_probabilities` and `conn.gdal_areas`.
+- `ls.max_threads()` returns the processors OpenMP can use.
+
 ## [0.51.0] - 2026-09-27
 
 ### Changed

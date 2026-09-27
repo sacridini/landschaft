@@ -27,6 +27,8 @@ Vogt, P. & Riitters, K. (2017). GuidosToolbox: universal digital image object an
 
 from __future__ import annotations
 
+from ._threads import threaded
+
 from typing import Any
 
 import numpy as np
@@ -109,6 +111,7 @@ def _wrap_as_dataarray(
     return arr
 
 
+@threaded
 def landscape_mosaic(
     data: xr.DataArray | np.ndarray,
     window_size: int = 27,
@@ -134,7 +137,7 @@ def landscape_mosaic(
         - 19: Standard GuidosToolbox 19-class landscape mosaic.
         - 103: Detailed 103-class barycentric triangle cells.
     threads : int, default 0
-        Number of OpenMP threads to use (0 = auto).
+        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
 
     Returns
     -------
@@ -160,6 +163,7 @@ def landscape_mosaic(
     return _wrap_as_dataarray(res, data, f"landscape_mosaic_{output_classes}", attrs)
 
 
+@threaded
 def landscape_mosaic_stats(
     data: xr.DataArray | np.ndarray,
     window_size: int = 27,
@@ -180,7 +184,7 @@ def landscape_mosaic_stats(
     is_lm103 : bool, default False
         Set to True if ``data`` is already a 103-class LM raster.
     threads : int, default 0
-        Number of OpenMP threads to use (0 = auto).
+        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
 
     Returns
     -------

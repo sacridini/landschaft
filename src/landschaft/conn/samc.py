@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from .._threads import threaded
+
 import numpy as np
 
 from .. import _core
@@ -62,6 +64,7 @@ def _absorption(absorption, nodes_geoms, res, dispersal_distance):
     return np.where(inside, 0.0, rate)
 
 
+@threaded
 def settlement_probabilities(nodes, resistance, *, dispersal_distance: float | None = None, absorption=None,
                              directions: int = 8, cost_function: str = "mean", vertices: int | None = 10,
                              vertex_fraction: float | None = None, settle: str = "sum", id: str | None = None):

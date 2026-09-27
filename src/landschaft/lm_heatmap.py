@@ -186,7 +186,7 @@ def landscape_mosaic_heatmap(
         Window label for the CSV title (default: ``window_size``; GTB writes
         ``"multiscale"`` for multiscale LM).
     threads
-        OpenMP threads for the LM (0 = all).
+        OpenMP threads for the LM (0: all cores but one).
     """
     if isinstance(data, (str, Path)):
         data = load_raster(data, validate=None)

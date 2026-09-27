@@ -16,6 +16,8 @@ pixels of the marker map block the way. The maps use GTB's display codes.
 
 from __future__ import annotations
 
+from ._threads import threaded
+
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -193,6 +195,7 @@ def isochrone_map(resistance, marker) -> IsochroneResult:
     )
 
 
+@threaded
 def isochrone_map_ab(resistance, marker) -> IsochroneResult:
     """Cheapest route between objects A and B (GTB Restoration Planner -> Isochrone Map AB).
 
@@ -247,6 +250,7 @@ def isochrone_map_ab(resistance, marker) -> IsochroneResult:
     )
 
 
+@threaded
 def distance_to_resistance(data):
     """Resistance growing with the distance to the foreground (GTB Setup Tools -> Distance -> Resistance).
 

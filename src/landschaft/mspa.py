@@ -126,7 +126,7 @@ def mspa(
         core-openings (100) and border-openings (220) (GTB "Intext").
     n_threads
         Threads used inside one map; ``1`` runs sequentially. ``None`` uses
-        all cores, except for dask-backed input where it defaults to 1
+        all cores but one, except for dask-backed input where it defaults to 1
         because dask already runs the slices in parallel.
     validate
         Check the input like GuidosToolbox before processing.
@@ -135,8 +135,8 @@ def mspa(
         as soon as it is ready (GTB naming) and a list of
         :class:`BatchResult` is returned, so memory stays bounded; see
         :func:`mspa_batch`. Without it, the results are returned as a list
-        of DataArrays. ``n_workers`` rasters run concurrently (default: one
-        per core), within the ``max_memory`` budget (e.g. ``"16GB"``).
+        of DataArrays. ``n_workers`` rasters run concurrently (default: all
+        cores but one), within the ``max_memory`` budget (e.g. ``"16GB"``).
 
     Returns
     -------
@@ -167,7 +167,7 @@ def mspa(
         raise TypeError("output_dir, n_workers and max_memory apply to raster collections only")
     lazy = hasattr(getattr(data, "data", None), "dask") or hasattr(data, "dask")
     if n_threads is None:
-        n_threads = 1 if lazy else 0  # 0 = all cores
+        n_threads = 1 if lazy else 0  # 0: all cores but one
     kw = dict(connectivity=int(connectivity), edge_width=int(edge_width), internal=bool(internal),
               n_threads=int(n_threads))
 

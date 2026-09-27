@@ -18,6 +18,7 @@ import rasterio
 from rasterio.windows import Window
 
 from .. import _core
+from .._threads import resolve
 
 __all__ = ["TiledReader", "DETAIL_FAMILIES"]
 
@@ -35,7 +36,7 @@ def block_size(block_rows, width: int, n_threads: int = 0) -> int:
     32 million cells."""
     width = max(width, 1)
     if block_rows == "auto" or block_rows is True:
-        rows = max(_STRIP * (n_threads or _core.max_threads()), (1 << 22) // width)
+        rows = max(_STRIP * resolve(n_threads), (1 << 22) // width)
         rows = min(rows, (1 << 25) // width)
     else:
         rows = int(block_rows)
@@ -89,7 +90,7 @@ class TiledReader:
 
     @property
     def _gdal_threads(self) -> str:
-        return str(self.n_threads) if self.n_threads else "ALL_CPUS"
+        return str(resolve(self.n_threads))
 
     def _read(self, src, row0: int, row1: int) -> tuple[np.ndarray, np.ndarray]:
         """Rows [row0, row1): class values (int32) and NA mask (uint8)."""
@@ -123,7 +124,7 @@ class TiledReader:
         """(values, mask, y0, rows, above, below) of every block with `halo`
         context rows."""
         ny = self.shape[0]
-        # GDAL decodes compressed blocks on all cores
+        # GDAL decodes compressed blocks on the same threads
         with rasterio.Env(GDAL_NUM_THREADS=self._gdal_threads), rasterio.open(self.path) as src:
             for y0 in range(0, ny, self.block_rows):
                 rows = min(self.block_rows, ny - y0)

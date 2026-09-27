@@ -19,6 +19,8 @@ Riitters, K. et al. (2000). Global-scale patterns of forest fragmentation.
 
 from __future__ import annotations
 
+from ._threads import threaded
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -327,6 +329,7 @@ def simple_change(
     )
 
 
+@threaded
 def morphological_change(
     t1: xr.DataArray | np.ndarray | str | Path,
     t2: xr.DataArray | np.ndarray | str | Path,
@@ -387,6 +390,7 @@ def morphological_change(
     )
 
 
+@threaded
 def fos_change(
     t1: xr.DataArray | np.ndarray | str | Path,
     t2: xr.DataArray | np.ndarray | str | Path,

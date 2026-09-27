@@ -9,6 +9,8 @@ methods of :class:`~landschaft.Landscape`.
 
 from __future__ import annotations
 
+from .._threads import threaded
+
 import os
 import warnings
 from collections.abc import Iterable
@@ -128,6 +130,7 @@ def adjacency_frame(counts: np.ndarray, classes: np.ndarray, what: str, upper: b
 # -- get_boundaries of raster values ------------------------------------------------------
 
 
+@threaded
 def raster_boundaries(
     data,
     *,

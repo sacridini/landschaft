@@ -113,7 +113,7 @@ def spa(data, variant: int = 5, *, n_threads: int = 0) -> SPAResult:
     variant
         2, 3, 5 (default) or 6.
     n_threads
-        OpenMP threads (0 = all).
+        OpenMP threads (0: all cores but one).
     """
     if variant not in (2, 3, 5, 6):
         raise ValueError(f"variant must be 2, 3, 5 or 6, got {variant}")

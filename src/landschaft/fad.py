@@ -15,6 +15,8 @@ Riitters, K., et al. (2002). Fragmentation of continental United States forests.
 
 from __future__ import annotations
 
+from ._threads import threaded
+
 import io
 from dataclasses import dataclass
 from typing import Any, Sequence
@@ -124,6 +126,7 @@ class FADMultiscaleResult:
         return buf.getvalue()
 
 
+@threaded
 def fad(
     data: xr.DataArray | np.ndarray,
     window_size: int = 7,
@@ -139,7 +142,7 @@ def fad(
     window_size : int, default 7
         Moving window size (must be an odd integer >= 3).
     threads : int, default 0
-        Number of OpenMP threads to use (0 = auto).
+        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
 
     Returns
     -------
@@ -201,6 +204,7 @@ def fad(
     )
 
 
+@threaded
 def fad_multiscale(
     data: xr.DataArray | np.ndarray,
     window_sizes: Sequence[int] = (7, 13, 27, 81, 243),
@@ -223,7 +227,7 @@ def fad_multiscale(
     window_sizes : sequence of int, default (7, 13, 27, 81, 243)
         List of odd window sizes.
     threads : int, default 0
-        Number of OpenMP threads to use (0 = auto).
+        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
 
     Returns
     -------

@@ -195,7 +195,9 @@ def core_options(options: dict, n_threads: int | None) -> dict:
         n_threads = int(n_threads)
         if n_threads < 0:
             raise ValueError(f"n_threads must be >= 0, got {n_threads}")
-    return {**options, "n_threads": n_threads or 0}
+    from .._threads import resolve
+
+    return {**options, "n_threads": resolve(n_threads)}
 
 
 def metric_specs(chosen: pd.DataFrame) -> tuple[list[int], list[str]]:
@@ -262,7 +264,7 @@ class Landscape:
         tables stay in memory. Results are identical to the in-memory ones;
         ``labels`` and ``to_raster`` are not available.
     n_threads
-        Threads of the C++ core (default: all cores).
+        Threads of the C++ core (default: all cores but one).
     convention
         ``"landscapemetrics"`` (default) or ``"fragstats"``: with non-square
         cells, left/right cell sides are as long as the cell height (the
@@ -846,7 +848,7 @@ def landscape_metrics(
         Add the columns ``name``, ``type`` and ``function_name`` (as
         ``calculate_lsm(full_name = TRUE)``).
     n_threads
-        Threads of the C++ core (default: all cores).
+        Threads of the C++ core (default: all cores but one).
     **options
         :class:`Landscape` options (``directions``, ``count_boundary``,
         ``edge_depth``, ``res``, ``nodata``, ``block_rows`` for files larger

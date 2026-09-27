@@ -212,7 +212,7 @@ def accounting(
     pixel_resolution
         Pixel size in metres, used for the hectare/acre factors of the report.
     n_threads
-        OpenMP threads (0 = all).
+        OpenMP threads (0: all cores but one).
 
     Returns
     -------

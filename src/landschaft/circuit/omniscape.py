@@ -193,7 +193,7 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
         large windows fewer threads run when each thread's factorisation of a
         full window would not fit (``attrs["threads"]``).
     n_threads
-        OpenMP threads (0 = all).
+        OpenMP threads (0: all cores but one).
 
     Returns
     -------

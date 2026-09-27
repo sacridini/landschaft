@@ -171,7 +171,7 @@ def fos(
     pixel_resolution
         Pixel size [m], for the observation scale in hectares.
     n_threads
-        OpenMP threads (0 = all).
+        OpenMP threads (0: all cores but one).
     """
     method = method.upper()
     if method not in ("FAD", "FED", "FAC"):

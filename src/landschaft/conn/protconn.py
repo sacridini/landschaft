@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from .._threads import threaded
+
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -435,6 +437,7 @@ def _cell_polygons(mask: np.ndarray, transform):
     return shapely.union_all(np.array(polys, dtype=object)) if polys else None
 
 
+@threaded
 def protconn_raster(protected_areas, region, *, distance, probability: float | None = 0.5,
                     transboundary: float | None = None, transboundary_type: str = "nodes", bound: bool = False,
                     area_unit: str = "m2", pij_min: float | None = None, nodata=None, band=None) -> pd.DataFrame:

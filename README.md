@@ -232,7 +232,7 @@ their docstrings (`help(ls.mspa)`) give every detail.
 | `mspa_colormap(transition=True)` | GTB's MSPA colour table (value → RGBA). |
 | `MSPA_CLASSES` | Byte value → class name. |
 | `example_data(name="input")`, `EXAMPLE_DATA` | Path and descriptions of the bundled GTB sample maps. |
-| `max_threads()` | Threads available to the C++ core. |
+| `max_threads()`, `default_threads()`, `set_default_threads(n)` | Processors the C++ core can use; the thread count of every parallel function when not given one (all cores but one) and how to change it for the process. Every parallel function takes `n_threads`. |
 | `__version__` | Installed version. |
 
 Parameter correspondence with GuidosToolbox:

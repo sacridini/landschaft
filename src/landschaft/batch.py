@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from ._threads import default_threads
 from .collection import RasterCollection, RasterInfo, expand_sources
 from .io import PathLike, load_raster, write_raster
 from .mspa import mspa
@@ -107,7 +108,7 @@ def run_parallel(
     wants every item processed.
     """
     if n_workers is None:
-        n_workers = max(1, (os.cpu_count() or 1) // max(1, threads_per_worker))
+        n_workers = max(1, default_threads() // max(1, threads_per_worker))
     budget = _MemoryBudget(parse_memory(max_memory))
 
     def task(item: T):
@@ -166,7 +167,7 @@ def mspa_batch(
     connectivity, edge_width, transition, internal
         MSPA parameters, see :func:`landschaft.mspa`.
     n_workers
-        Rasters processed concurrently. Default: number of CPU cores divided
+        Rasters processed concurrently. Default: all cores but one, divided
         by ``threads_per_worker``.
     threads_per_worker
         Threads inside each raster (default 1: best throughput for many

@@ -22,6 +22,8 @@ Vogt, P. & Riitters, K. (2017). GuidosToolbox: universal digital image object an
 
 from __future__ import annotations
 
+from ._threads import threaded
+
 from typing import Any
 
 import numpy as np
@@ -51,6 +53,7 @@ def _wrap_as_dataarray(
     return arr
 
 
+@threaded
 def contagion_pff(
     data: xr.DataArray | np.ndarray,
     window_size: int = 7,
@@ -84,7 +87,7 @@ def contagion_pff(
     apply_gtb_mask : bool, default True
         If True, applies background (101) and missing (102) masks.
     threads : int, default 0
-        Number of OpenMP threads to use (0 = auto).
+        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
 
     Returns
     -------
@@ -112,6 +115,7 @@ def contagion_pff(
     return _wrap_as_dataarray(res, data, "contagion_pff", attrs)
 
 
+@threaded
 def clustering_fac(
     data: xr.DataArray | np.ndarray,
     window_size: int = 7,
@@ -142,7 +146,7 @@ def clustering_fac(
     apply_gtb_mask : bool, default True
         If True, applies background (101) and missing (102) masks.
     threads : int, default 0
-        Number of OpenMP threads to use (0 = auto).
+        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
 
     Returns
     -------

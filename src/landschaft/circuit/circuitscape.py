@@ -602,7 +602,9 @@ def _one_to_all(g, poly, points: FocalPoints, strengths, pairs: IncludedPairs | 
                 "src_cells": sc.astype(np.int64), "src_vals": src.ravel()[sc], "gnd_cells": gc.astype(np.int64),
                 "gnd_vals": gnd.ravel()[gc], "check_cell": int(cells[np.nonzero(ids == n)[0][0]])}
 
-    threads = n_threads if n_threads > 0 else (os.cpu_count() or 1)
+    from .._threads import resolve
+
+    threads = resolve(n_threads)
     batch = max(1, 4 * threads)
     for b0 in range(0, len(unique_ids), batch):
         probs = [(i, problem(i)) for i in range(b0, min(len(unique_ids), b0 + batch))]

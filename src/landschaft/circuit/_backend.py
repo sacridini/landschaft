@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 
-from .. import _core
+from .. import _core, _threads
 
 
 @lru_cache(maxsize=None)
@@ -17,5 +17,7 @@ def core():
             from .. import _circuit_avx2
         except ImportError:
             return _core
+        # one OpenMP runtime for both modules: _core sets the thread count
+        _threads.install(_circuit_avx2, _core.set_num_threads)
         return _circuit_avx2
     return _core

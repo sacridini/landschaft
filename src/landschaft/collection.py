@@ -136,7 +136,9 @@ class RasterCollection(Sequence):
                 return f"cannot open: {err}"
             return info.problem(band=band, validate=validate) or info
 
-        with ThreadPoolExecutor(max_workers=min(32, len(paths))) as pool:
+        from ._threads import default_threads
+
+        with ThreadPoolExecutor(max_workers=max(1, min(32, len(paths), default_threads()))) as pool:
             headers = list(pool.map(header, paths))
         good = [h for h in headers if isinstance(h, RasterInfo)]
         bad = {p: h for p, h in zip(paths, headers) if isinstance(h, str)}

@@ -15,6 +15,8 @@ Riitters, K. H., et al. (1995). A factor analysis of landscape pattern and struc
 
 from __future__ import annotations
 
+from ._threads import threaded
+
 import io
 from dataclasses import dataclass
 from typing import Any
@@ -66,6 +68,7 @@ class SpatialEntropyResult:
         return buf.getvalue()
 
 
+@threaded
 def spatial_entropy(
     data: xr.DataArray | np.ndarray,
     *,
@@ -82,7 +85,7 @@ def spatial_entropy(
     data : xarray.DataArray or numpy.ndarray
         2D raster coded 0=missing, 1=background, 2=foreground.
     threads : int, default 0
-        Number of OpenMP threads to use (0 = auto).
+        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
 
     Returns
     -------
@@ -99,6 +102,7 @@ def spatial_entropy(
     )
 
 
+@threaded
 def spatial_entropy_map(
     data: xr.DataArray | np.ndarray,
     window_size: int = 50,
@@ -114,7 +118,7 @@ def spatial_entropy_map(
     window_size : int, default 50
         Size of moving convolution window.
     threads : int, default 0
-        Number of OpenMP threads to use (0 = auto).
+        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
 
     Returns
     -------

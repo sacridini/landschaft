@@ -90,7 +90,7 @@ def gray_spatial_convolution(
     mask_missing : bool, default True
         If True, pixels that are missing (value 255) remain 255 (or NaN) in the output.
     n_threads : int, default 0
-        Number of OpenMP worker threads (0 = all available).
+        Number of OpenMP worker threads (0: all cores but one).
 
     Returns
     -------

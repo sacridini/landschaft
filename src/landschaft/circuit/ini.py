@@ -137,7 +137,7 @@ def omniscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0):
     ``classified_resistance``, GeoTIFF (``write_as_tif``) or ASCII grids,
     NoData -9999. ``solver``, ``parallelize``, ``parallel_batch_size`` and
     ``suppress_cs_messages`` have no effect: windows are always solved exactly,
-    with ``n_threads`` threads (0 = all).
+    with ``n_threads`` threads (0: all cores but one).
 
     Returns
     -------

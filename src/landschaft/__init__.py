@@ -13,6 +13,10 @@ Typical use::
 from importlib import metadata as _metadata
 
 from . import _core
+from . import _threads
+
+_threads.install(_core, _core.set_num_threads)
+from ._threads import default_threads, set_default_threads  # noqa: E402
 from .accounting import ACCOUNTING_CLASSES, AccountingResult, accounting
 from .batch import BATCH_TOOLS, BatchResult, batch, mspa_batch
 from .change import (
@@ -222,6 +226,8 @@ __all__ = [
     "lm_colormap",
     "load_raster",
     "max_threads",
+    "default_threads",
+    "set_default_threads",
     "morphological_change",
     "mspa",
     "mspa_batch",
@@ -260,5 +266,6 @@ __all__ = [
 
 
 def max_threads() -> int:
-    """Number of OpenMP threads the C++ core can use (1 without OpenMP)."""
+    """Number of processors the C++ core can use (1 without OpenMP). Parallel
+    functions use :func:`default_threads` of them unless told otherwise."""
     return _core.max_threads()

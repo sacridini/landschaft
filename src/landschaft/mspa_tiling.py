@@ -133,7 +133,7 @@ def mspa_tiled(
     n_workers
         Tiles processed concurrently; each needs about 32 bytes per tile pixel.
     n_threads
-        Threads per tile (default: all cores shared among the workers).
+        Threads per tile (default: all cores but one, shared among the workers).
     overwrite
         Replace an existing ``output``.
 
@@ -146,7 +146,9 @@ def mspa_tiled(
     tile_layout(1, tile_size, overlap)  # checks the tiling parameters
     n_workers = max(1, int(n_workers))
     if n_threads is None:
-        n_threads = 0 if n_workers == 1 else max(1, (os.cpu_count() or 1) // n_workers)
+        from ._threads import default_threads
+
+        n_threads = max(1, default_threads() // n_workers)
     kw = dict(connectivity=int(connectivity), edge_width=int(edge_width), internal=bool(internal),
               n_threads=int(n_threads))
     attrs = {

@@ -17,6 +17,8 @@ Vogt, P. & Riitters, K. (2017). GuidosToolbox: universal digital image object an
 
 from __future__ import annotations
 
+from ._threads import threaded
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -73,6 +75,7 @@ class ParcellationResult:
         return "\n".join(lines)
 
 
+@threaded
 def parcellation(
     data: xr.DataArray | np.ndarray | str | Path,
     connectivity: int = 8,

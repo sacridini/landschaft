@@ -194,7 +194,7 @@ def influence_zones(
     buffer
         Width [pixels] of a background buffer drawn around the objects (0 = none).
     n_threads
-        OpenMP threads (0 = all).
+        OpenMP threads (0: all cores but one).
     """
     arr, template, _ = _prepare(data, min_area, core_buffer)
     if buffer < 0:

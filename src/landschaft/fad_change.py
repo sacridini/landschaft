@@ -153,7 +153,7 @@ def fad_multiscale_change(
     window_sizes
         FAD-MS observation scales (GTB: 7, 13, 27, 81, 243).
     n_threads
-        OpenMP threads (0 = all).
+        OpenMP threads (0: all cores but one).
 
     Returns
     -------

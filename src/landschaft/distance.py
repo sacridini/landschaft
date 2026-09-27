@@ -19,6 +19,8 @@ Meijster, A., Roerdink, J. B., & Hesselink, W. H. (2000). A general algorithm fo
 
 from __future__ import annotations
 
+from ._threads import threaded
+
 import io
 from dataclasses import dataclass
 from typing import Any
@@ -94,6 +96,7 @@ class EuclideanDistanceResult:
         return buf.getvalue()
 
 
+@threaded
 def euclidean_distance(
     data: xr.DataArray | np.ndarray,
     *,
@@ -114,7 +117,7 @@ def euclidean_distance(
     pixel_size : float or tuple of float, optional
         Physical pixel size (e.g. in meters) to convert distances to real-world units.
     threads : int, default 0
-        Number of OpenMP threads to use (0 = auto).
+        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
 
     Returns
     -------

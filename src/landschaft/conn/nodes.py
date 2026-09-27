@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from .._threads import threaded
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -105,6 +107,7 @@ def _raster_attributes(p: RasterPatches, attribute, weighted: bool, area_unit: s
     return pd.DataFrame({"id": ids, "attribute": values})
 
 
+@threaded
 def gdal_areas(geometries) -> np.ndarray:
     """Areas as sf's st_area (GDAL's shoelace sums, in order) computes them.
 

@@ -81,7 +81,7 @@ def advanced(conductance, source, ground, *, four_neighbors: bool = False, n_thr
     four_neighbors
         Connect the four orthogonal neighbours only.
     n_threads
-        OpenMP threads (0 = all).
+        OpenMP threads (0: all cores but one).
 
     Returns
     -------

@@ -34,6 +34,13 @@ It provides a native **C++17 / OpenMP** core exposed through zero-copy **pybind1
   * Forest Area Density (FAD) uses **2D Integral Images** (Summed-Area Tables) for $O(1)$ computation per pixel regardless of window size ($7 \times 7$ up to $243 \times 243$).
   * GraySpatCon uses **101-bin sliding histograms** that update columns in $O(1)$ rather than re-scanning the window.
 * **Full Geospatial Metadata Preservation**: All high-level functions accept and return `xarray.DataArray` objects, seamlessly preserving CRS, affine geotransforms, spatial coordinates, and nodata masks.
+* **Threads: all cores but one by default.** Every function that runs in parallel takes `n_threads` (and the ones that run several rasters at once, `n_workers`); `None` or 0 means all the cores the process may use but one, so the machine stays responsive. `ls.default_threads()` gives that count, `ls.set_default_threads(n)` changes it for the whole process (`None`: back to all cores but one). The compiled code follows the same rule even where a function has no thread argument of its own (every call into it sets the OpenMP thread count of the calling thread), in any Python thread. Results never depend on the number of threads.
+
+```python
+ls.default_threads()               # e.g. 19 on a 20-core machine
+ls.fad(data, n_threads=4)          # this call: 4 threads
+ls.set_default_threads(8)          # every call from now on: 8 threads
+```
 
 ---
 
@@ -151,7 +158,7 @@ result = ls.mspa(
     edge_width=1,     # Effective edge width in pixels (1 to 255)
     transition=True,  # Transition parameter for color styling
     internal=True,    # Identifies internal perforations and core openings
-    n_threads=0,      # Number of OpenMP threads (0 = all available cores)
+    n_threads=None,   # OpenMP threads (None / 0: all cores but one)
 )
 ```
 
@@ -737,7 +744,8 @@ full names (`"shannon_diversity_index"`, `"effective_mesh_size"`, …); the colu
 the names as asked. The `metric=` filter accepts family aliases (`"shape_index"`).
 
 **Threads.** `n_threads` (in `Landscape`, `landscape_metrics`, `sample_metrics`,
-`window_metrics`) limits the C++ core; the results do not depend on it.
+`window_metrics`, ...) limits the C++ core (default: all cores but one); the results do
+not depend on it.
 
 **FRAGSTATS-only metrics** (extras; landscapemetrics has none of them):
 
@@ -869,7 +877,7 @@ order. Memory grows with the number of patches (about 70 bytes per patch piece w
 reading, plus the per-patch values the metrics keep) and, for `enn` only, with the
 number of patch edge cells of the classes with several patches (about 24 bytes each):
 enn needs every edge cell to find nearest neighbours. `labels()` and `to_raster()` are
-not available out of core. GeoTIFF blocks are decoded on all cores
+not available out of core. GeoTIFF blocks are decoded on the same threads
 (`GDAL_NUM_THREADS`).
 
 ### Sample plots, moving windows and several rasters

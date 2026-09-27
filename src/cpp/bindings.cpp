@@ -585,9 +585,32 @@ py::array_t<float> compute_gray_convolution(
 
 int max_threads() {
 #if defined(_OPENMP)
-    return omp_get_max_threads();
+    return omp_get_num_procs();
 #else
     return 1;
+#endif
+}
+
+// Threads of a parallel region opened now by the calling thread (tests).
+int team_size() {
+    int n = 1;
+#if defined(_OPENMP)
+#pragma omp parallel
+    {
+#pragma omp single
+        n = omp_get_num_threads();
+    }
+#endif
+    return n;
+}
+
+// OpenMP thread count of the calling thread's next parallel regions (the
+// Python side sets it before every compiled call; see landschaft/_threads.py).
+void set_num_threads(int n) {
+#if defined(_OPENMP)
+    omp_set_num_threads(n > 0 ? n : 1);
+#else
+    (void)n;
 #endif
 }
 
@@ -1472,7 +1495,10 @@ PYBIND11_MODULE(_core, m) {
           py::arg("window_size") = 7, py::arg("mask_missing") = true, py::arg("n_threads") = 0,
           "Compute moving-window spatial convolution over continuous grayscale raster.");
 
-    m.def("max_threads", &max_threads, "Number of OpenMP threads available (1 if built without OpenMP).");
+    m.def("max_threads", &max_threads, "Processors OpenMP can use (1 if built without OpenMP).");
+    m.def("team_size", &team_size, "Threads a parallel region opened now gets (tests).");
+    m.def("set_num_threads", &set_num_threads, py::arg("n"),
+          "Thread count of the calling thread's next OpenMP parallel regions.");
 #if defined(_OPENMP)
     m.attr("openmp") = true;
 #else

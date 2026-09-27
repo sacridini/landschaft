@@ -392,7 +392,7 @@ def sample_metrics(
         ``xarray.DataArray``: the snapped window, NaN outside the plot and on
         NA cells; ``None`` for a plot outside the raster).
     n_threads
-        Threads of the C++ core (default: all cores).
+        Threads of the C++ core (default: all cores but one).
     **options
         Metric options (``directions``, ``edge_depth``, ...).
 
@@ -627,7 +627,7 @@ def window_metrics(
     extras
         Also select the FRAGSTATS metrics missing in landscapemetrics.
     n_threads
-        Threads of the C++ core (default: all cores).
+        Threads of the C++ core (default: all cores but one).
     **options
         Metric options (``directions``, ``edge_depth``, ...).
 
