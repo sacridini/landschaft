@@ -417,6 +417,43 @@ def learn_grain():
     save(fig, "learn_grain")
 
 
+@figure
+def learn_percolation():
+    rng = np.random.default_rng(3)
+    fig = plt.figure(figsize=(11, 3.4))
+    grid = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 1.7], wspace=0.35)
+    for i, p in enumerate((0.3, 0.5, 0.7)):
+        ax = fig.add_subplot(grid[0, i])
+        random_map = np.where(rng.random((80, 80)) < p, 2, 1).astype("uint8")
+        palette_map(ax, random_map, BINARY, None, f"{p:.0%} habitat")
+    ax = fig.add_subplot(grid[0, 3])
+    amounts = np.linspace(0.05, 0.95, 37)
+    colours = {4: "#0f172a", 8: "#15803d"}
+    for directions in (4, 8):
+        lpi = []
+        for p in amounts:
+            random_map = np.where(rng.random((300, 300)) < p, 2, 1).astype("uint8")
+            table = ls.Landscape(random_map, directions=directions).class_metrics(["lpi"]).set_index("class")
+            lpi.append(table.loc[2, "lpi"])
+        ax.plot(100 * amounts, lpi, color=colours[directions], lw=2, marker="o", ms=3.5,
+                label=f"{directions} neighbours")
+        p_c = {4: 59.3, 8: 40.7}[directions]
+        ax.axvline(p_c, color=colours[directions], lw=1, ls=":")
+        ax.text(p_c - 1.5, 20 if directions == 8 else 8, f"$p_c$ ≈ {p_c:.0f}%", color=colours[directions], fontsize=8, ha="right")
+    ax.set_xlabel("habitat in the map (%)")
+    ax.set_ylabel("largest patch (% of the map)")
+    ax.set_title("Largest patch index of random maps")
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 100)
+    ax.legend(frameon=False, loc="lower right", fontsize=8)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(color="#e2e8f0")
+    ax.set_axisbelow(True)
+    fig.subplots_adjust(left=0.02, right=0.98)
+    ax.set_position(ax.get_position().translated(0.04, 0))
+    save(fig, "learn_percolation")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:
