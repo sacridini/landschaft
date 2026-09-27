@@ -510,6 +510,45 @@ def learn_cost_distance():
     save(fig, "learn_cost_distance")
 
 
+@figure
+def learn_circuit_gaps():
+    from matplotlib.colors import LogNorm, TwoSlopeNorm
+
+    from landschaft import circuit
+
+    resistance = np.ones((60, 100))
+    resistance[:, 48:52] = np.nan
+    resistance[8:11, 48:52] = 1.0
+    resistance[34:52, 48:52] = 1.0
+    points = np.zeros(resistance.shape)
+    points[25:35, 5] = 1
+    points[25:35, 94] = 2
+    current = np.asarray(circuit.circuitscape_pairwise(resistance, points, cum_map=True).cum_current)
+    path = np.asarray(ls.least_cost_path(np.where(np.isnan(resistance), 0, resistance),
+                                         points == 1, points == 2).lcp_mask)
+    omni = ls.omniscape(resistance, radius=15, block_size=1, flow_potential=True, normalized_current=True)
+    normalised = np.asarray(omni["normalized_cum_currmap"])
+
+    wall = np.ma.masked_where(~np.isnan(resistance), np.ones(resistance.shape))
+    fig, axes = plt.subplots(1, 3, figsize=(13, 3.2), gridspec_kw={"wspace": 0.3})
+    ax = axes[0]
+    ax.imshow(np.where(np.isnan(resistance), np.nan, 1.0), cmap=ListedColormap(["#eee8d5"]), interpolation="nearest")
+    ax.imshow(np.ma.masked_where(~path.astype(bool), path), cmap=ListedColormap(["#15803d"]), interpolation="nearest")
+    ax.imshow(np.ma.masked_where(points == 0, points), cmap=ListedColormap(["#0f172a"]), interpolation="nearest")
+    ax.set_title("Least-cost path")
+    shown = np.where(current > 0, current, np.nan)
+    image = axes[1].imshow(shown, cmap="Blues", norm=LogNorm(1e-4, np.nanmax(current)), interpolation="nearest")
+    axes[1].set_title("Pairwise current (log scale)")
+    fig.colorbar(image, ax=axes[1], fraction=0.035, pad=0.02)
+    image = axes[2].imshow(normalised, cmap="RdBu_r", norm=TwoSlopeNorm(1.0, 0.0, 4.0), interpolation="nearest")
+    axes[2].set_title("Normalised current (Omniscape)")
+    fig.colorbar(image, ax=axes[2], fraction=0.035, pad=0.02)
+    for ax in axes:
+        ax.imshow(wall, cmap=ListedColormap(["#0f172a"]), interpolation="nearest")
+        ax.set_axis_off()
+    save(fig, "learn_circuit_gaps")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:
