@@ -88,6 +88,182 @@ struct TreeBuilder {
     }
 };
 
+// Nested dissection of a general graph (no geometry): a set of nodes is split
+// by a level of a breadth-first search from a pseudo-peripheral node (edges
+// only join consecutive levels), the smallest level that leaves at least a
+// fifth of the nodes on either side, trimmed of the nodes that touch no node
+// beyond it; both sides first, the separator last. Disconnected sets give one
+// subtree per component. The sets of one depth are disjoint and split in
+// parallel (the result does not depend on the threads); the tree is then laid
+// out in post-order: `order` receives the nodes in elimination order.
+struct GraphDissection {
+    static constexpr std::size_t kLeaf = 32;
+    const std::vector<std::int64_t>& ptr;
+    const std::vector<std::int32_t>& adj;
+    std::vector<std::int32_t> order;
+    std::vector<FrontalSymbolic::Node> nodes;
+    std::vector<std::vector<std::int32_t>> kids;
+    std::vector<std::int32_t> mark, level;  // mark: the part being split (its index)
+
+    struct Part {
+        std::vector<std::int32_t> set, piv, sub;  // nodes; pivots; child parts
+        bool pass = false;                         // components only: no front of its own
+    };
+    std::vector<Part> parts;
+
+    GraphDissection(std::int32_t n, const std::vector<std::int64_t>& p, const std::vector<std::int32_t>& a)
+        : ptr(p), adj(a), mark(static_cast<std::size_t>(n), -1), level(static_cast<std::size_t>(n), -1) {}
+
+    std::int32_t add(std::vector<std::int32_t>& piv, std::vector<std::int32_t> ch) {
+        std::sort(piv.begin(), piv.end());
+        FrontalSymbolic::Node node;
+        node.first = static_cast<std::int32_t>(order.size());
+        node.npiv = static_cast<std::int32_t>(piv.size());
+        order.insert(order.end(), piv.begin(), piv.end());
+        nodes.push_back(node);
+        kids.push_back(std::move(ch));
+        return static_cast<std::int32_t>(nodes.size()) - 1;
+    }
+
+    // BFS over the nodes marked t from `s`: levels, the nodes in BFS order.
+    void bfs(std::int32_t s, std::int32_t t, std::vector<std::int32_t>& seen) {
+        seen.clear();
+        seen.push_back(s);
+        level[s] = 0;
+        for (std::size_t h = 0; h < seen.size(); ++h) {
+            const std::int32_t v = seen[h];
+            for (std::int64_t e = ptr[v]; e < ptr[v + 1]; ++e) {
+                const std::int32_t w = adj[static_cast<std::size_t>(e)];
+                if (w < 0 || mark[w] != t || level[w] >= 0) continue;
+                level[w] = level[v] + 1;
+                seen.push_back(w);
+            }
+        }
+    }
+
+    void clear_levels(const std::vector<std::int32_t>& vs) {
+        for (std::int32_t v : vs) level[v] = -1;
+    }
+
+    // Splits part t (its nodes marked t): its pivots, or the node sets of its children.
+    void split(Part& p, std::int32_t t, std::vector<std::vector<std::int32_t>>& children) {
+        std::vector<std::int32_t>& set = p.set;
+        if (set.size() <= kLeaf) {
+            p.piv = std::move(set);
+            return;
+        }
+        std::vector<std::int32_t> seen;
+        // Components of the set, from its smallest node.
+        bfs(*std::min_element(set.begin(), set.end()), t, seen);
+        if (seen.size() < set.size()) {
+            children.push_back(seen);
+            for (std::int32_t v : set) {
+                if (level[v] >= 0) continue;
+                std::vector<std::int32_t> c;
+                bfs(v, t, c);
+                children.push_back(std::move(c));
+            }
+            for (auto& c : children) clear_levels(c);
+            p.pass = true;
+            return;
+        }
+        // A pseudo-peripheral start: from the farthest node, while the depth grows.
+        std::int32_t depth = level[seen.back()];
+        for (int it = 0; it < 2; ++it) {
+            std::int32_t far = seen.back();
+            for (std::int32_t v : seen)
+                if (level[v] == depth && v < far) far = v;
+            clear_levels(seen);
+            bfs(far, t, seen);
+            const std::int32_t d = level[seen.back()];
+            if (d <= depth && it > 0) break;
+            depth = d;
+        }
+        depth = level[seen.back()];
+        if (depth < 2) {  // no level separates two nonempty sides
+            clear_levels(seen);
+            p.piv = std::move(set);
+            return;
+        }
+        std::vector<std::int64_t> count(static_cast<std::size_t>(depth) + 1, 0);
+        for (std::int32_t v : seen) ++count[static_cast<std::size_t>(level[v])];
+        const std::int64_t n = static_cast<std::int64_t>(seen.size());
+        std::int32_t best = -1, half = -1;
+        std::int64_t before = count[0];
+        for (std::int32_t l = 1; l < depth; ++l) {
+            const std::int64_t after = n - before - count[l];
+            if (half < 0 && before + count[l] >= n / 2) half = l;
+            if (5 * before >= n && 5 * after >= n && (best < 0 || count[l] < count[best])) best = l;
+            before += count[l];
+        }
+        const std::int32_t sl = best >= 0 ? best : (half >= 0 ? half : depth / 2);
+        std::vector<std::int32_t> a, b;
+        for (std::int32_t v : seen) {
+            const std::int32_t l = level[v];
+            if (l < sl) {
+                a.push_back(v);
+            } else if (l > sl) {
+                b.push_back(v);
+            } else {
+                bool touches_b = false;
+                for (std::int64_t e = ptr[v]; e < ptr[v + 1] && !touches_b; ++e) {
+                    const std::int32_t w = adj[static_cast<std::size_t>(e)];
+                    touches_b = w >= 0 && mark[w] == t && level[w] == sl + 1;
+                }
+                (touches_b ? p.piv : a).push_back(v);
+            }
+        }
+        clear_levels(seen);
+        if (!a.empty()) children.push_back(std::move(a));
+        if (!b.empty()) children.push_back(std::move(b));
+        std::vector<std::int32_t>().swap(set);
+    }
+
+    // The subtree roots of `all`, appended to `roots`.
+    void dissect(std::vector<std::int32_t> all, std::vector<std::int32_t>& roots) {
+        if (all.empty()) return;
+        parts.push_back({});
+        parts.back().set = std::move(all);
+        std::vector<std::int32_t> frontier{0};
+        while (!frontier.empty()) {
+            const int nf = static_cast<int>(frontier.size());
+            std::vector<std::vector<std::vector<std::int32_t>>> children(frontier.size());
+#pragma omp parallel for schedule(dynamic, 1) if (nf > 1)
+            for (int i = 0; i < nf; ++i)
+                for (std::int32_t v : parts[frontier[i]].set) mark[v] = frontier[i];
+#pragma omp parallel for schedule(dynamic, 1) if (nf > 1)
+            for (int i = 0; i < nf; ++i) split(parts[frontier[i]], frontier[i], children[i]);
+            std::vector<std::int32_t> next;
+            for (int i = 0; i < nf; ++i)
+                for (auto& c : children[i]) {
+                    const std::int32_t k = static_cast<std::int32_t>(parts.size());
+                    parts.push_back({});
+                    parts.back().set = std::move(c);
+                    parts[frontier[i]].sub.push_back(k);
+                    next.push_back(k);
+                }
+            frontier = std::move(next);
+        }
+        emit(0, roots);
+    }
+
+    // Post-order layout of part k: its fronts' roots appended to `roots`.
+    void emit(std::int32_t k, std::vector<std::int32_t>& roots) {
+        Part& p = parts[k];
+        if (p.pass) {
+            for (std::int32_t c : p.sub) emit(c, roots);
+            return;
+        }
+        std::vector<std::int32_t> ch;
+        for (std::int32_t c : p.sub) emit(c, ch);
+        if (p.piv.empty() && ch.size() == 1) {
+            roots.push_back(ch[0]);
+            return;
+        }
+        roots.push_back(add(p.piv, std::move(ch)));
+    }
+};
+
 }  // namespace
 
 namespace {
@@ -197,6 +373,28 @@ std::shared_ptr<const FrontalSymbolic> frontal_analyze_graph(i64 bx, i64 by, con
     s.bx = bx;
     s.by = by;
     const std::int32_t n = static_cast<std::int32_t>(cell.size());
+    if (std::none_of(cell.begin(), cell.end(), [](i64 c) { return c >= 0; })) {
+        // No geometry (a network): the graph's own nested dissection.
+        GraphDissection gd(n, adj_ptr, adj);
+        std::vector<std::int32_t> all(static_cast<std::size_t>(n)), roots;
+        for (std::int32_t c = 0; c < n; ++c) all[c] = c;
+        gd.dissect(std::move(all), roots);
+        if (roots.size() > 1) {
+            std::vector<std::int32_t> none;
+            gd.add(none, roots);
+        }
+        s.perm = std::move(gd.order);
+        s.nodes = std::move(gd.nodes);
+        s.cells.assign(static_cast<std::size_t>(n), -1);
+        std::vector<std::int32_t> iperm(static_cast<std::size_t>(n), -1);
+        for (std::int32_t k = 0; k < n; ++k) iperm[static_cast<std::size_t>(s.perm[k])] = k;
+        s.unknown_of.assign(static_cast<std::size_t>(bx * by), -1);
+        s.adj_ptr = adj_ptr;
+        s.nbr.resize(adj.size());
+        for (std::size_t k = 0; k < adj.size(); ++k) s.nbr[k] = adj[k] >= 0 ? iperm[static_cast<std::size_t>(adj[k])] : -1;
+        build_fronts(s, gd.kids);
+        return sym;
+    }
     std::vector<std::uint8_t> mark(static_cast<std::size_t>(bx * by), 0);
     std::vector<std::int32_t> node_of_cell(static_cast<std::size_t>(bx * by), -1);
     for (std::int32_t c = 0; c < n; ++c)

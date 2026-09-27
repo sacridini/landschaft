@@ -69,6 +69,8 @@ std::shared_ptr<const FrontalSymbolic> frontal_analyze(i64 bx, i64 by, const std
 // the grid's nested dissection; merged nodes (cell[c] < 0, e.g. Circuitscape's
 // short-circuit regions) are eliminated last, in one front at the root. Cells
 // that are neighbours on the grid must be the only edges between cell nodes.
+// A graph with no cell nodes (a network) is ordered by its own nested
+// dissection (breadth-first level separators, split in parallel by depth).
 std::shared_ptr<const FrontalSymbolic> frontal_analyze_graph(i64 bx, i64 by, const std::vector<i64>& cell,
                                                              const std::vector<std::int64_t>& adj_ptr,
                                                              const std::vector<std::int32_t>& adj);

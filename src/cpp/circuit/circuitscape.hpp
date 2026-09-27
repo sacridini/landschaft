@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <utility>
 #include <vector>
 
 #include "circuit/grid.hpp"
@@ -35,6 +36,23 @@ struct RasterGraph {
 // short-circuit region ids (0: none) or nullptr.
 RasterGraph raster_graph(const double* gmap, const std::int64_t* polymap, i64 nx, i64 ny, bool avg_resistances,
                          bool four_neighbors);
+
+// Circuitscape's network graph (network/problem.jl): edges (a[k], b[k]) of
+// conductance w[k] over the nodes 0..m-1. A = sparse(a, b, w) (duplicates
+// summed in input order), A + Aᵀ (entries that add up to 0 are dropped, as
+// sparse `+` does), its Laplacian (self loops left out) and its components.
+// node_cell is -1 everywhere: the solver orders the graph by its own nested
+// dissection.
+RasterGraph network_graph(const std::vector<std::int32_t>& a, const std::vector<std::int32_t>& b,
+                          const std::vector<double>& w, std::int32_t m);
+
+// Node currents (get_node_currents: max of inflow and outflow, finite grounds
+// by node or nullptr) and branch currents (_get_branch_currents: every edge
+// r < c of the nodes `members` (ascending), column by column, |w| (v_r - v_c)
+// zeroed below 1e-8 of the largest, then made absolute) over `members`.
+// `node_cur` is by node; `branch` gets (adjacency entry of r in c's list, value).
+void network_currents(const RasterGraph& g, const std::int32_t* members, std::int64_t count, const double* v,
+                      const double* finite, double* node_cur, std::vector<std::pair<std::int64_t, double>>& branch);
 
 // Circuitscape's remove_src_or_gnd.
 enum class ConflictPolicy { KeepAll, RemoveSource, RemoveGround, RemoveAll };
@@ -85,15 +103,22 @@ struct PairwiseOptions {
     bool null_currents = false;  // set_null_currents_to_nodata
     bool null_voltages = false;  // set_null_voltages_to_nodata
     bool log_transform = false;  // log_transform_maps
+    // A network (no grid): no shortcut; with any map option every pair gives
+    // its node voltages, node currents and branch currents (component nodes),
+    // and the node and branch currents are summed over the pairs.
+    bool network = false;
     bool maps() const { return volt_maps || cur_maps || cum || max; }
 };
 struct PairMaps {
     int ci = -1, cj = -1;                  // focal point indices (their ids name the maps)
-    std::vector<double> voltage, current;  // grids, when asked for
+    std::vector<double> voltage, current;  // grids, when asked for (networks: per node of `nodes`)
+    std::vector<std::int32_t> nodes;       // networks: the component's nodes
+    std::vector<std::pair<std::int64_t, double>> branch;  // networks: branch currents (see network_currents)
 };
 struct PairwiseResult {
     std::vector<double> resistances;  // n × n
-    std::vector<double> cum, max;     // grids (empty unless asked for)
+    std::vector<double> cum, max;     // grids (empty unless asked for); networks: cum by node
+    std::vector<double> cum_branch;   // networks: summed branch currents by adjacency entry
 };
 PairwiseResult raster_pairwise(const RasterGraph& g, const double* gmap, const std::vector<std::int32_t>& points,
                                const std::vector<std::uint8_t>& excluded, const PairwiseOptions& options,

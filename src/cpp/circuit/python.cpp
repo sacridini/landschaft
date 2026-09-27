@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -275,6 +276,127 @@ py::dict circuitscape_pairwise(const CArray<double>& gmap, const py::object& pol
     return out;
 }
 
+circuit::RasterGraph network_from(const CArray<std::int32_t>& a, const CArray<std::int32_t>& b,
+                                  const CArray<double>& w, std::int32_t m) {
+    if (a.size() != b.size() || a.size() != w.size()) throw py::value_error("edge arrays of different lengths");
+    return circuit::network_graph(std::vector<std::int32_t>(a.data(), a.data() + a.size()),
+                                  std::vector<std::int32_t>(b.data(), b.data() + b.size()),
+                                  std::vector<double>(w.data(), w.data() + w.size()), m);
+}
+
+// Node of the adjacency list that holds each entry.
+std::vector<std::int32_t> entry_owner(const circuit::RasterGraph& g) {
+    std::vector<std::int32_t> owner(g.adj.size());
+    for (std::int32_t c = 0; c < g.n_nodes; ++c)
+        for (std::int64_t e = g.ptr[c]; e < g.ptr[c + 1]; ++e) owner[static_cast<std::size_t>(e)] = c;
+    return owner;
+}
+
+// Branch currents as three arrays: node r, node c (r < c), current.
+py::tuple branch_arrays(const circuit::RasterGraph& g, const std::vector<std::int32_t>& owner,
+                        const std::vector<std::pair<std::int64_t, double>>& branch) {
+    const auto n = static_cast<py::ssize_t>(branch.size());
+    py::array_t<std::int32_t> r(n), c(n);
+    py::array_t<double> v(n);
+    for (py::ssize_t k = 0; k < n; ++k) {
+        const std::int64_t e = branch[static_cast<std::size_t>(k)].first;
+        r.mutable_data()[k] = g.adj[static_cast<std::size_t>(e)];
+        c.mutable_data()[k] = owner[static_cast<std::size_t>(e)];
+        v.mutable_data()[k] = branch[static_cast<std::size_t>(k)].second;
+    }
+    return py::make_tuple(r, c, v);
+}
+
+// Circuitscape's advanced mode on a network: sources and grounds by node
+// (grounds as conductances, +Inf direct). Voltages by node, and the node and
+// branch currents of the whole graph (as write_cur_maps computes them).
+py::dict network_advanced(const CArray<std::int32_t>& a, const CArray<std::int32_t>& b, const CArray<double>& w,
+                          std::int32_t m, const CArray<double>& source, const CArray<double>& ground,
+                          const std::string& policy, int n_threads) {
+    if (source.size() != m || ground.size() != m) throw py::value_error("sources and grounds must have one value per node");
+    const circuit::ConflictPolicy pol = conflict_policy(policy);
+    circuit::RasterGraph g;
+    circuit::NodeSolution sol;
+    std::vector<double> current;
+    std::vector<std::pair<std::int64_t, double>> branch;
+    run_parallel(n_threads, [&] {
+        g = network_from(a, b, w, m);
+        std::vector<double> src(source.data(), source.data() + m), gnd(ground.data(), ground.data() + m);
+        std::vector<double> finite(static_cast<std::size_t>(m), 0.0);
+        bool any_finite = false;
+        for (std::int32_t v = 0; v < m; ++v) {
+            finite[v] = gnd[v] < std::numeric_limits<double>::infinity() ? gnd[v] : 0.0;
+            any_finite = any_finite || finite[v] != 0;
+        }
+        sol = circuit::raster_advanced(g, std::move(src), std::move(gnd), pol, n_threads);
+        std::vector<std::int32_t> all(static_cast<std::size_t>(m));
+        for (std::int32_t v = 0; v < m; ++v) all[v] = v;
+        current.assign(static_cast<std::size_t>(m), 0.0);
+        circuit::network_currents(g, all.data(), m, sol.voltage.data(), any_finite ? finite.data() : nullptr,
+                                  current.data(), branch);
+        return 0;
+    });
+    py::dict out;
+    out["voltage"] = vector_to_array(std::move(sol.voltage));
+    out["current"] = vector_to_array(std::move(current));
+    out["branch"] = branch_arrays(g, entry_owner(g), branch);
+    out["solved"] = sol.solved;
+    out["n_components"] = g.n_comp;
+    return out;
+}
+
+// Circuitscape's pairwise mode on a network: `points` are nodes (-1: not in
+// the graph). With map options every pair calls emit(ci, cj, nodes, voltage
+// or None, current, (branch r, c, current)) and the summed node currents and
+// branch currents (per edge r < c: arrays r, c, value) are returned.
+py::dict network_pairwise(const CArray<std::int32_t>& a, const CArray<std::int32_t>& b, const CArray<double>& w,
+                          std::int32_t m, const CArray<std::int32_t>& points, const CArray<std::uint8_t>& excluded,
+                          const py::dict& options, const py::object& emit, int n_threads) {
+    circuit::PairwiseOptions o;
+    auto flag = [&](const char* k) { return options.contains(k) && options[k].cast<bool>(); };
+    o.volt_maps = flag("volt_maps");
+    o.cur_maps = flag("cur_maps");
+    o.cum = flag("cum");
+    o.max = flag("max");
+    o.network = true;
+    std::vector<std::uint8_t> ex(excluded.data(), excluded.data() + excluded.size());
+    std::vector<std::int32_t> pts(points.data(), points.data() + points.size());
+    for (std::int32_t& v : pts)
+        if (v < 0 || v >= m) v = -1;
+    circuit::RasterGraph g;
+    std::vector<std::int32_t> owner;
+    circuit::PairwiseResult r;
+    std::function<void(circuit::PairMaps&&)> callback = [&](circuit::PairMaps&& pm) {
+        py::gil_scoped_acquire gil;
+        if (emit.is_none()) return;
+        py::object v = py::none();
+        if (!pm.voltage.empty()) v = vector_to_array(std::move(pm.voltage));
+        emit(pm.ci, pm.cj, vector_to_array(std::move(pm.nodes)), v, vector_to_array(std::move(pm.current)),
+             branch_arrays(g, owner, pm.branch));
+    };
+    run_parallel(n_threads, [&] {
+        g = network_from(a, b, w, m);
+        owner = entry_owner(g);
+        r = circuit::raster_pairwise(g, nullptr, pts, ex, o, callback, n_threads);
+        return 0;
+    });
+    const std::int64_t nr = static_cast<std::int64_t>(pts.size());
+    py::dict out;
+    auto* holder = new std::vector<double>(std::move(r.resistances));
+    py::capsule own(holder, [](void* q) { delete static_cast<std::vector<double>*>(q); });
+    out["resistances"] = py::array_t<double>({nr, nr}, holder->data(), own);
+    if (!r.cum.empty()) {
+        out["cum"] = vector_to_array(std::move(r.cum));
+        std::vector<std::pair<std::int64_t, double>> cb;
+        for (std::int32_t c = 0; c < g.n_nodes; ++c)
+            for (std::int64_t e = g.ptr[c]; e < g.ptr[c + 1]; ++e)
+                if (g.adj[static_cast<std::size_t>(e)] < c) cb.emplace_back(e, r.cum_branch[static_cast<std::size_t>(e)]);
+        out["cum_branch"] = branch_arrays(g, owner, cb);
+    }
+    out["n_components"] = g.n_comp;
+    return out;
+}
+
 // A batch of advanced solves on one graph (the one-to-all driver): every
 // problem gives its source and ground cells and values (summed per node in
 // column-major cell order) and the cell of its check node (-1: every
@@ -423,6 +545,12 @@ void register_python(py::module_& m) {
           py::arg("point_cells"), py::arg("excluded"), py::arg("avg_resistances"), py::arg("four_neighbors"),
           py::arg("options"), py::arg("emit") = py::none(), py::arg("n_threads") = 0,
           "Circuitscape's pairwise mode on a raster: resistances and current maps.");
+    m.def("network_advanced", &network_advanced, py::arg("a"), py::arg("b"), py::arg("w"), py::arg("n_nodes"),
+          py::arg("source"), py::arg("ground"), py::arg("policy"), py::arg("n_threads") = 0,
+          "Circuitscape's advanced mode on a network (0-based nodes): voltages, node and branch currents.");
+    m.def("network_pairwise", &network_pairwise, py::arg("a"), py::arg("b"), py::arg("w"), py::arg("n_nodes"),
+          py::arg("points"), py::arg("excluded"), py::arg("options"), py::arg("emit") = py::none(),
+          py::arg("n_threads") = 0, "Circuitscape's pairwise mode on a network: resistances and currents.");
     m.def("ascii_grid_rows", &ascii_grid_rows, py::arg("values"),
           "Rows of an ASCII grid: shortest round-trip values, NaN as -9999.");
     m.def("circuitscape_multi_advanced", &circuitscape_multi_advanced, py::arg("gmap"), py::arg("polymap"),

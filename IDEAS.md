@@ -319,13 +319,12 @@ Próximos passos sugeridos (2026-09-26, depois da 0.48.0):
     blocos com `parallel for`, ou o GEMM paralelo do Eigen onde couber;
   - manter o resultado determinístico (mesma ordem de soma com qualquer número de
     threads) e conferir com o CHOLMOD como nas outras partes.
-- Modo de rede (grafos) do Circuitscape (`data_type = network`): nós e arestas de arquivo
-  (listas de pares com resistência ou condutância, nós a partir de 0 deslocados),
-  pairwise e advanced sobre o grafo, correntes de ramo e de nó (`_branch_currents`,
-  `_node_currents`, `_voltages`), com a suíte de verificação dele (`sgNetworkVerify*`,
-  `mgNetworkVerify*` em `test/output_verify`). O núcleo já aceita grafos gerais
-  (`frontal_analyze_graph`), mas a ordenação precisa de uma dissecção aninhada para grafos
-  sem geometria (hoje os nós sem célula vão todos para a raiz).
+- Modo de rede (grafos) do Circuitscape (`data_type = network`). **Feito** (0.50.0:
+  `circuitscape_network_pairwise` / `_advanced`, `circuitscape_ini`; dissecção aninhada
+  por níveis de BFS para grafos sem geometria, em paralelo por profundidade; os casos de
+  rede do Circuitscape e seis sintéticos a 1,1e-14 do CHOLMOD; 1 M de nós, 20 pontos:
+  7,2 s contra 27,7 s do CHOLMOD e 182 s do cg+amg). A fatoração (~3,5 s desses 7,2 s)
+  continua numa thread só: é o item acima.
 - Omniscape com raio grande e muitas threads: limitado pela banda de memória (6× de 1 para
   20 threads em r = 100; o fator de uma janela tem 13 MB). Ideias: fatorar o landscape em
   precisão mista não serve (condicionamento); reduzir o tráfego guardando só a parte de L

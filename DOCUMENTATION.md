@@ -1812,3 +1812,52 @@ one-to-all and all-to-one the focal points are the only nodes with sources or gr
 every component is factorised once without them and each point is solved through the
 dense Schur complement on the focal nodes (Circuitscape factorises the graph once per
 point). ASCII grids are written by a parallel C++ formatter (shortest round-trip values).
+
+### Circuitscape (network mode)
+
+```python
+from landschaft.circuit import circuitscape_network_pairwise, circuitscape_network_advanced
+
+# edge list: node, node, resistance (graph_is_resistance=False: conductance)
+r = circuitscape_network_pairwise("graph.txt", "focal_nodes.txt", current_maps=True)
+r.resistances                        # ids in the first row and column, -1: not connected
+r.maps[("voltages", 1, 5)]           # node, voltage of one pair (voltage_maps=True)
+r.cum_node_currents, r.cum_branch_currents
+a = circuitscape_network_advanced("graph.txt", "sources.txt", "grounds.txt")
+a.voltages, a.node_currents, a.branch_currents
+circuitscape_ini("network.ini")      # data_type = network, pairwise or advanced
+```
+
+Circuitscape 6.1's `data_type = network` with its conventions: nodes numbered from 1, or
+from 0 (then every number, focal nodes, sources, grounds and pair files included, moves
+up by 1, as Circuitscape.jl does; focal nodes from 0 move on their own too); duplicate
+edges add their conductances (`sparse` in input order), then `A + Aᵀ` drops the edges
+whose conductances add up to 0 and self loops are left out of the Laplacian; components
+come from the remaining edges. Pairwise solves every pair of focal nodes per component
+(no resistance shortcut: Circuitscape keeps it for rasters), resistances with the -1 / 0
+rules of the raster mode, include / exclude pair files; with any map option every pair's
+node currents (`max(inflow, outflow)`, Circuitscape's 1e-8 thresholds) and branch currents
+(every edge, zeroed below 1e-8 of the largest, written above 1e-6) and, with
+`voltage_maps`, its node voltages; node and branch currents summed over the pairs (the
+first input line of an edge takes the sum). Advanced mode: sources and grounds by node
+(`sources[node] = value`: the last line of a node wins), ground resistances or
+conductances, direct grounds, the four conflict policies; node and branch currents of
+the whole graph; `use_unit_currents` and `use_direct_grounds` do not apply to networks.
+Files are written with Circuitscape's names (`_resistances.out`, `_voltages_<a>_<b>.txt`,
+`_node_currents_cum.txt`, `_branch_currents.txt`...).
+
+Graphs have no geometry, so the solver orders them by a nested dissection of their own:
+breadth-first levels from a pseudo-peripheral node, the smallest level that leaves a
+fifth of the nodes on either side as separator (trimmed of the nodes that touch only one
+side), components apart; the sets of one depth are split in parallel and the tree is the
+same with any number of threads. The fronts are those of the raster solver.
+
+Verification: `python tools/make_reference_circuitscape.py network` runs Circuitscape's
+network test cases (`sgNetworkVerify1-3`, `mgNetworkVerify1-3`) and six synthetic ones
+(numbering from 0 and 1, duplicate edges and self loops, edges that cancel, focal nodes
+repeated, isolated or out of the graph, include / exclude pairs, finite and direct
+grounds, `rmvgnd` / `rmvall`, a 4000-node graph) with CHOLMOD: every output file, the same
+set of files, to 1.1e-14. On a 1000×1000 grid-like network (1 M nodes, 3 M edges, 20
+focal nodes, resistances only; 20 threads) landschaft takes 7.2 s, Circuitscape 27.7 s
+with CHOLMOD and 182 s with its default cg+amg (the same resistances to 3e-15 against
+CHOLMOD).

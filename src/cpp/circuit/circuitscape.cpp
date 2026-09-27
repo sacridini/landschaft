@@ -79,19 +79,26 @@ void graph_node_currents(const RasterGraph& g, const std::int32_t* members, std:
 struct ComponentSystem {
     CellSystem sys;
     std::vector<std::int32_t> nodes;
-    std::unordered_map<std::int32_t, std::int32_t> local;
 };
+
+// Node -> unknown of the component being assembled, -1 elsewhere: one table
+// per thread, reset after use.
+std::vector<std::int32_t>& local_index(std::int32_t n_nodes) {
+    static thread_local std::vector<std::int32_t> table;
+    if (table.size() < static_cast<std::size_t>(n_nodes)) table.resize(static_cast<std::size_t>(n_nodes), -1);
+    return table;
+}
 
 template <class Drop>
 bool factor_component(const RasterGraph& g, const std::int32_t* members, std::int64_t count, const double* finite,
                       Drop drop, ComponentSystem& cs) {
     cs.nodes.clear();
-    cs.local.clear();
+    std::vector<std::int32_t>& local = local_index(g.n_nodes);
     i64 x0 = g.nx, x1 = -1, y0 = g.ny, y1 = -1;
     for (std::int64_t p = 0; p < count; ++p) {
         const std::int32_t v = members[p];
         if (drop(v)) continue;
-        cs.local.emplace(v, static_cast<std::int32_t>(cs.nodes.size()));
+        local[v] = static_cast<std::int32_t>(cs.nodes.size());
         cs.nodes.push_back(v);
         const i64 c = g.node_cell[v];
         if (c >= 0) {
@@ -102,6 +109,13 @@ bool factor_component(const RasterGraph& g, const std::int32_t* members, std::in
         }
     }
     if (cs.nodes.empty()) return true;
+    struct Reset {
+        std::vector<std::int32_t>& t;
+        const std::vector<std::int32_t>& nodes;
+        ~Reset() {
+            for (std::int32_t v : nodes) t[v] = -1;
+        }
+    } reset{local, cs.nodes};
     const i64 bx = x1 >= x0 ? x1 - x0 + 1 : 1, by = y1 >= y0 ? y1 - y0 + 1 : 1;
     std::vector<i64> cell(cs.nodes.size());
     std::vector<std::int64_t> ptr(cs.nodes.size() + 1, 0);
@@ -112,9 +126,9 @@ bool factor_component(const RasterGraph& g, const std::int32_t* members, std::in
         const i64 c = g.node_cell[v];
         cell[i] = c >= 0 ? (c / g.nx - y0) * bx + (c % g.nx - x0) : -1;
         for (std::int64_t e = g.ptr[v]; e < g.ptr[v + 1]; ++e) {
-            const auto it = cs.local.find(g.adj[static_cast<std::size_t>(e)]);
-            if (it == cs.local.end()) continue;
-            adj.push_back(it->second);
+            const std::int32_t u = local[g.adj[static_cast<std::size_t>(e)]];
+            if (u < 0) continue;
+            adj.push_back(u);
             off.push_back(-g.w[static_cast<std::size_t>(e)]);
         }
         ptr[i + 1] = static_cast<std::int64_t>(adj.size());
@@ -248,6 +262,123 @@ RasterGraph raster_graph(const double* gmap, const std::int64_t* polymap, i64 nx
     return g;
 }
 
+RasterGraph network_graph(const std::vector<std::int32_t>& a, const std::vector<std::int32_t>& b,
+                          const std::vector<double>& w, std::int32_t m) {
+    RasterGraph g;
+    g.n_nodes = m;
+    g.node_cell.assign(static_cast<std::size_t>(m), -1);
+    struct Entry {
+        std::int32_t r, c;
+        double w;
+    };
+    // sparse(a, b, w): duplicates summed in input order (column-major order).
+    std::vector<Entry> in(a.size());
+    for (std::size_t k = 0; k < a.size(); ++k) {
+        if (a[k] < 0 || b[k] < 0 || a[k] >= m || b[k] >= m) throw std::invalid_argument("node index out of range");
+        in[k] = {a[k], b[k], w[k]};
+    }
+    auto by_column = [m](std::vector<Entry>& v) {
+        // stable: counting sort by column, then insertion sort by row within each column
+        std::vector<std::int64_t> start(static_cast<std::size_t>(m) + 1, 0);
+        for (const Entry& e : v) ++start[static_cast<std::size_t>(e.c) + 1];
+        for (std::int32_t c = 0; c < m; ++c) start[c + 1] += start[c];
+        std::vector<Entry> out(v.size());
+        std::vector<std::int64_t> fill(start.begin(), start.end() - 1);
+        for (const Entry& e : v) out[static_cast<std::size_t>(fill[e.c]++)] = e;
+        for (std::int32_t c = 0; c < m; ++c) {
+            Entry* b = out.data() + start[c];
+            Entry* e = out.data() + start[c + 1];
+            for (Entry* x = b + 1; x < e; ++x) {
+                Entry k = *x;
+                Entry* y = x;
+                for (; y > b && (y - 1)->r > k.r; --y) *y = *(y - 1);
+                *y = k;
+            }
+        }
+        v.swap(out);
+    };
+    by_column(in);
+    std::vector<Entry> A;
+    for (std::size_t k = 0; k < in.size();) {
+        Entry e = in[k];
+        std::size_t t = k + 1;
+        for (; t < in.size() && in[t].r == e.r && in[t].c == e.c; ++t) e.w += in[t].w;
+        A.push_back(e);
+        k = t;
+    }
+    // A + A': both orientations, (r, c) = A[r, c] + A[c, r]; zeros dropped; self loops left out.
+    std::vector<Entry> both;
+    both.reserve(2 * A.size());
+    for (const Entry& e : A) {
+        if (e.r == e.c) continue;
+        both.push_back({e.r, e.c, e.w});
+        both.push_back({e.c, e.r, e.w});
+    }
+    by_column(both);
+    g.ptr.assign(static_cast<std::size_t>(m) + 1, 0);
+    for (std::size_t k = 0; k < both.size();) {
+        // at most two entries per position: A[r, c] and A[c, r]
+        double v = both[k].w;
+        std::size_t t = k + 1;
+        if (t < both.size() && both[t].r == both[k].r && both[t].c == both[k].c) v = both[k].w + both[t++].w;
+        if (v != 0) {
+            // column c holds row r: node c's neighbour r
+            g.adj.push_back(both[k].r);
+            g.w.push_back(v);
+            ++g.ptr[static_cast<std::size_t>(both[k].c) + 1];
+        }
+        k = t;
+    }
+    for (std::int32_t v = 0; v < m; ++v) g.ptr[v + 1] += g.ptr[v];
+    g.degree.assign(static_cast<std::size_t>(m), 0.0);
+    for (std::int32_t v = 0; v < m; ++v) {
+        double d = 0.0;
+        for (std::int64_t k = g.ptr[v]; k < g.ptr[v + 1]; ++k) d += g.w[static_cast<std::size_t>(k)];
+        g.degree[v] = d;
+    }
+    g.comp.assign(static_cast<std::size_t>(m), -1);
+    std::vector<std::int32_t> stack;
+    for (std::int32_t u = 0; u < m; ++u) {
+        if (g.comp[u] >= 0) continue;
+        g.comp[u] = g.n_comp;
+        stack.push_back(u);
+        while (!stack.empty()) {
+            const std::int32_t v = stack.back();
+            stack.pop_back();
+            for (std::int64_t k = g.ptr[v]; k < g.ptr[v + 1]; ++k) {
+                const std::int32_t t = g.adj[static_cast<std::size_t>(k)];
+                if (g.comp[t] >= 0) continue;
+                g.comp[t] = g.n_comp;
+                stack.push_back(t);
+            }
+        }
+        ++g.n_comp;
+    }
+    return g;
+}
+
+void network_currents(const RasterGraph& g, const std::int32_t* members, std::int64_t count, const double* v,
+                      const double* finite, double* node_cur, std::vector<std::pair<std::int64_t, double>>& branch) {
+    graph_node_currents(g, members, count, v, finite, node_cur);
+    branch.clear();
+    double maxcur = -std::numeric_limits<double>::infinity();
+    for (std::int64_t p = 0; p < count; ++p) {
+        const std::int32_t c = members[p];
+        for (std::int64_t e = g.ptr[c]; e < g.ptr[c + 1]; ++e) {
+            const std::int32_t r = g.adj[static_cast<std::size_t>(e)];
+            if (r >= c) continue;
+            const double b = std::abs(g.w[static_cast<std::size_t>(e)]) * (v[r] - v[c]);
+            maxcur = std::max(maxcur, b);
+            branch.emplace_back(e, b);
+        }
+    }
+    for (auto& eb : branch) {
+        double& b = eb.second;
+        if (std::abs(b / maxcur) < 1e-8) b = 0.0;
+        b = std::abs(b);
+    }
+}
+
 std::vector<double> node_sums(const RasterGraph& g, const double* cells) {
     std::vector<double> s(static_cast<std::size_t>(g.n_nodes), 0.0);
     for (i64 x = 0; x < g.nx; ++x)
@@ -350,14 +481,21 @@ PairwiseResult raster_pairwise(const RasterGraph& g, const double* gmap, const s
     auto R = [&](std::int32_t a, std::int32_t b) -> double& { return out.resistances[static_cast<std::size_t>(a) * np + b]; };
     bool any_excluded = false;
     for (std::uint8_t e : excluded) any_excluded = any_excluded || e;
-    const bool shortcut = !o.maps() && !any_excluded;
+    const bool shortcut = !o.network && !o.maps() && !any_excluded;
     std::vector<double> voltmatrix, shortcut_res;
     if (shortcut) {
         voltmatrix.assign(static_cast<std::size_t>(np) * np, 0.0);
         shortcut_res.assign(static_cast<std::size_t>(np) * np, -1.0);
     }
-    if (o.cum) out.cum.assign(static_cast<std::size_t>(ncell), 0.0);
-    if (o.max) out.max.assign(static_cast<std::size_t>(ncell), -9999.0);
+    if (o.network) {
+        if (o.maps()) {
+            out.cum.assign(static_cast<std::size_t>(g.n_nodes), 0.0);
+            out.cum_branch.assign(g.adj.size(), 0.0);
+        }
+    } else {
+        if (o.cum) out.cum.assign(static_cast<std::size_t>(ncell), 0.0);
+        if (o.max) out.max.assign(static_cast<std::size_t>(ncell), -9999.0);
+    }
     const int threads =
 #if defined(_OPENMP)
         max_threads > 0 ? max_threads : omp_get_max_threads();
@@ -420,19 +558,30 @@ PairwiseResult raster_pairwise(const RasterGraph& g, const double* gmap, const s
         const std::size_t m = cs.nodes.size();
         const std::vector<std::int32_t>& perm = cs.sys.perm();
         std::vector<std::int32_t> elim(static_cast<std::size_t>(p1 - p0), -1);  // member -> unknown in elimination order
-        std::unordered_map<std::int32_t, std::int32_t> member_of;
-        for (std::int64_t p = p0; p < p1; ++p) member_of.emplace(members[p], static_cast<std::int32_t>(p - p0));
-        for (std::size_t e = 0; e < m; ++e) elim[static_cast<std::size_t>(member_of[cs.nodes[perm[e]]])] = static_cast<std::int32_t>(e);
+        // members of a component are ascending: a node's member index by binary search
+        const std::int32_t* mb = members.data() + p0;
+        const std::int32_t* me = members.data() + p1;
+        auto member_index = [mb, me](std::int32_t v) {
+            return static_cast<std::int32_t>(std::lower_bound(mb, me, v) - mb);
+        };
+        for (std::size_t e = 0; e < m; ++e) elim[static_cast<std::size_t>(member_index(cs.nodes[perm[e]]))] = static_cast<std::int32_t>(e);
 
         // Batches of 8 right-hand sides per thread; results handled in job order.
+        // With maps every job keeps the voltages of the whole component (batches
+        // capped at about 256 MB of them), else those of its focal nodes only.
         constexpr std::size_t kCols = 8;
-        const std::size_t per_batch = kCols * static_cast<std::size_t>(threads) * 4;
-        std::vector<SolveScratch> scratch(static_cast<std::size_t>(threads));
         const std::int64_t count = p1 - p0;
+        const bool full = o.maps();
+        std::unordered_map<std::int32_t, std::int32_t> focal_slot;  // focal node -> position in csub
+        for (std::size_t k2 = 0; k2 < csub.size(); ++k2) focal_slot.emplace(csub[k2], static_cast<std::int32_t>(k2));
+        const std::size_t stride = full ? static_cast<std::size_t>(count) : csub.size();
+        std::size_t per_batch = kCols * static_cast<std::size_t>(threads) * 4;
+        if (full) per_batch = std::max(kCols, std::min(per_batch, (std::size_t(1) << 25) / std::max<std::size_t>(stride, 1)));
+        std::vector<SolveScratch> scratch(static_cast<std::size_t>(threads));
         for (std::size_t b0 = 0; b0 < jobs.size(); b0 += per_batch) {
             const std::size_t nb = std::min(per_batch, jobs.size() - b0);
-            // Voltages by member (relative to the source), one column per job.
-            std::vector<double> volt(static_cast<std::size_t>(count) * nb, 0.0);
+            // Voltages (relative to the source) by member, or by focal node, one column per job.
+            std::vector<double> volt(stride * nb, 0.0);
             const long long ngroups = static_cast<long long>((nb + kCols - 1) / kCols);
 #if defined(_OPENMP)
 #pragma omp parallel for schedule(dynamic, 1) num_threads(threads)
@@ -450,36 +599,52 @@ PairwiseResult raster_pairwise(const RasterGraph& g, const double* gmap, const s
                 for (std::size_t j = j0; j < j1; ++j) {
                     const Job& job = jobs[b0 + j];
                     double* col = rhs.data() + (j - j0) * m;
-                    const std::int32_t ei = elim[static_cast<std::size_t>(member_of.at(job.src))];
-                    const std::int32_t ej = elim[static_cast<std::size_t>(member_of.at(job.dst))];
+                    const std::int32_t ei = elim[static_cast<std::size_t>(member_index(job.src))];
+                    const std::int32_t ej = elim[static_cast<std::size_t>(member_index(job.dst))];
                     if (ei >= 0) col[ei] = -1.0;
                     if (ej >= 0) col[ej] = 1.0;
                 }
                 cs.sys.solve_many(rhs.data(), kk, scratch[static_cast<std::size_t>(tid)]);
                 for (std::size_t j = j0; j < j1; ++j) {
                     const double* col = rhs.data() + (j - j0) * m;
-                    double* vcol = volt.data() + j * static_cast<std::size_t>(count);
-                    for (std::int64_t q = 0; q < count; ++q) {
-                        const std::int32_t e = elim[static_cast<std::size_t>(q)];
-                        vcol[q] = e >= 0 ? col[e] : 0.0;
+                    double* vcol = volt.data() + j * stride;
+                    if (full) {
+                        for (std::int64_t q = 0; q < count; ++q) {
+                            const std::int32_t e = elim[static_cast<std::size_t>(q)];
+                            vcol[q] = e >= 0 ? col[e] : 0.0;
+                        }
+                        const double vs = vcol[member_index(jobs[b0 + j].src)];
+                        for (std::int64_t q = 0; q < count; ++q) vcol[q] -= vs;
+                    } else {
+                        for (std::size_t k2 = 0; k2 < csub.size(); ++k2) {
+                            const std::int32_t e = elim[static_cast<std::size_t>(member_index(csub[k2]))];
+                            vcol[k2] = e >= 0 ? col[e] : 0.0;
+                        }
+                        const double vs = vcol[focal_slot.at(jobs[b0 + j].src)];
+                        for (std::size_t k2 = 0; k2 < csub.size(); ++k2) vcol[k2] -= vs;
                     }
-                    const double vs = vcol[member_of.at(jobs[b0 + j].src)];
-                    for (std::int64_t q = 0; q < count; ++q) vcol[q] -= vs;
                 }
             }
             // handle_pair, in job order.
             std::vector<double> vnode, cnode;
+            std::vector<std::pair<std::int64_t, double>> branch;
             if (o.maps()) {
                 vnode.assign(static_cast<std::size_t>(g.n_nodes), 0.0);
                 cnode.assign(static_cast<std::size_t>(g.n_nodes), 0.0);
             }
             for (std::size_t j = 0; j < nb; ++j) {
                 const Job& job = jobs[b0 + j];
-                const double* vcol = volt.data() + j * static_cast<std::size_t>(count);
-                const double resistance = vcol[member_of.at(job.dst)] - vcol[member_of.at(job.src)];
+                const double* vcol = volt.data() + j * stride;
+                auto volt_at = [&](std::int32_t node) {
+                    return full ? vcol[member_index(node)] : vcol[focal_slot.at(node)];
+                };
+                const double resistance = volt_at(job.dst) - volt_at(job.src);
                 if (o.maps()) {
                     for (std::int64_t q = 0; q < count; ++q) vnode[members[p0 + q]] = vcol[q];
-                    graph_node_currents(g, members.data() + p0, count, vnode.data(), nullptr, cnode.data());
+                    if (o.network)
+                        network_currents(g, members.data() + p0, count, vnode.data(), nullptr, cnode.data(), branch);
+                    else
+                        graph_node_currents(g, members.data() + p0, count, vnode.data(), nullptr, cnode.data());
                 }
                 for (std::int32_t ci : positions[job.src])
                     for (std::int32_t cj : positions[job.dst]) {
@@ -490,7 +655,7 @@ PairwiseResult raster_pairwise(const RasterGraph& g, const double* gmap, const s
                             for (std::int32_t i = 1; i < np; ++i) {
                                 const std::int32_t v = points[i];
                                 if (v < 0 || g.comp[v] != k) continue;
-                                voltmatrix[static_cast<std::size_t>(i) * np + cj] = 1 - (vcol[member_of.at(v)] / resistance);
+                                voltmatrix[static_cast<std::size_t>(i) * np + cj] = 1 - (volt_at(v) / resistance);
                             }
                             continue;
                         }
@@ -498,6 +663,21 @@ PairwiseResult raster_pairwise(const RasterGraph& g, const double* gmap, const s
                         PairMaps pm;
                         pm.ci = ci;
                         pm.cj = cj;
+                        if (o.network) {
+                            // postprocess: the voltages when asked, the currents with any map option
+                            pm.nodes.assign(members.begin() + p0, members.begin() + p1);
+                            if (o.volt_maps) pm.voltage.assign(vcol, vcol + count);
+                            pm.current.resize(static_cast<std::size_t>(count));
+                            for (std::int64_t q = 0; q < count; ++q) {
+                                const std::int32_t v = members[static_cast<std::size_t>(p0 + q)];
+                                pm.current[static_cast<std::size_t>(q)] = cnode[v];
+                                out.cum[v] += cnode[v];
+                            }
+                            for (const auto& eb : branch) out.cum_branch[static_cast<std::size_t>(eb.first)] += eb.second;
+                            pm.branch = branch;
+                            emit(std::move(pm));
+                            continue;
+                        }
                         if (o.volt_maps) {
                             pm.voltage.assign(static_cast<std::size_t>(ncell), 0.0);
                             for (i64 c = 0; c < ncell; ++c) {
@@ -555,9 +735,9 @@ PairwiseResult raster_pairwise(const RasterGraph& g, const double* gmap, const s
     }
     if (shortcut) out.resistances = std::move(shortcut_res);
     for (std::int32_t i = 0; i < np; ++i) out.resistances[static_cast<std::size_t>(i) * np + i] = 0.0;
-    if (o.cum)
+    if (o.cum && !o.network)
         for (double& c : out.cum) c = c < -9999 ? -9999 : c;
-    if (o.max)
+    if (o.max && !o.network)
         for (double& c : out.max) c = c < -9999 ? -9999 : c;
     return out;
 }

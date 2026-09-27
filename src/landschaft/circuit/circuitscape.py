@@ -221,8 +221,9 @@ class IncludedPairs:
                 if m[i, j] == target and m[j, i] == target}
 
 
-def read_included_pairs(path) -> IncludedPairs:
-    """Circuitscape's read_included_pairs: a ``min``/``max`` matrix or a ``mode`` list of pairs."""
+def read_included_pairs(path, *, starts_from_zero: bool = False) -> IncludedPairs:
+    """Circuitscape's read_included_pairs: a ``min``/``max`` matrix or a ``mode`` list of pairs.
+    ``starts_from_zero``: the ids move with a network numbered from 0 (shifted by 1)."""
     kind = file_type(path)
     with _open(path) as f:
         lines = [ln for ln in f.read().splitlines()]
@@ -231,13 +232,15 @@ def read_included_pairs(path) -> IncludedPairs:
         maxval = float(lines[1].split()[1])
         rows = [[float(t) for t in ln.split()] for ln in lines[2:] if ln.split()]
         a = np.array(rows)
-        ids = a[0, 1:].astype(np.int64)
+        ids = a[0, 1:].astype(np.int64) + (1 if starts_from_zero else 0)
         m = a[1:, 1:]
         m = np.where(m > maxval, 0, m)
         return IncludedPairs("include", ids, (m >= minval).astype(np.int64))
     if kind == "pairs":
         mode = lines[0].split()[1]
         pairs = np.array([[float(t) for t in ln.split()] for ln in lines[1:] if ln.split()]).reshape(-1, 2)
+        if starts_from_zero:
+            pairs = pairs + 1
         ids = np.unique(pairs).astype(np.int64)
         ids = ids[ids != 0]
         pos = {int(v): k for k, v in enumerate(ids)}
@@ -786,8 +789,12 @@ def parse_config(path) -> dict[str, str]:
     return parse_ini(path)
 
 
-def circuitscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0) -> CircuitscapeResult:
-    """Run a Circuitscape INI file (raster data), as ``Circuitscape.compute(path)`` does.
+def circuitscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0):
+    """Run a Circuitscape INI file, as ``Circuitscape.compute(path)`` does.
+
+    Raster data give a :class:`CircuitscapeResult`; networks (``data_type =
+    network``, pairwise or advanced) a :class:`~landschaft.circuit.NetworkResult`
+    (see :func:`circuitscape_network_pairwise`).
 
     Paths are read from the working directory, or else next to the INI file.
     With ``write_outputs`` the maps go next to ``output_file`` as Circuitscape
@@ -799,8 +806,12 @@ def circuitscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0) ->
     path = Path(path)
     base = path.resolve().parent
     cfg = {**DEFAULTS, **parse_config(path)}
+    if cfg["data_type"] in ("network", "Network"):
+        from .network import network_ini
+
+        return network_ini(cfg, base, write_outputs=write_outputs, n_threads=n_threads)
     if cfg["data_type"] not in ("raster", "Raster"):
-        raise NotImplementedError("only raster data are supported (data_type = raster)")
+        raise ValueError(f'data_type = "{cfg["data_type"]}": expected raster or network')
     scenario = SCENARIOS.get(cfg["scenario"])
     if scenario is None:
         raise ValueError(f'scenario = "{cfg["scenario"]}" is not one of {sorted(set(SCENARIOS.values()))}')
