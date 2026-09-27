@@ -26,14 +26,34 @@ INDICATORS = ["ECA", "PC", "LA", "Protected_surface", "Prot", "ProtConn", "ProtU
 
 @dataclass
 class ProtConnNodes:
-    """The nodes of a ProtConn analysis of one region.
+    """The nodes of a ProtConn analysis of one region (:func:`protconn_nodes`).
 
-    ``nodes``: GeoDataFrame with ``type`` ("Non-Transboundary", "Transboundary"
-    or "Region") and ``attribute`` (the area in the region; 0 for the others).
-    ``pieces``: the areas of the protected areas' pieces in the region before
-    they are dissolved (ProtConn[Within]). ``clipped``: every protected area
-    cut to the region (the nodes of the importance of each area). ``la``: the
-    area of the region.
+    Attributes
+    ----------
+    nodes : geopandas.GeoDataFrame
+        ``type`` ("Non-Transboundary", "Transboundary" or "Region") and
+        ``attribute`` (the area in the region; 0 for the others).
+    pieces : numpy.ndarray
+        Areas of the protected areas' pieces in the region before they are
+        dissolved (ProtConn[Within]).
+    clipped : geopandas.GeoDataFrame
+        Every protected area cut to the region (the nodes of the importance of
+        each area).
+    la : float
+        The area of the region.
+
+    Examples
+    --------
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> reserves = gpd.GeoDataFrame({"name": ["a", "b", "c", "d"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(0, 0, 2000, 2000), shapely.box(3000, 0, 4500, 1500),
+    ...     shapely.box(0, 5000, 1000, 6000), shapely.box(9000, 9000, 11000, 11000)])
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> nodes = ls.conn.protconn_nodes(reserves, region)
+    >>> len(nodes.nodes), len(nodes.pieces)
+    (4, 4)
     """
 
     nodes: object
@@ -71,6 +91,40 @@ def protconn_nodes(protected_areas, region, *, transboundary: float | None = Non
     Makurhini simplifies the polygons of the zones with mapshaper (5 % of the
     vertices) before buffering them; landschaft buffers the exact polygons
     (with GEOS' 30 segments per quarter circle, as sf).
+
+    Parameters
+    ----------
+    protected_areas
+        Polygons of the protected areas (GeoDataFrame, projected in metres).
+    region
+        The region (one or more polygons, merged).
+    transboundary, transboundary_type, bound, area_unit
+        As in :func:`protconn`.
+    preselect
+        Only use the protected areas near the region.
+
+    Returns
+    -------
+    ProtConnNodes
+
+    See Also
+    --------
+    protconn_indicators : ProtConn from these nodes and their distances.
+
+    Examples
+    --------
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> reserves = gpd.GeoDataFrame({"name": ["a", "b", "c", "d"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(0, 0, 2000, 2000), shapely.box(3000, 0, 4500, 1500),
+    ...     shapely.box(0, 5000, 1000, 6000), shapely.box(9000, 9000, 11000, 11000)])
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> nodes = ls.conn.protconn_nodes(reserves, region, area_unit="ha")
+    >>> nodes.nodes["type"].tolist()
+    ['Non-Transboundary', 'Non-Transboundary', 'Non-Transboundary', 'Non-Transboundary']
+    >>> float(nodes.la)
+    12100.0
     """
     import geopandas as gpd
     import shapely
@@ -190,6 +244,33 @@ def protconn_indicators(nodes, distances, *, distance: float, la: float, pieces=
         uses 1; 0 counts them as stepping stones only (Saura et al. 2017).
     pij_min
         Links with a lower probability are cut (None: none).
+
+    Returns
+    -------
+    dict
+        The indicators of :func:`protconn` (``ECA``, ``PC``, ``Prot``,
+        ``ProtConn``, its fractions...) for this distance.
+
+    Examples
+    --------
+    Distances between the nodes of :func:`protconn_nodes`, then the indicators:
+
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> reserves = gpd.GeoDataFrame({"name": ["a", "b", "c", "d"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(0, 0, 2000, 2000), shapely.box(3000, 0, 4500, 1500),
+    ...     shapely.box(0, 5000, 1000, 6000), shapely.box(9000, 9000, 11000, 11000)])
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> import numpy as np
+    >>> nodes = ls.conn.protconn_nodes(reserves, region)
+    >>> geometry = nodes.nodes.geometry
+    >>> distances = np.array([[a.distance(b) if i != j else np.nan for j, b in enumerate(geometry)]
+    ...                       for i, a in enumerate(geometry)])
+    >>> result = ls.conn.protconn_indicators(nodes.nodes, distances, distance=2000, la=nodes.la,
+    ...                                      pieces=nodes.pieces)
+    >>> round(float(result["ProtConn"]), 2)
+    5.25
     """
     types = np.asarray(nodes["type"])
     a = np.asarray(nodes["attribute"], dtype=np.float64)
@@ -327,6 +408,13 @@ def protconn(protected_areas, region, *, distance, probability: float | None = 0
     transboundary_weight
         a_i a_j of the pairs with transboundary nodes (Makurhini: 1; 0 for
         Saura's definition, stepping stones only).
+    resistance, cost_directions, cost_function
+        Resistance raster of ``distance_type="least-cost"``, its neighbours (8
+        or 4) and conductance rule, as in :func:`distance_table`.
+    preselect
+        Only use the protected areas near the region (``False``: all of them).
+    pij_min
+        Links with a lower probability are cut (``None``: none).
 
     Returns
     -------
@@ -336,6 +424,34 @@ def protconn(protected_areas, region, *, distance, probability: float | None = 0
         ``RelConn``, ``ProtUnconn_Design``, ``ProtConn_Bound``, ``Unprotected``
         and the fractions ``ProtConn_Prot``, ``_Trans``, ``_Unprot``,
         ``_Within``, ``_Contig`` and their ``_land`` shares (in % of the region).
+
+    See Also
+    --------
+    protconn_regions : one row per region.
+    protconn_raster : protected areas given as a raster.
+    connectivity_grid : ProtConn of every cell of a grid.
+
+    Examples
+    --------
+    Four protected areas in a region of 11 x 11 km:
+
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> reserves = gpd.GeoDataFrame({"name": ["a", "b", "c", "d"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(0, 0, 2000, 2000), shapely.box(3000, 0, 4500, 1500),
+    ...     shapely.box(0, 5000, 1000, 6000), shapely.box(9000, 9000, 11000, 11000)])
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> table = ls.conn.protconn(reserves, region, distance=2000, probability=0.5)
+    >>> table[["distance", "Prot", "ProtConn"]].round(2)
+       distance  Prot  ProtConn
+    0      2000  6.82      5.25
+
+    With ``delta``, the loss of ProtConn when each area is removed:
+
+    >>> table, areas = ls.conn.protconn(reserves, region, distance=2000, delta=True)
+    >>> "dProtConn" in areas.columns
+    True
     """
     prep = protconn_nodes(protected_areas, region, transboundary=transboundary,
                           transboundary_type=transboundary_type, bound=bound, area_unit=area_unit,
@@ -398,10 +514,44 @@ def _delta(prep: ProtConnNodes, distance, probability, distance_type, resistance
 
 
 def protconn_regions(protected_areas, regions, *, id: str | None = None, **kwargs) -> pd.DataFrame:
-    """ProtConn of several regions (Makurhini's ``MK_ProtConnMult``): one row per region and distance.
+    """ProtConn of several regions, one row per region and distance (Makurhini's ``MK_ProtConnMult``).
 
-    ``regions``: GeoDataFrame, one region per row (``id`` names its column
-    of region ids, default 1..n). Other arguments as :func:`protconn`.
+    Each region (a row of ``regions``) is analysed as :func:`protconn` does, with
+    the same protected areas.
+
+    Parameters
+    ----------
+    protected_areas
+        Polygons of the protected areas (GeoDataFrame, projected in metres).
+    regions
+        GeoDataFrame with one region per row.
+    id
+        Column of the region ids (default ``1 .. n``).
+    **kwargs
+        Options of :func:`protconn` (``distance`` is required).
+
+    Returns
+    -------
+    pandas.DataFrame
+        ``region`` and the columns of :func:`protconn`, one row per region and
+        distance.
+
+    Examples
+    --------
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> reserves = gpd.GeoDataFrame({"name": ["a", "b", "c", "d"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(0, 0, 2000, 2000), shapely.box(3000, 0, 4500, 1500),
+    ...     shapely.box(0, 5000, 1000, 6000), shapely.box(9000, 9000, 11000, 11000)])
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> regions = gpd.GeoDataFrame({"zone": ["west", "east"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(-1000, -1000, 4000, 10000), shapely.box(4000, -1000, 12000, 12000)])
+    >>> table = ls.conn.protconn_regions(reserves, regions, id="zone", distance=2000)
+    >>> table[["region", "distance", "Prot", "ProtConn"]].round(2)
+      region  distance   Prot  ProtConn
+    0   west      2000  11.82     10.17
+    1   east      2000   4.57      3.95
     """
     ids = np.arange(1, len(regions) + 1) if id is None else regions[id].to_numpy()
     frames = []
@@ -451,10 +601,18 @@ def protconn_raster(protected_areas, region, *, distance, probability: float | N
         Polygons of the region (rasterized on the protected areas' grid,
         cells whose centre is inside; with ``bound`` each part is a region
         node), or a raster of it (its 4-connected patches).
-    distance, probability, transboundary, transboundary_type, bound,
-    area_unit, pij_min
+    distance, probability, transboundary, transboundary_type, bound, area_unit, pij_min
         As in :func:`protconn`.
+    nodata, band
+        Reading options of the rasters.
 
+    Returns
+    -------
+    pandas.DataFrame
+        The columns of :func:`protconn`, one row per distance.
+
+    Notes
+    -----
     Every protected-area id inside the region is a node (not dissolved), its
     attribute the area of its cells there; transboundary nodes are the ids
     outside the region within ``transboundary`` of the region's protected
@@ -465,6 +623,22 @@ def protconn_raster(protected_areas, region, *, distance, probability: float | N
     ones included). Makurhini pairs the attributes (by id) with centroids in
     the order ids first appear in the raster; landschaft keeps each id with
     its own centroid (the same when ids appear in increasing order).
+
+    Examples
+    --------
+    The broad-leaved forest of the example map as protected areas (each patch
+    with its own id):
+
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> labels = ls.Landscape(landcover.where(landcover == 23)).labels()
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(*landcover.rio.bounds())], crs=landcover.rio.crs)
+    >>> table = ls.conn.protconn_raster(labels, region, distance=1000, area_unit="ha")
+    >>> table[["distance", "Prot", "ProtConn"]].round(2)
+       distance  Prot  ProtConn
+    0      1000  7.71      2.76
     """
     import geopandas as gpd
     import shapely

@@ -62,49 +62,76 @@ def _as_list(value) -> list:
 class HabitatGraph:
     """Habitat patches (nodes with an attribute) and the connections between them.
 
-    The indices are those of Conefor Sensinode (Saura & Torné 2009): NC, NL, H,
-    CCP, LCP, IIC, F, AWF and PC, with the importance of every node (dI, the
-    loss of each index without the node) and the intra, flux and connector
-    fractions of dIIC and dPC, as Makurhini's ``MK_dPCIIC`` reports them.
+        The indices are those of Conefor Sensinode (Saura & Torné 2009): NC, NL, H,
+        CCP, LCP, IIC, F, AWF and PC, with the importance of every node (dI, the
+        loss of each index without the node) and the intra, flux and connector
+        fractions of dIIC and dPC, as Makurhini's ``MK_dPCIIC`` reports them.
 
-    Parameters
-    ----------
-    attributes
-        Attribute of every node (usually its area).
-    connections
-        Either a square ``n × n`` matrix (the upper triangle is read; NaN = no
-        connection; a square array is always read as a matrix) or a table of pairs: a DataFrame or ``(m, 3)`` array with
-        the two node ids and the value. Pairs missing from a table are not
-        connected.
-    ids
-        Node ids (default ``1 .. n``); pair tables refer to them.
-    kind
-        What the values are: ``"distance"`` (the default), ``"probability"``
-        of direct dispersal, or ``"link"`` (1 = linked, 0 = not), as
-        Conefor's connection types.
-    landscape_area
-        LA, the attribute of a landscape fully covered by habitat: IIC, PC and
-        LCP are their numerators divided by LA². Without it Makurhini reports
-        only the numerators (the indices are NaN here), Conefor uses LA = 1.
-    convention
-        ``"makurhini"`` (default) follows ``MK_dPCIIC``: pairs closer than the
-        distance are linked (``d < t``), probabilities
-        ``exp(d log(P) / t)`` below ``pij_min`` (default 0.01) are dropped and
-        unconnected pairs count in IIC as 16443701 links apart.
-        ``"conefor"`` follows Conefor Sensinode: links up to the distance
-        (``d <= t``), no probability cut by default (``pij_min`` is its
-        minProb heuristic: probabilities up to it are dropped and paths no
-        more probable are not extended) and unconnected pairs add nothing.
-    restoration
-        1 for the existing nodes and 0 for nodes that could be added (for
-        restoration), as Makurhini's ``restoration`` column; then
-        :meth:`node_importance` also rates the nodes to add (``dPCres``,
-        ``dIICres``: the gain in % of the graph with them, Makurhini; with
-        ``convention="conefor"``, Conefor's "adding nodes" mode: the other
-        indices are those of the existing nodes and every index gets its
-        ``d...add`` gain in % of the existing graph).
-    n_threads
-        OpenMP threads (default: all).
+        Parameters
+        ----------
+        attributes
+            Attribute of every node (usually its area).
+        connections
+            Either a square ``n × n`` matrix (the upper triangle is read; NaN = no
+            connection; a square array is always read as a matrix) or a table of pairs: a DataFrame or ``(m, 3)`` array with
+            the two node ids and the value. Pairs missing from a table are not
+            connected.
+        ids
+            Node ids (default ``1 .. n``); pair tables refer to them.
+        kind
+            What the values are: ``"distance"`` (the default), ``"probability"``
+            of direct dispersal, or ``"link"`` (1 = linked, 0 = not), as
+            Conefor's connection types.
+        landscape_area
+            LA, the attribute of a landscape fully covered by habitat: IIC, PC and
+            LCP are their numerators divided by LA². Without it Makurhini reports
+            only the numerators (the indices are NaN here), Conefor uses LA = 1.
+        convention
+            ``"makurhini"`` (default) follows ``MK_dPCIIC``: pairs closer than the
+            distance are linked (``d < t``), probabilities
+            ``exp(d log(P) / t)`` below ``pij_min`` (default 0.01) are dropped and
+            unconnected pairs count in IIC as 16443701 links apart.
+            ``"conefor"`` follows Conefor Sensinode: links up to the distance
+            (``d <= t``), no probability cut by default (``pij_min`` is its
+            minProb heuristic: probabilities up to it are dropped and paths no
+            more probable are not extended) and unconnected pairs add nothing.
+        restoration
+            1 for the existing nodes and 0 for nodes that could be added (for
+            restoration), as Makurhini's ``restoration`` column; then
+            :meth:`node_importance` also rates the nodes to add (``dPCres``,
+            ``dIICres``: the gain in % of the graph with them, Makurhini; with
+            ``convention="conefor"``, Conefor's "adding nodes" mode: the other
+            indices are those of the existing nodes and every index gets its
+            ``d...add`` gain in % of the existing graph).
+        n_threads
+            Threads (default: all cores but one).
+
+        See Also
+        --------
+        HabitatGraph.from_raster : nodes and distances from a map.
+        HabitatGraph.from_vector : nodes and distances from polygons.
+        HabitatGraph.from_conefor : Conefor's input files.
+
+        Examples
+        --------
+        Four patches (areas in ha) and the distances between them (m):
+
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> areas = [100, 50, 20, 80]
+        >>> distances = np.array([[0, 800, 1500, 5000], [800, 0, 600, 4000],
+        ...                       [1500, 600, 0, 3000], [5000, 4000, 3000, 0]])
+        >>> graph = ls.HabitatGraph(areas, distances, landscape_area=10_000)
+        >>> graph.n_nodes
+        4
+        >>> table = graph.overall(["NC", "PC"], distance=1000, probability=0.5)
+        >>> int(table["NC"].iloc[0]), round(float(table["EC(PC)"].iloc[0]), 1)
+        (2, 172.3)
+
+        The same as a table of pairs:
+
+        >>> pairs = [(1, 2, 800), (2, 3, 600), (1, 3, 1500)]
+        >>> sparse = ls.HabitatGraph(areas, pairs, landscape_area=10_000)
     """
 
     def __init__(
@@ -190,14 +217,59 @@ class HabitatGraph:
                     **kwargs) -> "HabitatGraph":
         """Nodes from a raster of patch ids (or the patches of ``habitat`` classes).
 
-        The attributes come from :func:`~landschaft.conn.node_table` (the patch
-        areas in ``area_unit`` by default) and the connections from
-        :func:`~landschaft.conn.distance_table` (``distance="centroid"``,
-        ``"edge"``, ``"least-cost"`` or ``"commute-time"`` over ``resistance``, pairs up to
-        ``max_distance`` in ``distance_unit``), as
-        Makurhini's ``MK_dPCIIC`` does with raster nodes. Other arguments go
-        to :class:`HabitatGraph`; :meth:`to_raster` paints node values on the
-        patches.
+                The attributes come from :func:`~landschaft.conn.node_table` (the patch
+                areas in ``area_unit`` by default) and the connections from
+                :func:`~landschaft.conn.distance_table` (``distance="centroid"``,
+                ``"edge"``, ``"least-cost"`` or ``"commute-time"`` over ``resistance``, pairs up to
+                ``max_distance`` in ``distance_unit``), as
+                Makurhini's ``MK_dPCIIC`` does with raster nodes. Other arguments go
+                to :class:`HabitatGraph`; :meth:`to_raster` paints node values on the
+                patches.
+
+            Parameters
+            ----------
+            nodes
+                Raster of patch ids (NaN / NoData = no habitat), or of classes with
+                ``habitat``.
+            attribute
+                Attribute per patch (table or Series by id); default: the patch area.
+            weighted
+                Multiply the given attribute by the patch area.
+            area_unit
+                ``"m2"``, ``"ha"`` or ``"km2"`` for the areas.
+            distance
+                ``"centroid"``, ``"edge"``, ``"least-cost"`` or ``"commute-time"``.
+            max_distance, distance_unit
+                Keep the pairs up to this distance (``"m"`` or ``"km"``).
+            habitat
+                Class values whose patches are the nodes (patches are labelled with
+                ``directions`` 8 or 4).
+            nodata, band
+                Reading options.
+            resistance
+                Resistance raster for least-cost and commute-time distances.
+            cost_directions, cost_function, unreachable
+                Neighbours of the cost surface (8 or 4), how the conductance between
+                two cells is taken (``"makurhini"`` or ``"mean"``), and what unreachable
+                pairs get (``"euclidean"``: their centroid distance, or ``"drop"``).
+            **kwargs
+                :class:`HabitatGraph` options (``landscape_area``, ``convention``...).
+
+            Returns
+            -------
+            HabitatGraph
+
+            Examples
+            --------
+            >>> import landschaft as ls
+            >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+            >>> graph = ls.HabitatGraph.from_raster(landcover, habitat=[23, 24, 25], area_unit="ha",
+            ...                                     distance="edge", max_distance=5000,
+            ...                                     landscape_area=landcover.size * 25 * 25 / 1e4)
+            >>> graph.n_nodes
+            158
+            >>> importance = graph.node_importance("PC", distance=1000, probability=0.5)
+            >>> dpc_map = graph.to_raster(importance, "dPC")
         """
         from .nodes import distance_table, node_table, read_patches
 
@@ -220,10 +292,38 @@ class HabitatGraph:
                     cost_function: str = "makurhini", unreachable: str = "euclidean", **kwargs) -> "HabitatGraph":
         """Nodes from polygons or points (GeoDataFrame), as Makurhini's ``MK_dPCIIC``.
 
-        ``id`` names the column of node ids, ``attribute`` a column (default:
-        the area in ``area_unit``); distances are ``"centroid"``, ``"edge"``
-        (GEOS), ``"least-cost"`` or ``"commute-time"`` over ``resistance``, pairs up to ``max_distance``. :meth:`to_geodataframe` joins
-        node values to the geometries.
+                ``id`` names the column of node ids, ``attribute`` a column (default:
+                the area in ``area_unit``); distances are ``"centroid"``, ``"edge"``
+                (GEOS), ``"least-cost"`` or ``"commute-time"`` over ``resistance``, pairs up to ``max_distance``. :meth:`to_geodataframe` joins
+                node values to the geometries.
+
+            Parameters
+            ----------
+            nodes
+                GeoDataFrame of polygons or points, in a metric CRS.
+            id
+                Column of node ids (default: 1..n).
+            attribute, weighted, area_unit, distance, max_distance, distance_unit
+                As in :meth:`from_raster`.
+            resistance, cost_directions, cost_function, unreachable
+                As in :meth:`from_raster`.
+            **kwargs
+                :class:`HabitatGraph` options.
+
+            Returns
+            -------
+            HabitatGraph
+
+            Examples
+            --------
+            >>> import geopandas as gpd
+            >>> import shapely
+            >>> import landschaft as ls
+            >>> patches = gpd.GeoDataFrame({"name": ["a", "b", "c"]}, crs="EPSG:3035", geometry=[
+            ...     shapely.box(0, 0, 500, 500), shapely.box(900, 0, 1400, 400), shapely.box(3000, 0, 3300, 300)])
+            >>> graph = ls.HabitatGraph.from_vector(patches, id="name", area_unit="ha", distance="edge")
+            >>> graph.components(distance=1000).tolist()
+            [1, 1, 2]
         """
         from .nodes import distance_table, node_table
 
@@ -248,12 +348,50 @@ class HabitatGraph:
                   area_unit: str = "m2", **kwargs) -> "HabitatGraph":
         """Polygons connected by settlement probabilities of a spatial absorbing Markov chain (``MK_dPC_SAMC``).
 
-        The probabilities are :func:`landschaft.conn.settlement_probabilities`
-        (samc's random walk over ``resistance``, absorbed with ``absorption``
-        or Fletcher et al.'s rate for ``dispersal_distance``); the attribute is
-        the area in ``area_unit`` or a column. The graph has
-        ``kind="probability"``: ``node_importance("PC", pij_min=0.001)`` is
-        Makurhini's ``MK_dPC_SAMC`` (which cuts at 0.001).
+                The probabilities are :func:`landschaft.conn.settlement_probabilities`
+                (samc's random walk over ``resistance``, absorbed with ``absorption``
+                or Fletcher et al.'s rate for ``dispersal_distance``); the attribute is
+                the area in ``area_unit`` or a column. The graph has
+                ``kind="probability"``: ``node_importance("PC", pij_min=0.001)`` is
+                Makurhini's ``MK_dPC_SAMC`` (which cuts at 0.001).
+
+            Parameters
+            ----------
+            nodes
+                GeoDataFrame of habitat polygons.
+            resistance
+                Resistance raster the random walk moves on.
+            dispersal_distance, absorption
+                Mean dispersal distance (for the default absorption rate) or the
+                absorption per cell.
+            directions, cost_function
+                Neighbours of the walk and how the step probabilities are derived.
+            vertices, vertex_fraction, settle, id, attribute, area_unit
+                Boundary vertices sampled per polygon, how settlement is summed, node
+                ids and attributes; see :func:`~landschaft.conn.settlement_probabilities`.
+            **kwargs
+                :class:`HabitatGraph` options.
+
+            Returns
+            -------
+            HabitatGraph
+                With ``kind="probability"``.
+
+            Examples
+            --------
+            >>> import geopandas as gpd
+            >>> import numpy as np
+            >>> import shapely
+            >>> import xarray as xr
+            >>> import landschaft as ls
+            >>> from rasterio.transform import from_origin
+            >>> resistance = xr.DataArray(np.ones((60, 60)), dims=("y", "x")).rio.write_transform(
+            ...     from_origin(0, 600, 10, 10)).rio.write_crs("EPSG:3035")
+            >>> patches = gpd.GeoDataFrame(geometry=[shapely.box(50, 50, 150, 150), shapely.box(400, 400, 520, 520)],
+            ...                            crs="EPSG:3035")
+            >>> graph = ls.HabitatGraph.from_samc(patches, resistance, dispersal_distance=300, area_unit="ha")
+            >>> graph.n_nodes
+            2
         """
         from .nodes import node_table
         from .samc import settlement_probabilities
@@ -268,10 +406,30 @@ class HabitatGraph:
         return graph
 
     def to_raster(self, values, name: str | None = None):
-        """Node values painted on the patches of :meth:`from_raster` (NaN elsewhere).
+        """Node values painted on the patches of :meth:`from_raster`.
 
-        ``values``: one value per node (in node order), a Series indexed by
-        node id, or a :meth:`node_importance` table and a column ``name``.
+        Parameters
+        ----------
+        values
+            One value per node (in node order), a Series indexed by node id, or a
+            table such as :meth:`node_importance` (with ``name`` naming the column).
+        name
+            Column of ``values`` to paint.
+
+        Returns
+        -------
+        xarray.DataArray or numpy.ndarray
+            The patch map with the values, NaN elsewhere.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> graph = ls.HabitatGraph.from_raster(landcover, habitat=[23, 24, 25], area_unit="ha",
+        ...                                     distance="edge", max_distance=5000,
+        ...                                     landscape_area=landcover.size * 25 * 25 / 1e4)
+        >>> components = graph.components(distance=1000)
+        >>> component_map = graph.to_raster(components)
         """
         patches = getattr(self, "_patches", None)
         if patches is None:
@@ -297,9 +455,30 @@ class HabitatGraph:
     def to_geodataframe(self, values, name: str | None = None):
         """Node values joined to the geometries of :meth:`from_vector`.
 
-        ``values``: a :meth:`node_importance` table (all its columns; with
-        several distances, one block per distance), a Series indexed by node
-        id, or one value per node with a ``name``.
+        Parameters
+        ----------
+        values
+            A :meth:`node_importance` table (all its columns; one block per
+            distance), a Series indexed by node id, or one value per node.
+        name
+            Name of the column for a plain sequence of values.
+
+        Returns
+        -------
+        geopandas.GeoDataFrame
+
+        Examples
+        --------
+        >>> import geopandas as gpd
+        >>> import shapely
+        >>> import landschaft as ls
+        >>> patches = gpd.GeoDataFrame(crs="EPSG:3035", geometry=[
+        ...     shapely.box(0, 0, 500, 500), shapely.box(900, 0, 1400, 400), shapely.box(3000, 0, 3300, 300)])
+        >>> graph = ls.HabitatGraph.from_vector(patches, area_unit="ha", distance="edge",
+        ...                                     landscape_area=100)
+        >>> table = graph.to_geodataframe(graph.node_importance("PC", distance=1000, probability=0.5))
+        >>> "dPC" in table.columns
+        True
         """
         nodes = getattr(self, "_vector", None)
         if nodes is None:
@@ -333,10 +512,35 @@ class HabitatGraph:
     def from_conefor(cls, node_file, connection_file, **kwargs) -> "HabitatGraph":
         """Read Conefor's input files.
 
-        ``node_file`` holds ``id attribute`` per line; ``connection_file`` either
-        ``id id value`` per line (pairs not listed are not connected) or the
-        ``n × n`` matrix in the order of the nodes. Other arguments go to
-        :class:`HabitatGraph` (``kind``, ``convention``, ``landscape_area``...).
+                ``node_file`` holds ``id attribute`` per line; ``connection_file`` either
+                ``id id value`` per line (pairs not listed are not connected) or the
+                ``n × n`` matrix in the order of the nodes. Other arguments go to
+                :class:`HabitatGraph` (``kind``, ``convention``, ``landscape_area``...).
+
+            Parameters
+            ----------
+            node_file
+                Node file: ``id attribute`` per line.
+            connection_file
+                Connection file: ``id id value`` per line, or an ``n x n`` matrix.
+            **kwargs
+                :class:`HabitatGraph` options.
+
+            Returns
+            -------
+            HabitatGraph
+
+            Examples
+            --------
+            >>> import numpy as np
+            >>> import landschaft as ls
+            >>> distances = np.array([[0, 800, 1500, 5000], [800, 0, 600, 4000],
+            ...                       [1500, 600, 0, 3000], [5000, 4000, 3000, 0]])
+            >>> graph = ls.HabitatGraph([100, 50, 20, 80], distances, landscape_area=10_000)
+            >>> graph.to_conefor("nodes.txt", "distances.txt")
+            >>> again = ls.HabitatGraph.from_conefor("nodes.txt", "distances.txt", landscape_area=10_000)
+            >>> again.n_nodes
+            4
         """
         nodes = np.loadtxt(node_file, dtype=np.float64, ndmin=2)
         if nodes.shape[1] < 2:
@@ -354,7 +558,26 @@ class HabitatGraph:
         return cls(nodes[:, 1], values, ids=ids, **kwargs)
 
     def to_conefor(self, node_file, connection_file) -> None:
-        """Write Conefor's input files: ``id attribute`` and ``id id value`` lines (connected pairs only)."""
+        """Write Conefor's input files.
+
+        Parameters
+        ----------
+        node_file
+            ``id attribute`` lines.
+        connection_file
+            ``id id value`` lines, connected pairs only.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> distances = np.array([[0, 800, 1500, 5000], [800, 0, 600, 4000],
+        ...                       [1500, 600, 0, 3000], [5000, 4000, 3000, 0]])
+        >>> graph = ls.HabitatGraph([100, 50, 20, 80], distances, landscape_area=10_000)
+        >>> graph.to_conefor("nodes.txt", "distances.txt")
+        >>> open("nodes.txt").read().split()[:2]
+        ['1', '100.0']
+        """
         with open(node_file, "w", encoding="ascii") as f:
             for i, a in zip(self.ids, self.attributes):
                 f.write(f"{i}\t{float(a)!r}\n")
@@ -365,6 +588,14 @@ class HabitatGraph:
 
     @property
     def n_nodes(self) -> int:
+        """Number of nodes.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> ls.HabitatGraph([1.0, 2.0], [[0, 5], [5, 0]]).n_nodes
+        2
+        """
         return int(self.attributes.size)
 
     def __repr__(self) -> str:
@@ -441,6 +672,17 @@ class HabitatGraph:
             ``distance`` and the indices: NC, NL, H, CCP, LCP, LCPnum, IIC,
             IICnum, EC(IIC), IICintra(%), IICdirect(%), IICstep(%), F, AWF, PC,
             PCnum, EC(PC), PCintra(%), PCdirect(%), PCstep(%).
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> distances = np.array([[0, 800, 1500, 5000], [800, 0, 600, 4000],
+        ...                       [1500, 600, 0, 3000], [5000, 4000, 3000, 0]])
+        >>> graph = ls.HabitatGraph([100, 50, 20, 80], distances, landscape_area=10_000)
+        >>> table = graph.overall(["NC", "IIC", "PC"], distance=[500, 1000], probability=0.5)
+        >>> table["distance"].tolist()
+        [500, 1000]
         """
         chosen = _metric_list(metrics, self.kind)
         # Conefor's "adding nodes": the indices are those of the existing nodes.
@@ -528,6 +770,17 @@ class HabitatGraph:
             of IICnum) and ``"BCPC"`` (``varBC_PC``: a_i a_j p*_ij of the pairs
             whose most probable path runs through it; ``dBC_PC`` in % of PCnum),
             Bodin & Saura (2010).
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> distances = np.array([[0, 800, 1500, 5000], [800, 0, 600, 4000],
+        ...                       [1500, 600, 0, 3000], [5000, 4000, 3000, 0]])
+        >>> graph = ls.HabitatGraph([100, 50, 20, 80], distances, landscape_area=10_000)
+        >>> importance = graph.node_importance("PC", distance=1000, probability=0.5)
+        >>> importance.columns.tolist()
+        ['id', 'distance', 'dPC', 'dPCintra', 'dPCflux', 'dPCconnector', 'varPC']
         """
         chosen = _metric_list(metrics, self.kind)
         frames = [self._importance_frame(chosen, d, probability, pij_min) for d in _as_list(distance)]
@@ -617,7 +870,28 @@ class HabitatGraph:
         return pd.DataFrame(cols)
 
     def components(self, distance=None) -> pd.Series:
-        """Component (1, 2, ...) of every node in the graph of links at ``distance``."""
+        """Connected component of every node.
+
+        Parameters
+        ----------
+        distance
+            Links are the pairs closer than this (distance graphs).
+
+        Returns
+        -------
+        pandas.Series
+            Component number (1, 2, ...) indexed by node id.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> distances = np.array([[0, 800, 1500, 5000], [800, 0, 600, 4000],
+        ...                       [1500, 600, 0, 3000], [5000, 4000, 3000, 0]])
+        >>> graph = ls.HabitatGraph([100, 50, 20, 80], distances, landscape_area=10_000)
+        >>> graph.components(distance=1000).tolist()
+        [1, 1, 1, 2]
+        """
         _, r = self._run(["NC"], distance, None, None, importance=False)
         return pd.Series(r["component"] + 1, index=pd.Index(self.ids, name="id"), name="component")
 
@@ -792,6 +1066,17 @@ class HabitatGraph:
         pandas.DataFrame
             ``from``, ``to`` (node ids), ``distance`` and ``dIIC_removal`` /
             ``dPC_removal``.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> distances = np.array([[0, 800, 1500, 5000], [800, 0, 600, 4000],
+        ...                       [1500, 600, 0, 3000], [5000, 4000, 3000, 0]])
+        >>> graph = ls.HabitatGraph([100, 50, 20, 80], distances, landscape_area=10_000)
+        >>> links = graph.link_importance("PC", distance=1000, probability=0.5)
+        >>> links.columns.tolist()
+        ['from', 'to', 'distance', 'dPC_removal']
         """
         metric = str(metric).upper()
         if metric not in ("IIC", "PC"):
@@ -829,6 +1114,18 @@ class HabitatGraph:
             pair that comes closer than ``distance`` gains a link, any other
             change counts 0. PC: the pair's edge takes the probability of its
             new value (not cut by ``pij_min``).
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> distances = np.array([[0, 800, 1500, 5000], [800, 0, 600, 4000],
+        ...                       [1500, 600, 0, 3000], [5000, 4000, 3000, 0]])
+        >>> graph = ls.HabitatGraph([100, 50, 20, 80], distances, landscape_area=10_000)
+        >>> changes = [(1, 2, 2000)]                    # the pair 1-2 becomes 2 km apart
+        >>> change = graph.link_change(changes, "PC", distance=1000, probability=0.5)
+        >>> list(change.columns)
+        ['from', 'to', 'distance', 'dPC_change']
         """
         metric = str(metric).upper()
         if metric not in ("IIC", "PC"):
@@ -942,6 +1239,17 @@ class HabitatGraph:
             share it) and ``cluster`` (component). With python-igraph installed
             also ``memb_rw`` (walktrap communities, weighted by p); Makurhini's
             Louvain communities are random and left out.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> distances = np.array([[0, 800, 1500, 5000], [800, 0, 600, 4000],
+        ...                       [1500, 600, 0, 3000], [5000, 4000, 3000, 0]])
+        >>> graph = ls.HabitatGraph([100, 50, 20, 80], distances, landscape_area=10_000)
+        >>> table = graph.centrality(1000)
+        >>> table.columns.tolist()
+        ['id', 'distance', 'degree', 'eigen', 'close', 'BWC', 'cluster']
         """
         if self.kind != "distance":
             raise ValueError("centrality needs distances between the nodes (kind='distance')")

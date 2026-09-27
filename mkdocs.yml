@@ -150,6 +150,7 @@ nav:
       - Habitat patterns: api/patterns.md
       - Fragmentation: api/fragmentation.md
       - Landscape metrics: api/landscape-metrics.md
+      - Habitat networks: api/networks.md
   - About:
       - Changelog: about/changelog.md
       - License: about/license.md

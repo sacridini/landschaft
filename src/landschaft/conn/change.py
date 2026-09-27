@@ -52,6 +52,28 @@ def eca_change(graphs: Sequence[HabitatGraph], metric: str = "PC", *, distance, 
         (ECA in % of LA and of the habitat area), ``dA`` and ``dECA`` (change
         in % from the previous time, the first from LA), ``rECA`` (dECA / dA)
         and Makurhini's two readings of them, ``comparison`` and ``change``.
+
+    Examples
+    --------
+    Area "a" grows between two times:
+
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> reserves = gpd.GeoDataFrame({"name": ["a", "b", "c", "d"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(0, 0, 2000, 2000), shapely.box(3000, 0, 4500, 1500),
+    ...     shapely.box(0, 5000, 1000, 6000), shapely.box(9000, 9000, 11000, 11000)])
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> later = reserves.copy()
+    >>> later.loc[0, "geometry"] = shapely.box(0, 0, 2800, 2000)
+    >>> graphs = [ls.HabitatGraph.from_vector(g, id="name", area_unit="ha", distance="edge",
+    ...                                       landscape_area=12100) for g in (reserves, later)]
+    >>> table = ls.conn.eca_change(graphs, "PC", distance=2000, probability=0.5,
+    ...                            landscape_area=12100)
+    >>> table[["time", "dA", "dECA", "change"]].round(1)
+       time    dA  dECA                        change
+    0     1 -90.7 -93.8           + Connectivity loss
+    1     2  14.2  22.5  Habitat or connectivity gain
     """
     metric = str(metric).upper()
     if metric not in ("PC", "IIC"):

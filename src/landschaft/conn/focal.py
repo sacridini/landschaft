@@ -57,7 +57,7 @@ def focal_nodes(nodes, *, distance, search_buffer, metric: str = "IIC", probabil
     threshold
         Pairs farther apart than this are not connected (Makurhini's ``threshold``).
     n_threads
-        OpenMP threads.
+        Threads (default: all cores but one).
 
     Returns
     -------
@@ -73,6 +73,23 @@ def focal_nodes(nodes, *, distance, search_buffer, metric: str = "IIC", probabil
     Makurhini simplifies the focal polygon (mapshaper, 90 % of the vertices)
     before buffering it; landschaft buffers the polygon itself, which only
     changes the neighbourhood when a node lies at the very edge of the buffer.
+
+    Examples
+    --------
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> reserves = gpd.GeoDataFrame({"name": ["a", "b", "c", "d"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(0, 0, 2000, 2000), shapely.box(3000, 0, 4500, 1500),
+    ...     shapely.box(0, 5000, 1000, 6000), shapely.box(9000, 9000, 11000, 11000)])
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> table = ls.conn.focal_nodes(reserves, id="name", distance=2000, search_buffer=12000)
+    >>> table[["id", "n_nodes", "dIIC"]].round(1)
+      id  n_nodes  dIIC
+    0  a        4  42.0
+    1  b        4  13.3
+    2  c        4   2.6
+    3  d        4  42.0
     """
     import shapely
 

@@ -194,7 +194,7 @@ network.num_components, network.eca, network.doc
 |---|---|
 | Least-cost distances through a resistance map | `from_raster(..., distance="least-cost", resistance=resistance)` |
 | Random-walk (commute-time) distances | `distance="commute-time"` |
-| Connectivity over time, ECA change | `ls.conn.eca_change([net_2000, net_2020], "PC", distance=...)` |
+| Connectivity over time, ECA change | `ls.conn.eca_change([net_2000, net_2020], "PC", distance=..., landscape_area=...)` |
 | Candidate patches for restoration | `HabitatGraph(..., restoration=flags)`, then `node_importance` |
 | Connectivity around every patch | `ls.conn.focal_nodes(patches, ...)` |
 | Settlement probabilities of a random walk | `HabitatGraph.from_samc(patches, resistance, ...)` |

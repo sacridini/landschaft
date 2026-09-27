@@ -168,6 +168,20 @@ def node_table(nodes, *, attribute=None, weighted: bool = False, area_unit: str 
     -------
     pandas.DataFrame
         ``id`` and ``attribute``, one row per node.
+
+    Examples
+    --------
+    Forest patches (classes 23-25) of the example map, areas in hectares:
+
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> nodes = ls.conn.node_table(landcover, habitat=[23, 24, 25], area_unit="ha")
+    >>> len(nodes)
+    158
+    >>> nodes.head(2)
+       id  attribute
+    0   1     73.250
+    1   2     89.125
     """
     if _is_vector(nodes):
         import shapely
@@ -313,6 +327,19 @@ def distance_table(nodes, *, distance: str = "centroid", id: str | None = None, 
     -------
     pandas.DataFrame
         ``from``, ``to`` (node ids, ``from`` first in node order) and ``distance``.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> pairs = ls.conn.distance_table(landcover, habitat=[23, 24, 25], distance="edge",
+    ...                                max_distance=1000)
+    >>> len(pairs)
+    126
+    >>> pairs.head(2)
+       from  to    distance
+    0     3  13  989.002022
+    1     4   5  206.155281
     """
     if distance not in DISTANCE_TYPES:
         raise ValueError(f"distance must be one of {DISTANCE_TYPES}, got {distance!r}")

@@ -77,10 +77,35 @@ def make_grid(region, cell_area: float, *, hexagonal: bool = True, clip: bool = 
     one cell; the cells that touch the region are kept. ``clip`` cuts them to
     the region, ``grid_boundary`` keeps only whole cells inside it.
 
+    Parameters
+    ----------
+    region
+        Polygons of the region (GeoDataFrame, projected).
+    cell_area
+        Area of each cell, in square map units.
+    hexagonal
+        Hexagons (default) or squares.
+    clip
+        Cut the cells to the region.
+    grid_boundary
+        Keep only the cells entirely inside the region.
+
     Returns
     -------
     geopandas.GeoDataFrame
         ``OBJECTID`` and the cell polygons.
+
+    Examples
+    --------
+    Hexagons of 25 km² over a region of 11 x 11 km:
+
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> grid = ls.conn.make_grid(region, cell_area=25e6)
+    >>> len(grid)
+    12
     """
     import geopandas as gpd
     import shapely
@@ -156,6 +181,31 @@ def connectivity_grid(protected_areas, region, *, distance: float, grid=None, ce
         ProtConn: links below this probability are cut. Makurhini's
         ``MK_Connect_grid`` turns its default (NULL) into infinity, which cuts
         every link (each node alone): ``pij_min=np.inf`` gives its values.
+    transboundary
+        ProtConn: distance of the transboundary zone of each cell.
+    area_unit
+        Unit of the areas.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        The grid with ``OBJECTID`` and, per cell, the columns of :func:`protconn`
+        (or ``ECA``, ``PC`` and ``Normalized_ECA`` with ``protconn_index=False``).
+
+    Examples
+    --------
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> reserves = gpd.GeoDataFrame({"name": ["a", "b", "c", "d"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(0, 0, 2000, 2000), shapely.box(3000, 0, 4500, 1500),
+    ...     shapely.box(0, 5000, 1000, 6000), shapely.box(9000, 9000, 11000, 11000)])
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> cells = ls.conn.connectivity_grid(reserves, region, distance=2000, cell_area=25e6)
+    >>> cells.columns.tolist()[:6]
+    ['OBJECTID', 'ECA', 'PC', 'LA', 'Protected_surface', 'Prot']
+    >>> len(cells)
+    12
     """
     import geopandas as gpd
     import shapely
@@ -221,6 +271,21 @@ def eca_change_grid(times, region, *, distance: float, metric: str = "IIC", grid
         gives dA = dECA = -100 (and ECA_i the area of its pieces when there are
         two or fewer), habitat that appears gives ECA_j = the cell's area and
         dA = dECA = 100, and none at both times gives NA.
+
+    Examples
+    --------
+    >>> import geopandas as gpd
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> reserves = gpd.GeoDataFrame({"name": ["a", "b", "c", "d"]}, crs="EPSG:3035", geometry=[
+    ...     shapely.box(0, 0, 2000, 2000), shapely.box(3000, 0, 4500, 1500),
+    ...     shapely.box(0, 5000, 1000, 6000), shapely.box(9000, 9000, 11000, 11000)])
+    >>> region = gpd.GeoDataFrame(geometry=[shapely.box(-1000, -1000, 10000, 10000)], crs="EPSG:3035")
+    >>> later = reserves.copy()
+    >>> later.loc[0, "geometry"] = shapely.box(0, 0, 2800, 2000)       # area "a" grows
+    >>> cells = ls.conn.eca_change_grid([reserves, later], region, distance=2000, cell_area=25e6)
+    >>> cells.columns.tolist()[:4]
+    ['OBJECTID', 'time', 'ECA_i', 'ECA_j']
     """
     import geopandas as gpd
     import shapely

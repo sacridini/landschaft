@@ -20,6 +20,29 @@ def boundary_vertices(geometry, n: int | None = 10, fraction: float | None = Non
     first equals the last, the last is dropped and repeated points removed.
     ``n`` of them (or ``round(fraction × count)``) at ``round(seq(1, count,
     length.out = n))``, all when there are no more.
+
+    Parameters
+    ----------
+    geometry
+        A shapely polygon (or multipolygon).
+    n
+        Number of vertices (``None``: use ``fraction``).
+    fraction
+        Fraction of the vertices instead.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(k, 2)`` array of x, y coordinates.
+
+    Examples
+    --------
+    >>> import shapely
+    >>> import landschaft as ls
+    >>> ls.conn.boundary_vertices(shapely.box(0, 0, 10, 10), n=3)
+    array([[10.,  0.],
+           [10., 10.],
+           [ 0.,  0.]])
     """
     import shapely
 
@@ -105,11 +128,36 @@ def settlement_probabilities(nodes, resistance, *, dispersal_distance: float | N
         ``"sum"`` or ``"mean"`` of the probabilities between the vertices.
     id
         Column with the node ids (default 1..n).
+    n_threads
+        Threads (default: all cores but one).
 
     Returns
     -------
     ids, numpy.ndarray
         The node ids and the n × n matrix of probabilities (1 on the diagonal).
+
+    See Also
+    --------
+    HabitatGraph.from_samc : a probability graph from these probabilities.
+
+    Examples
+    --------
+    Two patches on a uniform resistance surface of 60 x 60 cells of 10 m:
+
+    >>> import geopandas as gpd
+    >>> import numpy as np
+    >>> import shapely
+    >>> import xarray as xr
+    >>> import landschaft as ls
+    >>> from rasterio.transform import from_origin
+    >>> resistance = xr.DataArray(np.ones((60, 60)), dims=("y", "x")).rio.write_transform(
+    ...     from_origin(0, 600, 10, 10)).rio.write_crs("EPSG:3035")
+    >>> patches = gpd.GeoDataFrame(geometry=[shapely.box(50, 50, 150, 150),
+    ...                                      shapely.box(400, 400, 520, 520)], crs="EPSG:3035")
+    >>> ids, probabilities = ls.conn.settlement_probabilities(patches, resistance,
+    ...                                                       dispersal_distance=300)
+    >>> probabilities.shape
+    (2, 2)
     """
     from scipy import sparse
     from scipy.sparse.linalg import splu

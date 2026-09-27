@@ -124,7 +124,43 @@ def _wrap_as_dataarray(
 
 @dataclass
 class GTNComponentsResult:
-    """Results from GTN Components analysis (:func:`gtn_components`)."""
+    """Result of :func:`gtn_components`.
+
+    Attributes
+    ----------
+    components : xarray.DataArray or numpy.ndarray
+        Component id of every Core and Bridge pixel (0 elsewhere).
+    colored_map : xarray.DataArray or numpy.ndarray
+        Map for display: connected networks and isolated cores in their colours.
+    stats : pandas.DataFrame
+        One row per component: ``component_id``, ``core_pixels``,
+        ``bridge_pixels``, ``total_pixels``, ``has_bridge`` and the areas.
+    eca, eca_pixels
+        Equivalent Connected Area, in hectares (when the pixel size is known)
+        and in pixels.
+    eca_max, eca_max_pixels
+        ECA if all Core pixels formed one component.
+    doc : float
+        Degree of coherence, ECA / ECA_max in %.
+    num_components, num_isolated_cores, num_connected_components
+        Number of components, of components without bridges and of networks.
+    num_nodes, num_links
+        Number of Core patches and Bridge links.
+    pixel_area_ha : float or None
+        Area of a pixel in hectares.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> morph = ls.mspa(forest)
+    >>> network = ls.gtn_components(morph)
+    >>> network.num_components
+    418
+    >>> print(network.summary())  # doctest: +ELLIPSIS
+    Network components: 418
+    ...
+    """
 
     components: xr.DataArray | np.ndarray
     colored_map: xr.DataArray | np.ndarray
@@ -150,7 +186,12 @@ class GTNComponentsResult:
         )
 
     def summary(self) -> str:
-        """Formatted text summary matching GuidosToolbox log output."""
+        """Text summary, as GuidosToolbox's log.
+
+        Returns
+        -------
+        str
+        """
         unit = "ha" if self.pixel_area_ha is not None else "pixels"
         buf = io.StringIO()
         buf.write(f"Network components: {self.num_components}\n")
@@ -169,28 +210,47 @@ def gtn_components(
     *,
     pixel_size: float | tuple[float, float] | None = None,
 ) -> GTNComponentsResult:
-    """Identify habitat network components formed by MSPA Cores and Bridges.
+    """Components of the habitat network formed by MSPA Cores and Bridges.
 
-    This function implements GuidosToolbox's ``nw_components`` and calculates:
-    - Connected components of the network (Core OR Bridge, 8-connectivity).
-    - Core area per component (Bridge pixels do not contribute to habitat area).
-    - Equivalent Connected Area (ECA): :math:`\\sqrt{\\sum A_i^2}`.
-    - Degree of Coherence (DOC): :math:`(ECA / ECA_{max}) \\times 100\\%`.
-    - Component classification: multi-patch connected networks vs isolated cores.
+    The network of GuidosToolbox's ``nw_components``: Core patches are the nodes
+    and Bridges the links. Pixels of Core or Bridge are grouped into components
+    (8-connected); only Core pixels count as habitat area. For the whole map:
+
+    - ECA (Equivalent Connected Area) = sqrt(sum of the squared core areas of the
+      components);
+    - ECA_max, the ECA if all the core area formed one component;
+    - DOC (degree of coherence) = ECA / ECA_max in %.
 
     Parameters
     ----------
     data
-        2-D array of MSPA classes (``xarray.DataArray`` or ``numpy.ndarray``).
+        MSPA map (:func:`mspa` classes), DataArray or array.
     pixel_size
-        Optional pixel resolution in meters (e.g. 25 or (25, 25)). If omitted
-        and ``data`` is a georeferenced ``DataArray``, resolution is read
-        from its geospatial coordinates.
+        Pixel size in metres (e.g. 25 or ``(25, 25)``) for the areas in hectares;
+        read from a georeferenced DataArray when omitted.
 
     Returns
     -------
     GTNComponentsResult
-        Dataclass containing component raster, stats table, and connectivity metrics.
+
+    See Also
+    --------
+    gtn_importance : importance of every link and stepping-stone node.
+    HabitatGraph : networks of patches with distance-based links.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> morph = ls.mspa(forest)
+    >>> network = ls.gtn_components(morph)
+    >>> network.num_components, round(network.doc, 2)
+    (418, 56.71)
+    >>> network.stats.head(3)
+       component_id  core_pixels  bridge_pixels  total_pixels  has_bridge
+    0             1          199             21           220        True
+    1             2          103              0           103       False
+    2             3           12             10            22        True
     """
     arr = np.asarray(data.values if isinstance(data, xr.DataArray) else data)
     if arr.ndim != 2:
@@ -318,7 +378,38 @@ def gtn_components(
 
 @dataclass
 class GTNImportanceResult:
-    """Results from GTN Node/Link Importance analysis (:func:`gtn_importance`)."""
+    """Result of :func:`gtn_importance`.
+
+    Attributes
+    ----------
+    importance_map : xarray.DataArray or numpy.ndarray
+        dPC of every link (Bridge, positive) and stepping-stone node (Core,
+        negative) on their pixels.
+    node_link_ids : xarray.DataArray or numpy.ndarray
+        Link ids (positive) and node ids (negative) on their pixels.
+    colored_map : xarray.DataArray or numpy.ndarray
+        Importance classes for display (top 1 %, 5 %, 10 %...).
+    links : pandas.DataFrame
+        One row per link: ``link_id``, ``component_id``, ``pixels``, ``dpc``,
+        ``connected_nodes``, ``normalized_importance``.
+    nodes : pandas.DataFrame
+        One row per stepping-stone node (degree 2 or more): ``node_id``,
+        ``component_id``, ``pixels``, ``dpc``, ``degree``,
+        ``normalized_importance``.
+    max_link_dpc, max_node_dpc : float
+        Largest dPC of a link and of a node.
+    num_components, num_links, num_nodes : int
+        Counts of the network.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> morph = ls.mspa(forest)
+    >>> importance = ls.gtn_importance(morph)
+    >>> round(importance.max_link_dpc, 2)
+    19.87
+    """
 
     importance_map: xr.DataArray | np.ndarray
     node_link_ids: xr.DataArray | np.ndarray
@@ -338,7 +429,17 @@ class GTNImportanceResult:
         )
 
     def summary_text(self, title: str = "landschaft Connectivity Importance") -> str:
-        """Generate formatted report string matching GTB's ``_cs.txt``."""
+        """Text report, as GuidosToolbox's ``_cs.txt``.
+
+        Parameters
+        ----------
+        title
+            First line of the report.
+
+        Returns
+        -------
+        str
+        """
         buf = io.StringIO()
         buf.write(f"{title}: Connectivity Importance(Node_max={self.max_node_dpc:.2f}, Link_max={self.max_link_dpc:.2f})\n")
         buf.write("(NOTE: node ID & importance in the actual image data are\n")
@@ -398,29 +499,37 @@ def gtn_importance(
     *,
     components: GTNComponentsResult | None = None,
 ) -> GTNImportanceResult:
-    """Calculate the connectivity importance of Links (Bridges) and Nodes (Cores).
+    """Importance of every link (Bridge) and stepping-stone node (Core) of the MSPA network.
 
-    Reimplements GuidosToolbox's ``nw_importance``:
-    - Identifies which core nodes are connected by each bridge.
-    - Evaluates link importance (:math:`dPC`): percentage drop in global
-      connectivity (:math:`PC_{num}`) when the link is severed.
-    - Evaluates stepping-stone node importance (:math:`dPC`): contribution of
-      intermediate nodes (degree :math:`\\ge 2`) in connecting other nodes.
-    - Generates importance maps (positive for links, negative for nodes), node/link
-      ID rasters, and hot 1%/5%/10% classification maps.
+    GuidosToolbox's ``nw_importance``: the importance of a link is the loss of
+    connectivity (dPC: the drop of the numerator of PC, in %) when it is cut;
+    the importance of a node with two or more links, its contribution to
+    connecting the others. Maps show links positive and nodes negative, and
+    classify the top 1 %, 5 % and 10 %.
 
     Parameters
     ----------
     data
-        2-D array of MSPA classes (``xarray.DataArray`` or ``numpy.ndarray``).
+        MSPA map (:func:`mspa` classes), DataArray or array.
     components
-        Optional precomputed :class:`GTNComponentsResult` from :func:`gtn_components`.
-        If not supplied, it will be calculated automatically.
+        A :func:`gtn_components` result of the same map (computed when omitted).
 
     Returns
     -------
     GTNImportanceResult
-        Dataclass containing importance map, node/link ID map, colored map, and DataFrames.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> morph = ls.mspa(forest)
+    >>> importance = ls.gtn_importance(morph)
+    >>> importance.links.columns.tolist()
+    ['link_id', 'component_id', 'pixels', 'dpc', 'connected_nodes', 'normalized_importance']
+    >>> importance.nodes.head(2)
+       node_id  component_id  pixels       dpc  degree  normalized_importance
+    0        6             4     129  0.000011       2               0.000054
+    1        7             4      30  0.000007       2               0.000037
     """
     arr = np.asarray(data.values if isinstance(data, xr.DataArray) else data)
     if arr.ndim != 2:
@@ -665,27 +774,44 @@ def conefor_inputs(
     output_dir: str | Path | None = None,
     prefix: str = "mspa",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Export MSPA node and link topology for use in Conefor Sensinode.
+    """Nodes and links of the MSPA network as Conefor Sensinode input files.
 
-    Reimplements GuidosToolbox's ``nw_cs22`` / ``batch_mspaci``:
-    - Node table: Core patches (negative IDs, area in pixels) and Bridges (positive
-      IDs, area 0).
-    - Link table: Bridge-to-node connections with topological distance 1.
+    GuidosToolbox's ``nw_cs22`` / ``batch_mspaci``: nodes are the Core patches
+    (negative ids, area in pixels) and the Bridges (positive ids, area 0); links
+    join each Bridge to the nodes it touches, at topological distance 1.
 
     Parameters
     ----------
     data
-        2-D array of MSPA classes (``xarray.DataArray`` or ``numpy.ndarray``).
+        MSPA map (:func:`mspa` classes), DataArray or array.
     output_dir
-        Optional directory where ``<prefix>_nodes_mspa.txt`` and
-        ``<prefix>_links_mspa.txt`` will be written.
+        Folder where ``<prefix>_nodes_mspa.txt`` and ``<prefix>_links_mspa.txt``
+        are written (nothing is written when omitted).
     prefix
-        Filename prefix for the exported text files (default: ``"mspa"``).
+        Prefix of the file names.
 
     Returns
     -------
-    tuple of pd.DataFrame
-        ``(nodes_df, links_df)`` containing the exported tables.
+    nodes, links : pandas.DataFrame
+        ``id`` and ``pixels`` per node; ``link_id``, ``node_id`` and
+        ``distance`` per link.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> morph = ls.mspa(forest)
+    >>> nodes, links = ls.conefor_inputs(morph, output_dir=".")
+    >>> nodes.head(3)
+       id  pixels
+    0  -1     194
+    1  -2     103
+    2  -3      10
+    >>> links.head(3)
+       link_id  node_id  distance
+    0        1      -12         1
+    1        2       -3         1
+    2        2       -4         1
     """
     arr = np.asarray(data.values if isinstance(data, xr.DataArray) else data)
     if arr.ndim != 2:
