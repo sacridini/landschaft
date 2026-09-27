@@ -482,6 +482,34 @@ def learn_mspa_toy():
     save(fig, "learn_mspa_toy")
 
 
+@figure
+def learn_cost_distance():
+    from matplotlib.colors import LogNorm
+    from scipy import ndimage
+
+    landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:800, :800]
+    table = {}
+    table.update({c: 50.0 for c in range(1, 12)})
+    table.update({c: 10.0 for c in range(12, 23)})
+    table.update({c: 1.0 for c in range(23, 35)})
+    table.update({c: 100.0 for c in range(35, 45)})
+    resistance = np.vectorize(table.get)(landcover.values).astype(float)
+    forest = np.isin(landcover.values, [23, 24, 25])
+    euclidean_km = ndimage.distance_transform_edt(~forest) * 25 / 1000
+    cost_km = np.asarray(ls.cost_distance(resistance, forest)) * 25 / 1000
+    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.3))
+    panels = [(euclidean_km, "Straight-line distance to forest (km)", None),
+              (cost_km, "Cost distance to forest (km-equivalents, log scale)", LogNorm(0.1, cost_km.max()))]
+    for ax, (values, title, norm) in zip(axes, panels):
+        shown = np.ma.masked_where(forest, values)
+        image = ax.imshow(shown, cmap="Blues", norm=norm, interpolation="nearest")
+        ax.imshow(np.ma.masked_where(~forest, forest), cmap=ListedColormap(["#15803d"]), interpolation="nearest")
+        ax.set_title(title)
+        ax.set_axis_off()
+        fig.colorbar(image, ax=ax, fraction=0.046, pad=0.02)
+    save(fig, "learn_cost_distance")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:
