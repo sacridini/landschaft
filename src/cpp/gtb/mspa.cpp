@@ -51,6 +51,19 @@ private:
     Clock::time_point last_;
 };
 
+// Runs `f` on its own thread when `parallel`, otherwise lazily on get().
+// Task threads use single-threaded OpenMP kernels to avoid oversubscription.
+template <class F>
+auto spawn(bool parallel, F&& f) -> std::future<decltype(f())> {
+    if (!parallel) return std::async(std::launch::deferred, std::forward<F>(f));
+    return std::async(std::launch::async, [fn = std::forward<F>(f)]() mutable {
+#if defined(_OPENMP)
+        omp_set_num_threads(1);
+#endif
+        return fn();
+    });
+}
+
 // The distance thresholds below have two implementations:
 //  * literal: full squared EDT (sqedt) + float threshold, as fsp.c;
 //  * fast: exact integer test d^2 <= T via dilate_disk.
@@ -80,7 +93,7 @@ ImageU8 external_boundary(const ImageU8& im, float size, float edu) {
         return out;
     }
     const ImageU8 nim = negation(im);
-    const std::vector<std::uint32_t> d2 = sqedt(nim);
+    const Buffer<std::uint32_t> d2 = sqedt(nim);
     ImageU8 out(im.nx, im.ny);
     const u8* n = nim.data();
     u8* o = out.data();
@@ -105,7 +118,7 @@ ImageU8 core_mask(const ImageU8& im, float size, float edu) {
         });
         return out;
     }
-    const std::vector<std::uint32_t> d2 = sqedt(im);
+    const Buffer<std::uint32_t> d2 = sqedt(im);
     ImageU8 out(im.nx, im.ny);
     u8* o = out.data();
     parallel_chunks(out.size(), [&](i64 b, i64 e) {
@@ -119,25 +132,26 @@ ImageU8 core_mask(const ImageU8& im, float size, float edu) {
 
 // getexternalboundarygeodesic
 ImageU8 geodesic_boundary(const ImageU8& ref, const ImageU8& mask, float size, float edu) {
-    const std::vector<float> d = ced(ref, mask);
     const float s = size * edu;
-    ImageU8 out(ref.nx, ref.ny);
-    u8* o = out.data();
-    parallel_chunks(out.size(), [&](i64 b, i64 e) {
-        for (i64 i = b; i < e; ++i) o[i] = (d[i] >= 0.0001f && d[i] <= s) ? 1 : 0;
-    });
-    return out;
+    // ced gives 0 on `ref` and at least 1 elsewhere (the length of a non-zero
+    // integer vector plus a non-negative base distance), so no pixel lies in
+    // [0.0001, s] when s < 1: edge width 1 needs no geodesic distance.
+    if (s < 1.0f) return ImageU8(ref.nx, ref.ny, 0);
+    return ced_band(ref, mask, 0.0001f, s);  // pixels at distance 0 are below 0.0001
 }
 
 // fm_preproc: foreground plus the missing pixels within size*edu of it.
-ImageU8 fm_preproc(const ImageU8& fm, float size, float edu) {
-    ImageU8 da = fm;
-    threshold(da, 1, 255, 0, 1);
-    const ImageU8 dda = external_boundary(da, size, edu);
+ImageU8 fm_preproc(const ImageU8& fm, float size, float edu, bool par) {
+    auto dda_task = spawn(par, [&] {
+        ImageU8 da = fm;
+        threshold(da, 1, 255, 0, 1);
+        return external_boundary(da, size, edu);
+    });
     ImageU8 fa = fm;
     threshold(fa, 2, 255, 0, 1);
     ImageU8 dfa = external_boundary(fa, size, edu);
     bit_or(dfa, fa);
+    const ImageU8 dda = dda_task.get();
     inf(dfa, dda);
     sup(dfa, fa);
     return dfa;
@@ -164,8 +178,10 @@ ImageU8 fm_preproc2(const ImageU8& im, i64 s) {
     return out;
 }
 
-// setedges: returns {edges, perforations}. `core` is getcore(im).
-std::pair<ImageU8, ImageU8> set_edges(ImageU8 core, float size, int graphfg, int graphbg, float edu) {
+// setedges: returns {edges, perforations}. `core` is getcore(im) and
+// `core_boundary` gives getexternalboundary(core), which the openings share.
+std::pair<ImageU8, ImageU8> set_edges(ImageU8 core, float size, int graphfg, int graphbg, float edu,
+                                      std::shared_future<ImageU8>& core_boundary, bool par) {
     const ImageU8 core1 = core;
     ImageU8 corefill = fill_holes(core, graphbg);
     ImageU8 loecher = corefill;  // holes of the core
@@ -173,8 +189,9 @@ std::pair<ImageU8, ImageU8> set_edges(ImageU8 core, float size, int graphfg, int
     ImageU8 edges(core.nx, core.ny, 0);
 
     while (!is_empty(corefill)) {
-        bit_or(edges, external_boundary(corefill, size, edu));
+        auto boundary = spawn(par, [&] { return external_boundary(corefill, size, edu); });
         const ImageU8 i0 = fill_holes(loecher, graphfg);
+        bit_or(edges, boundary.get());
         sub_sat(corefill, i0);
         sub_sat(core, corefill);
         corefill = fill_holes(core, graphbg);
@@ -182,7 +199,7 @@ std::pair<ImageU8, ImageU8> set_edges(ImageU8 core, float size, int graphfg, int
         sub_sat(loecher, core);
     }
 
-    ImageU8 outer = external_boundary(core1, size, edu);
+    ImageU8 outer = core_boundary.get();
     bit_and(edges, negation(core1));
     sub_sat(outer, edges);
     return {std::move(edges), std::move(outer)};
@@ -224,14 +241,20 @@ Image<std::uint32_t> to_u32(const ImageU8& im) {
 
 // getcorridor: connectors joining two different cores (bridges).
 // `lbl` holds the labelled cores (label_components of the core image).
-ImageU8 get_corridor(const ImageU8& connector, Image<std::uint32_t> lbl, const ImageU8& opening, int graph) {
+ImageU8 get_corridor(const ImageU8& connector, Image<std::uint32_t> lbl, const ImageU8& opening, int graph,
+                     bool par, StageTimer& timer) {
+    auto cor_task = spawn(par, [&] {  // the connectors' components, independent of the watershed
+        Image<std::uint32_t> cor = to_u32(connector);
+        label_components(cor, graph);
+        return cor;
+    });
     ImageU8 imref = opening;
     bit_or(imref, connector);
     set_level(imref, 0, 0, 255);
     wsfah(lbl, imref, graph, 254);
-
-    Image<std::uint32_t> cor = to_u32(connector);
-    label_components(cor, graph);
+    timer("corridor: watershed");
+    Image<std::uint32_t> cor = cor_task.get();
+    timer("corridor: labels");
 
     // set_regions(cor, lbl, 20) gives every connector component (and the
     // background, label 0) max(lbl) - min(lbl) over it; then
@@ -240,15 +263,15 @@ ImageU8 get_corridor(const ImageU8& connector, Image<std::uint32_t> lbl, const I
     // this integer version.
     std::uint32_t max_label = 0;
     for (const std::uint32_t c : cor.px) max_label = std::max(max_label, c);
-    std::vector<std::uint32_t> lo(static_cast<std::size_t>(max_label) + 1, std::numeric_limits<std::uint32_t>::max());
-    std::vector<std::uint32_t> hi(static_cast<std::size_t>(max_label) + 1, 0);
+    Buffer<std::uint32_t> lo(static_cast<std::size_t>(max_label) + 1, std::numeric_limits<std::uint32_t>::max());
+    Buffer<std::uint32_t> hi(static_cast<std::size_t>(max_label) + 1, 0);
     for (i64 i = 0; i < cor.size(); ++i) {
         const std::uint32_t c = cor[i];
         const std::uint32_t v = lbl[i];
         if (v < lo[c]) lo[c] = v;
         if (v > hi[c]) hi[c] = v;
     }
-    std::vector<u8> is_bridge(lo.size(), 0);
+    Buffer<u8> is_bridge(lo.size(), 0);
     for (std::size_t c = 0; c < lo.size(); ++c) {
         if (lo[c] > hi[c]) continue;  // label not present
         const std::uint32_t range = hi[c] - lo[c];
@@ -259,31 +282,19 @@ ImageU8 get_corridor(const ImageU8& connector, Image<std::uint32_t> lbl, const I
     return out;
 }
 
-// Runs `f` on its own thread when `parallel`, otherwise lazily on get().
-// Task threads use single-threaded OpenMP kernels to avoid oversubscription.
-template <class F>
-auto spawn(bool parallel, F&& f) -> std::future<decltype(f())> {
-    if (!parallel) return std::async(std::launch::deferred, std::forward<F>(f));
-    return std::async(std::launch::async, [fn = std::forward<F>(f)]() mutable {
-#if defined(_OPENMP)
-        omp_set_num_threads(1);
-#endif
-        return fn();
-    });
-}
-
 void check_input(const ImageU8& input, const MspaParams& p) {
     if (p.connectivity != 4 && p.connectivity != 8) throw std::invalid_argument("connectivity must be 4 or 8");
     if (p.edge_width < 1 || p.edge_width > 255) throw std::invalid_argument("edge_width must be in [1, 255]");
     if (input.nx < 1 || input.ny < 1) throw std::invalid_argument("input image is empty");
-    for (const u8 v : input.px)
-        if (v > 2) throw std::invalid_argument("input values must be 0 (missing), 1 (background) or 2 (foreground)");
+    if (max_value(input) > 2)
+        throw std::invalid_argument("input values must be 0 (missing), 1 (background) or 2 (foreground)");
 }
 
 }  // namespace
 
 ImageU8 mspa(const ImageU8& input, const MspaParams& p) {
     check_input(input, p);
+    const PoolScope pool_scope;  // reuse the buffers of the many intermediate images
     StageTimer timer;
 
     const float eew = static_cast<float>(p.edge_width);
@@ -308,13 +319,13 @@ ImageU8 mspa(const ImageU8& input, const MspaParams& p) {
         auto holes = spawn(par && p.internal, [&] {
             ImageU8 h;
             if (p.internal) {
-                const ImageU8 i1 = fm_preproc(im, 1.0f, edu);
+                const ImageU8 i1 = fm_preproc(im, 1.0f, edu, false);
                 h = fill_holes(i1, graphbg);
                 sub_sat(h, i1);
             }
             return h;
         });
-        i0 = fm_preproc(im, size, edu);
+        i0 = fm_preproc(im, size, edu, par);
         all_holes = holes.get();
     }
     i0 = fm_preproc2(sub_frame(i0, frame), frame);
@@ -329,11 +340,7 @@ ImageU8 mspa(const ImageU8& input, const MspaParams& p) {
         sub_sat(patch, reached);
         return patch;
     });
-    auto opening_task = spawn(par, [&] {
-        ImageU8 opening = external_boundary(core, size, edu);
-        add_sat(opening, core);
-        return opening;
-    });
+    std::shared_future<ImageU8> core_boundary = spawn(par, [&] { return external_boundary(core, size, edu); }).share();
     auto labels_task = spawn(par, [&] {
         Image<std::uint32_t> lbl = to_u32(core);
         label_components(lbl, graphfg);
@@ -357,7 +364,7 @@ ImageU8 mspa(const ImageU8& input, const MspaParams& p) {
         return r;
     });
 
-    auto [edges, perforation] = set_edges(core, size, graphfg, graphbg, edu);
+    auto [edges, perforation] = set_edges(core, size, graphfg, graphbg, edu, core_boundary, par);
     ImageU8 patch = patch_task.get();  // before i0 is modified below
     timer("core/patch/edges");
 
@@ -373,11 +380,12 @@ ImageU8 mspa(const ImageU8& input, const MspaParams& p) {
     shift_left(edges, 1);
     bit_or(out, edges);
 
-    const ImageU8 opening = opening_task.get();
+    ImageU8 opening = core_boundary.get();  // getopening: boundary + core
+    add_sat(opening, core);
     timer("residues");
     ImageU8 connector = connector_to_core(core, opening, residues, size, oitype, graphfg, edu, timer);
     timer("connector");
-    ImageU8 corridor = get_corridor(connector, labels_task.get(), opening, graphfg);
+    ImageU8 corridor = get_corridor(connector, labels_task.get(), opening, graphfg, par, timer);
     timer("corridor");
     {
         ImageU8 core_bits = core;
@@ -399,14 +407,9 @@ ImageU8 mspa(const ImageU8& input, const MspaParams& p) {
 
     timer("internal");
     out = sub_frame(out, frame);
-    for (i64 i = 0; i < out.size(); ++i) {
-        if (input[i] == 0) out[i] = mspa_class::kMissing;
-    }
+    fill_where_zero(out, input, mspa_class::kMissing);
     // GuidosToolbox post-processing for EdgeWidth == 1: value 2 -> 0.
-    if (p.edge_width == 1) {
-        for (u8& v : out.px)
-            if (v == 2) v = 0;
-    }
+    if (p.edge_width == 1) set_level(out, 2, 2, 0);
     return out;
 }
 

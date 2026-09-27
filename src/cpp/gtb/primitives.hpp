@@ -54,6 +54,10 @@ void set_level(ImageU8& a, u8 t1, u8 t2, u8 value);
 void threshold(ImageU8& a, u8 t1, u8 t2, u8 bg, u8 fg);
 // true when every pixel is zero (miallib volume(...) == 0)
 bool is_empty(const ImageU8& a);
+// a[i] = value where b[i] == 0
+void fill_where_zero(ImageU8& a, const ImageU8& b, u8 value);
+// largest pixel value (0 for an empty image)
+u8 max_value(const ImageU8& a);
 
 // ---------------------------------------------------------------------------
 // Distances
@@ -62,7 +66,7 @@ bool is_empty(const ImageU8& a);
 // uc_sqedt (efedt.c): squared Euclidean distance of every non-zero pixel to
 // the nearest zero pixel (Meijster, Roerdink & Hesselink), with the exact
 // integer types of the original (result truncated to 32 bits).
-std::vector<std::uint32_t> sqedt(const ImageU8& im);
+Buffer<std::uint32_t> sqedt(const ImageU8& im);
 
 // uint32_to_float followed by imsqrt, as used after sqedt.
 inline float edt_value(std::uint32_t d2) {
@@ -81,7 +85,11 @@ ImageU8 dilate_disk(const ImageU8& src, std::int64_t T);
 
 // ced (ced.c): constrained (geodesic) Euclidean distance from `ref` inside
 // `mask`, using the original FIFO propagation and Bresenham visibility test.
-std::vector<float> ced(const ImageU8& ref, const ImageU8& mask);
+Buffer<float> ced(const ImageU8& ref, const ImageU8& mask);
+
+// 1 where lo <= ced(ref, mask) <= hi, 0 elsewhere (pixels ced leaves at 0
+// included only when lo <= 0).
+ImageU8 ced_band(const ImageU8& ref, const ImageU8& mask, float lo, float hi);
 
 // ---------------------------------------------------------------------------
 // Reconstruction / connectivity (binary images with values 0/1)

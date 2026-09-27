@@ -65,7 +65,7 @@ std::vector<float> morph_distance(const ImageU8& mask, bool background, Distance
     std::vector<float> out(static_cast<std::size_t>(n), 0.0f);
 
     if (metric == DistanceMetric::Euclidean) {
-        const std::vector<std::uint32_t> d2 = sqedt(set);
+        const Buffer<std::uint32_t> d2 = sqedt(set);
 #if defined(_OPENMP)
 #pragma omp parallel for schedule(static) if (n >= kParallelThreshold)
 #endif

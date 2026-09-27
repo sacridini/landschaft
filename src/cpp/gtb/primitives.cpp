@@ -15,6 +15,11 @@
 #include <stdexcept>
 #include <utility>
 
+#if defined(__SSE2__) || defined(_M_X64) || defined(_M_AMD64)
+#include <emmintrin.h>
+#define GTB_SSE2 1
+#endif
+
 namespace gtb {
 
 namespace {
@@ -29,84 +34,177 @@ void check_same_shape(const ImageU8& a, const ImageU8& b) {
 // Pointwise operations
 // ---------------------------------------------------------------------------
 
-ImageU8 negation(const ImageU8& im) {
-    ImageU8 out(im.nx, im.ny);
-    const u8* a = im.data();
-    u8* o = out.data();
-    parallel_chunks(im.size(), [=](i64 b, i64 e) {
-        for (i64 i = b; i < e; ++i) o[i] = a[i] ? 0 : 1;
-    });
-    return out;
+// Pointwise kernels: SSE2 on 16 pixels at a time where available (MSVC does
+// not vectorise most 8-bit loops by itself), the same operation per pixel on
+// the rest. `vec` and `one` must agree.
+template <class Vec, class One>
+static void binary_kernel(u8* __restrict p, const u8* __restrict q, i64 n, Vec vec, One one) {
+    i64 i = 0;
+#if defined(GTB_SSE2)
+    for (; i + 16 <= n; i += 16) {
+        const __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(p + i));
+        const __m128i b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(q + i));
+        _mm_storeu_si128(reinterpret_cast<__m128i*>(p + i), vec(a, b));
+    }
+#else
+    (void)vec;
+#endif
+    for (; i < n; ++i) p[i] = one(p[i], q[i]);
 }
 
-// Kernels with restrict-qualified pointers so that the compiler vectorises.
-template <class Op>
-static void binary_kernel(u8* __restrict p, const u8* __restrict q, i64 n, Op op) {
-    for (i64 i = 0; i < n; ++i) p[i] = op(p[i], q[i]);
+template <class Vec, class One>
+static void unary_kernel(u8* __restrict p, i64 n, Vec vec, One one) {
+    i64 i = 0;
+#if defined(GTB_SSE2)
+    for (; i + 16 <= n; i += 16) {
+        const __m128i a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(p + i));
+        _mm_storeu_si128(reinterpret_cast<__m128i*>(p + i), vec(a));
+    }
+#else
+    (void)vec;
+#endif
+    for (; i < n; ++i) p[i] = one(p[i]);
 }
 
-template <class Op>
-static void unary_kernel(u8* __restrict p, i64 n, Op op) {
-    for (i64 i = 0; i < n; ++i) p[i] = op(p[i]);
-}
-
-// Applies p[i] = op(p[i], q[i]) over two images of equal shape.
-template <class Op>
-static void binary_op(ImageU8& a, const ImageU8& b, Op op) {
+// p[i] = op(p[i], q[i]) over two images of equal shape.
+template <class Vec, class One>
+static void binary_op(ImageU8& a, const ImageU8& b, Vec vec, One one) {
     check_same_shape(a, b);
     u8* p = a.data();
     const u8* q = b.data();
-    parallel_chunks(a.size(), [=](i64 lo, i64 hi) { binary_kernel(p + lo, q + lo, hi - lo, op); });
+    parallel_chunks(a.size(), [=](i64 lo, i64 hi) { binary_kernel(p + lo, q + lo, hi - lo, vec, one); });
 }
 
-// Applies p[i] = op(p[i]) over an image.
-template <class Op>
-static void unary_op(ImageU8& a, Op op) {
+// p[i] = op(p[i]) over an image.
+template <class Vec, class One>
+static void unary_op(ImageU8& a, Vec vec, One one) {
     u8* p = a.data();
-    parallel_chunks(a.size(), [=](i64 lo, i64 hi) { unary_kernel(p + lo, hi - lo, op); });
+    parallel_chunks(a.size(), [=](i64 lo, i64 hi) { unary_kernel(p + lo, hi - lo, vec, one); });
+}
+
+#if defined(GTB_SSE2)
+using V = __m128i;
+// x in [t1, t2] (unsigned) as 0xFF / 0x00 bytes.
+static inline V in_range(V x, u8 t1, u8 t2) {
+    const V lo = _mm_set1_epi8(static_cast<char>(t1));
+    const V hi = _mm_set1_epi8(static_cast<char>(t2));
+    const V ge = _mm_cmpeq_epi8(_mm_max_epu8(x, lo), x);
+    const V le = _mm_cmpeq_epi8(_mm_min_epu8(x, hi), x);
+    return _mm_and_si128(ge, le);
+}
+static inline V blend(V mask, V yes, V no) { return _mm_or_si128(_mm_and_si128(mask, yes), _mm_andnot_si128(mask, no)); }
+#define GTB_VEC(body) [=](V a, V b) { (void)b; return body; }
+#define GTB_VEC1(body) [=](V a) { return body; }
+#else
+struct V {};
+#define GTB_VEC(body) [](V, V) { return V{}; }
+#define GTB_VEC1(body) [](V) { return V{}; }
+#endif
+
+ImageU8 negation(const ImageU8& im) {
+    ImageU8 out = im;
+#if defined(GTB_SSE2)
+    const V zero = _mm_setzero_si128();
+    const V one = _mm_set1_epi8(1);
+#endif
+    unary_op(out, GTB_VEC1(_mm_and_si128(_mm_cmpeq_epi8(a, zero), one)), [](u8 x) { return static_cast<u8>(x ? 0 : 1); });
+    return out;
 }
 
 void bit_or(ImageU8& a, const ImageU8& b) {
-    binary_op(a, b, [](u8 x, u8 y) { return static_cast<u8>(x | y); });
+    binary_op(a, b, GTB_VEC(_mm_or_si128(a, b)), [](u8 x, u8 y) { return static_cast<u8>(x | y); });
 }
 
 void bit_and(ImageU8& a, const ImageU8& b) {
-    binary_op(a, b, [](u8 x, u8 y) { return static_cast<u8>(x & y); });
+    binary_op(a, b, GTB_VEC(_mm_and_si128(a, b)), [](u8 x, u8 y) { return static_cast<u8>(x & y); });
 }
 
 void sub_sat(ImageU8& a, const ImageU8& b) {
-    binary_op(a, b, [](u8 x, u8 y) { return static_cast<u8>(x > y ? x - y : 0); });
+    binary_op(a, b, GTB_VEC(_mm_subs_epu8(a, b)), [](u8 x, u8 y) { return static_cast<u8>(x > y ? x - y : 0); });
 }
 
 void add_sat(ImageU8& a, const ImageU8& b) {
-    binary_op(a, b, [](u8 x, u8 y) {
+    binary_op(a, b, GTB_VEC(_mm_adds_epu8(a, b)), [](u8 x, u8 y) {
         const int s = int(x) + int(y);
         return static_cast<u8>(s > 255 ? 255 : s);
     });
 }
 
 void inf(ImageU8& a, const ImageU8& b) {
-    binary_op(a, b, [](u8 x, u8 y) { return std::min(x, y); });
+    binary_op(a, b, GTB_VEC(_mm_min_epu8(a, b)), [](u8 x, u8 y) { return std::min(x, y); });
 }
 
 void sup(ImageU8& a, const ImageU8& b) {
-    binary_op(a, b, [](u8 x, u8 y) { return std::max(x, y); });
+    binary_op(a, b, GTB_VEC(_mm_max_epu8(a, b)), [](u8 x, u8 y) { return std::max(x, y); });
 }
 
 void shift_left(ImageU8& a, int k) {
-    unary_op(a, [k](u8 x) { return static_cast<u8>(x << k); });
+    if (k <= 0) return;
+    if (k >= 8) {
+        std::fill(a.px.begin(), a.px.end(), u8{0});
+        return;
+    }
+#if defined(GTB_SSE2)
+    const V keep = _mm_set1_epi8(static_cast<char>((0xFF << k) & 0xFF));
+    const V count = _mm_cvtsi32_si128(k);
+#endif
+    unary_op(a, GTB_VEC1(_mm_and_si128(_mm_sll_epi16(a, count), keep)), [k](u8 x) { return static_cast<u8>(x << k); });
 }
 
 void set_level(ImageU8& a, u8 t1, u8 t2, u8 value) {
-    unary_op(a, [=](u8 x) { return (x >= t1 && x <= t2) ? value : x; });
+#if defined(GTB_SSE2)
+    const V v = _mm_set1_epi8(static_cast<char>(value));
+#endif
+    unary_op(a, GTB_VEC1(blend(in_range(a, t1, t2), v, a)), [=](u8 x) { return (x >= t1 && x <= t2) ? value : x; });
 }
 
 void threshold(ImageU8& a, u8 t1, u8 t2, u8 bg, u8 fg) {
-    unary_op(a, [=](u8 x) { return (x >= t1 && x <= t2) ? fg : bg; });
+#if defined(GTB_SSE2)
+    const V vf = _mm_set1_epi8(static_cast<char>(fg));
+    const V vb = _mm_set1_epi8(static_cast<char>(bg));
+#endif
+    unary_op(a, GTB_VEC1(blend(in_range(a, t1, t2), vf, vb)), [=](u8 x) { return (x >= t1 && x <= t2) ? fg : bg; });
 }
 
+void fill_where_zero(ImageU8& a, const ImageU8& b, u8 value) {
+#if defined(GTB_SSE2)
+    const V zero = _mm_setzero_si128();
+    const V v = _mm_set1_epi8(static_cast<char>(value));
+#endif
+    binary_op(a, b, GTB_VEC(blend(_mm_cmpeq_epi8(b, zero), v, a)), [=](u8 x, u8 y) { return y == 0 ? value : x; });
+}
+
+u8 max_value(const ImageU8& a) {
+    const u8* p = a.data();
+    const i64 n = a.size();
+    i64 i = 0;
+    u8 m = 0;
+#if defined(GTB_SSE2)
+    V acc = _mm_setzero_si128();
+    for (; i + 16 <= n; i += 16) acc = _mm_max_epu8(acc, _mm_loadu_si128(reinterpret_cast<const V*>(p + i)));
+    alignas(16) u8 lanes[16];
+    _mm_store_si128(reinterpret_cast<V*>(lanes), acc);
+    for (const u8 l : lanes) m = std::max(m, l);
+#endif
+    for (; i < n; ++i) m = std::max(m, p[i]);
+    return m;
+}
+
+#undef GTB_VEC
+#undef GTB_VEC1
+
 bool is_empty(const ImageU8& a) {
-    return std::all_of(a.px.begin(), a.px.end(), [](u8 v) { return v == 0; });
+    const u8* p = a.data();
+    const i64 n = a.size();
+    i64 i = 0;
+    for (; i + 32 <= n; i += 32) {
+        std::uint64_t w[4];
+        std::memcpy(w, p + i, 32);
+        if ((w[0] | w[1] | w[2] | w[3]) != 0) return false;
+    }
+    for (; i < n; ++i)
+        if (p[i]) return false;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,13 +217,13 @@ inline u64 squ(i64 v) { return static_cast<u64>(v) * static_cast<u64>(v); }
 inline u64 normu(i64 a, i64 b) { return squ(a) + squ(b); }
 }  // namespace
 
-std::vector<std::uint32_t> sqedt(const ImageU8& im) {
+Buffer<std::uint32_t> sqedt(const ImageU8& im) {
     const i64 m = im.nx;
     const i64 n = im.ny;
     const std::uint32_t bigval = std::numeric_limits<std::uint32_t>::max() / 2;
     const u8* b = im.data();
-    std::vector<std::uint32_t> g(static_cast<std::size_t>(m * n));
-    std::vector<std::uint32_t> dt(static_cast<std::size_t>(m * n));
+    Buffer<std::uint32_t> g(static_cast<std::size_t>(m * n));
+    Buffer<std::uint32_t> dt(static_cast<std::size_t>(m * n));
 
     // Scans 1 and 2: vertical distances. Columns are independent; they are
     // swept in blocks so that the inner loop runs along contiguous memory.
@@ -159,8 +257,8 @@ std::vector<std::uint32_t> sqedt(const ImageU8& im) {
 #pragma omp parallel if (m * n >= kParallelThreshold)
 #endif
     {
-        std::vector<i64> s(static_cast<std::size_t>(m));
-        std::vector<i64> t(static_cast<std::size_t>(m));
+        Buffer<i64> s(static_cast<std::size_t>(m));
+        Buffer<i64> t(static_cast<std::size_t>(m));
 #if defined(_OPENMP)
 #pragma omp for schedule(static)
 #endif
@@ -218,20 +316,177 @@ std::int64_t isqrt(std::int64_t v) {
     while ((r + 1) * (r + 1) <= v) ++r;
     return r;
 }
-}  // namespace
 
-ImageU8 dilate_disk(const ImageU8& src, std::int64_t T) {
+// ---- Bit-packed rows: bit j of word i is pixel 64 i + j. ------------------
+
+// Non-zero bytes of row[0, n) as bits.
+void pack_row(const u8* row, i64 n, u64* bits) {
+    const i64 full = n / 64;
+    for (i64 w = 0; w < full; ++w) {
+        const u8* r = row + 64 * w;
+        u64 word = 0;
+#if defined(GTB_SSE2)
+        const __m128i zero = _mm_setzero_si128();
+        for (int k = 0; k < 4; ++k) {
+            const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i*>(r + 16 * k));
+            const unsigned zeros = static_cast<unsigned>(_mm_movemask_epi8(_mm_cmpeq_epi8(v, zero)));
+            word |= static_cast<u64>(~zeros & 0xFFFFu) << (16 * k);
+        }
+#else
+        for (int j = 0; j < 64; ++j) word |= static_cast<u64>(r[j] != 0) << j;
+#endif
+        bits[w] = word;
+    }
+    if (full * 64 < n) {
+        u64 word = 0;
+        for (i64 x = full * 64; x < n; ++x) word |= static_cast<u64>(row[x] != 0) << (x - full * 64);
+        bits[full] = word;
+    }
+}
+
+// bits as 0/1 bytes in row[0, n).
+void unpack_row(const u64* bits, i64 n, u8* row) {
+    const i64 full = n / 64;
+#if defined(GTB_SSE2)
+    const __m128i select = _mm_set_epi8(static_cast<char>(0x80), 0x40, 0x20, 0x10, 8, 4, 2, 1,
+                                        static_cast<char>(0x80), 0x40, 0x20, 0x10, 8, 4, 2, 1);
+    const __m128i one = _mm_set1_epi8(1);
+#endif
+    for (i64 w = 0; w < full; ++w) {
+        const u64 word = bits[w];
+        u8* r = row + 64 * w;
+#if defined(GTB_SSE2)
+        for (int k = 0; k < 4; ++k) {
+            const u64 m = (word >> (16 * k)) & 0xFFFFu;
+            const __m128i spread = _mm_set_epi64x(static_cast<long long>((m >> 8) * 0x0101010101010101ULL),
+                                                  static_cast<long long>((m & 0xFFu) * 0x0101010101010101ULL));
+            const __m128i hit = _mm_cmpeq_epi8(_mm_and_si128(spread, select), select);
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(r + 16 * k), _mm_and_si128(hit, one));
+        }
+#else
+        for (int j = 0; j < 64; ++j) r[j] = static_cast<u8>((word >> j) & 1u);
+#endif
+    }
+    for (i64 x = full * 64; x < n; ++x) row[x] = static_cast<u8>((bits[full] >> (x - full * 64)) & 1u);
+}
+
+// dst = src | src moved k pixels towards higher x | src moved k pixels towards lower x.
+void or_shifted_both(const u64* src, u64* dst, i64 nw, i64 k) {
+    const i64 q = k / 64;
+    const int r = static_cast<int>(k % 64);
+    for (i64 i = 0; i < nw; ++i) {
+        u64 v = src[i];
+        const i64 a = i - q;  // pixel p from p - k
+        if (a >= 0) {
+            v |= r ? (src[a] << r) : src[a];
+            if (r && a - 1 >= 0) v |= src[a - 1] >> (64 - r);
+        }
+        const i64 b = i + q;  // pixel p from p + k
+        if (b < nw) {
+            v |= r ? (src[b] >> r) : src[b];
+            if (r && b + 1 < nw) v |= src[b + 1] << (64 - r);
+        }
+        dst[i] = v;
+    }
+}
+
+// Horizontal dilation of a row by [-w, w]. A row dilated by [-a, a] and then
+// OR-ed with its shifts by -b and +b is dilated by [-(a + b), a + b] as long
+// as b <= 2a + 1 (the three copies overlap), so the radius grows 0, 1, 3, 7...
+// The row needs w zero pixels of margin on both sides.
+void dilate_row(u64* bits, u64* tmp, i64 nw, i64 w) {
+    for (i64 a = 0; a < w;) {
+        const i64 b = std::min(2 * a + 1, w - a);
+        or_shifted_both(bits, tmp, nw, b);
+        std::copy_n(tmp, nw, bits);
+        a += b;
+    }
+}
+
+// dilate_disk for small radii: rows packed into bits, dilated horizontally by
+// the disk's half-width at every row offset, and OR-ed over the offsets.
+ImageU8 dilate_disk_bits(const ImageU8& src, std::int64_t T, std::int64_t R) {
+    const i64 nx = src.nx;
+    const i64 ny = src.ny;
+    const i64 nw = (nx + 63) / 64;
+    // Rows carry `pad` zero words on both sides: the shifted copies of
+    // dilate_row must not lose the pixels just outside the row.
+    const i64 pad = (R + 63) / 64;
+    const i64 ns = nw + 2 * pad;
+    Buffer<std::int64_t> W(static_cast<std::size_t>(R + 1));
+    for (std::int64_t g = 0; g <= R; ++g) W[g] = isqrt(T - g * g);
+
+    Buffer<u64> packed(static_cast<std::size_t>(ns * ny), 0);
+    Buffer<u64> acc(static_cast<std::size_t>(nw * ny), 0);
+    Buffer<u64> hd(static_cast<std::size_t>(ns * ny));
+    const bool par = nx * ny >= kParallelThreshold;
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(static) if (par)
+#endif
+    for (i64 y = 0; y < ny; ++y) pack_row(src.data() + y * nx, nx, packed.data() + y * ns + pad);
+
+    // Row offsets 0..R grouped by half-width: rows are dilated once per width.
+    for (std::int64_t g0 = 0; g0 <= R;) {
+        std::int64_t g1 = g0;
+        while (g1 + 1 <= R && W[g1 + 1] == W[g0]) ++g1;
+        const i64 w = W[g0];
+#if defined(_OPENMP)
+#pragma omp parallel if (par)
+#endif
+        {
+            Buffer<u64> tmp(static_cast<std::size_t>(ns));
+#if defined(_OPENMP)
+#pragma omp for schedule(static)
+#endif
+            for (i64 y = 0; y < ny; ++y) {
+                u64* row = hd.data() + y * ns;
+                std::copy_n(packed.data() + y * ns, ns, row);
+                dilate_row(row, tmp.data(), ns, w);
+            }
+#if defined(_OPENMP)
+#pragma omp for schedule(static)
+#endif
+            for (i64 y = 0; y < ny; ++y) {  // acc(y) |= hd(y - g), hd(y + g) for g in [g0, g1]
+                u64* out = acc.data() + y * nw;
+                for (std::int64_t g = g0; g <= g1; ++g) {
+                    const i64 above = y - g;
+                    const i64 below = y + g;
+                    if (above >= 0) {
+                        const u64* in = hd.data() + above * ns + pad;
+                        for (i64 i = 0; i < nw; ++i) out[i] |= in[i];
+                    }
+                    if (g > 0 && below < ny) {
+                        const u64* in = hd.data() + below * ns + pad;
+                        for (i64 i = 0; i < nw; ++i) out[i] |= in[i];
+                    }
+                }
+            }
+        }
+        g0 = g1 + 1;
+    }
+
+    ImageU8 out(nx, ny);
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(static) if (par)
+#endif
+    for (i64 y = 0; y < ny; ++y) unpack_row(acc.data() + y * nw, nx, out.data() + y * nx);
+    return out;
+}
+
+// Radii up to this use the bit-packed version (its cost grows with R).
+constexpr std::int64_t kBitDiskMaxRadius = 24;
+
+// Column distances clipped at R + 1, then one sweep per row direction: the
+// cost does not depend on the radius.
+ImageU8 dilate_disk_sweep(const ImageU8& src, std::int64_t T, std::int64_t R) {
     const i64 nx = src.nx;
     const i64 ny = src.ny;
     ImageU8 out(nx, ny, 0);
-    if (T < 0) return out;
-    const std::int64_t R = isqrt(T);
-    if (R >= 65535) throw std::invalid_argument("dilate_disk: radius too large");
     const int far = static_cast<int>(R + 1);
 
     // Vertical distance to the nearest source in the same column, clipped at
     // R + 1 (anything farther cannot satisfy d^2 <= T).
-    std::vector<std::uint16_t> v(static_cast<std::size_t>(nx * ny));
+    Buffer<std::uint16_t> v(static_cast<std::size_t>(nx * ny));
     const u8* s = src.data();
     constexpr i64 kBlock = 1024;
     const i64 nblocks = (nx + kBlock - 1) / kBlock;
@@ -262,7 +517,7 @@ ImageU8 dilate_disk(const ImageU8& src, std::int64_t T) {
     }
 
     // Half-width of the disk at vertical offset g.
-    std::vector<std::int64_t> W(static_cast<std::size_t>(R + 1));
+    Buffer<std::int64_t> W(static_cast<std::size_t>(R + 1));
     for (std::int64_t g = 0; g <= R; ++g) W[g] = isqrt(T - g * g);
 
     // Pixel x is covered iff some column s has |x - s| <= W[v_s].
@@ -285,6 +540,16 @@ ImageU8 dilate_disk(const ImageU8& src, std::int64_t T) {
         }
     }
     return out;
+}
+
+}  // namespace
+
+ImageU8 dilate_disk(const ImageU8& src, std::int64_t T) {
+    if (T < 0) return ImageU8(src.nx, src.ny, 0);
+    const std::int64_t R = isqrt(T);
+    if (R >= 65535) throw std::invalid_argument("dilate_disk: radius too large");
+    if (R <= kBitDiskMaxRadius) return dilate_disk_bits(src, T, R);
+    return dilate_disk_sweep(src, T, R);
 }
 
 // ---------------------------------------------------------------------------
@@ -336,10 +601,20 @@ bool inmaskp(const u8* mask, i64 ncol, i64 base, long x2, long y2) {
 
 }  // namespace
 
-std::vector<float> ced(const ImageU8& ref_in, const ImageU8& mask_in) {
+namespace {
+
+// ced's propagation. The original fills three per-pixel arrays (vector to
+// the base pixel and base distance) before starting; here a state byte says
+// whether a pixel still holds those initial values (px = py = 0x7FFF, pb = 0,
+// or px = py = pb = 0 for the pixels that start as sources), so only the
+// pixels the front reaches are ever written. `emit(framed offset, value)` is
+// called for them with ced's value (the others are 0).
+template <class Emit>
+void ced_run(const ImageU8& ref_in, const ImageU8& mask_in, Emit emit) {
     check_same_shape(ref_in, mask_in);
     constexpr std::int16_t kShortMax = 0x7FFF;
     constexpr u8 kInQueue = 2;
+    constexpr u8 kInitial = 0, kInitialSource = 1, kAssigned = 2;
 
     const ImageU8 ref = add_frame<u8>(ref_in, 1, 0);
     ImageU8 pm = add_frame<u8>(mask_in, 1, 0);  // working copy, marks queued pixels
@@ -349,7 +624,7 @@ std::vector<float> ced(const ImageU8& ref_in, const ImageU8& mask_in) {
     const int dx[4] = {0, 1, 0, -1};
     const int dy[4] = {1, 0, -1, 0};
 
-    std::vector<i64> cur;
+    Buffer<i64> cur;
     cur.reserve(static_cast<std::size_t>(npix / 100 + 1024));
     for (i64 i = 0; i < npix; ++i) {
         if (ref[i] && pm[i]) {
@@ -364,84 +639,144 @@ std::vector<float> ced(const ImageU8& ref_in, const ImageU8& mask_in) {
         }
     }
 
-    // (px, py): vector from the current base pixel; pb: geodesic distance of
-    // that base pixel.
-    std::vector<std::int16_t> px(static_cast<std::size_t>(npix));
-    std::vector<std::int16_t> py(static_cast<std::size_t>(npix));
-    std::vector<float> pb(static_cast<std::size_t>(npix), 0.0f);
-    for (i64 i = 0; i < npix; ++i) {
-        const std::int16_t v = pm[i] <= 2 ? kShortMax : 0;
-        px[i] = v;
-        py[i] = v;
+    // The original's px/py (vector from the base pixel) and pb (distance of
+    // the base pixel) start as 0x7FFF / 0 where pm <= 2 and 0 elsewhere.
+    ImageU8 st(nx, ref.ny);
+    {
+        const u8* m = pm.data();
+        u8* t = st.data();
+        for (i64 i = 0; i < npix; ++i) t[i] = m[i] > 2 ? kInitialSource : kInitial;
     }
+    Buffer<std::int16_t> pxa(static_cast<std::size_t>(npix));
+    Buffer<std::int16_t> pya(static_cast<std::size_t>(npix));
+    Buffer<float> pba(static_cast<std::size_t>(npix));
+    Buffer<i64> assigned;
+    const u8* state = st.data();
+    auto px = [&](i64 i) -> std::int16_t { return state[i] == kAssigned ? pxa[i] : (state[i] == kInitial ? kShortMax : 0); };
+    auto py = [&](i64 i) -> std::int16_t { return state[i] == kAssigned ? pya[i] : (state[i] == kInitial ? kShortMax : 0); };
+    auto pb = [&](i64 i) -> float { return state[i] == kAssigned ? pba[i] : 0.0f; };
 
     auto sq = [](i64 v) { return v * v; };
+    // Distance of a pixel from its vector and base distance, as the remove
+    // pass compares it. Kept per queue entry: a waiting pixel's vector no
+    // longer changes, so it is not recomputed on every round.
+    auto dist = [&](i64 ofs) {
+        return std::sqrt(static_cast<double>(sq(px(ofs)) + sq(py(ofs)))) + static_cast<double>(pb(ofs));
+    };
     const u8* mask = pm.data();
-    std::vector<i64> next;
+    Buffer<i64> next;
+    Buffer<double> cur_d(cur.size()), next_d;
     next.reserve(cur.capacity());
     while (!cur.empty()) {
         // Look pass: compute a tentative distance for every queued pixel.
         float dmin = FLT_MAX;
-        for (const i64 ofs : cur) {
-            if (px[ofs] != kShortMax) continue;
+        for (std::size_t h = 0; h < cur.size(); ++h) {
+            const i64 ofs = cur[h];
+            if (px(ofs) != kShortMax) continue;
             float dp = FLT_MAX;
+            std::int16_t npx = 0, npy = 0;
+            float npb = 0.0f;
+            bool set = false;
             for (int k = 0; k < 4; ++k) {
                 const i64 o = ofs + shft[k];
-                if (px[o] == kShortMax) continue;
-                const i64 base = o - px[o] - i64(py[o]) * nx;
+                const std::int16_t pxo = px(o);
+                if (pxo == kShortMax) continue;
+                const std::int16_t pyo = py(o);
+                const float pbo = pb(o);
+                const i64 base = o - pxo - i64(pyo) * nx;
                 bool base_flag;
                 float dcrt;
-                if (inmaskp(mask, nx, base, px[o] + dx[k], py[o] + dy[k])) {
+                if (inmaskp(mask, nx, base, pxo + dx[k], pyo + dy[k])) {
                     base_flag = false;
                     dcrt = static_cast<float>(
-                        std::sqrt(static_cast<double>(sq(i64(px[o]) + dx[k]) + sq(i64(py[o]) + dy[k]))) +
-                        static_cast<double>(pb[o]));
+                        std::sqrt(static_cast<double>(sq(i64(pxo) + dx[k]) + sq(i64(pyo) + dy[k]))) +
+                        static_cast<double>(pbo));
                 } else {
                     base_flag = true;
-                    dcrt = static_cast<float>(std::sqrt(static_cast<double>(sq(px[o]) + sq(py[o]))) +
-                                              static_cast<double>(pb[o]) + 1.0);
+                    dcrt = static_cast<float>(std::sqrt(static_cast<double>(sq(pxo) + sq(pyo))) +
+                                              static_cast<double>(pbo) + 1.0);
                 }
                 if (dcrt < dp) {
                     if (base_flag) {
-                        px[ofs] = static_cast<std::int16_t>(dx[k]);
-                        py[ofs] = static_cast<std::int16_t>(dy[k]);
-                        pb[ofs] = dcrt - 1.0f;
+                        npx = static_cast<std::int16_t>(dx[k]);
+                        npy = static_cast<std::int16_t>(dy[k]);
+                        npb = dcrt - 1.0f;
                     } else {
-                        px[ofs] = static_cast<std::int16_t>(px[o] + dx[k]);
-                        py[ofs] = static_cast<std::int16_t>(py[o] + dy[k]);
-                        pb[ofs] = pb[o];
+                        npx = static_cast<std::int16_t>(pxo + dx[k]);
+                        npy = static_cast<std::int16_t>(pyo + dy[k]);
+                        npb = pbo;
                     }
+                    set = true;
                     dp = dcrt;
                 }
             }
+            if (set) {  // the original writes px/py/pb in place; no neighbour of ofs is ofs itself
+                if (state[ofs] != kAssigned) assigned.push_back(ofs);
+                st[ofs] = kAssigned;
+                pxa[ofs] = npx;
+                pya[ofs] = npy;
+                pba[ofs] = npb;
+            }
+            cur_d[h] = dist(ofs);
             if (dmin > dp) dmin = dp;
         }
         // Remove pass: pixels at the current minimum propagate, others wait.
         next.clear();
-        for (const i64 ofs : cur) {
-            const double d = std::sqrt(static_cast<double>(sq(px[ofs]) + sq(py[ofs]))) + static_cast<double>(pb[ofs]);
+        next_d.clear();
+        for (std::size_t h = 0; h < cur.size(); ++h) {
+            const i64 ofs = cur[h];
+            const double d = cur_d[h];
             if (d > static_cast<double>(dmin)) {
                 next.push_back(ofs);
+                next_d.push_back(d);
             } else {
                 for (int k = 0; k < 4; ++k) {
                     const i64 o = ofs + shft[k];
                     if (pm[o] == 1) {
                         next.push_back(o);
+                        next_d.push_back(0.0);  // new: computed by the next look pass
                         pm[o] = kInQueue;
                     }
                 }
             }
         }
         cur.swap(next);
+        cur_d.swap(next_d);
     }
 
-    Image<float> out(nx, ref.ny);
-    for (i64 i = 0; i < npix; ++i) {
-        float v = pb[i];
-        if (px[i] != kShortMax) v += static_cast<float>(std::sqrt(static_cast<double>(sq(px[i]) + sq(py[i]))));
-        out[i] = v;
+    // ced's value pb + |(px, py)| (pb alone where px is 0x7FFF): 0 on every
+    // pixel still holding its initial values.
+    for (const i64 i : assigned) {
+        float v = pba[i];
+        if (pxa[i] != kShortMax) v += static_cast<float>(std::sqrt(static_cast<double>(sq(pxa[i]) + sq(pya[i]))));
+        emit(i, v);
     }
-    return sub_frame(out, 1).px;
+}
+
+}  // namespace
+
+Buffer<float> ced(const ImageU8& ref_in, const ImageU8& mask_in) {
+    const i64 nx = ref_in.nx;
+    const i64 fnx = nx + 2;  // offsets of ced_run are in the framed image
+    Buffer<float> out(static_cast<std::size_t>(ref_in.size()), 0.0f);
+    ced_run(ref_in, mask_in, [&](i64 ofs, float v) {
+        const i64 x = ofs % fnx - 1;
+        const i64 y = ofs / fnx - 1;
+        if (x >= 0 && x < nx && y >= 0 && y < ref_in.ny) out[static_cast<std::size_t>(y * nx + x)] = v;
+    });
+    return out;
+}
+
+ImageU8 ced_band(const ImageU8& ref_in, const ImageU8& mask_in, float lo, float hi) {
+    const i64 nx = ref_in.nx;
+    const i64 fnx = nx + 2;
+    ImageU8 out(nx, ref_in.ny, 0);
+    ced_run(ref_in, mask_in, [&](i64 ofs, float v) {
+        const i64 x = ofs % fnx - 1;
+        const i64 y = ofs / fnx - 1;
+        if (x >= 0 && x < nx && y >= 0 && y < ref_in.ny && v >= lo && v <= hi) out.at(x, y) = 1;
+    });
+    return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -495,7 +830,7 @@ public:
         link(graph);
     }
 
-    const std::vector<Run>& runs() const { return runs_; }
+    const Buffer<Run>& runs() const { return runs_; }
     // Runs of row y are [row_begin(y), row_begin(y + 1)).
     i64 row_begin(i64 y) const { return row_begin_[y]; }
     // Root (component id) of run i; ids are run indices.
@@ -570,9 +905,9 @@ private:
     }
 
     i64 ny_;
-    std::vector<Run> runs_;
-    std::vector<i64> row_begin_;
-    std::vector<i64> parent_;
+    Buffer<Run> runs_;
+    Buffer<i64> row_begin_;
+    Buffer<i64> parent_;
 };
 
 }  // namespace
@@ -583,7 +918,7 @@ ImageU8 fill_holes(const ImageU8& im, int graph) {
     const u8* p = im.data();
     const RunComponents cc(p, nx, ny, graph, /*nonzero=*/false);
     const auto& runs = cc.runs();
-    std::vector<u8> touches_border(runs.size(), 0);
+    Buffer<u8> touches_border(runs.size(), 0);
     for (std::size_t r = 0; r < runs.size(); ++r) {
         const auto& run = runs[r];
         if (run.y == 0 || run.y == ny - 1 || run.xs == 0 || run.xe == nx) touches_border[cc.root(r)] = 1;
@@ -604,7 +939,7 @@ void reconstruct_dilation(ImageU8& marker, const ImageU8& mask, int graph) {
     const u8* k = marker.data();
     const RunComponents cc(m, nx, mask.ny, graph, /*nonzero=*/true);
     const auto& runs = cc.runs();
-    std::vector<u8> marked(runs.size(), 0);
+    Buffer<u8> marked(runs.size(), 0);
     for (std::size_t r = 0; r < runs.size(); ++r) {
         const auto& run = runs[r];
         const u8* row = k + run.y * nx;
@@ -637,7 +972,7 @@ void label_components(Image<std::uint32_t>& im, int graph) {
     const auto& runs = cc.runs();
     // Roots are the first run of each component in raster order, so numbering
     // roots in run order reproduces u32_label's raster-order labels (from 2).
-    std::vector<std::uint32_t> label_of(runs.size(), 0);
+    Buffer<std::uint32_t> label_of(runs.size(), 0);
     std::uint32_t lbl = 1;
     for (std::size_t r = 0; r < runs.size(); ++r) {
         if (cc.root(static_cast<i64>(r)) == static_cast<i64>(r)) {
@@ -660,7 +995,7 @@ std::uint32_t label_regions(const ImageU8& im, u8 value, int graph, bool bottom_
     const auto& runs = cc.runs();
 
     // Number the components in the order their first run is met.
-    std::vector<std::int32_t> label_of(runs.size(), 0);
+    Buffer<std::int32_t> label_of(runs.size(), 0);
     std::int32_t n = 0;
     areas.assign(1, 0);
     for (i64 k = 0; k < ny; ++k) {
@@ -688,40 +1023,56 @@ std::uint32_t label_regions(const ImageU8& im, u8 value, int graph, bool bottom_
     return static_cast<std::uint32_t>(n);
 }
 
-void wsfah(Image<std::uint32_t>& iml, const ImageU8& imr, int graph, int maxfl) {
-    if (iml.nx != imr.nx || iml.ny != imr.ny) throw std::invalid_argument("wsfah: shape mismatch");
+namespace {
+
+// The flood of wsfah with pixel offsets of type Idx (32 bits when the image
+// allows: half the memory traffic of the queues).
+template <class Idx>
+void wsfah_flood(std::uint32_t* pl, const u8* pr, i64 npix, const i64* shft, int nshft, int maxfl) {
     constexpr std::uint32_t kLabelMax = 0x7FFFFFFF;
     constexpr std::uint32_t kLabelMsb = 0x80000000;
-    const i64 nx = iml.nx;
-    std::vector<i64> shft;
-    if (graph == 4) {
-        shft = {-nx, -1, nx, 1};  // set_shift(graph = 4)
-    } else if (graph == 8) {
-        shft = {-nx, -1, nx, 1, -nx - 1, -nx + 1, nx - 1, nx + 1};  // set_shift(graph = 8)
-    } else {
-        throw std::invalid_argument("connectivity must be 4 or 8");
-    }
-    const int nshft = graph;
-    set_frame<std::uint32_t>(iml, 1, std::numeric_limits<std::uint32_t>::max());
+    Buffer<Buffer<Idx>> fah(static_cast<std::size_t>(maxfl));
 
-    ++maxfl;
-    std::vector<std::vector<i64>> fah(static_cast<std::size_t>(maxfl));
-    std::uint32_t* pl = iml.data();
-    const u8* pr = imr.data();
-    const i64 npix = iml.size();
-
+    // Blocks of 4 pixels are checked at once when all their neighbours lie
+    // inside the image (|shift| <= nx + 1).
+    const i64 nx1 = std::abs(shft[0]) + 1;
     auto init_pass = [&](int k0, int k1) {
         for (i64 i = 0; i < npix; ++i) {
-            if (pl[i] > 0 && pl[i] < kLabelMax) {
+#if defined(GTB_SSE2)
+            // A block is skipped when none of its seeds (labels in [1, kLabelMax))
+            // has a zero neighbour. The pass only turns zeros into non-seeds, so
+            // neither can appear later in the pass: the scalar loop would do nothing.
+            if ((i & 3) == 0 && i >= nx1 && i + 4 + nx1 <= npix) {
+                const __m128i zero = _mm_setzero_si128();
+                const __m128i v4 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pl + i));
+                const __m128i pos = _mm_cmpgt_epi32(v4, zero);  // 1 .. 0x7FFFFFFF
+                const __m128i top = _mm_cmpeq_epi32(v4, _mm_set1_epi32(0x7FFFFFFF));
+                const __m128i seeds = _mm_andnot_si128(top, pos);
+                if (_mm_movemask_epi8(seeds) == 0) {
+                    i += 3;
+                    continue;
+                }
+                __m128i open = zero;
                 for (int k = k0; k < k1; ++k) {
-                    const i64 o = i + shft[k];
-                    if (pl[o] == 0) {
-                        if (pr[o] < maxfl) {
-                            pl[o] = pl[i] | kLabelMsb;
-                            fah[pr[o]].push_back(o);
-                        } else {
-                            pl[o] = kLabelMax;
-                        }
+                    const __m128i nb = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pl + i + shft[k]));
+                    open = _mm_or_si128(open, _mm_cmpeq_epi32(nb, zero));
+                }
+                if (_mm_movemask_epi8(_mm_and_si128(seeds, open)) == 0) {
+                    i += 3;
+                    continue;
+                }
+            }
+#endif
+            const std::uint32_t v = pl[i];
+            if (v - 1u >= kLabelMax - 1u) continue;  // not in [1, kLabelMax)
+            for (int k = k0; k < k1; ++k) {
+                const i64 o = i + shft[k];
+                if (pl[o] == 0) {
+                    if (pr[o] < maxfl) {
+                        pl[o] = v | kLabelMsb;
+                        fah[pr[o]].push_back(static_cast<Idx>(o));
+                    } else {
+                        pl[o] = kLabelMax;
                     }
                 }
             }
@@ -733,27 +1084,53 @@ void wsfah(Image<std::uint32_t>& iml, const ImageU8& imr, int graph, int maxfl) 
     } else {
         init_pass(0, nshft);
     }
-    for (i64 i = 0; i < npix; ++i) {
-        if (pl[i] > kLabelMax) pl[i] ^= kLabelMsb;
-    }
+    // pl > kLabelMax has the top bit set: clearing it is what XOR did.
+    for (i64 i = 0; i < npix; ++i) pl[i] &= kLabelMax;
 
     for (int lev = 0; lev < maxfl; ++lev) {
-        for (std::size_t h = 0; h < fah[lev].size(); ++h) {
-            const i64 ofs = fah[lev][h];
+        Buffer<Idx>& queue = fah[lev];
+        for (std::size_t h = 0; h < queue.size(); ++h) {
+            const i64 ofs = static_cast<i64>(queue[h]);
+            const std::uint32_t label = pl[ofs];
             for (int k = 0; k < nshft; ++k) {
                 const i64 o = ofs + shft[k];
                 if (pl[o] == 0) {
-                    if (pr[o] < maxfl) {
-                        pl[o] = pl[ofs];
-                        fah[std::max<int>(lev, pr[o])].push_back(o);
+                    const u8 level = pr[o];
+                    if (level < maxfl) {
+                        pl[o] = label;
+                        fah[std::max<int>(lev, level)].push_back(static_cast<Idx>(o));
                     } else {
                         pl[o] = kLabelMax;
                     }
                 }
             }
         }
-        std::vector<i64>().swap(fah[lev]);
+        Buffer<Idx>().swap(queue);
     }
+}
+
+}  // namespace
+
+void wsfah(Image<std::uint32_t>& iml, const ImageU8& imr, int graph, int maxfl) {
+    if (iml.nx != imr.nx || iml.ny != imr.ny) throw std::invalid_argument("wsfah: shape mismatch");
+    const i64 nx = iml.nx;
+    i64 shft[8];
+    if (graph == 4) {  // set_shift(graph = 4)
+        const i64 s4[4] = {-nx, -1, nx, 1};
+        std::copy_n(s4, 4, shft);
+    } else if (graph == 8) {  // set_shift(graph = 8)
+        const i64 s8[8] = {-nx, -1, nx, 1, -nx - 1, -nx + 1, nx - 1, nx + 1};
+        std::copy_n(s8, 8, shft);
+    } else {
+        throw std::invalid_argument("connectivity must be 4 or 8");
+    }
+    set_frame<std::uint32_t>(iml, 1, std::numeric_limits<std::uint32_t>::max());
+    const i64 npix = iml.size();
+    // ++maxfl as in wsfah.c: levels 0..maxfl-1 are flooded.
+    if (npix <= static_cast<i64>(std::numeric_limits<std::uint32_t>::max()))
+        wsfah_flood<std::uint32_t>(iml.data(), imr.data(), npix, shft, graph, maxfl + 1);
+    else
+        wsfah_flood<i64>(iml.data(), imr.data(), npix, shft, graph, maxfl + 1);
     set_frame<std::uint32_t>(iml, 1, 0);
 }
 

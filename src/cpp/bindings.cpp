@@ -62,11 +62,12 @@ gtb::Image<T> to_image(const CArray<T>& a) {
     return im;
 }
 
-// Hand a std::vector over to numpy without copying it.
-template <class T>
-py::array_t<T> to_array(std::vector<T>&& v, i64 nx, i64 ny) {
-    auto* holder = new std::vector<T>(std::move(v));
-    py::capsule owner(holder, [](void* p) { delete static_cast<std::vector<T>*>(p); });
+// Hand a vector (std::vector or gtb::Buffer) over to numpy without copying it.
+template <class T, class A>
+py::array_t<T> to_array(std::vector<T, A>&& v, i64 nx, i64 ny) {
+    using V = std::vector<T, A>;
+    auto* holder = new V(std::move(v));
+    py::capsule owner(holder, [](void* p) { delete static_cast<V*>(p); });
     return py::array_t<T>({ny, nx}, holder->data(), owner);
 }
 

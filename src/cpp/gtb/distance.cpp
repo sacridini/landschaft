@@ -41,8 +41,8 @@ EuclideanDistanceResultCpp compute_euclidean_distance(const ImageU8& im) {
     }
 
     // Compute squared Euclidean distance transforms
-    const std::vector<std::uint32_t> sq_fg = sqedt(ext_fg);
-    const std::vector<std::uint32_t> sq_bg = sqedt(ext_bg);
+    const Buffer<std::uint32_t> sq_fg = sqedt(ext_fg);
+    const Buffer<std::uint32_t> sq_bg = sqedt(ext_bg);
 
     EuclideanDistanceResultCpp res;
     res.signed_distance.resize(static_cast<std::size_t>(nx * ny), 0.0f);

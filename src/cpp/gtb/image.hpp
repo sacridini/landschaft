@@ -12,18 +12,23 @@
 #include <stdexcept>
 #include <vector>
 
+#include "pool.hpp"
+
 namespace gtb {
 
 using u8 = std::uint8_t;
 using i64 = std::int64_t;
 
+// Images from this size run memory-bound per-pixel loops in parallel.
 constexpr i64 kParallelThreshold = i64(1) << 24;
+// Scans doing much work per pixel pay off in parallel on smaller images.
+constexpr i64 kHeavyScanThreshold = i64(1) << 20;
 
 template <class T>
 struct Image {
     i64 nx = 0;
     i64 ny = 0;
-    std::vector<T> px;
+    Buffer<T> px;
 
     Image() = default;
     Image(i64 nx_, i64 ny_, T value = T{})

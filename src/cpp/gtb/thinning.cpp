@@ -236,15 +236,15 @@ void thin_anchored(ImageU8& im, int stype, ImageU8& anchor) {
     Thinner th(im.data(), anchor.data(), stype, nx);
     const i64* sh = th.shifts();
     u8* img = im.data();
-    std::vector<u8> is_simple(static_cast<std::size_t>(npix), 0);
+    Buffer<u8> is_simple(static_cast<std::size_t>(npix), 0);
 
     // Initial scan: read-only, so it runs in parallel; per-chunk candidate
     // lists are concatenated in chunk order to keep the raster queue order.
     constexpr i64 kChunk = i64(1) << 16;
     const i64 nchunks = end > start ? (end - start + kChunk - 1) / kChunk : 0;
-    std::vector<std::vector<i64>> found(static_cast<std::size_t>(nchunks));
+    Buffer<Buffer<i64>> found(static_cast<std::size_t>(nchunks));
 #if defined(_OPENMP)
-#pragma omp parallel for schedule(dynamic) if (npix >= kParallelThreshold)
+#pragma omp parallel for schedule(dynamic) if (npix >= kHeavyScanThreshold)
 #endif
     for (i64 c = 0; c < nchunks; ++c) {
         const i64 lo = start + c * kChunk;
@@ -253,7 +253,7 @@ void thin_anchored(ImageU8& im, int stype, ImageU8& anchor) {
             if (img[i] && th.simple_pixel(i) && th.not_anchor(i) && th.indep_simple(i)) found[c].push_back(i);
         }
     }
-    std::vector<i64> current, next, removed;
+    Buffer<i64> current, next, removed;
     for (const auto& f : found) {
         for (const i64 i : f) {
             is_simple[i] = 1;
