@@ -164,6 +164,27 @@ def isochrone_map(resistance, marker) -> IsochroneResult:
     marker
         ``uint8`` map of the same size: 0 background, 1 object A (a single
         8-connected object), 3 missing (not crossed); 2 is ignored.
+
+    Returns
+    -------
+    IsochroneResult
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> import numpy as np
+    >>> resistance = ls.distance_to_resistance(forest)
+    >>> objects = ls.accounting(forest)                     # the two largest forest objects
+    >>> ids = objects.ids.values
+    >>> marker = np.zeros(forest.shape, dtype="uint8")
+    >>> marker[ids == objects.largest[0][0]] = 1            # object A
+    >>> marker[ids == objects.largest[1][0]] = 2            # object B
+    >>> marker[forest.values == 0] = 3                      # missing: not crossed
+    >>> only_a = np.where(marker == 2, 0, marker).astype("uint8")
+    >>> rings = ls.isochrone_map(resistance, only_a)
+    >>> rings.min_cost, rings.max_cost
+    (2, 1166)
     """
     resist, template = _load(resistance)
     mark, _ = _load(marker)
@@ -202,6 +223,36 @@ def isochrone_map_ab(resistance, marker) -> IsochroneResult:
     ``marker`` holds 1 = object A, 2 = object B (each a single 8-connected
     object, not touching each other), 3 = missing, 0 = background; see
     :func:`isochrone_map` for ``resistance``.
+
+    Parameters
+    ----------
+    resistance
+        ``uint8`` resistance map, as in :func:`isochrone_map`.
+    marker
+        ``uint8`` map: 1 object A, 2 object B, 3 missing, 0 background.
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
+    Returns
+    -------
+    IsochroneResult
+        With the least-cost path in ``lcp``.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> import numpy as np
+    >>> resistance = ls.distance_to_resistance(forest)
+    >>> objects = ls.accounting(forest)                     # the two largest forest objects
+    >>> ids = objects.ids.values
+    >>> marker = np.zeros(forest.shape, dtype="uint8")
+    >>> marker[ids == objects.largest[0][0]] = 1            # object A
+    >>> marker[ids == objects.largest[1][0]] = 2            # object B
+    >>> marker[forest.values == 0] = 3                      # missing: not crossed
+    >>> route = ls.isochrone_map_ab(resistance, marker)
+    >>> route.min_cost, int(np.asarray(route.lcp).sum())
+    (210, 215)
     """
     resist, template = _load(resistance)
     mark, _ = _load(marker)
@@ -259,6 +310,26 @@ def distance_to_resistance(data):
     foreground 2 and missing 0. The distance is IDL's MORPH_DISTANCE as GTB
     uses it (quasi-Euclidean; see :func:`landschaft.influence_zones` for the
     remaining differences to IDL).
+
+    Parameters
+    ----------
+    data
+        Map coded 0 missing, 1 background, 2 foreground.
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
+    Returns
+    -------
+    xarray.DataArray or numpy.ndarray
+        ``uint8`` resistance map (see :func:`resistance_colormap`).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> resistance = ls.distance_to_resistance(forest)
+    >>> int(resistance.min()), int(resistance.max())
+    (0, 38)
     """
     arr, template = _load(data)
     if not (arr == 2).any():

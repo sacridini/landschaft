@@ -40,6 +40,23 @@ def tile_layout(size: int, tile_size: int = 6500, overlap: int = 2000) -> list[t
     coordinates). Tiles start every ``tile_size - overlap`` pixels; the last
     one ends at the map border. Of each overlap, the first ``overlap // 2``
     pixels go to the earlier tile.
+
+    Parameters
+    ----------
+    size
+        Pixels along the axis.
+    tile_size, overlap
+        As in :func:`mspa_tiled`.
+
+    Returns
+    -------
+    list of tuple
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ls.tile_layout(10_000)
+    [(0, 6500, 0, 5500), (4500, 10000, 5500, 10000)]
     """
     if overlap < 0 or tile_size <= overlap:
         raise ValueError(f"tile_size ({tile_size}) must be larger than overlap ({overlap}) >= 0")
@@ -139,8 +156,17 @@ def mspa_tiled(
 
     Returns
     -------
-    The MSPA map (array or DataArray) for in-memory input; the path of the
-    written GeoTIFF for a path input.
+    numpy.ndarray, xarray.DataArray or pathlib.Path
+        The MSPA map for in-memory input; the path of the written GeoTIFF for a
+        path input.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> path = ls.mspa_tiled(ls.example_data("input"), "input_mspa_tiled.tif",
+    ...                      tile_size=600, overlap=200)
+    >>> path.name
+    'input_mspa_tiled.tif'
     """
     _check_params(connectivity, edge_width)
     tile_layout(1, tile_size, overlap)  # checks the tiling parameters

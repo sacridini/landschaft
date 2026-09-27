@@ -131,7 +131,15 @@ class LMHeatmap:
 
 @dataclass(frozen=True)
 class LMHeatmapChange:
-    """Heatmap difference B - A (GTB ``delta_heatmap.csv``); ``values`` as in :class:`LMHeatmap`."""
+    """Result of :func:`landscape_mosaic_change`: the heatmap difference B - A (GTB's ``delta_heatmap.csv``).
+
+    Attributes
+    ----------
+    values
+        Change of the share [%] of every LM class, as ``LMHeatmap.values``.
+    a, b
+        The heatmaps of the two times.
+    """
 
     values: np.ndarray
     a: LMHeatmap
@@ -227,6 +235,36 @@ def landscape_mosaic_change(a, b, window_size: int = 27, *, is_lm103: bool = Fal
 
     ``a`` and ``b`` are :class:`LMHeatmap` objects or maps accepted by
     :func:`landscape_mosaic_heatmap` (with ``window_size`` / ``is_lm103``).
+
+    Parameters
+    ----------
+    a, b
+        Times A and B: :class:`LMHeatmap` objects or maps accepted by
+        :func:`landscape_mosaic_heatmap`.
+    window_size, is_lm103
+        As in :func:`landscape_mosaic_heatmap`, for maps.
+    threads
+        Threads (0: all cores but one).
+
+    Returns
+    -------
+    LMHeatmapChange
+
+    Examples
+    --------
+    Agriculture (1) around the north-west corner becomes developed (3):
+
+    >>> import xarray as xr
+    >>> import landschaft as ls
+    >>> clc = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> before = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
+    >>> after = before.copy()
+    >>> corner = after.values[:600, :600]
+    >>> corner[corner == 1] = 3
+    >>> change = ls.landscape_mosaic_change(before, after, window_size=27)
+    >>> change.table.columns.tolist()
+    ['percent_a', 'percent_b', 'change', 'recode_class_19']
+    >>> _ = change.to_csv("delta_heatmap.csv")
     """
     ha = a if isinstance(a, LMHeatmap) else landscape_mosaic_heatmap(a, window_size, is_lm103=is_lm103,
                                                                       threads=threads)

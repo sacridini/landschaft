@@ -105,6 +105,8 @@ class InfluenceZonesResult:
 
     @property
     def n_objects(self) -> int:
+        """Number of objects (of at least ``min_area`` pixels).
+        """
         return int(self.object_area.size)
 
 
@@ -147,10 +149,17 @@ class ProximityResult:
 
     @property
     def n_objects(self) -> int:
+        """Number of objects (of at least ``min_area`` pixels).
+        """
         return int(self.object_area.size)
 
     def csv_text(self, source: str | None = None) -> str:
-        """GTB's ``<name>_proximity_<min_area>_<core_buffer>_<prox_max>.csv``."""
+        """GTB's proximity CSV (``<name>_proximity_<min_area>_<core_buffer>_<prox_max>.csv``) as text.
+
+        Returns
+        -------
+        str
+        """
         targets = " Core-obj." if self.core_buffer > 0 else " FG-obj."
         prox_min = "undef." if self.prox_min is None else str(self.prox_min)
         title = f"Min.{targets} size: {self.min_area} - {self.n_objects} objects - prox_min: {prox_min}"
@@ -163,7 +172,13 @@ class ProximityResult:
         return "\n".join(rows) + "\n"
 
     def to_csv(self, path: str | Path, source: str | None = None) -> Path:
-        """Write GTB's proximity CSV."""
+        """Write GTB's proximity CSV.
+
+        Parameters
+        ----------
+        path
+            Output file.
+        """
         path = Path(path)
         path.write_text(self.csv_text(source))
         return path
@@ -194,7 +209,27 @@ def influence_zones(
     buffer
         Width [pixels] of a background buffer drawn around the objects (0 = none).
     n_threads
-        OpenMP threads (0: all cores but one).
+        Threads (0 or ``None``: all cores but one).
+
+    Returns
+    -------
+    InfluenceZonesResult
+
+    Notes
+    -----
+    Experimental: the method is GTB's, but its distance transform (IDL's
+    ``MORPH_DISTANCE``) is not yet reproduced exactly, so zone boundaries can
+    differ in detail.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> zones = ls.influence_zones(forest, min_area=5000)
+    >>> zones.n_objects
+    10
+    >>> zones.object_area[:3]
+    array([214811,   7927,   7398])
     """
     arr, template, _ = _prepare(data, min_area, core_buffer)
     if buffer < 0:
@@ -226,6 +261,38 @@ def proximity(
     Parameters are those of :func:`influence_zones`, with ``prox_max``: the
     watershed lines with a proximity up to ``prox_max`` (or the minimum
     proximity, if larger) are marked 165 (GTB default 0).
+
+    Parameters
+    ----------
+    data
+        Map coded 0 missing, 1 background, 2 foreground (array, DataArray or
+        path).
+    min_area
+        Minimum object area in pixels (GTB default 5000).
+    core_buffer
+        Reduce the objects to their core first (see :func:`influence_zones`).
+    prox_max
+        Watershed lines with a proximity up to this value are marked 165.
+    n_threads
+        Threads (0 or ``None``: all cores but one).
+
+    Returns
+    -------
+    ProximityResult
+
+    Notes
+    -----
+    Experimental, as :func:`influence_zones`.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> near = ls.proximity(forest, min_area=5000)
+    >>> near.n_objects, near.prox_min
+    (10, 2)
+    >>> near.lines.columns.tolist()
+    ['x', 'y', 'nbr', 'clength', 'cag', 'ids', 'areas']
     """
     arr, template, name = _prepare(data, min_area, core_buffer)
     if prox_max < 0:

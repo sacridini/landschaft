@@ -53,7 +53,7 @@ _FOS_CLASSES = [
 
 @dataclass(frozen=True)
 class SimpleChangeResult:
-    """Results from simple binary change detection (A -> B).
+    """Result of :func:`simple_change`.
 
     Attributes
     ----------
@@ -72,6 +72,21 @@ class SimpleChangeResult:
         Pixels missing at one or both times.
     total_valid : int
         Total valid pixels (stable_bg + gain + loss + stable_fg).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> before = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> after = before.copy()
+    >>> cut = after.values[600:700, 100:260]
+    >>> cut[cut == 2] = 1                                   # a clear-cut
+    >>> plantation = after.values[250:330, 420:520]
+    >>> plantation[plantation == 1] = 2                     # a new plantation
+    >>> print(ls.simple_change(before, after).summary())  # doctest: +ELLIPSIS
+    Simple Change Analysis Summary (A -> B)
+    ...
+    Net Change [pixels]           : +1,329
+    ...
     """
 
     change_map: xr.DataArray | np.ndarray
@@ -84,11 +99,17 @@ class SimpleChangeResult:
 
     @property
     def net_change(self) -> int:
-        """Net foreground change in pixels (gain - loss)."""
+        """Net foreground change in pixels (gain - loss).
+        """
         return self.gain - self.loss
 
     def summary(self) -> str:
-        """Return a formatted text summary of simple change statistics."""
+        """Text summary of the change.
+
+        Returns
+        -------
+        str
+        """
         fg_a = self.stable_fg + self.loss
         fg_b = self.stable_fg + self.gain
         lines = [
@@ -112,7 +133,7 @@ class SimpleChangeResult:
 
 @dataclass(frozen=True)
 class MorphologicalChangeResult:
-    """Results from Morphological Change Detection (MCD).
+    """Result of :func:`morphological_change`.
 
     Attributes
     ----------
@@ -155,7 +176,12 @@ class MorphologicalChangeResult:
     elasticity: float
 
     def summary(self) -> str:
-        """Return a formatted text summary of MCD statistics."""
+        """Text summary of the change.
+
+        Returns
+        -------
+        str
+        """
         spurious_gain_b = self.fg_area_t2 - self.stable_fg - self.mcd_gain
         lines = [
             "Morphological Change Detection (MCD) Summary",
@@ -183,7 +209,7 @@ class MorphologicalChangeResult:
 
 @dataclass(frozen=True)
 class FOSChangeResult:
-    """Results from Fragmentation (FOS) Change Analysis.
+    """Result of :func:`fos_change`.
 
     Attributes
     ----------
@@ -224,7 +250,12 @@ class FOSChangeResult:
     matrix_6x6: pd.DataFrame
 
     def summary(self) -> str:
-        """Return a formatted text summary of FOS change statistics."""
+        """Text summary of the change.
+
+        Returns
+        -------
+        str
+        """
         lines = [
             "Fragmentation (FOS) Change Summary",
             "==================================",
@@ -283,19 +314,37 @@ def simple_change(
     t1: xr.DataArray | np.ndarray | str | Path,
     t2: xr.DataArray | np.ndarray | str | Path,
 ) -> SimpleChangeResult:
-    """Compute simple 4-class binary difference between two rasters.
+    """Pixel-by-pixel change of a habitat map between two dates.
+
+    Every pixel gets one of four transitions: stable background (11), gain (12),
+    loss (21) or stable foreground (22); 255 where either date is missing.
 
     Parameters
     ----------
-    t1 : xarray.DataArray, numpy.ndarray, str, or Path
-        Binary landcover raster at time 1 (0=missing, 1=background, 2=foreground).
-    t2 : xarray.DataArray, numpy.ndarray, str, or Path
-        Binary landcover raster at time 2 (0=missing, 1=background, 2=foreground).
+    t1, t2
+        Maps of the two dates, coded 0 missing, 1 background, 2 foreground
+        (DataArray, array or path), on the same grid.
 
     Returns
     -------
     SimpleChangeResult
-        Object containing the change map and transition statistics.
+
+    See Also
+    --------
+    morphological_change : separates structural change from edge noise.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> before = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> after = before.copy()
+    >>> cut = after.values[600:700, 100:260]
+    >>> cut[cut == 2] = 1                                   # a clear-cut
+    >>> plantation = after.values[250:330, 420:520]
+    >>> plantation[plantation == 1] = 2                     # a new plantation
+    >>> change = ls.simple_change(before, after)
+    >>> change.gain, change.loss, change.net_change
+    (6839, 5510, 1329)
     """
     u8_1, u8_2, xr_tpl = _prepare_inputs(t1, t2)
     res = _core.compute_simple_change(u8_1, u8_2)
@@ -334,23 +383,41 @@ def morphological_change(
     t1: xr.DataArray | np.ndarray | str | Path,
     t2: xr.DataArray | np.ndarray | str | Path,
 ) -> MorphologicalChangeResult:
-    """Compute Morphological Change Detection (MCD) between two rasters.
+    """Change of a habitat map that separates real structural change from edge noise (GTB's Morphological Change Detection).
 
-    Applies morphological core identification (distance > 2), geodesic reconstruction
-    by dilation, 3x3 closing, and segregates real structural changes from boundary chatter.
-    Also computes landscape elasticity.
+    Small shifts along patch edges (e.g. from slightly different
+    classifications of the two dates) are "spurious" (176); gains and losses
+    that change the shape of the habitat are kept (12, 21). The method finds the
+    cores of each date (pixels more than 2 pixels from the edge), reconstructs
+    them by geodesic dilation and closes the result with a 3 x 3 window.
+
+    The landscape elasticity compares the change of the core interior with the
+    total change.
 
     Parameters
     ----------
-    t1 : xarray.DataArray, numpy.ndarray, str, or Path
-        Binary landcover raster at time 1 (0=missing, 1=background, 2=foreground).
-    t2 : xarray.DataArray, numpy.ndarray, str, or Path
-        Binary landcover raster at time 2 (0=missing, 1=background, 2=foreground).
+    t1, t2
+        Maps of the two dates, coded 0 missing, 1 background, 2 foreground
+        (DataArray, array or path).
+    n_threads
+        Threads (0 or ``None``: all cores but one).
 
     Returns
     -------
     MorphologicalChangeResult
-        Object containing MCD change map, boundary chatter counts, and elasticity.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> before = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> after = before.copy()
+    >>> cut = after.values[600:700, 100:260]
+    >>> cut[cut == 2] = 1                                   # a clear-cut
+    >>> plantation = after.values[250:330, 420:520]
+    >>> plantation[plantation == 1] = 2                     # a new plantation
+    >>> change = ls.morphological_change(before, after)
+    >>> change.mcd_gain, change.mcd_loss, change.spurious
+    (7348, 5504, 395)
     """
     u8_1, u8_2, xr_tpl = _prepare_inputs(t1, t2)
     res = _core.compute_morphological_change(u8_1, u8_2)
@@ -395,19 +462,39 @@ def fos_change(
     t1: xr.DataArray | np.ndarray | str | Path,
     t2: xr.DataArray | np.ndarray | str | Path,
 ) -> FOSChangeResult:
-    """Compute Fragmentation (FOS) change map, transition matrix, and shift percentages.
+    """Change of fragmentation between two dates (GTB's FOS change).
+
+    Compares two :func:`fos` maps: for the foreground at both dates, the shift
+    of its fragmentation class (a 6 x 6 transition matrix from Rare to Intact),
+    and whether it became more or less fragmented; gains and losses of
+    foreground are marked separately.
 
     Parameters
     ----------
-    t1 : xarray.DataArray, numpy.ndarray, str, or Path
-        FOS density raster at time 1 (0..100 = FG density, 101 = BG, 102 = Missing, 105 = Water).
-    t2 : xarray.DataArray, numpy.ndarray, str, or Path
-        FOS density raster at time 2 (0..100 = FG density, 101 = BG, 102 = Missing, 105 = Water).
+    t1, t2
+        FOS maps of the two dates (``fos(...).map``: 0-100 foreground density,
+        101 background, 102 missing, 105 water).
+    n_threads
+        Threads (0 or ``None``: all cores but one).
 
     Returns
     -------
     FOSChangeResult
-        Object containing delta FOS map, 6x6 transition matrix, and shift statistics.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> before = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> after = before.copy()
+    >>> cut = after.values[600:700, 100:260]
+    >>> cut[cut == 2] = 1                                   # a clear-cut
+    >>> plantation = after.values[250:330, 420:520]
+    >>> plantation[plantation == 1] = 2                     # a new plantation
+    >>> shift = ls.fos_change(ls.fos(before, window_size=27).map, ls.fos(after, window_size=27).map)
+    >>> round(shift.frag_increase_pct, 2), round(shift.frag_decrease_pct, 2)
+    (54.71, 45.29)
+    >>> shift.matrix_6x6.shape
+    (6, 6)
     """
     u8_1, u8_2, xr_tpl = _prepare_inputs(t1, t2)
     res = _core.compute_fos_change(u8_1, u8_2)

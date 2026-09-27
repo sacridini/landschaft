@@ -46,30 +46,40 @@ __all__ = [
 
 @dataclass(frozen=True)
 class RestorationStatusResult:
-    """Results from GuidosToolbox Restoration Status (RSS) analysis.
+    """Result of :func:`restoration_status`.
 
     Attributes
     ----------
     data_area : int
-        Valid pixels in the image (total pixels minus missing / nodata).
+        Valid pixels (all but the missing ones).
     nr_comp : int
-        Number of 8-connected foreground habitat components.
+        Number of habitat objects (8-connected).
     eca_max : int
-        Total foreground habitat area in pixels (:math:`\\sum A_i`).
+        Total habitat area, pixels.
     larg_obj : int
-        Area of the largest foreground habitat component in pixels.
+        Area of the largest object, pixels.
     aps : float
-        Average Patch Size (:math:`ECA_{max} / N`).
+        Average patch size, eca_max / nr_comp.
     cnoa : int
-        Critical New Object Area (:math:`\\lfloor (2 b c^2)/(b^2 - c^2) + 1 \\rfloor`).
+        Critical new object area (GTB's formula), floor(2 b c² / (b² - c²) + 1)
+        with b = eca_max and c = eca.
     eca : float
-        Equivalent Connected Area (:math:`\\sqrt{\\sum A_i^2}`).
+        Equivalent connected area, sqrt(sum of A_i²), pixels.
     doc : float
-        Degree of Coherence (:math:`(ECA / ECA_{max}) \\times 100\\%`).
+        Degree of coherence, ECA / eca_max in %.
     rest_pot : float
-        Restoration Potential (:math:`100\\% - DOC`).
+        Restoration potential, 100 - doc.
     rac : float
-        Relative Area of Connected Habitat (:math:`(ECA_{max} / A_{valid}) \\times 100\\%`).
+        Relative area of habitat, eca_max / data_area in %.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> status = ls.restoration_status(forest)
+    >>> status.to_dataframe()[["NR_OBJ", "COH[%]", "REST_POT[%]"]]
+       NR_OBJ  COH[%]  REST_POT[%]
+    0    2850   51.64        48.36
     """
 
     data_area: int
@@ -84,7 +94,12 @@ class RestorationStatusResult:
     rac: float
 
     def to_dict(self) -> dict[str, Any]:
-        """Return the restoration status metrics as a dictionary."""
+        """The metrics as a dictionary.
+
+        Returns
+        -------
+        dict
+        """
         return {
             "data_area": self.data_area,
             "nr_comp": self.nr_comp,
@@ -99,7 +114,12 @@ class RestorationStatusResult:
         }
 
     def to_dataframe(self) -> pd.DataFrame:
-        """Return metrics formatted matching the GTB batch_rss spreadsheet."""
+        """The metrics as one row of GTB's ``batch_rss`` spreadsheet.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
         return pd.DataFrame(
             [
                 {
@@ -117,7 +137,12 @@ class RestorationStatusResult:
         )
 
     def summary(self) -> str:
-        """Return a formatted text summary of the restoration status."""
+        """Text summary of the restoration status.
+
+        Returns
+        -------
+        str
+        """
         lines = [
             "Restoration Status (RSS) Summary",
             "================================",
@@ -137,20 +162,34 @@ class RestorationStatusResult:
 def restoration_status(
     data: xr.DataArray | np.ndarray | str | Path,
 ) -> RestorationStatusResult:
-    """Compute GuidosToolbox Restoration Status (RSS) on a habitat map.
+    """How connected the habitat is and how much reconnecting it could add (GTB's Restoration Status, ``batch_rss``).
+
+    The habitat objects (8-connected foreground components) of areas A_i give:
+
+    - ECA (equivalent connected area) = sqrt(sum of A_i²), the size of a single
+      object with the same connectivity;
+    - DOC (degree of coherence) = ECA / total habitat area, in %;
+    - restoration potential = 100 - DOC;
+    - RAC (relative area of habitat) = habitat area / valid area, in %;
+    - APS (average patch size) and CNOA (critical new object area).
 
     Parameters
     ----------
-    data : xarray.DataArray, numpy.ndarray, str, or Path
-        Input habitat raster where:
-        - 0: NoData / missing
-        - 1: Background (or resistance values 1..100)
-        - 2: Foreground habitat
+    data
+        Map coded 0 missing, 1 background (or resistance 1-100), 2 foreground
+        (DataArray, array or path).
 
     Returns
     -------
     RestorationStatusResult
-        Computed restoration metrics including ECA, DOC, REST_POT, RAC, APS, and CNOA.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> status = ls.restoration_status(forest)
+    >>> status.nr_comp, round(status.doc, 1), round(status.rest_pot, 1)
+    (2850, 51.6, 48.4)
     """
     if isinstance(data, (str, Path)):
         data = load_raster(data)
@@ -180,19 +219,39 @@ def cost_distance(
     resistance: xr.DataArray | np.ndarray | str | Path,
     source_mask: xr.DataArray | np.ndarray | str | Path,
 ) -> xr.DataArray | np.ndarray:
-    """Compute 8-neighbor anisotropic cost distance from source pixels across resistance.
+    """Accumulated cost of travelling from the source cells across a resistance surface (8 neighbours).
+
+    A step costs the mean resistance of the two cells times the step length (1,
+    or sqrt(2) on the diagonals).
 
     Parameters
     ----------
-    resistance : xarray.DataArray, numpy.ndarray, str, or Path
-        Resistance / friction surface (1..100, where 0 represents impassable barrier / nodata).
-    source_mask : xarray.DataArray, numpy.ndarray, str, or Path
-        Binary mask (> 0 indicates source cells from which cost distance is measured).
+    resistance
+        Resistance surface (1-100; 0 = impassable / NoData): DataArray, array or
+        path.
+    source_mask
+        Cells > 0 (or ``True``) are the sources, at cost 0.
 
     Returns
     -------
     xarray.DataArray or numpy.ndarray
-        Array of accumulated cost distance values.
+        Accumulated cost; ``inf`` where the sources cannot be reached.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> import numpy as np
+    >>> resistance = ls.distance_to_resistance(forest)
+    >>> objects = ls.accounting(forest)                     # the two largest forest objects
+    >>> ids = objects.ids.values
+    >>> marker = np.zeros(forest.shape, dtype="uint8")
+    >>> marker[ids == objects.largest[0][0]] = 1            # object A
+    >>> marker[ids == objects.largest[1][0]] = 2            # object B
+    >>> marker[forest.values == 0] = 3                      # missing: not crossed
+    >>> cost = ls.cost_distance(resistance, marker == 1)
+    >>> round(float(cost.values[marker == 2].min()), 1)      # cheapest cost to reach B
+    370.4
     """
     is_xr = isinstance(resistance, xr.DataArray)
     xr_template = resistance if is_xr else None
@@ -222,22 +281,22 @@ def cost_distance(
 
 @dataclass(frozen=True)
 class LeastCostPathResult:
-    """Results from two-ended least-cost path calculation.
+    """Result of :func:`least_cost_path`.
 
     Attributes
     ----------
     combined_cost : xarray.DataArray or numpy.ndarray
-        Accumulated two-way cost field (Cost_A + Cost_B).
+        Cost from A plus cost from B.
     lcp_mask : xarray.DataArray or numpy.ndarray
-        Binary mask (1 on the least cost corridor path, 0 elsewhere).
+        1 on the path, 0 elsewhere.
     path_length : int
-        Total length of the path in pixels.
+        Length of the path, pixels.
     rest_pixels : int
-        Number of restore pixels along the path located in the background.
+        Pixels of the path in the background: what would have to be restored.
     expense : float
-        Total accumulated resistance along restore pixels.
+        Total resistance of those pixels.
     avg_distance : float
-        Average distance along restore pixels (if distance map was provided).
+        Mean distance of those pixels (with ``dist_map``; else 0).
     """
 
     combined_cost: xr.DataArray | np.ndarray
@@ -254,23 +313,40 @@ def least_cost_path(
     marker_b: xr.DataArray | np.ndarray | str | Path,
     dist_map: xr.DataArray | np.ndarray | None = None,
 ) -> LeastCostPathResult:
-    """Compute the two-ended least cost path between marker A and marker B.
+    """The least-cost path between two areas A and B.
+
+    The costs from A and from B (:func:`cost_distance`) are added; the path is
+    the cells of minimal total cost.
 
     Parameters
     ----------
-    resistance : xarray.DataArray, numpy.ndarray, str, or Path
-        Resistance friction surface (1..100, 0 = impassable).
-    marker_a : xarray.DataArray, numpy.ndarray, str, or Path
-        Source component / marker A mask.
-    marker_b : xarray.DataArray, numpy.ndarray, str, or Path
-        Target component / marker B mask.
-    dist_map : xarray.DataArray or numpy.ndarray, optional
-        Morphological distance transform map used to evaluate average distance quality.
+    resistance
+        Resistance surface (1-100; 0 = impassable).
+    marker_a, marker_b
+        Masks of areas A and B.
+    dist_map
+        Optional distance map (e.g. :func:`euclidean_distance`) to report the
+        mean distance of the restored cells.
 
     Returns
     -------
     LeastCostPathResult
-        Container with combined cost field, LCP binary mask, and summary metrics.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> import numpy as np
+    >>> resistance = ls.distance_to_resistance(forest)
+    >>> objects = ls.accounting(forest)                     # the two largest forest objects
+    >>> ids = objects.ids.values
+    >>> marker = np.zeros(forest.shape, dtype="uint8")
+    >>> marker[ids == objects.largest[0][0]] = 1            # object A
+    >>> marker[ids == objects.largest[1][0]] = 2            # object B
+    >>> marker[forest.values == 0] = 3                      # missing: not crossed
+    >>> path = ls.least_cost_path(resistance, marker == 1, marker == 2)
+    >>> path.path_length, path.rest_pixels, path.expense
+    (115, 113, 323.0)
     """
     is_xr = isinstance(resistance, xr.DataArray)
     xr_template = resistance if is_xr else None
@@ -322,7 +398,7 @@ def least_cost_path(
 
 @dataclass(frozen=True)
 class RestorationCorridorResult:
-    """Comprehensive restoration corridor impact assessment.
+    """Result of :func:`restoration_corridor`.
 
     Attributes
     ----------
@@ -337,19 +413,36 @@ class RestorationCorridorResult:
     expense : float
         Accumulated resistance cost of restored pixels.
     efficiency : float
-        Restoration efficiency (:math:`\\Delta ECA / Expense`).
+        Restoration efficiency, delta_eca / expense.
     eca_orig : float
         Landscape ECA before restoration.
     eca_new : float
         Landscape ECA after establishing the corridor.
     delta_eca : float
-        Net increase in ECA (:math:`ECA_{new} - ECA_{orig}`).
+        Net increase in ECA, eca_new - eca_orig.
     doc_orig : float
         Landscape Degree of Coherence (%) before restoration.
     doc_new : float
         Landscape Degree of Coherence (%) after restoration.
     delta_doc : float
         Net increase in Degree of Coherence (% points).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> import numpy as np
+    >>> resistance = ls.distance_to_resistance(forest)
+    >>> objects = ls.accounting(forest)                     # the two largest forest objects
+    >>> ids = objects.ids.values
+    >>> marker = np.zeros(forest.shape, dtype="uint8")
+    >>> marker[ids == objects.largest[0][0]] = 1            # object A
+    >>> marker[ids == objects.largest[1][0]] = 2            # object B
+    >>> marker[forest.values == 0] = 3                      # missing: not crossed
+    >>> corridor = ls.restoration_corridor(forest, resistance, marker == 1, marker == 2)
+    >>> corridor.to_dataframe()[["REST_PIX", "COH_ORIG", "COH_NEW"]]
+       REST_PIX  COH_ORIG  COH_NEW
+    0       113     51.64    59.06
     """
 
     lcp_result: LeastCostPathResult
@@ -366,7 +459,12 @@ class RestorationCorridorResult:
     delta_doc: float
 
     def to_dataframe(self) -> pd.DataFrame:
-        """Format metrics matching the GTB Restoration Planner spreadsheet."""
+        """The metrics as one row of GTB's Restoration Planner spreadsheet.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
         return pd.DataFrame(
             [
                 {
@@ -394,25 +492,42 @@ def restoration_corridor(
     marker_b: xr.DataArray | np.ndarray,
     dist_map: xr.DataArray | np.ndarray | None = None,
 ) -> RestorationCorridorResult:
-    """Evaluate connectivity gain and efficiency of a restoration corridor.
+    """Connectivity gain of restoring the least-cost corridor between two areas (GTB's Restoration Planner).
+
+    The corridor of :func:`least_cost_path` is turned into habitat and the
+    landscape's ECA and degree of coherence (:func:`restoration_status`) are
+    compared before and after.
 
     Parameters
     ----------
-    data : xarray.DataArray or numpy.ndarray
-        Input habitat map (0=missing, 1=bg, 2=fg).
-    resistance : xarray.DataArray or numpy.ndarray
-        Resistance map (1..100, 0=impassable).
-    marker_a : array-like
-        Binary mask of component A.
-    marker_b : array-like
-        Binary mask of component B.
-    dist_map : array-like, optional
-        Morphological distance transform map.
+    data
+        Habitat map coded 0 missing, 1 background, 2 foreground.
+    resistance
+        Resistance surface (1-100; 0 = impassable).
+    marker_a, marker_b
+        Masks of areas A and B.
+    dist_map
+        Optional distance map, as in :func:`least_cost_path`.
 
     Returns
     -------
     RestorationCorridorResult
-        Complete evaluation including ECA gain and restoration efficiency.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> import numpy as np
+    >>> resistance = ls.distance_to_resistance(forest)
+    >>> objects = ls.accounting(forest)                     # the two largest forest objects
+    >>> ids = objects.ids.values
+    >>> marker = np.zeros(forest.shape, dtype="uint8")
+    >>> marker[ids == objects.largest[0][0]] = 1            # object A
+    >>> marker[ids == objects.largest[1][0]] = 2            # object B
+    >>> marker[forest.values == 0] = 3                      # missing: not crossed
+    >>> corridor = ls.restoration_corridor(forest, resistance, marker == 1, marker == 2)
+    >>> corridor.rest_pixels, round(corridor.delta_eca, 2), round(corridor.delta_doc, 2)
+    (113, 31784.28, 7.41)
     """
     orig_rss = restoration_status(data)
     lcp_res = least_cost_path(resistance, marker_a, marker_b, dist_map=dist_map)

@@ -72,7 +72,35 @@ def _wrap_as_dataarray(
 
 @dataclass
 class EuclideanDistanceResult:
-    """Result of Euclidean Distance Transform analysis (:func:`euclidean_distance`)."""
+    """Result of :func:`euclidean_distance`.
+
+    Attributes
+    ----------
+    signed_distance
+        Distance of every pixel in pixels: positive in the foreground, negative
+        in the background, NaN on missing pixels.
+    byte_map
+        GTB's ``uint8`` display map of the distances (see :func:`dist_colormap`).
+    mean_fg_distance, max_fg_distance
+        Mean and maximum distance of the foreground pixels, in pixels.
+    mean_bg_distance, max_bg_distance
+        The same for the background (absolute values).
+    fg_pixel_count, bg_pixel_count
+        Number of foreground and background pixels.
+    stats
+        The same statistics as a table, in pixels and in map units.
+    pixel_size
+        Pixel size used for the map units (``None``: unknown).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> print(ls.euclidean_distance(forest, pixel_size=25).summary())  # doctest: +ELLIPSIS
+    ================================================================
+    GuidosToolbox (GTB) - Euclidean Distance Transform
+    ...
+    """
 
     signed_distance: xr.DataArray | np.ndarray
     byte_map: xr.DataArray | np.ndarray
@@ -86,7 +114,12 @@ class EuclideanDistanceResult:
     pixel_size: float | None = None
 
     def summary(self) -> str:
-        """Formatted text summary of distance statistics."""
+        """Text summary of the distance statistics.
+
+        Returns
+        -------
+        str
+        """
         buf = io.StringIO()
         buf.write("=" * 64 + "\n")
         buf.write("GuidosToolbox (GTB) - Euclidean Distance Transform\n")
@@ -103,26 +136,39 @@ def euclidean_distance(
     pixel_size: float | tuple[float, float] | None = None,
     threads: int = 0,
 ) -> EuclideanDistanceResult:
-    """Compute Euclidean Distance Transform matching GuidosToolbox batch_eucldist.
+    """Euclidean distance to the habitat edge, inside and outside the habitat (GTB's ``batch_eucldist``).
 
-    Calculates the true Euclidean distance from each foreground pixel to the
-    nearest edge (positive distance), and from each background pixel to the
-    nearest foreground patch (negative distance), replicating border pixels to
-    prevent edge artifact biases.
+    Every foreground pixel gets its straight-line distance to the nearest
+    background pixel (positive), every background pixel its distance to the
+    nearest foreground (negative). The border pixels are replicated so that the
+    map edge does not act as an edge.
 
     Parameters
     ----------
-    data : xarray.DataArray or numpy.ndarray
-        2D raster coded 0=missing, 1=background, 2=foreground.
-    pixel_size : float or tuple of float, optional
-        Physical pixel size (e.g. in meters) to convert distances to real-world units.
-    threads : int, default 0
-        Threads of the compiled code (also as ``n_threads``); 0: all cores but one.
+    data
+        Map coded 0 missing, 1 background, 2 foreground (DataArray, array or
+        path).
+    pixel_size
+        Pixel size (e.g. in metres) for the statistics in map units; read from a
+        georeferenced DataArray when omitted.
+    threads, n_threads
+        Threads (0 or ``None``: all cores but one).
 
     Returns
     -------
     EuclideanDistanceResult
-        Result containing signed float distance, GTB byte distance map, and statistics.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> distance = ls.euclidean_distance(forest, pixel_size=25)
+    >>> round(distance.mean_fg_distance, 2), round(distance.max_bg_distance, 2)
+    (6.01, 33.54)
+    >>> distance.stats[["class", "pixel_count", "mean_distance_units"]]
+                     class  pixel_count  mean_distance_units
+    0  Foreground (Forest)       428490               150.37
+    1  Background (Matrix)       571240               125.76
     """
     validate_mspa_input(data)
     arr = np.ascontiguousarray(data.values if isinstance(data, xr.DataArray) else data, dtype=np.uint8)

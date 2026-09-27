@@ -59,7 +59,8 @@ class FADChangeScale:
 
     @property
     def net_change(self) -> int:
-        """Net foreground cover change A -> B [pixels]."""
+        """Net foreground change A -> B, pixels.
+        """
         return self.fg_area_b - self.fg_area_a
 
 
@@ -77,7 +78,17 @@ class FADMultiscaleChangeResult:
     averages: pd.DataFrame
 
     def summary(self, scale: int | str = "mscale") -> str:
-        """Report of one scale in the layout of GTB's ``FAD_change_<scale>.txt``."""
+        """Report of one scale, in the layout of GTB's ``FAD_change_<scale>.txt``.
+
+        Parameters
+        ----------
+        scale
+            A window size or ``"mscale"``.
+
+        Returns
+        -------
+        str
+        """
         sc = self.scales[scale]
         windows = [w for w in self.scales if w != "mscale"]
         label = ("average over " + "-".join(f"{w}x{w}" for w in windows)) if scale == "mscale" else f"{scale}x{scale}"
@@ -153,12 +164,30 @@ def fad_multiscale_change(
     window_sizes
         FAD-MS observation scales (GTB: 7, 13, 27, 81, 243).
     n_threads
-        OpenMP threads (0: all cores but one).
+        Threads (0 or ``None``: all cores but one).
 
     Returns
     -------
     FADMultiscaleChangeResult
         One transition table per observation scale and for the multiscale map.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> before = ls.load_raster(ls.example_data("input"))   # 0 missing, 1 background, 2 forest
+    >>> after = before.copy()
+    >>> cut = after.values[600:700, 100:260]
+    >>> cut[cut == 2] = 1                                   # a clear-cut
+    >>> plantation = after.values[250:330, 420:520]
+    >>> plantation[plantation == 1] = 2                     # a new plantation
+    >>> change = ls.fad_multiscale_change(before, after)
+    >>> list(change.scales)
+    [7, 13, 27, 81, 243, 'mscale']
+    >>> scale = change.scales[27]
+    >>> scale.changed, round(scale.frag_increase_pct, 1)
+    (3470, 54.7)
+    >>> change.averages.loc[27, ["fad_av_a", "fad_av_b"]].round(2).tolist()
+    [73.54, 74.01]
     """
     window_sizes = [int(w) for w in window_sizes]
     maps_a = _fad_ms_maps(a, window_sizes, n_threads)

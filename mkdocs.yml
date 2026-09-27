@@ -152,6 +152,9 @@ nav:
       - Landscape metrics: api/landscape-metrics.md
       - Habitat networks: api/networks.md
       - Circuit connectivity: api/circuits.md
+      - Distance & restoration: api/distance.md
+      - Change detection: api/change.md
+      - Large data & batch: api/batch.md
   - About:
       - Changelog: about/changelog.md
       - License: about/license.md

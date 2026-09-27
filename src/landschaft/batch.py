@@ -43,7 +43,21 @@ BYTES_PER_PIXEL = 32
 
 @dataclass
 class BatchResult:
-    """Outcome of processing one input file."""
+    """Outcome of one input of :func:`batch` / :func:`mspa_batch`.
+
+    Attributes
+    ----------
+    input
+        The input raster.
+    output
+        The main output file (``None`` on error).
+    seconds
+        Run time.
+    error
+        The error message, or ``None``.
+    outputs
+        Every file written.
+    """
 
     input: Path
     output: Path | None
@@ -53,6 +67,8 @@ class BatchResult:
 
     @property
     def ok(self) -> bool:
+        """Whether the input was processed without error.
+        """
         return self.error is None
 
 
@@ -184,6 +200,18 @@ def mspa_batch(
     -------
     list of BatchResult
         One entry per input, in input order.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> Path("tiles").mkdir(exist_ok=True)
+    >>> for row in (0, 500):
+    ...     _ = ls.write_raster(forest[row:row + 500, :500], f"tiles/forest_{row}.tif")
+    >>> runs = ls.mspa_batch("tiles", "mspa_out", edge_width=1)
+    >>> [run.output.name for run in runs]
+    ['forest_0_8_1_1_1.tif', 'forest_500_8_1_1_1.tif']
     """
     if isinstance(inputs, RasterCollection):
         paths, band = inputs.paths, inputs.band
@@ -452,6 +480,24 @@ def batch(
     -------
     list of BatchResult
         One entry per input, in input order; ``outputs`` lists every file written.
+
+    Examples
+    --------
+    Accounting of every raster of a folder:
+
+    >>> from pathlib import Path
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> Path("tiles").mkdir(exist_ok=True)
+    >>> for row in (0, 500):
+    ...     _ = ls.write_raster(forest[row:row + 500, :500], f"tiles/forest_{row}.tif")
+    >>> runs = ls.batch("accounting", "tiles", "accounting_out")
+    >>> [run.ok for run in runs]
+    [True, True]
+    >>> [path.name for path in runs[0].outputs]  # doctest: +NORMALIZE_WHITESPACE
+    ['forest_0_accounting_classes.tif', 'forest_0_accounting_ids.tif',
+     'forest_0_accounting_area.tif', 'forest_0_accounting_stats.csv',
+     'forest_0_accounting.txt', 'forest_0_accounting.json']
     """
     name, fn = _resolve_tool(tool)
     if table_format not in ("csv", "parquet"):
