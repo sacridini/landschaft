@@ -65,7 +65,8 @@ def run_page(path: Path) -> list[str]:
     errors = []
     namespace: dict = {"__name__": "__docs__"}
     cwd = os.getcwd()
-    with tempfile.TemporaryDirectory(prefix="landschaft_docs_") as tmp:
+    # ignore_cleanup_errors: lazy (dask) arrays can keep files open on Windows
+    with tempfile.TemporaryDirectory(prefix="landschaft_docs_", ignore_cleanup_errors=True) as tmp:
         os.chdir(tmp)
         try:
             for line, code in blocks(path.read_text(encoding="utf-8")):
@@ -75,9 +76,13 @@ def run_page(path: Path) -> list[str]:
                     errors.append(f"{path.relative_to(ROOT)}:{line}\n{traceback.format_exc(limit=4)}")
                     break  # later blocks usually depend on this one
         finally:
+            import gc
+
             import matplotlib.pyplot as plt
 
             plt.close("all")
+            namespace.clear()
+            gc.collect()
             os.chdir(cwd)
     return errors
 

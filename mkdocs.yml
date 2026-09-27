@@ -130,6 +130,16 @@ nav:
       - Quickstart: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
       - Core concepts: getting-started/concepts.md
+  - Tutorials:
+      - tutorials/index.md
+      - Habitat patterns: tutorials/patterns.md
+      - Fragmentation: tutorials/fragmentation.md
+      - Landscape metrics: tutorials/landscape-metrics.md
+      - Habitat networks: tutorials/habitat-networks.md
+      - Circuit connectivity: tutorials/circuit-connectivity.md
+      - Distance & restoration: tutorials/distance-restoration.md
+      - Change detection: tutorials/change-detection.md
+      - Large data & batch: tutorials/large-data.md
   - About:
       - Changelog: about/changelog.md
       - License: about/license.md

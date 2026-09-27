@@ -85,5 +85,5 @@ opens in QGIS or ArcGIS with the usual colours.
 ## Where next
 
 - [Core concepts](concepts.md): how to prepare your own data.
-- The tutorial of your topic, from habitat patterns to circuit connectivity.
+- The [tutorial](../tutorials/index.md) of your topic, from habitat patterns to circuit connectivity.
 - [Configuration](configuration.md): threads and memory for large maps.

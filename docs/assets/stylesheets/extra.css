@@ -254,3 +254,8 @@ code, kbd, pre {
   font-weight: 700;
   letter-spacing: -0.01em;
 }
+
+/* option names in the first column of tables stay on one line */
+.md-typeset table:not([class]) td:first-child code {
+  white-space: nowrap;
+}
