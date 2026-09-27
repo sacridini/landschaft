@@ -208,4 +208,4 @@ object.
   [fragmentation tutorial](fragmentation.md).
 - Process many maps or maps larger than memory with MSPA in
   [large data & batch](large-data.md).
-- Every function and option: [API reference](../index.md).
+- Every function and option: [API reference](../api/patterns.md).

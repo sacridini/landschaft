@@ -173,7 +173,7 @@ Transboundary protected areas (`transboundary=`), several regions
 (`ls.conn.protconn_regions`), rasters of protected areas
 (`ls.conn.protconn_raster`) and hexagonal grids (`ls.conn.make_grid`,
 `ls.conn.connectivity_grid`) are covered in the
-[API reference](../index.md).
+[API reference](../api/networks.md#protected-area-connectivity).
 
 ## Networks from habitat patterns
 

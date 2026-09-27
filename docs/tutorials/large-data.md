@@ -151,5 +151,5 @@ needed.
 
 ## Next steps
 
-- The [API reference](../index.md) lists every option.
+- The [API reference](../api/batch.md) lists every option.
 - The [benchmarks](../index.md) show the speed you can expect.

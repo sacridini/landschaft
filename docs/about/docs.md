@@ -23,7 +23,10 @@ GitHub Pages.
 - `python tools/make_doc_figures.py` redraws every figure of the tutorials
   from the example data (`docs/assets/figures`).
 - `python tools/check_docs.py` runs every Python example of the pages, in
-  order, so that the documentation never shows code that does not work.
+  order, so that the documentation never shows code that does not work;
+  `python tools/check_docs.py --api` runs the examples of every docstring.
+- `python tools/make_api_index.py` rewrites the overview of the API reference
+  from the entries of its pages.
 
 ## Writing
 
