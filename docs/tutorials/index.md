@@ -2,12 +2,12 @@
 
 Step-by-step guides, one per topic. Each starts with what the analysis means
 and why you would use it, walks through a complete example on the maps that
-ship with landschaft, shows the results and how to read them, and ends with
+ship with Landschaft, shows the results and how to read them, and ends with
 the advanced options. Every code block runs as it is: copy it into a notebook
 and follow along.
 
 !!! tip "Before you start"
-    Install landschaft with the `plot` extra ([installation](../getting-started/installation.md))
+    Install Landschaft with the `plot` extra ([installation](../getting-started/installation.md))
     and read [core concepts](../getting-started/concepts.md): it explains how
     habitat maps are coded, which all tutorials rely on.
 

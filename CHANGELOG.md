@@ -1,10 +1,25 @@
 # Changelog
 
-All notable changes to landschaft are documented here. The project follows
+All notable changes to Landschaft are documented here. The project follows
 [Semantic Versioning](https://semver.org/); before 1.0 the API may still change
 between minor versions.
 
 ## [Unreleased]
+
+### Added
+- `Dockerfile`: a multi-stage image with the package built from source and every
+  optional feature (`docker build -t landschaft .`); `--target test` builds an image
+  that runs the test suite.
+
+### Changed
+- README reduced to the purpose, installation (conda, pip, Docker), a quick start and
+  a summary of validation and speed; the details live on the documentation website.
+- The project is written Landschaft in the README and on the website.
+- The home page highlights the reproduced tools and out-of-core processing.
+
+### Fixed
+- The C++ core did not compile with GCC on Linux, where `int64_t` is `long`: three
+  `std::max` calls mixed it with `long long` literals (grayspatcon, contortion).
 
 ## [0.53.0] - 2026-09-27
 

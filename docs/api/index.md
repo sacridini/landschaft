@@ -12,7 +12,7 @@ from landschaft import circuit      # Circuitscape
 ```
 
 !!! example "Every example runs"
-    The examples use the maps that ship with landschaft (`ls.example_data`) or
+    The examples use the maps that ship with Landschaft (`ls.example_data`) or
     small arrays built in place, and they are run as tests, outputs included.
     Copy one into a Python session to try a function.
 

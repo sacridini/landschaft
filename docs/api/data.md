@@ -4,7 +4,7 @@ Reading, preparing and writing rasters, colour tables, collections of files
 and the thread settings shared by every tool.
 
 !!! example "Every example runs"
-    The examples on these pages use the maps that ship with landschaft
+    The examples on these pages use the maps that ship with Landschaft
     (`ls.example_data`) and are run as tests, outputs included.
 
 ## Reading and writing

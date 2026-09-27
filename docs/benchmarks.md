@@ -1,6 +1,6 @@
 # Benchmarks & accuracy
 
-landschaft makes two promises: **the same results as the established tools**,
+Landschaft makes two promises: **the same results as the established tools**,
 and **much less waiting for them**. This page shows how both are checked, with
 the numbers.
 
@@ -34,9 +34,9 @@ the numbers.
 
 ![Speed-up over the original tools](assets/figures/bench_speedup.png)
 
-How much faster landschaft is than the tool it reproduces, on the cases in the
+How much faster Landschaft is than the tool it reproduces, on the cases in the
 tables below (logarithmic scale). The original's time is its own run,
-including its input and output where noted; landschaft is timed in memory.
+including its input and output where noted; Landschaft is timed in memory.
 
 !!! info "How these were measured"
     The MSPA table was measured with `tools/benchmark.py` (version 0.53) on a
@@ -51,8 +51,8 @@ including its input and output where noted; landschaft is timed in memory.
 
 Against GuidosToolbox's `mspa` executable (v2.3, whose time includes reading
 and writing its TIFF files) on its sample map and on the CORINE forest map;
-landschaft with 1 thread and with the default 19. Every output was compared
-pixel by pixel. landschaft is 10 to 17 times faster.
+Landschaft with 1 thread and with the default 19. Every output was compared
+pixel by pixel. Landschaft is 10 to 17 times faster.
 
 | Map | Connectivity, edge width | GuidosToolbox | 1 thread | 19 threads | Identical |
 |---|---|---|---|---|---|
@@ -64,7 +64,7 @@ pixel by pixel. landschaft is 10 to 17 times faster.
 | CORINE, 2000² | 4, 20 | 1.70 s | 0.213 s | 0.174 s | yes |
 
 At scale, the CORINE map repeated 3 × 3 (6000 × 6000, 36 million pixels)
-takes GuidosToolbox 20 to 26 s and landschaft 1.4 to 2.3 s, again with
+takes GuidosToolbox 20 to 26 s and Landschaft 1.4 to 2.3 s, again with
 identical outputs.
 
 MSPA's longest steps (geodesic distances, thinning, watershed) are ordered
@@ -84,7 +84,7 @@ only 10 to 30 % less time with more threads. Many maps gain fully: run them side
 
 Against the R package landscapemetrics 2.2.2.
 
-| Task | landscapemetrics (R) | landschaft | Since |
+| Task | landscapemetrics (R) | Landschaft | Since |
 |---|---|---|---|
 | All 133 metrics of `augusta_nlcd` (440 × 678) | 15.6 s | 0.03 s | 0.14 |
 | `sample_lsm`, 6 plots of `augusta_nlcd` | 3.7 s | 0.02 s | 0.15 |
@@ -99,7 +99,7 @@ blocks with the same results.
 
 Against the R package Makurhini (and, through it, gdistance).
 
-| Task | Makurhini (R) | landschaft | Since |
+| Task | Makurhini (R) | Landschaft | Since |
 |---|---|---|---|
 | IIC and node importances, 404 patches (`MK_dPCIIC`) | 1.4 s | 0.005 s | 0.30 |
 | PC and node importances, 404 patches (`MK_dPCIIC`) | 10.6 s | 0.017 s | 0.30 |
@@ -114,7 +114,7 @@ graph are rated in 22 s.
 
 Against Omniscape 0.7 and Circuitscape 6.1 (Julia), both with 20 threads.
 
-| Task | Original | landschaft | Since |
+| Task | Original | Landschaft | Since |
 |---|---|---|---|
 | Omniscape, 800 × 800, radius 10 | 29.4 s | 0.64 s | 0.43 |
 | Omniscape, 700 × 700, radius 25 | 46.7 s | 1.36 s | 0.43 |
@@ -156,7 +156,7 @@ factorisation), and the result does not depend on the number of threads.
 | MSPA | GuidosToolbox `mspa` v2.3 executable: sample map with 7 parameter sets, 10 synthetic scenes, live random scenes; during development 1,200 random cases and CORINE with edge widths up to 100 | identical, 0 differing pixels |
 | MSPA Tiling | GuidosToolbox's IDL code with its GDAL tools and `mspa`, in GDL | identical |
 | SPA, Accounting | GuidosToolbox's IDL code in GDL | identical maps and statistics |
-| FAD, FAD-MS, FOS, landscape mosaic, contagion and clustering | GuidosToolbox's IDL code and `spatcon` / `grayspatcon` / `recode` | identical maps; single-precision means and standard deviations to 1e-4 (landschaft computes in double) |
+| FAD, FAD-MS, FOS, landscape mosaic, contagion and clustering | GuidosToolbox's IDL code and `spatcon` / `grayspatcon` / `recode` | identical maps; single-precision means and standard deviations to 1e-4 (Landschaft computes in double) |
 | FAD-MS change, landscape mosaic heatmap and heatmap change | GuidosToolbox's IDL code in GDL | identical |
 | Isochrone maps A and AB, least-cost path | GuidosToolbox's `ggeo` and IDL post-processing | identical |
 | 133 landscape metrics and the utilities | landscapemetrics 2.2.2 (R): 14 maps (its example data, NA cells, non-square cells, degenerate layouts) × 5 option sets, live random maps | identical bits; `gyrate` and rare `enn` ties to a relative 1e-10; `circle` is randomised in landscapemetrics |
@@ -171,7 +171,7 @@ factorisation), and the result does not depend on the number of threads.
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an
 algebraic multigrid) is itself only about 2e-7 away from the exact solution;
-landschaft's solves are exact, so it is compared with their exact (CHOLMOD)
+Landschaft's solves are exact, so it is compared with their exact (CHOLMOD)
 runs.
 
 ### Checked in other ways
@@ -190,7 +190,7 @@ its code:
     - **Euclidean distance, distance to resistance, influence zones and
       proximity** depend on IDL's `MORPH_DISTANCE`, which does not always pick
       the nearest object near the boundaries between the zones of different
-      objects (about 1 % of the pixels of the test cases). landschaft's
+      objects (about 1 % of the pixels of the test cases). Landschaft's
       distances are exact Euclidean distances, so these maps can differ from
       GuidosToolbox's in detail; influence zones and proximity are marked
       experimental.

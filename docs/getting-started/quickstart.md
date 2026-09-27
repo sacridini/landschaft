@@ -1,6 +1,6 @@
 # Quickstart
 
-This walkthrough analyses the example map that ships with landschaft. It needs
+This walkthrough analyses the example map that ships with Landschaft. It needs
 nothing but a working [installation](installation.md) with the `plot` extra
 (matplotlib). Run the code in a Jupyter notebook, or save it in a `.py` file
 and run it with `python`.
@@ -19,7 +19,7 @@ print(forest.rio.crs)               # its coordinate reference system
 `load_raster` reads any raster file the same way, e.g.
 `ls.load_raster("my_forest.tif")`. The result is an `xarray.DataArray`: the
 pixel values plus the georeferencing (coordinates, CRS, NoData), which every
-landschaft function keeps.
+Landschaft function keeps.
 
 The map is coded the way habitat analyses expect it:
 

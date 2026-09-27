@@ -1,18 +1,18 @@
 ---
-title: landschaft
+title: Landschaft
 description: Fast, exact landscape pattern, fragmentation, landscape-metric and connectivity analysis for Python.
 hide:
   - navigation
   - toc
 ---
 
-# landschaft
+# Landschaft
 
 <div class="ls-hero" markdown>
 
 <div markdown>
 
-<p class="ls-hero__title"><span>landschaft</span></p>
+<p class="ls-hero__title"><span>Landschaft</span></p>
 
 <p class="ls-hero__tagline">
 Fast, exact landscape analysis for Python. Map habitat structure, measure
@@ -31,16 +31,16 @@ from a single raster on a laptop to continental maps larger than memory.
 </div>
 
 <div class="ls-hero__image" markdown>
-![landschaft](assets/images/logo-block.png)
+![Landschaft](assets/images/logo-block.png)
 </div>
 
 </div>
 
 <div class="ls-stats">
 <div><strong>130+</strong><small>landscape metrics</small></div>
-<div><strong>1,280+</strong><small>tests against reference outputs</small></div>
+<div><strong>7</strong><small>established tools reproduced and validated</small></div>
 <div><strong>up to 600×</strong><small>faster than the tools it reproduces</small></div>
-<div><strong>1 core</strong><small>always left free by default</small></div>
+<div><strong>Out-of-core</strong><small>rasters larger than memory</small></div>
 </div>
 
 ## What you can do
@@ -152,7 +152,7 @@ from a single raster on a laptop to continental maps larger than memory.
     flow["cum_currmap"].plot()
     ```
 
-## Why landschaft
+## Why Landschaft
 
 <div class="grid cards" markdown>
 
@@ -191,7 +191,7 @@ from a single raster on a laptop to continental maps larger than memory.
 
 !!! success "Validated against established tools"
 
-    landschaft reproduces the methods of GuidosToolbox (MSPA, fragmentation,
+    Landschaft reproduces the methods of GuidosToolbox (MSPA, fragmentation,
     accounting, restoration planning), the R package landscapemetrics and
     FRAGSTATS (landscape metrics), Conefor Sensinode and Makurhini (habitat
     networks), and Circuitscape and Omniscape (circuit connectivity), and is

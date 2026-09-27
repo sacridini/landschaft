@@ -1,12 +1,12 @@
 # Core concepts
 
-Every landschaft tool works on rasters and follows the same conventions. This
+Every Landschaft tool works on rasters and follows the same conventions. This
 page explains them once; the tutorials assume them.
 
 ## Rasters
 
 A raster is a grid of cells (pixels), each holding a number: a land-cover
-class, a percentage of tree cover, a resistance to movement... landschaft
+class, a percentage of tree cover, a resistance to movement... Landschaft
 accepts rasters in three forms:
 
 | Form | Example | Georeferencing |
@@ -69,7 +69,7 @@ says what it needs.
 
 Cells without data are marked by the raster's NoData value (a DataArray keeps
 it in `data.rio.nodata`), by NaN in floating-point rasters, or by 0 in habitat
-maps. landschaft leaves them out of every computation: a moving window near
+maps. Landschaft leaves them out of every computation: a moving window near
 NoData uses only the valid cells, a landscape metric counts only valid cells,
 and results carry NoData where the input had it.
 
@@ -78,7 +78,7 @@ and results carry NoData where the input had it.
 Distances, areas and densities use the raster's cell size and units. Use a
 **projected** coordinate system in metres (UTM, a national grid, EPSG:3035 in
 Europe...) whenever sizes matter: in a geographic CRS (degrees) a cell is not a
-square on the ground, and landschaft warns you where it matters. A numpy
+square on the ground, and Landschaft warns you where it matters. A numpy
 array has cells of size 1 unless a function takes a `res=` argument.
 
 Window sizes (`window_size=27`) and edge widths (`edge_width=2`) are counted in

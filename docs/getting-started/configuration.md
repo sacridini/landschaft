@@ -1,6 +1,6 @@
 # Configuration
 
-landschaft has no configuration file: a handful of settings, passed to the
+Landschaft has no configuration file: a handful of settings, passed to the
 functions that use them or set once for the Python session.
 
 ## Threads
@@ -63,6 +63,6 @@ landscape metrics tutorial).
 
 ## Reproducibility
 
-landschaft has no random numbers: the same input and options give the same
+Landschaft has no random numbers: the same input and options give the same
 output on the same platform, whatever the number of threads. Record the
 version (`ls.__version__`) with your results.

@@ -1,6 +1,6 @@
 # Installation
 
-landschaft is a Python package with a compiled C++ core. Until binary wheels
+Landschaft is a Python package with a compiled C++ core. Until binary wheels
 are published it is built from source, which takes two to five minutes the
 first time.
 
@@ -60,7 +60,7 @@ platform, which avoids most installation problems.
     ```
 
     `llvm-openmp` gives Apple's compiler the OpenMP runtime it lacks; without
-    it landschaft builds and runs, single-threaded.
+    it Landschaft builds and runs, single-threaded.
 
 === "Linux"
 
@@ -91,6 +91,36 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install "landschaft[all] @ git+https://github.com/sacridini/landschaft.git"
 ```
+
+## Run with Docker
+
+The repository has a `Dockerfile` that builds Landschaft with every optional
+feature in a Linux image, so the host needs neither a compiler nor Python, only
+[Docker](https://docs.docker.com/get-docker/):
+
+```bash
+git clone https://github.com/sacridini/landschaft.git
+cd landschaft
+docker build -t landschaft .
+```
+
+The container works in `/data`; mount the folder with your maps and scripts
+there:
+
+```bash
+docker run --rm -it -v "$PWD:/data" landschaft                 # Python shell
+docker run --rm -v "$PWD:/data" landschaft python analysis.py  # run a script
+```
+
+In PowerShell write `${PWD}` instead of `$PWD`. Outputs written with relative
+paths land in the mounted folder. Other options:
+
+| Command | Effect |
+|---|---|
+| `docker build --build-arg PYTHON_VERSION=3.11 -t landschaft .` | another Python version |
+| `docker build --build-arg EXTRAS= -t landschaft .` | the core only, without dask, matplotlib and geopandas (smaller image) |
+| `docker build --target test -t landschaft:test .` then `docker run --rm landschaft:test` | run the test suite in the container |
+| `docker run --cpuset-cpus 0-7 ...` | limit the cores; Landschaft then uses all of them but one |
 
 ## Optional features
 
