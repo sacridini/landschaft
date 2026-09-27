@@ -2,7 +2,7 @@
 //
 // Elementary functions with the bits R gives them on x86-64 Windows, where
 // landscapemetrics' reference values come from. R's arithmetic runs through
-// the mingw-w64 math library: log() and sqrt() are computed on the x87 unit
+// the mingw-w64 math library: log(), sqrt(), sin() and cos() are computed on the x87 unit
 // in extended precision and then rounded to double (so they can differ in
 // the last bit from a correctly rounded result or from MSVC's library), and
 // x^y with y other than 2 is powl(). On other processors the standard
@@ -19,6 +19,8 @@
 #define LSM_X87_MASM 1
 extern "C" double lsm_x87_log(double x);
 extern "C" double lsm_x87_sqrt(double x);
+extern "C" double lsm_x87_sin(double x);
+extern "C" double lsm_x87_cos(double x);
 extern "C" double lsm_x87_sum(const double* x, std::int64_t n);
 extern "C" void lsm_x87_accumulate(const double* x, std::int64_t n, void* acc);
 extern "C" double lsm_x87_to_double(const void* acc);
@@ -81,6 +83,36 @@ inline double r_sqrt(double x, bool scalar = false) {
     return static_cast<double>(v);
 #else
     return std::sqrt(x);
+#endif
+}
+
+// R's sin(x) and cos(x): mingw-w64 runs fsin / fcos in extended precision
+// (the same bits for landscapemetrics' circular plots).
+inline double r_sin(double x) {
+    if (!(std::fabs(x) < 9.2e18)) return std::sin(x);
+#if defined(LSM_X87_MASM)
+    return lsm_x87_sin(x);
+#elif defined(LSM_X87_INLINE)
+    detail::X87Precision precision;
+    long double v = x;
+    __asm__("fsin" : "+t"(v));
+    return static_cast<double>(v);
+#else
+    return std::sin(x);
+#endif
+}
+
+inline double r_cos(double x) {
+    if (!(std::fabs(x) < 9.2e18)) return std::cos(x);
+#if defined(LSM_X87_MASM)
+    return lsm_x87_cos(x);
+#elif defined(LSM_X87_INLINE)
+    detail::X87Precision precision;
+    long double v = x;
+    __asm__("fcos" : "+t"(v));
+    return static_cast<double>(v);
+#else
+    return std::cos(x);
 #endif
 }
 

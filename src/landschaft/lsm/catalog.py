@@ -6,9 +6,10 @@ from __future__ import annotations
 import functools
 from collections.abc import Iterable
 
+import numpy as np
 import pandas as pd
 
-__all__ = ["list_metrics", "canonical_name", "canonical_family", "LEVELS", "TYPES", "STATS"]
+__all__ = ["list_metrics", "add_full_name", "canonical_name", "canonical_family", "LEVELS", "TYPES", "STATS"]
 
 LEVELS = ("patch", "class", "landscape")
 TYPES = (
@@ -150,7 +151,7 @@ _CATALOG = [
     ("shdi", "shannon's diversity index", "diversity metric", "landscape"),
     ("shei", "shannon's evenness index", "diversity metric", "landscape"),
     ("sidi", "simpson's diversity index", "diversity metric", "landscape"),
-    ("siei", "simpson's evenness index", "diversity metric", "landscape"),
+    ("siei", "simspon's evenness index", "diversity metric", "landscape"),  # sic, as landscapemetrics
     ("split", "splitting index", "aggregation metric", "landscape"),
     ("ta", "total area", "area and edge metric", "landscape"),
     ("tca", "total core area", "core area metric", "landscape"),
@@ -256,6 +257,16 @@ def _subset(values: pd.Series, spec: list[str] | None, what: str) -> pd.Series:
     return values.isin(spec)
 
 
+# correct spellings of landscapemetrics' misspelt names
+_NAME_ALIASES = {"simpson's evenness index": "simspon's evenness index"}
+
+
+def _name_aliases(names: list[str] | None) -> list[str] | None:
+    if names is None:
+        return None
+    return [("-" if n.startswith("-") else "") + _NAME_ALIASES.get(n.lstrip("-"), n.lstrip("-")) for n in names]
+
+
 def select_metrics(level=None, metric=None, name=None, type=None, what=None, extras: bool = False) -> pd.DataFrame:
     """Catalogue rows chosen like landscapemetrics' ``list_lsm`` (plus the
     extras when ``extras``; extras named in ``what`` are always kept)."""
@@ -286,7 +297,7 @@ def select_metrics(level=None, metric=None, name=None, type=None, what=None, ext
         keep = (
             _subset(table["level"], level, "level")
             & _subset(table["family"], metric, "metric")
-            & _subset(table["name"], _as_list(name), "name")
+            & _subset(table["name"], _name_aliases(_as_list(name)), "name")
             & _subset(table["type"], _as_list(type), "type")
         )
     result = table[keep]
@@ -319,6 +330,31 @@ def list_metrics(level=None, metric=None, name=None, type=None, what=None, *, ex
         landscapemetrics) and ``function_name``.
     """
     return select_metrics(level, metric, name, type, what, extras).drop(columns="family")
+
+
+def add_full_name(df: pd.DataFrame) -> pd.DataFrame:
+    """``calculate_lsm(full_name = TRUE)``: the columns ``name``, ``type`` and
+    ``function_name`` of each row's metric, inserted after ``value``.
+
+    Looked up by the category codes of ``level`` and ``metric``, so large
+    patch tables are not converted to strings."""
+    table = _full_table()
+    level = pd.Categorical(df["level"])
+    metric = pd.Categorical(df["metric"])
+    row_of = {(lv, m): i for i, (lv, m) in enumerate(zip(table["level"], table["metric"]))}
+    lookup = np.full((len(level.categories) + 1, len(metric.categories) + 1), -1, dtype=np.int64)
+    for i, lv in enumerate(level.categories):
+        for j, m in enumerate(metric.categories):
+            lookup[i, j] = row_of.get((str(lv), str(m)), -1)
+    rows = lookup[level.codes, metric.codes]  # code -1 (NA) reads the last row / column: -1
+    out = df.copy()
+    at = out.columns.get_loc("value") + 1
+    for k, col in enumerate(("name", "type", "function_name")):
+        values = table[col].to_numpy()
+        cats, codes = np.unique(values, return_inverse=True)
+        col_codes = np.where(rows >= 0, codes[np.maximum(rows, 0)], -1)
+        out.insert(at + k, col, pd.Categorical.from_codes(col_codes, categories=cats))
+    return out
 
 
 # -- aliases ----------------------------------------------------------------------

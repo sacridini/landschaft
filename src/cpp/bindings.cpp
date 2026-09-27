@@ -44,6 +44,7 @@
 #include "conn/graph.hpp"
 #include "conn/nodes.hpp"
 #include "lsm/landscape.hpp"
+#include "lsm/rmath.hpp"
 
 namespace py = pybind11;
 using gtb::i64;
@@ -918,6 +919,21 @@ void bind_landscape(py::module_& m) {
         py::arg("values"), py::arg("na_mask"), py::arg("consider_boundary"), py::arg("edge_depth"),
         py::arg("patch_id"));
     m.def(
+        "lsm_unique_values",
+        [](const CArray<std::int32_t>& values, const py::object& na_mask) {
+            CArray<std::uint8_t> mask_arr;
+            const lsm::RasterView r = raster_view(values, na_mask, mask_arr, 1.0, 1.0);
+            std::vector<std::int32_t> v;
+            {
+                py::gil_scoped_release release;
+                v = lsm::unique_values(r.values, r.na_mask, r.nx * r.ny);
+            }
+            py::array_t<std::int32_t> a(static_cast<py::ssize_t>(v.size()));
+            std::copy(v.begin(), v.end(), a.mutable_data());
+            return a;
+        },
+        py::arg("values"), py::arg("na_mask"), "The distinct non-NA values of a raster, sorted.");
+    m.def(
         "lsm_r_cor",
         [](const CArray<double>& x, const std::string& method) {
             if (x.ndim() != 2) throw py::value_error("expected a 2-D array (observations x variables)");
@@ -948,6 +964,18 @@ void bind_landscape(py::module_& m) {
         },
         py::arg("rings"), py::arg("geotransform"), py::arg("nx"), py::arg("ny"),
         "Mask of polygon rings burnt as GDAL's rasterizer with ALL_TOUCHED=TRUE.");
+    m.def(
+        "lsm_r_sincos",
+        [](const CArray<double>& x) {
+            const auto n = static_cast<py::ssize_t>(x.size());
+            py::array_t<double> s(n), c(n);
+            for (py::ssize_t i = 0; i < n; ++i) {
+                s.mutable_data()[i] = lsm::r_sin(x.data()[i]);
+                c.mutable_data()[i] = lsm::r_cos(x.data()[i]);
+            }
+            return py::make_tuple(s, c);
+        },
+        py::arg("x"), "R's sin(x) and cos(x) (the x87 bits of R on x86-64 Windows).");
     m.def("lsm_r_statistics", &lsm::r_statistics, py::arg("x"),
           "R's sum, mean, sd and median of x, log(x[0]) and sqrt(x[0]), as landschaft computes them.");
     m.def(

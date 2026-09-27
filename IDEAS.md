@@ -13,11 +13,13 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
 
 ## Uso e API
 
-- Próxima parte (o que ainda falta da API do landscapemetrics): `full_name` (colunas
-  `name`, `type` e `function_name` como no `calculate_lsm`), `return_raster` no
-  `sample_metrics` (o recorte do raster de cada plot, como no `sample_lsm`) e os
-  helpers públicos `construct_buffer`, `pad_raster`, `raster_to_points` e
-  `get_unique_values`, conferidos contra o R como nas outras partes.
+- O que faltava da API do landscapemetrics: `full_name`, `return_raster` no
+  `sample_metrics` e os helpers `construct_buffer`, `pad_raster`, `unpad_raster`,
+  `raster_to_points` e `get_unique_values`. **Feito** (0.49.0, bit a bit com o R; o
+  `sin` do círculo é o `fsin` x87; o extent dos recortes é o do terra num raster intacto:
+  o `crop(mask = TRUE)` do terra reescreve o extent do raster recortado, e no
+  `sample_lsm` os plots depois do primeiro saem deslocados alguns ulps, o que não
+  reproduzimos).
 
 ## Exportação
 

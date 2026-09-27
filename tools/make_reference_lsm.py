@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_lsm.py [lsm] [sample] [window] [rmath] [utils]
+    python tools/make_reference_lsm.py [lsm] [sample] [window] [rmath] [utils] [api]
 
 Needs Rscript with landscapemetrics and terra (see ``tests/lsm_reference.py``
 for ``LANDSCHAFT_RSCRIPT`` / ``LANDSCHAFT_R_LIBS``). ``lsm`` (default: all
@@ -19,7 +19,10 @@ of ``calculate_lsm`` for each option set to
 (``get_centroids``, ``get_nearestneighbour``, ``get_circumscribingcircle``,
 ``get_adjacencies``, ``get_boundaries``, ``extract_lsm``, ``check_landscape``,
 ``calculate_correlation``; ``tools/lsm_utils_reference.R``) in
-``tests/data/reference/lsm_utils``. The test-suite
+``tests/data/reference/lsm_utils``; ``api`` stores ``full_name``,
+``return_raster`` and the public helpers (``construct_buffer``, ``pad_raster``,
+``unpad_raster``, ``raster_to_points``, ``get_unique_values``;
+``tools/lsm_api_reference.R``) in ``tests/data/reference/lsm_api``. The test-suite
 compares landschaft against these files, so it runs anywhere without R.
 """
 
@@ -48,6 +51,15 @@ OUT_WINDOW = ROOT / "tests" / "data" / "reference" / "lsm_window"
 OUT_RMATH = ROOT / "tests" / "data" / "reference" / "lsm_rmath"
 OUT_UTILS = ROOT / "tests" / "data" / "reference" / "lsm_utils"
 R_UTILS_SCRIPT = ROOT / "tools" / "lsm_utils_reference.R"
+OUT_API = ROOT / "tests" / "data" / "reference" / "lsm_api"
+R_API_SCRIPT = ROOT / "tools" / "lsm_api_reference.R"
+# raster, buffer size in cells (not a whole number: plots cut cells)
+API_CASES = {
+    "augusta": ("augusta.tif", 3.4),
+    "podlasie": ("podlasie.tif", 2.6),
+    "synthetic_na": ("synthetic_na.tif", 2.2),
+    "sparse": ("sparse.tif", 4.1),
+}
 
 # (input, options): the stored maps, with the utilities' options
 UTILS_CASES = {
@@ -185,6 +197,56 @@ def make_utils(rscript) -> None:
             print(f"{name}: {len(files[name]['outputs'])} tables")
     write_manifest(OUT_UTILS, rscript, files, {"stack": [p.name for p in stack],
                                               "neighbourhood": UTILS_NEIGHBOURHOOD.tolist()})
+
+
+def api_points(tif: Path, size: float) -> pd.DataFrame:
+    """Plot centres whose buffers lie inside the raster."""
+    import rasterio
+
+    with rasterio.open(tif) as src:
+        b = src.bounds
+    rng = np.random.default_rng(11)
+    xs = rng.uniform(b.left + size, b.right - size, 5)
+    ys = rng.uniform(b.bottom + size, b.top - size, 5)
+    return pd.DataFrame({"x": xs, "y": ys})
+
+
+def make_api(rscript) -> None:
+    """full_name, return_raster and the public helpers (construct_buffer,
+    pad_raster, unpad_raster, raster_to_points, get_unique_values)."""
+    import gzip
+    import shutil
+
+    import rasterio
+
+    OUT_API.mkdir(parents=True, exist_ok=True)
+    files = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        for name, (tif, cells) in API_CASES.items():
+            with rasterio.open(INPUTS / tif) as src:
+                size = float(cells * src.res[0])
+            points = api_points(INPUTS / tif, size)
+            pts = tmp / f"{name}_points.csv"
+            points.to_csv(pts, index=False, float_format="%.17g")
+            out = tmp / name
+            lsm_reference._run_r(rscript, R_API_SCRIPT, [INPUTS / tif, pts, repr(size), out], {})
+            target = OUT_API / name
+            if target.exists():
+                shutil.rmtree(target)
+            target.mkdir(parents=True)
+            points.to_csv(target / "points.csv", index=False, float_format="%.17g")
+            outputs = []
+            for f in sorted(out.iterdir()):
+                if f.suffix == ".csv":
+                    with open(f, "rb") as src, gzip.GzipFile(target / (f.name + ".gz"), "wb", mtime=0) as dst:
+                        shutil.copyfileobj(src, dst)
+                else:
+                    shutil.copy(f, target / f.name)
+                outputs.append(f.name)
+            files[name] = {"input": tif, "size": size, "outputs": outputs}
+            print(f"{name}: {len(outputs)} files")
+    write_manifest(OUT_API, rscript, files)
 
 
 def make_rmath(rscript) -> None:
@@ -363,8 +425,9 @@ def write_manifest(folder: Path, rscript, files: dict, extra: dict | None = None
 
 
 def main() -> None:
-    parts = {a for a in sys.argv[1:] if not a.startswith("--")} or {"lsm", "sample", "window", "rmath", "utils"}
-    unknown = parts - {"lsm", "sample", "window", "rmath", "utils"}
+    all_parts = {"lsm", "sample", "window", "rmath", "utils", "api"}
+    parts = {a for a in sys.argv[1:] if not a.startswith("--")} or all_parts
+    unknown = parts - all_parts
     if unknown:
         sys.exit(f"unknown part(s): {sorted(unknown)}")
     rscript = lsm_reference.find_rscript()
@@ -378,6 +441,8 @@ def main() -> None:
         make_rmath(rscript)
     if "utils" in parts:
         make_utils(rscript)
+    if "api" in parts:
+        make_api(rscript)
     if "window" in parts:
         make_window(rscript)
 

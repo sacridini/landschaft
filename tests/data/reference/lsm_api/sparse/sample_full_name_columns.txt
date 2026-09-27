@@ -1,0 +1,11 @@
+layer
+level
+class
+id
+metric
+value
+name
+type
+plot_id
+percentage_inside
+raster_sample_plots

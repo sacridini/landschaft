@@ -920,6 +920,45 @@ values with the untransposed shape). And
 ordered like landscapemetrics' `scale_sample` (plot, level, metric, class, id, size);
 points only.
 
+**`full_name=True`** (in `landscape_metrics`, `Landscape.metrics`, `sample_metrics`,
+`scale_sample` and `extract_metrics`) adds `calculate_lsm`'s columns `name`, `type`
+and `function_name` after `value` (categoricals; the FRAGSTATS extras have their own).
+The names are landscapemetrics' own, typo included (`siei` is the "simspon's evenness
+index"; `list_metrics(name=...)` takes both spellings). landscapemetrics'
+`sample_lsm(full_name = TRUE)` loses `function_name` by dropping a column by position;
+it is kept here.
+
+**`return_raster=True`** in `sample_metrics` adds `raster_sample_plots`: each plot's
+raster as `terra::crop(mask = TRUE)` returns it (a DataArray on the snapped window,
+NaN outside the plot and on NA cells, the raster's CRS; `None` for a plot outside the
+raster). The window's extent is terra's (`align` through terra's origin, then
+`setWindow`), the same bits as a crop of the intact raster. terra's crop also rewrites
+the extent of the raster it crops (its `removeWindow` rebuilds it with the window's
+cell size), so in `sample_lsm` the plots after the first see an extent moved by a few
+ulps; that side effect is not reproduced (the cells and values are the same).
+
+landscapemetrics' public helpers:
+
+```python
+ls.construct_buffer(points_xy, "circle", 500)                    # GeoDataFrame of plots
+ls.construct_buffer(points_xy, "square", 500, return_vec=False)  # R's vertex matrix
+ls.pad_raster("landcover.tif", -999, 2)   # 2 rows / columns of -999 around it
+ls.unpad_raster(padded, 2)                # and back
+ls.raster_to_points("landcover.tif", return_NA=False)   # layer, x, y, z
+ls.get_unique_values(["a.tif", "b.tif"])  # {"layer_1": values, "layer_2": values}
+```
+
+`construct_buffer` gives the plots `sample_metrics` builds (squares of half side
+`size`, 100-vertex circles), with R's bits: the circle's `sin`/`cos` are the x87
+`fsin`/`fcos` R runs through mingw-w64 (`np.sin` differs in the last bit at 5 of the 100
+angles). `pad_raster` / `unpad_raster` return a DataArray for georeferenced input
+(extent grown or shrunk by the cells, as `ext(x) + res(x) * n`; landscapemetrics fails
+when the cells are not square, since terra recycles `c(xres, yres)` over the four
+sides; landschaft grows each axis by its own cell size) and a numpy array otherwise;
+`global_` is R's `global` (NA cells take the pad value too). `raster_to_points` gives
+terra's cell centres and the values in row order. `get_unique_values` returns the sorted
+distinct values of each layer (NA left out, doubles truncated), in parallel in C++.
+
 **Zonal results and export.** `zonal_metrics(data, zones)` cuts the polygons out like
 `sample_metrics` and returns a GeoDataFrame: the zones' geometry and attributes, one
 column per landscape metric and one per class metric and class (`ca_11`, `pland_42`...),

@@ -4,14 +4,18 @@
 
 from __future__ import annotations
 
+import math
 import warnings
 from collections.abc import Iterable
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 from rasterio.transform import Affine
 
 from .. import _core
+from .catalog import add_full_name
+from .utils import raster_extent
 from .landscape import (
     _prepare,
     as_layers,
@@ -35,7 +39,7 @@ def _r_seq(start: float, stop: float, n: int) -> np.ndarray:
 
 
 _CIRCLE = _r_seq(0.0, 2 * np.pi, 100)
-_CIRCLE_SIN, _CIRCLE_COS = np.sin(_CIRCLE), np.cos(_CIRCLE)
+_CIRCLE_SIN, _CIRCLE_COS = _core.lsm_r_sincos(_CIRCLE)  # R's bits (x87 fsin / fcos)
 
 
 def _buffer(x: float, y: float, size: float, shape: str) -> dict:
@@ -197,23 +201,123 @@ def _is_rectangle(geom: dict) -> bool:
     return bool(np.all(step.sum(axis=1) == 1))
 
 
-def _grid(data, res, nodata, band):
-    """Class values, NA mask (bool), cell size and geotransform of a raster."""
+def _grid(data, res, nodata, band, with_crs: bool = False):
+    """Class values, NA mask (bool), cell size and geotransform of a raster
+    (and its CRS, or None, with `with_crs`)."""
     values, mask, r, template = _prepare(data, res, nodata, band)
     mask = np.zeros(values.shape, dtype=bool) if mask is None else mask.astype(bool)
+    transform = crs = None
     if template is not None:
         try:
             transform = template.rio.transform()
+            crs = template.rio.crs
         except Exception:
             transform = None
-    else:
-        transform = None
     if transform is None:
         # as terra::rast(matrix): origin at 0, first row on top
         transform = Affine(r[0], 0.0, 0.0, 0.0, -r[1], values.shape[0] * r[1])
     if transform.b != 0 or transform.d != 0:
         raise ValueError("rotated rasters are not supported")
-    return values, mask, r, transform
+    return (values, mask, r, transform, crs) if with_crs else (values, mask, r, transform)
+
+
+def grid_array(data: np.ndarray, transform: Affine, crs=None, name: str | None = None) -> xr.DataArray:
+    """A DataArray on the grid of `transform` (cell-centre coordinates), with
+    NaN as nodata."""
+    ny, nx = data.shape
+    x = transform.c + (np.arange(nx) + 0.5) * transform.a
+    y = transform.f + (np.arange(ny) + 0.5) * transform.e
+    da = xr.DataArray(data, dims=("y", "x"), coords={"y": y, "x": x}, name=name)
+    da = da.rio.write_transform(transform)
+    if crs is not None:
+        da = da.rio.write_crs(crs)
+    return da.rio.write_nodata(np.nan, encoded=False)
+
+
+def c_round(v: float) -> float:
+    """C's round(): halves away from zero."""
+    t = math.trunc(v)
+    if abs(v - t) >= 0.5:
+        t += 1 if v > 0 else -1
+    return float(t)
+
+
+def _is_equal(a: float, b: float, tolerance: float = 10.0) -> bool:
+    """terra's is_equal (math_utils.cpp)."""
+    tol = max(tolerance, abs(min(a, b))) * np.finfo(float).eps
+    return a == b or abs(a - b) < tol
+
+
+def terra_grid(data: np.ndarray, extent, crs=None) -> xr.DataArray:
+    """A raster on terra's extent (xmin, xmax, ymin, ymax): the geotransform
+    holds xmin, ymax and terra's resolution ((xmax - xmin) / ncol) exactly;
+    xmax and ymin come back from it to within an ulp or so."""
+    ny, nx = data.shape
+    xmin, xmax, ymin, ymax = extent
+    return grid_array(data, Affine((xmax - xmin) / nx, 0.0, xmin, 0.0, -(ymax - ymin) / ny, ymax), crs)
+
+
+def terra_crop_extent(geom: dict, extent, shape) -> tuple[float, float, float, float]:
+    """Extent (xmin, xmax, ymin, ymax) of ``terra::crop(x, plot, mask =
+    TRUE)`` (SpatRaster::cropmask): the plot's extent snapped to the cell
+    edges through terra's origin (align), cut to the raster, snapped again by
+    setWindow, which keeps the whole raster when the window is within a tenth
+    of a cell of it and otherwise rebuilds xmax and ymax from the cell counts
+    (setExtent).
+
+    terra's cropmask also rewrites the extent of the raster it crops
+    (removeWindow rebuilds it with the window's cell size), so in
+    ``sample_lsm`` the plots after the first one see an extent moved by a few
+    ulps; that side effect is not reproduced (same cells and values)."""
+    coords = np.concatenate([r for _, r in _rings(geom)])
+    pxmin, pymin = coords.min(axis=0)
+    pxmax, pymax = coords.max(axis=0)
+    rxmin, rxmax, rymin, rymax = extent
+    ny, nx = shape
+    xres, yres = (rxmax - rxmin) / nx, (rymax - rymin) / ny
+    ox = rxmin - xres * c_round(rxmin / xres)
+    oy = rymax - yres * c_round(rymax / yres)
+    if _is_equal(xres + ox, abs(ox)):
+        ox = abs(ox)
+    if _is_equal(yres + oy, abs(oy)):
+        oy = abs(oy)
+
+    def align(e):
+        xmn = c_round((e[0] - ox) / xres) * xres + ox
+        xmx = c_round((e[1] - ox) / xres) * xres + ox
+        ymn = c_round((e[2] - oy) / yres) * yres + oy
+        ymx = c_round((e[3] - oy) / yres) * yres + oy
+        if xmn == xmx:
+            if xmn < e[0]:
+                xmx += xres
+            else:
+                xmn -= xres
+        if ymn == ymx:
+            if ymn < e[2]:
+                ymx += yres
+            else:
+                ymn -= yres
+        return xmn, xmx, ymn, ymx
+
+    def intersect(e):
+        return max(e[0], rxmin), min(e[1], rxmax), max(e[2], rymin), min(e[3], rymax)
+
+    x = align(intersect(align((pxmin, pxmax, pymin, pymax))))
+    tol = 0.1 * xres
+    if all(abs(a - b) <= tol for a, b in zip(x, extent)):
+        return tuple(extent)
+    nc = max(1.0, c_round((x[1] - x[0]) / xres))
+    nr = max(1.0, c_round((x[3] - x[2]) / yres))
+    return x[0], x[0] + nc * xres, x[2], x[2] + nr * yres
+
+
+def _crop_raster(values, mask, extent, crs, geom, crop) -> xr.DataArray:
+    """The plot's raster as ``terra::crop(mask = TRUE)`` returns it: the
+    snapped window (terra's extent), NA outside the plot."""
+    rows, cols, inside = crop
+    sub = values[rows, cols].astype(np.float64)
+    sub[mask[rows, cols] | ~inside] = np.nan
+    return terra_grid(sub, terra_crop_extent(geom, extent, values.shape), crs)
 
 
 def sample_metrics(
@@ -234,6 +338,8 @@ def sample_metrics(
     band: int | None = None,
     verbose: bool = True,
     extras: bool = False,
+    full_name: bool = False,
+    return_raster: bool = False,
     n_threads: int | None = None,
     **options,
 ) -> pd.DataFrame:
@@ -276,6 +382,15 @@ def sample_metrics(
         Warn when a plot lies less than 90 % inside the raster.
     extras
         Also select the FRAGSTATS metrics missing in landscapemetrics.
+    full_name
+        Add the columns ``name``, ``type`` and ``function_name`` after
+        ``value`` (landscapemetrics' ``sample_lsm(full_name = TRUE)`` drops
+        ``function_name`` when ``return_raster = FALSE``, by a fixed column
+        index; it is kept here).
+    return_raster
+        Add a column ``raster_sample_plots`` with each plot's raster (an
+        ``xarray.DataArray``: the snapped window, NaN outside the plot and on
+        NA cells; ``None`` for a plot outside the raster).
     n_threads
         Threads of the C++ core (default: all cores).
     **options
@@ -307,14 +422,18 @@ def sample_metrics(
     single = layers is None
     frames = []
     for layer_no, layer in enumerate([data] if single else layers, start=1):
-        values, mask, r, transform = _grid(layer, res, nodata, band)
+        values, mask, r, transform, crs = _grid(layer, res, nodata, band, with_crs=True)
         rasters, inside_area = [], np.zeros(n_plots)
+        crops = np.full(n_plots, None, dtype=object)
+        extent = raster_extent(transform, values.shape, r)
         empty = (np.zeros((1, 1), np.int32), np.ones((1, 1), np.uint8), r[0], r[1])
         for k, geom in enumerate(plots):
             crop = _crop(geom, transform, values.shape)
             if crop is None:
                 rasters.append(empty)
                 continue
+            if return_raster:
+                crops[k] = _crop_raster(values, mask, extent, crs, geom, crop)
             rows, cols, inside = crop
             sub_mask = mask[rows, cols] | ~inside
             sub = np.ascontiguousarray(values[rows, cols])
@@ -327,6 +446,8 @@ def sample_metrics(
         with np.errstate(divide="ignore", invalid="ignore"):
             pct = np.where(inside_area > 0, inside_area / (areas / 10000) * 100, 0.0)
         df["percentage_inside"] = pct[item]
+        if return_raster:
+            df["raster_sample_plots"] = crops[item]
         if all_classes:
             df = _sort(_add_all_classes(df, values, mask), True)
         elif np.any(ids[1:] < ids[:-1]):
@@ -340,7 +461,7 @@ def sample_metrics(
     out = frames[0] if single else pd.concat(frames, ignore_index=True)
     if verbose and (out["percentage_inside"] < 90).any():
         warnings.warn("percentage_inside is below 90% for at least one plot", stacklevel=2)
-    return out
+    return add_full_name(out) if full_name else out
 
 
 def scale_sample(
@@ -355,6 +476,7 @@ def scale_sample(
     type=None,
     what=None,
     verbose: bool = True,
+    full_name: bool = False,
     **options,
 ) -> pd.DataFrame:
     """Landscape metrics of buffers of several sizes around points, like
@@ -362,8 +484,8 @@ def scale_sample(
 
     :func:`sample_metrics` for each buffer size in ``size`` (the plots of all
     sizes are computed in parallel). ``y``: an ``(n, 2)`` array of
-    coordinates or point geometries; other arguments as in
-    :func:`sample_metrics`.
+    coordinates or point geometries; other arguments (``full_name`` too) as
+    in :func:`sample_metrics`.
 
     Returns
     -------
@@ -394,7 +516,7 @@ def scale_sample(
     out = out.loc[tmp.sort_values(keys, kind="stable", na_position="last").index].reset_index(drop=True)
     if verbose and (out["percentage_inside"] < 90).any():
         warnings.warn("percentage_inside is below 90% for at least one buffer", stacklevel=2)
-    return out
+    return add_full_name(out) if full_name else out
 
 
 def _add_all_classes(df: pd.DataFrame, values: np.ndarray, mask: np.ndarray) -> pd.DataFrame:
@@ -412,6 +534,7 @@ def _add_all_classes(df: pd.DataFrame, values: np.ndarray, mask: np.ndarray) -> 
         for c, m, p, v in zip(cls_rows["class"], cls_rows["metric"], cls_rows["plot_id"], cls_rows["value"])
     }
     pct = dict(zip(df["plot_id"], df["percentage_inside"]))
+    crops = dict(zip(df["plot_id"], df["raster_sample_plots"])) if "raster_sample_plots" in df.columns else None
     metrics = list(dict.fromkeys(cls_rows["metric"]))
     plots = list(dict.fromkeys(cls_rows["plot_id"]))
     grid = [(c, m, p) for c in classes for m in metrics for p in plots]
@@ -426,6 +549,11 @@ def _add_all_classes(df: pd.DataFrame, values: np.ndarray, mask: np.ndarray) -> 
             "percentage_inside": [pct[p] for _, _, p in grid],
         }
     )
+    if crops is not None:
+        column = np.empty(len(grid), dtype=object)
+        for k, (_, _, p) in enumerate(grid):
+            column[k] = crops[p]
+        added["raster_sample_plots"] = column
     return pd.concat([df[~is_class], added], ignore_index=True)
 
 

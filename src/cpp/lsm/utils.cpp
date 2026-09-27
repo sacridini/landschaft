@@ -398,6 +398,75 @@ std::vector<i64> Landscape::cooccurrence(const std::vector<std::pair<int, int>>&
     return part[0];
 }
 
+// The distinct non-NA values, sorted: the value range per chunk, then a
+// presence table over the range (per thread, OR-ed), or for wide ranges the
+// sorted distinct values of each chunk, merged.
+std::vector<std::int32_t> unique_values(const std::int32_t* values, const std::uint8_t* na_mask, i64 n) {
+    const bool parallel = n >= kParallel;
+    const i64 n_chunks = parallel ? std::min<i64>(256, n / 65536 + 1) : 1;
+    std::vector<std::int32_t> lo(static_cast<std::size_t>(n_chunks), std::numeric_limits<std::int32_t>::max());
+    std::vector<std::int32_t> hi(static_cast<std::size_t>(n_chunks), std::numeric_limits<std::int32_t>::min());
+    std::vector<std::uint8_t> any(static_cast<std::size_t>(n_chunks), 0);
+    parallel_for(parallel, n_chunks, [&](i64 c) {
+        std::int32_t a = lo[c], b = hi[c];
+        bool seen = false;
+        for (i64 p = n * c / n_chunks, p1 = n * (c + 1) / n_chunks; p < p1; ++p) {
+            if (na_mask && na_mask[p]) continue;
+            a = std::min(a, values[p]);
+            b = std::max(b, values[p]);
+            seen = true;
+        }
+        lo[c] = a;
+        hi[c] = b;
+        any[c] = seen;
+    });
+    if (std::find(any.begin(), any.end(), 1) == any.end()) return {};
+    const std::int32_t vmin = *std::min_element(lo.begin(), lo.end());
+    const std::int32_t vmax = *std::max_element(hi.begin(), hi.end());
+    const i64 range = static_cast<i64>(vmax) - vmin + 1;
+    std::vector<std::int32_t> out;
+    if (range <= (i64(1) << 22)) {
+        std::vector<std::uint8_t> present(static_cast<std::size_t>(range), 0);
+        auto mark = [&](i64 p0, i64 p1, std::uint8_t* f) {
+            for (i64 p = p0; p < p1; ++p) {
+                if (!(na_mask && na_mask[p])) f[values[p] - static_cast<i64>(vmin)] = 1;
+            }
+        };
+        if (parallel && range <= n / 4) {
+#pragma omp parallel
+            {
+                std::vector<std::uint8_t> local(static_cast<std::size_t>(range), 0);
+#pragma omp for schedule(static)
+                for (i64 c = 0; c < n_chunks; ++c) mark(n * c / n_chunks, n * (c + 1) / n_chunks, local.data());
+#pragma omp critical
+                for (i64 v = 0; v < range; ++v) present[v] |= local[v];
+            }
+        } else {
+            mark(0, n, present.data());
+        }
+        for (i64 v = 0; v < range; ++v) {
+            if (present[v]) out.push_back(static_cast<std::int32_t>(v + vmin));
+        }
+        return out;
+    }
+    std::vector<std::vector<std::int32_t>> distinct(static_cast<std::size_t>(n_chunks));
+    parallel_for(parallel, n_chunks, [&](i64 c) {
+        std::vector<std::int32_t>& d = distinct[c];
+        for (i64 p = n * c / n_chunks, p1 = n * (c + 1) / n_chunks; p < p1; ++p) {
+            if (!(na_mask && na_mask[p])) d.push_back(values[p]);
+        }
+        std::sort(d.begin(), d.end());
+        d.erase(std::unique(d.begin(), d.end()), d.end());
+    });
+    for (auto& d : distinct) {
+        out.insert(out.end(), d.begin(), d.end());
+        std::vector<std::int32_t>().swap(d);
+    }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
 // landscapemetrics' get_boundaries on the raster values themselves
 // (rcpp_get_boundaries with 4 directions): a cell is a boundary when the
 // cell below has another value (or NA), or the cell above, left or right is

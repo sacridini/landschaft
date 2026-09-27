@@ -224,6 +224,7 @@ def extract_metrics(
     type=None,
     what=None,
     extras: bool = False,
+    full_name: bool = False,
     verbose: bool = True,
     n_threads: int | None = None,
     **options,
@@ -246,6 +247,9 @@ def extract_metrics(
     metric, name, type, what, extras
         Selection of patch-level metrics, as in
         :func:`landschaft.list_metrics` (all patch metrics by default).
+    full_name
+        Add the columns ``name``, ``type`` and ``function_name`` after
+        ``value``.
     **options
         :class:`~landschaft.Landscape` options (``directions``, ``res``, ...).
 
@@ -262,17 +266,21 @@ def extract_metrics(
     chosen = chosen_metrics(level, metric, name, type, what, extras)
     if set(chosen["level"]) != {"patch"}:
         raise ValueError("extract_metrics only takes patch level metrics")
+    from .catalog import add_full_name
+
     layers = as_layers(data)
     if layers is None:
         lm = Landscape(data, n_threads=n_threads, **options)
-        return _order(extract_frame(lm, y, extract_id, chosen, verbose), False)
-    frames = []
-    for i, layer in enumerate(layers, start=1):
-        lm = Landscape(layer, n_threads=n_threads, **options)
-        df = extract_frame(lm, y, extract_id, chosen, verbose)
-        df.insert(0, "layer", i)
-        frames.append(df)
-    return _order(pd.concat(frames, ignore_index=True), True)
+        out = _order(extract_frame(lm, y, extract_id, chosen, verbose), False)
+    else:
+        frames = []
+        for i, layer in enumerate(layers, start=1):
+            lm = Landscape(layer, n_threads=n_threads, **options)
+            df = extract_frame(lm, y, extract_id, chosen, verbose)
+            df.insert(0, "layer", i)
+            frames.append(df)
+        out = _order(pd.concat(frames, ignore_index=True), True)
+    return add_full_name(out) if full_name else out
 
 
 # -- check_landscape -----------------------------------------------------------------------

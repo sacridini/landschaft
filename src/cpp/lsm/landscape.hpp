@@ -298,6 +298,10 @@ private:
 std::vector<std::int32_t> raster_boundaries(const std::int32_t* values, const std::uint8_t* na_mask, i64 nx, i64 ny,
                                             bool consider_boundary, int edge_depth, bool patch_id, std::int32_t na);
 
+// The distinct values of the cells that are not NA, in increasing order
+// (landscapemetrics' get_unique_values; utils.cpp).
+std::vector<std::int32_t> unique_values(const std::int32_t* values, const std::uint8_t* na_mask, i64 n);
+
 // Mask (ny x nx, row-major) of polygon rings (map coordinates) burnt as
 // GDAL's rasterizer does with ALL_TOUCHED=TRUE; gt: GDAL geotransform
 // (rasterize.cpp).

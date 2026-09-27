@@ -21,7 +21,7 @@ import pandas as pd
 import xarray as xr
 
 from .. import _core
-from .catalog import LEVELS, canonical_name, select_metrics
+from .catalog import LEVELS, add_full_name, canonical_name, select_metrics
 from .utils import raster_extent
 
 __all__ = ["Landscape", "landscape_metrics"]
@@ -741,12 +741,15 @@ class Landscape:
         return pd.DataFrame({col: [self._core.landscape_metric(m)] for m, col in zip(metrics, columns)})
 
     def metrics(
-        self, level=None, metric=None, name=None, type=None, what=None, *, extras: bool = False
+        self, level=None, metric=None, name=None, type=None, what=None, *, extras: bool = False,
+        full_name: bool = False,
     ) -> pd.DataFrame:
         """Selected metrics in long format, like landscapemetrics' ``calculate_lsm``.
 
         Selection as in :func:`landschaft.list_metrics` (all landscapemetrics
         metrics by default; ``extras=True`` adds the FRAGSTATS ones).
+        ``full_name=True`` adds the columns ``name``, ``type`` and
+        ``function_name`` of each metric (as ``calculate_lsm(full_name = TRUE)``).
 
         Returns
         -------
@@ -757,7 +760,8 @@ class Landscape:
         """
         chosen = chosen_metrics(level, metric, name, type, what, extras)
         self._ensure(chosen["metric"])
-        return long_frame(self._core.long_table(*metric_specs(chosen)), chosen)
+        df = long_frame(self._core.long_table(*metric_specs(chosen)), chosen)
+        return add_full_name(df) if full_name else df
 
 
 def _chunk_rows(chunk_rows) -> int:
@@ -818,6 +822,7 @@ def landscape_metrics(
     what=None,
     *,
     extras: bool = False,
+    full_name: bool = False,
     n_threads: int | None = None,
     **options,
 ) -> pd.DataFrame:
@@ -837,6 +842,9 @@ def landscape_metrics(
     extras
         Also select the FRAGSTATS metrics missing in landscapemetrics
         (``_am``, ``_md``, ``_ra``, ...; see :func:`landschaft.list_metrics`).
+    full_name
+        Add the columns ``name``, ``type`` and ``function_name`` (as
+        ``calculate_lsm(full_name = TRUE)``).
     n_threads
         Threads of the C++ core (default: all cores).
     **options
@@ -852,7 +860,8 @@ def landscape_metrics(
     """
     layers = as_layers(data)
     if layers is None:
-        return Landscape(data, n_threads=n_threads, **options).metrics(level, metric, name, type, what, extras=extras)
+        return Landscape(data, n_threads=n_threads, **options).metrics(level, metric, name, type, what, extras=extras,
+                                                                       full_name=full_name)
     if options.get("block_rows") is not None:
         frames = [
             Landscape(layer, n_threads=n_threads, **options).metrics(level, metric, name, type, what, extras=extras)
@@ -860,7 +869,8 @@ def landscape_metrics(
         ]
         for i, df in enumerate(frames, start=1):
             df.insert(0, "layer", i)
-        return pd.concat(frames, ignore_index=True)
+        df = pd.concat(frames, ignore_index=True)
+        return add_full_name(df) if full_name else df
     res, nodata, band = options.pop("res", None), options.pop("nodata", None), options.pop("band", None)
     opts = core_options(metric_options(**options), n_threads)
     chosen = chosen_metrics(level, metric, name, type, what, extras)
@@ -871,7 +881,7 @@ def landscape_metrics(
     table = _core.lsm_batch(rasters, opts, *metric_specs(chosen))
     df = long_frame(table, chosen)
     df.insert(0, "layer", table["item"].astype(np.int64) + 1)
-    return df
+    return add_full_name(df) if full_name else df
 
 
 def as_layers(data) -> list | None:

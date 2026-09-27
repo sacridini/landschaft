@@ -1,6 +1,6 @@
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ;
-; log() and sqrt() as R computes them on x86-64 Windows: R links the
+; log(), sqrt(), sin() and cos() as R computes them on x86-64 Windows: R links the
 ; mingw-w64 math library, whose log (glibc's __ieee754_log) and sqrt run on
 ; the x87 unit with 64-bit precision and round the result to double once
 ; more. MSVC has no inline assembly on x64, hence this file. The x87
@@ -61,6 +61,40 @@ lsm_x87_sqrt PROC
     movsd   xmm0, REAL8 PTR [rsp+8]
     ret
 lsm_x87_sqrt ENDP
+
+; double lsm_x87_sin(double x) / lsm_x87_cos(double x), |x| < 2^63: the
+; mingw-w64 sin() and cos() (fsin / fcos with 64-bit precision, rounded).
+lsm_x87_sin PROC
+    movsd   REAL8 PTR [rsp+8], xmm0
+    fnstcw  WORD PTR [rsp+16]
+    mov     ax, WORD PTR [rsp+16]
+    and     ax, 0F0FFh
+    or      ax, 0300h
+    mov     WORD PTR [rsp+18], ax
+    fldcw   WORD PTR [rsp+18]
+    fld     REAL8 PTR [rsp+8]
+    fsin
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_sin ENDP
+
+lsm_x87_cos PROC
+    movsd   REAL8 PTR [rsp+8], xmm0
+    fnstcw  WORD PTR [rsp+16]
+    mov     ax, WORD PTR [rsp+16]
+    and     ax, 0F0FFh
+    or      ax, 0300h
+    mov     WORD PTR [rsp+18], ax
+    fldcw   WORD PTR [rsp+18]
+    fld     REAL8 PTR [rsp+8]
+    fcos
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_cos ENDP
 
 ; R's LDOUBLE loops (sum(), mean(), var()): accumulated on the x87 unit with
 ; 64-bit precision, as R's gcc build does, then rounded to double once.
