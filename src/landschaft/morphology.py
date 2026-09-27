@@ -49,6 +49,13 @@ class ParcellationResult:
         Landscape-level metrics across all valid classes.
     parcel_labels : xarray.DataArray or numpy.ndarray, optional
         Labeled parcels raster (if return_labels=True was requested).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> result = ls.parcellation(ls.load_raster(ls.example_data("input")))
+    >>> round(result.global_stats["division"], 3)
+    0.689
     """
 
     stats: pd.DataFrame
@@ -81,21 +88,42 @@ def parcellation(
     connectivity: int = 8,
     return_labels: bool = False,
 ) -> ParcellationResult:
-    """Compute landscape parcellation, effective mesh size, and division index.
+    """How finely the landscape is divided into parcels.
+
+    Every connected region of one value (e.g. habitat and background, or the
+    classes of a land-cover map) is a parcel. Per class and for the whole map:
+    the number of parcels, the average parcel size (APS), the area-weighted
+    average parcel size (AWAPS, the size of the parcel a random pixel falls in),
+    the division index (probability that two random pixels are in different
+    parcels) and the degree of parcellation (PARC).
 
     Parameters
     ----------
-    data : xarray.DataArray, numpy.ndarray, str, or Path
-        Input landcover or habitat raster (integer / byte classes; 0 = nodata).
-    connectivity : int, default 8
-        Neighborhood connectivity: 4 or 8.
-    return_labels : bool, default False
-        Whether to generate and return a labeled raster of individual parcels.
+    data
+        Class raster (array, DataArray or path; integer classes, 0 = NoData).
+    connectivity
+        Pixels of one parcel touch by a side (4) or also by a corner (8).
+    return_labels
+        Also return a map of the parcels.
+    n_threads
+        Threads (``None`` / 0: all cores but one).
 
     Returns
     -------
     ParcellationResult
-        Object containing class-level DataFrame, global statistics dict, and optional parcel raster.
+        ``stats`` per class, ``global_stats`` for the map and, with
+        ``return_labels``, ``parcel_labels``.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> result = ls.parcellation(forest)
+    >>> list(result.stats.columns)
+    ['Class', 'Count', 'Area[pixels]', 'APS', 'AWAPS', 'AWAPS/data', 'DIVISION', 'PARC[%]']
+    >>> result.global_stats["total_parcels"]
+    4020
+    >>> labels = ls.parcellation(forest, return_labels=True).parcel_labels
     """
     if connectivity not in (4, 8):
         raise ValueError(f"connectivity must be 4 or 8, got {connectivity}")
@@ -158,27 +186,36 @@ def contortion(
     min_area: int = 1,
     return_display: bool = False,
 ) -> xr.DataArray | np.ndarray:
-    """Compute GuidosToolbox Contortion (boundary tortuosity & perimeter inflection).
+    """How convoluted the boundary of every habitat object is.
+
+    For each habitat object, a measure of how much its boundary bends relative to
+    its size: compact objects score low, elongated or dendritic ones high.
 
     Parameters
     ----------
-    data : xarray.DataArray, numpy.ndarray, str, or Path
-        Input habitat raster (0=nodata, 1=background, 2=foreground habitat).
-    min_area : int, default 1
-        Minimum area threshold; objects smaller than this or lacking a 3x3 core
-        are classified as neglected (value 2).
-    return_display : bool, default False
-        If True, rescale contortion values >= 2 to byte range [3, 255] matching
-        the GTB interactive visualization format.
+    data
+        Habitat map (array, DataArray or path) coded 0 missing, 1 background,
+        2 habitat.
+    min_area
+        Objects smaller than this (pixels), or without an interior (no 3 x 3
+        core), are left out and coded 2.
+    return_display
+        Rescale the values to 3-255 for display (the byte scale of the colour
+        table :func:`contortion_colormap`).
 
     Returns
     -------
     xarray.DataArray or numpy.ndarray
-        Contortion map where:
-        - 0: NoData / missing
-        - 1: Background
-        - 2: Neglected objects (< min_area or lacking a core)
-        - >= 3: Contortion values
+        0 missing, 1 background, 2 left-out objects, 3 and above the contortion
+        of each object.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> values = ls.contortion(forest, min_area=100)
+    >>> int(values.max())
+    42
     """
     is_xr = isinstance(data, xr.DataArray)
     xr_template = data if is_xr else None

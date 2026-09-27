@@ -95,6 +95,13 @@ def show_patches(landscape, classes="global", *, labels: bool = False, cmap="tab
     Returns
     -------
     matplotlib.figure.Figure
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:400, :400]
+    >>> fig = ls.show_patches(landcover)
+    >>> fig = ls.show_patches(landcover, classes=[12, 23], labels=True)
     """
     plt = _plt()
     landscape = _as_landscape(landscape, options)
@@ -117,15 +124,35 @@ def show_patches(landscape, classes="global", *, labels: bool = False, cmap="tab
 def show_cores(landscape, classes="all", *, edge_depth: int = 1, consider_boundary: bool = True,
                labels: bool = False, ncols=None, nrows=None, **options):
     """Core and edge cells of the patches (landscapemetrics' ``show_cores``):
-    core cells dark, edge cells light, other classes blank.
+        core cells dark, edge cells light, other classes blank.
 
-    ``edge_depth`` and ``consider_boundary`` as for the core-area metrics
-    (landscapemetrics' plot defaults: ``consider_boundary=True``);
-    ``labels`` writes the core area (ha) of each patch.
+        ``edge_depth`` and ``consider_boundary`` as for the core-area metrics
+        (landscapemetrics' plot defaults: ``consider_boundary=True``);
+        ``labels`` writes the core area (ha) of each patch.
 
-    Returns
-    -------
-    matplotlib.figure.Figure
+        Parameters
+        ----------
+        landscape
+            A :class:`Landscape`, or a raster (``**options`` are then the
+            :class:`Landscape` options).
+        classes
+            "all" (one panel per class, default), "global" or class value(s).
+        edge_depth, consider_boundary
+            As for the core-area metrics.
+        labels
+            Write the core area (ha) of each patch.
+        ncols, nrows
+            Panel layout.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:400, :400]
+        >>> fig = ls.show_cores(landcover, classes=[23], edge_depth=2)
     """
     plt = _plt()
     landscape = _as_landscape(landscape, options)
@@ -156,11 +183,31 @@ def _core_areas(landscape, edge_depth: int, consider_boundary: bool) -> np.ndarr
 def show_lsm(landscape, metric: str, classes="global", *, labels: bool = False, cmap="viridis", ncols=None,
              nrows=None, **options):
     """A patch-level metric painted on the patches (landscapemetrics'
-    ``show_lsm``), with a colour bar; ``labels`` writes the values.
+        ``show_lsm``), with a colour bar; ``labels`` writes the values.
 
-    Returns
-    -------
-    matplotlib.figure.Figure
+        Parameters
+        ----------
+        landscape
+            A :class:`Landscape`, or a raster (``**options`` are then the
+            :class:`Landscape` options).
+        metric
+            A patch-level metric.
+        classes
+            "global" (one map, default), "all" or class value(s).
+        labels
+            Write the values on the patches.
+        cmap, ncols, nrows
+            Colour map and panel layout.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:400, :400]
+        >>> fig = ls.show_lsm(landcover, "shape")
     """
     _plt()
     landscape = _as_landscape(landscape, options)
@@ -199,6 +246,12 @@ def show_correlation(data, method: str = "pearson", *, diag: bool = True, labels
     Returns
     -------
     matplotlib.figure.Figure
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> table = ls.landscape_metrics(ls.example_data("clc"), what=["lsm_p_area", "lsm_p_perim", "lsm_p_shape"])
+    >>> fig = ls.show_correlation(table, method="spearman", labels=True)
     """
     from .utils import calculate_correlation
 

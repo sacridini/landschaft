@@ -404,6 +404,18 @@ def sample_metrics(
         in %), ordered by plot, level, metric, class and id; plus ``layer``
         for several rasters. A plot outside the raster (an error in
         landscapemetrics) gives NA metrics and 0 %.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> import numpy as np
+    >>> xmin, xmax, ymin, ymax = ls.Landscape(landcover).extent
+    >>> points = np.array([[xmin + 5000, ymin + 5000], [xmax - 5000, ymax - 5000]])
+    >>> plots = ls.sample_metrics(landcover, points, size=1000, shape="circle",
+    ...                           level="landscape", metric=["shdi", "np"])
+    >>> plots["plot_id"].unique().tolist()
+    [1, 2]
     """
     opts = core_options(metric_options(**options), n_threads)
     chosen = chosen_metrics(level, metric, name, type, what, extras)
@@ -493,6 +505,17 @@ def scale_sample(
         ``level``, ``class``, ``id``, ``metric``, ``value``, ``size``,
         ``plot_id``, ``percentage_inside`` (plus ``layer``), ordered by
         (layer,) plot, level, metric, class, id and size.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> import numpy as np
+    >>> xmin, xmax, ymin, ymax = ls.Landscape(landcover).extent
+    >>> points = np.array([[xmin + 5000, ymin + 5000], [xmax - 5000, ymax - 5000]])
+    >>> scales = ls.scale_sample(landcover, points, size=[500, 1000, 2000], what=["lsm_l_shdi"])
+    >>> sorted(scales["size"].unique().tolist())
+    [500.0, 1000.0, 2000.0]
     """
     sizes = [float(s) for s in np.atleast_1d(size)]
     if not sizes or any(s <= 0 for s in sizes):
@@ -636,6 +659,20 @@ def window_metrics(
     dict
         ``{metric: raster}`` (a DataArray on the input grid, or a numpy
         array), or a list of such dicts for several rasters.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> maps = ls.window_metrics(landcover[:300, :300], window=21, what=["lsm_l_shdi", "lsm_l_ed"])
+    >>> sorted(maps)
+    ['ed', 'shdi']
+
+    A circular window:
+
+    >>> import numpy as np
+    >>> disc = np.hypot(*np.mgrid[-5:6, -5:6]) <= 5
+    >>> contagion = ls.window_metrics(landcover[:300, :300], window=disc, metric="contag")
     """
     opts = core_options(metric_options(**options), n_threads)
     chosen = chosen_metrics(level, metric, name, type, what, extras)

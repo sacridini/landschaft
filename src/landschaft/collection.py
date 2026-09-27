@@ -58,7 +58,28 @@ def expand_sources(source, *, recursive: bool = False) -> list[Path]:
 
 @dataclass(frozen=True)
 class RasterInfo:
-    """Header of one raster of a collection (pixels are not read)."""
+    """Header of one raster of a collection (the pixels are not read).
+
+    Attributes
+    ----------
+    path : pathlib.Path
+        The file.
+    height, width, count : int
+        Rows, columns and bands.
+    dtype : str
+        Data type of the first band.
+    crs, transform
+        Coordinate reference system and affine transform (rasterio objects).
+    nodata : float or None
+        NoData value.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> info = ls.RasterInfo.read(ls.example_data("input"))
+    >>> info.height, info.width, info.pixels
+    (1000, 1000, 1000000)
+    """
 
     path: Path
     height: int
@@ -92,10 +113,33 @@ class RasterInfo:
 class RasterCollection(Sequence):
     """Many rasters handled as one object; pixels are read only when processed.
 
-    Create it with :func:`landschaft.load_raster` given a list of paths, a
-    directory or a glob pattern. Pass it to :func:`landschaft.mspa` to process
-    every raster in parallel (one thread per raster), or turn it into a lazy
-    ``(file, y, x)`` stack with :meth:`to_stack` when all rasters share a grid.
+    Create it with :func:`load_raster` given a list of paths, a folder or a glob
+    pattern. Pass it to :func:`mspa` or :func:`batch` to process every raster in
+    parallel, or turn it into a lazy ``(file, y, x)`` stack with :meth:`to_stack`
+    when all rasters share a grid.
+
+    Attributes
+    ----------
+    paths : list of pathlib.Path
+        The files, in order.
+    total_pixels : int
+        Pixels of all rasters together.
+    same_grid : bool
+        Whether all rasters share shape, CRS and transform.
+    skipped : dict
+        Files left out by ``errors="skip"``, with the reason.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> _ = ls.write_raster(forest[:500], "north.tif")
+    >>> _ = ls.write_raster(forest[500:], "south.tif")
+    >>> maps = ls.load_raster("*.tif")
+    >>> len(maps), maps.same_grid          # two different places: not the same grid
+    (2, False)
+    >>> first = maps.load(0)                       # one raster, as a DataArray
+    >>> results = ls.mspa(maps, edge_width=2)      # every raster, in parallel
     """
 
     def __init__(
@@ -191,7 +235,17 @@ class RasterCollection(Sequence):
 
     # --- data access -------------------------------------------------------------
     def load(self, index: int) -> xr.DataArray:
-        """Read one raster into memory (with the collection's checks)."""
+        """Read one raster into memory (with the collection's checks).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> forest = ls.load_raster(ls.example_data("input"))
+        >>> _ = ls.write_raster(forest[:500], "a.tif")
+        >>> _ = ls.write_raster(forest[500:], "b.tif")
+        >>> ls.load_raster(["a.tif", "b.tif"]).load(1).shape
+        (500, 1000)
+        """
         from .io import load_raster
 
         return load_raster(self._infos[index].path, band=self.band, validate=self.validate)
@@ -201,6 +255,16 @@ class RasterCollection(Sequence):
 
         Requires a shared grid (see :attr:`same_grid`). Pixel values are not
         checked here; :func:`landschaft.mspa` checks them when it runs.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> forest = ls.load_raster(ls.example_data("input"))
+        >>> _ = ls.write_raster(forest, "y2010.tif")
+        >>> _ = ls.write_raster(forest, "y2020.tif")
+        >>> stack = ls.load_raster(["y2010.tif", "y2020.tif"]).to_stack()
+        >>> stack.dims
+        ('file', 'y', 'x')
         """
         if not self.same_grid:
             raise InvalidInputError(

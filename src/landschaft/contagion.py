@@ -93,6 +93,13 @@ def contagion_pff(
     -------
     xarray.DataArray or numpy.ndarray
         Contagion raster (uint8 or float32).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> pff = ls.contagion_pff(forest, window_size=13)                  # 0-100, 101/102 masks
+    >>> probability = ls.contagion_pff(forest, window_size=13, as_byte=False)   # 0-1, NaN off habitat
     """
     validate_mspa_input(data)
     if window_size < 3 or window_size % 2 == 0:
@@ -152,6 +159,13 @@ def clustering_fac(
     -------
     xarray.DataArray or numpy.ndarray
         Clustering raster (uint8 or float32).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> fac = ls.clustering_fac(ls.load_raster(ls.example_data("input")), window_size=13, as_byte=False)
+    >>> float(fac.max()) <= 1.0
+    True
     """
     validate_mspa_input(data)
     if window_size < 3 or window_size % 2 == 0:

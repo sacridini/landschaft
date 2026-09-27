@@ -25,9 +25,33 @@ _ZERO_WHEN_ABSENT = {"ca", "pland", "np", "pd", "lpi", "te", "ed", "tca", "cplan
 
 
 def grid_zones(data, size, *, res=None, nodata=None, band=None) -> list[dict]:
-    """Square zones of side ``size`` (map units) tiling a raster, from its
-    top-left corner (partial squares at the right and bottom edges), as
-    GeoJSON-like polygons in row-major order."""
+    """Square zones tiling a raster, for zonal analyses.
+
+    Squares of side ``size`` from the top-left corner of the raster (partial
+    squares at the right and bottom edges), in row-major order.
+
+    Parameters
+    ----------
+    data
+        The raster (path, DataArray or array).
+    size
+        Side of the squares, in map units.
+    res, nodata, band
+        Reading options, as in :class:`Landscape`.
+
+    Returns
+    -------
+    list of dict
+        GeoJSON-like polygons, accepted by :func:`sample_metrics`,
+        :func:`zonal_metrics` and the analyses.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> zones = ls.grid_zones(ls.example_data("clc"), 5000)
+    >>> len(zones), zones[0]["type"]
+    (100, 'Polygon')
+    """
     from .sampling import _grid
 
     values, _, _, transform = _grid(data, res, nodata, band)
@@ -73,6 +97,17 @@ class SpatioTemporalAnalysis:
         Side of square zones tiling the rasters instead of zones.
     **options
         Metric options (``directions``, ``edge_depth``, ...).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> import numpy as np
+    >>> later = landcover.copy()
+    >>> later.values[:500, :500] = np.where(later.values[:500, :500] == 12, 1, later.values[:500, :500])
+    >>> series = ls.SpatioTemporalAnalysis([landcover, later], dates=[2018, 2030])
+    >>> series.landscape_metrics(["np", "shdi"]).columns.tolist()     # indexed by date
+    ['np', 'shdi']
     """
 
     def __init__(self, rasters, dates=None, *, zones=None, points=None, size=None, shape: str = "square",
@@ -99,8 +134,27 @@ class SpatioTemporalAnalysis:
         self.zonal = self._zonal_kwargs is not None
 
     def metrics(self, level=None, metric=None, name=None, type=None, what=None, *, extras: bool = False) -> pd.DataFrame:
-        """Long table of the selected metrics with a ``date`` column (and
-        ``zone`` and ``percentage_inside`` for zonal analyses)."""
+        """Selected metrics of every date, in long format.
+
+        Parameters
+        ----------
+        level, metric, name, type, what, extras
+            Selection, as in :func:`list_metrics`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The long table of :func:`landscape_metrics` with a ``date`` column (and
+            ``zone`` and ``percentage_inside`` for zonal analyses).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> series = ls.SpatioTemporalAnalysis([landcover, landcover[:1000]], dates=["full", "north"])
+        >>> series.metrics(what=["lsm_l_ta"])["date"].tolist()
+        ['full', 'north']
+        """
         from .landscape import landscape_metrics
         from .sampling import sample_metrics
 
@@ -118,8 +172,26 @@ class SpatioTemporalAnalysis:
         return df
 
     def landscape_metrics(self, metrics=None) -> pd.DataFrame:
-        """Landscape-level metrics: one row per date (and zone), one column
-        per metric."""
+        """Landscape-level metrics, one row per date (and zone).
+
+        Parameters
+        ----------
+        metrics
+            Metric names (default: all landscape metrics).
+
+        Returns
+        -------
+        pandas.DataFrame
+            One column per metric, indexed by ``date`` (and ``zone``).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> series = ls.SpatioTemporalAnalysis([landcover, landcover[:1000]], dates=[1, 2])
+        >>> series.landscape_metrics(["ta"])["ta"].tolist()
+        [250000.0, 125000.0]
+        """
         df = self.metrics(level="landscape") if metrics is None else self.metrics(
             what=["lsm_l_" + m for m in _as_list(metrics)])
         index = ["zone", "date"] if self.zonal else ["date"]
@@ -129,9 +201,32 @@ class SpatioTemporalAnalysis:
         return wide
 
     def class_metrics(self, metrics=None, classes=None, *, fillna: bool = True) -> pd.DataFrame:
-        """Class-level metrics: one row per class and date (and zone). With
-        ``fillna``, a class missing at a date has 0 for area / edge / count
-        metrics (``ca``, ``pland``, ``np``, ``te``...) instead of NaN."""
+        """Class-level metrics, one row per class and date (and zone).
+
+        Parameters
+        ----------
+        metrics
+            Metric names (default: all class metrics).
+        classes
+            Class values to keep (default: all).
+        fillna
+            A class absent at a date gets 0 for area, edge and count metrics
+            (``ca``, ``pland``, ``np``, ``te``...) instead of NaN.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One column per metric, indexed by ``class`` and ``date`` (and ``zone``).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> series = ls.SpatioTemporalAnalysis([landcover, landcover[:1000]], dates=[1, 2])
+        >>> table = series.class_metrics(["pland"], classes=[23, 24])
+        >>> table.index.names
+        FrozenList(['class', 'date'])
+        """
         df = self.metrics(level="class") if metrics is None else self.metrics(
             what=["lsm_c_" + m for m in _as_list(metrics)])
         df = df[df["class"].notna()]
@@ -153,9 +248,30 @@ class SpatioTemporalAnalysis:
         return wide
 
     def plot_metric(self, metric: str, classes=None, *, ax=None, **plot_kwargs):
-        """Line plot of a metric over the dates: the landscape level, or one
-        line per class with ``classes`` ("all" or class values); zonal
-        analyses: one line per zone. Returns the matplotlib Figure."""
+        """Line plot of a metric over the dates (needs matplotlib).
+
+        Parameters
+        ----------
+        metric
+            A landscape or class metric.
+        classes
+            ``None`` (landscape level), ``"all"`` or class values: one line per class.
+        ax
+            A matplotlib axes to draw in.
+        **plot_kwargs
+            Passed to matplotlib's ``plot``.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> series = ls.SpatioTemporalAnalysis([landcover, landcover[:1000]], dates=[2000, 2020])
+        >>> fig = series.plot_metric("pland", classes=[12, 23])
+        """
         from .plotting import _plt
 
         plt = _plt()
@@ -248,6 +364,16 @@ class SpatialSignatureAnalysis:
         Zonal signatures of one raster (see :class:`SpatioTemporalAnalysis`).
     **options
         Metric options.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> signatures = ls.SpatialSignatureAnalysis(landcover, grid=5000, landscape_metrics=["shdi", "ed", "np"],
+    ...                                          class_metrics=["pland"])
+    >>> signatures.table.shape
+    (100, 29)
+    >>> groups = signatures.cluster(4)
     """
 
     def __init__(self, rasters=None, *, landscape_metrics=None, class_metrics=None, classes=None, fillna: bool = True,
@@ -279,7 +405,25 @@ class SpatialSignatureAnalysis:
 
     @classmethod
     def from_table(cls, table: pd.DataFrame) -> SpatialSignatureAnalysis:
-        """An analysis of a ready signature matrix (rows = landscapes, columns = metrics)."""
+        """An analysis of a ready signature matrix.
+
+        Parameters
+        ----------
+        table
+            Rows = landscapes or zones, columns = metrics.
+
+        Returns
+        -------
+        SpatialSignatureAnalysis
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import landschaft as ls
+        >>> table = pd.DataFrame({"shdi": [1.2, 0.8, 1.5], "ed": [40.0, 22.0, 55.0]})
+        >>> ls.SpatialSignatureAnalysis.from_table(table).table.shape
+        (3, 2)
+        """
         return cls(table=table)
 
     def _standardised(self) -> tuple[pd.DataFrame, list]:
@@ -297,9 +441,30 @@ class SpatialSignatureAnalysis:
         return (x - x.mean()) / sd, bad
 
     def pca(self, n_components: int | None = None) -> PCAResult:
-        """Principal components of the standardised metrics (z-scores; constant
-        metrics, up to rounding, are left out). Signs as scikit-learn's PCA (the largest loading
-        of each component is positive)."""
+        """Principal components of the standardised metrics.
+
+        The metrics are turned into z-scores; constant metrics are left out. Signs
+        as scikit-learn's PCA (the largest loading of each component is positive).
+
+        Parameters
+        ----------
+        n_components
+            Components to keep (default: all).
+
+        Returns
+        -------
+        PCAResult
+            Scores, loadings and explained variance ratios.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> signatures = ls.SpatialSignatureAnalysis(ls.example_data("clc"), grid=5000,
+        ...                                          landscape_metrics=["shdi", "ed", "np", "lpi"])
+        >>> pca = signatures.pca(2)
+        >>> pca.scores.shape
+        (100, 2)
+        """
         z, dropped = self._standardised()
         u, s, vt = np.linalg.svd(z.to_numpy(), full_matrices=False)
         k = len(s) if n_components is None else min(int(n_components), len(s))
@@ -313,13 +478,35 @@ class SpatialSignatureAnalysis:
         return PCAResult(scores, loadings, (s**2 / np.sum(s**2))[:k], dropped)
 
     def nmf(self, n_components: int, *, max_iter: int = 1000, tol: float = 1e-6) -> NMFResult:
-        """Non-negative matrix factorisation of the metrics, each scaled to
-        [0, 1] (min-max; constant metrics left out): scores (W) times
-        components (H) approximates them, both non-negative, with the
-        Frobenius loss. NNDSVDa start and HALS (coordinate descent) updates,
-        as scikit-learn's ``NMF(init="nndsvda", solver="cd")``; stops when the
-        loss improves by less than ``tol`` (relative) or after ``max_iter``
-        sweeps. Deterministic."""
+        """Non-negative matrix factorisation of the metrics.
+
+        Each metric is scaled to [0, 1] (constant metrics left out); scores (W)
+        times components (H) approximates them, both non-negative, with the
+        Frobenius loss (NNDSVDa start, HALS updates, as scikit-learn's
+        ``NMF(init="nndsvda", solver="cd")``). Deterministic.
+
+        Parameters
+        ----------
+        n_components
+            Number of factors.
+        max_iter
+            Maximum number of sweeps.
+        tol
+            Stop when the loss improves by less than this (relative).
+
+        Returns
+        -------
+        NMFResult
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> signatures = ls.SpatialSignatureAnalysis(ls.example_data("clc"), grid=5000,
+        ...                                          landscape_metrics=["shdi", "ed", "np", "lpi"])
+        >>> factors = signatures.nmf(2)
+        >>> factors.components.shape
+        (4, 2)
+        """
         x, dropped = self._minmax()
         k = int(n_components)
         if not 1 <= k <= min(x.shape):
@@ -331,14 +518,36 @@ class SpatialSignatureAnalysis:
 
     def cluster(self, n_clusters: int, *, method: str = "kmeans", n_components: int | None = None,
                 n_init: int = 10, seed: int = 0) -> pd.Series:
-        """Clusters of the landscapes on the standardised metrics (or on the
-        first ``n_components`` principal components). ``method``:
-        ``"kmeans"`` (k-means++ starts, the best of ``n_init``) or a
-        hierarchical linkage of scipy (``"ward"``, ``"average"``,
-        ``"complete"``, ``"single"``, ``"centroid"``, ``"median"``,
-        ``"weighted"``; Euclidean distances, the tree cut into
-        ``n_clusters``). Returns the cluster of every row, numbered 0..k-1 in
-        order of first appearance."""
+        """Groups of landscapes (or zones) with similar metrics.
+
+        Parameters
+        ----------
+        n_clusters
+            Number of groups.
+        method
+            ``"kmeans"`` (k-means++ starts, the best of ``n_init``) or a
+            hierarchical linkage: ``"ward"``, ``"average"``, ``"complete"``,
+            ``"single"``, ``"centroid"``, ``"median"``, ``"weighted"``.
+        n_components
+            Cluster the first principal components instead of all metrics.
+        n_init, seed
+            k-means restarts and random seed.
+
+        Returns
+        -------
+        pandas.Series
+            The group of every row, numbered 0..k-1 in order of first appearance.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> signatures = ls.SpatialSignatureAnalysis(ls.example_data("clc"), grid=5000,
+        ...                                          landscape_metrics=["shdi", "ed", "np", "lpi"])
+        >>> groups = signatures.cluster(3)
+        >>> sorted(groups.unique().tolist())
+        [0, 1, 2]
+        >>> ward = signatures.cluster(3, method="ward")
+        """
         x = self._cluster_data(n_components)
         k = int(n_clusters)
         if not 1 <= k <= len(x):
@@ -351,12 +560,34 @@ class SpatialSignatureAnalysis:
 
     def clustergram(self, k_range=range(1, 9), *, method: str = "kmeans", n_components: int | None = None,
                     pca_weighted: bool = True, n_init: int = 10, seed: int = 0) -> ClustergramResult:
-        """Clusters for every k in ``k_range`` (``method`` as in
-        :meth:`cluster`) and the mean of each row's cluster: the cluster centre
-        projected on the first principal axis of the clustered data
-        (``pca_weighted``) or averaged over its columns, as the clustergram
-        package computes them (pylandstats' ``get_cgram``). See
-        :meth:`plot_clustergram`."""
+        """Clusters for a range of k, for a clustergram.
+
+        For every k in ``k_range``, the cluster of every row and the mean of its
+        cluster (the centre projected on the first principal axis, or averaged over
+        the columns).
+
+        Parameters
+        ----------
+        k_range
+            Numbers of clusters.
+        method, n_components, n_init, seed
+            As in :meth:`cluster`.
+        pca_weighted
+            Project the cluster means on the first principal axis.
+
+        Returns
+        -------
+        ClustergramResult
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> signatures = ls.SpatialSignatureAnalysis(ls.example_data("clc"), grid=5000,
+        ...                                          landscape_metrics=["shdi", "ed", "np", "lpi"])
+        >>> cg = signatures.clustergram(range(1, 5))
+        >>> cg.labels.shape
+        (100, 4)
+        """
         x = self._cluster_data(n_components)
         data = x.to_numpy()
         ks = [int(k) for k in k_range]
@@ -382,11 +613,33 @@ class SpatialSignatureAnalysis:
 
     def plot_clustergram(self, result: ClustergramResult | None = None, *, ax=None, size: float = 1.0,
                          linewidth: float = 1.0, **kwargs):
-        """Clustergram: for every k, a dot per cluster at its mean (size by
-        its rows), and lines between the clusters of k and k + 1 as wide as
-        the rows they share (as the clustergram package draws it). Computes
-        :meth:`clustergram` with ``kwargs`` unless ``result`` is given.
-        Returns the Figure."""
+        """Draw a clustergram (needs matplotlib).
+
+        For every k, a dot per cluster at its mean, sized by its rows, and lines
+        between the clusters of k and k + 1 as wide as the rows they share.
+
+        Parameters
+        ----------
+        result
+            A :meth:`clustergram` result (computed with ``kwargs`` when not given).
+        ax
+            A matplotlib axes to draw in.
+        size, linewidth
+            Scale of the dots and lines.
+        **kwargs
+            Passed to :meth:`clustergram`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> signatures = ls.SpatialSignatureAnalysis(ls.example_data("clc"), grid=5000,
+        ...                                          landscape_metrics=["shdi", "ed", "np", "lpi"])
+        >>> fig = signatures.plot_clustergram(k_range=range(1, 6))
+        """
         from matplotlib.ticker import MaxNLocator
 
         from .plotting import _plt
@@ -438,8 +691,30 @@ class SpatialSignatureAnalysis:
         return (x - lo) / span, bad
 
     def plot_pca(self, clusters: pd.Series | None = None, components=(1, 2), *, ax=None, labels: bool = False):
-        """Scatter plot of two principal components (coloured by cluster),
-        with the metric loadings as arrows. Returns the Figure."""
+        """Scatter plot of two principal components, with the metric loadings as arrows.
+
+        Parameters
+        ----------
+        clusters
+            Colour the points by these groups (e.g. from :meth:`cluster`).
+        components
+            The two components to draw (1-based).
+        ax
+            A matplotlib axes to draw in.
+        labels
+            Write the row labels.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> signatures = ls.SpatialSignatureAnalysis(ls.example_data("clc"), grid=5000,
+        ...                                          landscape_metrics=["shdi", "ed", "np", "lpi"])
+        >>> fig = signatures.plot_pca(signatures.cluster(3))
+        """
         from .plotting import _plt
 
         plt = _plt()
@@ -464,7 +739,24 @@ class SpatialSignatureAnalysis:
         return fig
 
     def plot_cluster_metrics(self, clusters: pd.Series):
-        """Box plots of every metric per cluster. Returns the Figure."""
+        """Box plots of every metric per cluster.
+
+        Parameters
+        ----------
+        clusters
+            Groups of the rows, e.g. from :meth:`cluster`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> signatures = ls.SpatialSignatureAnalysis(ls.example_data("clc"), grid=5000,
+        ...                                          landscape_metrics=["shdi", "ed", "np", "lpi"])
+        >>> fig = signatures.plot_cluster_metrics(signatures.cluster(3))
+        """
         from .plotting import _panels
 
         cols = list(self.table.columns)

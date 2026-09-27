@@ -91,6 +91,13 @@ def spatial_entropy(
     -------
     SpatialEntropyResult
         Result containing normalized entropy index and directional transition histogram.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> result = ls.spatial_entropy(ls.load_raster(ls.example_data("input")))
+    >>> round(result.entropy_index, 1)
+    32.5
     """
     validate_mspa_input(data)
     arr = np.ascontiguousarray(data.values if isinstance(data, xr.DataArray) else data, dtype=np.uint8)
@@ -124,6 +131,13 @@ def spatial_entropy_map(
     -------
     xarray.DataArray or numpy.ndarray
         Local spatial entropy raster in [0, 100]%.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> local = ls.spatial_entropy_map(ls.load_raster(ls.example_data("input")), window_size=51)
+    >>> local.shape
+    (1000, 1000)
     """
     validate_mspa_input(data)
     arr = np.ascontiguousarray(data.values if isinstance(data, xr.DataArray) else data, dtype=np.uint8)

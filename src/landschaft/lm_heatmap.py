@@ -172,21 +172,36 @@ def landscape_mosaic_heatmap(
 ) -> LMHeatmap:
     """Heatmap of a Landscape Mosaic, as GTB computes it.
 
-    Parameters
-    ----------
-    data
-        Land-cover map coded 0 = missing, 1 = agriculture, 2 = forest,
-        3 = developed (array, DataArray or raster path), or with
-        ``is_lm103=True`` a 103-class LM map (missing = 0).
-    window_size
-        LM window size for a land-cover map.
-    is_lm103
-        ``data`` already is a 103-class LM map.
-    window
-        Window label for the CSV title (default: ``window_size``; GTB writes
-        ``"multiscale"`` for multiscale LM).
-    threads
-        OpenMP threads for the LM (0: all cores but one).
+        Parameters
+        ----------
+        data
+            Land-cover map coded 0 = missing, 1 = agriculture, 2 = forest,
+            3 = developed (array, DataArray or raster path), or with
+            ``is_lm103=True`` a 103-class LM map (missing = 0).
+        window_size
+            LM window size for a land-cover map.
+        is_lm103
+            ``data`` already is a 103-class LM map.
+        window
+            Window label for the CSV title (default: ``window_size``; GTB writes
+            ``"multiscale"`` for multiscale LM).
+        threads
+            OpenMP threads for the LM (0: all cores but one).
+
+        Returns
+        -------
+        LMHeatmap
+            The share of the map (%) in each of the 103 cells of the composition
+            triangle (``values``); ``to_csv(path)`` writes the table.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> import landschaft as ls
+        >>> clc = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> three = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
+        >>> heat = ls.landscape_mosaic_heatmap(three, window_size=27)
+        >>> _ = heat.to_csv("heatmap.csv")
     """
     if isinstance(data, (str, Path)):
         data = load_raster(data, validate=None)

@@ -40,14 +40,47 @@ def available_cores() -> int:
 
 
 def default_threads() -> int:
-    """The thread count used when a function is not given one: all cores but
-    one (at least 1), or the value of :func:`set_default_threads`."""
+    """The number of threads a parallel function uses when not given one.
+
+    All the cores the process may use but one (at least 1), so the computer
+    stays responsive, or the value set with :func:`set_default_threads`.
+
+    Returns
+    -------
+    int
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> n = ls.default_threads()
+    >>> n >= 1
+    True
+    """
     return _default if _default is not None else max(1, available_cores() - 1)
 
 
 def set_default_threads(n: int | None = None) -> int:
-    """Set the default thread count of every parallel function (``None``:
-    back to all cores but one). Returns the new default."""
+    """Set the default thread count of every parallel function for this process.
+
+    Parameters
+    ----------
+    n
+        Threads to use when a function is not given ``n_threads``; ``None``
+        goes back to all cores but one.
+
+    Returns
+    -------
+    int
+        The new default.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ls.set_default_threads(2)
+    2
+    >>> result = ls.fad(ls.load_raster(ls.example_data("input")))   # 2 threads
+    >>> _ = ls.set_default_threads(None)                            # all cores but one again
+    """
     global _default
     if n is not None:
         n = int(n)

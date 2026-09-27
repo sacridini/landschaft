@@ -266,6 +266,19 @@ __all__ = [
 
 
 def max_threads() -> int:
-    """Number of processors the C++ core can use (1 without OpenMP). Parallel
-    functions use :func:`default_threads` of them unless told otherwise."""
+    """Number of processors the compiled core can use.
+
+    1 when landschaft was built without OpenMP. Parallel functions use
+    :func:`default_threads` of them unless told otherwise.
+
+    Returns
+    -------
+    int
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ls.max_threads() >= ls.default_threads() >= 1
+    True
+    """
     return _core.max_threads()

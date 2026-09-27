@@ -84,12 +84,33 @@ def _pyarrow():
 def write_table(table: pd.DataFrame, path: str | os.PathLike, **kwargs) -> Path:
     """Write a metric table, the format given by the file extension.
 
-    ``.csv`` (``.csv.gz`` compressed), ``.parquet`` (needs pyarrow; keeps the
-    categorical and nullable integer columns, and is compact and fast for
-    patch tables of millions of rows), or, for a GeoDataFrame (e.g. from
-    :func:`zonal_metrics`), a vector format: ``.gpkg``, ``.geojson``,
-    ``.shp``, ``.fgb``. Extra keyword arguments go to the pandas / geopandas
-    writer.
+        ``.csv`` (``.csv.gz`` compressed), ``.parquet`` (needs pyarrow; keeps the
+        categorical and nullable integer columns, and is compact and fast for
+        patch tables of millions of rows), or, for a GeoDataFrame (e.g. from
+        :func:`zonal_metrics`), a vector format: ``.gpkg``, ``.geojson``,
+        ``.shp``, ``.fgb``. Extra keyword arguments go to the pandas / geopandas
+        writer.
+
+        Parameters
+        ----------
+        table
+            A DataFrame or GeoDataFrame.
+        path
+            Output file; its extension selects the format.
+        **kwargs
+            Passed to the pandas / geopandas writer.
+
+        Returns
+        -------
+        pathlib.Path
+            The file written.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> table = ls.landscape_metrics(ls.example_data("clc"), level="class", metric="ca")
+        >>> ls.write_table(table, "class_area.csv").name
+        'class_area.csv'
     """
     path = Path(path)
     kind = _TABLE_SUFFIXES.get(path.suffix.lower())
@@ -167,6 +188,16 @@ def zonal_metrics(
     Returns
     -------
     geopandas.GeoDataFrame
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> zones = ls.grid_zones(landcover, 10000)          # 10 km squares
+    >>> table = ls.zonal_metrics(landcover, zones, level="landscape", metric=["shdi"])
+    >>> len(table)
+    25
+    >>> _ = ls.write_table(table, "zones.gpkg")
     """
     import geopandas as gpd
 

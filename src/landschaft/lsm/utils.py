@@ -143,22 +143,45 @@ def raster_boundaries(
 ):
     """landscapemetrics' ``get_boundaries`` on the values of a raster.
 
-    The values are taken as they are (classes, or patch ids such as
-    :meth:`Landscape.labels` or :meth:`Landscape.patches`). A cell is a
-    boundary cell as in landscapemetrics' ``rcpp_get_boundaries``: the cell
-    below holds another value or NA, or the cell above, left or right is NA;
-    the map edge counts as NA unless ``consider_boundary``. As in
-    landscapemetrics, ``patch_id`` is ignored (with a warning) when a value
-    is 0. (On a map of
-    several classes this marks only one side of a class change;
-    :meth:`Landscape.boundaries` gives the boundaries of the patches of every
-    class.) ``edge_depth`` > 1 peels the boundary off and repeats.
+        The values are taken as they are (classes, or patch ids such as
+        :meth:`Landscape.labels` or :meth:`Landscape.patches`). A cell is a
+        boundary cell as in landscapemetrics' ``rcpp_get_boundaries``: the cell
+        below holds another value or NA, or the cell above, left or right is NA;
+        the map edge counts as NA unless ``consider_boundary``. As in
+        landscapemetrics, ``patch_id`` is ignored (with a warning) when a value
+        is 0. (On a map of
+        several classes this marks only one side of a class change;
+        :meth:`Landscape.boundaries` gives the boundaries of the patches of every
+        class.) ``edge_depth`` > 1 peels the boundary off and repeats.
 
-    Returns
-    -------
-    xarray.DataArray or numpy.ndarray
-        1 on boundary cells (their value with ``patch_id``), 0 inside (NA with
-        ``as_na``), NaN where the raster is NA.
+        Parameters
+        ----------
+        data
+            A raster of classes or patch ids.
+        consider_boundary
+            Do not count the map edge as NA.
+        edge_depth
+            Width of the boundary, in cells.
+        as_na
+            NaN instead of 0 for the inner cells.
+        patch_id
+            The cell value instead of 1 on boundary cells.
+        nodata, band
+            Reading options.
+        n_threads
+            Threads (``None`` / 0: all cores but one).
+
+        Returns
+        -------
+        xarray.DataArray or numpy.ndarray
+            1 on boundary cells (their value with ``patch_id``), 0 inside (NA with
+            ``as_na``), NaN where the raster is NA.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> edges = ls.raster_boundaries(lc.labels(), edge_depth=1)
     """
     from .landscape import _prepare
 
@@ -262,6 +285,17 @@ def extract_metrics(
         ``level``, ``class``, ``id``, ``metric``, ``value``, ``extract_id``
         (plus ``layer``), one row per point, patch and metric, ordered by
         (layer,) extract_id, level, metric, class and id.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> import numpy as np
+    >>> xmin, xmax, ymin, ymax = ls.Landscape(landcover).extent
+    >>> points = np.array([[xmin + 5000, ymin + 5000], [xmax - 5000, ymax - 5000]])
+    >>> table = ls.extract_metrics(landcover, points, what=["lsm_p_area", "lsm_p_shape"])
+    >>> sorted(table["metric"].astype(str).unique())
+    ['area', 'shape']
     """
     from .landscape import Landscape, as_layers, chosen_metrics
 
@@ -387,19 +421,36 @@ def _check_one(layer, verbose: bool, nodata, band) -> dict:
 
 def check_landscape(data, verbose: bool = True, *, nodata=None, band: int | None = None) -> pd.DataFrame:
     """Is a raster suitable for landscape metrics? Like landscapemetrics'
-    ``check_landscape``.
+        ``check_landscape``.
 
-    Returns
-    -------
-    pandas.DataFrame
-        One row per raster: ``layer``, ``crs`` ("projected", "geographic" or
-        NA), ``units`` (of the CRS, e.g. "m"), ``class`` ("integer",
-        "non-integer", or NA when all values are NA), ``n_classes`` and
-        ``OK``: ✔ (integer classes, metric CRS, at most 30 classes), ✖
-        (non-integer values or degrees) or ❓ (no CRS, or more than 30
-        classes). ``verbose`` warns about the problems. Like terra, a raster
-        file without CRS whose extent fits longitudes and latitudes is taken
-        as geographic.
+        Parameters
+        ----------
+        data
+            A raster or a list of rasters.
+        verbose
+            Warn about the problems found.
+        nodata, band
+            Reading options, as in :class:`Landscape`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per raster: ``layer``, ``crs`` ("projected", "geographic" or
+            NA), ``units`` (of the CRS, e.g. "m"), ``class`` ("integer",
+            "non-integer", or NA when all values are NA), ``n_classes`` and
+            ``OK``: ✔ (integer classes, metric CRS, at most 30 classes), ✖
+            (non-integer values or degrees) or ❓ (no CRS, or more than 30
+            classes). ``verbose`` warns about the problems. Like terra, a raster
+            file without CRS whose extent fits longitudes and latitudes is taken
+            as geographic.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> check = ls.check_landscape(ls.example_data("clc"), verbose=False)
+        >>> check[["crs", "units", "class", "n_classes"]]
+                crs units    class  n_classes
+        0  projected     m  integer         26
     """
     from .landscape import as_layers
 
@@ -472,6 +523,15 @@ def calculate_correlation(metrics: pd.DataFrame, method: str = "pearson", diag: 
     dict or pandas.DataFrame
         ``{level: DataFrame(metric_1, metric_2, value)}`` with the lower
         triangle of the correlation matrix (column by column, as R).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> table = ls.landscape_metrics(landcover, what=["lsm_p_area", "lsm_p_perim", "lsm_p_shape"])
+    >>> corr = ls.calculate_correlation(table, method="spearman")
+    >>> sorted(corr)
+    ['patch']
     """
     if method not in ("pearson", "spearman", "kendall"):
         raise ValueError("method must be 'pearson', 'spearman' or 'kendall'")

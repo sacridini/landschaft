@@ -110,6 +110,29 @@ def load_raster(
     ------
     InvalidInputError
         If a file does not satisfy the requested checks.
+
+    Examples
+    --------
+    One raster, checked as a habitat map (0 missing, 1 background, 2 habitat):
+
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> forest.shape, str(forest.dtype)
+    ((1000, 1000), 'uint8')
+
+    Any other raster, without the habitat checks:
+
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover.rio.crs.to_epsg()
+    3035
+
+    Many rasters at once (a folder, a pattern or a list) give a collection:
+
+    >>> _ = ls.write_raster(forest[:500], "north.tif")
+    >>> _ = ls.write_raster(forest[500:], "south.tif")
+    >>> maps = ls.load_raster(["north.tif", "south.tif"])
+    >>> len(maps)
+    2
     """
     from .collection import RasterCollection, is_single_source
 
@@ -163,25 +186,44 @@ def reclassify(
     missing: Iterable[int] | int | None = None,
     background: Iterable[int] | int | None = None,
 ):
-    """Build an MSPA input (0 = missing, 1 = background, 2 = foreground).
+    """Build a habitat map (0 = missing, 1 = background, 2 = habitat) from any raster.
 
     Parameters
     ----------
     data
-        Categorical map (numpy array or DataArray, any integer/float dtype).
+        Categorical or continuous map: numpy array or DataArray, any integer or
+        float type.
     foreground
-        Class value(s) that become foreground, or a function returning a
-        boolean mask (e.g. ``lambda a: a >= 0.3`` on a tree-cover fraction).
+        Value(s) that become habitat (2), or a function of the values returning
+        a boolean mask (e.g. ``lambda a: a >= 30`` on a tree-cover percentage).
     missing
-        Class value(s) that become missing. NaN values and the raster's
-        nodata value (``data.rio.nodata``) are always treated as missing.
+        Value(s) that become missing (0). NaN and the raster's NoData value
+        (``data.rio.nodata``) are always missing.
     background
-        Class value(s) that become background. By default every value that is
-        neither foreground nor missing; if given, remaining values are missing.
+        Value(s) that become background (1). By default every value that is
+        neither habitat nor missing; when given, the remaining values become
+        missing.
 
     Returns
     -------
-    Same type as ``data``, with dtype ``uint8``.
+    xarray.DataArray or numpy.ndarray
+        Same type and georeferencing as ``data``, ``uint8`` coded 0/1/2, ready
+        for :func:`mspa`, :func:`fad` and the other habitat-pattern tools.
+
+    Examples
+    --------
+    Forests of a CORINE land-cover map (classes 23, 24 and 25):
+
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> forest = ls.reclassify(landcover, foreground=[23, 24, 25])
+    >>> sorted(int(v) for v in set(forest.values.ravel()))
+    [1, 2]
+    >>> morph = ls.mspa(forest)
+
+    A rule on a continuous map, water (class 41) left out as missing:
+
+    >>> tall = ls.reclassify(landcover, foreground=lambda a: (a >= 23) & (a <= 25), missing=[41])
     """
     values = np.asarray(data)
 
@@ -261,7 +303,28 @@ _GTN_IMPORTANCE_COLORS = {
 
 
 def mspa_colormap(transition: bool = True) -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for MSPA maps (256 entries, RGBA)."""
+    """Colour table of MSPA class maps (:func:`mspa`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Parameters
+    ----------
+    transition
+        Colour bridges and loops that cross an edge or a perforation in their own
+        colours (default) or as the class they cross.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.mspa_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     colors = dict(_MSPA_COLORS)
     colors.update(_TRANSITION_ON if transition else _TRANSITION_OFF)
     for value in [v for v in colors if v not in (0, 100, 129, 220)]:
@@ -270,12 +333,42 @@ def mspa_colormap(transition: bool = True) -> dict[int, tuple[int, int, int, int
 
 
 def gtn_components_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for GTN Components maps (256 entries, RGBA)."""
+    """Colour table of network component maps (:func:`gtn_components`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.gtn_components_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*_GTN_COMPONENTS_COLORS.get(i, (0, 0, 0)), 255) for i in range(256)}
 
 
 def gtn_importance_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for GTN Importance maps (256 entries, RGBA)."""
+    """Colour table of network importance maps (:func:`gtn_importance`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.gtn_importance_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*_GTN_IMPORTANCE_COLORS.get(i, (0, 0, 0)), 255) for i in range(256)}
 
 
@@ -284,52 +377,202 @@ GTN_IMPORTANCE_COLORMAP: dict[int, tuple[int, int, int, int]] = gtn_importance_c
 
 
 def fad_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for FAD maps (256 entries, RGBA)."""
+    """Colour table of density maps of :func:`fad`, :func:`fad_multiscale` and :func:`fos` (6 classes).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.fad_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*FAD_PALETTE[i], 255) for i in range(256)}
 
 
 def fad5_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for 5-class FAD/FOS maps (256 entries, RGBA)."""
+    """Colour table of 5-class fragmentation maps (:func:`fos` with ``classes=5``).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.fad5_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*FAD5_PALETTE[i], 255) for i in range(256)}
 
 
 def dist_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for Euclidean Distance maps (256 entries, RGBA)."""
+    """Colour table of distance maps (:func:`euclidean_distance`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.dist_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*DIST_PALETTE[i], 255) for i in range(256)}
 
 
 def entropy_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for Spatial Entropy maps (256 entries, RGBA)."""
+    """Colour table of spatial entropy maps (:func:`spatial_entropy_map`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.entropy_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*ENTROPY_PALETTE[i], 255) for i in range(256)}
 
 
 def lm_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for Landscape Mosaic maps (256 entries, RGBA)."""
+    """Colour table of landscape mosaic maps (:func:`landscape_mosaic`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.lm_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*LM_PALETTE[i], 255) for i in range(256)}
 
 
 def contortion_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for Contortion maps (256 entries, RGBA)."""
+    """Colour table of contortion maps (:func:`contortion`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.contortion_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*CONTORTION_PALETTE[i], 255) for i in range(256)}
 
 
 def resistance_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for Resistance / Isochrone maps (256 entries, RGBA)."""
+    """Colour table of resistance and isochrone maps (:func:`distance_to_resistance`, :func:`isochrone_map`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.resistance_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*RESISTANCE_PALETTE[i], 255) for i in range(256)}
 
 
 def change_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for Simple Change and MCD maps (256 entries, RGBA)."""
+    """Colour table of change maps (:func:`simple_change`, :func:`morphological_change`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.change_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*CHANGE_PALETTE[i], 255) for i in range(256)}
 
 
 def foschange_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for FOS Change maps (256 entries, RGBA)."""
+    """Colour table of fragmentation change maps (:func:`fos_change`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.foschange_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*FOSCHANGE_PALETTE[i], 255) for i in range(256)}
 
 
 def accounting_colormap() -> dict[int, tuple[int, int, int, int]]:
-    """Colour table of GuidosToolbox for Accounting maps (256 entries, RGBA)."""
+    """Colour table of object size-class maps (:func:`accounting`).
+
+    The standard colours of the product, as embedded by :func:`write_raster`.
+
+    Returns
+    -------
+    dict
+        ``{value: (red, green, blue, alpha)}`` for the 256 values 0-255.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> colours = ls.accounting_colormap()
+    >>> len(colours), len(colours[0])
+    (256, 4)
+    """
     return {i: (*MSPA_ON_PALETTE[i], 255) for i in range(256)}
 
 
@@ -417,31 +660,48 @@ def write_raster(
     compress: str = "lzw",
     description: str | None = None,
 ) -> Path:
-    """Write a 2-D array to a GeoTIFF.
+    """Write a 2-D raster to a GeoTIFF.
 
     Parameters
     ----------
     data
-        ``xarray.DataArray`` (georeferencing taken from ``.rio``) or numpy
-        array (then pass ``crs`` and ``transform``). Dask-backed arrays are
-        computed.
+        ``xarray.DataArray`` (georeferencing taken from ``.rio``) or numpy array
+        (then pass ``crs`` and ``transform`` to georeference it). Dask-backed
+        arrays are computed.
     path
         Output file.
     crs, transform, nodata
-        Override/define the georeferencing and nodata value.
+        Coordinate reference system, affine transform and NoData value; they
+        override those of ``data``.
     colormap
-        ``"auto"`` (default) writes the GuidosToolbox colour table for MSPA
-        results, ``"mspa"`` forces it, a ``{value: (r, g, b[, a])}`` mapping
-        writes a custom one and ``None`` writes none.
+        ``"auto"`` (default) embeds the colour table of the product when ``data``
+        is a class map made by landschaft (MSPA, fragmentation, change...),
+        ``"mspa"`` forces the MSPA colours, a ``{value: (r, g, b[, a])}`` mapping
+        embeds your own and ``None`` none.
     compress
-        GDAL compression (``"lzw"`` as GuidosToolbox, ``"deflate"``, ``"zstd"``...).
+        GDAL compression: ``"lzw"`` (default), ``"deflate"``, ``"zstd"``...
     description
-        TIFF image description. MSPA results get the processing parameters.
+        TIFF image description (MSPA results record their parameters there).
 
     Returns
     -------
     pathlib.Path
         The written file.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> morph = ls.mspa(forest, edge_width=2)
+    >>> ls.write_raster(morph, "forest_mspa.tif").name
+    'forest_mspa.tif'
+
+    A numpy array with your own colours, georeferenced like the input:
+
+    >>> import numpy as np
+    >>> mask = (forest.values == 2).astype("uint8")
+    >>> path = ls.write_raster(mask, "mask.tif", crs=forest.rio.crs, transform=forest.rio.transform(),
+    ...                        colormap={0: (255, 255, 255), 1: (21, 128, 61)})
     """
     arr = np.asarray(data.values if isinstance(data, xr.DataArray) else data)
     if arr.ndim != 2:

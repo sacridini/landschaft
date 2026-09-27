@@ -150,28 +150,53 @@ def fos(
 ) -> FOSResult:
     """Fragmentation at a Fixed Observation Scale (GTB FOS).
 
-    Parameters
-    ----------
-    data
-        Binary map (0 missing, 1 background, 2 foreground, 3/4 special
-        background) or grayscale map (0-100, 255 missing, 103/104 special
-        background); array, DataArray or raster path.
-    window_size
-        Side of the square moving window [pixels], odd (GTB offers 3-243).
-    method
-        ``"FAD"``, ``"FED"`` or ``"FAC"`` (binary maps only).
-    classes
-        5 or 6 reporting classes (6 separates intact = 100 from interior).
-    connectivity
-        Foreground connectivity for the patch statistics (8 or 4).
-    grayscale
-        Treat the map as grayscale; default: when its maximum exceeds 4 (GTB).
-    gray_threshold
-        Grayscale maps: pixels with a value of at least this are foreground.
-    pixel_resolution
-        Pixel size [m], for the observation scale in hectares.
-    n_threads
-        OpenMP threads (0: all cores but one).
+        Parameters
+        ----------
+        data
+            Binary map (0 missing, 1 background, 2 foreground, 3/4 special
+            background) or grayscale map (0-100, 255 missing, 103/104 special
+            background); array, DataArray or raster path.
+        window_size
+            Side of the square moving window [pixels], odd (GTB offers 3-243).
+        method
+            ``"FAD"``, ``"FED"`` or ``"FAC"`` (binary maps only).
+        classes
+            5 or 6 reporting classes (6 separates intact = 100 from interior).
+        connectivity
+            Foreground connectivity for the patch statistics (8 or 4).
+        grayscale
+            Treat the map as grayscale; default: when its maximum exceeds 4 (GTB).
+        gray_threshold
+            Grayscale maps: pixels with a value of at least this are foreground.
+        pixel_resolution
+            Pixel size [m], for the observation scale in hectares.
+        n_threads
+            Threads (0: all cores but one).
+
+        Returns
+        -------
+        FOSResult
+            The class map (``map``), the share of each class (``stats``), a
+            histogram of the values and patch statistics of the whole map
+            (``n_patches``, ``average_patch_size``, ``eca``, ``coherence``,
+            ``average``, ``avcon``); ``summary()`` prints the report.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> forest = ls.load_raster(ls.example_data("input"))
+        >>> result = ls.fos(forest, window_size=27, method="FAC", classes=5)
+        >>> list(result.stats["class"])
+        ['Rare', 'Patchy', 'Transitional', 'Dominant', 'Interior']
+        >>> result.n_patches
+        2850
+
+        A percentage map (grayscale): pixels of at least 30% are habitat.
+
+        >>> cover = ls.load_raster(ls.example_data("gscinput"), validate=None)
+        >>> gray = ls.fos(cover, window_size=27, gray_threshold=30)
+        >>> gray.grayscale
+        True
     """
     method = method.upper()
     if method not in ("FAD", "FED", "FAC"):

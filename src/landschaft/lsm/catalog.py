@@ -309,25 +309,49 @@ def select_metrics(level=None, metric=None, name=None, type=None, what=None, ext
 def list_metrics(level=None, metric=None, name=None, type=None, what=None, *, extras: bool = False) -> pd.DataFrame:
     """Available landscape metrics.
 
-    Filters work as in landscapemetrics' ``list_lsm``: ``level`` ("patch",
-    "class", "landscape"), ``metric`` (family, e.g. ``"area"`` selects
-    ``area``, ``area_mn``, ``area_sd`` and ``area_cv``), ``name`` and
-    ``type`` (e.g. ``"aggregation metric"``) are combined, and names starting
-    with ``-`` exclude. ``what`` lists levels and/or function names such as
-    ``"lsm_c_ca"`` and overrides the other filters.
+        Filters work as in landscapemetrics' ``list_lsm``: ``level`` ("patch",
+        "class", "landscape"), ``metric`` (family, e.g. ``"area"`` selects
+        ``area``, ``area_mn``, ``area_sd`` and ``area_cv``), ``name`` and
+        ``type`` (e.g. ``"aggregation metric"``) are combined, and names starting
+        with ``-`` exclude. ``what`` lists levels and/or function names such as
+        ``"lsm_c_ca"`` and overrides the other filters.
 
-    ``extras=True`` adds the metrics landscapemetrics does not have
-    (FRAGSTATS / pylandstats): the area-weighted mean ``_am``, the median
-    ``_md`` and the range ``_ra`` of every patch metric, the statistics of
-    ``perim``, and FRAGSTATS' proximity (``prox``), similarity (``simi``),
-    connectance (``connect``) and edge-contrast (``econ``, ``cwed``,
-    ``teci``) metrics. Extras named in ``what`` are always selected.
+        ``extras=True`` adds the metrics landscapemetrics does not have
+        (FRAGSTATS / pylandstats): the area-weighted mean ``_am``, the median
+        ``_md`` and the range ``_ra`` of every patch metric, the statistics of
+        ``perim``, and FRAGSTATS' proximity (``prox``), similarity (``simi``),
+        connectance (``connect``) and edge-contrast (``econ``, ``cwed``,
+        ``teci``) metrics. Extras named in ``what`` are always selected.
 
-    Returns
-    -------
-    pandas.DataFrame
-        Columns ``metric``, ``name``, ``type``, ``level``, ``extra`` (not in
-        landscapemetrics) and ``function_name``.
+        Parameters
+        ----------
+        level
+            "patch", "class" and/or "landscape".
+        metric
+            Metric families, e.g. ``"area"`` (``area``, ``area_mn``...), with
+            aliases (``"shape_index"``).
+        name, type
+            Full names or types, e.g. ``"aggregation metric"``.
+        what
+            Levels and function names such as ``"lsm_c_ca"``; overrides the other
+            filters.
+        extras
+            Include the FRAGSTATS metrics landscapemetrics does not have.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns ``metric``, ``name``, ``type``, ``level``, ``extra`` (not in
+            landscapemetrics) and ``function_name``.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> len(ls.list_metrics()) > 130
+        True
+        >>> ls.list_metrics(level="landscape", type="diversity metric")["metric"].tolist()
+        ['msidi', 'msiei', 'pr', 'prd', 'rpr', 'shdi', 'shei', 'sidi', 'siei']
+        >>> no_core = ls.list_metrics(level="class", type="-core area metric")
     """
     return select_metrics(level, metric, name, type, what, extras).drop(columns="family")
 

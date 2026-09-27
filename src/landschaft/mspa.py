@@ -144,6 +144,27 @@ def mspa(
     :data:`MSPA_CLASSES`. DataArrays keep coordinates and georeferencing and
     record the parameters in ``attrs``. For a collection, a list (see
     ``output_dir``).
+
+    See Also
+    --------
+    mspa_stats : area of every class.
+    mspa_tiled : maps larger than memory.
+    spa : simplified pattern analysis (2 to 6 classes).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> morph = ls.mspa(forest, edge_width=2)
+    >>> morph.shape, str(morph.dtype)
+    ((1000, 1000), 'uint8')
+    >>> ls.MSPA_CLASSES[17], ls.MSPA_CLASSES[33]
+    ('Core', 'Bridge')
+    >>> _ = ls.write_raster(morph, "forest_mspa.tif")   # with the MSPA colours
+
+    4-connected habitat and without internal features:
+
+    >>> plain = ls.mspa(forest, connectivity=4, internal=False)
     """
     _check_params(connectivity, edge_width)
     from .collection import RasterCollection
@@ -218,11 +239,31 @@ def mspa(
 
 
 def mspa_stats(result) -> pd.DataFrame:
-    """Pixel statistics of an MSPA map, grouped as in GuidosToolbox.
+    """Area of every MSPA class.
 
-    Returns a DataFrame indexed by class group with the number of pixels,
-    the percentage of the data area (all non-missing pixels) and, for
-    foreground classes, the percentage of the foreground area.
+    Parameters
+    ----------
+    result
+        An MSPA map returned by :func:`mspa` (DataArray or numpy array).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Indexed by class (Core, Islet, Perforation, Edge, Loop, Bridge, Branch,
+        Background, Core-Opening, Border-Opening, Missing), with ``pixels``, the
+        percentage of the mapped area ``pct_data`` (all non-missing pixels) and,
+        for habitat classes, the percentage of the habitat ``pct_foreground``.
+        Classes inside core-openings count with their class.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> morph = ls.mspa(ls.load_raster(ls.example_data("input")), edge_width=2)
+    >>> stats = ls.mspa_stats(morph)
+    >>> list(stats.columns)
+    ['pixels', 'pct_data', 'pct_foreground']
+    >>> round(float(stats.loc["Core", "pct_foreground"]), 1)
+    61.8
     """
     values = np.asarray(result.values if isinstance(result, xr.DataArray) else result)
     counts = np.bincount(values.ravel(), minlength=256)

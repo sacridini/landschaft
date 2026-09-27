@@ -25,7 +25,7 @@ plot = ["matplotlib>=3.5"]
 vector = ["geopandas>=0.12", "pyarrow>=10"]
 test = ["pytest>=7", "scipy>=1.10", "dask[array]>=2023.1"]
 all = ["dask[array]>=2023.1", "matplotlib>=3.5", "geopandas>=0.12", "pyarrow>=10"]
-docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.26", "matplotlib>=3.5"]
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.26", "ruff", "matplotlib>=3.5"]
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"

@@ -291,16 +291,26 @@ class Landscape:
         Similarity weights between classes for ``simi``, as ``contrast``
         (default: 1 within a class, 0 between classes, i.e. ``simi = prox``).
 
+    Notes
+    -----
     Metric names are landscapemetrics' abbreviations; FRAGSTATS abbreviations
     in capitals (``"SHDI"``) and the full names of pylandstats / FRAGSTATS
     (``"shannon_diversity_index"``, ``"total_area"``) are accepted too.
 
     Examples
     --------
-    >>> lm = Landscape("landcover.tif")
-    >>> lm.class_metrics(["ca", "pland", "np", "area_mn"])
-    >>> lm.landscape_metrics(["shdi", "contag", "ed"])
-    >>> lm.metrics(type="aggregation metric")          # long format
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> lc = ls.Landscape(landcover)
+    >>> lc.n_patches
+    967
+    >>> lc.class_metrics(["ca", "np"]).head(2)
+       class         ca     np
+    0      1    174.500    2.0
+    1      2  27058.125  201.0
+    >>> float(lc.landscape_metrics(["shdi"])["shdi"].iloc[0])
+    1.8096...
+    >>> long = lc.metrics(type="aggregation metric")   # long format, like calculate_lsm
     """
 
     def __init__(
@@ -377,25 +387,71 @@ class Landscape:
 
     @property
     def classes(self) -> np.ndarray:
-        """Class values present, in increasing order."""
+        """Class values present in the map, in increasing order.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc.classes[:5].tolist()
+        [1, 2, 3, 4, 5]
+        """
         return self._core.class_values
 
     @property
     def n_patches(self) -> int:
+        """Number of patches of all classes.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None)).n_patches
+        967
+        """
         return self._core.n_patches()
 
     @functools.cached_property
     def patch_classes(self) -> np.ndarray:
-        """Class value of every patch (patch ``id`` = position + 1)."""
+        """Class value of every patch (patch ``id`` = position + 1).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc.patch_classes[:3].tolist()
+        [1, 1, 2]
+        """
         return self.classes[self._core.patch_class()] if self.classes.size else np.empty(0, np.int32)
 
     @property
     def out_of_core(self) -> bool:
-        """Read by blocks (``block_rows``)."""
+        """Whether the raster is read by blocks (``block_rows``).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> ls.Landscape(ls.example_data("clc"), block_rows=256).out_of_core
+        True
+        """
         return self._tiled is not None
 
     def labels(self) -> xr.DataArray | np.ndarray:
-        """Patch ids (1..n, the ``id`` of the patch tables); 0 where NA."""
+        """Map of patch ids.
+
+        Returns
+        -------
+        xarray.DataArray or numpy.ndarray
+            Patch ids 1..n (the ``id`` of the patch tables), 0 where NA; same grid
+            as the input. Not available out of core.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> ids = lc.labels()
+        >>> int(ids.max()) == lc.n_patches
+        True
+        """
         self._no_raster("labels")
         return self._wrap(self._core.labels(), "patches")
 
@@ -423,6 +479,20 @@ class Landscape:
         path
             Write the raster to this GeoTIFF (``write_raster``; with a list, a
             directory: one ``<metric>.tif`` each), and return the path(s).
+
+        Returns
+        -------
+        xarray.DataArray, numpy.ndarray, dict or path
+            The raster (same form as the input), a dict of them for a list of
+            metrics, or the path(s) written.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> area = lc.to_raster("area")                  # every patch painted with its area (ha)
+        >>> pland = lc.to_raster("pland", level="class")
+        >>> path = lc.to_raster("shape", path="shape.tif")
         """
         self._no_raster("to_raster")
         if not isinstance(metric, str):
@@ -461,12 +531,39 @@ class Landscape:
 
     @property
     def extent(self) -> tuple[float, float, float, float]:
-        """(xmin, xmax, ymin, ymax) of the raster (terra's extent)."""
+        """Extent of the raster: ``(xmin, xmax, ymin, ymax)`` in map units.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> xmin, xmax, ymin, ymax = lc.extent
+        >>> xmax - xmin
+        50000.0
+        """
         return self._extent
 
     def patches(self, classes=None) -> dict:
-        """Patch ids of each class on a raster of their own (NaN elsewhere),
-        like landscapemetrics' ``get_patches``: ``{class: raster}``."""
+        """The patches of each class, each class on a raster of its own.
+
+        Parameters
+        ----------
+        classes
+            Class values to return (default: all).
+
+        Returns
+        -------
+        dict
+            ``{class: raster}``: patch ids on the cells of the class, NaN elsewhere.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> forests = lc.patches(classes=[23, 24])
+        >>> sorted(forests)
+        [23, 24]
+        """
         self._no_raster("patches")
         labels = np.asarray(self._core.labels())
         pclass = np.concatenate([[np.iinfo(np.int32).min], self.patch_classes])
@@ -493,6 +590,13 @@ class Landscape:
         -------
         pandas.DataFrame
             ``class``, ``id``, ``x``, ``y``.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc.centroids().columns.tolist()
+        ['class', 'id', 'x', 'y']
         """
         self._no_raster("centroids")
         t = self._core.centroids(*self._extent, bool(cell_center))
@@ -512,6 +616,14 @@ class Landscape:
         -------
         pandas.DataFrame
             ``class``, ``id``, ``dist`` (and ``id_neighbour``).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> nn = lc.nearest_neighbours(return_id=True)
+        >>> nn.columns.tolist()
+        ['class', 'id', 'dist', 'id_neighbour']
         """
         self._no_raster("nearest_neighbours")
         t = self._core.nearest_neighbours(bool(return_id))
@@ -534,6 +646,14 @@ class Landscape:
         pandas.DataFrame
             ``class``, ``id`` (patch level), ``diameter``, ``center_x``,
             ``center_y`` (map coordinates).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> circles = lc.circumscribing_circles()
+        >>> "diameter" in circles.columns
+        True
         """
         if level not in ("patch", "class"):
             raise ValueError("level must be 'patch' or 'class'")
@@ -563,6 +683,20 @@ class Landscape:
             "full" (counts), or only "like" (diagonal), "unlike" (off-diagonal)
             or "triangle" (with the diagonal) of the lower triangle (upper
             with ``upper``), NaN elsewhere.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Class x class counts (index: class of the cell, columns: class of the
+            neighbour).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> table = lc.adjacencies(4)
+        >>> table.shape == (len(lc.classes), len(lc.classes))
+        True
         """
         self._no_raster("adjacencies")
         from .utils import adjacency_frame, neighbourhood_offsets
@@ -572,13 +706,35 @@ class Landscape:
 
     def boundaries(self, consider_boundary: bool = False, edge_depth: int = 1, as_na: bool = False,
                    patch_id: bool = False):
-        """Boundary cells of the patches, like landscapemetrics'
-        ``get_boundaries`` on the rasters of ``get_patches``: 1 for cells
-        within ``edge_depth`` cells (4 neighbours) of another class, NA or,
-        unless ``consider_boundary``, the map edge; 0 inside (NaN with
-        ``as_na``); the patch id instead of 1 with ``patch_id``. NaN where the
-        map is NA. The cells that are not boundary are the core cells of the
-        core-area metrics.
+        """Boundary cells of the patches.
+
+        1 for the cells within ``edge_depth`` cells (4 neighbours) of another class,
+        of NA or, unless ``consider_boundary``, of the map edge; 0 inside. The
+        cells that are not boundary are the core cells of the core-area metrics.
+
+        Parameters
+        ----------
+        consider_boundary
+            Do not count the map edge as a boundary.
+        edge_depth
+            Width of the boundary, in cells.
+        as_na
+            NaN instead of 0 for the inner cells.
+        patch_id
+            The patch id instead of 1 on boundary cells.
+
+        Returns
+        -------
+        xarray.DataArray or numpy.ndarray
+            Same grid as the map, NaN where it is NA.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> edges = lc.boundaries(edge_depth=2)
+        >>> sorted(int(v) for v in set(edges.values[~edges.isnull().values].ravel()))
+        [0, 1]
         """
         self._no_raster("boundaries")
         b = np.asarray(self._core.patch_boundaries(bool(consider_boundary), int(edge_depth))).astype(float)
@@ -591,28 +747,59 @@ class Landscape:
         return self._wrap(b, "boundaries")
 
     def show_patches(self, classes="global", **kwargs):
-        """Map of the patches (landscapemetrics' ``show_patches``); see
-        :func:`landschaft.show_patches`."""
+        """Draw the patches (needs matplotlib); see :func:`show_patches`.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> fig = lc.show_patches()
+        """
         from .plotting import show_patches
 
         return show_patches(self, classes, **kwargs)
 
     def show_cores(self, classes="all", **kwargs):
-        """Core and edge cells (``show_cores``); see :func:`landschaft.show_cores`."""
+        """Draw the core and edge cells of every class (needs matplotlib); see
+        :func:`show_cores`.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None)[:300, :300])
+        >>> fig = lc.show_cores(classes=[12, 23])
+        """
         from .plotting import show_cores
 
         return show_cores(self, classes, **kwargs)
 
     def show_lsm(self, metric: str, classes="global", **kwargs):
-        """A patch metric on the map (``show_lsm``); see :func:`landschaft.show_lsm`."""
+        """Draw a patch metric on the patches (needs matplotlib); see :func:`show_lsm`.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> fig = lc.show_lsm("area")
+        """
         from .plotting import show_lsm
 
         return show_lsm(self, metric, classes, **kwargs)
 
     def extract_metrics(self, y, *, extract_id=None, metric=None, name=None, type=None, what=None,
                         extras: bool = False, verbose: bool = True) -> pd.DataFrame:
-        """Patch metrics of the patches under points, like landscapemetrics'
-        ``extract_lsm`` (see :func:`landschaft.extract_metrics`)."""
+        """Patch metrics of the patches under points; see :func:`extract_metrics`.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> xmin, xmax, ymin, ymax = lc.extent
+        >>> points = [[xmin + 1000, ymin + 1000], [xmax - 1000, ymax - 1000]]
+        >>> table = lc.extract_metrics(points, what=["lsm_p_area"])
+        >>> table["extract_id"].tolist()
+        [1, 2]
+        """
         self._no_raster("extract_metrics")
         from .utils import _order, extract_frame
 
@@ -643,7 +830,27 @@ class Landscape:
         return self._core.patch_metric(metric)
 
     def patch_metrics(self, metrics: Iterable[str] | str | None = None) -> pd.DataFrame:
-        """Patch-level metrics: one row per patch (``class``, ``id``, metrics...)."""
+        """Patch-level metrics, one row per patch.
+
+        Parameters
+        ----------
+        metrics
+            Metric names (default: all patch metrics). Upper-case and full names
+            are accepted; the columns keep the names as given.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``class``, ``id`` and one column per metric.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> table = lc.patch_metrics(["area", "shape"])
+        >>> table.columns.tolist()
+        ['class', 'id', 'area', 'shape']
+        """
         metrics, columns = _names(metrics, "patch")
         self._ensure(metrics)
         df = pd.DataFrame({"class": self.patch_classes, "id": np.arange(1, self.n_patches + 1)})
@@ -653,12 +860,34 @@ class Landscape:
 
     def write_patch_metrics(self, path, metrics: Iterable[str] | str | None = None, *,
                             chunk_rows: int = 1_000_000, **kwargs) -> Path:
-        """Write :meth:`patch_metrics` to a file chunk by chunk, without
-        building the table in memory: ``.parquet`` (one row group per chunk;
-        needs pyarrow), ``.csv`` or ``.csv.gz``. For maps with tens of millions
-        of patches. Extra keyword arguments go to the CSV / Parquet writer.
+        """Write :meth:`patch_metrics` to a file, chunk by chunk.
 
-        Returns the path written.
+        The table is never built in memory: for maps with tens of millions of
+        patches.
+
+        Parameters
+        ----------
+        path
+            ``.parquet`` (one row group per chunk; needs pyarrow), ``.csv`` or
+            ``.csv.gz``.
+        metrics
+            As in :meth:`patch_metrics`.
+        chunk_rows
+            Patches per chunk.
+        **kwargs
+            Passed to the CSV or Parquet writer.
+
+        Returns
+        -------
+        pathlib.Path
+            The file written.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc.write_patch_metrics("patches.csv", ["area", "perim"]).name
+        'patches.csv'
         """
         from .export import TableSink
 
@@ -679,12 +908,32 @@ class Landscape:
 
     def write_metrics(self, path, level=None, metric=None, name=None, type=None, what=None, *,
                       extras: bool = False, chunk_rows: int = 1_000_000, **kwargs) -> Path:
-        """Write :meth:`metrics` (long format, same rows and types) to a file,
-        one metric at a time and the patch metrics chunk by chunk, without
-        building the table in memory: ``.parquet`` (needs pyarrow), ``.csv``
-        or ``.csv.gz``. Extra keyword arguments go to the CSV / Parquet writer.
+        """Write :meth:`metrics` (long format) to a file, without building it in memory.
 
-        Returns the path written.
+        One metric at a time, the patch metrics chunk by chunk; the same rows and
+        types as :meth:`metrics`.
+
+        Parameters
+        ----------
+        path
+            ``.parquet`` (needs pyarrow), ``.csv`` or ``.csv.gz``.
+        level, metric, name, type, what, extras
+            Selection, as in :meth:`metrics`.
+        chunk_rows
+            Patches per chunk.
+        **kwargs
+            Passed to the CSV or Parquet writer.
+
+        Returns
+        -------
+        pathlib.Path
+            The file written.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> path = lc.write_metrics("metrics.csv.gz", level=["class", "landscape"])
         """
         from .export import TableSink
 
@@ -721,10 +970,30 @@ class Landscape:
         return sink.path
 
     def class_metrics(self, metrics: Iterable[str] | str | None = None, *, extras: bool = False) -> pd.DataFrame:
-        """Class-level metrics: one row per class (``class``, metrics...).
+        """Class-level metrics, one row per class.
 
-        All landscapemetrics metrics by default (``extras=True``: also the
-        FRAGSTATS ones, see :func:`landschaft.list_metrics`).
+        Parameters
+        ----------
+        metrics
+            Metric names (default: all class metrics). Upper-case and full names
+            are accepted; the columns keep the names as given.
+        extras
+            With the default selection, also the metrics landscapemetrics does not
+            have (see :func:`list_metrics`).
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``class`` and one column per metric.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc.class_metrics(["ca", "pland", "np"]).columns.tolist()
+        ['class', 'ca', 'pland', 'np']
+        >>> lc.class_metrics(["CA", "area_am"]).columns.tolist()
+        ['class', 'CA', 'area_am']
         """
         metrics, columns = _names(metrics, "class", extras)
         self._ensure(metrics)
@@ -735,8 +1004,25 @@ class Landscape:
         return df
 
     def landscape_metrics(self, metrics: Iterable[str] | str | None = None, *, extras: bool = False) -> pd.DataFrame:
-        """Landscape-level metrics: a single row (``extras`` as in
-        :meth:`class_metrics`)."""
+        """Landscape-level metrics, in a single row.
+
+        Parameters
+        ----------
+        metrics, extras
+            As in :meth:`class_metrics`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row, one column per metric.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc.landscape_metrics(["ta", "np", "shdi"]).columns.tolist()
+        ['ta', 'np', 'shdi']
+        """
         metrics, columns = _names(metrics, "landscape", extras)
         self._ensure(metrics)
         self._core.prepare([2] * len(metrics), metrics)
@@ -748,17 +1034,27 @@ class Landscape:
     ) -> pd.DataFrame:
         """Selected metrics in long format, like landscapemetrics' ``calculate_lsm``.
 
-        Selection as in :func:`landschaft.list_metrics` (all landscapemetrics
-        metrics by default; ``extras=True`` adds the FRAGSTATS ones).
-        ``full_name=True`` adds the columns ``name``, ``type`` and
-        ``function_name`` of each metric (as ``calculate_lsm(full_name = TRUE)``).
+                Selection as in :func:`landschaft.list_metrics` (all landscapemetrics
+                metrics by default; ``extras=True`` adds the FRAGSTATS ones).
+                ``full_name=True`` adds the columns ``name``, ``type`` and
+                ``function_name`` of each metric (as ``calculate_lsm(full_name = TRUE)``).
 
-        Returns
-        -------
-        pandas.DataFrame
-            Columns ``level``, ``class``, ``id``, ``metric``, ``value``
-            (``class``/``id`` are missing where they do not apply). An all-NA
-            map gives one missing value per metric, as in landscapemetrics.
+                Returns
+                -------
+                pandas.DataFrame
+                    Columns ``level``, ``class``, ``id``, ``metric``, ``value``
+                    (``class``/``id`` are missing where they do not apply). An all-NA
+                    map gives one missing value per metric, as in landscapemetrics.
+
+            Examples
+            --------
+            >>> import landschaft as ls
+            >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+            >>> table = lc.metrics(level="landscape", type="diversity metric")
+            >>> table.columns.tolist()
+            ['level', 'class', 'id', 'metric', 'value']
+            >>> sorted(table["metric"].astype(str))[:3]
+            ['msidi', 'msiei', 'pr']
         """
         chosen = chosen_metrics(level, metric, name, type, what, extras)
         self._ensure(chosen["metric"])
@@ -859,6 +1155,22 @@ def landscape_metrics(
     pandas.DataFrame
         ``level``, ``class``, ``id``, ``metric``, ``value`` (plus ``layer``
         for several rasters). Several rasters are computed in parallel.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> table = ls.landscape_metrics(landcover, level="landscape", metric=["shdi", "contag"])
+    >>> table[["metric", "value"]].round(2)
+       metric  value
+    0  contag  69.46
+    1    shdi   1.81
+
+    Several rasters (a ``layer`` column numbers them):
+
+    >>> both = ls.landscape_metrics([landcover, landcover[:1000]], what=["lsm_l_np"])
+    >>> both["layer"].tolist()
+    [1, 2]
     """
     layers = as_layers(data)
     if layers is None:

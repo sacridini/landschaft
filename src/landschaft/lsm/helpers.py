@@ -42,7 +42,21 @@ def construct_buffer(coords, shape: str, size: float, *, return_vec: bool = True
         CRS of the polygons (``return_vec`` only; default: the CRS of
         ``coords`` if it has one).
 
+    Notes
+    -----
     These are the plots :func:`sample_metrics` builds around points.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ls.construct_buffer([[0.0, 0.0]], "square", 10, return_vec=False)
+    array([[-10., -10.,   1.],
+           [-10.,  10.,   1.],
+           [ 10.,  10.,   1.],
+           [ 10., -10.,   1.]])
+    >>> plots = ls.construct_buffer([[0.0, 0.0], [100.0, 0.0]], "circle", 25)   # GeoDataFrame
+    >>> len(plots)
+    2
     """
     from .sampling import _CIRCLE_COS, _CIRCLE_SIN
     from .utils import point_coords
@@ -166,6 +180,16 @@ def pad_raster(data, pad_raster_value: float = -999, pad_raster_cells: int = 1, 
     Returns
     -------
     xarray.DataArray or numpy.ndarray (float), or a list for several rasters.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> ls.pad_raster(np.array([[1, 2], [3, 4]]), pad_raster_value=0)
+    array([[0., 0., 0., 0.],
+           [0., 1., 2., 0.],
+           [0., 3., 4., 0.],
+           [0., 0., 0., 0.]])
     """
     cells = int(pad_raster_cells)
     if cells < 0:
@@ -191,8 +215,31 @@ def pad_raster(data, pad_raster_value: float = -999, pad_raster_cells: int = 1, 
 def unpad_raster(data, unpad_raster_cells: int = 1, return_raster: bool = True, *, nodata=None,
                  band: int | None = None):
     """Remove ``unpad_raster_cells`` rows and columns on each side of a
-    raster, like landscapemetrics' ``unpad_raster`` (the inverse of
-    :func:`pad_raster`). Arguments and result as in :func:`pad_raster`."""
+        raster, like landscapemetrics' ``unpad_raster`` (the inverse of
+        :func:`pad_raster`). Arguments and result as in :func:`pad_raster`.
+
+        Parameters
+        ----------
+        data
+            A raster or a list of rasters.
+        unpad_raster_cells
+            Rows and columns removed on each side.
+        return_raster
+            Return a georeferenced DataArray for georeferenced input.
+        nodata, band
+            Reading options.
+
+        Returns
+        -------
+        xarray.DataArray or numpy.ndarray (float), or a list for several rasters.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> padded = ls.pad_raster(ls.example_data("clc"), pad_raster_cells=2)
+        >>> ls.unpad_raster(padded, 2).shape
+        (2000, 2000)
+    """
     cells = int(unpad_raster_cells)
     if cells < 1:
         raise ValueError(f"unpad_raster_cells must be >= 1, got {unpad_raster_cells}")
@@ -231,6 +278,16 @@ def raster_to_points(data, return_NA: bool = True, *, nodata=None, band: int | N
     pandas.DataFrame
         ``layer``, ``x``, ``y``, ``z``, cell by cell in row order (the
         coordinates are terra's ``xyFromCell``).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> ls.raster_to_points(np.array([[1, 2], [np.nan, 4]]), return_NA=False)
+       layer    x    y    z
+    0      1  0.5  1.5  1.0
+    1      1  1.5  1.5  2.0
+    2      1  1.5  0.5  4.0
     """
     layers, _ = _layers(data)
     frames = []
@@ -268,12 +325,32 @@ def _unique(layer, nodata, band) -> np.ndarray:
 
 def get_unique_values(data, simplify: bool = False, *, nodata=None, band: int | None = None):
     """The distinct values of rasters (NA left out, doubles truncated to
-    integers), sorted, like landscapemetrics' ``get_unique_values``.
+        integers), sorted, like landscapemetrics' ``get_unique_values``.
 
-    ``data``: a raster (file, DataArray, numpy array of any dimension up to 2,
-    masked array) or a list of them. Returns ``{"layer_1": values, ...}``
-    as landscapemetrics does, or only the values of a single raster with
-    ``simplify=True``.
+        ``data``: a raster (file, DataArray, numpy array of any dimension up to 2,
+        masked array) or a list of them. Returns ``{"layer_1": values, ...}``
+        as landscapemetrics does, or only the values of a single raster with
+        ``simplify=True``.
+
+        Parameters
+        ----------
+        data
+            A raster (file, DataArray, numpy or masked array, also 1-D) or a list
+            of them.
+        simplify
+            Return the values of a single raster directly.
+        nodata, band
+            Reading options.
+
+        Returns
+        -------
+        dict or numpy.ndarray
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> ls.get_unique_values(ls.example_data("input"), simplify=True).tolist()
+        [0, 1, 2]
     """
     layers, single = _layers(data)
     result = {f"layer_{k}": _unique(layer, nodata, band) for k, layer in enumerate(layers, start=1)}

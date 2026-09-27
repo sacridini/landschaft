@@ -13,7 +13,23 @@ SPECIAL_BACKGROUND_2 = 4
 
 
 class InvalidInputError(ValueError):
-    """The raster cannot be processed by the requested GTB tool."""
+    """The raster cannot be processed by the requested tool.
+
+    Raised by :func:`load_raster` and the habitat-pattern tools when a map is not
+    coded as they expect; the message says what is wrong and how to fix it. It is
+    a ``ValueError``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> try:
+    ...     ls.validate_mspa_input(np.array([[5, 1], [2, 2]], dtype="uint8"))
+    ... except ls.InvalidInputError as err:
+    ...     message = str(err)
+    >>> "larger than 2" in message
+    True
+    """
 
 
 def _minmax(values) -> tuple[int, int]:
@@ -28,15 +44,29 @@ def _minmax(values) -> tuple[int, int]:
 
 
 def validate_mspa_input(data, *, spatial_only: bool = True) -> None:
-    """Raise :class:`InvalidInputError` unless ``data`` is a valid MSPA input.
+    """Check that ``data`` is a habitat map MSPA can process.
 
-    MSPA expects a single-band ``uint8`` map coded as
-    ``0`` = missing, ``1`` = background, ``2`` = foreground, with at least
-    one foreground pixel and at least one pixel that is not foreground.
+    MSPA expects a single-band ``uint8`` map coded ``0`` = missing,
+    ``1`` = background, ``2`` = habitat, with at least one habitat pixel and
+    at least one pixel that is not habitat.
 
-    ``data`` may be a numpy array, a dask array or an ``xarray.DataArray``.
-    With ``spatial_only`` the array must be 2-D; otherwise extra leading
-    dimensions (e.g. time) are allowed and every slice is checked jointly.
+    Parameters
+    ----------
+    data
+        numpy array, dask array or ``xarray.DataArray``.
+    spatial_only
+        Require a 2-D map (default); otherwise leading dimensions (e.g. time) are
+        allowed and all slices are checked together.
+
+    Raises
+    ------
+    InvalidInputError
+        With a message that says what is wrong and how to fix it.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ls.validate_mspa_input(ls.load_raster(ls.example_data("input")))   # passes silently
     """
     if isinstance(data, xr.DataArray):
         values = data.data  # keeps dask arrays lazy
@@ -72,12 +102,26 @@ def validate_mspa_input(data, *, spatial_only: bool = True) -> None:
 
 
 def validate_fad_input(data) -> None:
-    """Raise :class:`InvalidInputError` unless ``data`` is a valid 2-D FAD-type input.
+    """Check that ``data`` is a habitat map the density and object tools accept.
 
-    GuidosToolbox's ``LM_Compliance`` check for the ``'fad'`` tools
-    (Accounting, FOS): a single-band ``uint8`` map coded ``0`` = missing,
-    ``1`` = background, ``2`` = foreground, ``3``/``4`` = special background,
-    with at least one foreground pixel.
+    A single-band ``uint8`` map coded ``0`` = missing, ``1`` = background,
+    ``2`` = habitat and ``3``/``4`` = special background, with at least one
+    habitat pixel (used by :func:`accounting` and :func:`fos`).
+
+    Parameters
+    ----------
+    data
+        numpy array or ``xarray.DataArray``, 2-D.
+
+    Raises
+    ------
+    InvalidInputError
+        With a message that says what is wrong and how to fix it.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ls.validate_fad_input(ls.load_raster(ls.example_data("input")))
     """
     values = np.asarray(data.values if isinstance(data, xr.DataArray) else data)
     if values.ndim != 2:

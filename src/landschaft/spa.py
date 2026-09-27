@@ -63,6 +63,13 @@ class SPAResult:
         and of foreground objects, as GTB reports them.
     porosity
         ``100 - contiguous / (contiguous + core-openings) * 100``.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> result = ls.spa(ls.load_raster(ls.example_data("input")), variant=6)
+    >>> result.map.shape
+    (1000, 1000)
     """
 
     map: xr.DataArray | np.ndarray
@@ -103,17 +110,41 @@ class SPAResult:
 
 
 def spa(data, variant: int = 5, *, n_threads: int = 0) -> SPAResult:
-    """Simplified Pattern Analysis SPA2, SPA3, SPA5 or SPA6 (GTB).
+    """Simplified pattern analysis: the habitat in 2, 3, 5 or 6 classes.
+
+    A coarser, faster summary than :func:`mspa`:
+
+    - ``2``: contiguous habitat (core, edge, perforation) and small linear
+      features (margin);
+    - ``3``: core, edge (with perforation) and margin;
+    - ``5``: core, edge, perforation and margin;
+    - ``6``: core, edge, perforation, margin and islet.
 
     Parameters
     ----------
     data
-        2-D ``uint8`` map (array, DataArray or raster path) coded 0 missing,
-        1 background, 2 foreground.
+        2-D ``uint8`` habitat map (array, DataArray or raster path) coded
+        0 missing, 1 background, 2 habitat.
     variant
         2, 3, 5 (default) or 6.
     n_threads
-        OpenMP threads (0: all cores but one).
+        Threads (``None`` / 0: all cores but one).
+
+    Returns
+    -------
+    SPAResult
+        The class map, class areas, object counts and porosity.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> result = ls.spa(forest, variant=5)
+    >>> list(result.stats["class"])
+    ['Core', 'Edge', 'Perforation', 'Margin']
+    >>> round(result.porosity, 2)
+    1.42
+    >>> print(result.summary())  # doctest: +SKIP
     """
     if variant not in (2, 3, 5, 6):
         raise ValueError(f"variant must be 2, 3, 5 or 6, got {variant}")

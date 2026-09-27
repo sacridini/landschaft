@@ -91,7 +91,15 @@ def _wrap_as_dataarray(
 
 @dataclass
 class FADResult:
-    """Result of single-scale FAD analysis (:func:`fad`)."""
+    """Result of single-scale FAD analysis (:func:`fad`).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> result = ls.fad(ls.load_raster(ls.example_data("input")), window_size=13)
+    >>> result.window_size, result.density.shape
+    (13, (1000, 1000))
+    """
 
     density: xr.DataArray | np.ndarray
     raw_density: xr.DataArray | np.ndarray
@@ -106,7 +114,15 @@ class FADResult:
 
 @dataclass
 class FADMultiscaleResult:
-    """Result of multiscale FAD analysis (:func:`fad_multiscale`)."""
+    """Result of multiscale FAD analysis (:func:`fad_multiscale`).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> result = ls.fad_multiscale(ls.load_raster(ls.example_data("input")), window_sizes=(7, 27))
+    >>> result.window_sizes
+    [7, 27]
+    """
 
     multiscale_map: xr.DataArray | np.ndarray
     classes: xr.DataArray | np.ndarray
@@ -148,6 +164,15 @@ def fad(
     -------
     FADResult
         Result object containing density map, 6-class map, and statistics table.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> result = ls.fad(forest, window_size=27)
+    >>> float(result.stats["average_fad"].iloc[0])
+    73.54
+    >>> _ = ls.write_raster(result.density, "fad27.tif")   # with the colours of the six classes
     """
     validate_mspa_input(data)
     arr = np.ascontiguousarray(data.values if isinstance(data, xr.DataArray) else data, dtype=np.uint8)
@@ -233,6 +258,16 @@ def fad_multiscale(
     -------
     FADMultiscaleResult
         Result containing composite map, single scale maps, and statistics table.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> result = ls.fad_multiscale(forest)
+    >>> list(result.stats["window_size"])
+    [7, 13, 27, 81, 243, 'Average']
+    >>> sorted(result.single_scales)
+    [7, 13, 27, 81, 243]
     """
     validate_fad_input(data)
     arr = np.ascontiguousarray(data.values if isinstance(data, xr.DataArray) else data, dtype=np.uint8)

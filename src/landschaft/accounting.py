@@ -73,6 +73,15 @@ class AccountingResult:
         area share a rank).
     highlighted
         Whether the three largest objects are painted pink in ``classes``.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> result = ls.accounting(ls.load_raster(ls.example_data("input")))
+    >>> result.largest[0]
+    (1,)
+    >>> int(result.object_area[0])
+    214811
     """
 
     classes: xr.DataArray | np.ndarray
@@ -217,6 +226,23 @@ def accounting(
     Returns
     -------
     AccountingResult
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> result = ls.accounting(forest, thresholds=(50, 250, 1000, 5000, 20000))
+    >>> result.n_objects
+    2850
+    >>> result.stats[["size_class", "range", "objects"]].head(2)
+       size_class     range  objects
+    0           1    1 - 50     2668
+    1           2  51 - 250      129
+    >>> _ = ls.write_raster(result.classes, "size_classes.tif")
+
+    Classes proposed from the range of object sizes:
+
+    >>> auto = ls.accounting(forest, thresholds="auto")
     """
     if connectivity not in (4, 8):
         raise ValueError(f"connectivity must be 4 or 8, got {connectivity}")

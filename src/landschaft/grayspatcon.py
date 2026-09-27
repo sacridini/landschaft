@@ -96,6 +96,15 @@ def gray_spatial_convolution(
     -------
     xarray.DataArray or numpy.ndarray
         Floating-point (float32) raster of the computed spatial convolution metric.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> cover = ls.load_raster(ls.example_data("gscinput"), validate=None)   # 0-100 %, 255 missing
+    >>> mean = ls.gray_spatial_convolution(cover, metric="mean", window_size=7)
+    >>> spread = ls.gray_spatial_convolution(cover, metric="stddev", window_size=9)
+    >>> str(mean.dtype)
+    'float32'
     """
     key = metric.lower().strip()
     if key not in _SUPPORTED_METRICS:

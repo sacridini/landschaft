@@ -64,6 +64,9 @@ plugins:
         python:
           paths: [src]
           options:
+            extensions:
+              - docs/griffe_roles.py:SphinxRoles
+            line_length: 88
             docstring_style: numpy
             docstring_section_style: table
             show_source: false
@@ -121,6 +124,7 @@ extra:
 
 exclude_docs: |
   /overrides/
+  /griffe_roles.py
 
 nav:
   - Home: index.md
@@ -140,6 +144,12 @@ nav:
       - Distance & restoration: tutorials/distance-restoration.md
       - Change detection: tutorials/change-detection.md
       - Large data & batch: tutorials/large-data.md
+  - API reference:
+      - api/index.md
+      - Data & configuration: api/data.md
+      - Habitat patterns: api/patterns.md
+      - Fragmentation: api/fragmentation.md
+      - Landscape metrics: api/landscape-metrics.md
   - About:
       - Changelog: about/changelog.md
       - License: about/license.md

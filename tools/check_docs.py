@@ -4,12 +4,14 @@
 Usage::
 
     python tools/check_docs.py [page.md ...]
+    python tools/check_docs.py --api [name filter]
 
 Every fenced ``python`` block of every page under ``docs/`` (or of the pages
 named) runs in order, the blocks of one page sharing a namespace, in a
 temporary working directory (files the examples write go there). A block
 preceded by an ``<!-- no-run -->`` comment is skipped. Exits with status 1 if
-an example fails.
+an example fails. With ``--api`` the ``Examples`` sections of the docstrings
+of the public API (functions, classes and their methods) run instead.
 """
 
 from __future__ import annotations
@@ -87,7 +89,82 @@ def run_page(path: Path) -> list[str]:
     return errors
 
 
+def public_objects():
+    """(qualified name, object) of the public API: landschaft, landschaft.conn,
+    landschaft.circuit and the public methods of their classes."""
+    import inspect
+
+    import landschaft
+    import landschaft.circuit
+    import landschaft.conn
+
+    seen = set()
+    for mod in (landschaft, landschaft.conn, landschaft.circuit):
+        for name in getattr(mod, "__all__", []):
+            obj = getattr(mod, name)
+            if id(obj) in seen or not callable(obj):
+                continue
+            seen.add(id(obj))
+            yield f"{mod.__name__}.{name}", obj
+            if inspect.isclass(obj):
+                for attr, member in vars(obj).items():
+                    if attr.startswith("_") and attr != "__init__":
+                        continue
+                    member = getattr(member, "__func__", member)
+                    if callable(member) or isinstance(member, property):
+                        yield f"{mod.__name__}.{name}.{attr}", member
+
+
+def run_api(filter_text: str = "") -> list[str]:
+    """Run the Examples section of every public docstring as a doctest: the
+    outputs shown are compared (whitespace normalised, ``...`` matches
+    anything); ``# doctest: +SKIP`` lines are not run."""
+    import doctest
+    import io
+
+    errors = []
+    parser = doctest.DocTestParser()
+    flags = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
+    n = 0
+    for qualname, obj in public_objects():
+        if filter_text and filter_text not in qualname:
+            continue
+        doc = getattr(obj, "__doc__", None) or ""
+        if "Examples" not in doc:
+            continue
+        section = doc[doc.index("Examples"):]
+        test = parser.get_doctest(section, {"__name__": "__api__"}, qualname, qualname, 0)
+        if not test.examples:
+            continue
+        n += 1
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory(prefix="landschaft_api_", ignore_cleanup_errors=True) as tmp:
+            os.chdir(tmp)
+            out = io.StringIO()
+            runner = doctest.DocTestRunner(optionflags=flags)
+            try:
+                result = runner.run(test, out=out.write)
+                if result.failed:
+                    errors.append(qualname + "\n" + out.getvalue())
+            finally:
+                import gc
+
+                import matplotlib.pyplot as plt
+
+                plt.close("all")
+                test.globs.clear()
+                gc.collect()
+                os.chdir(cwd)
+    print(f"{n} docstring examples run, {len(errors)} failed")
+    return errors
+
+
 def main() -> None:
+    if sys.argv[1:2] == ["--api"]:
+        errors = run_api(sys.argv[2] if len(sys.argv) > 2 else "")
+        for e in errors:
+            print("\n" + e)
+        sys.exit(1 if errors else 0)
     pages = [Path(p).resolve() for p in sys.argv[1:]] or sorted(
         p for p in DOCS.rglob("*.md") if "overrides" not in p.parts)
     failed = []

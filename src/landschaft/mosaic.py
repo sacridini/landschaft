@@ -143,6 +143,19 @@ def landscape_mosaic(
     -------
     xarray.DataArray or numpy.ndarray
         Landscape mosaic raster (uint8).
+
+    Examples
+    --------
+    Land cover in three classes (1 agriculture, 2 natural, 3 developed) from
+    the CORINE example:
+
+    >>> import xarray as xr
+    >>> import landschaft as ls
+    >>> clc = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> three = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
+    >>> mosaic = ls.landscape_mosaic(three, window_size=27)
+    >>> ls.LM19_CLASSES[17]
+    'Pure Forest (100%)'
     """
     _validate_lm_input(data)
     if window_size < 3 or window_size % 2 == 0:
@@ -190,7 +203,17 @@ def landscape_mosaic_stats(
     -------
     pandas.DataFrame
         DataFrame with columns ``class_code``, ``pixel_count``, ``percentage``,
-        and ``recode_class_19``.
+        ``recode_class_19`` and ``recode_name_19`` (the 19-class code and name).
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> import landschaft as ls
+    >>> clc = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> three = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
+    >>> table = ls.landscape_mosaic_stats(three, window_size=27)
+    >>> list(table.columns)
+    ['class_code', 'pixel_count', 'percentage', 'recode_class_19', 'recode_name_19']
     """
     if is_lm103:
         im103 = np.ascontiguousarray(data.values if isinstance(data, xr.DataArray) else data, dtype=np.uint8)

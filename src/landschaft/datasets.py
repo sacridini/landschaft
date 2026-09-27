@@ -26,17 +26,31 @@ EXAMPLE_DATA: dict[str, str] = {
 
 
 def example_data(name: str = "input") -> Path:
-    """Path of a bundled sample raster.
+    """Path of an example raster shipped with the package.
 
     Parameters
     ----------
     name
-        One of :data:`EXAMPLE_DATA`: ``"input"`` (default), ``"clc"`` or ``"gscinput"``.
+        One of :data:`EXAMPLE_DATA`:
+
+        - ``"input"`` (default): habitat map, 1000 x 1000 cells, coded 0 missing,
+          1 background, 2 forest;
+        - ``"clc"``: CORINE land cover, 2000 x 2000 cells of 25 m (EPSG:3035),
+          classes 1-44 (forests: 23, 24, 25);
+        - ``"gscinput"``: percentage map (0-100, 255 missing), 1990 x 1289 cells.
+
+    Returns
+    -------
+    pathlib.Path
+        Path of the GeoTIFF, to pass to :func:`load_raster` or any tool.
 
     Examples
     --------
     >>> import landschaft as ls
-    >>> result = ls.mspa(ls.load_raster(ls.example_data("input")))
+    >>> ls.example_data("clc").name
+    'clc.tif'
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> result = ls.mspa(forest)
     """
     if name not in EXAMPLE_DATA:
         raise ValueError(f"unknown example {name!r}; available: {', '.join(EXAMPLE_DATA)}")
