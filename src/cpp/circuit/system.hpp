@@ -138,10 +138,11 @@ public:
 private:
     std::shared_ptr<const FrontalSymbolic> sym_;
     bool factorize(double* y);  // with y: the forward substitution of y too
+    bool factorize_large(double* y);  // structures with a large L: in parallel (see system.cpp)
     void forward(double* x, i64 k, AlignedBuffer& tmp) const;
     void backward(double* x, i64 k, AlignedBuffer& tmp) const;
     std::vector<double> diag_, off_;  // the matrix: diagonal, and unknown × direction edge values
-    AlignedBuffer l_, stack_;
+    AlignedBuffer l_, stack_, work_;
     SolveScratch scratch_;
 };
 

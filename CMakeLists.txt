@@ -57,7 +57,9 @@ FetchContent_Declare(eigen
 FetchContent_MakeAvailable(eigen)
 add_library(eigen_headers INTERFACE)
 target_include_directories(eigen_headers SYSTEM INTERFACE ${eigen_SOURCE_DIR})
-target_compile_definitions(eigen_headers INTERFACE EIGEN_MPL2_ONLY)
+# Eigen's own threads stay off: the circuit kernels split their work in fixed
+# blocks themselves, so results do not depend on the number of threads.
+target_compile_definitions(eigen_headers INTERFACE EIGEN_MPL2_ONLY EIGEN_DONT_PARALLELIZE)
 
 set(CIRCUIT_SOURCES
     src/cpp/circuit/circuitscape.cpp

@@ -229,3 +229,36 @@ def test_one_to_all_matches_circuitscape(ini, in_cs):
     for kind in theirs:
         want = z[f"{name}/{kind}.asc"]
         np.testing.assert_allclose(r.maps[kind], want, rtol=1e-11, atol=1e-12 * max(np.abs(want).max(), 1e-300))
+
+
+def test_large_factorisation_is_exact_and_deterministic():
+    # 400 x 400 cells: an L above the size factorised by parts in parallel
+    import scipy.sparse as sp
+
+    rng = np.random.default_rng(12)
+    g = rng.uniform(0.2, 5.0, (400, 400))
+    src = np.full(g.shape, np.nan)
+    src[3, 5] = 1.0
+    src[200, 300] = 2.0
+    gnd = np.full(g.shape, np.nan)
+    gnd[399, 399] = 0.0
+    kw = dict(habitat_is_resistance=False, four_neighbors=True)
+    one = cs.circuitscape_advanced(g, src, gnd, n_threads=1, **kw)
+    many = cs.circuitscape_advanced(g, src, gnd, n_threads=8, **kw)
+    np.testing.assert_array_equal(one.voltage, many.voltage)
+    np.testing.assert_array_equal(one.current, many.current)
+    # the voltages solve the grounded Laplacian (4 neighbours, average conductances)
+    ny, nx = g.shape
+    idx = np.arange(ny * nx).reshape(ny, nx)
+    rows, cols, vals = [], [], []
+    for a, b in ((idx[:, :-1], idx[:, 1:]), (idx[:-1, :], idx[1:, :])):
+        w = (g.ravel()[a.ravel()] + g.ravel()[b.ravel()]) / 2
+        rows += [a.ravel(), b.ravel()]
+        cols += [b.ravel(), a.ravel()]
+        vals += [w, w]
+    A = sp.coo_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))), shape=(ny * nx,) * 2).tocsr()
+    L = sp.diags(np.asarray(A.sum(axis=1)).ravel()) - A
+    v = one.voltage.ravel()
+    b = np.nan_to_num(src).ravel()
+    res = (L @ v - b)[:-1]
+    assert np.abs(res).max() < 1e-9

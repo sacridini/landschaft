@@ -306,10 +306,12 @@ Fases:
      Fase 5 concluída; o modo de rede (grafos) do Circuitscape continua fora.
 
 Próximos passos sugeridos (2026-09-26, depois da 0.48.0):
-- Fatoração paralela de um componente grande. Hoje cada componente é fatorado numa thread
-  só; é o que limita o pairwise e o advanced num mapa de um componente só (1000×1000 com 20
-  pontos: 2,7 s contra 8,7 s do Circuitscape, só 3×, enquanto os modos com muitas
-  fatorações ganham 5–8×). Dois níveis:
+- Fatoração paralela de um componente grande. **Feita** (0.51.0: partes da árvore em
+  paralelo, os fronts acima por alturas, fronts grandes por Cholesky em blocos fixos;
+  mesmos bits com qualquer número de threads; 1000×1000: fatoração 3,4 → 0,7 s com 20
+  threads). O que sobra no advanced de um componente só é serial: montar o grafo, o
+  `factor_component` e as correntes (~1,6 s dos 2,6 s num raster 1000×1000), e no
+  pairwise as substituições (lotes de 8 colunas relendo o L inteiro). Plano original:
   - paralelismo na árvore: subárvores independentes da ND fatoradas ao mesmo tempo, por
     alturas (OpenMP 2.0 do MSVC não tem `task`: `parallel for` sobre os nós de mesma
     altura), com as matrizes de atualização em áreas próprias por nó em vez da pilha única
@@ -323,8 +325,7 @@ Próximos passos sugeridos (2026-09-26, depois da 0.48.0):
   `circuitscape_network_pairwise` / `_advanced`, `circuitscape_ini`; dissecção aninhada
   por níveis de BFS para grafos sem geometria, em paralelo por profundidade; os casos de
   rede do Circuitscape e seis sintéticos a 1,1e-14 do CHOLMOD; 1 M de nós, 20 pontos:
-  7,2 s contra 27,7 s do CHOLMOD e 182 s do cg+amg). A fatoração (~3,5 s desses 7,2 s)
-  continua numa thread só: é o item acima.
+  7,2 s contra 27,7 s do CHOLMOD e 182 s do cg+amg; 5,0 s com a fatoração paralela).
 - Omniscape com raio grande e muitas threads: limitado pela banda de memória (6× de 1 para
   20 threads em r = 100; o fator de uma janela tem 13 MB). Ideias: fatorar o landscape em
   precisão mista não serve (condicionamento); reduzir o tráfego guardando só a parte de L

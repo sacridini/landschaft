@@ -1755,7 +1755,17 @@ lists of `value x y`), grounds as resistances (0: direct ground), unit currents,
 grounds and the four `remove_src_or_gnd` policies with their quirks. ASCII grids are read
 in double, as Circuitscape does (GDAL would give float32). Each component is factorised by
 the same multifrontal Cholesky as Omniscape's windows, with the short-circuit regions
-eliminated last.
+eliminated last. Large components (an L of more than 32 MB) are factorised in parallel:
+subtrees of the dissection of similar work on separate threads, each with its own stack
+of update matrices; the fronts above them by heights (several at once, or a lone one with
+parallel kernels); large fronts (128 pivots or more) by a blocked right-looking Cholesky
+over fixed blocks (LLT of 128-column diagonal blocks, panel solves by 256-row chunks,
+the trailing update by 256 × 128 tiles). Every front is built in an aligned workspace,
+so the arithmetic, and the result, is the same bits with any number of threads; a
+forward substitution fused into the factorisation keeps the single-thread order of its
+operations (the contributions of a subtree to the rows outside it are replayed at its
+root's turn). On a 1000×1000 raster the factorisation takes 0.7 s with 20 threads
+instead of 3.4 s (advanced mode as a whole: 2.6 s instead of 5.2 s).
 
 Implemented: `scenario = advanced` (voltage and current maps; `circuitscape_ini` writes
 `<output>_voltmap` and `<output>_curmap`, ASCII grids or GeoTIFF, and the configuration
@@ -1858,6 +1868,8 @@ network test cases (`sgNetworkVerify1-3`, `mgNetworkVerify1-3`) and six syntheti
 repeated, isolated or out of the graph, include / exclude pairs, finite and direct
 grounds, `rmvgnd` / `rmvall`, a 4000-node graph) with CHOLMOD: every output file, the same
 set of files, to 1.1e-14. On a 1000×1000 grid-like network (1 M nodes, 3 M edges, 20
-focal nodes, resistances only; 20 threads) landschaft takes 7.2 s, Circuitscape 27.7 s
-with CHOLMOD and 182 s with its default cg+amg (the same resistances to 3e-15 against
-CHOLMOD).
+focal nodes, resistances only; 20 threads) landschaft takes 5.0 s, Circuitscape 27.7 s
+with CHOLMOD and 182 s with its default cg+amg. The resistances agree with CHOLMOD's to
+5e-10 (relative); an exact sparse LU of the grounded Laplacian (scipy, no diagonal shift)
+differs from both by as much: that is the conditioning of a 1 M-node Laplacian and
+Circuitscape's 10ε shift, not the solver.

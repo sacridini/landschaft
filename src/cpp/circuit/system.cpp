@@ -6,7 +6,12 @@
 #include <Eigen/Core>
 
 #include <algorithm>
+#include <queue>
 #include <utility>
+
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
 
 namespace circuit {
 
@@ -483,6 +488,363 @@ void CellSystem::assemble(const double* g, const std::uint8_t* present, const do
 
 bool CellSystem::factorize() { return factorize(nullptr); }
 
+namespace {
+
+// Structures with more doubles of L than this are factorised apart: every
+// front built in an aligned workspace and only its L copied out (so the
+// arithmetic does not depend on where a front is built), subtrees in
+// parallel, large fronts by blocked kernels in parallel. The blocks are fixed,
+// so the result is the same with any number of threads.
+constexpr std::int64_t kLargeL = std::int64_t(1) << 22;
+constexpr std::int64_t kBigFront = 128;  // pivots from which a front uses the blocked kernels
+constexpr std::int64_t kBlock = 128;     // column block of the blocked kernels
+constexpr std::int64_t kRowChunk = 256;  // row chunk of the panel solves
+
+int team_size() {
+#if defined(_OPENMP)
+    return omp_in_parallel() ? 1 : omp_get_max_threads();
+#else
+    return 1;
+#endif
+}
+
+// Partial Cholesky of the front F (m × m, column-major, lower triangle): the
+// first np columns factorised, the trailing block updated by their Schur
+// complement. Fronts of kBigFront pivots or more: right-looking, by column
+// blocks of kBlock (LLT of the diagonal block, the panel below solved in row
+// chunks, the trailing lower part updated block column by block column; the
+// strictly upper parts of the diagonal blocks get garbage, never read).
+bool dense_front(double* F, std::int64_t m, std::int64_t np, bool parallel) {
+    const std::int64_t nu = m - np;
+    if (np == 0) return true;
+    if (np < kBigFront) {
+        Block F11(F, np, np, Eigen::OuterStride<>(m));
+        Eigen::LLT<Eigen::Ref<Eigen::MatrixXd, 0, Eigen::OuterStride<>>> llt(F11);
+        if (llt.info() != Eigen::Success) return false;
+        if (nu > 0) {
+            Block F21(F + np, nu, np, Eigen::OuterStride<>(m));
+            F11.triangularView<Eigen::Lower>().transpose().solveInPlace<Eigen::OnTheRight>(F21);
+            Block F22(F + np * m + np, nu, nu, Eigen::OuterStride<>(m));
+            F22.selfadjointView<Eigen::Lower>().rankUpdate(F21, -1.0);
+        }
+        return true;
+    }
+    (void)parallel;
+    for (std::int64_t k0 = 0; k0 < np; k0 += kBlock) {
+        const std::int64_t kb = std::min(kBlock, np - k0);
+        Block D(F + k0 * m + k0, kb, kb, Eigen::OuterStride<>(m));
+        Eigen::LLT<Eigen::Ref<Eigen::MatrixXd, 0, Eigen::OuterStride<>>> llt(D);
+        if (llt.info() != Eigen::Success) return false;
+        const std::int64_t r0 = k0 + kb, nr = m - r0;
+        if (nr == 0) continue;
+        const long long chunks = static_cast<long long>((nr + kRowChunk - 1) / kRowChunk);
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(dynamic, 1) if (parallel && chunks > 1)
+#endif
+        for (long long c = 0; c < chunks; ++c) {
+            const std::int64_t i0 = r0 + c * kRowChunk, ni = std::min(kRowChunk, m - i0);
+            Block P(F + k0 * m + i0, ni, kb, Eigen::OuterStride<>(m));
+            D.triangularView<Eigen::Lower>().transpose().solveInPlace<Eigen::OnTheRight>(P);
+        }
+        // Tiles: column block [j0, j0 + kBlock) by row chunk [i0, i0 + kRowChunk), i0 >= j0.
+        const std::int64_t blocks = (nr + kBlock - 1) / kBlock;
+        std::int64_t tiles = 0;
+        for (std::int64_t bb = 0; bb < blocks; ++bb) tiles += (m - (r0 + bb * kBlock) + kRowChunk - 1) / kRowChunk;
+        const long long n_tiles = static_cast<long long>(tiles);
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(dynamic, 1) if (parallel && n_tiles > 1)
+#endif
+        for (long long tt = 0; tt < n_tiles; ++tt) {
+            std::int64_t rest = tt, bb = 0;
+            for (;; ++bb) {
+                const std::int64_t c = (m - (r0 + bb * kBlock) + kRowChunk - 1) / kRowChunk;
+                if (rest < c) break;
+                rest -= c;
+            }
+            const std::int64_t j0 = r0 + bb * kBlock, nj = std::min(kBlock, m - j0);
+            const std::int64_t i0 = j0 + rest * kRowChunk, ni = std::min(kRowChunk, m - i0);
+            const ConstBlock Pi(F + k0 * m + i0, ni, kb, Eigen::OuterStride<>(m));
+            const ConstBlock Pj(F + k0 * m + j0, nj, kb, Eigen::OuterStride<>(m));
+            Block C(F + j0 * m + i0, ni, nj, Eigen::OuterStride<>(m));
+            C.noalias() -= Pi * Pj.transpose();
+        }
+    }
+    return true;
+}
+
+// The subtrees factorised in parallel: nodes are in post-order, so node t's
+// subtree is the node range [begin[t], t]. From the roots, the subtree of
+// most work is replaced by its children (and goes "above") while there are
+// fewer than `parts` subtrees and it holds more than a 1/(4 parts) of the work.
+struct Plan {
+    std::vector<std::int32_t> begin, subtree;  // node -> first node of its subtree; -> its part (-1: above)
+    std::vector<std::int32_t> roots;           // part roots, heaviest first
+    std::vector<std::int64_t> peak;            // per part: its update-stack peak (doubles)
+};
+
+Plan make_plan(const FrontalSymbolic& s, int parts) {
+    const std::int32_t n = static_cast<std::int32_t>(s.nodes.size());
+    Plan p;
+    p.begin.resize(static_cast<std::size_t>(n));
+    std::vector<double> work(static_cast<std::size_t>(n), 0.0);
+    std::vector<std::uint8_t> has_parent(static_cast<std::size_t>(n), 0);
+    for (std::int32_t t = 0; t < n; ++t) {
+        const FrontalSymbolic::Node& node = s.nodes[t];
+        const double m = static_cast<double>(node.npiv) + node.nupd;
+        work[t] += static_cast<double>(node.npiv) * m * m + m;
+        p.begin[t] = node.child_begin < node.child_end ? p.begin[s.children[node.child_begin]] : t;
+        for (std::int32_t ci = node.child_begin; ci < node.child_end; ++ci) {
+            work[t] += work[s.children[ci]];
+            has_parent[s.children[ci]] = 1;
+        }
+    }
+    auto heavier = [&](std::int32_t a, std::int32_t b) { return work[a] < work[b] || (work[a] == work[b] && a > b); };
+    std::priority_queue<std::int32_t, std::vector<std::int32_t>, decltype(heavier)> heap(heavier);
+    double total = 0.0;
+    for (std::int32_t t = 0; t < n; ++t)
+        if (!has_parent[t]) {
+            heap.push(t);
+            total += work[t];
+        }
+    while (static_cast<int>(heap.size()) < parts) {
+        const std::int32_t t = heap.top();
+        const FrontalSymbolic::Node& node = s.nodes[t];
+        if (node.child_begin == node.child_end || work[t] * 4 * parts <= total) break;
+        heap.pop();
+        for (std::int32_t ci = node.child_begin; ci < node.child_end; ++ci) heap.push(s.children[ci]);
+    }
+    while (!heap.empty()) {
+        p.roots.push_back(heap.top());
+        heap.pop();
+    }
+    p.subtree.assign(static_cast<std::size_t>(n), -1);
+    p.peak.assign(p.roots.size(), 0);
+    for (std::size_t k = 0; k < p.roots.size(); ++k) {
+        const std::int32_t r = p.roots[k];
+        std::int64_t top = 0, peak = 0;
+        for (std::int32_t t = p.begin[r]; t <= r; ++t) {
+            p.subtree[t] = static_cast<std::int32_t>(k);
+            const FrontalSymbolic::Node& node = s.nodes[t];
+            for (std::int32_t ci = node.child_begin; ci < node.child_end; ++ci) {
+                const std::int64_t u = s.nodes[s.children[ci]].nupd;
+                top -= u * u;
+            }
+            top += static_cast<std::int64_t>(node.nupd) * node.nupd;
+            peak = std::max(peak, top);
+        }
+        p.peak[k] = peak;
+    }
+    return p;
+}
+
+}  // namespace
+
+// The large-structure factorisation (see kLargeL). The parts (subtrees) run in
+// parallel; the fronts above them by heights, several fronts of one height in
+// parallel or a lone one with parallel kernels. The forward substitution of y
+// (as factorize(y) fuses it) runs inside the parts for their own unknowns; their
+// contributions to other unknowns are recorded and, with the forward steps of
+// the fronts above, applied in a final pass in post-order: y gets the same
+// operations in the same order as in a single thread.
+bool CellSystem::factorize_large(double* y) {
+    const FrontalSymbolic& s = *sym_;
+    const std::int32_t n_nodes = static_cast<std::int32_t>(s.nodes.size());
+    const int threads = team_size();
+    const Plan plan = make_plan(s, threads > 1 ? 2 * threads : 1);
+    double* lstore = l_.get(static_cast<std::size_t>(s.lsize));
+    std::vector<std::vector<double>> held(static_cast<std::size_t>(n_nodes));  // updates of part roots and above
+    const int n_parts = static_cast<int>(plan.roots.size());
+    std::vector<std::vector<std::pair<std::int32_t, double>>> deferred(static_cast<std::size_t>(n_parts));
+
+    // Forward step of node t: y's own pivots, then the contributions to its update
+    // rows, applied when in [lo, hi) and recorded in `out` otherwise.
+    auto forward_step = [&](std::int32_t t, AlignedBuffer& tmpbuf, std::int32_t lo, std::int32_t hi,
+                            std::vector<std::pair<std::int32_t, double>>* out) {
+        const FrontalSymbolic::Node& node = s.nodes[t];
+        const std::int64_t np = node.npiv, nu = node.nupd, m = np + nu;
+        if (np == 0) return;
+        const ConstBlock Lb(lstore + node.lpos, m, np, Eigen::OuterStride<>(m));
+        Eigen::Map<Eigen::VectorXd> yp(y + node.first, np);
+        Lb.topRows(np).triangularView<Eigen::Lower>().solveInPlace(yp);
+        if (nu == 0) return;
+        double* tmp = tmpbuf.get(static_cast<std::size_t>(nu));
+        Eigen::Map<Eigen::MatrixXd> tm(tmp, nu, 1);
+        tm.col(0).noalias() = Lb.bottomRows(nu) * yp.col(0);
+        const std::int32_t* rows = s.rows.data() + node.upd;
+        for (std::int64_t i = 0; i < nu; ++i) {
+            if (rows[i] >= lo && rows[i] < hi) y[rows[i]] -= tmp[i];
+            else out->emplace_back(rows[i], tmp[i]);
+        }
+    };
+
+    // One front: assembled in F (m × m, aligned), children's updates from `child(ci)`,
+    // factorised, L copied to its place, the update matrix handed to `keep`.
+    auto front = [&](std::int32_t t, AlignedBuffer& work, bool parallel, auto&& child, auto&& keep) -> bool {
+        const FrontalSymbolic::Node& node = s.nodes[t];
+        const std::int64_t np = node.npiv, nu = node.nupd, m = np + nu;
+        double* F = work.get(static_cast<std::size_t>(std::max<std::int64_t>(m * m, 1)));
+        for (std::int64_t j = 0; j < m; ++j) std::fill(F + j * m + j, F + j * m + m, 0.0);
+        for (std::int32_t p = node.first; p < node.first + node.npiv; ++p) {
+            const std::int64_t j = p - node.first;
+            F[j * m + j] += diag_[static_cast<std::size_t>(s.value_index(p))];
+            for (std::int64_t k = s.entry_begin(p); k < s.entry_end(p); ++k) {
+                const std::int32_t a = s.amap[static_cast<std::size_t>(k)];
+                if (a >= 0) F[j * m + a] += off_[static_cast<std::size_t>(k)];
+            }
+        }
+        for (std::int32_t ci = node.child_begin; ci < node.child_end; ++ci) {
+            const FrontalSymbolic::Node& c = s.nodes[s.children[ci]];
+            const std::int64_t u = c.nupd;
+            const std::int32_t* rel = s.relmap.data() + c.upd;
+            const double* U = child(ci);
+            for (std::int64_t jj = 0; jj < u; ++jj) {
+                double* col = F + static_cast<std::int64_t>(rel[jj]) * m;
+                const double* ucol = U + jj * u;
+                for (std::int64_t ii = jj; ii < u; ++ii) col[rel[ii]] += ucol[ii];
+            }
+        }
+        if (!dense_front(F, m, np, parallel)) return false;
+        double* L = lstore + node.lpos;
+        for (std::int64_t j = 0; j < np; ++j) std::copy(F + j * m + j, F + j * m + m, L + j * m + j);
+        keep(F + np * m + np, m, nu);
+        return true;
+    };
+
+    // A part: its subtree on one thread, its updates on a stack of its own.
+    auto run_part = [&](int k, AlignedBuffer& work, AlignedBuffer& stackbuf, AlignedBuffer& tmpbuf,
+                        bool parallel) -> bool {
+        const std::int32_t r = plan.roots[static_cast<std::size_t>(k)];
+        const std::int32_t b = plan.begin[r];
+        const std::int32_t lo = s.nodes[b].first, hi = s.nodes[r].first + s.nodes[r].npiv;
+        double* stack = stackbuf.get(static_cast<std::size_t>(std::max<std::int64_t>(plan.peak[k], 1)));
+        std::int64_t top = 0;
+        for (std::int32_t t = b; t <= r; ++t) {
+            const FrontalSymbolic::Node& node = s.nodes[t];
+            std::int64_t below = top;
+            for (std::int32_t ci = node.child_begin; ci < node.child_end; ++ci) {
+                const std::int64_t u = s.nodes[s.children[ci]].nupd;
+                below -= u * u;
+            }
+            std::int64_t at = below;
+            auto child = [&](std::int32_t ci) {
+                const double* U = stack + at;
+                const std::int64_t u = s.nodes[s.children[ci]].nupd;
+                at += u * u;
+                return U;
+            };
+            auto keep = [&](const double* F22, std::int64_t m, std::int64_t nu) {
+                double* U;
+                if (t == r) {
+                    held[t].resize(static_cast<std::size_t>(nu * nu));
+                    U = held[t].data();
+                } else {
+                    U = stack + below;
+                }
+                for (std::int64_t j = 0; j < nu; ++j) std::copy(F22 + j * m + j, F22 + j * m + nu, U + j * nu + j);
+                top = below + (t == r ? 0 : nu * nu);
+            };
+            if (!front(t, work, parallel, child, keep)) return false;
+            if (y) forward_step(t, tmpbuf, lo, hi, &deferred[static_cast<std::size_t>(k)]);
+        }
+        return true;
+    };
+
+    bool failed = false;
+    if (n_parts > 1) {
+#if defined(_OPENMP)
+#pragma omp parallel num_threads(threads)
+#endif
+        {
+            AlignedBuffer work, stackbuf, tmpbuf;
+#if defined(_OPENMP)
+#pragma omp for schedule(dynamic, 1)
+#endif
+            for (int k = 0; k < n_parts; ++k) {
+                if (!run_part(k, work, stackbuf, tmpbuf, false)) {
+#if defined(_OPENMP)
+#pragma omp critical(circuit_factorize_failed)
+#endif
+                    failed = true;
+                }
+            }
+        }
+    } else if (n_parts == 1) {
+        AlignedBuffer stackbuf;
+        failed = !run_part(0, work_, stackbuf, scratch_.tmp, threads > 1);
+    }
+    if (failed) return false;
+
+    // Above the parts, by heights (a front's height: 1 + its highest child above, 0 without one).
+    std::vector<std::int32_t> height(static_cast<std::size_t>(n_nodes), -1);
+    std::int32_t max_height = -1;
+    for (std::int32_t t = 0; t < n_nodes; ++t) {
+        if (plan.subtree[t] >= 0) continue;
+        const FrontalSymbolic::Node& node = s.nodes[t];
+        std::int32_t h = 0;
+        for (std::int32_t ci = node.child_begin; ci < node.child_end; ++ci)
+            if (plan.subtree[s.children[ci]] < 0) h = std::max(h, height[s.children[ci]] + 1);
+        height[t] = h;
+        max_height = std::max(max_height, h);
+    }
+    for (std::int32_t h = 0; h <= max_height; ++h) {
+        std::vector<std::int32_t> level;
+        for (std::int32_t t = 0; t < n_nodes; ++t)
+            if (height[t] == h) level.push_back(t);
+        const int n_level = static_cast<int>(level.size());
+        auto one = [&](int i, AlignedBuffer& work, bool parallel) -> bool {
+            const std::int32_t t = level[static_cast<std::size_t>(i)];
+            const FrontalSymbolic::Node& node = s.nodes[t];
+            auto child = [&](std::int32_t ci) { return held[s.children[ci]].data(); };
+            auto keep = [&](const double* F22, std::int64_t m, std::int64_t nu) {
+                for (std::int32_t ci = node.child_begin; ci < node.child_end; ++ci)
+                    std::vector<double>().swap(held[s.children[ci]]);
+                held[t].resize(static_cast<std::size_t>(nu * nu));
+                double* U = held[t].data();
+                for (std::int64_t j = 0; j < nu; ++j) std::copy(F22 + j * m + j, F22 + j * m + nu, U + j * nu + j);
+            };
+            return front(t, work, parallel, child, keep);
+        };
+        if (threads > 1 && n_level > 1) {
+#if defined(_OPENMP)
+#pragma omp parallel num_threads(threads)
+#endif
+            {
+                AlignedBuffer work;
+#if defined(_OPENMP)
+#pragma omp for schedule(dynamic, 1)
+#endif
+                for (int i = 0; i < n_level; ++i) {
+                    if (!one(i, work, false)) {
+#if defined(_OPENMP)
+#pragma omp critical(circuit_factorize_failed)
+#endif
+                        failed = true;
+                    }
+                }
+            }
+        } else {
+            for (int i = 0; i < n_level && !failed; ++i) failed = !one(i, work_, threads > 1);
+        }
+        if (failed) return false;
+    }
+
+    // y: the parts' recorded contributions at their roots, the fronts above in turn.
+    if (y) {
+        std::vector<std::pair<std::int32_t, double>> none;
+        const std::int32_t hi = static_cast<std::int32_t>(s.cells.size());
+        for (std::int32_t t = 0; t < n_nodes; ++t) {
+            const std::int32_t k = plan.subtree[t];
+            if (k >= 0) {
+                if (t == plan.roots[static_cast<std::size_t>(k)])
+                    for (const auto& rv : deferred[static_cast<std::size_t>(k)]) y[rv.first] -= rv.second;
+                continue;
+            }
+            forward_step(t, scratch_.tmp, 0, hi, &none);
+        }
+    }
+    return true;
+}
+
 bool CellSystem::factorize_solve(const double* b, double* x) {
     const i64 n = size();
     double* y = scratch_.rhs.get(static_cast<std::size_t>(n));
@@ -495,6 +857,7 @@ bool CellSystem::factorize_solve(const double* b, double* x) {
 
 bool CellSystem::factorize(double* y) {
     const FrontalSymbolic& s = *sym_;
+    if (s.lsize >= kLargeL) return factorize_large(y);
     double* stack = stack_.get(static_cast<std::size_t>(s.stack_size));
     // Every front is built where its columns of L go: its first npiv columns
     // stay as L, its trailing ones (the update matrix, copied to the stack)
