@@ -6,6 +6,13 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.69.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis: `rand_structured` randomisation (Biodiverse's default: labels to
+  random groups keeping richness and ranges, with its swap phase and the
+  `richness_multiplier` and `richness_addition` options), identical to Biodiverse.
+
 ## [0.68.0] - 2026-09-28
 
 ### Added
