@@ -6,6 +6,22 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.62.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis, modern data: `ls.bio.read_occurrences` reads GBIF downloads
+  (the "simple CSV" zip or file) and Darwin Core Archives (through `meta.xml`) in
+  chunks and cleans them (absences, missing or out-of-range coordinates, coordinate
+  uncertainty, basis of record, GBIF issues, duplicates);
+  `BaseData.from_occurrences` puts the records in cells, optionally reprojected.
+  `BaseData.from_raster` and `from_xarray` read stacks of species distribution models
+  a block of rows at a time (Cloud-Optimised GeoTIFFs, NetCDF or Zarr through dask),
+  with an optional presence threshold.
+
+### Changed
+- `BaseData` construction works on integer codes and names only the distinct groups:
+  large imports are several times faster.
+
 ## [0.61.0] - 2026-09-28
 
 ### Added
