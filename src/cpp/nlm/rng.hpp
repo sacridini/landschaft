@@ -43,6 +43,10 @@ public:
     void runif(double* out, i64 n, double a = 0.0, double b = 1.0);
     void rnorm(double* out, i64 n, double mu = 0.0, double sigma = 1.0);
 
+    // exp_rand() (Ahrens & Dieter 1972) and rpois(mu) (Ahrens & Dieter 1982).
+    double exp_rand();
+    double rpois(double mu);
+
     // sample.int(n, size, replace, prob) (1-based results), including the
     // hashed sample2() that sample.int() uses for n > 1e7 without
     // replacement or prob and size <= n / 2.
@@ -51,6 +55,15 @@ public:
 private:
     std::uint32_t mt_[624];
     int mti_ = 625;
+
+    // rpois()'s parameters kept between calls with the same mu (as R's
+    // static variables; they only save work)
+    struct PoisState {
+        int l = 0, m = 0;
+        double b1 = 0, b2 = 0, c = 0, c0 = 0, c1 = 0, c2 = 0, c3 = 0;
+        double pp[36] = {}, p0 = 0, p = 0, q = 0, s = 0, d = 0, omega = 0;
+        double big_l = 0, muprev = 0, muprev2 = 0;
+    } pois_;
 
     static double fixup(double x);
     double genrand();

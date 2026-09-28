@@ -1913,6 +1913,7 @@ cl = ls.nlm.random_cluster(200, 150, p=0.4, ai=[0.3, 0.3, 0.4], seed=4)
 cu = ls.nlm.curds([0.5, 0.4, 0.6], [8, 8, 8], wheyes=[0.1, 0.1, 0.1], seed=5)  # 512 x 512
 gf = ls.nlm.gaussian_field(200, 150, autocorr_range=20, mag_var=5, nug=0.2, seed=6)
 fb = ls.nlm.fbm(200, 150, fract_dim=1.2, seed=7)
+mf = ls.nlm.mosaic_field(200, 150, n=20, seed=8)          # dict with collect=/infinit=
 ```
 
 NLMR behaviours kept with `nlmr_compat=True` (the default where they apply):
@@ -1948,6 +1949,14 @@ NLMR behaviours kept with `nlmr_compat=True` (the default where they apply):
   ported statement by statement; the columns' and rows' transforms run in parallel
   with the same bits), R's `exp` and `x^y` on Windows (mingw-w64's x87 `exp` and
   `powl`), R's vector `sqrt` and the 80-bit `mean`/`sd`.
+- `mosaic_field`: spatstat's `rpoislinetess(4)` (R's `rpois`, `runif`, x87 `sin`/`cos`)
+  and `rMosaicField`: the tiles are the cells of the line arrangement in the unit
+  square in `chop.tess` order (below before above each line, lines in order), each
+  pixel centre (`as.mask`'s grid) takes its tile's `rnorm` value; `infinit` is
+  `log(exp(Z))` of `rLGCP`'s circulant embedding (`grid.prep`, `covariance.prep`,
+  `generate.normals` with R's `fft`). Kept NLMR quirks: `n = 1` sums three fields
+  (`for (i in 2:n)`), `collect` divides the i-th field by `sqrt(i)` and rescales all
+  steps with the first step's range.
 - `classify`: `sum`/`cumsum` of the weights in 80-bit precision as R; when all
   class boundaries are equal every cell becomes class 1; Jenks' breaks cost
   O(classes x cells^2) as in NLMR (parallel over the rows of each class column).

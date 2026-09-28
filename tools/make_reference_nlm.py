@@ -67,13 +67,19 @@ def r_literal(x) -> str:
         return "c(" + ", ".join(r_literal(v) for v in x) + ")"
     if isinstance(x, (int, np.integer)):
         return f"{int(x)}"
-    return repr(float(x))
+    v = float(x)
+    # hexadecimal: R's parser may not round long decimals correctly
+    return repr(v) if v.is_integer() or len(repr(v)) <= 12 else v.hex()
 
 
 def r_op(op: tuple) -> str:
     kind = op[0]
     if kind in ("runif", "rnorm"):
         return f"{kind}({op[1]}, {r_literal(op[2])}, {r_literal(op[3])})"
+    if kind == "rpois":
+        return f"as.numeric(rpois({op[1]}, {r_literal(op[2])}))"
+    if kind == "rexp":
+        return f"rexp({op[1]})"
     if kind == "sample":
         return f"as.numeric(sample.int({r_literal(float(op[1]))}, {op[2]}, {r_literal(op[3])}, {r_literal(op[4])}))"
     raise ValueError(kind)

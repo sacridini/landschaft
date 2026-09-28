@@ -21,6 +21,16 @@ R_SEQUENCES = {
         ("rnorm", 1000, 2.0, 0.5),
         ("runif", 5, 360.0, 360.0),  # a == b: no draw
     ],
+    "pois": [
+        ("rpois", 300, 4 * 2 * np.pi * (np.sqrt(2.0) / 2)),  # rpoislinetess(4) on the unit square
+        ("rpois", 200, 3.5),
+        ("rpois", 100, 0.3),
+        ("rpois", 300, 10.0),
+        ("rpois", 100, 150.5),
+        ("rpois", 50, 9.99),
+        ("rexp", 500),
+        ("rpois", 100, 17.5),
+    ],
     "sample": [
         ("sample", 10, 10, False, None),
         ("sample", 1000, 100, False, None),
@@ -223,6 +233,30 @@ MODELS: dict[str, tuple[str, object]] = {
                    lambda ls: ls.nlm.fbm(30, 20, fract_dim=2, seed=4, rescale=False)),
     "fbm_big": ("NLMR:::util_rescale(terra::rast(NLMR:::simulate_fbm(150, 121, 1.25, seed = 5)))",
                 lambda ls: ls.nlm.fbm(121, 150, fract_dim=1.25, seed=5)),
+    # mosaic fields (spatstat)
+    "mosaicfield": ("nlm_mosaicfield(50, 40, user_seed = 1)", lambda ls: ls.nlm.mosaic_field(50, 40, seed=1)),
+    "mosaicfield_n3_raw": ("nlm_mosaicfield(30, 25, n = 3, mosaic_mean = 2, mosaic_sd = 1, user_seed = 4, rescale = FALSE)",
+                           lambda ls: ls.nlm.mosaic_field(30, 25, n=3, mosaic_mean=2, mosaic_sd=1, seed=4,
+                                                          rescale=False)),
+    "mosaicfield_n1": ("nlm_mosaicfield(20, 20, n = 1, user_seed = 5)",
+                       lambda ls: ls.nlm.mosaic_field(20, 20, n=1, seed=5)),
+    "mosaicfield_big": ("nlm_mosaicfield(200, 150, n = 10, user_seed = 6)",
+                        lambda ls: ls.nlm.mosaic_field(200, 150, n=10, seed=6)),
+    "mosaicfield_collect_sum": ("nlm_mosaicfield(30, 20, n = 4, collect = TRUE, user_seed = 7)$mosaicfield_raster",
+                                lambda ls: ls.nlm.mosaic_field(30, 20, n=4, collect=True, seed=7)["mosaic_field"]),
+    "mosaicfield_collect_steps": (
+        "nlm_mosaicfield(30, 20, n = 4, collect = TRUE, user_seed = 7)$steps",
+        lambda ls: _hstack_steps(ls.nlm.mosaic_field(30, 20, n=4, collect=True, seed=7)["steps"])),
+    "mosaicfield_infinit": ("nlm_mosaicfield(40, 30, n = 2, infinit = TRUE, user_seed = 8)$mosaicfield_inf",
+                            lambda ls: ls.nlm.mosaic_field(40, 30, n=2, infinit=True, seed=8)["infinit"]),
+    "mosaicfield_infinit_only": ("nlm_mosaicfield(35, 25, n = NA, infinit = TRUE, user_seed = 9, rescale = FALSE)",
+                                 lambda ls: ls.nlm.mosaic_field(35, 25, n=None, infinit=True, seed=9, rescale=False)),
 }
+
+
+def _hstack_steps(steps):
+    """terra's as.matrix(wide = TRUE) of a multi-layer raster: layers side by side."""
+    return np.hstack([steps.values[k] for k in range(steps.shape[0])])
+
 
 MODEL_CASES: dict[str, str] = {key: r for key, (r, _) in MODELS.items()}

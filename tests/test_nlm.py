@@ -278,3 +278,29 @@ def test_fbm():
     np.testing.assert_array_equal(one, four)
     with pytest.raises(ValueError):
         ls.nlm.fbm(10, 10, fract_dim=2.5)
+
+
+def test_mosaic_field():
+    one = ls.nlm.mosaic_field(80, 60, n=1, seed=3, nlmr_compat=False, rescale=False).values
+    # one mosaic: piecewise constant tiles, few distinct values
+    assert np.unique(one).size < 200
+    many = ls.nlm.mosaic_field(80, 60, n=40, seed=3, rescale=False).values
+    assert np.unique(many).size > np.unique(one).size
+    # NLMR's n = 1 sums three fields
+    compat = ls.nlm.mosaic_field(80, 60, n=1, seed=3, rescale=False).values
+    assert not np.array_equal(compat, one)
+    out = ls.nlm.mosaic_field(30, 20, n=3, collect=True, infinit=True, seed=4)
+    assert set(out) == {"mosaic_field", "steps", "infinit"}
+    assert out["steps"].dims == ("step", "y", "x") and list(out["steps"].step.values) == [1, 2, 3]
+    only = ls.nlm.mosaic_field(30, 20, n=None, infinit=True, seed=4)
+    assert only.shape == (20, 30)
+    with ls._threads.limit(1):
+        a = ls.nlm.mosaic_field(150, 120, n=5, infinit=True, seed=6)
+    with ls._threads.limit(4):
+        b = ls.nlm.mosaic_field(150, 120, n=5, infinit=True, seed=6)
+    for k in a:
+        np.testing.assert_array_equal(a[k].values, b[k].values)
+    with pytest.raises(ValueError):
+        ls.nlm.mosaic_field(10, 10, n=None)
+    with pytest.raises(ValueError):
+        ls.nlm.mosaic_field(10, 10, n=0)

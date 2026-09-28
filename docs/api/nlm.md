@@ -40,6 +40,10 @@ habitat = ls.nlm.classify(r, weighting=[0.7, 0.3])
 
 ::: landschaft.nlm.gaussian_field
 
+## Mosaics
+
+::: landschaft.nlm.mosaic_field
+
 ## Clusters
 
 ::: landschaft.nlm.random_cluster

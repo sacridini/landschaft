@@ -73,6 +73,23 @@ std::vector<double> gaussian_field(RRng& rng, i64 nrow, i64 ncol, double autocor
 // simulate_fbm() (row-major nrow x ncol).
 std::vector<double> fbm(RRng& rng, i64 nrow, i64 ncol, double fract_dim);
 
+// -- mosaic fields (spatstat) --------------------------------------------------------------
+
+// One rMosaicField(rpoislinetess(4), rnorm, dimyx = c(nrow, ncol)) image,
+// rows from the bottom (y increasing), NaN outside every tile.
+std::vector<double> mosaic_tile_field(RRng& rng, i64 nrow, i64 ncol, double mean, double sd);
+// log(exp(Z)) of rLGCP("exp", mu, var, scale) on the unit square, rows from
+// the bottom.
+std::vector<double> lgcp_log_field(RRng& rng, i64 nrow, i64 ncol, double mu, double var, double scale);
+
+struct MosaicFieldResult {
+    std::vector<double> sum;                 // rows from the top; empty when n == 0
+    std::vector<std::vector<double>> steps;  // `collect`
+    std::vector<double> inf;                 // `infinit`
+};
+MosaicFieldResult mosaic_field(RRng& rng, i64 nrow, i64 ncol, int n, bool nlmr_compat, double mean, double sd,
+                               bool collect, bool infinit);
+
 // -- classification -----------------------------------------------------------------
 
 // NLMR's rcpp_get_jenksbreaks(sorted d, k): k + 1 break values.

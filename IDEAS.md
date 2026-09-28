@@ -425,7 +425,13 @@ Fases:
    x87 (`__expl_internal` com log2(e) partido em duas constantes; `powl`: expoente inteiro
    por quadrados em 80 bits, 0,5 por `fsqrt`, os demais `exp2l(y log2l |x|)`), agora em
    `lsm/rmath.hpp` (`r_exp`, `r_pow`) e no MASM; 6–8× o NLMR);
-5. `mosaicfield` (`rpoislinetess`, `rMosaicField`, `rLGCP` do spatstat);
+5. `mosaicfield` (`rpoislinetess`, `rMosaicField`, `rLGCP` do spatstat). **Feita** (0.58.0,
+   bit a bit, também `collect` e `infinit`; `rpois`/`exp_rand` do R portados; os ladrilhos
+   são as células do arranjo de retas no quadrado unitário na ordem lexicográfica do
+   `chop.tess` (abaixo antes de acima), recortando o quadrado reta a reta (o polyclip do
+   spatstat arredonda os vértices a ~1e-9: um pixel a essa distância de uma reta, ou uma
+   lasca mais fina que isso, poderia divergir, nunca visto); 200² com 20 mosaicos: 9,95 s no
+   R, 10 ms aqui);
 6. `mosaictess`, `mosaicgibbs` (`st_sample`, `rSSI`, Voronoi);
 7. opcionais: `blend`/`merge` do antigo landscapetools, modelos do NLMpy, gerador paralelo
    rápido (`rng="fast"`, diferente do R) para rasters enormes.

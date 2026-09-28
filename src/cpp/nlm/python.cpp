@@ -80,6 +80,12 @@ py::list r_sequence(std::int32_t seed, const py::list& ops, int n_threads) {
             if (!op[4].is_none()) prob = op[4].cast<std::vector<double>>();
             std::vector<i64> v = rng.sample_int(n, size, replace, prob ? &*prob : nullptr);
             out.append(vector_to_array(std::move(v)));
+        } else if (kind == "rpois" || kind == "rexp") {
+            const i64 n = op[1].cast<i64>();
+            const double mu = kind == "rpois" ? op[2].cast<double>() : 0.0;
+            std::vector<double> v(static_cast<std::size_t>(n));
+            for (auto& x : v) x = kind == "rpois" ? rng.rpois(mu) : rng.exp_rand();
+            out.append(vector_to_array(std::move(v)));
         } else if (kind == "unif_index") {
             const i64 n = op[1].cast<i64>();
             const double dn = op[2].cast<double>();
@@ -285,6 +291,23 @@ py::array_t<double> py_r_fft(const CArray<double>& re, const CArray<double>& im,
     return vector_to_array(std::move(z));
 }
 
+py::dict py_mosaic_field(std::int32_t seed, i64 nrow, i64 ncol, int n, bool nlmr_compat, double mean, double sd,
+                         bool collect, bool infinit) {
+    nlm::RRng rng(seed);
+    nlm::MosaicFieldResult r = run_parallel(0, [&] {
+        return nlm::mosaic_field(rng, nrow, ncol, n, nlmr_compat, mean, sd, collect, infinit);
+    });
+    py::dict out;
+    if (!r.sum.empty()) out["sum"] = raster_to_array(std::move(r.sum), nrow, ncol);
+    if (collect) {
+        py::list steps;
+        for (auto& s : r.steps) steps.append(raster_to_array(std::move(s), nrow, ncol));
+        out["steps"] = steps;
+    }
+    if (infinit) out["infinit"] = raster_to_array(std::move(r.inf), nrow, ncol);
+    return out;
+}
+
 // R's sum() and cumsum() of doubles (LDOUBLE accumulation).
 double py_r_sum(const CArray<double>& x) { return lsm::r_sum(x.data(), static_cast<i64>(x.size())); }
 
@@ -354,6 +377,9 @@ void register_python(py::module_& m) {
           "NLMR's simulate_fbm().");
     m.def("nlm_r_fft", &py_r_fft, py::arg("re"), py::arg("im"), py::arg("nrow"), py::arg("ncol"),
           py::arg("inverse") = false, py::arg("parallel") = true, "R's fft() of a complex matrix (interleaved result).");
+    m.def("nlm_mosaic_field", &py_mosaic_field, py::arg("seed"), py::arg("nrow"), py::arg("ncol"), py::arg("n"),
+          py::arg("nlmr_compat"), py::arg("mean"), py::arg("sd"), py::arg("collect"), py::arg("infinit"),
+          "nlm_mosaicfield() before rescaling: {'sum', 'steps', 'infinit'}.");
     m.def("nlm_r_sum", &py_r_sum, py::arg("x"), "R's sum() of doubles (80-bit accumulation).");
     m.def("nlm_r_cumsum", &py_r_cumsum, py::arg("x"), "R's cumsum() of doubles (80-bit accumulation).");
     m.def("nlm_cut", &py_cut, py::arg("x"), py::arg("breaks"),

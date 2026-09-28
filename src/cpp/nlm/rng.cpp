@@ -120,6 +120,181 @@ double RRng::rnorm(double mu, double sigma) {
     return mu + sigma * norm_rand();
 }
 
+double RRng::exp_rand() {
+    // sexp.c
+    static const double q[] = {0.6931471805599453, 0.9333736875190459, 0.9888777961838675, 0.9984959252914960,
+                               0.9998292811061389, 0.9999833164100727, 0.9999985691438767, 0.9999998906925558,
+                               0.9999999924734159, 0.9999999995283275, 0.9999999999728814, 0.9999999999985598,
+                               0.9999999999999289, 0.9999999999999968, 0.9999999999999999, 1.0000000000000000};
+    double a = 0.;
+    double u = unif_rand();
+    while (u <= 0. || u >= 1.) u = unif_rand();
+    for (;;) {
+        u += u;
+        if (u > 1.) break;
+        a += q[0];
+    }
+    u -= 1.;
+    if (u <= q[0]) return a + u;
+    int i = 0;
+    double ustar = unif_rand(), umin = ustar;
+    do {
+        ustar = unif_rand();
+        if (umin > ustar) umin = ustar;
+        i++;
+    } while (u > q[i]);
+    return a + umin * q[0];
+}
+
+namespace {
+
+// mingw-w64's pow() of doubles for an integer exponent (__powi: repeated
+// squaring in double), as rpois() calls it.
+double mingw_powi(double x, int y) {
+    if (y == 0 || x == 1.0) return 1.0;
+    const bool odd = (y & 1) != 0;
+    const bool recip = y < 0;
+    unsigned int u = recip ? 0u - static_cast<unsigned int>(y) : static_cast<unsigned int>(y);
+    double d = std::fabs(x), r;
+    if (u == 1) {
+        r = d;
+    } else {
+        r = (u & 1) ? d : 1.0;
+        u >>= 1;
+        do {
+            d *= d;
+            if (u & 1) r *= d;
+            u >>= 1;
+        } while (u > 0);
+    }
+    if (recip) r = 1.0 / r;
+    return (x < 0 && odd) ? -r : r;
+}
+
+}  // namespace
+
+double RRng::rpois(double mu) {
+    // nmath/rpois.c of R 4.4 (Ahrens & Dieter 1982)
+    constexpr double a0 = -0.5, a1 = 0.3333333, a2 = -0.2500068, a3 = 0.2000118, a4 = -0.1661269, a5 = 0.1421878,
+                     a6 = -0.1384794, a7 = 0.1250060;
+    constexpr double one_7 = 0.1428571428571428571, one_12 = 0.0833333333333333333,
+                     one_24 = 0.0416666666666666667;
+    constexpr double M_1_SQRT_2PI_ = 0.398942280401432677939946059934;
+    static const double fact[10] = {1., 1., 2., 6., 24., 120., 720., 5040., 40320., 362880.};
+    PoisState& st = pois_;
+    double del, difmuk = 0., E = 0., fk = 0., fx, fy, g, px, py, t, u = 0., v, x;
+    double pois = -1.;
+    int k, kflag, big_mu, new_big_mu = 0;
+
+    if (!std::isfinite(mu) || mu < 0) return std::numeric_limits<double>::quiet_NaN();
+    if (mu <= 0.) return 0.;
+
+    big_mu = mu >= 10.;
+    if (big_mu) new_big_mu = 0;
+
+    if (!(big_mu && mu == st.muprev)) {
+        if (big_mu) {
+            new_big_mu = 1;
+            st.muprev = mu;
+            st.s = std::sqrt(mu);
+            st.d = 6. * mu * mu;
+            st.big_l = std::floor(mu - 1.1484);
+        } else {
+            if (mu != st.muprev) {
+                st.muprev = mu;
+                st.m = std::max(1, static_cast<int>(mu));
+                st.l = 0;
+                st.q = st.p0 = st.p = lsm::r_exp(-mu);
+            }
+            for (;;) {
+                u = unif_rand();
+                if (u <= st.p0) return 0.;
+                if (st.l != 0) {
+                    for (k = (u <= 0.458) ? 1 : std::min(st.l, st.m); k <= st.l; k++)
+                        if (u <= st.pp[k]) return static_cast<double>(k);
+                    if (st.l == 35) continue;
+                }
+                st.l++;
+                for (k = st.l; k <= 35; k++) {
+                    st.p *= mu / k;
+                    st.q += st.p;
+                    st.pp[k] = st.q;
+                    if (u <= st.q) {
+                        st.l = k;
+                        return static_cast<double>(k);
+                    }
+                }
+                st.l = 35;
+            }
+        }
+    }
+
+    g = mu + st.s * norm_rand();
+    if (g >= 0.) {
+        pois = std::floor(g);
+        if (pois >= st.big_l) return pois;
+        fk = pois;
+        difmuk = mu - fk;
+        u = unif_rand();
+        if (st.d * u >= difmuk * difmuk * difmuk) return pois;
+    }
+
+    if (new_big_mu || mu != st.muprev2) {
+        st.muprev2 = mu;
+        st.omega = M_1_SQRT_2PI_ / st.s;
+        st.b1 = one_24 / mu;
+        st.b2 = 0.3 * st.b1 * st.b1;
+        st.c3 = one_7 * st.b1 * st.b2;
+        st.c2 = st.b2 - 15. * st.c3;
+        st.c1 = st.b1 - 6. * st.b2 + 45. * st.c3;
+        st.c0 = 1. - st.b1 + 3. * st.b2 - 15. * st.c3;
+        st.c = 0.1069 / mu;
+    }
+
+    if (g >= 0.) {
+        kflag = 0;
+        goto Step_F;
+    }
+
+    for (;;) {
+        E = exp_rand();
+        u = 2 * unif_rand() - 1.;
+        t = 1.8 + ((u >= 0) ? std::fabs(E) : -std::fabs(E));  // fsign(E, u)
+        if (t > -0.6744) {
+            pois = std::floor(mu + st.s * t);
+            fk = pois;
+            difmuk = mu - fk;
+            kflag = 1;
+
+        Step_F:
+            if (pois < 10) {
+                px = -mu;
+                py = mingw_powi(mu, static_cast<int>(pois)) / fact[static_cast<int>(pois)];
+            } else {
+                del = one_12 / fk;
+                del = del * (1. - 4.8 * del * del);
+                v = difmuk / fk;
+                if (std::fabs(v) <= 0.25)
+                    px = fk * v * v * (((((((a7 * v + a6) * v + a5) * v + a4) * v + a3) * v + a2) * v + a1) * v + a0) -
+                         del;
+                else
+                    px = fk * lsm::r_log(1. + v) - difmuk - del;
+                py = M_1_SQRT_2PI_ / std::sqrt(fk);
+            }
+            x = (0.5 - difmuk) / st.s;
+            x *= x;
+            fx = -0.5 * x;
+            fy = st.omega * (((st.c3 * x + st.c2) * x + st.c1) * x + st.c0);
+            if (kflag > 0) {
+                if (st.c * std::fabs(u) <= py * lsm::r_exp(px + E) - fy * lsm::r_exp(fx + E)) break;
+            } else if (fy - u * fy <= py * lsm::r_exp(px - fx)) {
+                break;
+            }
+        }
+    }
+    return pois;
+}
+
 void RRng::runif(double* out, i64 n, double a, double b) {
     for (i64 i = 0; i < n; ++i) out[i] = runif(a, b);
 }
