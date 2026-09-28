@@ -92,6 +92,7 @@ add_library(nlmcore STATIC
     src/cpp/nlm/rng.cpp
     src/cpp/nlm/spectral.cpp
     src/cpp/nlm/stdmodels.cpp
+    src/cpp/nlm/tess.cpp
 )
 target_include_directories(nlmcore PUBLIC src/cpp)
 # R's x87 log (lsm/rmath.hpp).

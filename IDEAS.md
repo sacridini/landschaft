@@ -432,7 +432,12 @@ Fases:
    spatstat arredonda os vértices a ~1e-9: um pixel a essa distância de uma reta, ou uma
    lasca mais fina que isso, poderia divergir, nunca visto); 200² com 20 mosaicos: 9,95 s no
    R, 10 ms aqui);
-6. `mosaictess`, `mosaicgibbs` (`st_sample`, `rSSI`, Voronoi);
+6. `mosaictess`, `mosaicgibbs` (`st_sample`, `rSSI`, Voronoi). **Feita** (0.59.0, bit a bit, melhor
+   que o previsto: a ordem das células do GEOS vem do próprio GEOS pelo shapely (3.13 dá a
+   mesma ordem que o 3.12 do sf), dependência opcional com aviso; o `terra::rasterize` grava
+   float32; a rasterização é por germe mais próximo em grade de baldes, em paralelo;
+   25–70× o NLMR). Resta: portar a triangulação incremental do GEOS para não depender do
+   shapely;
 7. opcionais: `blend`/`merge` do antigo landscapetools, modelos do NLMpy, gerador paralelo
    rápido (`rng="fast"`, diferente do R) para rasters enormes.
 

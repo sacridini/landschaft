@@ -21,6 +21,7 @@ from ._cluster import curds, random_cluster
 from ._mosaic import mosaic_field
 from ._spectral import fbm, gaussian_field
 from ._stdmodels import mpd, neigh, random_rectangular_cluster
+from ._tess import mosaic_gibbs, mosaic_tess
 
 __all__ = [
     "classify",
@@ -30,6 +31,8 @@ __all__ = [
     "fbm",
     "gaussian_field",
     "mosaic_field",
+    "mosaic_gibbs",
+    "mosaic_tess",
     "mpd",
     "neigh",
     "percolation",

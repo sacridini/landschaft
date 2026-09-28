@@ -308,6 +308,30 @@ py::dict py_mosaic_field(std::int32_t seed, i64 nrow, i64 ncol, int n, bool nlmr
     return out;
 }
 
+py::tuple py_tess_germs(std::int32_t seed, i64 germs, double width, double height) {
+    nlm::RRng rng(seed);
+    nlm::GermDraws g = nlm::tess_germs(rng, germs, width, height);
+    return py::make_tuple(vector_to_array(std::move(g.x)), vector_to_array(std::move(g.y)),
+                          vector_to_array(std::move(g.v)));
+}
+
+py::tuple py_gibbs_germs(std::int32_t seed, i64 germs, double r, int patch_classes, double width, double height,
+                         int giveup) {
+    nlm::RRng rng(seed);
+    nlm::GermDraws g = nlm::gibbs_germs(rng, germs, r, patch_classes, width, height, giveup);
+    return py::make_tuple(vector_to_array(std::move(g.x)), vector_to_array(std::move(g.y)),
+                          vector_to_array(std::move(g.v)));
+}
+
+py::array_t<double> py_nearest_germ_raster(const CArray<double>& x, const CArray<double>& y, const CArray<double>& v,
+                                           i64 nrow, i64 ncol) {
+    if (x.size() != y.size() || x.size() != v.size()) throw py::value_error("x, y and values differ in length");
+    std::vector<double> gx(x.data(), x.data() + x.size()), gy(y.data(), y.data() + y.size()),
+        gv(v.data(), v.data() + v.size());
+    std::vector<double> out = run_parallel(0, [&] { return nlm::nearest_germ_raster(gx, gy, gv, nrow, ncol); });
+    return raster_to_array(std::move(out), nrow, ncol);
+}
+
 // R's sum() and cumsum() of doubles (LDOUBLE accumulation).
 double py_r_sum(const CArray<double>& x) { return lsm::r_sum(x.data(), static_cast<i64>(x.size())); }
 
@@ -380,6 +404,13 @@ void register_python(py::module_& m) {
     m.def("nlm_mosaic_field", &py_mosaic_field, py::arg("seed"), py::arg("nrow"), py::arg("ncol"), py::arg("n"),
           py::arg("nlmr_compat"), py::arg("mean"), py::arg("sd"), py::arg("collect"), py::arg("infinit"),
           "nlm_mosaicfield() before rescaling: {'sum', 'steps', 'infinit'}.");
+    m.def("nlm_tess_germs", &py_tess_germs, py::arg("seed"), py::arg("germs"), py::arg("width"), py::arg("height"),
+          "nlm_mosaictess()'s germs and values (x, y, values).");
+    m.def("nlm_gibbs_germs", &py_gibbs_germs, py::arg("seed"), py::arg("germs"), py::arg("r"),
+          py::arg("patch_classes"), py::arg("width"), py::arg("height"), py::arg("giveup") = 1000,
+          "nlm_mosaicgibbs()'s rSSI germs and shuffled classes (x, y, classes).");
+    m.def("nlm_nearest_germ_raster", &py_nearest_germ_raster, py::arg("x"), py::arg("y"), py::arg("values"),
+          py::arg("nrow"), py::arg("ncol"), "Value of the nearest germ at every cell centre.");
     m.def("nlm_r_sum", &py_r_sum, py::arg("x"), "R's sum() of doubles (80-bit accumulation).");
     m.def("nlm_r_cumsum", &py_r_cumsum, py::arg("x"), "R's cumsum() of doubles (80-bit accumulation).");
     m.def("nlm_cut", &py_cut, py::arg("x"), py::arg("breaks"),

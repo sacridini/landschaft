@@ -304,3 +304,51 @@ def test_mosaic_field():
         ls.nlm.mosaic_field(10, 10, n=None)
     with pytest.raises(ValueError):
         ls.nlm.mosaic_field(10, 10, n=0)
+
+
+def test_mosaic_tess():
+    t = ls.nlm.mosaic_tess(120, 90, germs=60, seed=5, nlmr_compat=False, rescale=False)
+    x, y, v = ls._core.nlm_tess_germs(5, 60, 120.0, 90.0)
+    # every cell takes the value of its nearest germ
+    yy, xx = np.mgrid[0:90, 0:120]
+    cx, cy = xx + 0.5, 90 - (yy + 0.5)
+    d = (cx[..., None] - x) ** 2 + (cy[..., None] - y) ** 2
+    np.testing.assert_array_equal(t.values, v[np.argmin(d, axis=2)])
+    # NLMR's order: the same tiles and values, another assignment, in float32
+    c = ls.nlm.mosaic_tess(120, 90, germs=60, seed=5, rescale=False).values
+    assert set(np.unique(c)) == set(v.astype(np.float32).astype(np.float64))
+    with ls._threads.limit(1):
+        one = ls.nlm.mosaic_tess(500, 400, germs=800, seed=7).values
+    with ls._threads.limit(4):
+        four = ls.nlm.mosaic_tess(500, 400, germs=800, seed=7).values
+    np.testing.assert_array_equal(one, four)
+    with pytest.raises(ValueError):
+        ls.nlm.mosaic_tess(10, 10, germs=0)
+
+
+def test_mosaic_gibbs():
+    x, y, classes = ls._core.nlm_gibbs_germs(3, 80, 6.0, 4, 100.0, 80.0)
+    assert len(x) == 80
+    d = np.hypot(x[:, None] - x, y[:, None] - y) + np.eye(80) * 1e9
+    assert d.min() > 6
+    assert sorted(np.bincount(classes.astype(int))[1:]) == [20, 20, 20, 20]
+    g = ls.nlm.mosaic_gibbs(100, 80, germs=80, R=6, patch_classes=4, seed=3, nlmr_compat=False, rescale=False)
+    assert set(np.unique(g.values)) == {1.0, 2.0, 3.0, 4.0}
+    with pytest.warns(UserWarning, match="only"):
+        ls.nlm.mosaic_gibbs(20, 20, germs=50, R=10, patch_classes=2, seed=1, nlmr_compat=False)
+
+
+def test_voronoi_without_shapely(monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_shapely(name, *args, **kwargs):
+        if name == "shapely" or name.startswith("shapely."):
+            raise ImportError("no shapely")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_shapely)
+    with pytest.warns(UserWarning, match="shapely"):
+        t = ls.nlm.mosaic_tess(40, 30, germs=10, seed=1)
+    assert t.shape == (30, 40)

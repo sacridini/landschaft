@@ -44,6 +44,16 @@ habitat = ls.nlm.classify(r, weighting=[0.7, 0.3])
 
 ::: landschaft.nlm.mosaic_field
 
+::: landschaft.nlm.mosaic_tess
+
+::: landschaft.nlm.mosaic_gibbs
+
+!!! note "Voronoi mosaics and shapely"
+    NLMR gives the tile values in the order in which GEOS returns the Voronoi
+    cells. Landschaft asks GEOS for that order through shapely (installed with
+    the `vector` extra); without shapely the models warn and give each germ its
+    own value.
+
 ## Clusters
 
 ::: landschaft.nlm.random_cluster

@@ -291,6 +291,8 @@ ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 | [`ls.fbm`](nlm.md#landschaft.nlm.fbm) | Fractional Brownian motion neutral landscape model (NLMR's ``nlm_fbm``) |
 | [`ls.gaussian_field`](nlm.md#landschaft.nlm.gaussian_field) | Gaussian random field neutral landscape model (NLMR's ``nlm_gaussianfield``) |
 | [`ls.mosaic_field`](nlm.md#landschaft.nlm.mosaic_field) | Mosaic random field neutral landscape model (NLMR's ``nlm_mosaicfield``, Schlather 1999) |
+| [`ls.mosaic_tess`](nlm.md#landschaft.nlm.mosaic_tess) | Polygonal (Voronoi) mosaic neutral landscape model (NLMR's ``nlm_mosaictess``, Gaucherel 2008) |
+| [`ls.mosaic_gibbs`](nlm.md#landschaft.nlm.mosaic_gibbs) | Gibbs-process Voronoi mosaic (NLMR's ``nlm_mosaicgibbs``, Gauchel et al. 2008) |
 | [`ls.random_cluster`](nlm.md#landschaft.nlm.random_cluster) | Random cluster neutral landscape model (NLMR's ``nlm_randomcluster``, Saura & Martínez-Millán 2000) |
 | [`ls.neigh`](nlm.md#landschaft.nlm.neigh) | Neighbourhood-based clusters (NLMR's ``nlm_neigh``, Scherer et al. 2016) |
 | [`ls.random_rectangular_cluster`](nlm.md#landschaft.nlm.random_rectangular_cluster) | Random rectangular clusters (NLMR's ``nlm_randomrectangularcluster``, Gaucherel 2008) |

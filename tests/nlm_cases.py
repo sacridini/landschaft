@@ -251,6 +251,22 @@ MODELS: dict[str, tuple[str, object]] = {
                             lambda ls: ls.nlm.mosaic_field(40, 30, n=2, infinit=True, seed=8)["infinit"]),
     "mosaicfield_infinit_only": ("nlm_mosaicfield(35, 25, n = NA, infinit = TRUE, user_seed = 9, rescale = FALSE)",
                                  lambda ls: ls.nlm.mosaic_field(35, 25, n=None, infinit=True, seed=9, rescale=False)),
+    # Voronoi mosaics (NLMR's value order comes from GEOS, through shapely)
+    "mosaictess": ("nlm_mosaictess(50, 40, germs = 30, user_seed = 1)",
+                   lambda ls: ls.nlm.mosaic_tess(50, 40, germs=30, seed=1)),
+    "mosaictess_raw": ("nlm_mosaictess(100, 80, germs = 200, user_seed = 2, rescale = FALSE)",
+                       lambda ls: ls.nlm.mosaic_tess(100, 80, germs=200, seed=2, rescale=False)),
+    "mosaictess_planar": ("nlm_mosaictess(400, 300, germs = 500, user_seed = 4)",
+                          lambda ls: ls.nlm.mosaic_tess(400, 300, germs=500, seed=4)),
+    "mosaictess_few": ("nlm_mosaictess(30, 30, germs = 3, user_seed = 3)",
+                       lambda ls: ls.nlm.mosaic_tess(30, 30, germs=3, seed=3)),
+    "mosaicgibbs": ("nlm_mosaicgibbs(50, 40, germs = 20, R = 4, patch_classes = 3, user_seed = 1)",
+                    lambda ls: ls.nlm.mosaic_gibbs(50, 40, germs=20, R=4, patch_classes=3, seed=1)),
+    "mosaicgibbs_raw": ("nlm_mosaicgibbs(120, 90, germs = 150, R = 3, patch_classes = 5, user_seed = 2, rescale = FALSE)",
+                        lambda ls: ls.nlm.mosaic_gibbs(120, 90, germs=150, R=3, patch_classes=5, seed=2,
+                                                       rescale=False)),
+    "mosaicgibbs_dense": ("nlm_mosaicgibbs(60, 60, germs = 100, R = 5, patch_classes = 4, user_seed = 3)",
+                          lambda ls: ls.nlm.mosaic_gibbs(60, 60, germs=100, R=5, patch_classes=4, seed=3)),
 }
 
 

@@ -1914,6 +1914,8 @@ cu = ls.nlm.curds([0.5, 0.4, 0.6], [8, 8, 8], wheyes=[0.1, 0.1, 0.1], seed=5)  #
 gf = ls.nlm.gaussian_field(200, 150, autocorr_range=20, mag_var=5, nug=0.2, seed=6)
 fb = ls.nlm.fbm(200, 150, fract_dim=1.2, seed=7)
 mf = ls.nlm.mosaic_field(200, 150, n=20, seed=8)          # dict with collect=/infinit=
+mt = ls.nlm.mosaic_tess(200, 150, germs=100, seed=9)
+mg = ls.nlm.mosaic_gibbs(200, 150, germs=80, R=8, patch_classes=4, seed=10)
 ```
 
 NLMR behaviours kept with `nlmr_compat=True` (the default where they apply):
@@ -1957,6 +1959,14 @@ NLMR behaviours kept with `nlmr_compat=True` (the default where they apply):
   `generate.normals` with R's `fft`). Kept NLMR quirks: `n = 1` sums three fields
   (`for (i in 2:n)`), `collect` divides the i-th field by `sqrt(i)` and rescales all
   steps with the first step's range.
+- `mosaic_tess`, `mosaic_gibbs`: the germs are `sf::st_sample`'s `runif` draws and
+  spatstat's `rSSI` (blocks of proposals, rejection within `R`); NLMR gives the k-th
+  value to the k-th Voronoi polygon in GEOS's order (`st_voronoi(st_union(...))`,
+  `dTolerance = 0.1` for `mosaicgibbs`, where the value is the k-th germ's class, not
+  the class of the germ inside the polygon). Landschaft gets that order from GEOS
+  through shapely (without it: a warning, each germ its own value), rasterises by
+  nearest germ in C++ (the polygon containing each cell centre) and rounds to float32
+  as `terra::rasterize`.
 - `classify`: `sum`/`cumsum` of the weights in 80-bit precision as R; when all
   class boundaries are equal every cell becomes class 1; Jenks' breaks cost
   O(classes x cells^2) as in NLMR (parallel over the rows of each class column).

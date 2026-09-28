@@ -90,6 +90,20 @@ struct MosaicFieldResult {
 MosaicFieldResult mosaic_field(RRng& rng, i64 nrow, i64 ncol, int n, bool nlmr_compat, double mean, double sd,
                                bool collect, bool infinit);
 
+// -- Voronoi mosaics -----------------------------------------------------------------------
+
+struct GermDraws {
+    std::vector<double> x, y, v;  // germs and their values (in draw order)
+};
+// nlm_mosaictess(): sf::st_sample()'s germs, then runif(germs).
+GermDraws tess_germs(RRng& rng, i64 germs, double width, double height);
+// nlm_mosaicgibbs(): spatstat's rSSI() germs, then the shuffled classes.
+GermDraws gibbs_germs(RRng& rng, i64 germs, double r, int patch_classes, double width, double height, int giveup);
+// The value of the nearest germ at every cell centre (row-major, first row
+// on top, cells of size 1 from (0, 0)).
+std::vector<double> nearest_germ_raster(const std::vector<double>& gx, const std::vector<double>& gy,
+                                        const std::vector<double>& value, i64 nrow, i64 ncol);
+
 // -- classification -----------------------------------------------------------------
 
 // NLMR's rcpp_get_jenksbreaks(sorted d, k): k + 1 break values.
