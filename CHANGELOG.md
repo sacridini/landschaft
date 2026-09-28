@@ -6,6 +6,16 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.66.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis: relative phylogenetic diversity and endemism (RPD1/2, RPE1/2,
+  central RPE), labels on and off the trimmed tree, RWiBaLD, and the PhyloCom indices
+  (MPD and MNTD unweighted, local range and abundance weighted; NRI and NTI with their
+  expected values; net VPD) in `ls.bio.spatial_analysis`, identical to Biodiverse,
+  including its sampled NTI and VPD expectations (new `prng_seed` argument: Biodiverse's
+  Mersenne Twister) and its path length caching on ultrametric trees.
+
 ## [0.65.0] - 2026-09-28
 
 ### Added
