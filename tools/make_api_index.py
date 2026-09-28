@@ -34,7 +34,9 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("batch.md", "Large data & batch", ":material-layers-triple-outline:",
           "Folders of rasters, tiled MSPA, maps larger than memory."),
          ("nlm.md", "Neutral landscape models", ":material-dice-multiple-outline:",
-          "Simulated landscapes as null models: random, gradients, clusters, fractals.")]
+          "Simulated landscapes as null models: random, gradients, clusters, fractals."),
+         ("biodiversity.md", "Biodiversity analysis", ":material-paw:",
+          "Species counts per cell, phylogenies and dissimilarity matrices (Biodiverse).")]
 
 INTRO = '''# API reference
 
@@ -48,6 +50,7 @@ import landschaft as ls             # most tools: ls.mspa, ls.fad, ls.Landscape.
 ls.conn.protconn(...)               # habitat networks and protected areas
 from landschaft import circuit      # Circuitscape
 ls.nlm.random(100, 100, seed=1)     # neutral landscape models
+ls.bio.BaseData.from_table(...)     # biodiversity analysis
 ```
 
 !!! example "Every example runs"
@@ -87,6 +90,10 @@ def prefix(ident: str) -> str:
         return "ls.conn."
     if ".lsm." in ident:
         return "ls.lsm."
+    if ".nlm." in ident:
+        return "ls.nlm."
+    if ".bio." in ident:
+        return "ls.bio."
     if ".circuit." in ident and name != "omniscape":
         return "circuit."
     return "ls."

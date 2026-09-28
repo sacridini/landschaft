@@ -27,6 +27,7 @@ from .change import (
     morphological_change,
     simple_change,
 )
+from . import bio
 from . import circuit
 from .circuit import omniscape
 from .collection import RasterCollection, RasterInfo
@@ -182,6 +183,7 @@ __all__ = [
     "accounting",
     "accounting_colormap",
     "change_colormap",
+    "bio",
     "circuit",
     "nlm",
     "batch",

@@ -1,0 +1,4620 @@
+{
+ "bands_coarse": {
+  "cell_origins": [
+   5,
+   3
+  ],
+  "cell_sizes": [
+   30,
+   20
+  ],
+  "groups": {
+   "110:133": {
+    "coord": [
+     110,
+     133
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 3
+    }
+   },
+   "110:153": {
+    "coord": [
+     110,
+     153
+    ],
+    "labels": {
+     "band3": 4,
+     "sp_a": 3,
+     "sp_b": 4
+    }
+   },
+   "110:173": {
+    "coord": [
+     110,
+     173
+    ],
+    "labels": {
+     "band3": 4,
+     "sp_a": 4,
+     "sp_b": 6
+    }
+   },
+   "110:193": {
+    "coord": [
+     110,
+     193
+    ],
+    "labels": {
+     "band3": 4,
+     "sp_a": 7,
+     "sp_b": 5
+    }
+   },
+   "110:213": {
+    "coord": [
+     110,
+     213
+    ],
+    "labels": {
+     "band3": 5,
+     "sp_a": 4,
+     "sp_b": 2
+    }
+   },
+   "110:233": {
+    "coord": [
+     110,
+     233
+    ],
+    "labels": {
+     "band3": 3,
+     "sp_a": 5,
+     "sp_b": 2
+    }
+   },
+   "110:253": {
+    "coord": [
+     110,
+     253
+    ],
+    "labels": {
+     "band3": 4,
+     "sp_a": 1,
+     "sp_b": 3
+    }
+   },
+   "140:133": {
+    "coord": [
+     140,
+     133
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 5
+    }
+   },
+   "140:153": {
+    "coord": [
+     140,
+     153
+    ],
+    "labels": {
+     "band3": 7,
+     "sp_a": 5,
+     "sp_b": 7
+    }
+   },
+   "140:173": {
+    "coord": [
+     140,
+     173
+    ],
+    "labels": {
+     "band3": 6,
+     "sp_a": 7,
+     "sp_b": 8
+    }
+   },
+   "140:193": {
+    "coord": [
+     140,
+     193
+    ],
+    "labels": {
+     "band3": 4,
+     "sp_a": 6,
+     "sp_b": 6
+    }
+   },
+   "140:213": {
+    "coord": [
+     140,
+     213
+    ],
+    "labels": {
+     "band3": 12,
+     "sp_a": 6,
+     "sp_b": 8
+    }
+   },
+   "140:233": {
+    "coord": [
+     140,
+     233
+    ],
+    "labels": {
+     "band3": 4,
+     "sp_a": 6,
+     "sp_b": 6
+    }
+   },
+   "140:253": {
+    "coord": [
+     140,
+     253
+    ],
+    "labels": {
+     "band3": 3,
+     "sp_a": 1,
+     "sp_b": 4
+    }
+   },
+   "170:133": {
+    "coord": [
+     170,
+     133
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "170:153": {
+    "coord": [
+     170,
+     153
+    ],
+    "labels": {
+     "band3": 3,
+     "sp_a": 9,
+     "sp_b": 8
+    }
+   },
+   "170:173": {
+    "coord": [
+     170,
+     173
+    ],
+    "labels": {
+     "band3": 5,
+     "sp_a": 7,
+     "sp_b": 6
+    }
+   },
+   "170:193": {
+    "coord": [
+     170,
+     193
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 4,
+     "sp_b": 4
+    }
+   },
+   "170:213": {
+    "coord": [
+     170,
+     213
+    ],
+    "labels": {
+     "band3": 11,
+     "sp_a": 6,
+     "sp_b": 4
+    }
+   },
+   "170:233": {
+    "coord": [
+     170,
+     233
+    ],
+    "labels": {
+     "band3": 6,
+     "sp_a": 4,
+     "sp_b": 9
+    }
+   },
+   "170:253": {
+    "coord": [
+     170,
+     253
+    ],
+    "labels": {
+     "band3": 4,
+     "sp_a": 4,
+     "sp_b": 6
+    }
+   },
+   "200:133": {
+    "coord": [
+     200,
+     133
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "200:153": {
+    "coord": [
+     200,
+     153
+    ],
+    "labels": {
+     "band3": 4,
+     "sp_b": 3
+    }
+   },
+   "200:173": {
+    "coord": [
+     200,
+     173
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "200:193": {
+    "coord": [
+     200,
+     193
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 4
+    }
+   },
+   "200:213": {
+    "coord": [
+     200,
+     213
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1
+    }
+   },
+   "200:233": {
+    "coord": [
+     200,
+     233
+    ],
+    "labels": {
+     "band3": 3,
+     "sp_a": 4,
+     "sp_b": 4
+    }
+   },
+   "200:253": {
+    "coord": [
+     200,
+     253
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   }
+  },
+  "labels": {
+   "band3": {
+    "range": 23,
+    "sample_count": 103
+   },
+   "sp_a": {
+    "range": 27,
+    "sample_count": 108
+   },
+   "sp_b": {
+    "range": 26,
+    "sample_count": 119
+   }
+  },
+  "numeric_labels": 0
+ },
+ "bands_multi": {
+  "cell_origins": [
+   0,
+   0
+  ],
+  "cell_sizes": [
+   10,
+   10
+  ],
+  "groups": {
+   "105:135": {
+    "coord": [
+     105,
+     135
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "105:145": {
+    "coord": [
+     105,
+     145
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2
+    }
+   },
+   "105:155": {
+    "coord": [
+     105,
+     155
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_b": 1
+    }
+   },
+   "105:165": {
+    "coord": [
+     105,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "105:175": {
+    "coord": [
+     105,
+     175
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "105:185": {
+    "coord": [
+     105,
+     185
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2
+    }
+   },
+   "105:195": {
+    "coord": [
+     105,
+     195
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "105:205": {
+    "coord": [
+     105,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1
+    }
+   },
+   "105:215": {
+    "coord": [
+     105,
+     215
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_b": 1
+    }
+   },
+   "105:225": {
+    "coord": [
+     105,
+     225
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "105:235": {
+    "coord": [
+     105,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2
+    }
+   },
+   "105:245": {
+    "coord": [
+     105,
+     245
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "115:135": {
+    "coord": [
+     115,
+     135
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "115:145": {
+    "coord": [
+     115,
+     145
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 2
+    }
+   },
+   "115:155": {
+    "coord": [
+     115,
+     155
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "115:165": {
+    "coord": [
+     115,
+     165
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 1
+    }
+   },
+   "115:175": {
+    "coord": [
+     115,
+     175
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "115:185": {
+    "coord": [
+     115,
+     185
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "115:195": {
+    "coord": [
+     115,
+     195
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "115:205": {
+    "coord": [
+     115,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2
+    }
+   },
+   "115:215": {
+    "coord": [
+     115,
+     215
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "115:225": {
+    "coord": [
+     115,
+     225
+    ],
+    "labels": {
+     "band3": 1
+    }
+   },
+   "115:235": {
+    "coord": [
+     115,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "115:245": {
+    "coord": [
+     115,
+     245
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 1
+    }
+   },
+   "125:135": {
+    "coord": [
+     125,
+     135
+    ],
+    "labels": {
+     "sp_a": 2
+    }
+   },
+   "125:145": {
+    "coord": [
+     125,
+     145
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1
+    }
+   },
+   "125:155": {
+    "coord": [
+     125,
+     155
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "125:165": {
+    "coord": [
+     125,
+     165
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "125:175": {
+    "coord": [
+     125,
+     175
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "125:185": {
+    "coord": [
+     125,
+     185
+    ],
+    "labels": {
+     "band3": 2
+    }
+   },
+   "125:195": {
+    "coord": [
+     125,
+     195
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "125:205": {
+    "coord": [
+     125,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 2
+    }
+   },
+   "125:215": {
+    "coord": [
+     125,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "125:225": {
+    "coord": [
+     125,
+     225
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "125:235": {
+    "coord": [
+     125,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "125:245": {
+    "coord": [
+     125,
+     245
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_b": 2
+    }
+   },
+   "135:135": {
+    "coord": [
+     135,
+     135
+    ],
+    "labels": {
+     "sp_a": 2
+    }
+   },
+   "135:145": {
+    "coord": [
+     135,
+     145
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "135:155": {
+    "coord": [
+     135,
+     155
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 2
+    }
+   },
+   "135:165": {
+    "coord": [
+     135,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "135:175": {
+    "coord": [
+     135,
+     175
+    ],
+    "labels": {
+     "sp_b": 1
+    }
+   },
+   "135:185": {
+    "coord": [
+     135,
+     185
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "135:195": {
+    "coord": [
+     135,
+     195
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "135:205": {
+    "coord": [
+     135,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "135:215": {
+    "coord": [
+     135,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "135:225": {
+    "coord": [
+     135,
+     225
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1
+    }
+   },
+   "135:235": {
+    "coord": [
+     135,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1
+    }
+   },
+   "135:245": {
+    "coord": [
+     135,
+     245
+    ],
+    "labels": {
+     "sp_b": 1
+    }
+   },
+   "145:135": {
+    "coord": [
+     145,
+     135
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1
+    }
+   },
+   "145:145": {
+    "coord": [
+     145,
+     145
+    ],
+    "labels": {
+     "sp_b": 2
+    }
+   },
+   "145:155": {
+    "coord": [
+     145,
+     155
+    ],
+    "labels": {
+     "band3": 1
+    }
+   },
+   "145:165": {
+    "coord": [
+     145,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1
+    }
+   },
+   "145:175": {
+    "coord": [
+     145,
+     175
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "145:185": {
+    "coord": [
+     145,
+     185
+    ],
+    "labels": {
+     "band3": 2
+    }
+   },
+   "145:195": {
+    "coord": [
+     145,
+     195
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "145:205": {
+    "coord": [
+     145,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1
+    }
+   },
+   "145:215": {
+    "coord": [
+     145,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 1
+    }
+   },
+   "145:225": {
+    "coord": [
+     145,
+     225
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "145:235": {
+    "coord": [
+     145,
+     235
+    ],
+    "labels": {
+     "sp_a": 1
+    }
+   },
+   "145:245": {
+    "coord": [
+     145,
+     245
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "155:135": {
+    "coord": [
+     155,
+     135
+    ],
+    "labels": {
+     "sp_b": 1
+    }
+   },
+   "155:145": {
+    "coord": [
+     155,
+     145
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "155:155": {
+    "coord": [
+     155,
+     155
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "155:165": {
+    "coord": [
+     155,
+     165
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1
+    }
+   },
+   "155:175": {
+    "coord": [
+     155,
+     175
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "155:185": {
+    "coord": [
+     155,
+     185
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_b": 1
+    }
+   },
+   "155:195": {
+    "coord": [
+     155,
+     195
+    ],
+    "labels": {
+     "band3": 1
+    }
+   },
+   "155:205": {
+    "coord": [
+     155,
+     205
+    ],
+    "labels": {
+     "band3": 2
+    }
+   },
+   "155:215": {
+    "coord": [
+     155,
+     215
+    ],
+    "labels": {
+     "band3": 2
+    }
+   },
+   "155:225": {
+    "coord": [
+     155,
+     225
+    ],
+    "labels": {
+     "sp_b": 2
+    }
+   },
+   "155:235": {
+    "coord": [
+     155,
+     235
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "155:245": {
+    "coord": [
+     155,
+     245
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "165:135": {
+    "coord": [
+     165,
+     135
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1
+    }
+   },
+   "165:145": {
+    "coord": [
+     165,
+     145
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2
+    }
+   },
+   "165:155": {
+    "coord": [
+     165,
+     155
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "165:165": {
+    "coord": [
+     165,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2
+    }
+   },
+   "165:175": {
+    "coord": [
+     165,
+     175
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "165:185": {
+    "coord": [
+     165,
+     185
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "165:205": {
+    "coord": [
+     165,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "165:215": {
+    "coord": [
+     165,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "165:225": {
+    "coord": [
+     165,
+     225
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 2
+    }
+   },
+   "165:235": {
+    "coord": [
+     165,
+     235
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "165:245": {
+    "coord": [
+     165,
+     245
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "175:145": {
+    "coord": [
+     175,
+     145
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1
+    }
+   },
+   "175:155": {
+    "coord": [
+     175,
+     155
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "175:165": {
+    "coord": [
+     175,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "175:175": {
+    "coord": [
+     175,
+     175
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_b": 2
+    }
+   },
+   "175:185": {
+    "coord": [
+     175,
+     185
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "175:195": {
+    "coord": [
+     175,
+     195
+    ],
+    "labels": {
+     "sp_a": 1
+    }
+   },
+   "175:205": {
+    "coord": [
+     175,
+     205
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "175:215": {
+    "coord": [
+     175,
+     215
+    ],
+    "labels": {
+     "band3": 2
+    }
+   },
+   "175:225": {
+    "coord": [
+     175,
+     225
+    ],
+    "labels": {
+     "sp_a": 1
+    }
+   },
+   "175:235": {
+    "coord": [
+     175,
+     235
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "175:245": {
+    "coord": [
+     175,
+     245
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "185:135": {
+    "coord": [
+     185,
+     135
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "185:145": {
+    "coord": [
+     185,
+     145
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 1
+    }
+   },
+   "185:155": {
+    "coord": [
+     185,
+     155
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 2
+    }
+   },
+   "185:165": {
+    "coord": [
+     185,
+     165
+    ],
+    "labels": {
+     "sp_a": 1
+    }
+   },
+   "185:175": {
+    "coord": [
+     185,
+     175
+    ],
+    "labels": {
+     "sp_b": 2
+    }
+   },
+   "185:185": {
+    "coord": [
+     185,
+     185
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "185:195": {
+    "coord": [
+     185,
+     195
+    ],
+    "labels": {
+     "sp_b": 2
+    }
+   },
+   "185:205": {
+    "coord": [
+     185,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1
+    }
+   },
+   "185:225": {
+    "coord": [
+     185,
+     225
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "185:235": {
+    "coord": [
+     185,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "185:245": {
+    "coord": [
+     185,
+     245
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   }
+  },
+  "labels": {
+   "band3": {
+    "range": 66,
+    "sample_count": 103
+   },
+   "sp_a": {
+    "range": 76,
+    "sample_count": 108
+   },
+   "sp_b": {
+    "range": 74,
+    "sample_count": 119
+   }
+  },
+  "numeric_labels": 0
+ },
+ "bands_single": {
+  "cell_origins": [
+   0,
+   0
+  ],
+  "cell_sizes": [
+   10,
+   10
+  ],
+  "groups": {
+   "105:135": {
+    "coord": [
+     105,
+     135
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "105:155": {
+    "coord": [
+     105,
+     155
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "105:165": {
+    "coord": [
+     105,
+     165
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "105:185": {
+    "coord": [
+     105,
+     185
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "105:195": {
+    "coord": [
+     105,
+     195
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "105:205": {
+    "coord": [
+     105,
+     205
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "105:215": {
+    "coord": [
+     105,
+     215
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "105:235": {
+    "coord": [
+     105,
+     235
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "115:135": {
+    "coord": [
+     115,
+     135
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "115:145": {
+    "coord": [
+     115,
+     145
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "115:155": {
+    "coord": [
+     115,
+     155
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "115:165": {
+    "coord": [
+     115,
+     165
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "115:175": {
+    "coord": [
+     115,
+     175
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "115:185": {
+    "coord": [
+     115,
+     185
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "115:205": {
+    "coord": [
+     115,
+     205
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "115:215": {
+    "coord": [
+     115,
+     215
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "115:225": {
+    "coord": [
+     115,
+     225
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "115:235": {
+    "coord": [
+     115,
+     235
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "115:245": {
+    "coord": [
+     115,
+     245
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "125:135": {
+    "coord": [
+     125,
+     135
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "125:145": {
+    "coord": [
+     125,
+     145
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "125:155": {
+    "coord": [
+     125,
+     155
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "125:165": {
+    "coord": [
+     125,
+     165
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "125:185": {
+    "coord": [
+     125,
+     185
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "125:205": {
+    "coord": [
+     125,
+     205
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "125:215": {
+    "coord": [
+     125,
+     215
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "125:225": {
+    "coord": [
+     125,
+     225
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "125:235": {
+    "coord": [
+     125,
+     235
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "125:245": {
+    "coord": [
+     125,
+     245
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "135:135": {
+    "coord": [
+     135,
+     135
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "135:185": {
+    "coord": [
+     135,
+     185
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "135:195": {
+    "coord": [
+     135,
+     195
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "135:205": {
+    "coord": [
+     135,
+     205
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "135:215": {
+    "coord": [
+     135,
+     215
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "135:225": {
+    "coord": [
+     135,
+     225
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "135:235": {
+    "coord": [
+     135,
+     235
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "135:245": {
+    "coord": [
+     135,
+     245
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "145:135": {
+    "coord": [
+     145,
+     135
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "145:155": {
+    "coord": [
+     145,
+     155
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "145:165": {
+    "coord": [
+     145,
+     165
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "145:185": {
+    "coord": [
+     145,
+     185
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "145:205": {
+    "coord": [
+     145,
+     205
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "145:215": {
+    "coord": [
+     145,
+     215
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "145:225": {
+    "coord": [
+     145,
+     225
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "145:245": {
+    "coord": [
+     145,
+     245
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "155:145": {
+    "coord": [
+     155,
+     145
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "155:155": {
+    "coord": [
+     155,
+     155
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "155:165": {
+    "coord": [
+     155,
+     165
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "155:175": {
+    "coord": [
+     155,
+     175
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "155:185": {
+    "coord": [
+     155,
+     185
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "155:215": {
+    "coord": [
+     155,
+     215
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "155:225": {
+    "coord": [
+     155,
+     225
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "155:235": {
+    "coord": [
+     155,
+     235
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "155:245": {
+    "coord": [
+     155,
+     245
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "165:145": {
+    "coord": [
+     165,
+     145
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "165:155": {
+    "coord": [
+     165,
+     155
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "165:165": {
+    "coord": [
+     165,
+     165
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "165:175": {
+    "coord": [
+     165,
+     175
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "165:185": {
+    "coord": [
+     165,
+     185
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "165:195": {
+    "coord": [
+     165,
+     195
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "165:205": {
+    "coord": [
+     165,
+     205
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "165:215": {
+    "coord": [
+     165,
+     215
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "165:225": {
+    "coord": [
+     165,
+     225
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "165:235": {
+    "coord": [
+     165,
+     235
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "165:245": {
+    "coord": [
+     165,
+     245
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "175:135": {
+    "coord": [
+     175,
+     135
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "175:145": {
+    "coord": [
+     175,
+     145
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "175:155": {
+    "coord": [
+     175,
+     155
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "175:175": {
+    "coord": [
+     175,
+     175
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "175:185": {
+    "coord": [
+     175,
+     185
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "175:195": {
+    "coord": [
+     175,
+     195
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "175:215": {
+    "coord": [
+     175,
+     215
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "175:225": {
+    "coord": [
+     175,
+     225
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "185:135": {
+    "coord": [
+     185,
+     135
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "185:145": {
+    "coord": [
+     185,
+     145
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "185:155": {
+    "coord": [
+     185,
+     155
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "185:165": {
+    "coord": [
+     185,
+     165
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "185:185": {
+    "coord": [
+     185,
+     185
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "185:195": {
+    "coord": [
+     185,
+     195
+    ],
+    "labels": {
+     "raster_single": 1
+    }
+   },
+   "185:205": {
+    "coord": [
+     185,
+     205
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "185:215": {
+    "coord": [
+     185,
+     215
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "185:225": {
+    "coord": [
+     185,
+     225
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "185:235": {
+    "coord": [
+     185,
+     235
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   }
+  },
+  "labels": {
+   "raster_single": {
+    "range": 83,
+    "sample_count": 170
+   }
+  },
+  "numeric_labels": 0
+ },
+ "two_files": {
+  "cell_origins": [
+   0,
+   0
+  ],
+  "cell_sizes": [
+   10,
+   10
+  ],
+  "groups": {
+   "105:135": {
+    "coord": [
+     105,
+     135
+    ],
+    "labels": {
+     "raster_single": 3,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "105:145": {
+    "coord": [
+     105,
+     145
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2
+    }
+   },
+   "105:155": {
+    "coord": [
+     105,
+     155
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 1,
+     "sp_b": 1
+    }
+   },
+   "105:165": {
+    "coord": [
+     105,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 2,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "105:175": {
+    "coord": [
+     105,
+     175
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "105:185": {
+    "coord": [
+     105,
+     185
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3,
+     "sp_a": 2
+    }
+   },
+   "105:195": {
+    "coord": [
+     105,
+     195
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "105:205": {
+    "coord": [
+     105,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_a": 1
+    }
+   },
+   "105:215": {
+    "coord": [
+     105,
+     215
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 1,
+     "sp_b": 1
+    }
+   },
+   "105:225": {
+    "coord": [
+     105,
+     225
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "105:235": {
+    "coord": [
+     105,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 1,
+     "sp_a": 2
+    }
+   },
+   "105:245": {
+    "coord": [
+     105,
+     245
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "115:135": {
+    "coord": [
+     115,
+     135
+    ],
+    "labels": {
+     "raster_single": 2,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "115:145": {
+    "coord": [
+     115,
+     145
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_b": 2
+    }
+   },
+   "115:155": {
+    "coord": [
+     115,
+     155
+    ],
+    "labels": {
+     "raster_single": 3,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "115:165": {
+    "coord": [
+     115,
+     165
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 1,
+     "sp_b": 1
+    }
+   },
+   "115:175": {
+    "coord": [
+     115,
+     175
+    ],
+    "labels": {
+     "raster_single": 3,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "115:185": {
+    "coord": [
+     115,
+     185
+    ],
+    "labels": {
+     "raster_single": 3,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "115:195": {
+    "coord": [
+     115,
+     195
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "115:205": {
+    "coord": [
+     115,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_a": 2
+    }
+   },
+   "115:215": {
+    "coord": [
+     115,
+     215
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "115:225": {
+    "coord": [
+     115,
+     225
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 1
+    }
+   },
+   "115:235": {
+    "coord": [
+     115,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 1,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "115:245": {
+    "coord": [
+     115,
+     245
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_b": 1
+    }
+   },
+   "125:135": {
+    "coord": [
+     125,
+     135
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 2
+    }
+   },
+   "125:145": {
+    "coord": [
+     125,
+     145
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 1,
+     "sp_a": 1
+    }
+   },
+   "125:155": {
+    "coord": [
+     125,
+     155
+    ],
+    "labels": {
+     "raster_single": 3,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "125:165": {
+    "coord": [
+     125,
+     165
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 1,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "125:175": {
+    "coord": [
+     125,
+     175
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "125:185": {
+    "coord": [
+     125,
+     185
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3
+    }
+   },
+   "125:195": {
+    "coord": [
+     125,
+     195
+    ],
+    "labels": {
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "125:205": {
+    "coord": [
+     125,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 1,
+     "sp_b": 2
+    }
+   },
+   "125:215": {
+    "coord": [
+     125,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "125:225": {
+    "coord": [
+     125,
+     225
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 3,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "125:235": {
+    "coord": [
+     125,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 3,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "125:245": {
+    "coord": [
+     125,
+     245
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 2,
+     "sp_b": 2
+    }
+   },
+   "135:135": {
+    "coord": [
+     135,
+     135
+    ],
+    "labels": {
+     "raster_single": 2,
+     "sp_a": 2
+    }
+   },
+   "135:145": {
+    "coord": [
+     135,
+     145
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "135:155": {
+    "coord": [
+     135,
+     155
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_b": 2
+    }
+   },
+   "135:165": {
+    "coord": [
+     135,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "135:175": {
+    "coord": [
+     135,
+     175
+    ],
+    "labels": {
+     "sp_b": 1
+    }
+   },
+   "135:185": {
+    "coord": [
+     135,
+     185
+    ],
+    "labels": {
+     "raster_single": 2,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "135:195": {
+    "coord": [
+     135,
+     195
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "135:205": {
+    "coord": [
+     135,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "135:215": {
+    "coord": [
+     135,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "135:225": {
+    "coord": [
+     135,
+     225
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 1,
+     "sp_a": 1
+    }
+   },
+   "135:235": {
+    "coord": [
+     135,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 3,
+     "sp_a": 1
+    }
+   },
+   "135:245": {
+    "coord": [
+     135,
+     245
+    ],
+    "labels": {
+     "raster_single": 3,
+     "sp_b": 1
+    }
+   },
+   "145:135": {
+    "coord": [
+     145,
+     135
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 2,
+     "sp_a": 1
+    }
+   },
+   "145:145": {
+    "coord": [
+     145,
+     145
+    ],
+    "labels": {
+     "sp_b": 2
+    }
+   },
+   "145:155": {
+    "coord": [
+     145,
+     155
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 2
+    }
+   },
+   "145:165": {
+    "coord": [
+     145,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 2,
+     "sp_a": 1
+    }
+   },
+   "145:175": {
+    "coord": [
+     145,
+     175
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "145:185": {
+    "coord": [
+     145,
+     185
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 1
+    }
+   },
+   "145:195": {
+    "coord": [
+     145,
+     195
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "145:205": {
+    "coord": [
+     145,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 1,
+     "sp_a": 1
+    }
+   },
+   "145:215": {
+    "coord": [
+     145,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_b": 1
+    }
+   },
+   "145:225": {
+    "coord": [
+     145,
+     225
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "145:235": {
+    "coord": [
+     145,
+     235
+    ],
+    "labels": {
+     "sp_a": 1
+    }
+   },
+   "145:245": {
+    "coord": [
+     145,
+     245
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "155:135": {
+    "coord": [
+     155,
+     135
+    ],
+    "labels": {
+     "sp_b": 1
+    }
+   },
+   "155:145": {
+    "coord": [
+     155,
+     145
+    ],
+    "labels": {
+     "raster_single": 2,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "155:155": {
+    "coord": [
+     155,
+     155
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 3,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "155:165": {
+    "coord": [
+     155,
+     165
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3,
+     "sp_a": 1
+    }
+   },
+   "155:175": {
+    "coord": [
+     155,
+     175
+    ],
+    "labels": {
+     "raster_single": 3,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "155:185": {
+    "coord": [
+     155,
+     185
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 2,
+     "sp_b": 1
+    }
+   },
+   "155:195": {
+    "coord": [
+     155,
+     195
+    ],
+    "labels": {
+     "band3": 1
+    }
+   },
+   "155:205": {
+    "coord": [
+     155,
+     205
+    ],
+    "labels": {
+     "band3": 2
+    }
+   },
+   "155:215": {
+    "coord": [
+     155,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2
+    }
+   },
+   "155:225": {
+    "coord": [
+     155,
+     225
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_b": 2
+    }
+   },
+   "155:235": {
+    "coord": [
+     155,
+     235
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "155:245": {
+    "coord": [
+     155,
+     245
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 3,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "165:135": {
+    "coord": [
+     165,
+     135
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1
+    }
+   },
+   "165:145": {
+    "coord": [
+     165,
+     145
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 2,
+     "sp_a": 2
+    }
+   },
+   "165:155": {
+    "coord": [
+     165,
+     155
+    ],
+    "labels": {
+     "raster_single": 3,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "165:165": {
+    "coord": [
+     165,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 2,
+     "sp_a": 2
+    }
+   },
+   "165:175": {
+    "coord": [
+     165,
+     175
+    ],
+    "labels": {
+     "raster_single": 2,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "165:185": {
+    "coord": [
+     165,
+     185
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "165:195": {
+    "coord": [
+     165,
+     195
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "165:205": {
+    "coord": [
+     165,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "165:215": {
+    "coord": [
+     165,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "165:225": {
+    "coord": [
+     165,
+     225
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_b": 2
+    }
+   },
+   "165:235": {
+    "coord": [
+     165,
+     235
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "165:245": {
+    "coord": [
+     165,
+     245
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "175:135": {
+    "coord": [
+     175,
+     135
+    ],
+    "labels": {
+     "raster_single": 2
+    }
+   },
+   "175:145": {
+    "coord": [
+     175,
+     145
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 2,
+     "sp_a": 1
+    }
+   },
+   "175:155": {
+    "coord": [
+     175,
+     155
+    ],
+    "labels": {
+     "raster_single": 2,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "175:165": {
+    "coord": [
+     175,
+     165
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1,
+     "sp_b": 1
+    }
+   },
+   "175:175": {
+    "coord": [
+     175,
+     175
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 3,
+     "sp_b": 2
+    }
+   },
+   "175:185": {
+    "coord": [
+     175,
+     185
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "175:195": {
+    "coord": [
+     175,
+     195
+    ],
+    "labels": {
+     "raster_single": 3,
+     "sp_a": 1
+    }
+   },
+   "175:205": {
+    "coord": [
+     175,
+     205
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 2,
+     "sp_b": 1
+    }
+   },
+   "175:215": {
+    "coord": [
+     175,
+     215
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3
+    }
+   },
+   "175:225": {
+    "coord": [
+     175,
+     225
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 1
+    }
+   },
+   "175:235": {
+    "coord": [
+     175,
+     235
+    ],
+    "labels": {
+     "band3": 2,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "175:245": {
+    "coord": [
+     175,
+     245
+    ],
+    "labels": {
+     "band3": 1,
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   },
+   "185:135": {
+    "coord": [
+     185,
+     135
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "185:145": {
+    "coord": [
+     185,
+     145
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_b": 1
+    }
+   },
+   "185:155": {
+    "coord": [
+     185,
+     155
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 2,
+     "sp_b": 2
+    }
+   },
+   "185:165": {
+    "coord": [
+     185,
+     165
+    ],
+    "labels": {
+     "raster_single": 2,
+     "sp_a": 1
+    }
+   },
+   "185:175": {
+    "coord": [
+     185,
+     175
+    ],
+    "labels": {
+     "sp_b": 2
+    }
+   },
+   "185:185": {
+    "coord": [
+     185,
+     185
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "185:195": {
+    "coord": [
+     185,
+     195
+    ],
+    "labels": {
+     "raster_single": 1,
+     "sp_b": 2
+    }
+   },
+   "185:205": {
+    "coord": [
+     185,
+     205
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3,
+     "sp_a": 1
+    }
+   },
+   "185:215": {
+    "coord": [
+     185,
+     215
+    ],
+    "labels": {
+     "raster_single": 3
+    }
+   },
+   "185:225": {
+    "coord": [
+     185,
+     225
+    ],
+    "labels": {
+     "band3": 2,
+     "raster_single": 3,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "185:235": {
+    "coord": [
+     185,
+     235
+    ],
+    "labels": {
+     "band3": 1,
+     "raster_single": 3,
+     "sp_a": 2,
+     "sp_b": 2
+    }
+   },
+   "185:245": {
+    "coord": [
+     185,
+     245
+    ],
+    "labels": {
+     "sp_a": 1,
+     "sp_b": 2
+    }
+   }
+  },
+  "labels": {
+   "band3": {
+    "range": 66,
+    "sample_count": 103
+   },
+   "raster_single": {
+    "range": 83,
+    "sample_count": 170
+   },
+   "sp_a": {
+    "range": 76,
+    "sample_count": 108
+   },
+   "sp_b": {
+    "range": 74,
+    "sample_count": 119
+   }
+  },
+  "numeric_labels": 0
+ },
+ "values": {
+  "cell_origins": [
+   0,
+   0
+  ],
+  "cell_sizes": [
+   10,
+   10
+  ],
+  "groups": {
+   "105:135": {
+    "coord": [
+     105,
+     135
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "105:145": {
+    "coord": [
+     105,
+     145
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "105:155": {
+    "coord": [
+     105,
+     155
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "105:165": {
+    "coord": [
+     105,
+     165
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "105:175": {
+    "coord": [
+     105,
+     175
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "105:185": {
+    "coord": [
+     105,
+     185
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "105:195": {
+    "coord": [
+     105,
+     195
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "105:205": {
+    "coord": [
+     105,
+     205
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "105:215": {
+    "coord": [
+     105,
+     215
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "105:225": {
+    "coord": [
+     105,
+     225
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "105:235": {
+    "coord": [
+     105,
+     235
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "105:245": {
+    "coord": [
+     105,
+     245
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "115:135": {
+    "coord": [
+     115,
+     135
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "115:145": {
+    "coord": [
+     115,
+     145
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "115:155": {
+    "coord": [
+     115,
+     155
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "115:165": {
+    "coord": [
+     115,
+     165
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "115:175": {
+    "coord": [
+     115,
+     175
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "115:185": {
+    "coord": [
+     115,
+     185
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "115:195": {
+    "coord": [
+     115,
+     195
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "115:205": {
+    "coord": [
+     115,
+     205
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "115:215": {
+    "coord": [
+     115,
+     215
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "115:225": {
+    "coord": [
+     115,
+     225
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "115:235": {
+    "coord": [
+     115,
+     235
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "115:245": {
+    "coord": [
+     115,
+     245
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "125:135": {
+    "coord": [
+     125,
+     135
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "125:145": {
+    "coord": [
+     125,
+     145
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "125:155": {
+    "coord": [
+     125,
+     155
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "125:165": {
+    "coord": [
+     125,
+     165
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "125:175": {
+    "coord": [
+     125,
+     175
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "125:185": {
+    "coord": [
+     125,
+     185
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "125:195": {
+    "coord": [
+     125,
+     195
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "125:205": {
+    "coord": [
+     125,
+     205
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "125:215": {
+    "coord": [
+     125,
+     215
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "125:225": {
+    "coord": [
+     125,
+     225
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "125:235": {
+    "coord": [
+     125,
+     235
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "125:245": {
+    "coord": [
+     125,
+     245
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "135:135": {
+    "coord": [
+     135,
+     135
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "135:145": {
+    "coord": [
+     135,
+     145
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "135:155": {
+    "coord": [
+     135,
+     155
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "135:165": {
+    "coord": [
+     135,
+     165
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "135:175": {
+    "coord": [
+     135,
+     175
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "135:185": {
+    "coord": [
+     135,
+     185
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "135:195": {
+    "coord": [
+     135,
+     195
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "135:205": {
+    "coord": [
+     135,
+     205
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "135:225": {
+    "coord": [
+     135,
+     225
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "135:235": {
+    "coord": [
+     135,
+     235
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "135:245": {
+    "coord": [
+     135,
+     245
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "145:135": {
+    "coord": [
+     145,
+     135
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "145:145": {
+    "coord": [
+     145,
+     145
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "145:155": {
+    "coord": [
+     145,
+     155
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "145:165": {
+    "coord": [
+     145,
+     165
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "145:175": {
+    "coord": [
+     145,
+     175
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "145:185": {
+    "coord": [
+     145,
+     185
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "145:195": {
+    "coord": [
+     145,
+     195
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "145:205": {
+    "coord": [
+     145,
+     205
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "145:215": {
+    "coord": [
+     145,
+     215
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "145:225": {
+    "coord": [
+     145,
+     225
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "145:235": {
+    "coord": [
+     145,
+     235
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "145:245": {
+    "coord": [
+     145,
+     245
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "155:135": {
+    "coord": [
+     155,
+     135
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "155:145": {
+    "coord": [
+     155,
+     145
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "155:155": {
+    "coord": [
+     155,
+     155
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "155:165": {
+    "coord": [
+     155,
+     165
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "155:175": {
+    "coord": [
+     155,
+     175
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "155:185": {
+    "coord": [
+     155,
+     185
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "155:195": {
+    "coord": [
+     155,
+     195
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "155:205": {
+    "coord": [
+     155,
+     205
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "155:215": {
+    "coord": [
+     155,
+     215
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "155:225": {
+    "coord": [
+     155,
+     225
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "155:235": {
+    "coord": [
+     155,
+     235
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "155:245": {
+    "coord": [
+     155,
+     245
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "165:135": {
+    "coord": [
+     165,
+     135
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "165:145": {
+    "coord": [
+     165,
+     145
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "165:155": {
+    "coord": [
+     165,
+     155
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "165:165": {
+    "coord": [
+     165,
+     165
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "165:175": {
+    "coord": [
+     165,
+     175
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "165:185": {
+    "coord": [
+     165,
+     185
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "165:195": {
+    "coord": [
+     165,
+     195
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "165:205": {
+    "coord": [
+     165,
+     205
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "165:215": {
+    "coord": [
+     165,
+     215
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "165:225": {
+    "coord": [
+     165,
+     225
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "165:235": {
+    "coord": [
+     165,
+     235
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "165:245": {
+    "coord": [
+     165,
+     245
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "175:135": {
+    "coord": [
+     175,
+     135
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "175:145": {
+    "coord": [
+     175,
+     145
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "175:155": {
+    "coord": [
+     175,
+     155
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "175:165": {
+    "coord": [
+     175,
+     165
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "175:175": {
+    "coord": [
+     175,
+     175
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "175:185": {
+    "coord": [
+     175,
+     185
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "175:195": {
+    "coord": [
+     175,
+     195
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "175:205": {
+    "coord": [
+     175,
+     205
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "175:215": {
+    "coord": [
+     175,
+     215
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "175:225": {
+    "coord": [
+     175,
+     225
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "175:235": {
+    "coord": [
+     175,
+     235
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "175:245": {
+    "coord": [
+     175,
+     245
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "185:135": {
+    "coord": [
+     185,
+     135
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "185:145": {
+    "coord": [
+     185,
+     145
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "185:155": {
+    "coord": [
+     185,
+     155
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "185:165": {
+    "coord": [
+     185,
+     165
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "185:175": {
+    "coord": [
+     185,
+     175
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "185:185": {
+    "coord": [
+     185,
+     185
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "185:195": {
+    "coord": [
+     185,
+     195
+    ],
+    "labels": {
+     "2": 1
+    }
+   },
+   "185:205": {
+    "coord": [
+     185,
+     205
+    ],
+    "labels": {
+     "1": 1
+    }
+   },
+   "185:215": {
+    "coord": [
+     185,
+     215
+    ],
+    "labels": {
+     "7": 1
+    }
+   },
+   "185:225": {
+    "coord": [
+     185,
+     225
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "185:235": {
+    "coord": [
+     185,
+     235
+    ],
+    "labels": {
+     "5": 1
+    }
+   },
+   "185:245": {
+    "coord": [
+     185,
+     245
+    ],
+    "labels": {
+     "7": 1
+    }
+   }
+  },
+  "labels": {
+   "1": {
+    "range": 24,
+    "sample_count": 24
+   },
+   "2": {
+    "range": 26,
+    "sample_count": 26
+   },
+   "5": {
+    "range": 28,
+    "sample_count": 28
+   },
+   "7": {
+    "range": 29,
+    "sample_count": 29
+   }
+  },
+  "numeric_labels": 1
+ },
+ "values_coarse": {
+  "cell_origins": [
+   0,
+   0
+  ],
+  "cell_sizes": [
+   25,
+   25
+  ],
+  "groups": {
+   "112.5:137.5": {
+    "coord": [
+     112.5,
+     137.5
+    ],
+    "labels": {
+     "1": 2,
+     "5": 1,
+     "7": 1
+    }
+   },
+   "112.5:162.5": {
+    "coord": [
+     112.5,
+     162.5
+    ],
+    "labels": {
+     "1": 2,
+     "2": 2
+    }
+   },
+   "112.5:187.5": {
+    "coord": [
+     112.5,
+     187.5
+    ],
+    "labels": {
+     "5": 5,
+     "7": 1
+    }
+   },
+   "112.5:212.5": {
+    "coord": [
+     112.5,
+     212.5
+    ],
+    "labels": {
+     "1": 2,
+     "2": 1,
+     "7": 1
+    }
+   },
+   "112.5:237.5": {
+    "coord": [
+     112.5,
+     237.5
+    ],
+    "labels": {
+     "1": 1,
+     "2": 1,
+     "5": 1,
+     "7": 3
+    }
+   },
+   "137.5:137.5": {
+    "coord": [
+     137.5,
+     137.5
+    ],
+    "labels": {
+     "1": 1,
+     "2": 1,
+     "5": 2,
+     "7": 2
+    }
+   },
+   "137.5:162.5": {
+    "coord": [
+     137.5,
+     162.5
+    ],
+    "labels": {
+     "1": 2,
+     "5": 2,
+     "7": 2
+    }
+   },
+   "137.5:187.5": {
+    "coord": [
+     137.5,
+     187.5
+    ],
+    "labels": {
+     "1": 1,
+     "2": 2,
+     "5": 3,
+     "7": 3
+    }
+   },
+   "137.5:212.5": {
+    "coord": [
+     137.5,
+     212.5
+    ],
+    "labels": {
+     "1": 1,
+     "2": 3,
+     "5": 1
+    }
+   },
+   "137.5:237.5": {
+    "coord": [
+     137.5,
+     237.5
+    ],
+    "labels": {
+     "1": 2,
+     "2": 3,
+     "5": 3,
+     "7": 1
+    }
+   },
+   "162.5:137.5": {
+    "coord": [
+     162.5,
+     137.5
+    ],
+    "labels": {
+     "1": 1,
+     "2": 1,
+     "7": 2
+    }
+   },
+   "162.5:162.5": {
+    "coord": [
+     162.5,
+     162.5
+    ],
+    "labels": {
+     "2": 2,
+     "7": 2
+    }
+   },
+   "162.5:187.5": {
+    "coord": [
+     162.5,
+     187.5
+    ],
+    "labels": {
+     "1": 1,
+     "2": 4,
+     "7": 1
+    }
+   },
+   "162.5:212.5": {
+    "coord": [
+     162.5,
+     212.5
+    ],
+    "labels": {
+     "2": 1,
+     "5": 2,
+     "7": 1
+    }
+   },
+   "162.5:237.5": {
+    "coord": [
+     162.5,
+     237.5
+    ],
+    "labels": {
+     "1": 1,
+     "2": 1,
+     "5": 2,
+     "7": 2
+    }
+   },
+   "187.5:137.5": {
+    "coord": [
+     187.5,
+     137.5
+    ],
+    "labels": {
+     "1": 1,
+     "5": 1,
+     "7": 2
+    }
+   },
+   "187.5:162.5": {
+    "coord": [
+     187.5,
+     162.5
+    ],
+    "labels": {
+     "1": 2,
+     "2": 1,
+     "5": 1
+    }
+   },
+   "187.5:187.5": {
+    "coord": [
+     187.5,
+     187.5
+    ],
+    "labels": {
+     "1": 2,
+     "2": 1,
+     "5": 2,
+     "7": 1
+    }
+   },
+   "187.5:212.5": {
+    "coord": [
+     187.5,
+     212.5
+    ],
+    "labels": {
+     "1": 2,
+     "2": 1,
+     "7": 1
+    }
+   },
+   "187.5:237.5": {
+    "coord": [
+     187.5,
+     237.5
+    ],
+    "labels": {
+     "2": 1,
+     "5": 2,
+     "7": 3
+    }
+   }
+  },
+  "labels": {
+   "1": {
+    "range": 16,
+    "sample_count": 24
+   },
+   "2": {
+    "range": 16,
+    "sample_count": 26
+   },
+   "5": {
+    "range": 14,
+    "sample_count": 28
+   },
+   "7": {
+    "range": 17,
+    "sample_count": 29
+   }
+  },
+  "numeric_labels": 1
+ }
+}

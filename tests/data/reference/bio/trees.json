@@ -1,0 +1,3205 @@
+{
+ "files": {
+  "Example_tree.nex": [
+   {
+    "name": "'Example_tree'",
+    "nodes": {
+     "0___": {
+      "children": [
+       "Genus:sp19",
+       "Genus:sp5"
+      ],
+      "length": 0.077662337662338,
+      "parent": "2___",
+      "terminal": 0
+     },
+     "10___": {
+      "children": [
+       "Genus:sp21",
+       "Genus:sp18"
+      ],
+      "length": 0.34398017589557,
+      "parent": "11___",
+      "terminal": 0
+     },
+     "11___": {
+      "children": [
+       "9___",
+       "10___"
+      ],
+      "length": 0.075867662593738,
+      "parent": "12___",
+      "terminal": 0
+     },
+     "12___": {
+      "children": [
+       "5___",
+       "11___"
+      ],
+      "length": 0.057495084175743,
+      "parent": "15___",
+      "terminal": 0
+     },
+     "13___": {
+      "children": [
+       "Genus:sp28",
+       "Genus:sp31"
+      ],
+      "length": 0.666666666666667,
+      "parent": "14___",
+      "terminal": 0
+     },
+     "14___": {
+      "children": [
+       "13___",
+       "Genus:sp27"
+      ],
+      "length": 0.265221710543839,
+      "parent": "15___",
+      "terminal": 0
+     },
+     "15___": {
+      "children": [
+       "12___",
+       "14___"
+      ],
+      "length": 0.026396763298318,
+      "parent": "19___",
+      "terminal": 0
+     },
+     "16___": {
+      "children": [
+       "Genus:sp9",
+       "Genus:sp8"
+      ],
+      "length": 0.111319966583125,
+      "parent": "18___",
+      "terminal": 0
+     },
+     "17___": {
+      "children": [
+       "Genus:sp14",
+       "Genus:sp16"
+      ],
+      "length": 0.300793650793651,
+      "parent": "18___",
+      "terminal": 0
+     },
+     "18___": {
+      "children": [
+       "16___",
+       "17___"
+      ],
+      "length": 0.0574914897151729,
+      "parent": "19___",
+      "terminal": 0
+     },
+     "19___": {
+      "children": [
+       "15___",
+       "18___"
+      ],
+      "length": 0.020427284632173,
+      "parent": "20___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "Genus:sp15",
+       "Genus:sp1"
+      ],
+      "length": 0.098714969241285,
+      "parent": "2___",
+      "terminal": 0
+     },
+     "20___": {
+      "children": [
+       "19___",
+       "Genus:sp17"
+      ],
+      "length": 0.00121523842637206,
+      "parent": "22___",
+      "terminal": 0
+     },
+     "21___": {
+      "children": [
+       "Genus:sp24",
+       "Genus:sp25"
+      ],
+      "length": 0.729927663567369,
+      "parent": "22___",
+      "terminal": 0
+     },
+     "22___": {
+      "children": [
+       "20___",
+       "21___"
+      ],
+      "length": 0.00291112550535999,
+      "parent": "28___",
+      "terminal": 0
+     },
+     "23___": {
+      "children": [
+       "Genus:sp2",
+       "Genus:sp3"
+      ],
+      "length": 0.160310277957336,
+      "parent": "25___",
+      "terminal": 0
+     },
+     "24___": {
+      "children": [
+       "Genus:sp6",
+       "Genus:sp7"
+      ],
+      "length": 0.455182072829131,
+      "parent": "25___",
+      "terminal": 0
+     },
+     "25___": {
+      "children": [
+       "23___",
+       "24___"
+      ],
+      "length": 0.075519681556834,
+      "parent": "26___",
+      "terminal": 0
+     },
+     "26___": {
+      "children": [
+       "25___",
+       "Genus:sp4"
+      ],
+      "length": 0.258187134502923,
+      "parent": "27___",
+      "terminal": 0
+     },
+     "27___": {
+      "children": [
+       "26___",
+       "Genus:sp13"
+      ],
+      "length": 0.027283233517174,
+      "parent": "28___",
+      "terminal": 0
+     },
+     "28___": {
+      "children": [
+       "22___",
+       "27___"
+      ],
+      "length": 0.00993044169650192,
+      "parent": "29___",
+      "terminal": 0
+     },
+     "29___": {
+      "children": [
+       "28___",
+       "Genus:sp22"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "2___": {
+      "children": [
+       "0___",
+       "1___"
+      ],
+      "length": 0.106700478344225,
+      "parent": "3___",
+      "terminal": 0
+     },
+     "3___": {
+      "children": [
+       "2___",
+       "Genus:sp10"
+      ],
+      "length": 0.05703610742759,
+      "parent": "5___",
+      "terminal": 0
+     },
+     "4___": {
+      "children": [
+       "Genus:sp26",
+       "Genus:sp20"
+      ],
+      "length": 0.341398923434153,
+      "parent": "5___",
+      "terminal": 0
+     },
+     "5___": {
+      "children": [
+       "3___",
+       "4___"
+      ],
+      "length": 0.03299436960061,
+      "parent": "12___",
+      "terminal": 0
+     },
+     "6___": {
+      "children": [
+       "Genus:sp23",
+       "Genus:sp30"
+      ],
+      "length": 0.051317777404734,
+      "parent": "7___",
+      "terminal": 0
+     },
+     "7___": {
+      "children": [
+       "6___",
+       "Genus:sp11"
+      ],
+      "length": 0.11249075347436,
+      "parent": "8___",
+      "terminal": 0
+     },
+     "8___": {
+      "children": [
+       "7___",
+       "Genus:sp29"
+      ],
+      "length": 0.0272381982058111,
+      "parent": "9___",
+      "terminal": 0
+     },
+     "9___": {
+      "children": [
+       "8___",
+       "Genus:sp12"
+      ],
+      "length": 0.172696292660468,
+      "parent": "11___",
+      "terminal": 0
+     },
+     "Genus:sp1": {
+      "children": [],
+      "length": 0.578947368421053,
+      "parent": "1___",
+      "terminal": 1
+     },
+     "Genus:sp10": {
+      "children": [],
+      "length": 0.784362816006563,
+      "parent": "3___",
+      "terminal": 1
+     },
+     "Genus:sp11": {
+      "children": [],
+      "length": 0.486100386100386,
+      "parent": "7___",
+      "terminal": 1
+     },
+     "Genus:sp12": {
+      "children": [],
+      "length": 0.625829337780557,
+      "parent": "9___",
+      "terminal": 1
+     },
+     "Genus:sp13": {
+      "children": [],
+      "length": 0.955555555555555,
+      "parent": "27___",
+      "terminal": 1
+     },
+     "Genus:sp14": {
+      "children": [],
+      "length": 0.6,
+      "parent": "17___",
+      "terminal": 1
+     },
+     "Genus:sp15": {
+      "children": [],
+      "length": 0.578947368421053,
+      "parent": "1___",
+      "terminal": 1
+     },
+     "Genus:sp16": {
+      "children": [],
+      "length": 0.6,
+      "parent": "17___",
+      "terminal": 1
+     },
+     "Genus:sp17": {
+      "children": [],
+      "length": 0.978712425140997,
+      "parent": "20___",
+      "terminal": 1
+     },
+     "Genus:sp18": {
+      "children": [],
+      "length": 0.454545454545455,
+      "parent": "10___",
+      "terminal": 1
+     },
+     "Genus:sp19": {
+      "children": [],
+      "length": 0.6,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "Genus:sp2": {
+      "children": [],
+      "length": 0.461538461538462,
+      "parent": "23___",
+      "terminal": 1
+     },
+     "Genus:sp20": {
+      "children": [],
+      "length": 0.5,
+      "parent": "4___",
+      "terminal": 1
+     },
+     "Genus:sp21": {
+      "children": [],
+      "length": 0.454545454545455,
+      "parent": "10___",
+      "terminal": 1
+     },
+     "Genus:sp22": {
+      "children": [],
+      "length": 0.992769230769231,
+      "parent": "29___",
+      "terminal": 1
+     },
+     "Genus:sp23": {
+      "children": [],
+      "length": 0.434782608695652,
+      "parent": "6___",
+      "terminal": 1
+     },
+     "Genus:sp24": {
+      "children": [],
+      "length": 0.25,
+      "parent": "21___",
+      "terminal": 1
+     },
+     "Genus:sp25": {
+      "children": [],
+      "length": 0.25,
+      "parent": "21___",
+      "terminal": 1
+     },
+     "Genus:sp26": {
+      "children": [],
+      "length": 0.5,
+      "parent": "4___",
+      "terminal": 1
+     },
+     "Genus:sp27": {
+      "children": [],
+      "length": 0.666666666666667,
+      "parent": "14___",
+      "terminal": 1
+     },
+     "Genus:sp28": {
+      "children": [],
+      "length": 0,
+      "parent": "13___",
+      "terminal": 1
+     },
+     "Genus:sp29": {
+      "children": [],
+      "length": 0.598591139574746,
+      "parent": "8___",
+      "terminal": 1
+     },
+     "Genus:sp3": {
+      "children": [],
+      "length": 0.461538461538462,
+      "parent": "23___",
+      "terminal": 1
+     },
+     "Genus:sp30": {
+      "children": [],
+      "length": 0.434782608695652,
+      "parent": "6___",
+      "terminal": 1
+     },
+     "Genus:sp31": {
+      "children": [],
+      "length": 0,
+      "parent": "13___",
+      "terminal": 1
+     },
+     "Genus:sp4": {
+      "children": [],
+      "length": 0.697368421052632,
+      "parent": "26___",
+      "terminal": 1
+     },
+     "Genus:sp5": {
+      "children": [],
+      "length": 0.6,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "Genus:sp6": {
+      "children": [],
+      "length": 0.166666666666667,
+      "parent": "24___",
+      "terminal": 1
+     },
+     "Genus:sp7": {
+      "children": [],
+      "length": 0.166666666666667,
+      "parent": "24___",
+      "terminal": 1
+     },
+     "Genus:sp8": {
+      "children": [],
+      "length": 0.789473684210526,
+      "parent": "16___",
+      "terminal": 1
+     },
+     "Genus:sp9": {
+      "children": [],
+      "length": 0.789473684210526,
+      "parent": "16___",
+      "terminal": 1
+     }
+    },
+    "total_length": 21.182241998715547
+   }
+  ],
+  "Example_tree_with_colours.nex": [
+   {
+    "name": "Example_site_data_Cluster1",
+    "nodes": {
+     "100___": {
+      "children": [
+       "80___",
+       "78___"
+      ],
+      "length": 0.0686838624338624,
+      "parent": "107___",
+      "terminal": 0
+     },
+     "101___": {
+      "children": [
+       "30___",
+       "3750000:1650000"
+      ],
+      "length": 0.0583809523809524,
+      "parent": "106___",
+      "terminal": 0
+     },
+     "102___": {
+      "children": [
+       "94___",
+       "73___"
+      ],
+      "length": 0.146800976800977,
+      "parent": "113___",
+      "terminal": 0
+     },
+     "103___": {
+      "children": [
+       "87___",
+       "99___"
+      ],
+      "length": 0.113719108823275,
+      "parent": "110___",
+      "terminal": 0
+     },
+     "104___": {
+      "children": [
+       "93___",
+       "66___"
+      ],
+      "length": 0.133290043290043,
+      "parent": "112___",
+      "terminal": 0
+     },
+     "105___": {
+      "children": [
+       "98___",
+       "3550000:1950000"
+      ],
+      "length": 0.0258518518518518,
+      "parent": "108___",
+      "terminal": 0
+     },
+     "106___": {
+      "children": [
+       "97___",
+       "101___"
+      ],
+      "length": 0.0676859321234321,
+      "parent": "110___",
+      "terminal": 0
+     },
+     "107___": {
+      "children": [
+       "100___",
+       "84___"
+      ],
+      "length": 0.236554232804233,
+      "parent": "119___",
+      "terminal": 0
+     },
+     "108___": {
+      "children": [
+       "105___",
+       "95___"
+      ],
+      "length": 0.216778087653088,
+      "parent": "118___",
+      "terminal": 0
+     },
+     "109___": {
+      "children": [
+       "92___",
+       "3250000:750000"
+      ],
+      "length": 0.169878616753617,
+      "parent": "118___",
+      "terminal": 0
+     },
+     "110___": {
+      "children": [
+       "103___",
+       "106___"
+      ],
+      "length": 0.0524022024157472,
+      "parent": "114___",
+      "terminal": 0
+     },
+     "111___": {
+      "children": [
+       "96___",
+       "36___"
+      ],
+      "length": 0.0645396825396826,
+      "parent": "115___",
+      "terminal": 0
+     },
+     "112___": {
+      "children": [
+       "104___",
+       "3750000:1550000"
+      ],
+      "length": 0.0272480856991304,
+      "parent": "114___",
+      "terminal": 0
+     },
+     "113___": {
+      "children": [
+       "102___",
+       "74___"
+      ],
+      "length": 0.202434662499598,
+      "parent": "120___",
+      "terminal": 0
+     },
+     "114___": {
+      "children": [
+       "110___",
+       "112___"
+      ],
+      "length": 0.0792086850433544,
+      "parent": "117___",
+      "terminal": 0
+     },
+     "115___": {
+      "children": [
+       "111___",
+       "90___"
+      ],
+      "length": 0.228139833711262,
+      "parent": "122___",
+      "terminal": 0
+     },
+     "116___": {
+      "children": [
+       "91___",
+       "31___"
+      ],
+      "length": 0.197362580439503,
+      "parent": "121___",
+      "terminal": 0
+     },
+     "117___": {
+      "children": [
+       "114___",
+       "25___"
+      ],
+      "length": 0.102693398472619,
+      "parent": "120___",
+      "terminal": 0
+     },
+     "118___": {
+      "children": [
+       "108___",
+       "109___"
+      ],
+      "length": 0.153453742139087,
+      "parent": "123___",
+      "terminal": 0
+     },
+     "119___": {
+      "children": [
+       "107___",
+       "88___"
+      ],
+      "length": 0.119385865457294,
+      "parent": "122___",
+      "terminal": 0
+     },
+     "120___": {
+      "children": [
+       "117___",
+       "113___"
+      ],
+      "length": 0.0453247433367313,
+      "parent": "121___",
+      "terminal": 0
+     },
+     "121___": {
+      "children": [
+       "120___",
+       "116___"
+      ],
+      "length": 0.0534506405199558,
+      "parent": "124___",
+      "terminal": 0
+     },
+     "122___": {
+      "children": [
+       "115___",
+       "119___"
+      ],
+      "length": 0.0232454352343514,
+      "parent": "123___",
+      "terminal": 0
+     },
+     "123___": {
+      "children": [
+       "122___",
+       "118___"
+      ],
+      "length": 0.0154438250297185,
+      "parent": "124___",
+      "terminal": 0
+     },
+     "124___": {
+      "children": [
+       "121___",
+       "123___"
+      ],
+      "length": 0.022036241406132,
+      "parent": "125___",
+      "terminal": 0
+     },
+     "125___": {
+      "children": [
+       "124___",
+       "14___"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "14___": {
+      "children": [
+       "1950000:1350000",
+       "1950000:1450000",
+       "2050000:1350000"
+      ],
+      "length": 0.981182795698925,
+      "parent": "125___",
+      "terminal": 0
+     },
+     "15___": {
+      "children": [
+       "3750000:1850000",
+       "3850000:1350000",
+       "3950000:1750000"
+      ],
+      "length": 0.333333333333333,
+      "parent": "80___",
+      "terminal": 0
+     },
+     "17___": {
+      "children": [
+       "3450000:1250000",
+       "3550000:1250000"
+      ],
+      "length": 0.366666666666667,
+      "parent": "85___",
+      "terminal": 0
+     },
+     "1950000:1350000": {
+      "children": [],
+      "length": 0,
+      "parent": "14___",
+      "terminal": 1
+     },
+     "1950000:1450000": {
+      "children": [],
+      "length": 0,
+      "parent": "14___",
+      "terminal": 1
+     },
+     "2050000:1250000": {
+      "children": [],
+      "length": 0,
+      "parent": "33___",
+      "terminal": 1
+     },
+     "2050000:1350000": {
+      "children": [],
+      "length": 0,
+      "parent": "14___",
+      "terminal": 1
+     },
+     "20___": {
+      "children": [
+       "2150000:1150000",
+       "2450000:1250000",
+       "2550000:850000",
+       "2650000:850000",
+       "2650000:950000"
+      ],
+      "length": 0.326984126984127,
+      "parent": "71___",
+      "terminal": 0
+     },
+     "2150000:1050000": {
+      "children": [],
+      "length": 0,
+      "parent": "35___",
+      "terminal": 1
+     },
+     "2150000:1150000": {
+      "children": [],
+      "length": 0,
+      "parent": "20___",
+      "terminal": 1
+     },
+     "2150000:1250000": {
+      "children": [],
+      "length": 0,
+      "parent": "33___",
+      "terminal": 1
+     },
+     "2250000:1050000": {
+      "children": [],
+      "length": 0,
+      "parent": "29___",
+      "terminal": 1
+     },
+     "2250000:1250000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "74___",
+      "terminal": 1
+     },
+     "2250000:950000": {
+      "children": [],
+      "length": 0.111111111111111,
+      "parent": "43___",
+      "terminal": 1
+     },
+     "22___": {
+      "children": [
+       "3150000:150000",
+       "3150000:250000"
+      ],
+      "length": 0.142857142857143,
+      "parent": "47___",
+      "terminal": 0
+     },
+     "2350000:1050000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "77___",
+      "terminal": 1
+     },
+     "2350000:1150000": {
+      "children": [],
+      "length": 0,
+      "parent": "35___",
+      "terminal": 1
+     },
+     "2350000:1250000": {
+      "children": [],
+      "length": 0,
+      "parent": "29___",
+      "terminal": 1
+     },
+     "2350000:950000": {
+      "children": [],
+      "length": 0,
+      "parent": "40___",
+      "terminal": 1
+     },
+     "23___": {
+      "children": [
+       "3650000:1450000",
+       "3650000:1550000"
+      ],
+      "length": 0.2,
+      "parent": "58___",
+      "terminal": 0
+     },
+     "2450000:1050000": {
+      "children": [],
+      "length": 0.196428571428571,
+      "parent": "53___",
+      "terminal": 1
+     },
+     "2450000:1150000": {
+      "children": [],
+      "length": 0.142857142857143,
+      "parent": "51___",
+      "terminal": 1
+     },
+     "2450000:1250000": {
+      "children": [],
+      "length": 0,
+      "parent": "20___",
+      "terminal": 1
+     },
+     "2450000:950000": {
+      "children": [],
+      "length": 0,
+      "parent": "40___",
+      "terminal": 1
+     },
+     "24___": {
+      "children": [
+       "3050000:50000",
+       "3250000:450000"
+      ],
+      "length": 0.222222222222222,
+      "parent": "62___",
+      "terminal": 0
+     },
+     "2550000:1050000": {
+      "children": [],
+      "length": 0,
+      "parent": "30___",
+      "terminal": 1
+     },
+     "2550000:750000": {
+      "children": [],
+      "length": 0,
+      "parent": "25___",
+      "terminal": 1
+     },
+     "2550000:850000": {
+      "children": [],
+      "length": 0,
+      "parent": "20___",
+      "terminal": 1
+     },
+     "2550000:950000": {
+      "children": [],
+      "length": 0.142857142857143,
+      "parent": "51___",
+      "terminal": 1
+     },
+     "25___": {
+      "children": [
+       "2550000:750000",
+       "2650000:750000"
+      ],
+      "length": 0.757677771963486,
+      "parent": "117___",
+      "terminal": 0
+     },
+     "2650000:650000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "56___",
+      "terminal": 1
+     },
+     "2650000:750000": {
+      "children": [],
+      "length": 0,
+      "parent": "25___",
+      "terminal": 1
+     },
+     "2650000:850000": {
+      "children": [],
+      "length": 0,
+      "parent": "20___",
+      "terminal": 1
+     },
+     "2650000:950000": {
+      "children": [],
+      "length": 0,
+      "parent": "20___",
+      "terminal": 1
+     },
+     "26___": {
+      "children": [
+       "3150000:2950000",
+       "3250000:2150000"
+      ],
+      "length": 0.441666666666667,
+      "parent": "96___",
+      "terminal": 0
+     },
+     "2750000:650000": {
+      "children": [],
+      "length": 0,
+      "parent": "37___",
+      "terminal": 1
+     },
+     "2750000:750000": {
+      "children": [],
+      "length": 0.493894993894994,
+      "parent": "99___",
+      "terminal": 1
+     },
+     "2750000:850000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "77___",
+      "terminal": 1
+     },
+     "2750000:950000": {
+      "children": [],
+      "length": 0,
+      "parent": "29___",
+      "terminal": 1
+     },
+     "27___": {
+      "children": [
+       "2850000:650000",
+       "3050000:150000",
+       "3050000:350000",
+       "3150000:50000",
+       "3250000:150000"
+      ],
+      "length": 0.142857142857143,
+      "parent": "49___",
+      "terminal": 0
+     },
+     "2850000:650000": {
+      "children": [],
+      "length": 0,
+      "parent": "27___",
+      "terminal": 1
+     },
+     "2850000:750000": {
+      "children": [],
+      "length": 0,
+      "parent": "41___",
+      "terminal": 1
+     },
+     "2950000:250000": {
+      "children": [],
+      "length": 0,
+      "parent": "31___",
+      "terminal": 1
+     },
+     "2950000:350000": {
+      "children": [],
+      "length": 0,
+      "parent": "30___",
+      "terminal": 1
+     },
+     "2950000:50000": {
+      "children": [],
+      "length": 0,
+      "parent": "30___",
+      "terminal": 1
+     },
+     "2950000:650000": {
+      "children": [],
+      "length": 0.0909090909090909,
+      "parent": "42___",
+      "terminal": 1
+     },
+     "2950000:750000": {
+      "children": [],
+      "length": 0,
+      "parent": "41___",
+      "terminal": 1
+     },
+     "29___": {
+      "children": [
+       "2250000:1050000",
+       "2350000:1250000",
+       "2750000:950000"
+      ],
+      "length": 0.333333333333333,
+      "parent": "73___",
+      "terminal": 0
+     },
+     "3050000:150000": {
+      "children": [],
+      "length": 0,
+      "parent": "27___",
+      "terminal": 1
+     },
+     "3050000:250000": {
+      "children": [],
+      "length": 0,
+      "parent": "31___",
+      "terminal": 1
+     },
+     "3050000:350000": {
+      "children": [],
+      "length": 0,
+      "parent": "27___",
+      "terminal": 1
+     },
+     "3050000:50000": {
+      "children": [],
+      "length": 0,
+      "parent": "24___",
+      "terminal": 1
+     },
+     "3050000:550000": {
+      "children": [],
+      "length": 0,
+      "parent": "37___",
+      "terminal": 1
+     },
+     "3050000:650000": {
+      "children": [],
+      "length": 0.0909090909090909,
+      "parent": "42___",
+      "terminal": 1
+     },
+     "3050000:750000": {
+      "children": [],
+      "length": 0.198717948717949,
+      "parent": "54___",
+      "terminal": 1
+     },
+     "3050000:850000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "55___",
+      "terminal": 1
+     },
+     "30___": {
+      "children": [
+       "2550000:1050000",
+       "2950000:350000",
+       "2950000:50000",
+       "3150000:550000"
+      ],
+      "length": 0.5,
+      "parent": "101___",
+      "terminal": 0
+     },
+     "3150000:150000": {
+      "children": [],
+      "length": 0,
+      "parent": "22___",
+      "terminal": 1
+     },
+     "3150000:250000": {
+      "children": [],
+      "length": 0,
+      "parent": "22___",
+      "terminal": 1
+     },
+     "3150000:2950000": {
+      "children": [],
+      "length": 0,
+      "parent": "26___",
+      "terminal": 1
+     },
+     "3150000:350000": {
+      "children": [],
+      "length": 0.142857142857143,
+      "parent": "49___",
+      "terminal": 1
+     },
+     "3150000:50000": {
+      "children": [],
+      "length": 0,
+      "parent": "27___",
+      "terminal": 1
+     },
+     "3150000:550000": {
+      "children": [],
+      "length": 0,
+      "parent": "30___",
+      "terminal": 1
+     },
+     "3150000:650000": {
+      "children": [],
+      "length": 0,
+      "parent": "41___",
+      "terminal": 1
+     },
+     "3150000:750000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "60___",
+      "terminal": 1
+     },
+     "3150000:850000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "60___",
+      "terminal": 1
+     },
+     "31___": {
+      "children": [
+       "2950000:250000",
+       "3050000:250000"
+      ],
+      "length": 0.708333333333333,
+      "parent": "116___",
+      "terminal": 0
+     },
+     "3250000:150000": {
+      "children": [],
+      "length": 0,
+      "parent": "27___",
+      "terminal": 1
+     },
+     "3250000:2150000": {
+      "children": [],
+      "length": 0,
+      "parent": "26___",
+      "terminal": 1
+     },
+     "3250000:250000": {
+      "children": [],
+      "length": 0.142857142857143,
+      "parent": "47___",
+      "terminal": 1
+     },
+     "3250000:2850000": {
+      "children": [],
+      "length": 0,
+      "parent": "36___",
+      "terminal": 1
+     },
+     "3250000:2950000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "76___",
+      "terminal": 1
+     },
+     "3250000:3050000": {
+      "children": [],
+      "length": 0,
+      "parent": "38___",
+      "terminal": 1
+     },
+     "3250000:350000": {
+      "children": [],
+      "length": 0.327272727272727,
+      "parent": "72___",
+      "terminal": 1
+     },
+     "3250000:450000": {
+      "children": [],
+      "length": 0,
+      "parent": "24___",
+      "terminal": 1
+     },
+     "3250000:650000": {
+      "children": [],
+      "length": 0.142857142857143,
+      "parent": "50___",
+      "terminal": 1
+     },
+     "3250000:750000": {
+      "children": [],
+      "length": 0.62037037037037,
+      "parent": "109___",
+      "terminal": 1
+     },
+     "3250000:850000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "55___",
+      "terminal": 1
+     },
+     "3250000:950000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "79___",
+      "terminal": 1
+     },
+     "32___": {
+      "children": [
+       "3350000:2150000",
+       "3450000:2050000"
+      ],
+      "length": 0.266666666666667,
+      "parent": "67___",
+      "terminal": 0
+     },
+     "3350000:1050000": {
+      "children": [],
+      "length": 0,
+      "parent": "39___",
+      "terminal": 1
+     },
+     "3350000:1150000": {
+      "children": [],
+      "length": 0,
+      "parent": "39___",
+      "terminal": 1
+     },
+     "3350000:1250000": {
+      "children": [],
+      "length": 0,
+      "parent": "39___",
+      "terminal": 1
+     },
+     "3350000:1350000": {
+      "children": [],
+      "length": 0,
+      "parent": "39___",
+      "terminal": 1
+     },
+     "3350000:2050000": {
+      "children": [],
+      "length": 0,
+      "parent": "36___",
+      "terminal": 1
+     },
+     "3350000:2150000": {
+      "children": [],
+      "length": 0,
+      "parent": "32___",
+      "terminal": 1
+     },
+     "3350000:650000": {
+      "children": [],
+      "length": 0.142857142857143,
+      "parent": "50___",
+      "terminal": 1
+     },
+     "3350000:750000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "81___",
+      "terminal": 1
+     },
+     "3350000:850000": {
+      "children": [],
+      "length": 0.416666666666667,
+      "parent": "92___",
+      "terminal": 1
+     },
+     "3350000:950000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "79___",
+      "terminal": 1
+     },
+     "33___": {
+      "children": [
+       "2050000:1250000",
+       "2150000:1250000"
+      ],
+      "length": 0.333333333333333,
+      "parent": "73___",
+      "terminal": 0
+     },
+     "3450000:1050000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "58___",
+      "terminal": 1
+     },
+     "3450000:1150000": {
+      "children": [],
+      "length": 0.25,
+      "parent": "66___",
+      "terminal": 1
+     },
+     "3450000:1250000": {
+      "children": [],
+      "length": 0,
+      "parent": "17___",
+      "terminal": 1
+     },
+     "3450000:1350000": {
+      "children": [],
+      "length": 0,
+      "parent": "39___",
+      "terminal": 1
+     },
+     "3450000:1450000": {
+      "children": [],
+      "length": 0,
+      "parent": "39___",
+      "terminal": 1
+     },
+     "3450000:1550000": {
+      "children": [],
+      "length": 0,
+      "parent": "39___",
+      "terminal": 1
+     },
+     "3450000:2050000": {
+      "children": [],
+      "length": 0,
+      "parent": "32___",
+      "terminal": 1
+     },
+     "3450000:2150000": {
+      "children": [],
+      "length": 0,
+      "parent": "36___",
+      "terminal": 1
+     },
+     "3450000:650000": {
+      "children": [],
+      "length": 0.266666666666667,
+      "parent": "68___",
+      "terminal": 1
+     },
+     "3450000:750000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "81___",
+      "terminal": 1
+     },
+     "3450000:850000": {
+      "children": [],
+      "length": 0.25,
+      "parent": "66___",
+      "terminal": 1
+     },
+     "3450000:950000": {
+      "children": [],
+      "length": 0.125,
+      "parent": "46___",
+      "terminal": 1
+     },
+     "3550000:1050000": {
+      "children": [],
+      "length": 0.125,
+      "parent": "46___",
+      "terminal": 1
+     },
+     "3550000:1150000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "57___",
+      "terminal": 1
+     },
+     "3550000:1250000": {
+      "children": [],
+      "length": 0,
+      "parent": "17___",
+      "terminal": 1
+     },
+     "3550000:1450000": {
+      "children": [],
+      "length": 0.351851851851852,
+      "parent": "83___",
+      "terminal": 1
+     },
+     "3550000:1550000": {
+      "children": [],
+      "length": 0,
+      "parent": "39___",
+      "terminal": 1
+     },
+     "3550000:1950000": {
+      "children": [],
+      "length": 0.547619047619048,
+      "parent": "105___",
+      "terminal": 1
+     },
+     "3550000:2050000": {
+      "children": [],
+      "length": 0.142857142857143,
+      "parent": "48___",
+      "terminal": 1
+     },
+     "3550000:2150000": {
+      "children": [],
+      "length": 0,
+      "parent": "36___",
+      "terminal": 1
+     },
+     "3550000:2250000": {
+      "children": [],
+      "length": 0.142857142857143,
+      "parent": "48___",
+      "terminal": 1
+     },
+     "3550000:950000": {
+      "children": [],
+      "length": 0.25,
+      "parent": "65___",
+      "terminal": 1
+     },
+     "35___": {
+      "children": [
+       "2150000:1050000",
+       "2350000:1150000"
+      ],
+      "length": 0.333333333333333,
+      "parent": "74___",
+      "terminal": 0
+     },
+     "3650000:1150000": {
+      "children": [],
+      "length": 0.25,
+      "parent": "65___",
+      "terminal": 1
+     },
+     "3650000:1250000": {
+      "children": [],
+      "length": 0.365079365079365,
+      "parent": "84___",
+      "terminal": 1
+     },
+     "3650000:1350000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "61___",
+      "terminal": 1
+     },
+     "3650000:1450000": {
+      "children": [],
+      "length": 0,
+      "parent": "23___",
+      "terminal": 1
+     },
+     "3650000:1550000": {
+      "children": [],
+      "length": 0,
+      "parent": "23___",
+      "terminal": 1
+     },
+     "3650000:1650000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "59___",
+      "terminal": 1
+     },
+     "3650000:1750000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "59___",
+      "terminal": 1
+     },
+     "3650000:1850000": {
+      "children": [],
+      "length": 0.404761904761905,
+      "parent": "90___",
+      "terminal": 1
+     },
+     "3650000:1950000": {
+      "children": [],
+      "length": 0.111111111111111,
+      "parent": "44___",
+      "terminal": 1
+     },
+     "3650000:2050000": {
+      "children": [],
+      "length": 0.111111111111111,
+      "parent": "44___",
+      "terminal": 1
+     },
+     "3650000:2350000": {
+      "children": [],
+      "length": 0,
+      "parent": "38___",
+      "terminal": 1
+     },
+     "36___": {
+      "children": [
+       "3250000:2850000",
+       "3350000:2050000",
+       "3450000:2150000",
+       "3550000:2150000"
+      ],
+      "length": 0.627777777777778,
+      "parent": "111___",
+      "terminal": 0
+     },
+     "3750000:1250000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "78___",
+      "terminal": 1
+     },
+     "3750000:1350000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "78___",
+      "terminal": 1
+     },
+     "3750000:1450000": {
+      "children": [],
+      "length": 0.2,
+      "parent": "61___",
+      "terminal": 1
+     },
+     "3750000:1550000": {
+      "children": [],
+      "length": 0.651221001221001,
+      "parent": "112___",
+      "terminal": 1
+     },
+     "3750000:1650000": {
+      "children": [],
+      "length": 0.5,
+      "parent": "101___",
+      "terminal": 1
+     },
+     "3750000:1750000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "75___",
+      "terminal": 1
+     },
+     "3750000:1850000": {
+      "children": [],
+      "length": 0,
+      "parent": "15___",
+      "terminal": 1
+     },
+     "3750000:1950000": {
+      "children": [],
+      "length": 0.377777777777778,
+      "parent": "86___",
+      "terminal": 1
+     },
+     "3750000:2050000": {
+      "children": [],
+      "length": 0.155555555555556,
+      "parent": "52___",
+      "terminal": 1
+     },
+     "3750000:2150000": {
+      "children": [],
+      "length": 0.388888888888889,
+      "parent": "88___",
+      "terminal": 1
+     },
+     "37___": {
+      "children": [
+       "2750000:650000",
+       "3050000:550000"
+      ],
+      "length": 0.2,
+      "parent": "56___",
+      "terminal": 0
+     },
+     "3850000:1350000": {
+      "children": [],
+      "length": 0,
+      "parent": "15___",
+      "terminal": 1
+     },
+     "3850000:1450000": {
+      "children": [],
+      "length": 0.111111111111111,
+      "parent": "45___",
+      "terminal": 1
+     },
+     "3850000:1550000": {
+      "children": [],
+      "length": 0.291666666666667,
+      "parent": "70___",
+      "terminal": 1
+     },
+     "3850000:1650000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "82___",
+      "terminal": 1
+     },
+     "3850000:1750000": {
+      "children": [],
+      "length": 0.111111111111111,
+      "parent": "45___",
+      "terminal": 1
+     },
+     "3850000:1850000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "82___",
+      "terminal": 1
+     },
+     "3850000:1950000": {
+      "children": [],
+      "length": 0.333333333333333,
+      "parent": "80___",
+      "terminal": 1
+     },
+     "38___": {
+      "children": [
+       "3250000:3050000",
+       "3650000:2350000"
+      ],
+      "length": 0.333333333333333,
+      "parent": "76___",
+      "terminal": 0
+     },
+     "3950000:1750000": {
+      "children": [],
+      "length": 0,
+      "parent": "15___",
+      "terminal": 1
+     },
+     "39___": {
+      "children": [
+       "3350000:1050000",
+       "3350000:1150000",
+       "3350000:1250000",
+       "3350000:1350000",
+       "3450000:1350000",
+       "3450000:1450000",
+       "3450000:1550000",
+       "3550000:1550000"
+      ],
+      "length": 0.333333333333333,
+      "parent": "75___",
+      "terminal": 0
+     },
+     "40___": {
+      "children": [
+       "2350000:950000",
+       "2450000:950000"
+      ],
+      "length": 0.111111111111111,
+      "parent": "43___",
+      "terminal": 0
+     },
+     "41___": {
+      "children": [
+       "2850000:750000",
+       "2950000:750000",
+       "3150000:650000"
+      ],
+      "length": 0.268686868686869,
+      "parent": "69___",
+      "terminal": 0
+     },
+     "42___": {
+      "children": [
+       "2950000:650000",
+       "3050000:650000"
+      ],
+      "length": 0.107808857808858,
+      "parent": "54___",
+      "terminal": 0
+     },
+     "43___": {
+      "children": [
+       "40___",
+       "2250000:950000"
+      ],
+      "length": 0.133597883597884,
+      "parent": "64___",
+      "terminal": 0
+     },
+     "44___": {
+      "children": [
+       "3650000:1950000",
+       "3650000:2050000"
+      ],
+      "length": 0.0444444444444444,
+      "parent": "52___",
+      "terminal": 0
+     },
+     "45___": {
+      "children": [
+       "3850000:1450000",
+       "3850000:1750000"
+      ],
+      "length": 0.180555555555556,
+      "parent": "70___",
+      "terminal": 0
+     },
+     "46___": {
+      "children": [
+       "3450000:950000",
+       "3550000:1050000"
+      ],
+      "length": 0.075,
+      "parent": "57___",
+      "terminal": 0
+     },
+     "47___": {
+      "children": [
+       "22___",
+       "3250000:250000"
+      ],
+      "length": 0.0970238095238095,
+      "parent": "63___",
+      "terminal": 0
+     },
+     "48___": {
+      "children": [
+       "3550000:2050000",
+       "3550000:2250000"
+      ],
+      "length": 0.123809523809524,
+      "parent": "67___",
+      "terminal": 0
+     },
+     "49___": {
+      "children": [
+       "27___",
+       "3150000:350000"
+      ],
+      "length": 0.0793650793650793,
+      "parent": "62___",
+      "terminal": 0
+     },
+     "50___": {
+      "children": [
+       "3250000:650000",
+       "3350000:650000"
+      ],
+      "length": 0.123809523809524,
+      "parent": "68___",
+      "terminal": 0
+     },
+     "51___": {
+      "children": [
+       "2450000:1150000",
+       "2550000:950000"
+      ],
+      "length": 0.0535714285714285,
+      "parent": "53___",
+      "terminal": 0
+     },
+     "52___": {
+      "children": [
+       "44___",
+       "3750000:2050000"
+      ],
+      "length": 0.222222222222222,
+      "parent": "86___",
+      "terminal": 0
+     },
+     "53___": {
+      "children": [
+       "51___",
+       "2450000:1050000"
+      ],
+      "length": 0.0482804232804233,
+      "parent": "64___",
+      "terminal": 0
+     },
+     "54___": {
+      "children": [
+       "42___",
+       "3050000:750000"
+      ],
+      "length": 0.06996891996892,
+      "parent": "69___",
+      "terminal": 0
+     },
+     "55___": {
+      "children": [
+       "3050000:850000",
+       "3250000:850000"
+      ],
+      "length": 0.208333333333333,
+      "parent": "91___",
+      "terminal": 0
+     },
+     "56___": {
+      "children": [
+       "37___",
+       "2650000:650000"
+      ],
+      "length": 0.178306878306878,
+      "parent": "87___",
+      "terminal": 0
+     },
+     "57___": {
+      "children": [
+       "46___",
+       "3550000:1150000"
+      ],
+      "length": 0.229292929292929,
+      "parent": "93___",
+      "terminal": 0
+     },
+     "58___": {
+      "children": [
+       "23___",
+       "3450000:1050000"
+      ],
+      "length": 0.22989417989418,
+      "parent": "95___",
+      "terminal": 0
+     },
+     "59___": {
+      "children": [
+       "3650000:1650000",
+       "3650000:1750000"
+      ],
+      "length": 0.261111111111111,
+      "parent": "98___",
+      "terminal": 0
+     },
+     "60___": {
+      "children": [
+       "3150000:750000",
+       "3150000:850000"
+      ],
+      "length": 0.208333333333333,
+      "parent": "91___",
+      "terminal": 0
+     },
+     "61___": {
+      "children": [
+       "3650000:1350000",
+       "3750000:1450000"
+      ],
+      "length": 0.22989417989418,
+      "parent": "95___",
+      "terminal": 0
+     },
+     "62___": {
+      "children": [
+       "49___",
+       "24___"
+      ],
+      "length": 0.0176587301587302,
+      "parent": "63___",
+      "terminal": 0
+     },
+     "63___": {
+      "children": [
+       "62___",
+       "47___"
+      ],
+      "length": 0.0873917748917748,
+      "parent": "72___",
+      "terminal": 0
+     },
+     "64___": {
+      "children": [
+       "43___",
+       "53___"
+      ],
+      "length": 0.0822751322751323,
+      "parent": "71___",
+      "terminal": 0
+     },
+     "65___": {
+      "children": [
+       "3550000:950000",
+       "3650000:1150000"
+      ],
+      "length": 0.179292929292929,
+      "parent": "93___",
+      "terminal": 0
+     },
+     "66___": {
+      "children": [
+       "3450000:1150000",
+       "3450000:850000"
+      ],
+      "length": 0.267930957930958,
+      "parent": "104___",
+      "terminal": 0
+     },
+     "67___": {
+      "children": [
+       "32___",
+       "48___"
+      ],
+      "length": 0.175,
+      "parent": "96___",
+      "terminal": 0
+     },
+     "68___": {
+      "children": [
+       "50___",
+       "3450000:650000"
+      ],
+      "length": 0.191005291005291,
+      "parent": "97___",
+      "terminal": 0
+     },
+     "69___": {
+      "children": [
+       "54___",
+       "41___"
+      ],
+      "length": 0.132616280778046,
+      "parent": "89___",
+      "terminal": 0
+     },
+     "70___": {
+      "children": [
+       "45___",
+       "3850000:1550000"
+      ],
+      "length": 0.0734126984126984,
+      "parent": "84___",
+      "terminal": 0
+     },
+     "71___": {
+      "children": [
+       "64___",
+       "20___"
+      ],
+      "length": 0.102886002886003,
+      "parent": "94___",
+      "terminal": 0
+     },
+     "72___": {
+      "children": [
+       "63___",
+       "3250000:350000"
+      ],
+      "length": 0.0510341510341511,
+      "parent": "87___",
+      "terminal": 0
+     },
+     "73___": {
+      "children": [
+       "29___",
+       "33___"
+      ],
+      "length": 0.177802197802198,
+      "parent": "102___",
+      "terminal": 0
+     },
+     "74___": {
+      "children": [
+       "35___",
+       "2250000:1250000"
+      ],
+      "length": 0.324603174603175,
+      "parent": "113___",
+      "terminal": 0
+     },
+     "75___": {
+      "children": [
+       "39___",
+       "3750000:1750000"
+      ],
+      "length": 0.0185185185185185,
+      "parent": "83___",
+      "terminal": 0
+     },
+     "76___": {
+      "children": [
+       "38___",
+       "3250000:2950000"
+      ],
+      "length": 0.0555555555555556,
+      "parent": "88___",
+      "terminal": 0
+     },
+     "77___": {
+      "children": [
+       "2350000:1050000",
+       "2750000:850000"
+      ],
+      "length": 0.0965367965367966,
+      "parent": "94___",
+      "terminal": 0
+     },
+     "78___": {
+      "children": [
+       "3750000:1250000",
+       "3750000:1350000"
+      ],
+      "length": 0.1625,
+      "parent": "100___",
+      "terminal": 0
+     },
+     "79___": {
+      "children": [
+       "3250000:950000",
+       "3350000:950000"
+      ],
+      "length": 0.0833333333333334,
+      "parent": "92___",
+      "terminal": 0
+     },
+     "80___": {
+      "children": [
+       "15___",
+       "3850000:1950000"
+      ],
+      "length": 0.1625,
+      "parent": "100___",
+      "terminal": 0
+     },
+     "81___": {
+      "children": [
+       "3350000:750000",
+       "3450000:750000"
+      ],
+      "length": 0.0679698161315808,
+      "parent": "89___",
+      "terminal": 0
+     },
+     "82___": {
+      "children": [
+       "3850000:1650000",
+       "3850000:1850000"
+      ],
+      "length": 0.124338624338624,
+      "parent": "97___",
+      "terminal": 0
+     },
+     "83___": {
+      "children": [
+       "75___",
+       "3550000:1450000"
+      ],
+      "length": 0.0148148148148148,
+      "parent": "85___",
+      "terminal": 0
+     },
+     "84___": {
+      "children": [
+       "70___",
+       "3650000:1250000"
+      ],
+      "length": 0.199437830687831,
+      "parent": "107___",
+      "terminal": 0
+     },
+     "85___": {
+      "children": [
+       "83___",
+       "17___"
+      ],
+      "length": 0.0944444444444444,
+      "parent": "98___",
+      "terminal": 0
+     },
+     "86___": {
+      "children": [
+       "52___",
+       "3750000:1950000"
+      ],
+      "length": 0.0269841269841271,
+      "parent": "90___",
+      "terminal": 0
+     },
+     "87___": {
+      "children": [
+       "72___",
+       "56___"
+      ],
+      "length": 0.134040897374231,
+      "parent": "103___",
+      "terminal": 0
+     },
+     "88___": {
+      "children": [
+       "76___",
+       "3750000:2150000"
+      ],
+      "length": 0.41218253968254,
+      "parent": "119___",
+      "terminal": 0
+     },
+     "89___": {
+      "children": [
+       "69___",
+       "81___"
+      ],
+      "length": 0.0925918444300797,
+      "parent": "99___",
+      "terminal": 0
+     },
+     "90___": {
+      "children": [
+       "86___",
+       "3650000:1850000"
+      ],
+      "length": 0.287555555555556,
+      "parent": "115___",
+      "terminal": 0
+     },
+     "91___": {
+      "children": [
+       "55___",
+       "60___"
+      ],
+      "length": 0.3,
+      "parent": "116___",
+      "terminal": 0
+     },
+     "92___": {
+      "children": [
+       "79___",
+       "3350000:850000"
+      ],
+      "length": 0.203703703703704,
+      "parent": "109___",
+      "terminal": 0
+     },
+     "93___": {
+      "children": [
+       "57___",
+       "65___"
+      ],
+      "length": 0.0886380286380286,
+      "parent": "104___",
+      "terminal": 0
+     },
+     "94___": {
+      "children": [
+       "71___",
+       "77___"
+      ],
+      "length": 0.0812654012654013,
+      "parent": "102___",
+      "terminal": 0
+     },
+     "95___": {
+      "children": [
+       "58___",
+       "61___"
+      ],
+      "length": 0.14357671957672,
+      "parent": "108___",
+      "terminal": 0
+     },
+     "96___": {
+      "children": [
+       "67___",
+       "26___"
+      ],
+      "length": 0.186111111111111,
+      "parent": "111___",
+      "terminal": 0
+     },
+     "97___": {
+      "children": [
+       "68___",
+       "82___"
+      ],
+      "length": 0.100708994708995,
+      "parent": "106___",
+      "terminal": 0
+     },
+     "98___": {
+      "children": [
+       "85___",
+       "59___"
+      ],
+      "length": 0.0865079365079366,
+      "parent": "105___",
+      "terminal": 0
+     },
+     "99___": {
+      "children": [
+       "89___",
+       "2750000:750000"
+      ],
+      "length": 0.0184527817861152,
+      "parent": "103___",
+      "terminal": 0
+     }
+    },
+    "total_length": 35.44982344756989
+   }
+  ],
+  "tree_with_nonmatching_names.nex": [
+   {
+    "name": "'tree_with_typos'",
+    "nodes": {
+     "0___": {
+      "children": [
+       "Henus:sp19",
+       "Henus:sp5"
+      ],
+      "length": 0.077662337662338,
+      "parent": "2___",
+      "terminal": 0
+     },
+     "10___": {
+      "children": [
+       "Henus:sp21",
+       "Henus:sp18"
+      ],
+      "length": 0.34398017589557,
+      "parent": "11___",
+      "terminal": 0
+     },
+     "11___": {
+      "children": [
+       "9___",
+       "10___"
+      ],
+      "length": 0.075867662593738,
+      "parent": "12___",
+      "terminal": 0
+     },
+     "12___": {
+      "children": [
+       "5___",
+       "11___"
+      ],
+      "length": 0.057495084175743,
+      "parent": "15___",
+      "terminal": 0
+     },
+     "13___": {
+      "children": [
+       "Henus:sp28",
+       "Henus:sp31"
+      ],
+      "length": 0.666666666666667,
+      "parent": "14___",
+      "terminal": 0
+     },
+     "14___": {
+      "children": [
+       "13___",
+       "Henus:sp27"
+      ],
+      "length": 0.265221710543839,
+      "parent": "15___",
+      "terminal": 0
+     },
+     "15___": {
+      "children": [
+       "12___",
+       "14___"
+      ],
+      "length": 0.026396763298318,
+      "parent": "19___",
+      "terminal": 0
+     },
+     "16___": {
+      "children": [
+       "Henus:sp9",
+       "Henus:sp8"
+      ],
+      "length": 0.111319966583125,
+      "parent": "18___",
+      "terminal": 0
+     },
+     "17___": {
+      "children": [
+       "henus:sp14",
+       "Henus:sp16"
+      ],
+      "length": 0.300793650793651,
+      "parent": "18___",
+      "terminal": 0
+     },
+     "18___": {
+      "children": [
+       "16___",
+       "17___"
+      ],
+      "length": 0.0574914897151729,
+      "parent": "19___",
+      "terminal": 0
+     },
+     "19___": {
+      "children": [
+       "15___",
+       "18___"
+      ],
+      "length": 0.020427284632173,
+      "parent": "20___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "Henus:sp15",
+       "Genus:sp1"
+      ],
+      "length": 0.098714969241285,
+      "parent": "2___",
+      "terminal": 0
+     },
+     "20___": {
+      "children": [
+       "19___",
+       "Henus:sp17"
+      ],
+      "length": 0.00121523842637206,
+      "parent": "22___",
+      "terminal": 0
+     },
+     "21___": {
+      "children": [
+       "Henus:sp24",
+       "Henus:sp25"
+      ],
+      "length": 0.729927663567369,
+      "parent": "22___",
+      "terminal": 0
+     },
+     "22___": {
+      "children": [
+       "20___",
+       "21___"
+      ],
+      "length": 0.00291112550535999,
+      "parent": "28___",
+      "terminal": 0
+     },
+     "23___": {
+      "children": [
+       "Henus:sp2",
+       "Henus:sp3"
+      ],
+      "length": 0.160310277957336,
+      "parent": "25___",
+      "terminal": 0
+     },
+     "24___": {
+      "children": [
+       "Henus:sp6",
+       "Henus:sp7"
+      ],
+      "length": 0.455182072829131,
+      "parent": "25___",
+      "terminal": 0
+     },
+     "25___": {
+      "children": [
+       "23___",
+       "24___"
+      ],
+      "length": 0.075519681556834,
+      "parent": "26___",
+      "terminal": 0
+     },
+     "26___": {
+      "children": [
+       "25___",
+       "Henus:sp4"
+      ],
+      "length": 0.258187134502923,
+      "parent": "27___",
+      "terminal": 0
+     },
+     "27___": {
+      "children": [
+       "26___",
+       "Henus:sp13"
+      ],
+      "length": 0.027283233517174,
+      "parent": "28___",
+      "terminal": 0
+     },
+     "28___": {
+      "children": [
+       "22___",
+       "27___"
+      ],
+      "length": 0.00993044169650192,
+      "parent": "29___",
+      "terminal": 0
+     },
+     "29___": {
+      "children": [
+       "28___",
+       "Henus:sp22"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "2___": {
+      "children": [
+       "0___",
+       "1___"
+      ],
+      "length": 0.106700478344225,
+      "parent": "3___",
+      "terminal": 0
+     },
+     "3___": {
+      "children": [
+       "2___",
+       "Genus_sp10"
+      ],
+      "length": 0.05703610742759,
+      "parent": "5___",
+      "terminal": 0
+     },
+     "4___": {
+      "children": [
+       "Henus:sp26",
+       "Henus:sp20"
+      ],
+      "length": 0.341398923434153,
+      "parent": "5___",
+      "terminal": 0
+     },
+     "5___": {
+      "children": [
+       "3___",
+       "4___"
+      ],
+      "length": 0.03299436960061,
+      "parent": "12___",
+      "terminal": 0
+     },
+     "6___": {
+      "children": [
+       "Henus:sp23",
+       "Henus:sp30"
+      ],
+      "length": 0.051317777404734,
+      "parent": "7___",
+      "terminal": 0
+     },
+     "7___": {
+      "children": [
+       "6___",
+       "Henus:sp11"
+      ],
+      "length": 0.11249075347436,
+      "parent": "8___",
+      "terminal": 0
+     },
+     "8___": {
+      "children": [
+       "7___",
+       "Henus:sp29"
+      ],
+      "length": 0.0272381982058111,
+      "parent": "9___",
+      "terminal": 0
+     },
+     "9___": {
+      "children": [
+       "8___",
+       "Henus:sp12"
+      ],
+      "length": 0.172696292660468,
+      "parent": "11___",
+      "terminal": 0
+     },
+     "Genus:sp1": {
+      "children": [],
+      "length": 0.578947368421053,
+      "parent": "1___",
+      "terminal": 1
+     },
+     "Genus_sp10": {
+      "children": [],
+      "length": 0.784362816006563,
+      "parent": "3___",
+      "terminal": 1
+     },
+     "Henus:sp11": {
+      "children": [],
+      "length": 0.486100386100386,
+      "parent": "7___",
+      "terminal": 1
+     },
+     "Henus:sp12": {
+      "children": [],
+      "length": 0.625829337780557,
+      "parent": "9___",
+      "terminal": 1
+     },
+     "Henus:sp13": {
+      "children": [],
+      "length": 0.955555555555555,
+      "parent": "27___",
+      "terminal": 1
+     },
+     "Henus:sp15": {
+      "children": [],
+      "length": 0.578947368421053,
+      "parent": "1___",
+      "terminal": 1
+     },
+     "Henus:sp16": {
+      "children": [],
+      "length": 0.6,
+      "parent": "17___",
+      "terminal": 1
+     },
+     "Henus:sp17": {
+      "children": [],
+      "length": 0.978712425140997,
+      "parent": "20___",
+      "terminal": 1
+     },
+     "Henus:sp18": {
+      "children": [],
+      "length": 0.454545454545455,
+      "parent": "10___",
+      "terminal": 1
+     },
+     "Henus:sp19": {
+      "children": [],
+      "length": 0.6,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "Henus:sp2": {
+      "children": [],
+      "length": 0.461538461538462,
+      "parent": "23___",
+      "terminal": 1
+     },
+     "Henus:sp20": {
+      "children": [],
+      "length": 0.5,
+      "parent": "4___",
+      "terminal": 1
+     },
+     "Henus:sp21": {
+      "children": [],
+      "length": 0.454545454545455,
+      "parent": "10___",
+      "terminal": 1
+     },
+     "Henus:sp22": {
+      "children": [],
+      "length": 0.992769230769231,
+      "parent": "29___",
+      "terminal": 1
+     },
+     "Henus:sp23": {
+      "children": [],
+      "length": 0.434782608695652,
+      "parent": "6___",
+      "terminal": 1
+     },
+     "Henus:sp24": {
+      "children": [],
+      "length": 0.25,
+      "parent": "21___",
+      "terminal": 1
+     },
+     "Henus:sp25": {
+      "children": [],
+      "length": 0.25,
+      "parent": "21___",
+      "terminal": 1
+     },
+     "Henus:sp26": {
+      "children": [],
+      "length": 0.5,
+      "parent": "4___",
+      "terminal": 1
+     },
+     "Henus:sp27": {
+      "children": [],
+      "length": 0.666666666666667,
+      "parent": "14___",
+      "terminal": 1
+     },
+     "Henus:sp28": {
+      "children": [],
+      "length": 0,
+      "parent": "13___",
+      "terminal": 1
+     },
+     "Henus:sp29": {
+      "children": [],
+      "length": 0.598591139574746,
+      "parent": "8___",
+      "terminal": 1
+     },
+     "Henus:sp3": {
+      "children": [],
+      "length": 0.461538461538462,
+      "parent": "23___",
+      "terminal": 1
+     },
+     "Henus:sp30": {
+      "children": [],
+      "length": 0.434782608695652,
+      "parent": "6___",
+      "terminal": 1
+     },
+     "Henus:sp31": {
+      "children": [],
+      "length": 0,
+      "parent": "13___",
+      "terminal": 1
+     },
+     "Henus:sp4": {
+      "children": [],
+      "length": 0.697368421052632,
+      "parent": "26___",
+      "terminal": 1
+     },
+     "Henus:sp5": {
+      "children": [],
+      "length": 0.6,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "Henus:sp6": {
+      "children": [],
+      "length": 0.166666666666667,
+      "parent": "24___",
+      "terminal": 1
+     },
+     "Henus:sp7": {
+      "children": [],
+      "length": 0.166666666666667,
+      "parent": "24___",
+      "terminal": 1
+     },
+     "Henus:sp8": {
+      "children": [],
+      "length": 0.789473684210526,
+      "parent": "16___",
+      "terminal": 1
+     },
+     "Henus:sp9": {
+      "children": [],
+      "length": 0.789473684210526,
+      "parent": "16___",
+      "terminal": 1
+     },
+     "henus:sp14": {
+      "children": [],
+      "length": 0.6,
+      "parent": "17___",
+      "terminal": 1
+     }
+    },
+    "total_length": 21.18224199871555
+   }
+  ]
+ },
+ "newick": {
+  "all_zero": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "0___": {
+      "children": [
+       "a",
+       "b"
+      ],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "0___",
+       "c"
+      ],
+      "length": 1,
+      "parent": null,
+      "terminal": 0
+     },
+     "a": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "b": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "c": {
+      "children": [],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 1
+     }
+    },
+    "total_length": 5
+   }
+  ],
+  "boot": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "0___": {
+      "children": [
+       "a",
+       "b"
+      ],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "0___",
+       "c"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "a": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "b": {
+      "children": [],
+      "length": 2,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "c": {
+      "children": [],
+      "length": 3,
+      "parent": "1___",
+      "terminal": 1
+     }
+    },
+    "total_length": 7
+   }
+  ],
+  "duplicates": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "0___": {
+      "children": [
+       "b",
+       "x__dup1"
+      ],
+      "length": 2,
+      "parent": "1___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "x",
+       "0___"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "a": {
+      "children": [],
+      "length": 1,
+      "parent": "x",
+      "terminal": 1
+     },
+     "a__dup1": {
+      "children": [],
+      "length": 2,
+      "parent": "x",
+      "terminal": 1
+     },
+     "b": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "x": {
+      "children": [
+       "a",
+       "a__dup1"
+      ],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 0
+     },
+     "x__dup1": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     }
+    },
+    "total_length": 8
+   }
+  ],
+  "exponent": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "0___": {
+      "children": [
+       "a",
+       "b"
+      ],
+      "length": -0.5,
+      "parent": "1___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "0___",
+       "c"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "a": {
+      "children": [],
+      "length": 0.001,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "b": {
+      "children": [],
+      "length": 250,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "c": {
+      "children": [],
+      "length": 0.25,
+      "parent": "1___",
+      "terminal": 1
+     }
+    },
+    "total_length": 249.751
+   }
+  ],
+  "forest": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "0___": {
+      "children": [
+       "a",
+       "b"
+      ],
+      "length": 0,
+      "parent": "2___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "c",
+       "d"
+      ],
+      "length": 0,
+      "parent": "2___",
+      "terminal": 0
+     },
+     "2___": {
+      "children": [
+       "0___",
+       "1___"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "a": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "b": {
+      "children": [],
+      "length": 2,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "c": {
+      "children": [],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 1
+     },
+     "d": {
+      "children": [],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 1
+     }
+    },
+    "total_length": 5
+   }
+  ],
+  "internal_names": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "a": {
+      "children": [],
+      "length": 0.1,
+      "parent": "ab",
+      "terminal": 1
+     },
+     "ab": {
+      "children": [
+       "a",
+       "b"
+      ],
+      "length": 0.05,
+      "parent": "root",
+      "terminal": 0
+     },
+     "b": {
+      "children": [],
+      "length": 0.2,
+      "parent": "ab",
+      "terminal": 1
+     },
+     "c": {
+      "children": [],
+      "length": 0.3,
+      "parent": "cd",
+      "terminal": 1
+     },
+     "cd": {
+      "children": [
+       "c",
+       "d"
+      ],
+      "length": 0.06,
+      "parent": "root",
+      "terminal": 0
+     },
+     "d": {
+      "children": [],
+      "length": 0.4,
+      "parent": "cd",
+      "terminal": 1
+     },
+     "root": {
+      "children": [
+       "ab",
+       "cd"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     }
+    },
+    "total_length": 1.1099999999999999
+   }
+  ],
+  "phylip_two": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "0___": {
+      "children": [
+       "a",
+       "b"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "a": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "b": {
+      "children": [],
+      "length": 2,
+      "parent": "0___",
+      "terminal": 1
+     }
+    },
+    "total_length": 3
+   },
+   {
+    "name": "anonymous_1",
+    "nodes": {
+     "0___": {
+      "children": [
+       "a",
+       "b"
+      ],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "0___",
+       "c"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "a": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "b": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "c": {
+      "children": [],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 1
+     }
+    },
+    "total_length": 4
+   }
+  ],
+  "quoted": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "0___": {
+      "children": [
+       "a b",
+       "c'd"
+      ],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "0___",
+       "e:f"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "a b": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "c'd": {
+      "children": [],
+      "length": 2,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "e:f": {
+      "children": [],
+      "length": 3,
+      "parent": "1___",
+      "terminal": 1
+     }
+    },
+    "total_length": 7
+   }
+  ],
+  "simple": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "0___": {
+      "children": [
+       "a",
+       "b"
+      ],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "0___",
+       "c"
+      ],
+      "length": 0,
+      "parent": null,
+      "terminal": 0
+     },
+     "a": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "b": {
+      "children": [],
+      "length": 2,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "c": {
+      "children": [],
+      "length": 3,
+      "parent": "1___",
+      "terminal": 1
+     }
+    },
+    "total_length": 7
+   }
+  ],
+  "unnamed": [
+   {
+    "name": "anonymous_0",
+    "nodes": {
+     "0___": {
+      "children": [
+       "a",
+       "b"
+      ],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 0
+     },
+     "1___": {
+      "children": [
+       "0___",
+       "c"
+      ],
+      "length": 1,
+      "parent": "2___",
+      "terminal": 0
+     },
+     "2___": {
+      "children": [
+       "1___",
+       "d"
+      ],
+      "length": 1,
+      "parent": null,
+      "terminal": 0
+     },
+     "a": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "b": {
+      "children": [],
+      "length": 1,
+      "parent": "0___",
+      "terminal": 1
+     },
+     "c": {
+      "children": [],
+      "length": 1,
+      "parent": "1___",
+      "terminal": 1
+     },
+     "d": {
+      "children": [],
+      "length": 1,
+      "parent": "2___",
+      "terminal": 1
+     }
+    },
+    "total_length": 7
+   }
+  ]
+ }
+}

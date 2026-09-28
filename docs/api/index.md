@@ -10,6 +10,7 @@ import landschaft as ls             # most tools: ls.mspa, ls.fad, ls.Landscape.
 ls.conn.protconn(...)               # habitat networks and protected areas
 from landschaft import circuit      # Circuitscape
 ls.nlm.random(100, 100, seed=1)     # neutral landscape models
+ls.bio.BaseData.from_table(...)     # biodiversity analysis
 ```
 
 !!! example "Every example runs"
@@ -78,6 +79,12 @@ ls.nlm.random(100, 100, seed=1)     # neutral landscape models
     ---
 
     Simulated landscapes as null models: random, gradients, clusters, fractals.
+
+-   :material-paw:{ .lg .middle } **[Biodiversity analysis](biodiversity.md)**
+
+    ---
+
+    Species counts per cell, phylogenies and dissimilarity matrices (Biodiverse).
 
 </div>
 
@@ -282,22 +289,34 @@ ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 
 | Name | Summary |
 |---|---|
-| [`ls.random`](nlm.md#landschaft.nlm.random) | Spatially random neutral landscape model (NLMR's ``nlm_random``) |
-| [`ls.percolation`](nlm.md#landschaft.nlm.percolation) | Percolation neutral landscape model (NLMR's ``nlm_percolation``) |
-| [`ls.planar_gradient`](nlm.md#landschaft.nlm.planar_gradient) | Planar gradient neutral landscape model (NLMR's ``nlm_planargradient``) |
-| [`ls.edge_gradient`](nlm.md#landschaft.nlm.edge_gradient) | Edge gradient neutral landscape model (NLMR's ``nlm_edgegradient``) |
-| [`ls.distance_gradient`](nlm.md#landschaft.nlm.distance_gradient) | Distance gradient neutral landscape model (NLMR's ``nlm_distancegradient``) |
-| [`ls.mpd`](nlm.md#landschaft.nlm.mpd) | Midpoint displacement neutral landscape model (NLMR's ``nlm_mpd``) |
-| [`ls.fbm`](nlm.md#landschaft.nlm.fbm) | Fractional Brownian motion neutral landscape model (NLMR's ``nlm_fbm``) |
-| [`ls.gaussian_field`](nlm.md#landschaft.nlm.gaussian_field) | Gaussian random field neutral landscape model (NLMR's ``nlm_gaussianfield``) |
-| [`ls.mosaic_field`](nlm.md#landschaft.nlm.mosaic_field) | Mosaic random field neutral landscape model (NLMR's ``nlm_mosaicfield``, Schlather 1999) |
-| [`ls.mosaic_tess`](nlm.md#landschaft.nlm.mosaic_tess) | Polygonal (Voronoi) mosaic neutral landscape model (NLMR's ``nlm_mosaictess``, Gaucherel 2008) |
-| [`ls.mosaic_gibbs`](nlm.md#landschaft.nlm.mosaic_gibbs) | Gibbs-process Voronoi mosaic (NLMR's ``nlm_mosaicgibbs``, Gauchel et al. 2008) |
-| [`ls.random_cluster`](nlm.md#landschaft.nlm.random_cluster) | Random cluster neutral landscape model (NLMR's ``nlm_randomcluster``, Saura & Martínez-Millán 2000) |
-| [`ls.neigh`](nlm.md#landschaft.nlm.neigh) | Neighbourhood-based clusters (NLMR's ``nlm_neigh``, Scherer et al. 2016) |
-| [`ls.random_rectangular_cluster`](nlm.md#landschaft.nlm.random_rectangular_cluster) | Random rectangular clusters (NLMR's ``nlm_randomrectangularcluster``, Gaucherel 2008) |
-| [`ls.curds`](nlm.md#landschaft.nlm.curds) | Hierarchical curdling (NLMR's ``nlm_curds``, Keitt 2000) |
-| [`ls.classify`](nlm.md#landschaft.nlm.classify) | Classify a continuous landscape into categories (NLMR's ``landscape_classify``) |
-| [`ls.binarize`](nlm.md#landschaft.nlm.binarize) | Habitat / matrix maps at given habitat shares (landscapetools' ``util_binarize``) |
-| [`ls.rescale`](nlm.md#landschaft.nlm.rescale) | Linearly rescale values to 0-1 (NLMR's ``util_rescale``) |
-| [`ls.merge`](nlm.md#landschaft.nlm.merge) | Merge neutral landscapes (landscapetools' ``util_merge``) |
+| [`ls.nlm.random`](nlm.md#landschaft.nlm.random) | Spatially random neutral landscape model (NLMR's ``nlm_random``) |
+| [`ls.nlm.percolation`](nlm.md#landschaft.nlm.percolation) | Percolation neutral landscape model (NLMR's ``nlm_percolation``) |
+| [`ls.nlm.planar_gradient`](nlm.md#landschaft.nlm.planar_gradient) | Planar gradient neutral landscape model (NLMR's ``nlm_planargradient``) |
+| [`ls.nlm.edge_gradient`](nlm.md#landschaft.nlm.edge_gradient) | Edge gradient neutral landscape model (NLMR's ``nlm_edgegradient``) |
+| [`ls.nlm.distance_gradient`](nlm.md#landschaft.nlm.distance_gradient) | Distance gradient neutral landscape model (NLMR's ``nlm_distancegradient``) |
+| [`ls.nlm.mpd`](nlm.md#landschaft.nlm.mpd) | Midpoint displacement neutral landscape model (NLMR's ``nlm_mpd``) |
+| [`ls.nlm.fbm`](nlm.md#landschaft.nlm.fbm) | Fractional Brownian motion neutral landscape model (NLMR's ``nlm_fbm``) |
+| [`ls.nlm.gaussian_field`](nlm.md#landschaft.nlm.gaussian_field) | Gaussian random field neutral landscape model (NLMR's ``nlm_gaussianfield``) |
+| [`ls.nlm.mosaic_field`](nlm.md#landschaft.nlm.mosaic_field) | Mosaic random field neutral landscape model (NLMR's ``nlm_mosaicfield``, Schlather 1999) |
+| [`ls.nlm.mosaic_tess`](nlm.md#landschaft.nlm.mosaic_tess) | Polygonal (Voronoi) mosaic neutral landscape model (NLMR's ``nlm_mosaictess``, Gaucherel 2008) |
+| [`ls.nlm.mosaic_gibbs`](nlm.md#landschaft.nlm.mosaic_gibbs) | Gibbs-process Voronoi mosaic (NLMR's ``nlm_mosaicgibbs``, Gauchel et al. 2008) |
+| [`ls.nlm.random_cluster`](nlm.md#landschaft.nlm.random_cluster) | Random cluster neutral landscape model (NLMR's ``nlm_randomcluster``, Saura & Martínez-Millán 2000) |
+| [`ls.nlm.neigh`](nlm.md#landschaft.nlm.neigh) | Neighbourhood-based clusters (NLMR's ``nlm_neigh``, Scherer et al. 2016) |
+| [`ls.nlm.random_rectangular_cluster`](nlm.md#landschaft.nlm.random_rectangular_cluster) | Random rectangular clusters (NLMR's ``nlm_randomrectangularcluster``, Gaucherel 2008) |
+| [`ls.nlm.curds`](nlm.md#landschaft.nlm.curds) | Hierarchical curdling (NLMR's ``nlm_curds``, Keitt 2000) |
+| [`ls.nlm.classify`](nlm.md#landschaft.nlm.classify) | Classify a continuous landscape into categories (NLMR's ``landscape_classify``) |
+| [`ls.nlm.binarize`](nlm.md#landschaft.nlm.binarize) | Habitat / matrix maps at given habitat shares (landscapetools' ``util_binarize``) |
+| [`ls.nlm.rescale`](nlm.md#landschaft.nlm.rescale) | Linearly rescale values to 0-1 (NLMR's ``util_rescale``) |
+| [`ls.nlm.merge`](nlm.md#landschaft.nlm.merge) | Merge neutral landscapes (landscapetools' ``util_merge``) |
+
+### Biodiversity analysis
+
+| Name | Summary |
+|---|---|
+| [`ls.bio.BaseData`](biodiversity.md#landschaft.bio.BaseData) | Groups × labels sample counts with the group coordinates |
+| [`ls.bio.snap_coordinates`](biodiversity.md#landschaft.bio.snap_coordinates) | Cell centres as Biodiverse's text import computes them (before naming) |
+| [`ls.bio.Tree`](biodiversity.md#landschaft.bio.Tree) | A rooted phylogenetic tree |
+| [`ls.bio.read_tree`](biodiversity.md#landschaft.bio.read_tree) | Read one tree (the first, or the one with index/name ``index``) |
+| [`ls.bio.read_trees`](biodiversity.md#landschaft.bio.read_trees) | Read every tree in a Newick, Phylip (several Newicks) or Nexus file |
+| [`ls.bio.Matrix`](biodiversity.md#landschaft.bio.Matrix) | A symmetric matrix of values between elements (usually labels) |
+| [`ls.bio.read_matrix`](biodiversity.md#landschaft.bio.read_matrix) | Read a Biodiverse matrix file (full or lower/upper triangle, or sparse pairs) |

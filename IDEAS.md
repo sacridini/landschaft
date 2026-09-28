@@ -446,6 +446,138 @@ Fases:
    NLMpy (outra referência, com o gerador do numpy); portar a triangulação do GEOS para
    o `mosaictess`/`mosaicgibbs` dispensarem o shapely.
 
+## Análise de biodiversidade (Biodiverse)
+
+Análise de 2026-09-28. O Biodiverse 5.99_004 (`C:\Users\eduar\Documents\dev\biodiverse`, Perl,
+GPL-3, ~98 mil linhas em `lib/`, metade GUI Gtk) analisa a distribuição espacial da
+biodiversidade. O núcleo:
+- **BaseData**: matriz esparsa grupos × rótulos (células × espécies, contagem de amostras),
+  grupos com coordenadas em N eixos e tamanhos de célula; propriedades de rótulos e grupos;
+  importação de CSV, raster e shapefile;
+- **condições espaciais**: expressões Perl avaliadas por `eval` (`sp_circle(radius => r)`,
+  `sp_block`, `sp_annulus`, `sp_ellipse`, `sp_rectangle`, `sp_select_*`, `sp_is_left_of`,
+  `sp_in_line_with`, `$D`, `$C`, `$d[0]`, `$coord[1]`...) definindo um ou dois conjuntos de
+  vizinhos por grupo, e a *definition query*;
+- **análise espacial**: 119 cálculos, 382 índices (`indices.json`): contagens e listas,
+  endemismo, raridade, dissimilaridade taxonômica, estimadores de riqueza, rótulos
+  hierárquicos, filogenéticos (PD, família PE, AED, clade contributions/loss, turnover,
+  relativos RPD/RPE, PhyloCom MPD/MNTD/NRI/NTI, RWiBaLD), propriedades de rótulos e grupos
+  (estatísticas, quantis, Gi*), rótulos numéricos, matriz e Rao QE;
+- **randomizações** (`rand_structured`, `rand_csr_by_group`, independent swaps, curveball,
+  random walk, diffusion, espacialmente estruturada) e comparações `C_/Q_/P_/SUM_/T_`,
+  z-scores, significância e **CANAPE**;
+- **cluster e RegionGrower**: aglomerativo sobre a matriz de dissimilaridade dos grupos, com
+  as ligações do Biodiverse (average, average_unweighted, minimum, maximum, recalculate),
+  tie-breakers, restrição espacial e índices por nó da árvore;
+- árvores (Nexus/Newick) e matrizes de dissimilaridade entre rótulos.
+
+Fora do escopo: a GUI, os arquivos de projeto `.bds`/`.bps` (Sereal), o Remap GUI e a
+importação de planilhas (o pandas cobre).
+
+Proposta: motor C++ `src/cpp/bio/` e subpacote `landschaft.bio` (`ls.bio`):
+
+```python
+bd   = ls.bio.BaseData.from_table("sites.csv", label_columns=["genus", "species"],
+                                  group_columns=["x", "y"], cell_sizes=[100000, 100000])
+tree = ls.bio.read_tree("tree.nex")
+res  = ls.bio.spatial_analysis(bd, conditions=["sp_circle(radius=>200000)"],
+                               calculations=["endemism_whole", "pd", "pe"], tree=tree)
+res.table; res.to_raster("PE_WE")
+rnd  = ls.bio.randomise(bd, res, function="rand_structured", iterations=999, seed=42)
+ls.bio.canape(rnd)
+cl   = ls.bio.cluster(bd, index="SORENSON", linkage="average"); cl.to_raster(n_clusters=10)
+ls.bio.list_calculations()
+```
+
+- Nomes: índices com os nomes do Biodiverse (`PE_WE`, `ENDW_WE`), cálculos sem o prefixo
+  `calc_` (aceito também com ele); metadados a partir do `indices.json` (GPL-3).
+- Condições espaciais: parser da sintaxe do Biodiverse (funções `sp_*`, variáveis `$D`, `$C`,
+  `$d[i]`, `$D[i]`, `$coord[i]`, `&&`, `||`, `!`, comparações, aritmética) numa AST avaliada em
+  C++; callable Python como alternativa lenta.
+- Desempenho: vizinhança por índice em grade/KD (círculo, quadrado, anel, elipse, retângulo),
+  listas em CSR, OpenMP por grupo, reaproveitamento das vizinhanças de `sp_block`;
+  "estatísticas suficientes" por vizinhança (acumulador denso por thread + rótulos tocados)
+  alimentando todas as famílias de índices numa agregação; árvore em arrays em pós-ordem, PD
+  subindo até a raiz com marcas, ranges dos nós pré-computados; A/B/C entre todos os pares de
+  grupos por `X·Xᵀ` esparso (Eigen) ou GEMM em blocos; randomizações com arrays de inteiros,
+  geração sequencial (mesmo fluxo do original) e índices por iteração em paralelo, com modo
+  opcional de fluxos independentes para iterações em paralelo; `n_threads` em tudo.
+
+Formatos modernos (o núcleo só recebe arrays grupos/rótulos/contagens; formatos são
+adaptadores em Python, e a paridade é conferida pelo CSV):
+- `from_dataframe` (tabela longa grupo/rótulo/contagem ou larga), `from_sparse`
+  (scipy.sparse), `from_xarray`;
+- ocorrências do GBIF / Darwin Core (DwC-A ou CSV simples: `decimalLatitude`,
+  `decimalLongitude`, `species`/`taxonKey`, `individualCount`), com reprojeção e agregação em
+  células e filtros (`coordinateUncertaintyInMeters`, duplicatas, `basisOfRecord`);
+- pilhas de SDM (GeoTIFF/COG multibanda, NetCDF, Zarr; uma banda/variável por espécie, limiar
+  ou peso por probabilidade), lidas em blocos (dask) direto para a matriz esparsa;
+- GeoParquet e GeoPackage na entrada e na saída (resultados com a geometria das células), COG,
+  e o CSV no formato do Biodiverse;
+- CRS explícito no `BaseData` (unidades de `sp_circle` claras);
+- grades hexagonais e H3 (`h3` opcional), hexágonos do `make_grid`;
+- árvores: Newick/Nexus com parser próprio; objetos `Bio.Phylo`/`dendropy`/`ete` se
+  instalados;
+- formato nativo de sessão em Parquet/Zarr em vez do Sereal.
+Dependências novas só em extras opcionais (`h3`, `pygbif`, `dendropy`); `pyarrow` e
+`geopandas` já estão no extra `vector`.
+
+Critério de igualdade (decidido 2026-09-28): o Strawberry Perl usa `double` (sem long double
+nem x87). O Biodiverse soma vários valores na ordem do hash (`sum values %$nodes_in_path` no
+PD), que muda o último bit a cada execução. Referências com `PERL_HASH_SEED=0` e
+`PERL_PERTURB_KEYS=0` e um overlay no harness que troca essas somas pela ordem das chaves
+ordenadas; do nosso lado os ids de rótulos e nós seguem a ordem das strings, e a comparação é
+**bit a bit** contra o Biodiverse com o overlay, ~1e-12 contra o original sem patch. PRNG:
+`Math::Random::MT::Auto` (MT19937-64, `irand`, `rand`, `shuffle`, `binomial`, `gaussian`)
+portado do C; percentis de `Statistics::Descriptive`/PDL portados. Fixtures extras: os
+valores esperados embutidos em `biodiverse/t/24-Indices-*.t` (`__DATA__`). Checagem cruzada
+do CANAPE com o pacote R `canaper`.
+
+Referência: Strawberry Perl 5.42 (`C:\Strawberry`), dependências do Biodiverse com
+`cpanm -L` numa biblioteca própria (sem mexer na do Strawberry); shims no harness para o que
+não for preciso (GDAL), já que a referência lê CSV; `tools/make_reference_bio.py` +
+`tools/bio_reference.pl` gravando em `tests/data/reference/bio`.
+
+Fases:
+0. harness Perl (biblioteca própria, overlay de soma ordenada, script de referência), dados
+   de exemplo. **Feita** (0.61.0): `tools/bio_harness.py` monta o overlay reescrevendo
+   todo `keys`/`values`/`each`, `for my ($k, $v) (%h)`, `pairs`/`pairmap` sobre hashes
+   (1100+ pontos) para funções `LSK::*` que devolvem as chaves ordenadas respeitando o
+   contexto escalar, e o `foreach (values %h)` para uma fatia ordenada (mantém o alias);
+   `tools/bio_reference.pl` roda o Biodiverse sobre um job JSON e grava números com 17
+   dígitos. Biblioteca Perl em `%LOCALAPPDATA%/landschaft-bio-perl5` (`cpanm -L`, PDL
+   compilado); GDAL pelo `Geo::GDAL::FFI` apontado para o `gdal.dll` do ambiente conda
+   `geo` (módulo `Geo::GDAL::gdal` e um `Alien::gdal` de fachada); GSL 2.8 pelo
+   `Alien::GSL` (compilado com o MSYS) e `PDL::GSL` com um `bin/gsl-config.bat` que
+   responde versão e flags;
+1. `BaseData` (tabela, DataFrame, esparsa, xarray, pontos, raster, vetor, GeoParquet/GPKG,
+   CRS, `to_raster`, ranges, contagens), `Tree` (Nexus/Newick), `Matrix`. **Feita**
+   (0.61.0): tudo igual ao Biodiverse bit a bit (grupos, coordenadas, contagens, ranges,
+   árvores com os nomes `N___`/`__dupN`, matrizes), menos as áreas de polígonos (7e-15: o
+   Biodiverse corta primeiro numa grade 8× mais grossa). Descobertas: o Biodiverse pede
+   `quote_space => 0` ao Text::CSV_XS mas filtra a opção, então nomes com espaço ou tab
+   saem entre aspas (`'east west':11.25`); contagem vazia vira 0 (`// 0` antes do teste de
+   indefinido); a importação de texto arredonda `(x - origem) / tamanho` a 1e-10 antes do
+   `floor`, a de feições e a de raster não; números viram texto com `%.15g` e as
+   coordenadas são relidas do nome;
+1b. GBIF/Darwin Core e pilhas de SDM (em blocos);
+2. motor de vizinhança: parser das condições espaciais, todas as `sp_*`, *definition query*,
+   reaproveitamento de vizinhanças;
+3. análise espacial e índices não filogenéticos: contagens e listas, endemismo, raridade,
+   dissimilaridade taxonômica, estimadores de riqueza, rótulos hierárquicos;
+4. filogenéticos: PD, família PE, clade contributions/loss, AED, PD local, turnover
+   filogenético;
+5. filogenéticos relativos (RPD/RPE, árvores aparadas), PhyloCom (MPD/MNTD, NRI/NTI, valores
+   esperados, VPD), RWiBaLD, CWE/CWR;
+6. propriedades de rótulos e grupos (estatísticas, quantis, Gi*), rótulos numéricos, índices
+   de matriz, Rao QE;
+7. MT::Auto portado, randomizações, comparações, z-scores, significância, CANAPE;
+8. cluster e RegionGrower (ligações, tie-breakers, restrição espacial, índices por nó, export
+   Newick/Nexus);
+9. grades hexagonais/H3, formato nativo de sessão, árvores de `Bio.Phylo`/`dendropy`/`ete`;
+10. extras (IEI do BiodiverseX, export no formato do Biodiverse), tutorial, otimização
+    (janela incremental etc.).
+
 ## Observações para os testes
 
 - O círculo circunscrito do landscapemetrics usa um algoritmo aleatorizado: regerar
