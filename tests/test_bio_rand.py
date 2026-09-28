@@ -113,3 +113,11 @@ def test_randomisation_continues():
     b.run(case["iterations"] - 4)
     assert b.iterations == a.iterations
     np.testing.assert_array_equal(a.comparison().to_numpy(), b.comparison().to_numpy())
+
+
+def test_binomial_deviates_match_perl():
+    # Math::Random::MT::Auto->new(seed => 77)->binomial(p, n), first three rounds
+    cases = [(0.03, 10), (0.02, 30), (0.04, 100), (0.7, 50), (0.3, 200), (0.05, 1000), (0.5, 25)]
+    rng = ls._core.BioRandom(77)
+    got = [[rng.binomial(p, n) for p, n in cases] for _ in range(3)]
+    assert got == [[0, 1, 2, 34, 72, 43, 16], [0, 1, 0, 39, 50, 47, 11], [1, 0, 5, 38, 60, 47, 11]]

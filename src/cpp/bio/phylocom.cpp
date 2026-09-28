@@ -119,6 +119,81 @@ std::uint64_t MT64::algo() {
     return n1;
 }
 
+namespace {
+// _rand: (0, 1); _tan; _ln_gamma (Numerical Recipes), as in MRMA.xs
+inline double mt_rand_open(std::uint64_t x) {
+    return static_cast<double>(x >> 12) * 2.220446049250313080847263336181640625e-16 +
+           1.1102230246251565404236316680908203125e-16;
+}
+inline double mt_rand_neg1(std::uint64_t x) {
+    return static_cast<double>(static_cast<std::int64_t>(x) >> 11) * 2.220446049250313080847263336181640625e-16 +
+           1.1102230246251565404236316680908203125e-16;
+}
+double mt_ln_gamma(double x) {
+    double qq = x + 4.5;
+    qq -= (x - 0.5) * perl_log(qq);
+    const double ser = 1.000000000190015 + (76.18009172947146 / x) - (86.50532032941677 / (x + 1.0)) +
+                       (24.01409824083091 / (x + 2.0)) - (1.231739572450155 / (x + 3.0)) +
+                       (1.208650973866179e-3 / (x + 4.0)) - (5.395239384953e-6 / (x + 5.0));
+    return perl_log(2.5066282746310005 * ser) - qq;
+}
+}  // namespace
+
+std::int64_t MT64::binomial(double prob, std::int64_t trials) {
+    if (prob < 0.0 || prob > 1.0 || trials < 0) throw std::invalid_argument("Invalid argument(s) to 'binomial'");
+    const double p = (prob <= 0.5) ? prob : 1.0 - prob;
+    std::int64_t ret;
+    if (trials < 25) {
+        ret = 0;
+        for (std::int64_t ii = 1; ii <= trials; ++ii)
+            if (mt_rand_open(irand()) < p) ++ret;
+    } else {
+        const double mean = p * static_cast<double>(trials);
+        if (mean < 1.0) {
+            double bound = 1.0;
+            const double limit = perl_exp(-mean);
+            for (ret = 0; ret < trials; ++ret) {
+                bound *= mt_rand_open(irand());
+                if (bound < limit) break;
+            }
+        } else {
+            const double en = static_cast<double>(trials);
+            const double pc = 1.0 - p;
+            const double sq = std::sqrt(2.0 * mean * pc);
+            if (trials != b_trials_) {
+                b_trials_ = trials;
+                b_term_ = mt_ln_gamma(en + 1.0);
+            }
+            if (p != b_prob_) {
+                b_prob_ = p;
+                b_plog_ = perl_log(p);
+                b_pclog_ = perl_log(pc);
+            }
+            double em, bound, tang;
+            do {
+                do {
+                    double x2, y2;
+                    do {
+                        const std::uint64_t x1 = irand();
+                        const std::uint64_t y1 = irand();
+                        x2 = mt_rand_neg1(x1);
+                        y2 = mt_rand_neg1(y1);
+                    } while (x2 * x2 + y2 * y2 > 1.0);
+                    tang = y2 / x2;
+                    em = (sq * tang) + mean;
+                } while (em < 0.0 || em >= (en + 1.0));
+                em = std::floor(em);
+                bound = 1.2 * sq * (1.0 + tang * tang) *
+                        perl_exp(b_term_ - mt_ln_gamma(em + 1.0) - mt_ln_gamma(en - em + 1.0) + em * b_plog_ +
+                                 (en - em) * b_pclog_);
+            } while (mt_rand_open(irand()) > bound);
+            ret = static_cast<std::int64_t>(em);
+        }
+    }
+    if (p < prob) ret = trials - ret;
+    return ret;
+}
+
 std::vector<std::uint64_t> MT64::get_state() const {
     std::vector<std::uint64_t> s(state_, state_ + N);
     s.push_back(static_cast<std::uint64_t>(next_));

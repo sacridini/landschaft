@@ -666,9 +666,15 @@ Fases:
    Peculiaridades reproduzidas: `scalar @$obj` num DeterministicOrder vale sempre 2 (as
    remoções "se vazio" nunca ocorrem) e um `delete` remove um rótulo de uma lista de grupos.
    A escolha do j-ésimo grupo ainda livre usa uma árvore de Fenwick (0,95 s por
-   randomização com 90 mil grupos e 630 mil registros). Faltam 7c (trocas independentes,
-   curveball) e 7d (variantes espacialmente estruturadas, subconjuntos, rótulos fixos,
-   propriedades de grupo, árvores);
+   randomização com 90 mil grupos e 630 mil registros). **7c feita** (0.70.0):
+   `rand_independent_swaps`, `rand_independent_swaps_modified` (com o
+   Statistics::Sampler::Multinomial::Indexed portado) e `rand_curveball` (desvio binomial do
+   MT::Auto portado e conferido com o Perl nos três caminhos), com `swap_count`,
+   `max_swap_attempts`, `stop_on_all_swapped` e `use_max_swap`; 6 casos bit a bit. Na versão
+   modificada o Biodiverse nunca preenche os pares originais, então `stop_on_all_swapped` não
+   tem efeito, como lá. Ficam para depois: o modo hipergeométrico do curveball (desvio
+   gaussiano e CDF do GSL) e os pares de troca espaciais. Falta 7d (variantes espacialmente
+   estruturadas, subconjuntos, rótulos fixos, propriedades de grupo, árvores);
 8. cluster e RegionGrower (ligações, tie-breakers, restrição espacial, índices por nó, export
    Newick/Nexus);
 9. grades hexagonais/H3, formato nativo de sessão, árvores de `Bio.Phylo`/`dendropy`/`ete`;

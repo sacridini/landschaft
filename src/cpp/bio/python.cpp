@@ -255,6 +255,7 @@ void register_python(py::module_& m) {
         .def(py::init([](std::uint64_t seed) { return MT64({seed}); }), py::arg("seed"))
         .def("irand", &MT64::irand)
         .def("rand", &MT64::rand)
+        .def("binomial", &MT64::binomial, py::arg("prob"), py::arg("trials"))
         .def(
             "shuffle_indices",
             [](MT64& mt, i64 n) {
@@ -292,6 +293,40 @@ void register_python(py::module_& m) {
                                   py::array_t<double>(static_cast<py::ssize_t>(out.counts.size()), out.counts.data()));
         },
         "Biodiverse's rand_structured on a groups x labels CSR (the generator advances).");
+    m.def(
+        "bio_rand_swaps",
+        [](const CArray<i64>& indptr, const CArray<i32>& indices, const CArray<double>& counts, i64 n_groups,
+           i64 n_labels, MT64& rng, const CArray<double>& label_range, const std::string& kind, std::int64_t swap_count,
+           std::int64_t max_swap_attempts, bool stop_on_all_swapped, bool use_max_swap) {
+            CountsCsr bd;
+            bd.n_groups = n_groups;
+            bd.n_labels = n_labels;
+            bd.indptr.assign(indptr.data(), indptr.data() + indptr.size());
+            bd.indices.assign(indices.data(), indices.data() + indices.size());
+            bd.counts.assign(counts.data(), counts.data() + counts.size());
+            std::vector<double> ranges(label_range.data(), label_range.data() + label_range.size());
+            SwapOptions opt;
+            opt.swap_count = swap_count;
+            opt.max_swap_attempts = max_swap_attempts;
+            opt.stop_on_all_swapped = stop_on_all_swapped;
+            opt.use_max_swap = use_max_swap;
+            CountsCsr out;
+            {
+                py::gil_scoped_release release;
+                if (kind == "curveball")
+                    out = rand_curveball(bd, rng, opt);
+                else if (kind == "independent_swaps")
+                    out = rand_independent_swaps(bd, rng, ranges, opt, false);
+                else if (kind == "independent_swaps_modified")
+                    out = rand_independent_swaps(bd, rng, ranges, opt, true);
+                else
+                    throw std::invalid_argument("unknown swap randomisation " + kind);
+            }
+            return py::make_tuple(py::array_t<i64>(static_cast<py::ssize_t>(out.indptr.size()), out.indptr.data()),
+                                  py::array_t<i32>(static_cast<py::ssize_t>(out.indices.size()), out.indices.data()),
+                                  py::array_t<double>(static_cast<py::ssize_t>(out.counts.size()), out.counts.data()));
+        },
+        "Biodiverse's swap randomisations (independent swaps, modified, curveball) on a groups x labels CSR.");
     m.def(
         "bio_perl_sqrt",
         [](const CArray<double>& x) {

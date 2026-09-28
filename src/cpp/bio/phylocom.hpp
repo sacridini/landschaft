@@ -29,6 +29,8 @@ public:
     std::uint64_t irand();
     // Math::Random::MT::Auto::rand: [0, 1)
     double rand() { return static_cast<double>(irand() >> 12) * 2.220446049250313080847263336181640625e-16; }
+    // Math::Random::MT::Auto::binomial (prob, trials)
+    std::int64_t binomial(double prob, std::int64_t trials);
     // state vector, position and count left (for saving and resuming)
     std::vector<std::uint64_t> get_state() const;
     void set_state(const std::vector<std::uint64_t>& s);
@@ -47,6 +49,9 @@ private:
     int next_ = 0;
     std::int64_t left_ = 1;
     std::uint64_t algo();
+    // binomial's cached terms
+    std::int64_t b_trials_ = 0;
+    double b_term_ = 0, b_prob_ = 0, b_plog_ = 0, b_pclog_ = 0;
 };
 
 struct MpdStats {

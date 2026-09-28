@@ -56,10 +56,47 @@ def rand_structured(bd, rng, richness_multiplier: float = 1, richness_addition: 
     return _with_counts(bd, sp.csr_matrix((data, indices, indptr), shape=c.shape))
 
 
+def _swaps(kind: str, bd, rng, swap_count=0, max_swap_attempts=0, stop_on_all_swapped=False, use_max_swap=False,
+           use_hypergeometric=False, spatial_condition_for_swap_pairs=None):
+    import scipy.sparse as sp
+
+    from ._spatial import _basedata_view
+
+    if use_hypergeometric:
+        raise NotImplementedError("use_hypergeometric is not supported yet")
+    if spatial_condition_for_swap_pairs is not None:
+        raise NotImplementedError("spatial_condition_for_swap_pairs is not supported yet")
+    c = bd.counts
+    ranges = np.ascontiguousarray(_basedata_view(bd)["label_range"], dtype=np.float64)
+    indptr, indices, data = _core.bio_rand_swaps(
+        np.ascontiguousarray(c.indptr, dtype=np.int64), np.ascontiguousarray(c.indices, dtype=np.int32),
+        np.ascontiguousarray(c.data, dtype=np.float64), bd.n_groups, bd.n_labels, rng, ranges, kind,
+        int(swap_count or 0), int(max_swap_attempts or 0), bool(stop_on_all_swapped), bool(use_max_swap))
+    return _with_counts(bd, sp.csr_matrix((data, indices, indptr), shape=c.shape))
+
+
+def rand_independent_swaps(bd, rng, **args):
+    """Independent swaps (Gotelli 2000; Miklos & Podani 2004): keeps richness and ranges."""
+    return _swaps("independent_swaps", bd, rng, **args)
+
+
+def rand_independent_swaps_modified(bd, rng, **args):
+    """Independent swaps drawing labels by range and target groups by richness (fewer misses)."""
+    return _swaps("independent_swaps_modified", bd, rng, **args)
+
+
+def rand_curveball(bd, rng, **args):
+    """Curveball algorithm (Strona et al. 2014): keeps richness and ranges."""
+    return _swaps("curveball", bd, rng, **args)
+
+
 FUNCTIONS: dict[str, Callable] = {
     "rand_nochange": rand_nochange,
     "rand_csr_by_group": rand_csr_by_group,
     "rand_structured": rand_structured,
+    "rand_independent_swaps": rand_independent_swaps,
+    "rand_independent_swaps_modified": rand_independent_swaps_modified,
+    "rand_curveball": rand_curveball,
 }
 
 
@@ -260,8 +297,12 @@ def randomise(
         Randomisation: ``rand_structured`` (Biodiverse's default: labels go
         to random groups keeping each group's richness, optionally scaled
         by ``richness_multiplier`` and ``richness_addition``, and label
-        ranges), ``rand_csr_by_group`` (whole assemblages to random groups)
-        or ``rand_nochange``.
+        ranges), the swap algorithms ``rand_independent_swaps``,
+        ``rand_independent_swaps_modified`` and ``rand_curveball`` (both
+        richness and ranges kept; options ``swap_count``,
+        ``max_swap_attempts``, ``stop_on_all_swapped`` and, for curveball,
+        ``use_max_swap``), ``rand_csr_by_group`` (whole assemblages to
+        random groups) or ``rand_nochange``.
     iterations : int
         Iterations to run now (see :meth:`Randomisation.run` for more).
     seed : int, optional

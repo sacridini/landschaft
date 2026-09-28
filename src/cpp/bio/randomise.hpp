@@ -28,4 +28,21 @@ struct CountsCsr {
 // then swaps reach the targets (swap_to_reach_richness_targets).
 CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, double addition);
 
+// Swap options (0: Biodiverse's defaults, twice the non-zero cells and 100
+// times as many attempts).
+struct SwapOptions {
+    std::int64_t swap_count = 0;
+    std::int64_t max_swap_attempts = 0;
+    bool stop_on_all_swapped = false;
+    bool use_max_swap = false;  // curveball
+};
+
+// rand_independent_swaps and rand_independent_swaps_modified (Gotelli 2000;
+// Miklos & Podani 2004); label_range is Biodiverse's get_range.
+CountsCsr rand_independent_swaps(const CountsCsr& bd, MT64& rng, const std::vector<double>& label_range,
+                                 const SwapOptions& opt, bool modified);
+
+// rand_curveball (Strona et al. 2014), without the hypergeometric draws.
+CountsCsr rand_curveball(const CountsCsr& bd, MT64& rng, const SwapOptions& opt);
+
 }  // namespace bio

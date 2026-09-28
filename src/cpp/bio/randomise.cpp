@@ -4,9 +4,12 @@
 
 #include "bio/randomise.hpp"
 
+#include "bio/perlmath.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <memory>
 #include <set>
 #include <stdexcept>
 #include <unordered_map>
@@ -32,6 +35,7 @@ public:
         pos_[k] = arr_.size() - 1;
     }
     i32 at(std::size_t p) const { return arr_[p]; }
+    std::size_t pos(i32 k) const { return pos_.at(k); }
     void erase(i32 k) {
         auto it = pos_.find(k);
         if (it == pos_.end()) return;
@@ -107,7 +111,362 @@ void binsert(std::vector<i32>& v, i32 x) {
     v.insert(it, x);
 }
 
+// Statistics::Sampler::Multinomial::Indexed: a sum tree over integer weights
+class IndexedSampler {
+public:
+    explicit IndexedSampler(std::vector<double> data) : data_(std::move(data)) {
+        const auto n = static_cast<double>(data_.size());
+        const int max_depth = 1 + static_cast<int>(perl_log(n) / perl_log(2.0));
+        index_.assign(static_cast<std::size_t>(max_depth) + 1, {});
+        index_[static_cast<std::size_t>(max_depth)] = data_;
+        for (int level = max_depth - 1; level >= 0; --level) {
+            const auto& below = index_[static_cast<std::size_t>(level) + 1];
+            auto& cur = index_[static_cast<std::size_t>(level)];
+            cur.assign((below.size() + 1) / 2, 0.0);
+            for (std::size_t i = 0; i < below.size(); ++i) cur[i / 2] += below[i];
+        }
+    }
+    std::size_t draw(MT64& rng) const {
+        if (data_.size() == 1) return 0;
+        const double norm = index_[0][0];
+        double r = rng.rand() * norm;
+        std::size_t level = 1, left = 0, right = 1;
+        const std::size_t last = index_.size() - 1;
+        while (level < last) {
+            const auto& lv = index_[level];
+            const double v = left < lv.size() ? lv[left] : 0.0;
+            if (r <= v) {
+                left *= 2;
+                right = left + 1;
+            } else {
+                r -= v;
+                left = right * 2;
+                right = left + 1;
+            }
+            ++level;
+        }
+        const double d = left < data_.size() ? data_[left] : 0.0;
+        return r > d ? right : left;
+    }
+    void update(std::size_t iter, double value) {
+        const double diff = value - data_[iter];
+        data_[iter] = value;
+        index_.back()[iter] = value;
+        std::size_t idx = iter >> 1;
+        for (std::size_t level = index_.size() - 1; level-- > 0;) {
+            index_[level][idx] += diff;
+            idx >>= 1;
+        }
+    }
+
+private:
+    std::vector<double> data_;
+    std::vector<std::vector<double>> index_;
+};
+
+CountsCsr from_label_maps(i64 ng, i64 nl, const std::vector<std::map<i32, double>>& by_label) {
+    std::vector<std::map<i32, double>> by_group(static_cast<std::size_t>(ng));
+    for (i64 l = 0; l < nl; ++l)
+        for (const auto& kv : by_label[static_cast<std::size_t>(l)])
+            by_group[static_cast<std::size_t>(kv.first)][static_cast<i32>(l)] = kv.second;
+    CountsCsr out;
+    out.n_groups = ng;
+    out.n_labels = nl;
+    out.indptr.assign(static_cast<std::size_t>(ng) + 1, 0);
+    for (i64 g = 0; g < ng; ++g) {
+        for (const auto& kv : by_group[static_cast<std::size_t>(g)]) {
+            out.indices.push_back(kv.first);
+            out.counts.push_back(kv.second);
+        }
+        out.indptr[static_cast<std::size_t>(g) + 1] = static_cast<i64>(out.indices.size());
+    }
+    return out;
+}
+
+// int $rand->rand (n)
+inline std::size_t rand_index(MT64& rng, std::size_t n) {
+    return static_cast<std::size_t>(std::trunc(rng.rand() * static_cast<double>(n)));
+}
+
 }  // namespace
+
+CountsCsr rand_independent_swaps(const CountsCsr& bd, MT64& rng, const std::vector<double>& label_range,
+                                 const SwapOptions& opt, bool modified) {
+    const i64 ng = bd.n_groups, nl = bd.n_labels;
+    std::vector<std::map<i32, double>> gp_hash(static_cast<std::size_t>(nl));  // label -> group -> count
+    std::vector<i32> richness(static_cast<std::size_t>(ng), 0), variety(static_cast<std::size_t>(nl), 0);
+    for (i64 g = 0; g < ng; ++g)
+        for (i64 k = bd.indptr[g]; k < bd.indptr[g + 1]; ++k) {
+            const i32 l = bd.indices[static_cast<std::size_t>(k)];
+            gp_hash[static_cast<std::size_t>(l)][static_cast<i32>(g)] = bd.counts[static_cast<std::size_t>(k)];
+            ++richness[static_cast<std::size_t>(g)];
+            ++variety[static_cast<std::size_t>(l)];
+        }
+    std::vector<i32> groups, labels;  // not empty, name order
+    for (i64 g = 0; g < ng; ++g)
+        if (richness[static_cast<std::size_t>(g)]) groups.push_back(static_cast<i32>(g));
+    for (i64 l = 0; l < nl; ++l)
+        if (variety[static_cast<std::size_t>(l)]) labels.push_back(static_cast<i32>(l));
+    std::vector<std::uint8_t> max_range(static_cast<std::size_t>(nl), 0);
+    std::int64_t nonzero = 0;
+    for (i32 l : labels) {
+        nonzero += variety[static_cast<std::size_t>(l)];
+        if (label_range[static_cast<std::size_t>(l)] == static_cast<double>(groups.size()))
+            max_range[static_cast<std::size_t>(l)] = 1;
+    }
+    const std::int64_t target = opt.swap_count > 0 ? opt.swap_count : 2 * nonzero;
+    const std::int64_t max_attempts = opt.max_swap_attempts > 0 ? opt.max_swap_attempts : 100 * target;
+    std::int64_t swaps = 0, attempts = 0, moved = 0;
+    std::set<std::pair<i32, i32>> moved_pairs;  // (label, group)
+    const auto orig = gp_hash;
+    auto track = [&](i32 l, i32 g) {
+        if (!opt.stop_on_all_swapped) return;
+        if (orig[static_cast<std::size_t>(l)].count(g) && moved_pairs.insert({l, g}).second) ++moved;
+    };
+    auto truthy = [&](i32 l, i32 g) {
+        const auto& m = gp_hash[static_cast<std::size_t>(l)];
+        auto it = m.find(g);
+        return it != m.end() && it->second != 0;
+    };
+    // $gp_hash{l1}{g2} = delete $gp_hash{l2}{g2}; $gp_hash{l2}{g1} = delete $gp_hash{l1}{g1}
+    auto swap_cells = [&](i32 l1, i32 g1, i32 l2, i32 g2) {
+        auto& h1 = gp_hash[static_cast<std::size_t>(l1)];
+        auto& h2 = gp_hash[static_cast<std::size_t>(l2)];
+        auto i2 = h2.find(g2);
+        const double c22 = i2 != h2.end() ? i2->second : 0.0;
+        if (i2 != h2.end()) h2.erase(i2);
+        h1[g2] = c22;
+        auto i1 = h1.find(g1);
+        const double c11 = i1 != h1.end() ? i1->second : 0.0;
+        if (i1 != h1.end()) h1.erase(i1);
+        h2[g1] = c11;
+    };
+
+    if (!modified) {
+        while (swaps < target && attempts < max_attempts && moved < nonzero) {
+            ++attempts;
+            i32 l1 = labels[rand_index(rng, labels.size())];
+            if (max_range[static_cast<std::size_t>(l1)]) continue;
+            i32 l2 = labels[rand_index(rng, labels.size())];
+            bool stop = false;
+            while (l1 == l2) {
+                if (groups.size() == 1) {
+                    stop = true;
+                    break;
+                }
+                l2 = labels[rand_index(rng, labels.size())];
+            }
+            if (stop) break;
+            if (max_range[static_cast<std::size_t>(l2)]) continue;
+            const i32 g1 = groups[rand_index(rng, groups.size())];
+            i32 g2 = groups[rand_index(rng, groups.size())];
+            while (g1 == g2) g2 = groups[rand_index(rng, groups.size())];
+            if (!(truthy(l1, g1) && truthy(l2, g2))) {
+                std::swap(l1, l2);
+                if (!(truthy(l1, g1) && truthy(l2, g2))) continue;
+            }
+            if (truthy(l1, g2) || truthy(l2, g1)) continue;
+            track(l1, g1);
+            track(l2, g2);
+            swap_cells(l1, g1, l2, g2);
+            ++swaps;
+        }
+        return from_label_maps(ng, nl, gp_hash);
+    }
+
+    // modified: labels drawn by range, target groups by richness among the groups without the label
+    std::vector<double> ranges;
+    for (i32 l : labels) ranges.push_back(static_cast<double>(variety[static_cast<std::size_t>(l)]));
+    IndexedSampler label_sampler(ranges);
+    std::vector<DetOrder> gp_list(static_cast<std::size_t>(nl)), gp_shadow(static_cast<std::size_t>(nl));
+    std::vector<DetOrder> lb_list(static_cast<std::size_t>(ng));
+    std::vector<std::unique_ptr<IndexedSampler>> shadow_sampler(static_cast<std::size_t>(nl));
+    for (i32 l : labels) {
+        std::vector<i32> with, without;
+        for (const auto& kv : gp_hash[static_cast<std::size_t>(l)]) with.push_back(kv.first);
+        for (i32 g : groups)
+            if (!gp_hash[static_cast<std::size_t>(l)].count(g)) without.push_back(g);
+        gp_list[static_cast<std::size_t>(l)] = DetOrder(with);
+        gp_shadow[static_cast<std::size_t>(l)] = DetOrder(without);
+        if (!without.empty()) {
+            std::vector<double> w;
+            for (i32 g : without) w.push_back(static_cast<double>(richness[static_cast<std::size_t>(g)]));
+            shadow_sampler[static_cast<std::size_t>(l)].reset(new IndexedSampler(w));
+        }
+    }
+    for (i32 g : groups) {
+        std::vector<i32> ls;
+        for (i64 k = bd.indptr[g]; k < bd.indptr[g + 1]; ++k) ls.push_back(bd.indices[static_cast<std::size_t>(k)]);
+        lb_list[static_cast<std::size_t>(g)] = DetOrder(ls);
+    }
+    while (swaps < target && attempts < max_attempts && moved < nonzero) {
+        ++attempts;
+        const i32 l1 = labels[label_sampler.draw(rng)];
+        if (max_range[static_cast<std::size_t>(l1)]) continue;
+        auto& gl1 = gp_list[static_cast<std::size_t>(l1)];
+        const i32 g1 = gl1.at(rand_index(rng, gl1.size()));
+        const std::size_t it = shadow_sampler[static_cast<std::size_t>(l1)]->draw(rng);
+        const i32 g2 = gp_shadow[static_cast<std::size_t>(l1)].at(it);
+        auto& lb2 = lb_list[static_cast<std::size_t>(g2)];
+        const std::size_t key_count = lb2.size();
+        i32 l2 = lb2.at(rand_index(rng, key_count));
+        std::set<i32> checked;
+        bool skip = false;
+        while (lb_list[static_cast<std::size_t>(g1)].exists(l2) || max_range[static_cast<std::size_t>(l2)]) {
+            checked.insert(l2);
+            if (checked.size() >= key_count) {
+                skip = true;
+                break;
+            }
+            l2 = lb2.at(rand_index(rng, key_count));
+        }
+        if (skip) continue;
+        // (Biodiverse never fills the original pairs here, so no pair counts as moved)
+        swap_cells(l1, g1, l2, g2);
+        auto& gl2 = gp_list[static_cast<std::size_t>(l2)];
+        gl2.erase(g2);
+        gl1.push(g2);
+        gl1.erase(g1);
+        gl2.push(g1);
+        lb2.erase(l2);
+        lb_list[static_cast<std::size_t>(g1)].push(l2);
+        lb_list[static_cast<std::size_t>(g1)].erase(l1);
+        lb2.push(l1);
+        auto& s1 = gp_shadow[static_cast<std::size_t>(l1)];
+        auto& s2 = gp_shadow[static_cast<std::size_t>(l2)];
+        s1.push(g1);
+        s2.push(g2);
+        s1.erase(g2);
+        s2.erase(g1);
+        shadow_sampler[static_cast<std::size_t>(l1)]->update(s1.pos(g1), richness[static_cast<std::size_t>(g1)]);
+        shadow_sampler[static_cast<std::size_t>(l2)]->update(s2.pos(g2), richness[static_cast<std::size_t>(g2)]);
+        ++swaps;
+    }
+    return from_label_maps(ng, nl, gp_hash);
+}
+
+CountsCsr rand_curveball(const CountsCsr& bd, MT64& rng, const SwapOptions& opt) {
+    const i64 ng = bd.n_groups, nl = bd.n_labels;
+    std::vector<std::map<i32, double>> lb_hash(static_cast<std::size_t>(ng));  // group -> label -> count
+    std::vector<i32> variety(static_cast<std::size_t>(nl), 0);
+    for (i64 g = 0; g < ng; ++g)
+        for (i64 k = bd.indptr[g]; k < bd.indptr[g + 1]; ++k) {
+            const i32 l = bd.indices[static_cast<std::size_t>(k)];
+            lb_hash[static_cast<std::size_t>(g)][l] = bd.counts[static_cast<std::size_t>(k)];
+            ++variety[static_cast<std::size_t>(l)];
+        }
+    std::size_t n_labels = 0;
+    for (i32 v : variety)
+        if (v) ++n_labels;
+    std::vector<i32> groups;
+    std::int64_t nonzero = 0;
+    for (i64 g = 0; g < ng; ++g) {
+        const auto r = lb_hash[static_cast<std::size_t>(g)].size();
+        if (!r) continue;
+        if (r == n_labels) continue;  // full groups cannot swap
+        nonzero += static_cast<std::int64_t>(r);
+        groups.push_back(static_cast<i32>(g));
+    }
+    const auto orig = lb_hash;
+    const std::int64_t target = opt.swap_count > 0 ? opt.swap_count : 2 * nonzero;
+    const std::int64_t max_attempts = opt.max_swap_attempts > 0 ? opt.max_swap_attempts : 100 * target;
+    std::int64_t swaps = 0, attempts = 0, moved = 0;
+    std::set<std::pair<i32, i32>> moved_pairs;  // (group, label)
+    const std::size_t n = groups.size();
+    while (swaps < target && attempts < max_attempts && moved < nonzero && n > 1) {
+        ++attempts;
+        const i32 g1 = groups[static_cast<std::size_t>(rng.irand() % n)];
+        i32 g2 = groups[static_cast<std::size_t>(rng.irand() % n)];
+        while (g1 == g2) g2 = groups[static_cast<std::size_t>(rng.irand() % n)];
+        auto& labels1 = lb_hash[static_cast<std::size_t>(g1)];
+        auto& labels2 = lb_hash[static_cast<std::size_t>(g2)];
+        std::vector<i32> from1, from2;
+        for (const auto& kv : labels1)
+            if (!labels2.count(kv.first)) from1.push_back(kv.first);
+        for (const auto& kv : labels2)
+            if (!labels1.count(kv.first)) from2.push_back(kv.first);
+        const std::size_t n1 = std::min(from1.size(), from2.size()), n2 = std::max(from1.size(), from2.size());
+        if (!n1) continue;
+        std::vector<i32> swap1, swap2;
+        const double ratio = static_cast<double>(n1) / static_cast<double>(n2);
+        if (opt.use_max_swap) {
+            if (from1.size() > n1) rng.shuffle(from1);
+            from1.resize(n1);
+            if (from2.size() > n1) rng.shuffle(from2);
+            from2.resize(n1);
+            swap1 = from1;
+            swap2 = from2;
+        } else if (n1 == 1 || ratio <= 0.05) {
+            std::int64_t nswaps = 0;
+            if (n1 == 1)
+                nswaps = (rng.rand() > 1 / (1 + static_cast<double>(n2))) ? 1 : 0;
+            else
+                nswaps = static_cast<std::int64_t>(n1) - rng.binomial(ratio, static_cast<std::int64_t>(n1));
+            if (!nswaps) continue;
+            if (nswaps == 1) {
+                swap1.push_back(from1[static_cast<std::size_t>(rng.irand() % from1.size())]);
+                swap2.push_back(from2[static_cast<std::size_t>(rng.irand() % from2.size())]);
+            } else {
+                rng.shuffle(from1);
+                from1.resize(static_cast<std::size_t>(nswaps));
+                rng.shuffle(from2);
+                from2.resize(static_cast<std::size_t>(nswaps));
+                swap1 = from1;
+                swap2 = from2;
+            }
+        } else {
+            std::vector<i32> shuffled = from1;
+            shuffled.insert(shuffled.end(), from2.begin(), from2.end());
+            rng.shuffle(shuffled);
+            std::size_t s_count = 0, i = 0;
+            while (s_count != n1 && i < from1.size()) {
+                if (labels2.count(shuffled[i])) {
+                    swap2.push_back(shuffled[i]);
+                    ++s_count;
+                }
+                ++i;
+            }
+            i = from1.size();
+            while (s_count != 0 && i < shuffled.size()) {
+                if (labels1.count(shuffled[i])) {
+                    swap1.push_back(shuffled[i]);
+                    --s_count;
+                }
+                ++i;
+            }
+            if (swap1.empty()) continue;
+        }
+        if (opt.stop_on_all_swapped) {
+            for (std::size_t i = 0; i < swap1.size(); ++i) {
+                if (orig[static_cast<std::size_t>(g1)].count(swap1[i]) && moved_pairs.insert({g1, swap1[i]}).second)
+                    ++moved;
+                if (orig[static_cast<std::size_t>(g2)].count(swap2[i]) && moved_pairs.insert({g2, swap2[i]}).second)
+                    ++moved;
+            }
+        }
+        for (i32 l : swap1) {
+            labels2[l] = labels1.at(l);
+            labels1.erase(l);
+        }
+        for (i32 l : swap2) {
+            labels1[l] = labels2.at(l);
+            labels2.erase(l);
+        }
+        swaps += static_cast<std::int64_t>(swap1.size());
+    }
+    CountsCsr out;
+    out.n_groups = ng;
+    out.n_labels = nl;
+    out.indptr.assign(static_cast<std::size_t>(ng) + 1, 0);
+    for (i64 g = 0; g < ng; ++g) {
+        for (const auto& kv : lb_hash[static_cast<std::size_t>(g)]) {
+            out.indices.push_back(kv.first);
+            out.counts.push_back(kv.second);
+        }
+        out.indptr[static_cast<std::size_t>(g) + 1] = static_cast<i64>(out.indices.size());
+    }
+    return out;
+}
 
 CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, double addition) {
     const i64 ng = bd.n_groups, nl = bd.n_labels;
