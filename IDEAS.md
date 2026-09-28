@@ -659,9 +659,16 @@ Fases:
    conjuntos de vizinhança que os dados (`index_uses_nbr_lists`, agora extraído com as
    dependências por `make_reference_bio.py dependencies`), então `RICHNESS_SET2` etc. não
    aparecem com um conjunto; o `RECYCLED_SET` interno entra nas comparações e é ignorado.
-   A análise é refeita pelo `_evaluate` com as vizinhanças originais. Faltam 7b
-   (`rand_structured`), 7c (trocas independentes, curveball) e 7d (variantes espacialmente
-   estruturadas, subconjuntos, rótulos fixos, propriedades de grupo, árvores);
+   A análise é refeita pelo `_evaluate` com as vizinhanças originais. **7b feita** (0.69.0):
+   `rand_structured` em C++ (`src/cpp/bio/randomise.cpp`) com a fase de trocas
+   (`swap_to_reach_richness_targets`, incluindo o List::Unique::DeterministicOrder e suas
+   remoções por troca com o último), multiplicador e adição de riqueza; 4 casos bit a bit.
+   Peculiaridades reproduzidas: `scalar @$obj` num DeterministicOrder vale sempre 2 (as
+   remoções "se vazio" nunca ocorrem) e um `delete` remove um rótulo de uma lista de grupos.
+   A escolha do j-ésimo grupo ainda livre usa uma árvore de Fenwick (0,95 s por
+   randomização com 90 mil grupos e 630 mil registros). Faltam 7c (trocas independentes,
+   curveball) e 7d (variantes espacialmente estruturadas, subconjuntos, rótulos fixos,
+   propriedades de grupo, árvores);
 8. cluster e RegionGrower (ligações, tie-breakers, restrição espacial, índices por nó, export
    Newick/Nexus);
 9. grades hexagonais/H3, formato nativo de sessão, árvores de `Bio.Phylo`/`dendropy`/`ete`;

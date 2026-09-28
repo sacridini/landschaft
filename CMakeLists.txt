@@ -106,6 +106,7 @@ add_library(biocore STATIC
     src/cpp/bio/phylo.cpp
     src/cpp/bio/phylocom.cpp
     src/cpp/bio/props.cpp
+    src/cpp/bio/randomise.cpp
 )
 target_include_directories(biocore PUBLIC src/cpp)
 # Perl's maths on Windows is mingw's x87 libm (lsm/rmath.hpp).

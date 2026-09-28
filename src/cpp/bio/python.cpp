@@ -14,6 +14,7 @@
 #include "bio/indices.hpp"
 #include "bio/perlmath.hpp"
 #include "bio/phylocom.hpp"
+#include "bio/randomise.hpp"
 
 namespace py = pybind11;
 
@@ -271,6 +272,26 @@ void register_python(py::module_& m) {
                             mt.set_state(s);
                             return mt;
                         }));
+    m.def(
+        "bio_rand_structured",
+        [](const CArray<i64>& indptr, const CArray<i32>& indices, const CArray<double>& counts, i64 n_groups,
+           i64 n_labels, MT64& rng, double multiplier, double addition) {
+            CountsCsr bd;
+            bd.n_groups = n_groups;
+            bd.n_labels = n_labels;
+            bd.indptr.assign(indptr.data(), indptr.data() + indptr.size());
+            bd.indices.assign(indices.data(), indices.data() + indices.size());
+            bd.counts.assign(counts.data(), counts.data() + counts.size());
+            CountsCsr out;
+            {
+                py::gil_scoped_release release;
+                out = rand_structured(bd, rng, multiplier, addition);
+            }
+            return py::make_tuple(py::array_t<i64>(static_cast<py::ssize_t>(out.indptr.size()), out.indptr.data()),
+                                  py::array_t<i32>(static_cast<py::ssize_t>(out.indices.size()), out.indices.data()),
+                                  py::array_t<double>(static_cast<py::ssize_t>(out.counts.size()), out.counts.data()));
+        },
+        "Biodiverse's rand_structured on a groups x labels CSR (the generator advances).");
     m.def(
         "bio_perl_sqrt",
         [](const CArray<double>& x) {

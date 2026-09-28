@@ -44,9 +44,22 @@ def rand_csr_by_group(bd, rng, **_):
     return _with_counts(bd, bd.counts[inverse])
 
 
+def rand_structured(bd, rng, richness_multiplier: float = 1, richness_addition: float = 0, **_):
+    """Labels to random groups until each reaches its richness target, then swaps."""
+    import scipy.sparse as sp
+
+    c = bd.counts
+    indptr, indices, data = _core.bio_rand_structured(
+        np.ascontiguousarray(c.indptr, dtype=np.int64), np.ascontiguousarray(c.indices, dtype=np.int32),
+        np.ascontiguousarray(c.data, dtype=np.float64), bd.n_groups, bd.n_labels, rng,
+        float(richness_multiplier), float(richness_addition or 0))
+    return _with_counts(bd, sp.csr_matrix((data, indices, indptr), shape=c.shape))
+
+
 FUNCTIONS: dict[str, Callable] = {
     "rand_nochange": rand_nochange,
     "rand_csr_by_group": rand_csr_by_group,
+    "rand_structured": rand_structured,
 }
 
 
@@ -244,8 +257,11 @@ def randomise(
     result : SpatialResult
         The observed analysis (its neighbourhoods are kept).
     function : str
-        Randomisation: ``rand_csr_by_group`` (whole assemblages to random
-        groups) or ``rand_nochange``.
+        Randomisation: ``rand_structured`` (Biodiverse's default: labels go
+        to random groups keeping each group's richness, optionally scaled
+        by ``richness_multiplier`` and ``richness_addition``, and label
+        ranges), ``rand_csr_by_group`` (whole assemblages to random groups)
+        or ``rand_nochange``.
     iterations : int
         Iterations to run now (see :meth:`Randomisation.run` for more).
     seed : int, optional
@@ -255,6 +271,8 @@ def randomise(
         Name of the randomisation (default: the function).
     n_threads : int, optional
         Threads for the analyses (default: all cores but one).
+    **args
+        Arguments of the randomisation function.
 
     Returns
     -------

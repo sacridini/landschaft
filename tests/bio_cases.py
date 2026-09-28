@@ -312,6 +312,17 @@ RAND_CASES = {
                   "calcs": RAND_CALCS, "function": "rand_csr_by_group", "iterations": 5, "seed": 7},
     "nochange": {"basedata": "site_100k", "tree": "Example_tree.nex", "conditions": ["sp_self_only()"],
                  "calcs": ["calc_richness", "calc_pe"], "function": "rand_nochange", "iterations": 3, "seed": 1},
+    "structured": {"basedata": "site_100k", "tree": "Example_tree.nex", "conditions": ["sp_circle (radius => 200000)"],
+                   "calcs": RAND_CALCS, "function": "rand_structured", "iterations": 5, "seed": 42},
+    "structured_counts": {"basedata": "site_counts", "conditions": ["sp_self_only()"],
+                          "calcs": ["calc_richness", "calc_endemism_whole", "calc_rarity_whole"],
+                          "function": "rand_structured", "iterations": 5, "seed": 3},
+    "structured_half": {"basedata": "site_100k", "conditions": ["sp_self_only()"],
+                        "calcs": ["calc_richness", "calc_endemism_whole"], "function": "rand_structured",
+                        "iterations": 4, "seed": 9, "args": {"richness_multiplier": 0.5}},
+    "structured_more": {"basedata": "site_100k", "conditions": ["sp_self_only()"],
+                        "calcs": ["calc_richness", "calc_endemism_whole"], "function": "rand_structured",
+                        "iterations": 4, "seed": 11, "args": {"richness_multiplier": 1.2, "richness_addition": 1}},
 }
 
 
