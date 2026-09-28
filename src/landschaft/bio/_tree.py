@@ -135,6 +135,130 @@ class Tree:
                 d[node] = d[p] + 1
         return d
 
+    # -- other libraries ----------------------------------------------------------------
+    @classmethod
+    def from_biopython(cls, tree) -> Tree:
+        """From a ``Bio.Phylo`` tree (names and branch lengths kept exactly).
+
+        Examples
+        --------
+        >>> import io
+        >>> from Bio import Phylo
+        >>> import landschaft as ls
+        >>> bp = Phylo.read(io.StringIO("((a:1.5,b:2)x:0.25,c:3);"), "newick")
+        >>> ls.bio.Tree.from_biopython(bp).terminal_names
+        ['a', 'b', 'c']
+        """
+
+        def rec(clade) -> str:
+            s = ""
+            if clade.clades:
+                s = "(" + ",".join(rec(c) for c in clade.clades) + ")"
+            if clade.name:
+                s += _quote(clade.name)
+            if clade.branch_length is not None:
+                s += ":" + repr(float(clade.branch_length))
+            return s
+
+        return read_tree(rec(tree.root) + ";", format="newick")
+
+    def to_biopython(self):
+        """As a ``Bio.Phylo`` tree.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> t = ls.bio.read_tree("((a:1,b:2):0.5,c:3);", format="newick")
+        >>> sorted(c.name for c in t.to_biopython().get_terminals())
+        ['a', 'b', 'c']
+        """
+        import io
+
+        from Bio import Phylo
+
+        return Phylo.read(io.StringIO(self.to_newick()), "newick")
+
+    @classmethod
+    def from_dendropy(cls, tree) -> Tree:
+        """From a ``dendropy`` tree (taxon labels for terminals, node labels inside).
+
+        Examples
+        --------
+        >>> import dendropy
+        >>> import landschaft as ls
+        >>> dt = dendropy.Tree.get(data="((a:1,b:2)x:0.5,c:3);", schema="newick")
+        >>> ls.bio.Tree.from_dendropy(dt).terminal_names
+        ['a', 'b', 'c']
+        """
+
+        def rec(node) -> str:
+            kids = node.child_nodes()
+            s = ""
+            if kids:
+                s = "(" + ",".join(rec(c) for c in kids) + ")"
+            name = node.taxon.label if node.taxon is not None else node.label
+            if name:
+                s += _quote(name)
+            if node.edge_length is not None:
+                s += ":" + repr(float(node.edge_length))
+            return s
+
+        return read_tree(rec(tree.seed_node) + ";", format="newick")
+
+    def to_dendropy(self):
+        """As a ``dendropy`` tree (underscores kept in names).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> t = ls.bio.read_tree("((a:1,b:2):0.5,c:3);", format="newick")
+        >>> sorted(tx.label for tx in t.to_dendropy().taxon_namespace)
+        ['a', 'b', 'c']
+        """
+        import dendropy
+
+        return dendropy.Tree.get(data=self.to_newick(), schema="newick", preserve_underscores=True)
+
+    @classmethod
+    def from_ete(cls, tree) -> Tree:
+        """From an ``ete3``/``ete4`` tree.
+
+        Examples
+        --------
+        >>> from ete3 import Tree as EteTree
+        >>> import landschaft as ls
+        >>> et = EteTree("((a:1,b:2)x:0.5,c:3);", format=1)
+        >>> ls.bio.Tree.from_ete(et).terminal_names
+        ['a', 'b', 'c']
+        """
+
+        def rec(node) -> str:
+            kids = list(node.children)
+            s = ""
+            if kids:
+                s = "(" + ",".join(rec(c) for c in kids) + ")"
+            if node.name:
+                s += _quote(node.name)
+            if node.up is not None or node.dist:
+                s += ":" + repr(float(node.dist))
+            return s
+
+        return read_tree(rec(tree) + ";", format="newick")
+
+    def to_ete(self):
+        """As an ``ete3`` tree.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> t = ls.bio.read_tree("((a:1,b:2):0.5,c:3);", format="newick")
+        >>> sorted(t.to_ete().get_leaf_names())
+        ['a', 'b', 'c']
+        """
+        from ete3 import Tree as EteTree
+
+        return EteTree(self.to_newick(), format=1, quoted_node_names=True)
+
     def to_newick(self, lengths: bool = True) -> str:
         """Newick string (names quoted when needed)."""
 
@@ -153,6 +277,13 @@ class Tree:
             return s
 
         return rec(self.root) + ";"
+
+
+def _quote(name: str) -> str:
+    """A node name for Newick text (quoted when needed)."""
+    if re.search(r"[\s(),:;'\[\]]", name):
+        return "'" + name.replace("'", "''") + "'"
+    return name
 
 
 class _Builder:

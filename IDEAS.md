@@ -702,7 +702,14 @@ Fases:
    desempates por índice, `link_recalculate` com cache de ABC e a exportação; 2500 grupos em
    13 s;
 
-9. grades hexagonais/H3, formato nativo de sessão, árvores de `Bio.Phylo`/`dendropy`/`ete`;
+9. grades hexagonais/H3, formato nativo de sessão, árvores de `Bio.Phylo`/`dendropy`/`ete`.
+   **Feita** (0.73.0): `BaseData.from_hex` (hexágonos com ponta ou lado para cima, grupos nos
+   centros para as condições por distância) e `BaseData.from_h3` (`h3` opcional, centros em
+   graus, ids das células em `grid`), desenhados como hexágonos pelo `to_geodataframe`;
+   `BaseData.save`/`load` e `save_session`/`load_session` (zip de Parquet: base, árvores em
+   Newick, matrizes e resultados espaciais e de agrupamento); conversão de árvores para e de
+   Bio.Phylo, DendroPy e ete pelo Newick com precisão total (o escritor do Bio.Phylo arredonda
+   os comprimentos) lido pelo nosso parser compatível com o Biodiverse. Extra opcional `bio`;
 10. extras (IEI do BiodiverseX, export no formato do Biodiverse), tutorial, otimização
     (janela incremental etc.).
 

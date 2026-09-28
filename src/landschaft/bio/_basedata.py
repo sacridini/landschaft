@@ -173,6 +173,9 @@ class BaseData:
         if self.coords.shape[1] != len(self.cell_sizes):
             raise ValueError("one cell size per coordinate axis is needed")
         self.crs = crs
+        # cell shapes other than rectangles: {"type": "hex", "size", "orientation"} or
+        # {"type": "h3", "resolution", "cells"} (cells in group order)
+        self.grid: dict | None = None
         self._group_axes = None if group_axes is None else [list(ax) for ax in np.asarray(group_axes, dtype=object)[g_order]]
         self._group_index = {g: i for i, g in enumerate(self.groups)}
         self._label_index = {lb: i for i, lb in enumerate(self.labels)}
@@ -397,7 +400,19 @@ class BaseData:
         dx, dy = self.cell_sizes
         hx, hy = (dx / 2, dy / 2) if dx > 0 and dy > 0 else (0.0, 0.0)
         geoms = [box(x - hx, y - hy, x + hx, y + hy) if hx else None for x, y in self.coords]
-        if not hx:
+        grid = getattr(self, "grid", None)
+        if grid and grid.get("type") == "hex":
+            from ._grids import hex_polygon
+
+            geoms = [hex_polygon(x, y, grid["size"], grid.get("orientation", "pointy")) for x, y in self.coords]
+        elif grid and grid.get("type") == "h3":
+            from shapely.geometry import Polygon
+
+            from ._grids import _require_h3
+
+            h3 = _require_h3()
+            geoms = [Polygon([(lng, lat) for lat, lng in h3.cell_to_boundary(c)]) for c in grid["cells"]]
+        elif not hx:
             from shapely.geometry import Point
 
             geoms = [Point(x, y) for x, y in self.coords]
@@ -405,6 +420,147 @@ class BaseData:
         if values is not None:
             df = df.join(pd.DataFrame(values).reindex(self.groups))
         return gpd.GeoDataFrame(df, geometry=geoms, crs=self.crs)
+
+    # -- hexagonal and H3 grids --------------------------------------------------------
+    @classmethod
+    def from_hex(
+        cls,
+        data: pd.DataFrame,
+        x: Hashable,
+        y: Hashable,
+        label_column: Hashable | Sequence[Hashable],
+        size: float,
+        *,
+        orientation: str = "pointy",
+        origin: Sequence[float] = (0.0, 0.0),
+        count_column: Hashable | None = None,
+        crs: Any = None,
+    ) -> BaseData:
+        """Records aggregated into a hexagonal grid.
+
+        Groups are the hexagons' centres (``"x:y"``), so the distance-based
+        spatial conditions (``sp_circle``...) work on them; cells are drawn
+        as hexagons by :meth:`to_geodataframe`.
+
+        Parameters
+        ----------
+        data : pandas.DataFrame
+            One row per record.
+        x, y : column names
+            Record coordinates (projected units).
+        label_column : column name(s)
+            Label (species) column(s).
+        size : float
+            Distance from a hexagon's centre to its vertices.
+        orientation : {"pointy", "flat"}
+        origin : (float, float)
+            A hexagon centre.
+        count_column : column name, optional
+            Sample counts (default 1 per record).
+        crs : optional
+            Coordinate reference system of the coordinates.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import landschaft as ls
+        >>> df = pd.DataFrame({"sp": ["a", "b", "a"], "x": [0.1, 0.2, 5.0], "y": [0.0, 0.3, 0.0]})
+        >>> bd = ls.bio.BaseData.from_hex(df, "x", "y", "sp", 2.0)
+        >>> bd.groups
+        ['0:0', '3.4641016151:0']
+        """
+        from ._grids import _grouped, hex_centres
+
+        cx, cy = hex_centres(data[x].to_numpy(), data[y].to_numpy(), size, orientation, origin)
+        bd = _grouped(data, cx, cy, label_column, count_column)
+        bd.crs = crs
+        bd.grid = {"type": "hex", "size": float(size), "orientation": orientation}
+        return bd
+
+    @classmethod
+    def from_h3(
+        cls,
+        data: pd.DataFrame,
+        lat: Hashable,
+        lon: Hashable,
+        label_column: Hashable | Sequence[Hashable],
+        resolution: int,
+        *,
+        count_column: Hashable | None = None,
+    ) -> BaseData:
+        """Records aggregated into H3 cells (needs the ``h3`` package).
+
+        Groups are the cells' centres (``"lon:lat"``, EPSG:4326); the cell
+        ids are in ``grid["cells"]`` and the cells are drawn as hexagons by
+        :meth:`to_geodataframe`.
+
+        Parameters
+        ----------
+        data : pandas.DataFrame
+            One row per record.
+        lat, lon : column names
+            Record coordinates in degrees.
+        label_column : column name(s)
+        resolution : int
+            H3 resolution (0-15).
+        count_column : column name, optional
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import landschaft as ls
+        >>> df = pd.DataFrame({"sp": ["a", "b"], "lat": [-33.86, -33.87], "lon": [151.21, 151.2]})
+        >>> bd = ls.bio.BaseData.from_h3(df, "lat", "lon", "sp", 5)
+        >>> bd.grid["cells"]
+        ['85be0e37fffffff']
+        """
+        from ._grids import _grouped, _require_h3, h3_cells
+
+        h3 = _require_h3()
+        cells = h3_cells(data[lat].to_numpy(), data[lon].to_numpy(), resolution)
+        centres = {c: h3.cell_to_latlng(c) for c in set(cells)}
+        gx = np.round([centres[c][1] for c in cells], 10)
+        gy = np.round([centres[c][0] for c in cells], 10)
+        bd = _grouped(data, gx, gy, label_column, count_column)
+        bd.crs = "EPSG:4326"
+        cell_of = {}
+        for c, a, b in zip(cells, gx, gy):
+            cell_of[(a, b)] = c
+        bd.grid = {"type": "h3", "resolution": int(resolution),
+                   "cells": [cell_of[(float(px), float(py))] for px, py in bd.coords]}
+        return bd
+
+    # -- native format ------------------------------------------------------------------
+    def save(self, path) -> None:
+        """Save to landschaft's native format (a zip of Parquet tables; needs pyarrow).
+
+        Examples
+        --------
+        >>> import tempfile, pathlib
+        >>> import pandas as pd
+        >>> import landschaft as ls
+        >>> df = pd.DataFrame({"sp": ["a", "b"], "x": [0.5, 1.5], "y": [0.5, 0.5]})
+        >>> bd = ls.bio.BaseData.from_dataframe(df, ["x", "y"], "sp", cell_sizes=[1, 1])
+        >>> path = pathlib.Path(tempfile.mkdtemp()) / "sites.lsbio"
+        >>> bd.save(path)
+        >>> ls.bio.BaseData.load(path).groups
+        ['0.5:0.5', '1.5:0.5']
+        """
+        from ._session import save_basedata
+
+        save_basedata(self, path)
+
+    @classmethod
+    def load(cls, path) -> BaseData:
+        """Load a basedata saved with :meth:`save`.
+
+        Examples
+        --------
+        See :meth:`save`.
+        """
+        from ._session import load_basedata
+
+        return load_basedata(path)
 
     # -- construction ------------------------------------------------------------------
     @classmethod

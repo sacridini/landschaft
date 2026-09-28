@@ -25,9 +25,11 @@ from ._basedata import BaseData, snap_coordinates
 from ._cluster import ClusterResult, cluster, region_grower
 from ._conditions import Neighbourhoods, SpatialCondition, definition_query, neighbours
 from ._gbif import read_occurrences
+from ._grids import h3_cells, hex_centres
 from ._matrix import Matrix, read_matrix
 from ._properties import read_properties
 from ._randomise import Randomisation, randomise
+from ._session import load_session, save_session
 from ._spatial import SpatialResult, list_calculations, spatial_analysis
 from ._tree import Tree, read_tree, read_trees
 
@@ -42,13 +44,17 @@ __all__ = [
     "Tree",
     "cluster",
     "definition_query",
+    "h3_cells",
+    "hex_centres",
     "list_calculations",
+    "load_session",
     "neighbours",
     "read_matrix",
     "read_occurrences",
     "randomise",
     "read_properties",
     "region_grower",
+    "save_session",
     "read_tree",
     "read_trees",
     "snap_coordinates",

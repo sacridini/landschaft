@@ -129,6 +129,23 @@ spatially constrained clustering and the indices of each node's groups.
 
 ::: landschaft.bio.read_matrix
 
+## Grids and files
+
+Records can be aggregated into hexagons (`BaseData.from_hex`) or H3 cells
+(`BaseData.from_h3`, needs `h3`); cells are drawn as hexagons by
+`BaseData.to_geodataframe`. Basedatas are saved with `BaseData.save` and
+whole studies (basedatas, trees, matrices and results) with `save_session`,
+as zips of Parquet tables. Trees convert to and from Bio.Phylo, DendroPy and
+ete (`Tree.from_biopython`, `Tree.to_dendropy`...).
+
+::: landschaft.bio.hex_centres
+
+::: landschaft.bio.h3_cells
+
+::: landschaft.bio.save_session
+
+::: landschaft.bio.load_session
+
 ## Element properties
 
 Label and group properties (Biodiverse's element properties files) are
