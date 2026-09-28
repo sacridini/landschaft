@@ -316,6 +316,10 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.bio.BaseData`](biodiversity.md#landschaft.bio.BaseData) | Groups × labels sample counts with the group coordinates |
 | [`ls.bio.snap_coordinates`](biodiversity.md#landschaft.bio.snap_coordinates) | Cell centres as Biodiverse's text import computes them (before naming) |
 | [`ls.bio.read_occurrences`](biodiversity.md#landschaft.bio.read_occurrences) | Occurrence records of a GBIF download or a Darwin Core Archive, cleaned |
+| [`ls.bio.neighbours`](biodiversity.md#landschaft.bio.neighbours) | Neighbour sets of every group, as Biodiverse's spatial analysis finds them |
+| [`ls.bio.definition_query`](biodiversity.md#landschaft.bio.definition_query) | Boolean mask of the groups passing a definition query |
+| [`ls.bio.SpatialCondition`](biodiversity.md#landschaft.bio.SpatialCondition) | A Biodiverse spatial condition (Perl syntax) compiled for a BaseData |
+| [`ls.bio.Neighbourhoods`](biodiversity.md#landschaft.bio.Neighbourhoods) | Neighbour sets of the processing groups |
 | [`ls.bio.Tree`](biodiversity.md#landschaft.bio.Tree) | A rooted phylogenetic tree |
 | [`ls.bio.read_tree`](biodiversity.md#landschaft.bio.read_tree) | Read one tree (the first, or the one with index/name ``index``) |
 | [`ls.bio.read_trees`](biodiversity.md#landschaft.bio.read_trees) | Read every tree in a Newick, Phylip (several Newicks) or Nexus file |

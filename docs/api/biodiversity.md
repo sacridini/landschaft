@@ -42,6 +42,24 @@ with `BaseData.from_occurrences`.
 
 ::: landschaft.bio.read_occurrences
 
+## Neighbourhoods
+
+Spatial conditions are written as in Biodiverse, in its Perl syntax:
+`sp_circle (radius => 200000)`, `sp_block (size => 500000)`,
+`$D <= 3 && $nbr_y > $y`, `sp_match_text (text => 'wet', axis => 2)`... They
+select the neighbours of each processing group (up to two sets, the second
+leaving out the first), optionally only for the groups passing a definition
+query. The neighbour lists are the ones Biodiverse uses, including its reuse
+of lists between groups for non-overlapping conditions.
+
+::: landschaft.bio.neighbours
+
+::: landschaft.bio.definition_query
+
+::: landschaft.bio.SpatialCondition
+
+::: landschaft.bio.Neighbourhoods
+
 ## Phylogenies
 
 ::: landschaft.bio.Tree

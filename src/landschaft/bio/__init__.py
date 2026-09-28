@@ -22,6 +22,7 @@ Typical use::
 """
 
 from ._basedata import BaseData, snap_coordinates
+from ._conditions import Neighbourhoods, SpatialCondition, definition_query, neighbours
 from ._gbif import read_occurrences
 from ._matrix import Matrix, read_matrix
 from ._tree import Tree, read_tree, read_trees
@@ -29,7 +30,11 @@ from ._tree import Tree, read_tree, read_trees
 __all__ = [
     "BaseData",
     "Matrix",
+    "Neighbourhoods",
+    "SpatialCondition",
     "Tree",
+    "definition_query",
+    "neighbours",
     "read_matrix",
     "read_occurrences",
     "read_tree",

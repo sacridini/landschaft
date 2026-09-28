@@ -569,7 +569,25 @@ Fases:
    códigos inteiros e só nomeia os grupos distintos. Nomes com espaço: a importação de
    texto põe aspas como o Biodiverse; as de ocorrências e de pilhas mantêm o nome puro;
 2. motor de vizinhança: parser das condições espaciais, todas as `sp_*`, *definition query*,
-   reaproveitamento de vizinhanças;
+   reaproveitamento de vizinhanças. **Feita** (0.63.0): `ls.bio.neighbours`,
+   `definition_query`, `SpatialCondition`; parser de Perl (`_perlexpr.py`, precedência do
+   Perl, `my`, `qr//`, `q{}`) compilado para uma árvore avaliada em C++ por par de grupos
+   (`src/cpp/bio/conditions.cpp`, grade uniforme nos dois primeiros eixos quando a condição
+   limita a distância, OpenMP); as funções que só dependem de um grupo (texto, regex,
+   polígonos, riqueza) viram máscaras em Python. 48 casos iguais ao Biodiverse, inclusive as
+   peculiaridades: o "tipo de resultado" é deduzido do texto (junta os tipos das `sp_*`
+   chamadas: `sp_select_all() && $D < 5` pega todos os grupos, `sp_point_in_poly(...) && $D
+   < 2` usa a lista do primeiro grupo para todos) e as listas de vizinhos são reaproveitadas
+   entre grupos (`non_overlapping` só no primeiro conjunto, `text_match_exact`,
+   `always_true`, `always_same`), emulado em Python só quando a condição mistura essas
+   funções com termos que dependem do local. Descobertas: o Perl do Strawberry usa a mesma
+   libm x87 do mingw que o R (`lsm/rmath.hpp`: sin, cos, exp, log, atan2 batem 100%); o `**`
+   do Perl eleva a expoentes inteiros por quadrados em double (negativos: 1/x^n) e usa o
+   `powl` x87 nos demais (`bio/perlmath.hpp`); `$C[i]` sozinho fica indefinido (o
+   Biodiverse só calcula distâncias em células com `$C` ou `$c[i]`); `WHERE "campo" =
+   "2"` do SQLite compara número. 490 mil grupos, círculo de raio 3: 0,5 s. Ficam para as
+   fases seguintes as condições de ranges de rótulos, clusters, saídas espaciais e o
+   `sp_select_block` (aleatório);
 3. análise espacial e índices não filogenéticos: contagens e listas, endemismo, raridade,
    dissimilaridade taxonômica, estimadores de riqueza, rótulos hierárquicos;
 4. filogenéticos: PD, família PE, clade contributions/loss, AED, PD local, turnover

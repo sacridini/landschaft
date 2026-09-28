@@ -132,7 +132,7 @@ def _rewrite_hash_lists(src: str) -> tuple[str, int]:
         if h1 is None or h1 >= len(compact):
             continue
         out.append(src[i:h0])
-        out.append("LSK::kv(\\" + compact[:h1] + ")")
+        out.append("+LSK::kv(\\" + compact[:h1] + ")")
         i = k + h1 - 1
         count += 1
     out.append(src[i:])
@@ -174,7 +174,8 @@ def rewrite_perl(src: str) -> tuple[str, int]:
         expr = src[h0:h1]
         fn = {"keys": "k", "values": "v", "each": "e"}[m_each.group(1)]
         out.append(src[i:m_each.start()])
-        out.append(f"LSK::{fn}(\\{expr})")
+        # the unary plus stops `sort LSK::k(...)` being read as `sort SUBNAME LIST`
+        out.append(f"+LSK::{fn}(\\{expr})")
         i = h1
         count += 1
     return "".join(out), count

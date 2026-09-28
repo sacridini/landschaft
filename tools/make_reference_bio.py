@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors]
+    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors] [neighbours]
 
 ``data`` writes the synthetic inputs of ``tests/bio_cases.py`` into
 ``tests/data/bio``; the other parts run Biodiverse (Perl) through
@@ -108,6 +108,26 @@ def make_vectors(unsorted: bool) -> None:
     save("vectors", out)
 
 
+def make_neighbours(unsorted: bool) -> None:
+    out = {}
+    case = bio_cases.BASEDATA_CASES["site_100k"]
+    spec = dict(case["biodiverse"])
+    spec["file"] = _path(spec["file"])
+    shapes = _path("site_polygons.shp").replace("\\", "/")
+    tasks = []
+    for name, conds in bio_cases.NEIGHBOUR_CASES.items():
+        conds = [c.replace("SHAPES", shapes) for c in conds]
+        task = {"type": "neighbours", "name": name, "spatial_conditions": conds}
+        if name in bio_cases.NEIGHBOUR_DEFQ:
+            task["definition_query"] = bio_cases.NEIGHBOUR_DEFQ[name]
+        tasks.append(task)
+    print("neighbours")
+    res = run({"basedata": spec, "tasks": tasks}, unsorted)
+    for name in bio_cases.NEIGHBOUR_CASES:
+        out[name] = res[name]
+    save("neighbours", out)
+
+
 def make_trees(unsorted: bool) -> None:
     out = {"files": {}, "newick": {}}
     for f in bio_cases.TREE_FILES:
@@ -130,11 +150,12 @@ def make_matrices(unsorted: bool) -> None:
 
 def main(argv: list[str]) -> None:
     unsorted = "--unsorted" in argv
-    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors"]
+    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours"]
     if "data" in parts:
         bio_cases.write_synthetic_data()
         bio_cases.write_rasters()
         bio_cases.write_points()
+        bio_cases.write_site_polygons()
         print("wrote synthetic inputs")
     if not bio_harness.available():
         sys.exit("Biodiverse/Strawberry Perl not found (see tools/bio_harness.py)")
@@ -148,6 +169,8 @@ def main(argv: list[str]) -> None:
         make_rasters(unsorted)
     if "vectors" in parts:
         make_vectors(unsorted)
+    if "neighbours" in parts:
+        make_neighbours(unsorted)
 
 
 if __name__ == "__main__":

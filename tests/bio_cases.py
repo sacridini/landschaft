@@ -77,6 +77,60 @@ VECTOR_CASES = {
                      "measure": "length"},
 }
 
+# spatial conditions on the site data (100 km cells); polygons in site coordinates
+_POLY = "[[3000000,1000000],[3000000,3000000],[4000000,3000000],[3500000,2200000],[4000000,1000000],[3000000,1000000]]"
+NEIGHBOUR_CASES = {
+    "D_le": ["$D <= 300000"],
+    "C_le": ["$C <= 2"],
+    "circle": ["sp_circle (radius => 250000)"],
+    "circle_axis": ["sp_circle (radius => 250000, axes => [0])"],
+    "circle_cell": ["sp_circle_cell (radius => 2)"],
+    "circle_cell_axes": ["sp_circle_cell (radius => 1.5, axes => [1])"],
+    "rectangle": ["sp_rectangle (sizes => [300000, 500000])"],
+    "rectangle_axes": ["sp_rectangle (sizes => [500000, 300000], axes => [1, 0])"],
+    "annulus": ["sp_annulus (inner_radius => 100000, outer_radius => 300000)"],
+    "annulus_axes": ["sp_annulus (inner_radius => 100000, outer_radius => 300000, axes => [0])"],
+    "square": ["sp_square (size => 500000)"],
+    "square_cell": ["sp_square_cell (size => 3)"],
+    "ellipse": ["sp_ellipse (major_radius => 400000, minor_radius => 150000, rotate_angle_deg => 30)"],
+    "ellipse_rad": ["sp_ellipse (major_radius => 300000, minor_radius => 100000, rotate_angle => 1.5714)"],
+    "block": ["sp_block (size => 300000)"],
+    "block_axis": ["sp_block (size => [300000, undef])"],
+    "block_origin": ["sp_block (size => 400000, origin => [50000, 150000])"],
+    "self_only": ["sp_self_only()"],
+    "select_all": ["sp_select_all()"],
+    "left": ["sp_is_left_of (vector_angle_deg => 45)"],
+    "right": ["sp_is_right_of (vector_angle => 1.2)"],
+    "in_line": ["sp_in_line_with ()"],
+    "d_list": ["$d[0] >= 0 && $D[1] <= 200000"],
+    "nbr_y": ["$nbr_y > $y && $D <= 400000"],
+    "match_text": ["sp_match_text (text => '3250000', axis => 0)"],
+    "match_text_proc": ["sp_match_text (text => $coord[1], axis => 1) && $D < 1000000"],
+    "match_regex": ["sp_match_regex (re => qr/^3[0-4]/, axis => 0, type => 'nbr')"],
+    "richness": ["sp_richness_greater_than (threshold => 5)"],
+    "redundancy": ["sp_redundancy_greater_than (threshold => 0.3)"],
+    "not_empty": ["sp_group_not_empty() && $D <= 200000"],
+    "select_element": ["sp_select_element (element => '3350000:850000')"],
+    "point_in_poly": [f"sp_point_in_poly (polygon => {_POLY})"],
+    "point_in_poly_proc": [f"sp_point_in_poly (polygon => {_POLY}, point => \\@coord) && $D <= 200000"],
+    "poly_shape": ["sp_point_in_poly_shape (file => 'SHAPES')"],
+    "poly_shape_field": ["sp_point_in_poly_shape (file => 'SHAPES', field_name => 'zone', field_val => 2)"],
+    "same_poly": ["sp_points_in_same_poly_shape (file => 'SHAPES')"],
+    "sequence": ["sp_select_sequence (frequency => 3)"],
+    "sequence_offset": ["sp_select_sequence (frequency => 4, first_offset => 2, reverse_order => 1)"],
+    "my_var": ["my $r = 150000; $D <= $r * 2"],
+    "coord_ids": ["$coord_id1 eq $coord_id2"],
+    "abs_d": ["abs($d[0]) <= 200000 and abs($d[1]) < 300000"],
+    "or": ["sp_circle (radius => 200000) || sp_block (size => 600000)"],
+    "not": ["!sp_circle (radius => 150000) && $D <= 350000"],
+    "ternary": ["$D <= 200000 ? 1 : $nbr_x > $x && $D <= 300000"],
+    "pow": ["$d[0]**2 + $d[1]**2 <= 250000**2"],
+    "two_sets": ["sp_self_only()", "sp_circle (radius => 300000)"],
+    "two_sets_block": ["sp_block (size => 300000)", "sp_block (size => 900000)"],
+    "defq": ["sp_circle (radius => 200000)", "$D <= 500000"],
+}
+NEIGHBOUR_DEFQ = {"defq": "$y > 2000000 && sp_richness_greater_than (threshold => 2)"}
+
 TREE_FILES = ["Example_tree.nex", "Example_tree_with_colours.nex", "tree_with_nonmatching_names.nex"]
 
 NEWICK_CASES = {
@@ -145,6 +199,21 @@ def write_points() -> None:
     df = pd.read_csv(DATA / SITE, dtype={"x": float, "y": float})
     gdf = gpd.GeoDataFrame(df[["num", "genus", "species"]], geometry=gpd.points_from_xy(df["x"], df["y"]))
     gdf.to_file(DATA / "site_points.shp")
+
+
+def write_site_polygons() -> None:
+    """Polygons over the site data (overlapping, with an attribute)."""
+    import geopandas as gpd
+    from shapely.geometry import Polygon, box
+
+    geoms = [
+        box(3000000, 1000000, 3600000, 2500000),
+        box(3400000, 2000000, 4200000, 3200000),
+        Polygon([(2000000, 1000000), (2600000, 1200000), (2400000, 2000000), (2000000, 1000000)]),
+        box(3300000, 900000, 3500000, 1100000),
+    ]
+    gdf = gpd.GeoDataFrame({"zone": [1, 2, 2, 3]}, geometry=geoms)
+    gdf.to_file(DATA / "site_polygons.shp")
 
 
 def write_rasters() -> None:

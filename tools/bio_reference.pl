@@ -49,6 +49,7 @@ foreach my $task (@{$job->{tasks} // []}) {
       : $type eq 'matrix'   ? dump_matrix($matrix)
       : $type eq 'indices'  ? run_indices($bd, $tree, $matrix, $task)
       : $type eq 'spatial'  ? run_spatial($bd, $tree, $matrix, $task)
+      : $type eq 'neighbours' ? run_neighbours($bd, $task)
       : croak "unknown task type $type";
     $output{$name} = $result;
 }
@@ -226,6 +227,34 @@ sub run_spatial {
     return \%results;
 }
 
+
+#  Neighbour lists (_NBR_SET1, _NBR_SET2) of the groups a spatial analysis
+#  processed; a group that failed the definition query is absent.
+sub run_neighbours {
+    my ($bd, $task) = @_;
+    my $name = $task->{name} // 'neighbours';
+    my $sp = $bd->add_spatial_output(name => $name);
+    my $conditions = $task->{spatial_conditions};
+    $sp->run_analysis(
+        spatial_conditions => $conditions,
+        (defined $task->{definition_query} ? (definition_query => $task->{definition_query}) : ()),
+        calculations => ['calc_richness'],
+        ($task->{no_recycling} ? (no_recycling => 1) : ()),
+    );
+    my %results;
+    my $pass = $sp->get_pass_def_query;
+    foreach my $gp (sort $sp->get_element_list) {
+        next if $pass && !$pass->{$gp};
+        my %sets;
+        foreach my $i (1 .. scalar @$conditions) {
+            my $l = $sp->get_list_ref(element => $gp, list => "_NBR_SET$i", autovivify => 0);
+            $sets{$i} = [sort @{$l // []}];
+        }
+        $results{$gp} = \%sets;
+    }
+    $bd->delete_output(output => $sp);
+    return \%results;
+}
 
 #  JSON with 17 significant digits for numbers and sorted keys.
 sub encode_value {
