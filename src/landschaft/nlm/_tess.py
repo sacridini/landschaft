@@ -45,6 +45,12 @@ def _values_by_cell_order(x, y, values, tolerance, nlmr_compat, model):
                       "each germ gets its own value instead (install shapely, or pass nlmr_compat=False)",
                       stacklevel=3)
         return values
+    import shapely
+
+    if shapely.geos_version < (3, 11, 0):
+        warnings.warn(f"{model}: GEOS {shapely.geos_version_string} orders the Voronoi cells differently from "
+                      "GEOS 3.11 and later, so the values do not follow NLMR's (update shapely / GEOS)",
+                      stacklevel=3)
     out = np.empty_like(values)
     out[germ_of_cell] = values[: len(germ_of_cell)]
     return out

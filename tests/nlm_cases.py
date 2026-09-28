@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 # -- generators ------------------------------------------------------------------
@@ -78,10 +80,43 @@ STD_SEQUENCE_SEEDS = {"shuffle_big": [42]}
 # -- R's arithmetic ---------------------------------------------------------------
 
 
+class _RandomState:
+    """numpy's RandomState(seed).uniform and .standard_normal, one IEEE operation
+    at a time: numpy's C code is compiled with fused multiply-adds on ARM64, which
+    changes the last bit of many draws, and the references hold R's results for
+    the x86-64 draws."""
+
+    def __init__(self, seed: int):
+        self._rs = np.random.RandomState(seed)
+        self._gauss: float | None = None
+
+    def uniform(self, low: float, high: float, n: int) -> np.ndarray:
+        return low + (high - low) * self._rs.random_sample(n)
+
+    def standard_normal(self, n: int) -> np.ndarray:
+        # numpy's legacy_gauss (polar method), the second value kept for the next call
+        out = np.empty(n)
+        for i in range(n):
+            if self._gauss is not None:
+                out[i], self._gauss = self._gauss, None
+                continue
+            while True:
+                x1 = 2.0 * self._rs.random_sample() - 1.0
+                x2 = 2.0 * self._rs.random_sample() - 1.0
+                r2 = x1 * x1
+                r2 = r2 + x2 * x2
+                if r2 < 1.0 and r2 != 0.0:
+                    break
+            f = math.sqrt(-2.0 * math.log(r2) / r2)
+            self._gauss = f * x1
+            out[i] = f * x2
+        return out
+
+
 def rmath_cases() -> dict[str, tuple[str, np.ndarray, float]]:
     """key -> (function, inputs, exponent): R's exp(), x^y (powl on Windows) and
     vector sqrt() on the kinds of values the models feed them."""
-    rs = np.random.RandomState(20260928)
+    rs = _RandomState(20260928)
     neg = -np.concatenate([rs.uniform(0, 1, 3000), rs.uniform(0, 60, 3000), rs.uniform(0, 745, 500),
                            np.arange(0, 200) / 10.0])
     grid = np.concatenate([np.arange(1, 5001, dtype=float), rs.uniform(1, 1e6, 2000), rs.uniform(1, 1.3, 1000)])
@@ -102,7 +137,7 @@ def rmath_cases() -> dict[str, tuple[str, np.ndarray, float]]:
 def fft_cases() -> dict[str, tuple[np.ndarray, np.ndarray, int, int, bool]]:
     """key -> (real, imaginary, nrow, ncol, inverse): R's fft() on sizes with
     factors 2, 3, 4, 5, odd primes and square factors."""
-    rs = np.random.RandomState(7)
+    rs = _RandomState(7)
     sizes = [(1, 7), (8, 8), (12, 10), (7, 13), (30, 45), (64, 100), (17, 1), (243, 5), (49, 18), (22, 121),
              (96, 60), (11, 1024)]
     out = {}

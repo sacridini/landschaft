@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 import nlm_cases
+from conftest import assert_same_bits
 from landschaft import _core
 
 REF = Path(__file__).parent / "data" / "reference" / "nlm" / "rng.npz"
@@ -44,7 +45,8 @@ def test_libstdcxx_distributions_match_gcc(ref, name):
         got = _core.nlm_std_sequence(seed, ops)
         for k, values in enumerate(got):
             expected = ref[f"std__{name}__{seed}__{k}"]
-            np.testing.assert_array_equal(np.asarray(values, dtype=float), expected.astype(float), err_msg=str(ops[k]))
+            # the normal distribution takes log and sqrt of the C library
+            assert_same_bits(values, expected, str(ops[k]))
 
 
 def test_rnorm_does_not_depend_on_threads():
@@ -97,14 +99,17 @@ def rmath():
 def test_r_arithmetic_matches_r(rmath, key):
     # exp() and x^y (powl) of mingw-w64 and R's vector sqrt(), as on R for Windows
     fn, x, y = nlm_cases.rmath_cases()[key]
-    np.testing.assert_array_equal(_core.nlm_r_math(fn, x, y), rmath[key])
+    assert_same_bits(_core.nlm_r_math(fn, x, y), rmath[key], key)
 
 
 @pytest.mark.parametrize("key", sorted(nlm_cases.fft_cases()))
 @pytest.mark.parametrize("parallel", [False, True])
 def test_r_fft_matches_r(rmath, key, parallel):
     re, im, nrow, ncol, inverse = nlm_cases.fft_cases()[key]
-    np.testing.assert_array_equal(_core.nlm_r_fft(re, im, nrow, ncol, inverse, parallel), rmath[key])
+    expected = rmath[key]
+    # the terms of each value carry R's sin and cos: ulps of the largest value
+    assert_same_bits(_core.nlm_r_fft(re, im, nrow, ncol, inverse, parallel), expected, key,
+                     scale=np.abs(expected).max())
 
 
 def test_r_fft_is_a_dft():

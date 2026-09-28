@@ -811,7 +811,9 @@ How each platform gets R's bits (all checked by the same tests):
 On ARM64 the sums still give R's bits (R's reference values come from R on x86-64
 Windows); only metrics that take a logarithm or a square root may differ in the last bit
 there. The MASM file is only assembled by MSVC on x86-64; every other build uses the C++
-code.
+code. `landschaft._core.x87_math` tells which kind of build is running: the reference
+tests compare bit for bit where it is true and allow a few units in the last place
+elsewhere (`tests/conftest.py`).
 
 R computes `sum()`, `mean()` and `var()` in `long double`, the 80-bit x87 type with a
 64-bit mantissa (R on Windows is built with gcc/mingw-w64). MSVC has no such type, so
@@ -1969,7 +1971,8 @@ NLMR behaviours kept with `nlmr_compat=True` (the default where they apply):
   value to the k-th Voronoi polygon in GEOS's order (`st_voronoi(st_union(...))`,
   `dTolerance = 0.1` for `mosaicgibbs`, where the value is the k-th germ's class, not
   the class of the germ inside the polygon). Landschaft gets that order from GEOS
-  through shapely (without it: a warning, each germ its own value), rasterises by
+  through shapely (GEOS 3.11 or later: older versions order the cells differently and
+  warn; without shapely: a warning, each germ its own value), rasterises by
   nearest germ in C++ (the polygon containing each cell centre) and rounds to float32
   as `terra::rasterize`.
 - `classify`: `sum`/`cumsum` of the weights in 80-bit precision as R; when all

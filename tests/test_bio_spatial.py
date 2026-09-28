@@ -11,6 +11,7 @@ import pytest
 
 import landschaft as ls
 from bio_cases import BASEDATA_CASES, DATA, REFERENCE, SPATIAL_CASES, spatial_calcs
+from conftest import same_bits
 
 _BD_CACHE: dict = {}
 
@@ -34,7 +35,7 @@ def _same(a, b) -> bool:
     b_nan = b is None or (isinstance(b, float) and math.isnan(b))
     if a_nan or b_nan:
         return a_nan and b_nan
-    return float(a) == float(b)
+    return bool(same_bits(float(a), float(b)))
 
 
 def compare(res, ref, diffs: list, limit: int = 20) -> None:

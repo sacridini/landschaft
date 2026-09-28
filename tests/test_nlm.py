@@ -13,6 +13,7 @@ from scipy import ndimage
 
 import landschaft as ls
 import nlm_cases
+from conftest import assert_same_bits
 from landschaft.nlm._common import as_values
 
 REF = Path(__file__).parent / "data" / "reference" / "nlm" / "models.npz"
@@ -25,14 +26,28 @@ def ref():
     return np.load(REF)
 
 
+# Units in the last place of a model's largest value its cells may be off without the
+# x87 functions (see conftest.BITWISE); a few otherwise. The big Gaussian field takes
+# the square roots of eigenvalues near 0 (circulant embedding of a long range).
+ULPS = {"gaussianfield_big": 64}
+
+
+def _geos_orders_voronoi_as_nlmr() -> bool:
+    shapely = pytest.importorskip("shapely")
+    return shapely.geos_version >= (3, 11, 0)
+
+
 @pytest.mark.parametrize("key", sorted(nlm_cases.MODELS))
 def test_matches_nlmr(ref, key):
     if key not in ref:
         pytest.skip(f"{key} not in the reference file")
+    if key.startswith(("mosaictess", "mosaicgibbs")) and not _geos_orders_voronoi_as_nlmr():
+        pytest.skip("GEOS < 3.11 orders the Voronoi cells differently")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)  # NLMR's mpd sizes
         got = as_values(nlm_cases.MODELS[key][1](ls))
-    np.testing.assert_array_equal(got, ref[key])
+    expected = ref[key]
+    assert_same_bits(got, expected, key, scale=np.nanmax(np.abs(expected)), ulps=ULPS.get(key, 4))
 
 
 # -- common behaviour -----------------------------------------------------------------

@@ -20,8 +20,8 @@ from rasterio.transform import from_origin
 import landschaft as ls
 import lsm_reference
 import lsm_scenes
-from conftest import DATA
-from test_lsm_reference import ATOL, NEIGHBOURHOOD_QUIRK, NOT_BITWISE, RTOL
+from conftest import DATA, same_bits
+from test_lsm_reference import ATOL, NEIGHBOURHOOD_QUIRK, NOT_BITWISE, RTOL, ULPS
 
 SAMPLE_DIR = DATA / "reference" / "lsm_sample"
 WINDOW_DIR = DATA / "reference" / "lsm_window"
@@ -33,7 +33,7 @@ SAMPLE_ARGS = {"shape", "size", "sizes", "all_classes", "level"}
 def assert_window_equal(ours: np.ndarray, ref: np.ndarray, label: str, metric: str) -> None:
     np.testing.assert_allclose(ours, ref, rtol=RTOL, atol=ATOL, err_msg=label)
     if not metric.startswith(NOT_BITWISE):
-        same = (ours == ref) | (np.isnan(ours) & np.isnan(ref))
+        same = same_bits(ours, ref, ulps=ULPS)
         assert same.all(), f"{label}: not the same bits at {np.argwhere(~same)[:5].tolist()}"
 
 
@@ -51,7 +51,7 @@ def compare_sample(ours: pd.DataFrame, ref: pd.DataFrame, label: str) -> None:
         assert ok.all(), f"{label}: {col} differs:\n{merged.loc[~ok, keys + [col, col + '_ref']].head(10)}"
         if col == "value":
             bitwise = ~merged["metric"].str.startswith(NOT_BITWISE).to_numpy()
-            bad = bitwise & ~((a == b) | (np.isnan(a) & np.isnan(b)))
+            bad = bitwise & ~same_bits(a, b, ulps=ULPS)
             assert not bad.any(), f"{label}: not the same bits:\n{merged.loc[bad, keys + [col, col + '_ref']].head(10)}"
     # sample_lsm's row order (plot, level, metric, class, id)
     assert ours["plot_id"].tolist() == ref["plot_id"].tolist()

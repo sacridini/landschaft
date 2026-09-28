@@ -19,7 +19,7 @@ import pytest
 import landschaft as ls
 import lsm_reference
 import lsm_scenes
-from conftest import DATA
+from conftest import DATA, same_bits
 
 REF_DIR = DATA / "reference" / "lsm"
 MANIFEST = json.loads((REF_DIR / "manifest.json").read_text())
@@ -42,6 +42,10 @@ ATOL = 1e-14
 # and standard deviations use R's 80-bit accumulation, log and sqrt R's x87
 # functions, pafrac the QR decomposition of R's lm().
 NOT_BITWISE = ("circle", "gyrate", "enn")
+# Units in the last place allowed without the x87 functions (conftest.BITWISE): the
+# metrics add up many logarithms and square roots and some cancel (sd, cv, contag);
+# the live runs compare with R on the same machine, which on ARM64 has no 80-bit sums.
+ULPS = 128
 
 
 def compare(ours: pd.DataFrame, ref: pd.DataFrame, label: str) -> None:
@@ -54,7 +58,7 @@ def compare(ours: pd.DataFrame, ref: pd.DataFrame, label: str) -> None:
     ok = np.isclose(a, b, rtol=RTOL, atol=ATOL, equal_nan=True)
     assert ok.all(), f"{label}: values differ:\n{merged.loc[~ok, keys + ['value', 'value_ref']].head(10)}"
     bitwise = ~merged["metric"].astype(str).str.startswith(NOT_BITWISE).to_numpy()
-    bad = bitwise & ~((a == b) | (np.isnan(a) & np.isnan(b)))
+    bad = bitwise & ~same_bits(a, b, ulps=ULPS)
     assert not bad.any(), f"{label}: not the same bits:\n{merged.loc[bad, keys + ['value', 'value_ref']].head(10)}"
 
 

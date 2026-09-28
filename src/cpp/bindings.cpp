@@ -1509,6 +1509,13 @@ PYBIND11_MODULE(_core, m) {
 #else
     m.attr("openmp") = false;
 #endif
+    // R's and Perl's log, sqrt, sin, cos, exp and atan2 on the x87 unit (x86 builds, lsm/rmath.hpp);
+    // elsewhere the system library, which can differ in the last bits.
+#if defined(LSM_X87_MASM) || defined(LSM_X87_INLINE)
+    m.attr("x87_math") = true;
+#else
+    m.attr("x87_math") = false;
+#endif
     py::module_ detail = m.def_submodule("detail");
     bind_detail(detail);
 }

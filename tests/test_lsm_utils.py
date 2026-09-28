@@ -19,8 +19,8 @@ import pytest
 
 import landschaft as ls
 import lsm_scenes
-from conftest import DATA
-from test_lsm_reference import NOT_BITWISE
+from conftest import DATA, same_bits
+from test_lsm_reference import NOT_BITWISE, ULPS
 
 REF_DIR = DATA / "reference" / "lsm_utils"
 MANIFEST = json.loads((REF_DIR / "manifest.json").read_text())
@@ -48,7 +48,7 @@ def assert_same(a, b, label: str) -> None:
     a = np.asarray(a, dtype=float)
     b = np.asarray(b, dtype=float)
     assert a.shape == b.shape, f"{label}: shapes {a.shape} and {b.shape}"
-    same = (a == b) | (np.isnan(a) & np.isnan(b))
+    same = same_bits(a, b, ulps=ULPS)
     assert same.all(), f"{label}: {int((~same).sum())} values differ, first at {np.argwhere(~same)[:3].tolist()}"
 
 

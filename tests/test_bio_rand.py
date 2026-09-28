@@ -12,6 +12,7 @@ import pytest
 
 import landschaft as ls
 from bio_cases import BASEDATA_CASES, DATA, RAND_CASES, REFERENCE
+from conftest import same_bits
 
 _BD: dict = {}
 
@@ -79,7 +80,7 @@ def _same(a, b) -> bool:
         return a is None or (isinstance(a, float) and math.isnan(a))
     if a is None or (isinstance(a, float) and math.isnan(a)):
         return False
-    return float(a) == float(b)
+    return bool(same_bits(float(a), float(b)))
 
 
 @pytest.fixture(scope="module")

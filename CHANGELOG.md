@@ -13,6 +13,12 @@ between minor versions.
   3.3 times and MSPA 1.6 times faster once found).
 - pandas 3: label and group properties kept their unset values as `None` (the new string
   dtype turned them into NaN and spatial analyses with properties failed).
+- `nlm.mosaic_tess` / `nlm.mosaic_gibbs` warn when GEOS is older than 3.11, which orders the
+  Voronoi cells differently from NLMR.
+- The test suite passes on ARM64 (Apple silicon): the reference comparisons stay bit for
+  bit in x86 builds (`_core.x87_math`) and allow a few units in the last place elsewhere,
+  and the R arithmetic and FFT cases draw their inputs with the x86-64 bits (numpy's
+  generators use fused multiply-adds on ARM64).
 
 ## [0.74.0] - 2026-09-28
 
