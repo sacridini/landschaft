@@ -6,6 +6,14 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Wheels: cibuildwheel configuration (`pyproject.toml`) for CPython 3.10-3.14 on Linux
+  (x86_64, aarch64), Windows (x86_64) and macOS (arm64, x86_64), with the OpenMP runtime
+  bundled (conda-forge's `libomp` on macOS 11+, delvewheel on Windows); a GitHub workflow
+  that builds and tests them and publishes to PyPI on a release (run by hand, never on
+  push); `tools/build_macos_wheels.sh` for macOS wheels without CI. The sdist holds only
+  the sources.
+
 ### Changed
 - `fad` 4 times faster (8000 x 8000 on an M4: 0.69 s to 0.17 s): density, raw density,
   classes and statistics come from one pass in C++ over integral images built once;
