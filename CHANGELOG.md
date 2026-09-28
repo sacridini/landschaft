@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.65.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis, phylogenetic indices: `ls.bio.spatial_analysis(..., tree=...)`
+  computes Biodiverse's phylogenetic diversity (PD, PD per taxon, local PD, included
+  node and terminal lists), phylogenetic endemism (PE, central PE, PE single, PE lists,
+  PD endemism, corrected weighted endemism), clade contributions, clade losses and
+  ancestral losses (PD and PE), last shared ancestor properties, evolutionary
+  distinctiveness (ES, ED, AED, AED-T and its weights, corrected weighted rarity),
+  phylogenetic abundance, labels on and off the tree, and phylogenetic turnover
+  (Sorenson, Jaccard, S2, range-weighted turnover), identical to Biodiverse, including
+  its trimming of the tree to the labels.
+
 ## [0.64.0] - 2026-09-28
 
 ### Added
