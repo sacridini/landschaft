@@ -56,6 +56,7 @@ foreach my $task (@{$job->{tasks} // []}) {
       : $type eq 'matrix'   ? dump_matrix($matrix)
       : $type eq 'indices'  ? run_indices($bd, $tree, $matrix, $task)
       : $type eq 'spatial'  ? run_spatial($bd, $tree, $matrix, $task)
+      : $type eq 'cluster'  ? run_cluster($bd, $tree, $matrix, $task)
       : $type eq 'neighbours' ? run_neighbours($bd, $task)
       : $type eq 'metadata' ? dump_metadata($bd)
       : croak "unknown task type $type";
@@ -212,6 +213,36 @@ sub run_indices {
     return \%results;
 }
 
+sub run_cluster {
+    my ($bd, $tree, $matrix, $task) = @_;
+    my $name = $task->{name} // 'cluster';
+    my $cl = $task->{region_grower}
+        ? $bd->add_cluster_output(name => $name, type => 'Biodiverse::RegionGrower')
+        : $bd->add_cluster_output(name => $name);
+    $cl->run_analysis(calc_args($tree, $matrix, $task));
+    my %nodes;
+    foreach my $node ($cl->get_node_refs) {
+        my $parent = $node->get_parent;
+        my %lists;
+        foreach my $list (@{$node->get_list_names // []}) {
+            next if $list =~ /^_/;
+            my $ref = $node->get_list_ref(list => $list);
+            $lists{$list} = $ref if ref $ref;
+        }
+        my %values = %{$node->{NODE_VALUES} // {}};
+        delete @values{qw /NAME LENGTH _CHILDREN _PARENT/};
+        $nodes{$node->get_name} = {
+            length   => $node->get_length,
+            parent   => ($parent ? $parent->get_name : undef),
+            children => [ map { $_->get_name } $node->get_children ],
+            values   => \%values,
+            lists    => \%lists,
+        };
+    }
+    $bd->delete_output(output => $cl);
+    return {nodes => \%nodes};
+}
+
 sub run_spatial {
     my ($bd, $tree, $matrix, $task) = @_;
     my $name = $task->{name} // 'spatial';
@@ -307,6 +338,19 @@ sub dump_metadata {
             $more{$index} = $n if $n > ($h{uses_nbr_lists} // 1);
         }
         $h{index_uses_nbr_lists} = \%more if %more;
+        #  cluster metrics: order, lumping of zeroes, bounds and distribution as given
+        my %cl;
+        foreach my $index (sort keys %$idx) {
+            my $meta = $idx->{$index};
+            next if !ref $meta || !$meta->{cluster};
+            $cl{$index} = {
+                cluster        => $meta->{cluster},
+                can_lump_zeroes => $meta->{cluster_can_lump_zeroes},
+                bounds         => $meta->{bounds},
+                distribution   => $meta->{distribution},
+            };
+        }
+        $h{cluster_indices} = \%cl if %cl;
         $out{$name} = \%h;
     }
     return \%out;

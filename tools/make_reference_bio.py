@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors] [neighbours] [spatial] [phylo] [phylocom] [props] [rand]
+    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors] [neighbours] [spatial] [phylo] [phylocom] [props] [rand] [cluster]
 
 ``data`` writes the synthetic inputs of ``tests/bio_cases.py`` into
 ``tests/data/bio``; the other parts run Biodiverse (Perl) through
@@ -192,6 +192,24 @@ def make_dependencies(unsorted: bool) -> None:
     print(f"wrote {out}")
 
 
+def make_cluster(unsorted: bool) -> None:
+    out = {}
+    for name, case in bio_cases.CLUSTER_CASES.items():
+        bdcase = bio_cases.BASEDATA_CASES[case["basedata"]]
+        spec = dict(bdcase["biodiverse"])
+        spec["file"] = _path(spec["file"])
+        args = dict(case["args"])
+        if case.get("calcs"):
+            args["spatial_calculations"] = case["calcs"]
+        task = {"type": "cluster", "name": name, "args": args, "region_grower": case.get("region_grower", False)}
+        job = {"basedata": spec, "tasks": [task]}
+        if "tree" in case:
+            job["tree"] = {"file": _path(case["tree"])}
+        print(name)
+        out[name] = run(job, unsorted)[name]
+    save("cluster", out)
+
+
 def make_rand(unsorted: bool) -> None:
     out = {}
     for name, case in bio_cases.RAND_CASES.items():
@@ -251,7 +269,7 @@ def make_matrices(unsorted: bool) -> None:
 
 def main(argv: list[str]) -> None:
     unsorted = "--unsorted" in argv
-    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours", "spatial", "phylo", "phylocom", "props", "rand"]
+    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours", "spatial", "phylo", "phylocom", "props", "rand", "cluster"]
     if "data" in parts:
         bio_cases.write_synthetic_data()
         bio_cases.write_rasters()
@@ -284,6 +302,8 @@ def main(argv: list[str]) -> None:
         make_props(unsorted)
     if "rand" in parts:
         make_rand(unsorted)
+    if "cluster" in parts:
+        make_cluster(unsorted)
     if "dependencies" in parts:
         make_dependencies(unsorted)
 

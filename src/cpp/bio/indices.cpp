@@ -1383,7 +1383,17 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
             abc.g2.clear();
             abc.has_set2 = have_set2;
             if (have_set2) abc.g2.assign(set2->indices.begin() + set2->indptr[r], set2->indices.begin() + set2->indptr[r + 1]);
-            aggregate(bd, abc.g1, abc.l1, abc.in1, abc.c1, abc.s1);
+            if (bd.has_row_labels) {
+                for (i64 k = bd.row_indptr[static_cast<std::size_t>(r)]; k < bd.row_indptr[static_cast<std::size_t>(r) + 1]; ++k) {
+                    const i32 l = bd.row_labels[static_cast<std::size_t>(k)];
+                    abc.l1.push_back(l);
+                    abc.in1[l] = 1;
+                    abc.c1[l] = static_cast<i32>(bd.row_counts[static_cast<std::size_t>(k)]);
+                    abc.s1[l] = bd.row_samples[static_cast<std::size_t>(k)];
+                }
+            } else {
+                aggregate(bd, abc.g1, abc.l1, abc.in1, abc.c1, abc.s1);
+            }
             aggregate(bd, abc.g2, abc.l2, abc.in2, abc.c2, abc.s2);
             std::set_union(abc.l1.begin(), abc.l1.end(), abc.l2.begin(), abc.l2.end(), std::back_inserter(abc.lall));
             abc.ABC = static_cast<i64>(abc.lall.size());
@@ -2198,14 +2208,33 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
                     const std::vector<i32> l1 = abc.g1.empty() ? std::vector<i32>{} : p.path_of(abc.l1);
                     const std::vector<i32> l2 = abc.g2.empty() ? std::vector<i32>{} : p.path_of(abc.l2);
                     double aa = 0, bb = 0, cc = 0;
-                    for (i32 node : l1) {
-                        if (std::binary_search(l2.begin(), l2.end(), node))
-                            aa += tree->length[static_cast<std::size_t>(node)];
-                        else
-                            bb += tree->length[static_cast<std::size_t>(node)];
+                    if (bd.pairwise_mode) {
+                        // totals of each set minus the shared length
+                        auto total = [&](const std::vector<i32>& l) {
+                            double s = 0;
+                            bool first = true;
+                            for (i32 node : l) {
+                                const double v = tree->length[static_cast<std::size_t>(node)];
+                                s = first ? v : s + v;
+                                first = false;
+                            }
+                            return s;
+                        };
+                        for (i32 node : l1)
+                            if (std::binary_search(l2.begin(), l2.end(), node)) aa += tree->length[static_cast<std::size_t>(node)];
+                        bb = total(l1) - aa;
+                        cc = total(l2) - aa;
+                    } else {
+                        for (i32 node : l1) {
+                            if (std::binary_search(l2.begin(), l2.end(), node))
+                                aa += tree->length[static_cast<std::size_t>(node)];
+                            else
+                                bb += tree->length[static_cast<std::size_t>(node)];
+                        }
+                        for (i32 node : l2)
+                            if (!std::binary_search(l1.begin(), l1.end(), node))
+                                cc += tree->length[static_cast<std::size_t>(node)];
                     }
-                    for (i32 node : l2)
-                        if (!std::binary_search(l1.begin(), l1.end(), node)) cc += tree->length[static_cast<std::size_t>(node)];
                     const double abcs = aa + bb + cc;
                     if (name == "calc_phylo_abc") {
                         set(0, aa);

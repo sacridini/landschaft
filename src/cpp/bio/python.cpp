@@ -15,6 +15,7 @@
 #include "bio/perlmath.hpp"
 #include "bio/phylocom.hpp"
 #include "bio/randomise.hpp"
+#include "bio/cluster.hpp"
 
 namespace py = pybind11;
 
@@ -149,6 +150,15 @@ bio::BaseDataView basedata_from(const py::dict& d) {
         b.mx_self_similarity = m["self_similarity"].cast<double>();
     }
     if (d.contains("exec_order")) b.exec_order = d["exec_order"].cast<std::vector<i32>>();
+    if (d.contains("pairwise_mode")) b.pairwise_mode = d["pairwise_mode"].cast<bool>();
+    if (d.contains("row_labels")) {
+        const auto rl = d["row_labels"].cast<py::tuple>();
+        b.has_row_labels = true;
+        b.row_indptr = to_vector<i64>(rl[0]);
+        b.row_labels = to_vector<i32>(rl[1]);
+        b.row_counts = to_vector<double>(rl[2]);
+        b.row_samples = to_vector<double>(rl[3]);
+    }
     return b;
 }
 
@@ -338,6 +348,48 @@ void register_python(py::module_& m) {
                                   py::array_t<double>(static_cast<py::ssize_t>(out.counts.size()), out.counts.data()));
         },
         "Biodiverse's swap randomisations (independent swaps, modified, curveball) on a groups x labels CSR.");
+    m.def(
+        "bio_cluster",
+        [](const std::vector<std::string>& names, const std::vector<std::vector<std::vector<i32>>>& nbrs,
+           bool trim_processed, const std::string& direct, const std::vector<std::vector<i32>>& labels,
+           const std::vector<i64>& pair_keys, const std::vector<double>& pair_values, const std::string& linkage,
+           bool can_lump_zeroes, double min_poss, bool have_tie_breaker, const std::vector<std::string>& breaker_keys,
+           const std::vector<std::string>& breaker_minmax, bool objective_max, double max_poss, MT64& rng,
+           const py::object& recalculate) {
+            ClusterInput in;
+            in.names = names;
+            in.nbrs = nbrs;
+            in.trim_processed = trim_processed;
+            in.direct = direct;
+            in.labels = labels;
+            in.pair_keys = pair_keys;
+            in.pair_values = pair_values;
+            in.linkage = linkage;
+            in.can_lump_zeroes = can_lump_zeroes;
+            in.min_poss = min_poss;
+            in.have_tie_breaker = have_tie_breaker;
+            in.breaker_keys = breaker_keys;
+            in.breaker_minmax = breaker_minmax;
+            in.objective_max = objective_max;
+            in.max_poss = max_poss;
+            if (!recalculate.is_none()) {
+                in.recalculate = [recalculate](const std::string& a, const std::string& b, const std::string& nn,
+                                               const std::vector<std::string>& checks) {
+                    py::gil_scoped_acquire acquire;
+                    return recalculate(a, b, nn, checks).cast<std::vector<double>>();
+                };
+            }
+            ClusterOutput out;
+            {
+                py::gil_scoped_release release;
+                out = cluster_groups(in, rng);
+            }
+            py::list joins;
+            for (const auto& j : out.joins)
+                joins.append(py::make_tuple(j.join_number, j.name, j.child1, j.child2, j.value, j.matrix_iter));
+            return py::make_tuple(out.terminals, joins, out.join_number, out.min_value);
+        },
+        "Biodiverse's agglomerative clustering: the joins (number, name, children, value, matrix).");
     m.def(
         "bio_perl_sqrt",
         [](const CArray<double>& x) {

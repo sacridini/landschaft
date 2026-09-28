@@ -688,7 +688,20 @@ Fases:
    rótulos fixos a base randomizada perde as propriedades. Ficam de fora: condições que
    dependem do rótulo corrente, `track_label_allocation_order`, e os itens do 7c;
 8. cluster e RegionGrower (ligações, tie-breakers, restrição espacial, índices por nó, export
-   Newick/Nexus);
+   Newick/Nexus). **Feita** (0.72.0): `ls.bio.cluster` e
+   `ls.bio.region_grower` (`src/cpp/bio/cluster.cpp`: a matriz do Biodiverse com o índice por
+   valor em `%.2g` e empates pela string `%.15g`, a construção das matrizes por condição com a
+   matriz-sombra, o laço de junções com as ligações média, média não ponderada, mínima, máxima
+   e recálculo, empates por embaralhamento, por `random` ou agrupando zeros; a árvore termina
+   em Python como o TreeNode: comprimentos pelos valores de junção, ramos de comprimento zero
+   subidos, raízes unidas, `ladderise` e numeração dos terminais). 14 análises iguais bit a bit,
+   inclusive os índices por nó. Descobertas: no modo par a par o PHYLO_B/C vem do total menos o
+   compartilhado; no modo hierárquico os nós herdam as contagens do primeiro filho e os
+   rótulos dos outros filhos recebem contagem 1 (as amostras são somadas), o que muda o
+   endemismo por nó; a análise de vizinhança exclui os grupos já processados. Ficam para depois:
+   desempates por índice, `link_recalculate` com cache de ABC e a exportação; 2500 grupos em
+   13 s;
+
 9. grades hexagonais/H3, formato nativo de sessão, árvores de `Bio.Phylo`/`dendropy`/`ete`;
 10. extras (IEI do BiodiverseX, export no formato do Biodiverse), tutorial, otimização
     (janela incremental etc.).

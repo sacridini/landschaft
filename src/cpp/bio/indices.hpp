@@ -79,6 +79,14 @@ struct BaseDataView {
     double mx_self_similarity = std::numeric_limits<double>::quiet_NaN();
     // order Biodiverse runs the calculations in (positions in the list given)
     std::vector<i32> exec_order;
+    // pairwise mode (cluster matrices): phylo B and C as totals minus A
+    bool pairwise_mode = false;
+    // per-row labels of neighbour set 1, their group counts and samples, used
+    // instead of the groups' (the hierarchical mode of cluster nodes)
+    bool has_row_labels = false;
+    std::vector<i64> row_indptr;
+    std::vector<i32> row_labels;
+    std::vector<double> row_counts, row_samples;
 };
 
 struct ListOut {

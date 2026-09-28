@@ -493,15 +493,32 @@ class _Run:
 
 def _evaluate(bd, run: _Run, threads: int | None = None, tree=None):
     """Run the calculations of an analysis on a basedata with the same groups (its neighbourhoods)."""
+    return _run_engine(bd, run.valid, run.set1, run.set2, run.procs, run.expand, run.tree if tree is None else tree,
+                       run.matrix, run.pc_steps, run.pc_vpd, run.prng_seed,
+                       run.threads if threads is None else threads,
+                       [bd.groups[g] for g in run.nbrs.groups])
+
+
+def _run_sets(bd, procs, set1, set2, calcs, *, tree=None, matrix=None, threads: int = 1, row_names=None,
+              prng_seed: int = 0, view_extra: dict | None = None):
+    """Calculations on given neighbour sets (CSR of group indices), one row per set."""
+    procs = np.ascontiguousarray(procs, dtype=np.int32)
+    set1 = (np.ascontiguousarray(set1[0], dtype=np.int64), np.ascontiguousarray(set1[1], dtype=np.int32))
+    if set2 is not None:
+        set2 = (np.ascontiguousarray(set2[0], dtype=np.int64), np.ascontiguousarray(set2[1], dtype=np.int32))
+    names = list(row_names) if row_names is not None else [str(i) for i in range(len(procs))]
+    return _run_engine(bd, list(calcs), set1, set2, procs, None, tree, matrix, [], False, prng_seed, threads, names,
+                       view_extra)
+
+
+def _run_engine(bd, valid, set1, set2, procs, expand, tree, matrix, pc_steps, pc_vpd, prng_seed, threads, names,
+                view_extra=None):
     reg = _registry()
-    valid, nbrs, set1, set2, procs, expand = run.valid, run.nbrs, run.set1, run.set2, run.procs, run.expand
-    matrix, pc_steps, pc_vpd, prng_seed = run.matrix, run.pc_steps, run.pc_vpd, run.prng_seed
-    if tree is None:
-        tree = run.tree
-    threads = run.threads if threads is None else threads
     order = _precalc_order(valid)
     view = _basedata_view(bd)
     view["abc_any_variant"] = _abc_any_variant(valid)
+    if view_extra:
+        view.update(view_extra)
     # the order Biodiverse runs the calculations in (shared statistics objects)
     position = {c: i for i, c in enumerate(order)}
     view["exec_order"] = sorted(range(len(valid)), key=lambda i: position.get(valid[i], len(order)))
@@ -532,7 +549,6 @@ def _evaluate(bd, run: _Run, threads: int | None = None, tree=None):
     raw = _core.bio_run_indices(view, procs, set1, set2, valid, threads > 1, tview)
     if expand is not None:
         raw = _expand_raw(raw, expand)
-    names = [bd.groups[g] for g in nbrs.groups]
     table = pd.DataFrame(np.asarray(raw["scalars"]), index=pd.Index(names, name="group"),
                          columns=list(raw["scalar_names"]))
     # indices needing more neighbour sets than given are not reported (Biodiverse's indices_to_clear)

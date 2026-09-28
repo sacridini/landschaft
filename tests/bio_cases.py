@@ -419,6 +419,34 @@ RAND_CASES = {
 }
 
 
+# cluster analyses (phase 8)
+CLUSTER_CASES = {
+    "sorenson": {"basedata": "site_100k", "args": {"prng_seed": 42}, "calcs": ["calc_richness", "calc_endemism_whole"]},
+    "jaccard_min": {"basedata": "site_100k", "args": {"index": "JACCARD", "linkage_function": "link_minimum",
+                                                      "prng_seed": 3}},
+    "s2_max": {"basedata": "site_100k", "args": {"index": "S2", "linkage_function": "link_maximum", "prng_seed": 4}},
+    "unweighted": {"basedata": "site_100k", "args": {"linkage_function": "link_average_unweighted", "prng_seed": 5}},
+    "bray_curtis": {"basedata": "site_counts", "args": {"index": "BRAY_CURTIS", "prng_seed": 6},
+                    "calcs": ["calc_richness"]},
+    "spatial": {"basedata": "site_100k", "args": {"prng_seed": 7, "spatial_conditions":
+                                                  ["sp_circle (radius => 200000)", "sp_circle (radius => 500000)"]}},
+    "constrained": {"basedata": "site_100k", "args": {"prng_seed": 8,
+                                                      "spatial_conditions": ["sp_circle (radius => 150000)"]}},
+    "defq": {"basedata": "site_100k", "args": {"prng_seed": 9, "definition_query": "$x > 2000000"}},
+    "tie_random": {"basedata": "site_100k", "args": {"prng_seed": 10, "cluster_tie_breaker": ["random", "maximise"]}},
+    "phylo_sorenson": {"basedata": "site_100k", "tree": "Example_tree.nex",
+                       "args": {"index": "PHYLO_SORENSON", "prng_seed": 11}, "calcs": ["calc_pd"]},
+    "recalculate": {"basedata": "site_100k", "args": {"linkage_function": "link_recalculate", "prng_seed": 12}},
+    "rg_richness": {"basedata": "site_100k", "region_grower": True, "args": {"prng_seed": 13},
+                    "calcs": ["calc_richness"]},
+    "rg_endemism": {"basedata": "site_100k", "region_grower": True,
+                    "args": {"index": "ENDW_WE", "prng_seed": 14,
+                             "spatial_conditions": ["sp_circle (radius => 150000)"]}},
+    "rg_pe": {"basedata": "site_100k", "region_grower": True, "tree": "Example_tree.nex",
+              "args": {"index": "PE_WE", "prng_seed": 15}},
+}
+
+
 def phylocom_calcs(case: dict) -> list[str]:
     return PHYLOCOM_CALCS + (PHYLOCOM_VPD if case.get("vpd") else [])
 

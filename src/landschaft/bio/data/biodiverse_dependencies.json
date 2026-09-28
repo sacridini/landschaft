@@ -166,18 +166,51 @@
 "uses_nbr_lists": 1
 },
 "calc_beta_diversity": {
+"cluster_indices": {
+"BETA_2": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": null,
+"cluster": 1,
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "_calc_abc_scalars"
 ],
 "uses_nbr_lists": 2
 },
 "calc_bray_curtis": {
+"cluster_indices": {
+"BRAY_CURTIS": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": null,
+"cluster": 1,
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "calc_abc3"
 ],
 "uses_nbr_lists": 2
 },
 "calc_bray_curtis_norm_by_gp_counts": {
+"cluster_indices": {
+"BRAY_CURTIS_NORM": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": null,
+"cluster": 1,
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "calc_abc3",
 "calc_elements_used"
@@ -197,6 +230,17 @@
 "uses_nbr_lists": 1
 },
 "calc_compare_dissim_matrix_values": {
+"cluster_indices": {
+"MXD_VARIANCE": {
+"bounds": [
+-Infinity,
+Infinity
+],
+"can_lump_zeroes": null,
+"cluster": 1,
+"distribution": null
+}
+},
 "pre_calc": [
 "_calc_abc_any"
 ],
@@ -366,12 +410,34 @@
 "uses_nbr_lists": 1
 },
 "calc_jaccard": {
+"cluster_indices": {
+"JACCARD": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": 1,
+"cluster": 1,
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "_calc_abc_scalars"
 ],
 "uses_nbr_lists": 2
 },
 "calc_kulczynski2": {
+"cluster_indices": {
+"KULCZYNSKI2": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": null,
+"cluster": 1,
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "_calc_abc_scalars"
 ],
@@ -563,6 +629,17 @@
 "uses_nbr_lists": 1
 },
 "calc_nestedness_resultant": {
+"cluster_indices": {
+"NEST_RESULTANT": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": null,
+"cluster": 1,
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "_calc_abc_scalars"
 ],
@@ -627,6 +704,26 @@
 "uses_nbr_lists": 1
 },
 "calc_numeric_label_dissimilarity": {
+"cluster_indices": {
+"NUMD_ABSMEAN": {
+"bounds": [
+0,
+Infinity
+],
+"can_lump_zeroes": null,
+"cluster": 1,
+"distribution": null
+},
+"NUMD_VARIANCE": {
+"bounds": [
+0,
+Infinity
+],
+"can_lump_zeroes": null,
+"cluster": 1,
+"distribution": null
+}
+},
 "pre_calc": [
 "calc_abc3"
 ],
@@ -848,6 +945,17 @@
 "uses_nbr_lists": 1
 },
 "calc_phylo_jaccard": {
+"cluster_indices": {
+"PHYLO_JACCARD": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": 1,
+"cluster": "NO_CACHE_ABC",
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "calc_phylo_abc"
 ],
@@ -953,6 +1061,17 @@
 "uses_nbr_lists": 1
 },
 "calc_phylo_rw_turnover": {
+"cluster_indices": {
+"PHYLO_RW_TURNOVER": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": null,
+"cluster": "NO_CACHE_ABC",
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "_calc_pe_lists_per_element_set",
 "_calc_abc_any"
@@ -963,12 +1082,34 @@
 "uses_nbr_lists": 2
 },
 "calc_phylo_s2": {
+"cluster_indices": {
+"PHYLO_S2": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": 0,
+"cluster": "NO_CACHE_ABC",
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "calc_phylo_abc"
 ],
 "uses_nbr_lists": 2
 },
 "calc_phylo_sorenson": {
+"cluster_indices": {
+"PHYLO_SORENSON": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": 1,
+"cluster": "NO_CACHE_ABC",
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "calc_phylo_abc"
 ],
@@ -1017,6 +1158,17 @@
 "uses_nbr_lists": 1
 },
 "calc_rw_turnover": {
+"cluster_indices": {
+"RW_TURNOVER": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": null,
+"cluster": "NO_CACHE_ABC",
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "calc_endemism_whole_lists",
 "calc_abc2"
@@ -1033,6 +1185,17 @@
 "uses_nbr_lists": 1
 },
 "calc_s2": {
+"cluster_indices": {
+"S2": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": 0,
+"cluster": 1,
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "_calc_abc_scalars"
 ],
@@ -1045,6 +1208,17 @@
 "uses_nbr_lists": 1
 },
 "calc_sorenson": {
+"cluster_indices": {
+"SORENSON": {
+"bounds": [
+0,
+1
+],
+"can_lump_zeroes": 1,
+"cluster": 1,
+"distribution": "unit_interval"
+}
+},
 "pre_calc": [
 "_calc_abc_scalars"
 ],

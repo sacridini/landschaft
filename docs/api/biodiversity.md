@@ -102,6 +102,19 @@ gives Biodiverse's results.
 
 ::: landschaft.bio.Randomisation
 
+## Cluster analyses
+
+Groups joined into a dendrogram by the dissimilarity of their labels
+(`cluster`) or grown into regions that maximise an index (`region_grower`),
+as Biodiverse does, including its tie handling (seeded by `prng_seed`),
+spatially constrained clustering and the indices of each node's groups.
+
+::: landschaft.bio.cluster
+
+::: landschaft.bio.region_grower
+
+::: landschaft.bio.ClusterResult
+
 ## Phylogenies
 
 ::: landschaft.bio.Tree

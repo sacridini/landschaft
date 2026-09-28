@@ -22,6 +22,7 @@ Typical use::
 """
 
 from ._basedata import BaseData, snap_coordinates
+from ._cluster import ClusterResult, cluster, region_grower
 from ._conditions import Neighbourhoods, SpatialCondition, definition_query, neighbours
 from ._gbif import read_occurrences
 from ._matrix import Matrix, read_matrix
@@ -32,12 +33,14 @@ from ._tree import Tree, read_tree, read_trees
 
 __all__ = [
     "BaseData",
+    "ClusterResult",
     "Matrix",
     "Neighbourhoods",
     "Randomisation",
     "SpatialCondition",
     "SpatialResult",
     "Tree",
+    "cluster",
     "definition_query",
     "list_calculations",
     "neighbours",
@@ -45,6 +48,7 @@ __all__ = [
     "read_occurrences",
     "randomise",
     "read_properties",
+    "region_grower",
     "read_tree",
     "read_trees",
     "snap_coordinates",
