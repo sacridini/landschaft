@@ -6,6 +6,20 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.64.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis, spatial analysis: `ls.bio.spatial_analysis` computes
+  Biodiverse's indices over the neighbourhood of every group, with values identical
+  to Biodiverse's: richness, redundancy and label/sample count summaries (lists,
+  statistics, quantiles), endemism (weighted, corrected, absolute, central and whole,
+  normalised, hierarchical partitions), rarity, turnover and dissimilarity (Sorenson,
+  Jaccard, Kulczynski 2, S2, beta diversity, nestedness, Bray-Curtis, range-weighted
+  turnover), Simpson and Shannon diversity, Rao's quadratic entropy and richness
+  estimators (Chao1, Chao2, ACE, ICE, Hurlbert's ES). `ls.bio.list_calculations` lists
+  them; results are a table of indices plus list indices, and map with `to_raster`.
+  The engine runs in C++ with OpenMP.
+
 ## [0.63.0] - 2026-09-28
 
 ### Added
