@@ -205,6 +205,10 @@ def make_rand(unsorted: bool) -> None:
         job = {"basedata": spec, "tasks": [task]}
         if "tree" in case:
             job["tree"] = {"file": _path(case["tree"])}
+        if case.get("group_props"):
+            props = bio_cases.GROUP_PROPS
+            job["groups_properties"] = {"file": _path(props["file"]),
+                                        "args": {"input_element_cols": props["element_columns"], **props["properties"]}}
         print(name)
         out[name] = run(job, unsorted)[name]
     save("rand", out)

@@ -26,7 +26,16 @@ def _basedata(name: str):
 def _run(name: str, **kw):
     case = RAND_CASES[name]
     tree = ls.bio.read_tree(DATA / case["tree"]) if "tree" in case else None
-    res = ls.bio.spatial_analysis(_basedata(case["basedata"]), case["conditions"], case["calcs"], tree=tree)
+    bd = _basedata(case["basedata"])
+    if case.get("group_props"):
+        import copy
+
+        from bio_cases import GROUP_PROPS
+
+        bd = copy.copy(bd)
+        bd.set_group_properties(ls.bio.read_properties(DATA / GROUP_PROPS["file"], GROUP_PROPS["element_columns"],
+                                                       GROUP_PROPS["properties"]))
+    res = ls.bio.spatial_analysis(bd, case["conditions"], case["calcs"], tree=tree)
     return ls.bio.randomise(res, case["function"], case["iterations"], seed=case["seed"], name="rnd",
                             **case.get("args", {}), **kw)
 
