@@ -65,6 +65,45 @@ STD_SEQUENCES = {
 # Sequences drawn with fewer seeds (large outputs).
 STD_SEQUENCE_SEEDS = {"shuffle_big": [42]}
 
+# -- R's arithmetic ---------------------------------------------------------------
+
+
+def rmath_cases() -> dict[str, tuple[str, np.ndarray, float]]:
+    """key -> (function, inputs, exponent): R's exp(), x^y (powl on Windows) and
+    vector sqrt() on the kinds of values the models feed them."""
+    rs = np.random.RandomState(20260928)
+    neg = -np.concatenate([rs.uniform(0, 1, 3000), rs.uniform(0, 60, 3000), rs.uniform(0, 745, 500),
+                           np.arange(0, 200) / 10.0])
+    grid = np.concatenate([np.arange(1, 5001, dtype=float), rs.uniform(1, 1e6, 2000), rs.uniform(1, 1.3, 1000)])
+    return {
+        "exp_neg": ("exp", neg, 0.0),
+        "exp_pos": ("exp", rs.uniform(-5, 700, 2000), 0.0),
+        "pow_m1": ("pow", grid, -1.0),
+        "pow_m075": ("pow", grid, -0.75),
+        "pow_m125": ("pow", grid, -1.25),
+        "pow_m15": ("pow", grid, -1.5),
+        "pow_m0999": ("pow", grid, -0.9995),
+        "pow_half": ("pow", grid, 0.5),
+        "pow_3": ("pow", rs.uniform(-10, 10, 2000), 3.0),
+        "sqrt": ("sqrt", np.concatenate([grid, rs.uniform(0, 1, 2000)]), 0.0),
+    }
+
+
+def fft_cases() -> dict[str, tuple[np.ndarray, np.ndarray, int, int, bool]]:
+    """key -> (real, imaginary, nrow, ncol, inverse): R's fft() on sizes with
+    factors 2, 3, 4, 5, odd primes and square factors."""
+    rs = np.random.RandomState(7)
+    sizes = [(1, 7), (8, 8), (12, 10), (7, 13), (30, 45), (64, 100), (17, 1), (243, 5), (49, 18), (22, 121),
+             (96, 60), (11, 1024)]
+    out = {}
+    for nrow, ncol in sizes:
+        for inverse in (False, True):
+            re = rs.standard_normal(nrow * ncol)
+            im = rs.standard_normal(nrow * ncol) if (nrow + ncol) % 2 else np.zeros(nrow * ncol)
+            out[f"fft_{nrow}x{ncol}_{'inv' if inverse else 'fwd'}"] = (re, im, nrow, ncol, inverse)
+    return out
+
+
 # -- models ----------------------------------------------------------------------
 
 # key -> (R expression returning a SpatRaster, the same call in landschaft).
@@ -164,6 +203,26 @@ MODELS: dict[str, tuple[str, object]] = {
                      lambda ls: ls.nlm.curds([0.5, 0.3, 0.6], [32, 6, 2], wheyes=[0.1, 0.05, 0.2], seed=2)),
     "curds_small": ("nlm_curds(c(0.8, 0.5), c(3, 5), user_seed = 3)",
                     lambda ls: ls.nlm.curds([0.8, 0.5], [3, 5], seed=3)),
+    # spectral models (NLMR 1.4's internal simulate_* functions; nlm_gaussianfield
+    # and nlm_fbm only print a message), rescaled as the previous implementation
+    "gaussianfield": ("NLMR:::util_rescale(terra::rast(NLMR:::simulate_gaussian_field(40, 50, 10, 5, 0.2, 0.5, seed = 1)))",
+                      lambda ls: ls.nlm.gaussian_field(50, 40, seed=1)),
+    "gaussianfield_raw": ("terra::rast(NLMR:::simulate_gaussian_field(33, 27, 4, 1, 0, 2, seed = 5))",
+                          lambda ls: ls.nlm.gaussian_field(27, 33, autocorr_range=4, mag_var=1, nug=0, mean=2, seed=5,
+                                                           rescale=False)),
+    "gaussianfield_big": ("NLMR:::util_rescale(terra::rast(NLMR:::simulate_gaussian_field(120, 90, 25, 3, 0.5, 0, seed = 9)))",
+                          lambda ls: ls.nlm.gaussian_field(90, 120, autocorr_range=25, mag_var=3, nug=0.5, mean=0,
+                                                           seed=9)),
+    "fbm": ("NLMR:::util_rescale(terra::rast(NLMR:::simulate_fbm(40, 50, 1, seed = 1)))",
+            lambda ls: ls.nlm.fbm(50, 40, seed=1)),
+    "fbm_rough": ("terra::rast(NLMR:::simulate_fbm(45, 33, 0.4, seed = 2))",
+                  lambda ls: ls.nlm.fbm(33, 45, fract_dim=0.4, seed=2, rescale=False)),
+    "fbm_smooth": ("NLMR:::util_rescale(terra::rast(NLMR:::simulate_fbm(64, 64, 1.7, seed = 3)))",
+                   lambda ls: ls.nlm.fbm(64, 64, fract_dim=1.7, seed=3)),
+    "fbm_linear": ("terra::rast(NLMR:::simulate_fbm(20, 30, 2, seed = 4))",
+                   lambda ls: ls.nlm.fbm(30, 20, fract_dim=2, seed=4, rescale=False)),
+    "fbm_big": ("NLMR:::util_rescale(terra::rast(NLMR:::simulate_fbm(150, 121, 1.25, seed = 5)))",
+                lambda ls: ls.nlm.fbm(121, 150, fract_dim=1.25, seed=5)),
 }
 
 MODEL_CASES: dict[str, str] = {key: r for key, (r, _) in MODELS.items()}

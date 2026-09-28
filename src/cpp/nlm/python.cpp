@@ -18,6 +18,7 @@
 #include "lsm/extended.hpp"
 #include "lsm/rmath.hpp"
 #include "nlm/models.hpp"
+#include "nlm/rfft.hpp"
 #include "nlm/rng.hpp"
 
 namespace py = pybind11;
@@ -252,6 +253,38 @@ py::array_t<double> py_curds(std::int32_t seed, const std::vector<double>& curds
     return raster_to_array(std::move(v), size, size);
 }
 
+py::array_t<double> py_gaussian_field(std::int32_t seed, i64 nrow, i64 ncol, double autocorr_range, double mag_var,
+                                      double nug, double mean) {
+    nlm::RRng rng(seed);
+    std::vector<double> v =
+        run_parallel(0, [&] { return nlm::gaussian_field(rng, nrow, ncol, autocorr_range, mag_var, nug, mean); });
+    return raster_to_array(std::move(v), nrow, ncol);
+}
+
+py::array_t<double> py_fbm(std::int32_t seed, i64 nrow, i64 ncol, double fract_dim) {
+    nlm::RRng rng(seed);
+    std::vector<double> v = run_parallel(0, [&] { return nlm::fbm(rng, nrow, ncol, fract_dim); });
+    return raster_to_array(std::move(v), nrow, ncol);
+}
+
+// R's fft() of a complex matrix given as real and imaginary parts
+// (column-major, R's layout); returns the interleaved result.
+py::array_t<double> py_r_fft(const CArray<double>& re, const CArray<double>& im, int nrow, int ncol, bool inverse,
+                             bool parallel) {
+    const i64 n = static_cast<i64>(nrow) * ncol;
+    if (re.size() != n || im.size() != n) throw py::value_error("re and im must have nrow * ncol values");
+    std::vector<double> z(2 * static_cast<std::size_t>(n));
+    for (i64 k = 0; k < n; ++k) {
+        z[2 * static_cast<std::size_t>(k)] = re.data()[k];
+        z[2 * static_cast<std::size_t>(k) + 1] = im.data()[k];
+    }
+    run_parallel(0, [&] {
+        nlm::r_fft2(z, nrow, ncol, inverse, parallel);
+        return 0;
+    });
+    return vector_to_array(std::move(z));
+}
+
 // R's sum() and cumsum() of doubles (LDOUBLE accumulation).
 double py_r_sum(const CArray<double>& x) { return lsm::r_sum(x.data(), static_cast<i64>(x.size())); }
 
@@ -295,6 +328,32 @@ void register_python(py::module_& m) {
           py::arg("ai"), py::arg("neighbourhood"), "nlm_randomcluster() before rescaling.");
     m.def("nlm_curds", &py_curds, py::arg("seed"), py::arg("curds"), py::arg("steps"), py::arg("wheyes") = py::none(),
           "nlm_curds() (1 curds, 0 matrix).");
+    m.def(
+        "nlm_r_math",
+        [](const std::string& fn, const CArray<double>& x, double y) {
+            py::array_t<double> out(x.request().shape);
+            double* p = out.mutable_data();
+            const double* v = x.data();
+            for (py::ssize_t i = 0; i < x.size(); ++i) {
+                if (fn == "exp")
+                    p[i] = lsm::r_exp(v[i]);
+                else if (fn == "pow")
+                    p[i] = lsm::r_pow(v[i], y);
+                else if (fn == "sqrt")
+                    p[i] = lsm::r_sqrt(v[i]);
+                else
+                    throw py::value_error("unknown function: " + fn);
+            }
+            return out;
+        },
+        py::arg("fn"), py::arg("x"), py::arg("y") = 0.0, "R's exp(x), x^y or vector sqrt(x) on x86-64 Windows.");
+    m.def("nlm_gaussian_field", &py_gaussian_field, py::arg("seed"), py::arg("nrow"), py::arg("ncol"),
+          py::arg("autocorr_range"), py::arg("mag_var"), py::arg("nug"), py::arg("mean"),
+          "NLMR's simulate_gaussian_field().");
+    m.def("nlm_fbm", &py_fbm, py::arg("seed"), py::arg("nrow"), py::arg("ncol"), py::arg("fract_dim"),
+          "NLMR's simulate_fbm().");
+    m.def("nlm_r_fft", &py_r_fft, py::arg("re"), py::arg("im"), py::arg("nrow"), py::arg("ncol"),
+          py::arg("inverse") = false, py::arg("parallel") = true, "R's fft() of a complex matrix (interleaved result).");
     m.def("nlm_r_sum", &py_r_sum, py::arg("x"), "R's sum() of doubles (80-bit accumulation).");
     m.def("nlm_r_cumsum", &py_r_cumsum, py::arg("x"), "R's cumsum() of doubles (80-bit accumulation).");
     m.def("nlm_cut", &py_cut, py::arg("x"), py::arg("breaks"),

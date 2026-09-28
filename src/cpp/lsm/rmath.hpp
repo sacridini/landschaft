@@ -22,6 +22,8 @@ extern "C" double lsm_x87_sqrt(double x);
 extern "C" double lsm_x87_sin(double x);
 extern "C" double lsm_x87_cos(double x);
 extern "C" double lsm_x87_atan2(double y, double x);
+extern "C" double lsm_x87_exp(double x);
+extern "C" double lsm_x87_pow_frac(double x, double y);
 extern "C" double lsm_x87_sum(const double* x, std::int64_t n);
 extern "C" void lsm_x87_accumulate(const double* x, std::int64_t n, void* acc);
 extern "C" double lsm_x87_to_double(const void* acc);
@@ -215,5 +217,156 @@ inline double sum_of(i64 begin, i64 end, F&& f, bool na_rm = false) {
 
 // R's x^-1: powl(x, -1), the reciprocal rounded to extended, then to double.
 inline double r_reciprocal(double x) { return static_cast<double>(Extended(1.0) / Extended(x)); }
+
+// R's exp(x): mingw-w64 v11's exp (x87, exp.def.h): 2^f with f = x log2(e) -
+// trunc(x log2(e)) from log2(e) split in two parts, then fscale.
+inline double r_exp(double x) {
+    if (std::isnan(x)) return x;
+    if (std::isinf(x)) return x < 0 ? 0.0 : x;
+    if (x == 0) return 1.0;
+    if (x > 7.09782712893383996843E2) return std::numeric_limits<double>::infinity();
+    if (x < -7.45133219101941108420E2) return 0.0;
+#if defined(LSM_X87_MASM)
+    return lsm_x87_exp(x);
+#elif defined(LSM_X87_INLINE)
+    detail::X87Precision precision;
+    static const long double c0 = 1.44268798828125L;
+    static const long double c1 = 7.05260771340735992468e-6L;
+    long double res;
+    unsigned short cw_saved, cw_chop;
+    // mingw-w64's __expl_internal, with its AT&T operand order
+    __asm__ volatile(
+        "fldl2e\n\t"
+        "fmul %%st(1),%%st\n\t"
+        "fnstcw %[cws]\n\t"
+        "movzwl %[cws], %%eax\n\t"
+        "orb $12, %%ah\n\t"
+        "movw %%ax, %[cwc]\n\t"
+        "fldcw %[cwc]\n\t"
+        "frndint\n\t"
+        "fld %%st(1)\n\t"
+        "frndint\n\t"
+        "fldcw %[cws]\n\t"
+        "fld %%st(1)\n\t"
+        "fldt %[c0]\n\t"
+        "fld %%st(2)\n\t"
+        "fmul %%st(1),%%st\n\t"
+        "fsubp %%st,%%st(2)\n\t"
+        "fld %%st(4)\n\t"
+        "fsub %%st(3),%%st\n\t"
+        "fmulp %%st,%%st(1)\n\t"
+        "faddp %%st,%%st(1)\n\t"
+        "fldt %[c1]\n\t"
+        "fmul %%st(4),%%st\n\t"
+        "faddp %%st,%%st(1)\n\t"
+        "f2xm1\n\t"
+        "fld1\n\t"
+        "faddp\n\t"
+        "fstp %%st(1)\n\t"
+        "fscale\n\t"
+        "fstp %%st(1)\n\t"
+        "fstp %%st(1)\n\t"
+        : "=t"(res), [cws] "=m"(cw_saved), [cwc] "=m"(cw_chop)
+        : "0"(static_cast<long double>(x)), [c0] "m"(c0), [c1] "m"(c1)
+        : "ax");
+    return static_cast<double>(res);
+#else
+    return std::exp(x);
+#endif
+}
+
+// R's x^y (R_pow: powl on 64-bit Windows) with mingw-w64 v11's powl:
+// integer exponents by repeated squaring in extended precision (a
+// reciprocal for negative ones), 0.5 by fsqrt, others exp2l(y log2l(|x|)).
+inline double r_pow(double x, double y) {
+    if (y == 2.0) return x * x;
+    if (x == 1. || y == 0.) return 1.;
+    if (x == 0.) {
+        if (y > 0.) return 0.;
+        if (y < 0.) return std::numeric_limits<double>::infinity();
+        return y;
+    }
+    if (!std::isfinite(x) || !std::isfinite(y)) return std::pow(x, y);
+    const double yi = std::trunc(y);
+    if (y != yi) {
+        if (x < 0) return -std::numeric_limits<double>::quiet_NaN();
+        if (y == 0.5) return r_sqrt(x);
+#if defined(LSM_X87_MASM)
+        return lsm_x87_pow_frac(x, y);
+#elif defined(LSM_X87_INLINE)
+        detail::X87Precision precision;
+        long double t;
+        const long double lx = x;
+        if (std::fabs(lx - 1.0L) <= static_cast<long double>(0.29)) {
+            __asm__("fld1\n\tfxch\n\tfyl2xp1" : "=t"(t) : "0"(lx - 1.0L) : "st(1)");
+        } else {
+            __asm__("fld1\n\tfxch\n\tfyl2x" : "=t"(t) : "0"(lx) : "st(1)");
+        }
+        t *= static_cast<long double>(y);
+        long double r;
+        unsigned short cw_saved, cw_chop;
+        __asm__ volatile(
+            "fld %%st\n\t"
+            "fnstcw %[cws]\n\t"
+            "movzwl %[cws], %%eax\n\t"
+            "orb $12, %%ah\n\t"
+            "movw %%ax, %[cwc]\n\t"
+            "fldcw %[cwc]\n\t"
+            "frndint\n\t"
+            "fldcw %[cws]\n\t"
+            "fsubr %%st,%%st(1)\n\t"
+            "fxch\n\t"
+            "f2xm1\n\t"
+            "fld1\n\t"
+            "faddp\n\t"
+            "fscale\n\t"
+            "fstp %%st(1)\n\t"
+            : "=t"(r), [cws] "=m"(cw_saved), [cwc] "=m"(cw_chop)
+            : "0"(t)
+            : "ax");
+        return static_cast<double>(r);
+#else
+        return std::pow(x, y);
+#endif
+    }
+    if (yi <= 2147483647.0 && yi >= -2147483648.0) {
+        // __powil(x, (int) y)
+        int n = static_cast<int>(yi);
+        const bool odd = (n & 1) != 0;
+        const bool recip = n < 0;
+        unsigned int u = recip ? 0u - static_cast<unsigned int>(n) : static_cast<unsigned int>(n);
+        Extended d = std::fabs(x);
+        Extended r;
+        if (u == 1) {
+            r = d;
+        } else {
+            r = (u & 1) ? d : Extended(1.0);
+            u >>= 1;
+            do {
+                d = d * d;
+                if (u & 1) r = r * d;
+                u >>= 1;
+            } while (u > 0);
+            if (recip && std::isinf(static_cast<double>(r)) && std::fabs(x) > 1.0) {
+                // overflow before the reciprocal: start from 1 / |x|
+                Extended e = Extended(1.0) / Extended(std::fabs(x));
+                unsigned int v = 0u - static_cast<unsigned int>(n);
+                r = (v & 1) ? e : Extended(1.0);
+                v >>= 1;
+                do {
+                    e = e * e;
+                    if (v & 1) r = r * e;
+                    v >>= 1;
+                } while (v > 0);
+                double out = static_cast<double>(r);
+                return (x < 0 && odd) ? -out : out;
+            }
+        }
+        if (recip) r = Extended(1.0) / r;
+        double out = static_cast<double>(r);
+        return (x < 0 && odd) ? -out : out;
+    }
+    return std::pow(x, y);  // |y| >= 2^31: not reached by the models
+}
 
 }  // namespace lsm

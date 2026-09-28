@@ -157,8 +157,47 @@ def make_models() -> dict[str, np.ndarray]:
     return out
 
 
+def make_rmath() -> dict[str, np.ndarray]:
+    """R's exp(x), x^y and vector sqrt(x) of the inputs in nlm_cases.RMATH."""
+    out: dict[str, np.ndarray] = {}
+    with tempfile.TemporaryDirectory(prefix="nlm_rmath_") as tmp:
+        tmp = Path(tmp)
+        lines = []
+        for key, (fn, x, y) in nlm_cases.rmath_cases().items():
+            x.astype("<f8").tofile(tmp / f"{key}.in")
+            src, dst = (tmp / f"{key}.in").as_posix(), (tmp / f"{key}.out").as_posix()
+            lines.append(f"x <- readBin('{src}', 'double', {x.size})")
+            expr = {"exp": "exp(x)", "sqrt": "sqrt(x)", "pow": f"x^{r_literal(y)}"}[fn]
+            lines.append(f"writeBin({expr}, '{dst}')")
+            out[f"{key}__x"] = x
+        run_r("\n".join(lines) + "\n")
+        for key in nlm_cases.rmath_cases():
+            out[key] = np.fromfile(tmp / f"{key}.out", dtype="<f8")
+    return out
+
+
+def make_fft() -> dict[str, np.ndarray]:
+    """R's fft() of the complex matrices in nlm_cases.fft_cases()."""
+    out: dict[str, np.ndarray] = {}
+    with tempfile.TemporaryDirectory(prefix="nlm_fft_") as tmp:
+        tmp = Path(tmp)
+        lines = []
+        for key, (re, im, nrow, ncol, inverse) in nlm_cases.fft_cases().items():
+            re.astype("<f8").tofile(tmp / f"{key}.re")
+            im.astype("<f8").tofile(tmp / f"{key}.im")
+            n = nrow * ncol
+            lines.append(f"z <- matrix(complex(real = readBin('{(tmp / f'{key}.re').as_posix()}', 'double', {n}), "
+                         f"imaginary = readBin('{(tmp / f'{key}.im').as_posix()}', 'double', {n})), {nrow}, {ncol})")
+            lines.append(f"f <- fft(z, inverse = {r_literal(inverse)})")
+            lines.append(f"writeBin(as.vector(rbind(as.vector(Re(f)), as.vector(Im(f)))), '{(tmp / f'{key}.out').as_posix()}')")
+        run_r("\n".join(lines) + "\n")
+        for key in nlm_cases.fft_cases():
+            out[key] = np.fromfile(tmp / f"{key}.out", dtype="<f8")
+    return out
+
+
 def main(argv: list[str]) -> None:
-    parts = argv or ["rng", "models"]
+    parts = argv or ["rng", "rmath", "models"]
     OUT.mkdir(parents=True, exist_ok=True)
     version = subprocess.run(
         [str(lsm_reference.find_rscript()), "-e", "cat(as.character(packageVersion('NLMR')), R.version.string)"],
@@ -172,6 +211,9 @@ def main(argv: list[str]) -> None:
                for k, v in make_rng().items()}
         np.savez_compressed(OUT / "rng.npz", **rng)
         info["rng"] = version
+    if "rmath" in parts:
+        np.savez_compressed(OUT / "rmath.npz", **make_rmath(), **make_fft())
+        info["rmath"] = version
     if "models" in parts and nlm_cases.MODEL_CASES:
         np.savez_compressed(OUT / "models.npz", **make_models())
         info["models"] = version

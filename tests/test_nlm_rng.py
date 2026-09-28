@@ -81,3 +81,36 @@ def test_sample_errors():
 def test_std_shuffle_is_a_permutation():
     (p,) = _core.nlm_std_sequence(11, [("shuffle", 100_001)])
     assert np.array_equal(np.sort(p), np.arange(100_001))
+
+
+RMATH = Path(__file__).parent / "data" / "reference" / "nlm" / "rmath.npz"
+
+
+@pytest.fixture(scope="module")
+def rmath():
+    if not RMATH.exists():
+        pytest.skip("no R arithmetic reference (tools/make_reference_nlm.py rmath)")
+    return np.load(RMATH)
+
+
+@pytest.mark.parametrize("key", sorted(nlm_cases.rmath_cases()))
+def test_r_arithmetic_matches_r(rmath, key):
+    # exp() and x^y (powl) of mingw-w64 and R's vector sqrt(), as on R for Windows
+    fn, x, y = nlm_cases.rmath_cases()[key]
+    np.testing.assert_array_equal(_core.nlm_r_math(fn, x, y), rmath[key])
+
+
+@pytest.mark.parametrize("key", sorted(nlm_cases.fft_cases()))
+@pytest.mark.parametrize("parallel", [False, True])
+def test_r_fft_matches_r(rmath, key, parallel):
+    re, im, nrow, ncol, inverse = nlm_cases.fft_cases()[key]
+    np.testing.assert_array_equal(_core.nlm_r_fft(re, im, nrow, ncol, inverse, parallel), rmath[key])
+
+
+def test_r_fft_is_a_dft():
+    rs = np.random.RandomState(1)
+    z = rs.standard_normal((30, 21)) + 1j * rs.standard_normal((30, 21))
+    col_major = z.T.ravel()
+    out = _core.nlm_r_fft(col_major.real.copy(), col_major.imag.copy(), 30, 21)
+    got = (out[0::2] + 1j * out[1::2]).reshape(21, 30).T
+    np.testing.assert_allclose(got, np.fft.fft2(z), rtol=1e-12, atol=1e-12)

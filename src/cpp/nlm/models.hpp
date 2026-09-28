@@ -65,6 +65,14 @@ std::vector<double> random_cluster(RRng& rng, i64 nrow, i64 ncol, double p, cons
 std::vector<double> curds(RRng& rng, const std::vector<double>& curds_p, const std::vector<std::int64_t>& steps,
                           const std::vector<double>* wheyes, i64& size);
 
+// -- spectral models (NLMR 1.4's R code) ---------------------------------------------------
+
+// simulate_gaussian_field() (row-major nrow x ncol).
+std::vector<double> gaussian_field(RRng& rng, i64 nrow, i64 ncol, double autocorr_range, double mag_var, double nug,
+                                   double mean);
+// simulate_fbm() (row-major nrow x ncol).
+std::vector<double> fbm(RRng& rng, i64 nrow, i64 ncol, double fract_dim);
+
 // -- classification -----------------------------------------------------------------
 
 // NLMR's rcpp_get_jenksbreaks(sorted d, k): k + 1 break values.

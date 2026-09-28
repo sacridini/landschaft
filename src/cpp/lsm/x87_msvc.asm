@@ -10,6 +10,9 @@
 .data
 one     REAL8 1.0
 limit   REAL8 0.29
+; mingw-w64's exp(): log2(e) split as c0 + c1 (c1 as an 80-bit literal)
+exp_c0  REAL8 1.44268798828125
+exp_c1  BYTE 020h, 0FAh, 0EEh, 0C2h, 05Fh, 070h, 0A5h, 0ECh, 0EDh, 03Fh
 
 .code
 
@@ -116,6 +119,102 @@ lsm_x87_atan2 PROC
     ret
 lsm_x87_atan2 ENDP
 
+; double lsm_x87_exp(double x), x finite and within exp's range: mingw-w64
+; v11's __expl_internal (x87/exp.def.h): i = trunc(x log2 e), xi = trunc(x),
+; f = (c0 xi - i) + c0 (x - xi) + c1 x, then 2^f by f2xm1 and fscale;
+; 64-bit precision, the two frndint with truncation.
+lsm_x87_exp PROC
+    movsd   REAL8 PTR [rsp+8], xmm0
+    fnstcw  WORD PTR [rsp+16]
+    mov     ax, WORD PTR [rsp+16]
+    and     ax, 0F0FFh
+    or      ax, 0300h
+    mov     WORD PTR [rsp+18], ax
+    or      ax, 0C00h
+    mov     WORD PTR [rsp+20], ax
+    fldcw   WORD PTR [rsp+18]
+    fld     REAL8 PTR [rsp+8]       ; x
+    fldl2e                          ; log2e : x
+    fmul    st(0), st(1)            ; x log2e : x
+    fldcw   WORD PTR [rsp+20]
+    frndint                         ; i : x
+    fld     st(1)                   ; x : i : x
+    frndint                         ; xi : i : x
+    fldcw   WORD PTR [rsp+18]
+    fld     st(1)                   ; i : xi : i : x
+    fld     exp_c0                  ; c0 : i : xi : i : x
+    fld     st(2)                   ; xi : c0 : i : xi : i : x
+    fmul    st(0), st(1)            ; c0 xi : c0 : i : xi : i : x
+    fsubrp  st(2), st(0)            ; c0 : f = c0 xi - i : xi : i : x
+    fld     st(4)                   ; x : c0 : f : xi : i : x
+    fsub    st(0), st(3)            ; xf = x - xi : c0 : f : xi : i : x
+    fmulp   st(1), st(0)            ; c0 xf : f : xi : i : x
+    faddp   st(1), st(0)            ; f : xi : i : x
+    fld     TBYTE PTR exp_c1        ; c1 : f : xi : i : x
+    fmul    st(0), st(4)            ; c1 x : f : xi : i : x
+    faddp   st(1), st(0)            ; f : xi : i : x
+    f2xm1
+    fld1
+    faddp   st(1), st(0)            ; 2^f : xi : i : x
+    fstp    st(1)                   ; 2^f : i : x
+    fscale                          ; e^x : i : x
+    fstp    st(1)
+    fstp    st(1)
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_exp ENDP
+
+; double lsm_x87_pow_frac(double x, double y), x > 0, y finite and not an
+; integer: mingw-w64 v11's powl() there, exp2l(y * log2l(x)) in extended
+; precision (log2l: fyl2xp1 when |x - 1| <= 0.29), rounded to double.
+lsm_x87_pow_frac PROC
+    movsd   REAL8 PTR [rsp+8], xmm0
+    movsd   REAL8 PTR [rsp+24], xmm1
+    fnstcw  WORD PTR [rsp+16]
+    mov     ax, WORD PTR [rsp+16]
+    and     ax, 0F0FFh
+    or      ax, 0300h
+    mov     WORD PTR [rsp+18], ax
+    or      ax, 0C00h
+    mov     WORD PTR [rsp+20], ax
+    fldcw   WORD PTR [rsp+18]
+    fld1                            ; 1
+    fld     REAL8 PTR [rsp+8]       ; x : 1
+    fld     st(0)                   ; x : x : 1
+    fsub    st(0), st(2)            ; x-1 : x : 1
+    fld     st(0)
+    fabs                            ; |x-1| : x-1 : x : 1
+    fcomp   limit                   ; x-1 : x : 1
+    fnstsw  ax
+    and     ah, 45h
+    jz      pow_fyl2x
+    fstp    st(1)                   ; x-1 : 1
+    fyl2xp1                         ; log2(x)
+    jmp     pow_log_done
+pow_fyl2x:
+    fstp    st(0)                   ; x : 1
+    fyl2x                           ; log2(x)
+pow_log_done:
+    fmul    REAL8 PTR [rsp+24]      ; t = y log2(x)
+    fld     st(0)                   ; t : t
+    fldcw   WORD PTR [rsp+20]
+    frndint                         ; int(t) : t
+    fldcw   WORD PTR [rsp+18]
+    fsub    st(1), st(0)            ; int : t - int
+    fxch                            ; fract : int
+    f2xm1
+    fld1
+    faddp   st(1), st(0)            ; 2^fract : int
+    fscale
+    fstp    st(1)
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_pow_frac ENDP
+
 ; R's LDOUBLE loops (sum(), mean(), var()): accumulated on the x87 unit with
 ; 64-bit precision, as R's gcc build does, then rounded to double once.
 ; Home space: [rsp+8] temporary, [rsp+16] saved / [rsp+18] new control word,
@@ -128,6 +227,7 @@ SET_PRECISION MACRO
     or      ax, 0300h
     mov     WORD PTR [rsp+18], ax
     fldcw   WORD PTR [rsp+18]
+
 ENDM
 
 ; double lsm_x87_sum(const double* x, int64 n): sum of x[0..n)

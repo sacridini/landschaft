@@ -243,3 +243,38 @@ def test_curds():
         ls.nlm.curds([0.5], [2, 2])
     with pytest.raises(ValueError):
         ls.nlm.curds([0.5], [0])
+
+
+def test_gaussian_field():
+    g = ls.nlm.gaussian_field(120, 100, autocorr_range=20, mag_var=1, nug=0, mean=3, seed=4, rescale=False).values
+    assert abs(g.mean() - 3) < 1
+    # autocorrelated: neighbours close, far cells independent
+    assert np.corrcoef(g[:, :-1].ravel(), g[:, 1:].ravel())[0, 1] > 0.9
+    noisy = ls.nlm.gaussian_field(120, 100, autocorr_range=20, mag_var=1, nug=1, mean=3, seed=4, rescale=False).values
+    assert np.corrcoef(noisy[:, :-1].ravel(), noisy[:, 1:].ravel())[0, 1] < 0.8
+    with ls._threads.limit(1):
+        one = ls.nlm.gaussian_field(150, 130, seed=2).values
+    with ls._threads.limit(4):
+        four = ls.nlm.gaussian_field(150, 130, seed=2).values
+    np.testing.assert_array_equal(one, four)
+    with pytest.raises(ValueError):
+        ls.nlm.gaussian_field(10, 10, autocorr_range=0)
+
+
+def test_fbm():
+    rough = ls.nlm.fbm(128, 128, fract_dim=0.3, seed=1, rescale=False).values
+    smooth = ls.nlm.fbm(128, 128, fract_dim=1.8, seed=1, rescale=False).values
+    # unit standard deviation of the steps, zero mean
+    for f in (rough, smooth):
+        steps = np.concatenate([np.diff(f, axis=0).ravel(order="F"), np.diff(f, axis=1).ravel(order="F")])
+        assert abs(np.std(steps, ddof=1) - 1) < 1e-12 and abs(f.mean()) < 1e-12
+    assert np.ptp(smooth) > np.ptp(rough)
+    plane = ls.nlm.fbm(20, 10, fract_dim=2, seed=3, rescale=False).values
+    np.testing.assert_allclose(np.diff(plane, axis=1, n=2), 0, atol=1e-12)
+    with ls._threads.limit(1):
+        one = ls.nlm.fbm(300, 200, seed=2).values
+    with ls._threads.limit(4):
+        four = ls.nlm.fbm(300, 200, seed=2).values
+    np.testing.assert_array_equal(one, four)
+    with pytest.raises(ValueError):
+        ls.nlm.fbm(10, 10, fract_dim=2.5)

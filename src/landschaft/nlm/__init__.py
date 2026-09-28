@@ -18,6 +18,7 @@ Typical use::
 from ._basic import distance_gradient, edge_gradient, percolation, planar_gradient, random, rescale
 from ._classify import classify
 from ._cluster import curds, random_cluster
+from ._spectral import fbm, gaussian_field
 from ._stdmodels import mpd, neigh, random_rectangular_cluster
 
 __all__ = [
@@ -25,6 +26,8 @@ __all__ = [
     "curds",
     "distance_gradient",
     "edge_gradient",
+    "fbm",
+    "gaussian_field",
     "mpd",
     "neigh",
     "percolation",

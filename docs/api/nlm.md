@@ -32,9 +32,13 @@ habitat = ls.nlm.classify(r, weighting=[0.7, 0.3])
 
 ::: landschaft.nlm.distance_gradient
 
-## Fractal surfaces
+## Fractal surfaces and random fields
 
 ::: landschaft.nlm.mpd
+
+::: landschaft.nlm.fbm
+
+::: landschaft.nlm.gaussian_field
 
 ## Clusters
 

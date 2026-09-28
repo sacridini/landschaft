@@ -419,7 +419,12 @@ Fases:
 3. `randomcluster`, `curds`. **Feita** (0.56.0, bit a bit; o `terra::patches` numera pela
    primeira célula de cada mancha em ordem de linha (a união guarda o menor rótulo, o R
    renumera em ordem); `randomcluster` 200² 19 s no R contra 3 ms);
-4. o `fft` do R portado; `gaussianfield`, `fbm`;
+4. o `fft` do R portado; `gaussianfield`, `fbm`. **Feita** (0.57.0, bit a bit com as
+   `simulate_*` internas do NLMR; `fft.c` do R portado linha a linha, colunas e linhas em
+   paralelo com os mesmos bits; `exp` e `x^y` do R no Windows são os do mingw-w64 v11 em
+   x87 (`__expl_internal` com log2(e) partido em duas constantes; `powl`: expoente inteiro
+   por quadrados em 80 bits, 0,5 por `fsqrt`, os demais `exp2l(y log2l |x|)`), agora em
+   `lsm/rmath.hpp` (`r_exp`, `r_pow`) e no MASM; 6–8× o NLMR);
 5. `mosaicfield` (`rpoislinetess`, `rMosaicField`, `rLGCP` do spatstat);
 6. `mosaictess`, `mosaicgibbs` (`st_sample`, `rSSI`, Voronoi);
 7. opcionais: `blend`/`merge` do antigo landscapetools, modelos do NLMpy, gerador paralelo
