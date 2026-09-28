@@ -91,7 +91,7 @@ def normalise_properties(props: pd.DataFrame, elements: Sequence[str]) -> pd.Dat
     props.index = idx
 
     def conv(v):
-        if v is None or (isinstance(v, float) and np.isnan(v)):
+        if _missing(v):
             return None
         if isinstance(v, str):
             return v if (v == "" or looks_like_number(v)) else None
@@ -99,10 +99,18 @@ def normalise_properties(props: pd.DataFrame, elements: Sequence[str]) -> pd.Dat
             return str(int(v))
         return perl_number(v)
 
-    out = props.reindex(list(elements)).astype(object)
-    out = out.apply(lambda col: col.map(conv))
+    rows = props.reindex(list(elements))
+    # built as object columns: mapped, pandas 3 would infer its string dtype,
+    # where None becomes NaN
+    out = pd.DataFrame({c: pd.Series([conv(v) for v in rows[c].tolist()], index=rows.index, dtype=object)
+                        for c in rows.columns}, index=rows.index, columns=rows.columns)
     out.index.name = props.index.name
     return out
+
+
+def _missing(v) -> bool:
+    """A value that is not set: None, NaN or pandas.NA."""
+    return v is None or v is pd.NA or (isinstance(v, float) and v != v)
 
 
 def property_tables(props: pd.DataFrame) -> list[tuple[str, list[str], np.ndarray, np.ndarray]]:
@@ -113,7 +121,7 @@ def property_tables(props: pd.DataFrame) -> list[tuple[str, list[str], np.ndarra
     """
     out = []
     for name in props.columns:
-        col = props[name].tolist()
+        col = [None if _missing(v) else v for v in props[name].tolist()]
         if all(v is None for v in col):
             continue
         keys = sorted({v for v in col if v is not None and v != ""}, key=lambda s: s.encode("utf-8"))

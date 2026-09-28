@@ -11,6 +11,8 @@ between minor versions.
   Homebrew's `libomp` with any CMake. With a CMake from outside the environment
   (Homebrew's, for example) it used to build a single-threaded core (on an M4: landscape metrics 4.7 times, distances
   3.3 times and MSPA 1.6 times faster once found).
+- pandas 3: label and group properties kept their unset values as `None` (the new string
+  dtype turned them into NaN and spatial analyses with properties failed).
 
 ## [0.74.0] - 2026-09-28
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import math
 
+import pandas as pd
 import pytest
 
 import landschaft as ls
@@ -59,7 +60,8 @@ def test_cluster_matches_biodiverse(reference, name):
     diffs = []
     for nm, r in ref.items():
         row = nodes.loc[nm]
-        if row["parent"] != r["parent"]:
+        parent = None if pd.isna(row["parent"]) else row["parent"]  # NaN in pandas 3's string columns
+        if parent != r["parent"]:
             diffs.append((nm, "parent", r["parent"], row["parent"]))
         if list(row["children"]) != r["children"]:
             diffs.append((nm, "children", r["children"], list(row["children"])))
