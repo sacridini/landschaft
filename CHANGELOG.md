@@ -6,6 +6,16 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.60.0] - 2026-09-28
+
+### Added
+- `ls.nlm.merge` and `ls.nlm.binarize`, landscapetools' `util_merge` (a primary
+  landscape plus weighted secondary ones) and `util_binarize` (habitat/matrix maps at
+  given habitat shares, through `classify`).
+- Documentation: a *Neutral landscapes* tutorial (a gallery of the models, habitat
+  maps from continuous surfaces, a null-model test of the example forest's
+  aggregation against random and fractal landscapes, reproducing NLMR).
+
 ## [0.59.0] - 2026-09-28
 
 ### Added
