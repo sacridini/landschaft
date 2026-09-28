@@ -6,6 +6,18 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.71.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis, randomisations: spatially structured allocation
+  (`rand_spatially_structured`, `rand_diffusion`, `rand_random_walk`, or `rand_structured`
+  with `spatial_conditions_for_label_allocation`: diffusion, random walk, random and
+  proximity orders, backtracking, reseeding, seed location conditions), randomising within
+  subsets of groups (`spatial_conditions_for_subset`, `definition_query`), labels kept in
+  place (`labels_not_to_randomise`), randomised group properties
+  (`randomise_group_props_by`) and shuffled tree terminal names (`randomise_trees_by`),
+  identical to Biodiverse.
+
 ## [0.70.0] - 2026-09-28
 
 ### Added
