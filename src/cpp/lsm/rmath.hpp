@@ -21,6 +21,7 @@ extern "C" double lsm_x87_log(double x);
 extern "C" double lsm_x87_sqrt(double x);
 extern "C" double lsm_x87_sin(double x);
 extern "C" double lsm_x87_cos(double x);
+extern "C" double lsm_x87_atan2(double y, double x);
 extern "C" double lsm_x87_sum(const double* x, std::int64_t n);
 extern "C" void lsm_x87_accumulate(const double* x, std::int64_t n, void* acc);
 extern "C" double lsm_x87_to_double(const void* acc);
@@ -113,6 +114,23 @@ inline double r_cos(double x) {
     return static_cast<double>(v);
 #else
     return std::cos(x);
+#endif
+}
+
+// atan2(y, x) as mingw-w64 computes it (fpatan in extended precision),
+// e.g. in terra's haversine distances.
+inline double r_atan2(double y, double x) {
+    if (!std::isfinite(y) || !std::isfinite(x)) return std::atan2(y, x);
+#if defined(LSM_X87_MASM)
+    return lsm_x87_atan2(y, x);
+#elif defined(LSM_X87_INLINE)
+    detail::X87Precision precision;
+    long double r;
+    const long double ly = y, lx = x;
+    __asm__("fpatan" : "=t"(r) : "0"(lx), "u"(ly) : "st(1)");
+    return static_cast<double>(r);
+#else
+    return std::atan2(y, x);
 #endif
 }
 

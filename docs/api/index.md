@@ -9,10 +9,11 @@ example you can run. Each page covers one topic; the
 import landschaft as ls             # most tools: ls.mspa, ls.fad, ls.Landscape...
 ls.conn.protconn(...)               # habitat networks and protected areas
 from landschaft import circuit      # Circuitscape
+ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 ```
 
 !!! example "Every example runs"
-    The examples use the maps that ship with Landschaft (`ls.example_data`) or
+    The examples use the maps that ship with landschaft (`ls.example_data`) or
     small arrays built in place, and they are run as tests, outputs included.
     Copy one into a Python session to try a function.
 
@@ -71,6 +72,12 @@ from landschaft import circuit      # Circuitscape
     ---
 
     Folders of rasters, tiled MSPA, maps larger than memory.
+
+-   :material-dice-multiple-outline:{ .lg .middle } **[Neutral landscape models](nlm.md)**
+
+    ---
+
+    Simulated landscapes as null models: random, gradients, clusters, fractals.
 
 </div>
 
@@ -270,3 +277,15 @@ from landschaft import circuit      # Circuitscape
 | [`ls.BatchResult`](batch.md#landschaft.BatchResult) | Outcome of one input of `batch` / `mspa_batch` |
 | [`ls.mspa_tiled`](batch.md#landschaft.mspa_tiled) | MSPA of a large map by overlapping tiles, identical to GTB's MSPA Tiling |
 | [`ls.tile_layout`](batch.md#landschaft.tile_layout) | GTB's tiles along one axis of ``size`` pixels |
+
+### Neutral landscape models
+
+| Name | Summary |
+|---|---|
+| [`ls.random`](nlm.md#landschaft.nlm.random) | Spatially random neutral landscape model (NLMR's ``nlm_random``) |
+| [`ls.percolation`](nlm.md#landschaft.nlm.percolation) | Percolation neutral landscape model (NLMR's ``nlm_percolation``) |
+| [`ls.planar_gradient`](nlm.md#landschaft.nlm.planar_gradient) | Planar gradient neutral landscape model (NLMR's ``nlm_planargradient``) |
+| [`ls.edge_gradient`](nlm.md#landschaft.nlm.edge_gradient) | Edge gradient neutral landscape model (NLMR's ``nlm_edgegradient``) |
+| [`ls.distance_gradient`](nlm.md#landschaft.nlm.distance_gradient) | Distance gradient neutral landscape model (NLMR's ``nlm_distancegradient``) |
+| [`ls.classify`](nlm.md#landschaft.nlm.classify) | Classify a continuous landscape into categories (NLMR's ``landscape_classify``) |
+| [`ls.rescale`](nlm.md#landschaft.nlm.rescale) | Linearly rescale values to 0-1 (NLMR's ``util_rescale``) |

@@ -32,7 +32,9 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("change.md", "Change detection", ":material-compare-horizontal:",
           "Habitat, fragmentation and landscape-mosaic change between dates."),
          ("batch.md", "Large data & batch", ":material-layers-triple-outline:",
-          "Folders of rasters, tiled MSPA, maps larger than memory.")]
+          "Folders of rasters, tiled MSPA, maps larger than memory."),
+         ("nlm.md", "Neutral landscape models", ":material-dice-multiple-outline:",
+          "Simulated landscapes as null models: random, gradients, clusters, fractals.")]
 
 INTRO = '''# API reference
 
@@ -45,6 +47,7 @@ example you can run. Each page covers one topic; the
 import landschaft as ls             # most tools: ls.mspa, ls.fad, ls.Landscape...
 ls.conn.protconn(...)               # habitat networks and protected areas
 from landschaft import circuit      # Circuitscape
+ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 ```
 
 !!! example "Every example runs"

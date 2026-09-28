@@ -15,6 +15,9 @@
 #include <omp.h>
 #endif
 
+#include "lsm/extended.hpp"
+#include "lsm/rmath.hpp"
+#include "nlm/models.hpp"
 #include "nlm/rng.hpp"
 
 namespace py = pybind11;
@@ -131,6 +134,101 @@ py::list std_sequence(std::uint32_t seed, const py::list& ops) {
     return out;
 }
 
+template <class T>
+using CArray = py::array_t<T, py::array::c_style | py::array::forcecast>;
+
+// A row-major raster handed to numpy without a copy.
+py::array_t<double> raster_to_array(std::vector<double>&& v, i64 nrow, i64 ncol) {
+    auto* holder = new std::vector<double>(std::move(v));
+    py::capsule owner(holder, [](void* p) { delete static_cast<std::vector<double>*>(p); });
+    return py::array_t<double>({nrow, ncol}, holder->data(), owner);
+}
+
+py::array_t<double> py_random_field(std::int32_t seed, i64 nrow, i64 ncol) {
+    nlm::RRng rng(seed);
+    std::vector<double> v = run_parallel(0, [&] { return nlm::random_field(rng, nrow, ncol); });
+    return raster_to_array(std::move(v), nrow, ncol);
+}
+
+py::array_t<double> py_percolation(std::int32_t seed, i64 nrow, i64 ncol, double prob) {
+    nlm::RRng rng(seed);
+    std::vector<double> v = run_parallel(0, [&] { return nlm::percolation(rng, nrow, ncol, prob); });
+    return raster_to_array(std::move(v), nrow, ncol);
+}
+
+py::array_t<double> py_planar_gradient(i64 nrow, i64 ncol, double direction, bool rescale, bool edge) {
+    std::vector<double> v = run_parallel(0, [&] {
+        std::vector<double> g = nlm::planar_gradient(nrow, ncol, direction);
+        const i64 n = nrow * ncol;
+        if (edge) {
+            // nlm_edgegradient(): a rescaled planar gradient folded around 0.5
+            nlm::rescale(g.data(), n);
+            nlm::edge_from_planar(g.data(), n);
+        }
+        if (rescale) nlm::rescale(g.data(), n);
+        return g;
+    });
+    return raster_to_array(std::move(v), nrow, ncol);
+}
+
+py::array_t<double> py_rescale(const CArray<double>& x) {
+    py::array_t<double> out(x.request().shape);
+    std::copy(x.data(), x.data() + x.size(), out.mutable_data());
+    double* p = out.mutable_data();
+    const i64 n = static_cast<i64>(x.size());
+    run_parallel(0, [&] {
+        nlm::rescale(p, n);
+        return 0;
+    });
+    return out;
+}
+
+py::array_t<double> py_distance(const CArray<std::uint8_t>& origin, const std::string& method, double res, double xmin,
+                             double ymax, double xres, double yres) {
+    if (origin.ndim() != 2) throw py::value_error("expected a 2-D origin mask");
+    const i64 nrow = origin.shape(0), ncol = origin.shape(1);
+    std::vector<std::uint8_t> o(origin.data(), origin.data() + origin.size());
+    std::vector<double> v = run_parallel(0, [&] {
+        if (method == "gdal") return nlm::distance_gdal(o, nrow, ncol, res);
+        if (method == "haversine") return nlm::distance_haversine(o, nrow, ncol, xmin, ymax, xres, yres);
+        if (method == "exact") return nlm::distance_exact(o, nrow, ncol, res);
+        throw std::invalid_argument("unknown distance method: " + method);
+    });
+    return raster_to_array(std::move(v), nrow, ncol);
+}
+
+py::array_t<double> py_jenks_breaks(const CArray<double>& sorted, int k) {
+    std::vector<double> d(sorted.data(), sorted.data() + sorted.size());
+    if (k < 1) throw py::value_error("k must be >= 1");
+    std::vector<double> b = run_parallel(0, [&] { return nlm::jenks_breaks(d, k); });
+    return vector_to_array(std::move(b));
+}
+
+py::array_t<double> py_cut(const CArray<double>& x, const CArray<double>& breaks) {
+    py::array_t<double> out(x.request().shape);
+    std::vector<double> b(breaks.data(), breaks.data() + breaks.size());
+    double* p = out.mutable_data();
+    run_parallel(0, [&] {
+        nlm::cut_include_lowest(x.data(), static_cast<i64>(x.size()), b, p);
+        return 0;
+    });
+    return out;
+}
+
+// R's sum() and cumsum() of doubles (LDOUBLE accumulation).
+double py_r_sum(const CArray<double>& x) { return lsm::r_sum(x.data(), static_cast<i64>(x.size())); }
+
+py::array_t<double> py_r_cumsum(const CArray<double>& x) {
+    py::array_t<double> out(static_cast<py::ssize_t>(x.size()));
+    double* p = out.mutable_data();
+    lsm::Extended s = 0.0;
+    for (py::ssize_t i = 0; i < x.size(); ++i) {
+        s += x.data()[i];
+        p[i] = static_cast<double>(s);
+    }
+    return out;
+}
+
 }  // namespace
 
 namespace nlm {
@@ -140,6 +238,20 @@ void register_python(py::module_& m) {
           "Draws from R's generator after set.seed(seed) (Mersenne-Twister, Inversion, Rejection).");
     m.def("nlm_std_sequence", &std_sequence, py::arg("seed"), py::arg("ops"),
           "Draws from std::mt19937(seed) with libstdc++'s distributions.");
+    m.def("nlm_random", &py_random_field, py::arg("seed"), py::arg("nrow"), py::arg("ncol"), "nlm_random() before rescaling.");
+    m.def("nlm_percolation", &py_percolation, py::arg("seed"), py::arg("nrow"), py::arg("ncol"), py::arg("prob"),
+          "nlm_percolation() (1/0).");
+    m.def("nlm_planar_gradient", &py_planar_gradient, py::arg("nrow"), py::arg("ncol"), py::arg("direction"),
+          py::arg("rescale"), py::arg("edge") = false, "nlm_planargradient() / nlm_edgegradient().");
+    m.def("nlm_rescale", &py_rescale, py::arg("x"), "NLMR's util_rescale() (a copy).");
+    m.def("nlm_distance", &py_distance, py::arg("origin"), py::arg("method"), py::arg("res") = 1.0, py::arg("xmin") = 0.0,
+          py::arg("ymax") = 0.0, py::arg("xres") = 1.0, py::arg("yres") = 1.0,
+          "Distance to the origin cells: 'gdal' / 'haversine' (terra::distance) or 'exact'.");
+    m.def("nlm_jenks_breaks", &py_jenks_breaks, py::arg("sorted"), py::arg("k"), "NLMR's rcpp_get_jenksbreaks().");
+    m.def("nlm_r_sum", &py_r_sum, py::arg("x"), "R's sum() of doubles (80-bit accumulation).");
+    m.def("nlm_r_cumsum", &py_r_cumsum, py::arg("x"), "R's cumsum() of doubles (80-bit accumulation).");
+    m.def("nlm_cut", &py_cut, py::arg("x"), py::arg("breaks"),
+          "base::cut(x, breaks, include.lowest = TRUE, labels = FALSE) (NaN outside).");
 }
 
 }  // namespace nlm

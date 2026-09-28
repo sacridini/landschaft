@@ -23,6 +23,7 @@ It provides a native **C++17 / OpenMP** core exposed through zero-copy **pybind1
 13. [Landscape Metrics (FRAGSTATS / landscapemetrics)](#13-landscape-metrics-fragstats--landscapemetrics)
 14. [Habitat Connectivity Graphs (Conefor Sensinode / Makurhini)](#14-habitat-connectivity-graphs-conefor-sensinode--makurhini)
 15. [Circuit Connectivity (Circuitscape / Omniscape)](#15-circuit-connectivity-circuitscape--omniscape)
+16. [Neutral Landscape Models (NLMR)](#16-neutral-landscape-models-nlmr)
 
 ---
 
@@ -1881,3 +1882,46 @@ with CHOLMOD and 182 s with its default cg+amg. The resistances agree with CHOLM
 5e-10 (relative); an exact sparse LU of the grounded Laplacian (scipy, no diagonal shift)
 differs from both by as much: that is the conditioning of a 1 M-node Laplacian and
 Circuitscape's 10ε shift, not the solver.
+
+---
+
+## 16. Neutral Landscape Models (NLMR)
+
+`ls.nlm` simulates neutral landscapes, the null models of landscape ecology, as
+the R package NLMR does, and returns `xarray.DataArray`s on NLMR's grid (origin
+0, 0; `resolution` cell size). With the same `seed` (NLMR's `user_seed`) each
+model gives NLMR's landscape bit for bit: R's generator (`set.seed`, `runif`,
+`rnorm` by inversion, `sample`) and the libstdc++ distributions of NLMR's C++
+code (`std::mt19937`) are reproduced. `seed=None` draws a seed and stores it in
+`attrs["seed"]`.
+
+```python
+import landschaft as ls
+
+r = ls.nlm.random(200, 150, seed=42)                     # uniform values, rescaled to 0-1
+p = ls.nlm.percolation(200, 150, prob=0.4, seed=1)        # 0/1 (uint8)
+g = ls.nlm.planar_gradient(200, 150, direction=45)        # direction=None: drawn from the seed
+e = ls.nlm.edge_gradient(200, 150, seed=3)
+d = ls.nlm.distance_gradient(200, 150, origin=(10, 20, 30, 40))
+classes = ls.nlm.classify(r, weighting=[0.5, 0.3, 0.2])   # int32 classes 1..3 (0 = missing)
+jenks = ls.nlm.classify(r, n=4)                           # Jenks natural breaks
+x = ls.nlm.rescale(some_array)                            # NLMR's util_rescale
+```
+
+NLMR behaviours kept with `nlmr_compat=True` (the default where they apply):
+
+- `distance_gradient`: `origin` is applied as `(first row, last row, first column,
+  last column)`, as NLMR indexes the raster; `terra::distance` treats rasters of at
+  most 360 x 90 cells as longitude/latitude (terra's default CRS for such an extent)
+  and returns haversine distances in metres; larger rasters get GDAL's proximity
+  algorithm (cell units, float32). `nlmr_compat=False` gives exact Euclidean
+  distances times `resolution`, with `origin = (first column, last column, first
+  row, last row)`.
+- `classify`: `sum`/`cumsum` of the weights in 80-bit precision as R; when all
+  class boundaries are equal every cell becomes class 1; Jenks' breaks cost
+  O(classes x cells^2) as in NLMR (parallel over the rows of each class column).
+
+Reference: `tools/make_reference_nlm.py` (NLMR 1.4.0 installed from a clone into a
+private R library, R 4.4.2; the libstdc++ distributions checked against a probe
+built with the Rtools g++), tests in `tests/test_nlm.py` and
+`tests/test_nlm_rng.py`.

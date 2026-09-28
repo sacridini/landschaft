@@ -400,8 +400,17 @@ Referência: NLMR do clone local instalado numa biblioteca R própria
 libstdc++ conferidas com um programa compilado pelo g++ do Rtools.
 
 Fases:
-0. geradores do R e da libstdc++, biblioteca R com o NLMR, script de referência;
-1. gradientes, `random`, `percolation`, `rescale`, `classify` (com Jenks);
+0. geradores do R e da libstdc++, biblioteca R com o NLMR, script de referência.
+   **Feita** (`src/cpp/nlm/rng.cpp`: todos os fluxos bit a bit com o R 4.4.2 e com um
+   programa compilado pelo g++ 13.3 do Rtools, na primeira tentativa);
+1. gradientes, `random`, `percolation`, `rescale`, `classify` (com Jenks). **Feita**
+   (0.54.0, tudo bit a bit com o NLMR). Descoberto: o `terra::rast(ncol, nrow, xmin = 0,
+   xmax = ncol, ...)` sem CRS vira lon/lat quando o extent cabe em ±360 × ±90, então o
+   `distancegradient` de rasters até 360 × 90 dá distâncias haversine em metros (esfera de
+   6378137 m, busca podada por latitude do terra, `sin`/`cos`/`atan2` x87 do mingw); acima
+   disso é o `GDALComputeProximity` (varredura com o alvo mais próximo propagado, float32).
+   `sum`/`cumsum` das proporções do `classify` em 80 bits; o Jenks roda coluna a coluna
+   com as linhas em paralelo (as mesmas somas);
 2. `mpd`, `neigh`, `randomrectangularcluster`;
 3. `randomcluster`, `curds`;
 4. o `fft` do R portado; `gaussianfield`, `fbm`;

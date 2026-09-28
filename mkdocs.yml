@@ -170,6 +170,7 @@ nav:
       - Distance & restoration: api/distance.md
       - Change detection: api/change.md
       - Large data & batch: api/batch.md
+      - Neutral landscape models: api/nlm.md
   - Benchmarks: benchmarks.md
   - About:
       - Changelog: about/changelog.md

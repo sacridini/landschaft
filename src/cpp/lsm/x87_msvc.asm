@@ -96,6 +96,26 @@ lsm_x87_cos PROC
     ret
 lsm_x87_cos ENDP
 
+; double lsm_x87_atan2(double y, double x): the mingw-w64 atan2() (fpatan
+; with 64-bit precision, rounded).
+lsm_x87_atan2 PROC
+    movsd   REAL8 PTR [rsp+8], xmm0
+    movsd   REAL8 PTR [rsp+24], xmm1
+    fnstcw  WORD PTR [rsp+16]
+    mov     ax, WORD PTR [rsp+16]
+    and     ax, 0F0FFh
+    or      ax, 0300h
+    mov     WORD PTR [rsp+18], ax
+    fldcw   WORD PTR [rsp+18]
+    fld     REAL8 PTR [rsp+8]
+    fld     REAL8 PTR [rsp+24]
+    fpatan
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_atan2 ENDP
+
 ; R's LDOUBLE loops (sum(), mean(), var()): accumulated on the x87 unit with
 ; 64-bit precision, as R's gcc build does, then rounded to double once.
 ; Home space: [rsp+8] temporary, [rsp+16] saved / [rsp+18] new control word,

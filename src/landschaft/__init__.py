@@ -78,6 +78,7 @@ from .io import (
     write_raster,
 )
 from .morphology import ParcellationResult, contortion, parcellation
+from . import nlm
 from .lsm import (
     Landscape,
     SpatialSignatureAnalysis,
@@ -182,6 +183,7 @@ __all__ = [
     "accounting_colormap",
     "change_colormap",
     "circuit",
+    "nlm",
     "batch",
     "clustering_fac",
     "conefor_inputs",
