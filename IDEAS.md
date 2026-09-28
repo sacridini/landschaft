@@ -711,7 +711,23 @@ Fases:
    Bio.Phylo, DendroPy e ete pelo Newick com precisão total (o escritor do Bio.Phylo arredonda
    os comprimentos) lido pelo nosso parser compatível com o Biodiverse. Extra opcional `bio`;
 10. extras (IEI do BiodiverseX, export no formato do Biodiverse), tutorial, otimização
-    (janela incremental etc.).
+    (janela incremental etc.). **Feita** (0.74.0): `iei_stats` e `iei_data` (o plugin
+    BiodiverseX::Indices::IEI entra no `@ISA` do harness), iguais bit a bit;
+    `SpatialResult.to_biodiverse_csv` escreve o texto do export "Delimited text" byte a byte
+    (9 casos: listas simétricas e assimétricas, listas-array contadas, `no_data_value`,
+    separador tab e aspas simples; `make_reference_bio.py export`); `ClusterResult.cut(k)`;
+    `ls.bio.example_data` (dados de exemplo do Biodiverse no pacote) e o tutorial
+    `docs/tutorials/biodiversity.md`. Descobertas: o export simétrico pega as chaves do
+    primeiro elemento e troca indefinidos por `no_data_value`; o assimétrico usa a união das
+    chaves, deixa vazios os indefinidos e soma 1 ao `no_data_value` por ocorrência nas
+    listas-array; as chaves seguem o `natsort` do Sort::Key::Natural (dígitos pelo
+    comprimento). Otimização: a janela incremental ficou desnecessária (17,6 mil grupos com
+    PD/PE/RPE em 0,1 s); o gargalo real era a alocação espacial das randomizações
+    (conjuntos por rótulo em `std::set` percorridos para cada ocorrência → vetores
+    marcados por passagem: `rand_diffusion` 10× e `rand_random_walk` 5× mais rápidos, com as
+    listas de vizinhos montadas em numpy) e as iterações da família `rand_structured` passam a
+    randomizar a próxima enquanto a atual é analisada (~30 %; as trocas ficam em sequência
+    porque o curveball perde velocidade ao lado das threads da análise).
 
 ## Observações para os testes
 

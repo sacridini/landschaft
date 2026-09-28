@@ -336,6 +336,49 @@ class SpatialResult:
         cols = list(indices) if indices is not None else list(self.table.columns)
         return self.bd.to_geodataframe(self.table[cols])
 
+    def to_biodiverse_csv(self, path, list_name: str = "SPATIAL_RESULTS", sep: str = ",", quote: str = '"',
+                          no_data_value=None) -> None:
+        """Write a list as Biodiverse's "Delimited text" export does.
+
+        Parameters
+        ----------
+        path : str or path-like
+            Output file.
+        list_name : str
+            ``SPATIAL_RESULTS`` (the scalar indices) or a list index
+            (``ENDW_WTLIST``...).
+        sep, quote : str
+            Separator and quote character (``"tab"`` and ``"space"`` accepted).
+        no_data_value : optional
+            Written where a group has no value (empty by default).
+
+        Notes
+        -----
+        The text is the same as Biodiverse writes: one row per group of the
+        BaseData (sorted), columns ``ELEMENT``, ``Axis_0``... and the keys in
+        natural order. Keys missing from a group get ``no_data_value``; an
+        array list (``IEI_DATA_ARRAY``) gives the count of each value.
+
+        Examples
+        --------
+        >>> import tempfile, pathlib
+        >>> import pandas as pd
+        >>> import landschaft as ls
+        >>> df = pd.DataFrame({"sp": ["a", "b", "a"], "x": [0.5, 1.5, 1.5], "y": [0.5] * 3})
+        >>> bd = ls.bio.BaseData.from_dataframe(df, ["x", "y"], "sp", cell_sizes=[1, 1])
+        >>> res = ls.bio.spatial_analysis(bd, "sp_self_only()", ["richness"])
+        >>> path = pathlib.Path(tempfile.mkdtemp()) / "richness.csv"
+        >>> res.to_biodiverse_csv(path)
+        >>> print(path.read_text())
+        ELEMENT,Axis_0,Axis_1,RICHNESS_ALL,RICHNESS_SET1
+        0.5:0.5,0.5,0.5,1,1
+        1.5:0.5,1.5,0.5,2,2
+        <BLANKLINE>
+        """
+        from ._export import write_biodiverse_csv
+
+        write_biodiverse_csv(self, path, list_name, sep, quote, no_data_value)
+
 
 def spatial_analysis(
     bd,
@@ -423,7 +466,7 @@ def spatial_analysis(
     from ._names import looks_like_number
 
     if not all(looks_like_number(lb) for lb in bd.labels):
-        valid = [c for c in valid if not c.startswith(("calc_numeric_label", "calc_num_labels"))]
+        valid = [c for c in valid if not c.startswith(("calc_numeric_label", "calc_num_labels", "calc_iei"))]
     if not any(bd.label_properties[c].notna().any() for c in bd.label_properties.columns):
         valid = [c for c in valid if not c.startswith("calc_lbprop")]
     if not any(bd.group_properties[c].notna().any() for c in bd.group_properties.columns):

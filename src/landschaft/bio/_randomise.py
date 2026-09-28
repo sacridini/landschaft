@@ -73,7 +73,7 @@ def _spatial_alloc(bd, state: dict, conditions, order: str, backtracking: str, r
             r = rows.get(g)
             per_set = []
             for ip, ix in stored:
-                per_set.append([] if r is None else sorted(int(x) for x in ix[ip[r]:ip[r + 1]]))
+                per_set.append([] if r is None else np.sort(ix[ip[r]:ip[r + 1]]).astype(np.int64).tolist())
             lists.append(per_set)
         types = [_as_condition(c).result_type for c in conds]
         same = all(t.startswith(("always_same", "always_true")) for t in types)
@@ -184,6 +184,10 @@ def rand_curveball(bd, rng, **args):
     """Curveball algorithm (Strona et al. 2014): keeps richness and ranges."""
     return _swaps("curveball", bd, rng, **args)
 
+
+# randomised while the previous iteration is analysed (the swap algorithms slow down beside the
+# analysis threads, so they run in turn)
+_PIPELINED = {"rand_structured", "rand_spatially_structured", "rand_diffusion", "rand_random_walk"}
 
 FUNCTIONS: dict[str, Callable] = {
     "rand_nochange": rand_nochange,
@@ -479,23 +483,45 @@ class Randomisation:
 
     def run(self, iterations: int = 1, n_threads: int | None = None) -> Randomisation:
         """Run more iterations (the random stream continues)."""
-        from .._threads import resolve
+        from .._threads import limit, resolve
 
         threads = resolve(n_threads)
         fn = FUNCTIONS[self.function]
-        res = self.result
-        for _ in range(int(iterations)):
-            rand_bd = _randomised_basedata(res.bd, self._rng, fn, self._state, self.args)
-            tree = self._shuffled_tree()
-            table, lists = _evaluate(rand_bd, res._run, threads, tree=tree)
-            self._scalars.add(table.reindex(columns=res.table.columns).to_numpy(dtype=np.float64))
-            for lname, (idx, counts) in self._lists.items():
-                df = lists[lname]
-                r = pd.Series(df["value"].to_numpy(dtype=np.float64),
-                              index=pd.MultiIndex.from_arrays([df["group"].to_numpy(), df["key"].to_numpy()]))
-                counts.add(r.reindex(idx).to_numpy(dtype=np.float64))
-            self.iterations += 1
+        n = int(iterations)
+
+        def generate():
+            # the random stream is consumed here only, in iteration order
+            with limit(1):
+                rand_bd = _randomised_basedata(self.result.bd, self._rng, fn, self._state, self.args)
+                return rand_bd, self._shuffled_tree()
+
+        if threads < 2 or n < 2 or self.function not in _PIPELINED:
+            for _ in range(n):
+                self._compare(*generate(), threads)
+            return self
+        # pipeline: the next iteration is randomised while this one is analysed
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(1) as pool:
+            pending = pool.submit(generate)
+            for i in range(n):
+                rand_bd, tree = pending.result()
+                if i + 1 < n:
+                    pending = pool.submit(generate)
+                self._compare(rand_bd, tree, threads)
         return self
+
+    def _compare(self, rand_bd, tree, threads: int) -> None:
+        """Analyse one randomised basedata and update the counters."""
+        res = self.result
+        table, lists = _evaluate(rand_bd, res._run, threads, tree=tree)
+        self._scalars.add(table.reindex(columns=res.table.columns).to_numpy(dtype=np.float64))
+        for lname, (idx, counts) in self._lists.items():
+            df = lists[lname]
+            r = pd.Series(df["value"].to_numpy(dtype=np.float64),
+                          index=pd.MultiIndex.from_arrays([df["group"].to_numpy(), df["key"].to_numpy()]))
+            counts.add(r.reindex(idx).to_numpy(dtype=np.float64))
+        self.iterations += 1
 
     def _shuffled_tree(self):
         """The analysis tree for this iteration (``randomise_trees_by``)."""

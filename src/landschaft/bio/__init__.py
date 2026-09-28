@@ -24,6 +24,7 @@ Typical use::
 from ._basedata import BaseData, snap_coordinates
 from ._cluster import ClusterResult, cluster, region_grower
 from ._conditions import Neighbourhoods, SpatialCondition, definition_query, neighbours
+from ._examples import example_data
 from ._gbif import read_occurrences
 from ._grids import h3_cells, hex_centres
 from ._matrix import Matrix, read_matrix
@@ -44,6 +45,7 @@ __all__ = [
     "Tree",
     "cluster",
     "definition_query",
+    "example_data",
     "h3_cells",
     "hex_centres",
     "list_calculations",

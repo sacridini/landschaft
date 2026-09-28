@@ -23,6 +23,9 @@ use Biodiverse::Tree;
 use Biodiverse::Indices;
 use Biodiverse::Matrix;
 use Biodiverse::ElementProperties;
+#  BiodiverseX plugins are not loaded by Biodiverse::Indices
+use BiodiverseX::Indices::IEI;
+push @Biodiverse::Indices::ISA, 'BiodiverseX::Indices::IEI';
 
 local $| = 1;
 
@@ -262,6 +265,23 @@ sub run_spatial {
             seed       => $r->{seed},
             %{$r->{args} // {}},
         );
+    }
+    #  exports: the text Biodiverse writes (instead of the results)
+    if ($task->{export}) {
+        my %texts;
+        foreach my $e (@{$task->{export}}) {
+            my $file = $e->{file};
+            $sp->export(format => 'Delimited text', file => $file, list => $e->{list}, %{$e->{args} // {}});
+            open my $fh, '<:raw', $file or croak "cannot read $file";
+            local $/;
+            my $text = <$fh>;
+            close $fh;
+            unlink $file;
+            $text =~ s/\r\n/\n/g;
+            $texts{$e->{name} // $e->{list}} = $text;
+        }
+        $bd->delete_output(output => $sp);
+        return \%texts;
     }
     my %results;
     my $pass = $sp->get_pass_def_query;

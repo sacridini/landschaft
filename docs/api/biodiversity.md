@@ -8,7 +8,9 @@ Rosauer 2010).
 Reading data gives the same groups, labels and sample counts as Biodiverse
 with the same settings: coordinates are snapped to the cell grid the same
 way and groups and labels get the same names (coordinates or name parts joined
-with `:`), so results can be compared one to one.
+with `:`), so results can be compared one to one. The
+[biodiversity tutorial](../tutorials/biodiversity.md) walks through a complete
+study.
 
 <!-- no-run -->
 ```python
@@ -32,6 +34,8 @@ bd = ls.bio.BaseData.from_raster("sdm_stack.tif", threshold=0.5)
 ::: landschaft.bio.BaseData
 
 ::: landschaft.bio.snap_coordinates
+
+::: landschaft.bio.example_data
 
 ## Occurrence records
 
@@ -80,9 +84,13 @@ Biodiverse samples random sets of tips, its Mersenne Twister draws: pass
 `prng_seed`). With label or group properties: their values, frequencies,
 summary statistics, quantiles and Getis-Ord Gi* (also weighted by local
 ranges); with numeric labels: their statistics, quantiles, harmonic and
-geometric means, dissimilarity between neighbour sets and Gi*; with a label
+geometric means, dissimilarity between neighbour sets, Gi* and the
+inter-event interval statistics of BiodiverseX (`iei_stats`, `iei_data`: the
+intervals between the numeric labels of each group); with a label
 matrix (`matrix=`): matrix statistics, Rao's quadratic entropy and the
 comparison of two neighbour sets. Values are identical to Biodiverse's.
+`SpatialResult.to_biodiverse_csv` writes the results as Biodiverse's
+"Delimited text" export does, the same text byte for byte.
 
 ::: landschaft.bio.spatial_analysis
 
@@ -108,6 +116,7 @@ Groups joined into a dendrogram by the dissimilarity of their labels
 (`cluster`) or grown into regions that maximise an index (`region_grower`),
 as Biodiverse does, including its tie handling (seeded by `prng_seed`),
 spatially constrained clustering and the indices of each node's groups.
+`ClusterResult.cut` splits the dendrogram into a number of clusters.
 
 ::: landschaft.bio.cluster
 

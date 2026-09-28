@@ -160,6 +160,7 @@ nav:
       - Change detection: tutorials/change-detection.md
       - Large data & batch: tutorials/large-data.md
       - Neutral landscapes: tutorials/neutral-landscapes.md
+      - Biodiversity analysis: tutorials/biodiversity.md
   - API reference:
       - api/index.md
       - Data & configuration: api/data.md

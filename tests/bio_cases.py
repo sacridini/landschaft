@@ -253,6 +253,21 @@ NUMERIC_CALCS = [
     "calc_numeric_label_data", "calc_num_labels_gistar",
 ]
 MATRIX_CALCS = ["calc_matrix_stats", "calc_mx_rao_qe"]
+# Biodiverse's delimited text export of spatial results: a case of another collection and its lists
+EXPORT_CASES = {
+    "self_all": {"from": "spatial", "case": "self_all", "lists": ["SPATIAL_RESULTS", "ENDW_WTLIST"]},
+    "two_sets": {"from": "spatial", "case": "two_sets",
+                 "lists": ["SPATIAL_RESULTS", "EL_LIST_SET1", "ABC3_QUANTILES_SET1", "END_ABS_ALL_LIST"]},
+    "block": {"from": "spatial", "case": "block", "lists": ["SPATIAL_RESULTS", "ENDW_WTLIST"]},
+    "defq": {"from": "spatial", "case": "defq", "lists": ["SPATIAL_RESULTS", "ENDW_WTLIST"]},
+    "no_data": {"from": "spatial", "case": "defq", "lists": ["SPATIAL_RESULTS", "ENDW_WTLIST"],
+                "args": {"no_data_value": -9999}},
+    "tab_quote": {"from": "spatial", "case": "counts_two", "lists": ["SPATIAL_RESULTS", "ENDW_WTLIST"],
+                  "args": {"sep_char": "tab", "quote_char": "'"}},
+    "phylo": {"from": "phylo", "case": "circle", "lists": ["SPATIAL_RESULTS", "PE_WTLIST"]},
+    "iei": {"from": "props", "case": "iei_circle", "lists": ["SPATIAL_RESULTS", "IEI_DATA_ARRAY", "IEI_DATA_HASH"]},
+    "iei_no_data": {"from": "props", "case": "iei_circle", "lists": ["IEI_DATA_ARRAY"], "args": {"no_data_value": 5}},
+}
 PROPERTY_CASES = {
     "props_circle": {"basedata": "site_100k", "conditions": ["sp_circle (radius => 200000)"], "calcs": PROP_CALCS},
     "props_two_sets": {"basedata": "site_100k", "conditions": ["sp_self_only()", "sp_circle (radius => 300000)"],
@@ -266,6 +281,10 @@ PROPERTY_CASES = {
                          "calcs": NUMERIC_CALCS + ["calc_numeric_label_dissimilarity"]},
     "numeric_stats_only": {"basedata": "numeric", "conditions": ["sp_circle (radius => 15)"],
                            "calcs": ["calc_numeric_label_stats", "calc_num_labels_gistar"]},
+    "iei_circle": {"basedata": "numeric", "conditions": ["sp_circle (radius => 15)"],
+                   "calcs": ["calc_iei_stats", "calc_iei_data"]},
+    "iei_two_sets": {"basedata": "numeric", "conditions": ["sp_self_only()", "sp_circle (radius => 25)"],
+                     "calcs": ["calc_iei_stats", "calc_iei_data"]},
     "matrix_circle": {"basedata": "site_100k", "matrix": "full", "conditions": ["sp_circle (radius => 200000)"],
                       "calcs": MATRIX_CALCS},
     "matrix_two_sets": {"basedata": "site_100k", "matrix": "full",

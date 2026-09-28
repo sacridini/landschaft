@@ -315,6 +315,7 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 |---|---|
 | [`ls.bio.BaseData`](biodiversity.md#landschaft.bio.BaseData) | Groups × labels sample counts with the group coordinates |
 | [`ls.bio.snap_coordinates`](biodiversity.md#landschaft.bio.snap_coordinates) | Cell centres as Biodiverse's text import computes them (before naming) |
+| [`ls.bio.example_data`](biodiversity.md#landschaft.bio.example_data) | Path of Biodiverse's example data (GPL-3, Laffan et al.) |
 | [`ls.bio.read_occurrences`](biodiversity.md#landschaft.bio.read_occurrences) | Occurrence records of a GBIF download or a Darwin Core Archive, cleaned |
 | [`ls.bio.neighbours`](biodiversity.md#landschaft.bio.neighbours) | Neighbour sets of every group, as Biodiverse's spatial analysis finds them |
 | [`ls.bio.definition_query`](biodiversity.md#landschaft.bio.definition_query) | Boolean mask of the groups passing a definition query |
@@ -323,8 +324,18 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.bio.spatial_analysis`](biodiversity.md#landschaft.bio.spatial_analysis) | Biodiverse's spatial analysis: indices over the neighbourhood of every group |
 | [`ls.bio.list_calculations`](biodiversity.md#landschaft.bio.list_calculations) | The calculations available to `spatial_analysis` |
 | [`ls.bio.SpatialResult`](biodiversity.md#landschaft.bio.SpatialResult) | Results of `spatial_analysis` |
+| [`ls.bio.randomise`](biodiversity.md#landschaft.bio.randomise) | Randomise the basedata of a spatial analysis and compare the results |
+| [`ls.bio.Randomisation`](biodiversity.md#landschaft.bio.Randomisation) | Randomisations of a `SpatialResult` (see `randomise`) |
+| [`ls.bio.cluster`](biodiversity.md#landschaft.bio.cluster) | Cluster the groups by the dissimilarity of their labels (Biodiverse's cluster analysis) |
+| [`ls.bio.region_grower`](biodiversity.md#landschaft.bio.region_grower) | Grow regions by joining the pairs with the highest value of an index (Biodiverse's RegionGrower) |
+| [`ls.bio.ClusterResult`](biodiversity.md#landschaft.bio.ClusterResult) | Results of `cluster` |
 | [`ls.bio.Tree`](biodiversity.md#landschaft.bio.Tree) | A rooted phylogenetic tree |
 | [`ls.bio.read_tree`](biodiversity.md#landschaft.bio.read_tree) | Read one tree (the first, or the one with index/name ``index``) |
 | [`ls.bio.read_trees`](biodiversity.md#landschaft.bio.read_trees) | Read every tree in a Newick, Phylip (several Newicks) or Nexus file |
 | [`ls.bio.Matrix`](biodiversity.md#landschaft.bio.Matrix) | A symmetric matrix of values between elements (usually labels) |
 | [`ls.bio.read_matrix`](biodiversity.md#landschaft.bio.read_matrix) | Read a Biodiverse matrix file (full or lower/upper triangle, or sparse pairs) |
+| [`ls.bio.hex_centres`](biodiversity.md#landschaft.bio.hex_centres) | Centres of the hexagons (circumradius ``size``) containing each point |
+| [`ls.bio.h3_cells`](biodiversity.md#landschaft.bio.h3_cells) | H3 cell of each point (``h3`` package) |
+| [`ls.bio.save_session`](biodiversity.md#landschaft.bio.save_session) | Save basedatas, trees, matrices and analysis results in one file |
+| [`ls.bio.load_session`](biodiversity.md#landschaft.bio.load_session) | Load the objects saved with `save_session` (a dict by name) |
+| [`ls.bio.read_properties`](biodiversity.md#landschaft.bio.read_properties) | Read a Biodiverse element properties file (label or group properties) |

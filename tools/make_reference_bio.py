@@ -128,56 +128,83 @@ def make_neighbours(unsorted: bool) -> None:
     save("neighbours", out)
 
 
+def _basedata_spec(case: dict) -> dict:
+    spec = dict(bio_cases.BASEDATA_CASES[case["basedata"]]["biodiverse"])
+    spec["file"] = _path(spec["file"])
+    return spec
+
+
+def _spatial_job(name: str, case: dict) -> dict:
+    task = {"type": "spatial", "name": name, "spatial_conditions": case["conditions"],
+            "calculations": bio_cases.spatial_calcs(case)}
+    if case.get("definition_query"):
+        task["definition_query"] = case["definition_query"]
+    return {"basedata": _basedata_spec(case), "tasks": [task]}
+
+
+def _phylo_job(name: str, case: dict) -> dict:
+    task = {"type": "spatial", "name": name, "spatial_conditions": case["conditions"],
+            "calculations": bio_cases.phylo_calcs(case)}
+    return {"basedata": _basedata_spec(case), "tree": {"file": _path(case["tree"])}, "tasks": [task]}
+
+
+def _props_job(name: str, case: dict) -> dict:
+    job = {"basedata": _basedata_spec(case)}
+    lb, gp = bio_cases.property_case_uses(case)
+    for flag, key, props in ((lb, "labels_properties", bio_cases.LABEL_PROPS),
+                             (gp, "groups_properties", bio_cases.GROUP_PROPS)):
+        if flag:
+            job[key] = {"file": _path(props["file"]),
+                        "args": {"input_element_cols": props["element_columns"], **props["properties"]}}
+    if "matrix" in case:
+        mc = bio_cases.MATRIX_CASES[case["matrix"]]
+        job["matrix"] = {"file": _path(mc["file"]), "params": mc["params"], "sparse": mc["sparse"],
+                         "args": mc.get("args", {})}
+    job["tasks"] = [{"type": "spatial", "name": name, "spatial_conditions": case["conditions"],
+                     "calculations": case["calcs"]}]
+    return job
+
+
 def make_spatial(unsorted: bool) -> None:
     out = {}
     for name, case in bio_cases.SPATIAL_CASES.items():
-        bdcase = bio_cases.BASEDATA_CASES[case["basedata"]]
-        spec = dict(bdcase["biodiverse"])
-        spec["file"] = _path(spec["file"])
-        task = {"type": "spatial", "name": name, "spatial_conditions": case["conditions"],
-                "calculations": bio_cases.spatial_calcs(case)}
-        if case.get("definition_query"):
-            task["definition_query"] = case["definition_query"]
         print(name)
-        out[name] = run({"basedata": spec, "tasks": [task]}, unsorted)[name]
+        out[name] = run(_spatial_job(name, case), unsorted)[name]
     save("spatial", out)
 
 
 def make_phylo(unsorted: bool) -> None:
     out = {}
     for name, case in bio_cases.PHYLO_CASES.items():
-        bdcase = bio_cases.BASEDATA_CASES[case["basedata"]]
-        spec = dict(bdcase["biodiverse"])
-        spec["file"] = _path(spec["file"])
-        task = {"type": "spatial", "name": name, "spatial_conditions": case["conditions"],
-                "calculations": bio_cases.phylo_calcs(case)}
         print(name)
-        out[name] = run({"basedata": spec, "tree": {"file": _path(case["tree"])}, "tasks": [task]}, unsorted)[name]
+        out[name] = run(_phylo_job(name, case), unsorted)[name]
     save("phylo", out)
 
 
 def make_props(unsorted: bool) -> None:
     out = {}
     for name, case in bio_cases.PROPERTY_CASES.items():
-        bdcase = bio_cases.BASEDATA_CASES[case["basedata"]]
-        spec = dict(bdcase["biodiverse"])
-        spec["file"] = _path(spec["file"])
-        job = {"basedata": spec}
-        lb, gp = bio_cases.property_case_uses(case)
-        for flag, key, props in ((lb, "labels_properties", bio_cases.LABEL_PROPS),
-                                 (gp, "groups_properties", bio_cases.GROUP_PROPS)):
-            if flag:
-                job[key] = {"file": _path(props["file"]),
-                            "args": {"input_element_cols": props["element_columns"], **props["properties"]}}
-        if "matrix" in case:
-            mc = bio_cases.MATRIX_CASES[case["matrix"]]
-            job["matrix"] = {"file": _path(mc["file"]), "params": mc["params"], "sparse": mc["sparse"],
-                             "args": mc.get("args", {})}
-        job["tasks"] = [{"type": "spatial", "name": name, "spatial_conditions": case["conditions"],
-                         "calculations": case["calcs"]}]
         print(name)
-        out[name] = run(job, unsorted)[name]
+        out[name] = run(_props_job(name, case), unsorted)[name]
     save("props", out)
+
+
+def make_export(unsorted: bool) -> None:
+    import tempfile
+
+    makers = {"spatial": (bio_cases.SPATIAL_CASES, _spatial_job), "phylo": (bio_cases.PHYLO_CASES, _phylo_job),
+              "props": (bio_cases.PROPERTY_CASES, _props_job)}
+    out = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, case in bio_cases.EXPORT_CASES.items():
+            cases, maker = makers[case["from"]]
+            job = maker(name, cases[case["case"]])
+            job["tasks"][0]["export"] = [
+                {"list": lst, "file": str(Path(tmp) / f"{name}_{i}.csv"), "args": case.get("args", {})}
+                for i, lst in enumerate(case["lists"])]
+            print(name)
+            out[name] = run(job, unsorted)[name]
+    save("export", out)
 
 
 def make_dependencies(unsorted: bool) -> None:
@@ -269,7 +296,7 @@ def make_matrices(unsorted: bool) -> None:
 
 def main(argv: list[str]) -> None:
     unsorted = "--unsorted" in argv
-    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours", "spatial", "phylo", "phylocom", "props", "rand", "cluster"]
+    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours", "spatial", "phylo", "phylocom", "props", "rand", "cluster", "export"]
     if "data" in parts:
         bio_cases.write_synthetic_data()
         bio_cases.write_rasters()
@@ -304,6 +331,8 @@ def main(argv: list[str]) -> None:
         make_rand(unsorted)
     if "cluster" in parts:
         make_cluster(unsorted)
+    if "export" in parts:
+        make_export(unsorted)
     if "dependencies" in parts:
         make_dependencies(unsorted)
 

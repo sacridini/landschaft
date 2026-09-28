@@ -7,6 +7,7 @@ import json
 import math
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import landschaft as ls
@@ -130,3 +131,15 @@ def test_binomial_deviates_match_perl():
     rng = ls._core.BioRandom(77)
     got = [[rng.binomial(p, n) for p, n in cases] for _ in range(3)]
     assert got == [[0, 1, 2, 34, 72, 43, 16], [0, 1, 0, 39, 50, 47, 11], [1, 0, 5, 38, 60, 47, 11]]
+
+
+@pytest.mark.parametrize("function", ["rand_structured", "rand_diffusion", "rand_curveball"])
+def test_pipelined_iterations_match_sequential(function):
+    """Randomising the next iteration during the analysis changes nothing, also when continued."""
+    bd = ls.bio.BaseData.from_table(ls.bio.example_data("sites"), group_columns=["x", "y"],
+                                    label_columns=["genus", "species"], cell_sizes=[100000, 100000])
+    res = ls.bio.spatial_analysis(bd, "sp_circle (radius => 200000)", ["richness", "endemism_whole"])
+    one = ls.bio.randomise(res, function, iterations=6, seed=7, n_threads=1)
+    many = ls.bio.randomise(res, function, iterations=2, seed=7, n_threads=4).run(4, n_threads=4)
+    assert many.iterations == 6
+    pd.testing.assert_frame_equal(one.comparison(), many.comparison())

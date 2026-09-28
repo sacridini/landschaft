@@ -81,4 +81,11 @@ and follow along.
     Simulated landscapes as null models: random, gradients, fractals,
     clusters and mosaics; habitat maps and null-model tests.
 
+-   :material-leaf:{ .lg .middle } **[Biodiversity analysis](biodiversity.md)**
+
+    ---
+
+    Species records in grid cells: richness, endemism, phylogenetic
+    diversity and endemism, randomisations, CANAPE and regions.
+
 </div>

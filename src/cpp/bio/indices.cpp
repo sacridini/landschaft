@@ -288,6 +288,11 @@ std::vector<CalcInfo> make_registry() {
     add("calc_numeric_label_data", {}, {{"NUM_DATA_ARRAY", K::NumberArray}}, 1);
     add("calc_numeric_label_dissimilarity", {"NUMD_ABSMEAN", "NUMD_COUNT", "NUMD_VARIANCE"}, {}, 2);
     add("calc_num_labels_gistar", {"NUM_GISTAR"}, {}, 1);
+    // Inter-event intervals (BiodiverseX::Indices::IEI)
+    add("calc_iei_stats",
+        {"IEI_CV", "IEI_GMEAN", "IEI_KURT", "IEI_MAX", "IEI_MEAN", "IEI_MIN", "IEI_N", "IEI_RANGE", "IEI_SD", "IEI_SKEW"},
+        {}, 1);
+    add("calc_iei_data", {}, {{"IEI_DATA_ARRAY", K::NumberArray}, {"IEI_DATA_HASH", K::Number}}, 1);
     // Matrix
     add("calc_matrix_stats",
         {"MX_KURT", "MX_MAXVALUE", "MX_MEAN", "MX_MEDIAN", "MX_MINVALUE", "MX_N", "MX_PCT05", "MX_PCT25", "MX_PCT75",
@@ -2551,6 +2556,72 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
                     const auto& w = s.weights();
                     for (std::size_t i = 0; i < d.size(); ++i)
                         for (std::int64_t r = 0; r < w[i]; ++r) put(0, d[i], 0);
+                } else if (name == "calc_iei_stats" || name == "calc_iei_data") {
+                    // intervals between the labels (event times) of each group, groups in name order
+                    std::vector<i32> groups;
+                    std::set_union(abc.g1.begin(), abc.g1.end(), abc.g2.begin(), abc.g2.end(), std::back_inserter(groups));
+                    std::vector<double> data;
+                    std::map<std::string, std::pair<double, double>> hash;  // key -> (interval, count)
+                    auto bump = [&](double iv, double by) {
+                        auto& e = hash[perl_str(iv)];
+                        e.first = iv;
+                        e.second += by;
+                    };
+                    auto zeros = [&](double count) {
+                        if (!(count > 1)) return;
+                        const double z = count - 1;
+                        for (i64 k = 0; k < static_cast<i64>(z); ++k) data.push_back(0.0);
+                        bump(0.0, z);
+                    };
+                    for (i32 g : groups) {
+                        std::vector<std::pair<i32, double>> ls;
+                        for (i64 k = bd.indptr[g]; k < bd.indptr[g + 1]; ++k)
+                            ls.push_back({bd.indices[static_cast<std::size_t>(k)], bd.counts[static_cast<std::size_t>(k)]});
+                        if (ls.size() < 2) continue;
+                        std::stable_sort(ls.begin(), ls.end(), [&](const auto& a, const auto& b) {
+                            return bd.label_values[static_cast<std::size_t>(a.first)] <
+                                   bd.label_values[static_cast<std::size_t>(b.first)];
+                        });
+                        zeros(ls[0].second);
+                        for (std::size_t i = 1; i < ls.size(); ++i) {
+                            const double iv = bd.label_values[static_cast<std::size_t>(ls[i].first)] -
+                                              bd.label_values[static_cast<std::size_t>(ls[i - 1].first)];
+                            data.push_back(iv);
+                            bump(iv, 1);
+                            zeros(ls[i].second);
+                        }
+                    }
+                    DStats s;
+                    s.add(data);
+                    s.sort_data();
+                    if (name == "calc_iei_data") {
+                        for (double v : s.data()) put(0, v, 0);
+                        for (const auto& kv : hash) put(1, kv.second.first, kv.second.second);
+                    } else {
+                        const double n = s.count();
+                        set(6, n);
+                        if (n != 0) {
+                            const double sd = s.sd(), mean = s.mean();
+                            set(0, (!std::isnan(sd) && mean != 0) ? sd / mean : NaN);
+                            double gm = 1;
+                            const double ex = 1 / n;
+                            for (double v : s.data()) {
+                                if (v < 0) {
+                                    gm = NaN;
+                                    break;
+                                }
+                                gm *= perl_pow(v, ex);
+                            }
+                            set(1, gm);
+                            set(4, mean);
+                            set(8, sd);
+                            set(7, s.sample_range());
+                            set(9, s.skewness());
+                            set(2, s.kurtosis());
+                            set(5, s.min());
+                            set(3, s.max());
+                        }
+                    }
                 } else if (name == "calc_num_labels_gistar") {
                     set(0, gistar(num_global, num_object()));
                 } else if (name == "calc_numeric_label_dissimilarity") {

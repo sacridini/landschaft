@@ -640,6 +640,83 @@ def nlm_null():
     save(fig, "nlm_null")
 
 
+_BIO: dict = {}
+
+
+def bio_run():
+    """The tutorial's analysis of Biodiverse's example data."""
+    if not _BIO:
+        bd = ls.bio.BaseData.from_table(ls.bio.example_data("sites"), group_columns=["x", "y"],
+                                        label_columns=["genus", "species"], cell_sizes=[100000, 100000])
+        tree = ls.bio.read_tree(ls.bio.example_data("tree"))
+        res = ls.bio.spatial_analysis(bd, "sp_circle (radius => 200000)",
+                                      ["richness", "endemism_whole", "endemism_whole_lists", "pd", "pe", "phylo_rpe2"],
+                                      tree=tree)
+        rnd = ls.bio.randomise(res, "rand_structured", iterations=999, seed=2024)
+        _BIO.update(bd=bd, tree=tree, res=res, rnd=rnd)
+    return _BIO
+
+
+def bio_map(ax, grid, title: str, **kw):
+    x, y = grid["x"].values, grid["y"].values
+    dx, dy = abs(x[1] - x[0]), abs(y[1] - y[0])
+    extent = [(x.min() - dx / 2) / 1000, (x.max() + dx / 2) / 1000, (y.min() - dy / 2) / 1000,
+              (y.max() + dy / 2) / 1000]
+    im = ax.imshow(grid.values, extent=extent, interpolation="nearest", **kw)
+    ax.set_title(title)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_facecolor("white")
+    return im
+
+
+@figure
+def bio_indices():
+    run = bio_run()
+    res = run["res"]
+    fig, axes = plt.subplots(1, 4, figsize=(13, 3.4))
+    for ax, (index, title) in zip(axes, [("RICHNESS_ALL", "species richness"), ("ENDW_WE", "weighted endemism"),
+                                         ("PD", "phylogenetic diversity"), ("PE_WE", "phylogenetic endemism")]):
+        im = bio_map(ax, res.to_raster(index), title, cmap="viridis")
+        fig.colorbar(im, ax=ax, shrink=0.75)
+    save(fig, "bio_indices")
+
+
+@figure
+def bio_canape():
+    run = bio_run()
+    can = run["rnd"].canape()
+    grid = run["bd"].to_raster(can["CANAPE_CODE"])
+    palette = {0: (203, 213, 225, 255), 1: (220, 38, 38, 255), 2: (37, 99, 235, 255), 3: (168, 85, 247, 255),
+               4: (88, 28, 135, 255)}
+    labels = {0: "not significant", 1: "neo-endemism", 2: "palaeo-endemism", 3: "mixed endemism",
+              4: "super-endemism"}
+    fig, axes = plt.subplots(1, 2, figsize=(10, 3.8))
+    keys = sorted(palette)
+    cmap = ListedColormap([np.array(palette[k]) / 255 for k in keys])
+    bio_map(axes[0], grid, "CANAPE (999 randomisations)", cmap=cmap,
+            norm=BoundaryNorm(np.arange(len(keys) + 1) - 0.5, len(keys)))
+    present = set(can["CANAPE_CODE"].dropna().astype(int))
+    axes[0].legend(handles=[Patch(color=np.array(palette[k]) / 255, label=labels[k]) for k in keys if k in present],
+                   loc="upper left", bbox_to_anchor=(1.01, 1), frameon=False, fontsize=8)
+    pr = run["rnd"].p_rank()["PE_WE"]
+    im = bio_map(axes[1], run["bd"].to_raster(pr), "p-rank of PE", cmap="RdBu_r", vmin=0, vmax=1)
+    fig.colorbar(im, ax=axes[1], shrink=0.75)
+    fig.tight_layout()
+    save(fig, "bio_canape")
+
+
+@figure
+def bio_clusters():
+    run = bio_run()
+    cl = ls.bio.cluster(run["bd"], "SORENSON", "link_average", prng_seed=1)
+    groups = cl.cut(5)
+    fig, ax = plt.subplots(figsize=(5, 4))
+    cmap = ListedColormap(["#0d9488", "#f59e0b", "#6366f1", "#e11d48", "#65a30d"])
+    bio_map(ax, run["bd"].to_raster(groups), "five Sorenson clusters", cmap=cmap, vmin=0.5, vmax=5.5)
+    save(fig, "bio_clusters")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:

@@ -215,6 +215,54 @@ class ClusterResult:
     def __repr__(self) -> str:
         return f"ClusterResult({(self.nodes['children'].str.len() == 0).sum()} groups, {len(self.nodes)} nodes)"
 
+    def cut(self, k: int) -> pd.Series:
+        """Cut the dendrogram into ``k`` clusters (the highest joins are undone first).
+
+        Parameters
+        ----------
+        k : int
+            Number of clusters (at most the number of groups).
+
+        Returns
+        -------
+        pandas.Series
+            Cluster number (1 to ``k``, in the dendrogram's terminal order) of
+            each group.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import landschaft as ls
+        >>> df = pd.DataFrame({"sp": ["a", "b", "a", "b", "c", "c", "d"],
+        ...                    "x": [0.5, 0.5, 1.5, 1.5, 2.5, 3.5, 3.5], "y": [0.5] * 7})
+        >>> bd = ls.bio.BaseData.from_dataframe(df, ["x", "y"], "sp", cell_sizes=[1, 1])
+        >>> ls.bio.cluster(bd, prng_seed=1).cut(2).to_dict()
+        {'0.5:0.5': 1, '1.5:0.5': 1, '2.5:0.5': 2, '3.5:0.5': 2}
+        """
+        nodes = self.nodes
+        n_groups = int((nodes["children"].str.len() == 0).sum())
+        if not 1 <= k <= n_groups:
+            raise ValueError(f"k must be between 1 and {n_groups}")
+        height = (nodes["TOTAL_LENGTH"] - nodes["length"].fillna(0)).to_dict()
+        children = nodes["children"].to_dict()
+        first = nodes["TERMINAL_NODE_FIRST"].to_dict()
+        clusters = list(nodes.index[nodes["parent"].isna()])
+        while len(clusters) < k:
+            # the highest join still in place (ties: the first in terminal order)
+            split = max((c for c in clusters if len(children[c])), key=lambda c: (height[c], -first[c]))
+            clusters.remove(split)
+            clusters.extend(children[split])
+        out = {}
+        for i, c in enumerate(sorted(clusters, key=lambda c: first[c]), start=1):
+            stack = [c]
+            while stack:
+                nd = stack.pop()
+                if len(children[nd]):
+                    stack.extend(children[nd])
+                else:
+                    out[nd] = i
+        return pd.Series(out, name="cluster").sort_index()
+
 
 def region_grower(
     bd,

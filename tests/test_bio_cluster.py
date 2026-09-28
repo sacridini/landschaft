@@ -73,3 +73,31 @@ def test_cluster_matches_biodiverse(reference, name):
             if got == "missing" or not _same(got, v):
                 diffs.append((nm, k, v, got))
     assert not diffs, "\n".join(map(str, diffs[:20]))
+
+
+@pytest.mark.parametrize("seed", [1, 2])
+def test_cut_nests_subtrees(seed):
+    bd = _basedata("site_100k")
+    cl = ls.bio.cluster(bd, prng_seed=seed)
+    terminals = {}  # node -> set of groups below it
+    children = cl.nodes["children"].to_dict()
+
+    def below(nd):
+        if nd not in terminals:
+            terminals[nd] = {nd} if not len(children[nd]) else set().union(*(below(c) for c in children[nd]))
+        return terminals[nd]
+
+    subtrees = {frozenset(below(nd)) for nd in cl.nodes.index}
+    previous = None
+    for k in (1, 2, 3, 5, 8, 20, bd.n_groups):
+        cut = cl.cut(k)
+        assert sorted(cut.index) == sorted(bd.groups)
+        assert sorted(cut.unique()) == list(range(1, k + 1))
+        for c in range(1, k + 1):
+            assert frozenset(cut.index[cut == c]) in subtrees
+        if previous is not None:  # a finer cut splits clusters of the coarser one
+            assert (cut.groupby(previous).nunique() >= 1).all()
+            assert (previous.groupby(cut).nunique() == 1).all()
+        previous = cut
+    with pytest.raises(ValueError):
+        cl.cut(0)

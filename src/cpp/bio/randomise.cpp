@@ -546,14 +546,17 @@ CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, dou
 
     std::vector<double> target(static_cast<std::size_t>(ng));
     std::map<i32, double> filled;  // group -> richness reached (0 for empty targets)
+    std::vector<std::uint8_t> is_filled(static_cast<std::size_t>(ng), 0);  // its keys
     std::set<i32> unfilled;
     for (i64 g = 0; g < ng; ++g) {
         const double t = std::floor(richness[static_cast<std::size_t>(g)] * multiplier + addition);
         target[static_cast<std::size_t>(g)] = t;
-        if (t != 0)
+        if (t != 0) {
             unfilled.insert(static_cast<i32>(g));
-        else
+        } else {
             filled[static_cast<i32>(g)] = 0;
+            is_filled[static_cast<std::size_t>(g)] = 1;
+        }
     }
     // groups still unfilled (in name order): the targets of each label
     std::vector<std::uint8_t> is_unfilled(static_cast<std::size_t>(ng), 0);
@@ -569,9 +572,19 @@ CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, dou
     const bool shuffle_lists = sp && sp->order.rfind("random", 0) == 0;
     if (sp && sp->seeded.size() != static_cast<std::size_t>(nl)) sp->seeded.assign(static_cast<std::size_t>(nl), 0);
     std::vector<std::uint8_t> tmask;
+    // per-label sets of groups (assigned, cleared, queued) as stamps: member when == the label's pass
+    std::vector<i32> assigned_at(static_cast<std::size_t>(ng), -1), cleared_at(static_cast<std::size_t>(ng), -1),
+        queued_at(static_cast<std::size_t>(ng), -1);
+    i32 pass = -1;
     for (i32 label : label_order) {
         auto& gp_hash = cloned[static_cast<std::size_t>(label)];
         if (gp_hash.empty()) continue;
+        ++pass;
+        auto assigned = [&](i32 g) { return assigned_at[static_cast<std::size_t>(g)] == pass; };
+        auto cleared = [&](i32 g) { return cleared_at[static_cast<std::size_t>(g)] == pass; };
+        auto queue = [&](const std::vector<i32>& v) {
+            for (i32 g : v) queued_at[static_cast<std::size_t>(g)] = pass;
+        };
         tmask = is_unfilled;
         target_groups.reset(tmask);
         auto remove_target = [&](i32 g) {
@@ -585,14 +598,13 @@ CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, dou
         rng.shuffle(from_order);
         std::size_t from_pos = 0;
         std::deque<i32> to_groups;
-        std::set<i32> assigned, cleared, queued;
         std::vector<i32> seed_targets;
         bool new_seed = false, done = false;
         auto filter = [&](const std::vector<i32>& list, i32 self) {
             std::vector<i32> sub;
             for (i32 g : list) {
-                if (filled.count(g) || assigned.count(g) || g == self) continue;
-                if (diffusion && queued.count(g)) continue;
+                if (is_filled[static_cast<std::size_t>(g)] || assigned(g) || g == self) continue;
+                if (diffusion && queued_at[static_cast<std::size_t>(g)] == pass) continue;
                 sub.push_back(g);
             }
             return sub;
@@ -607,7 +619,7 @@ CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, dou
                         // first lookup of this label's seed groups (cached thereafter)
                         sp->seeded[static_cast<std::size_t>(label)] = 1;
                         for (i32 g : sp->seeds)
-                            if (!filled.count(g)) seed_targets.push_back(g);
+                            if (!is_filled[static_cast<std::size_t>(g)]) seed_targets.push_back(g);
                     }
                     i32 seed = -1;
                     while (seed < 0 && !seed_targets.empty()) {
@@ -630,12 +642,12 @@ CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, dou
                 }
                 remove_target(to);
                 to_groups.push_back(to);
-                cleared.insert(to);
+                cleared_at[static_cast<std::size_t>(to)] = pass;
                 if (sp) {
                     for (const auto& list : sp->lists(to, rng)) {
                         auto sub = filter(list, to);
                         if (sub.empty()) continue;
-                        queued.insert(sub.begin(), sub.end());
+                        queue(sub);
                         if (shuffle_lists) rng.shuffle(sub);
                         to_groups.insert(to_groups.end(), sub.begin(), sub.end());
                     }
@@ -649,21 +661,22 @@ CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, dou
                     done = true;
                     break;
                 }
-                if (random_prop && assigned.count(to)) break;  // next BY_GROUP
+                if (random_prop && assigned(to)) break;  // next BY_GROUP
                 const i32 from = from_order[from_pos++];
                 auto it = gp_hash.find(from);
                 const double count = it->second;
                 gp_hash.erase(it);
                 if (gp_hash.empty()) --n_cloned;
-                if (!cleared.count(to)) {
+                if (!cleared(to)) {
                     remove_target(to);
-                    cleared.insert(to);
+                    cleared_at[static_cast<std::size_t>(to)] = pass;
                 }
                 nw[static_cast<std::size_t>(to)][label] = count;
-                assigned.insert(to);
+                assigned_at[static_cast<std::size_t>(to)] = pass;
                 const i32 r = ++new_richness[static_cast<std::size_t>(to)];
                 if (r >= target[static_cast<std::size_t>(to)]) {
                     filled[to] = r;
+                    is_filled[static_cast<std::size_t>(to)] = 1;
                     unfilled.erase(to);
                     is_unfilled[static_cast<std::size_t>(to)] = 0;
                 }
@@ -681,7 +694,7 @@ CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, dou
                         auto sub = filter(sets[i], to);
                         if (sub.empty()) continue;
                         valid += sub.size();
-                        queued.insert(sub.begin(), sub.end());
+                        queue(sub);
                         if (shuffle_lists) rng.shuffle(sub);
                         if (sp->backtracking == "from_start")
                             to_groups.insert(to_groups.end(), sub.begin(), sub.end());
@@ -743,6 +756,7 @@ CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, dou
             }
         auto fill_group = [&](i32 gp, i32 r) {
             filled[gp] = r;
+            is_filled[static_cast<std::size_t>(gp)] = 1;
             unfilled.erase(gp);
             auto bg = unfilled_without_label_by_gp.find(gp);
             if (bg != unfilled_without_label_by_gp.end()) {
