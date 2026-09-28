@@ -673,8 +673,20 @@ Fases:
    `max_swap_attempts`, `stop_on_all_swapped` e `use_max_swap`; 6 casos bit a bit. Na versão
    modificada o Biodiverse nunca preenche os pares originais, então `stop_on_all_swapped` não
    tem efeito, como lá. Ficam para depois: o modo hipergeométrico do curveball (desvio
-   gaussiano e CDF do GSL) e os pares de troca espaciais. Falta 7d (variantes espacialmente
-   estruturadas, subconjuntos, rótulos fixos, propriedades de grupo, árvores);
+   gaussiano e CDF do GSL) e os pares de troca espaciais. **7d feita** (0.71.0): alocação
+   espacial do `rand_structured` (`rand_spatially_structured`, `rand_diffusion`,
+   `rand_random_walk`: ordens difusão, passeio aleatório, aleatória e proximidade,
+   retrocesso, re-semeadura, condição de semeadura), randomização por subconjuntos
+   (`spatial_conditions_for_subset`, `definition_query`), rótulos fixos
+   (`labels_not_to_randomise`), propriedades de grupo (`by_set`, `by_item`) e embaralhamento
+   dos nomes terminais das árvores; 17 casos novos bit a bit (32 no total). Peculiaridades
+   reproduzidas: os caches de vizinhança e o sorteio de desempate da proximidade valem para
+   todas as iterações; os alvos da condição de semeadura só são usados na primeira (o cache
+   por rótulo evita recalculá-los); uma semente que já saiu da lista escolhe o último alvo
+   (índice -1); subconjuntos usam um objeto de randomização novo por iteração; os grupos
+   reprovados pela definição mantêm as propriedades embaralhadas da iteração anterior; com
+   rótulos fixos a base randomizada perde as propriedades. Ficam de fora: condições que
+   dependem do rótulo corrente, `track_label_allocation_order`, e os itens do 7c;
 8. cluster e RegionGrower (ligações, tie-breakers, restrição espacial, índices por nó, export
    Newick/Nexus);
 9. grades hexagonais/H3, formato nativo de sessão, árvores de `Bio.Phylo`/`dendropy`/`ete`;

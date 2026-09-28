@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <deque>
 #include <map>
 #include <memory>
 #include <set>
@@ -468,7 +469,63 @@ CountsCsr rand_curveball(const CountsCsr& bd, MT64& rng, const SwapOptions& opt)
     return out;
 }
 
-CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, double addition) {
+SpatialAlloc::SpatialAlloc(std::string order_, std::string backtracking_, double reseed_prob_,
+                           std::vector<std::vector<std::vector<i32>>> nbrs, bool same,
+                           std::vector<std::vector<double>> coords, bool have_seeds_, std::vector<i32> seeds_)
+    : order(std::move(order_)),
+      backtracking(std::move(backtracking_)),
+      reseed_prob(reseed_prob_),
+      have_seeds(have_seeds_),
+      seeds(std::move(seeds_)),
+      nbrs_(std::move(nbrs)),
+      same_(same),
+      coords_(std::move(coords)) {
+    std::sort(seeds.begin(), seeds.end());
+    cache_.assign(nbrs_.size(), {});
+    cached_.assign(nbrs_.size(), 0);
+}
+
+// get_sp_alloc_nbr_list
+const std::vector<std::vector<i32>>& SpatialAlloc::lists(i32 group, MT64& rng) {
+    const auto g = static_cast<std::size_t>(group);
+    if (cached_[g]) return cache_[g];
+    std::vector<std::vector<i32>> out = nbrs_[g];
+    if (order == "proximity") {
+        // by distance to the group, then a random number, then name
+        for (auto& list : out) {
+            struct Item {
+                i32 g;
+                double d, r;
+            };
+            std::vector<Item> items;
+            for (i32 e : list) {
+                double dist = 0;
+                const auto& a = coords_[static_cast<std::size_t>(e)];
+                const auto& b = coords_[g];
+                for (std::size_t i = 0; i < b.size(); ++i) dist += perl_pow(a[i] - b[i], 2);
+                items.push_back({e, perl_sqrt(dist), rng.rand()});
+            }
+            std::stable_sort(items.begin(), items.end(), [](const Item& x, const Item& y) {
+                if (x.d != y.d) return x.d < y.d;
+                if (x.r != y.r) return x.r < y.r;
+                return x.g < y.g;
+            });
+            for (std::size_t i = 0; i < items.size(); ++i) list[i] = items[i].g;
+        }
+    }
+    cache_[g] = out;
+    cached_[g] = 1;
+    if (same_) {
+        // always_same / always_true: this list for every group
+        for (std::size_t k = 0; k < cache_.size(); ++k) {
+            cache_[k] = out;
+            cached_[k] = 1;
+        }
+    }
+    return cache_[g];
+}
+
+CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, double addition, SpatialAlloc* sp) {
     const i64 ng = bd.n_groups, nl = bd.n_labels;
     // the basedata as labels -> groups -> count (destructively sampled)
     std::vector<std::map<i32, double>> cloned(static_cast<std::size_t>(nl));
@@ -507,30 +564,150 @@ CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, dou
     std::vector<std::map<i32, double>> nw(static_cast<std::size_t>(ng));
     std::vector<i32> new_richness(static_cast<std::size_t>(ng), 0);
 
+    const bool random_prop = sp && (sp->order == "random_walk" || sp->order == "diffusion");
+    const bool diffusion = sp && sp->order == "diffusion";
+    const bool shuffle_lists = sp && sp->order.rfind("random", 0) == 0;
+    if (sp && sp->seeded.size() != static_cast<std::size_t>(nl)) sp->seeded.assign(static_cast<std::size_t>(nl), 0);
+    std::vector<std::uint8_t> tmask;
     for (i32 label : label_order) {
         auto& gp_hash = cloned[static_cast<std::size_t>(label)];
         if (gp_hash.empty()) continue;
-        target_groups.reset(is_unfilled);
+        tmask = is_unfilled;
+        target_groups.reset(tmask);
+        auto remove_target = [&](i32 g) {
+            if (tmask[static_cast<std::size_t>(g)]) {
+                tmask[static_cast<std::size_t>(g)] = 0;
+                target_groups.remove(static_cast<std::size_t>(g));
+            }
+        };
         std::vector<i32> from_order;
         for (const auto& kv : gp_hash) from_order.push_back(kv.first);
         rng.shuffle(from_order);
         std::size_t from_pos = 0;
-        while (from_pos < from_order.size() && target_groups.count() > 0) {
-            const i64 j = static_cast<i64>(rng.irand() % static_cast<std::uint64_t>(target_groups.count()));
-            const auto pos = target_groups.select(j);
-            const i32 to = static_cast<i32>(pos);
-            target_groups.remove(pos);
-            const i32 from = from_order[from_pos++];
-            auto it = gp_hash.find(from);
-            const double count = it->second;
-            gp_hash.erase(it);
-            if (gp_hash.empty()) --n_cloned;
-            nw[static_cast<std::size_t>(to)][label] = count;
-            const i32 r = ++new_richness[static_cast<std::size_t>(to)];
-            if (r >= target[static_cast<std::size_t>(to)]) {
-                filled[to] = r;
-                unfilled.erase(to);
-                is_unfilled[static_cast<std::size_t>(to)] = 0;
+        std::deque<i32> to_groups;
+        std::set<i32> assigned, cleared, queued;
+        std::vector<i32> seed_targets;
+        bool new_seed = false, done = false;
+        auto filter = [&](const std::vector<i32>& list, i32 self) {
+            std::vector<i32> sub;
+            for (i32 g : list) {
+                if (filled.count(g) || assigned.count(g) || g == self) continue;
+                if (diffusion && queued.count(g)) continue;
+                sub.push_back(g);
+            }
+            return sub;
+        };
+        while (!done && from_pos < from_order.size() && target_groups.count() > 0) {
+            if (to_groups.empty() || new_seed) {
+                to_groups.clear();
+                new_seed = false;
+                i32 to = -1;
+                if (sp && sp->have_seeds) {
+                    if (!sp->seeded[static_cast<std::size_t>(label)]) {
+                        // first lookup of this label's seed groups (cached thereafter)
+                        sp->seeded[static_cast<std::size_t>(label)] = 1;
+                        for (i32 g : sp->seeds)
+                            if (!filled.count(g)) seed_targets.push_back(g);
+                    }
+                    i32 seed = -1;
+                    while (seed < 0 && !seed_targets.empty()) {
+                        const auto jj = static_cast<std::size_t>(rng.irand() % seed_targets.size());
+                        seed = seed_targets[jj];
+                        seed_targets.erase(seed_targets.begin() + static_cast<std::ptrdiff_t>(jj));
+                        auto f = nw[static_cast<std::size_t>(seed)].find(label);
+                        if (f != nw[static_cast<std::size_t>(seed)].end() && f->second != 0) seed = -1;
+                    }
+                    if (seed >= 0) {
+                        // its index among the targets, or -1 (the last target) when gone
+                        to = tmask[static_cast<std::size_t>(seed)]
+                                 ? seed
+                                 : static_cast<i32>(target_groups.select(target_groups.count() - 1));
+                    }
+                }
+                if (to < 0) {
+                    const i64 j = static_cast<i64>(rng.irand() % static_cast<std::uint64_t>(target_groups.count()));
+                    to = static_cast<i32>(target_groups.select(j));
+                }
+                remove_target(to);
+                to_groups.push_back(to);
+                cleared.insert(to);
+                if (sp) {
+                    for (const auto& list : sp->lists(to, rng)) {
+                        auto sub = filter(list, to);
+                        if (sub.empty()) continue;
+                        queued.insert(sub.begin(), sub.end());
+                        if (shuffle_lists) rng.shuffle(sub);
+                        to_groups.insert(to_groups.end(), sub.begin(), sub.end());
+                    }
+                }
+            }
+            if (to_groups.empty()) break;
+            while (!to_groups.empty()) {
+                const i32 to = to_groups.front();
+                to_groups.pop_front();
+                if (from_pos >= from_order.size()) {
+                    done = true;
+                    break;
+                }
+                if (random_prop && assigned.count(to)) break;  // next BY_GROUP
+                const i32 from = from_order[from_pos++];
+                auto it = gp_hash.find(from);
+                const double count = it->second;
+                gp_hash.erase(it);
+                if (gp_hash.empty()) --n_cloned;
+                if (!cleared.count(to)) {
+                    remove_target(to);
+                    cleared.insert(to);
+                }
+                nw[static_cast<std::size_t>(to)][label] = count;
+                assigned.insert(to);
+                const i32 r = ++new_richness[static_cast<std::size_t>(to)];
+                if (r >= target[static_cast<std::size_t>(to)]) {
+                    filled[to] = r;
+                    unfilled.erase(to);
+                    is_unfilled[static_cast<std::size_t>(to)] = 0;
+                }
+                if (sp && sp->reseed_prob != 0 && rng.rand() < sp->reseed_prob) {
+                    new_seed = true;
+                    break;
+                }
+                if (random_prop) {
+                    const auto& sets = sp->lists(to, rng);
+                    std::vector<std::size_t> idx(sets.size());
+                    for (std::size_t i = 0; i < idx.size(); ++i) idx[i] = i;
+                    if (sp->backtracking != "from_start") std::reverse(idx.begin(), idx.end());
+                    std::size_t valid = 0;
+                    for (std::size_t i : idx) {
+                        auto sub = filter(sets[i], to);
+                        if (sub.empty()) continue;
+                        valid += sub.size();
+                        queued.insert(sub.begin(), sub.end());
+                        if (shuffle_lists) rng.shuffle(sub);
+                        if (sp->backtracking == "from_start")
+                            to_groups.insert(to_groups.end(), sub.begin(), sub.end());
+                        else
+                            to_groups.insert(to_groups.begin(), sub.begin(), sub.end());
+                    }
+                    if (diffusion || (!valid && sp->backtracking == "random")) {
+                        if (!diffusion) {
+                            std::set<i32> seen;
+                            std::deque<i32> u;
+                            for (i32 g : to_groups)
+                                if (seen.insert(g).second) u.push_back(g);
+                            to_groups.swap(u);
+                        }
+                        if (to_groups.size() > 1) {
+                            const auto k = static_cast<std::size_t>(rng.irand() % to_groups.size());
+                            const i32 g = to_groups[k];
+                            to_groups.erase(to_groups.begin() + static_cast<std::ptrdiff_t>(k));
+                            to_groups.push_front(g);
+                        }
+                    }
+                }
+                if (target_groups.count() == 0) {
+                    done = true;
+                    break;
+                }
             }
         }
     }

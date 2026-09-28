@@ -491,11 +491,13 @@ class _Run:
         self.threads = threads
 
 
-def _evaluate(bd, run: _Run, threads: int | None = None):
+def _evaluate(bd, run: _Run, threads: int | None = None, tree=None):
     """Run the calculations of an analysis on a basedata with the same groups (its neighbourhoods)."""
     reg = _registry()
     valid, nbrs, set1, set2, procs, expand = run.valid, run.nbrs, run.set1, run.set2, run.procs, run.expand
-    tree, matrix, pc_steps, pc_vpd, prng_seed = run.tree, run.matrix, run.pc_steps, run.pc_vpd, run.prng_seed
+    matrix, pc_steps, pc_vpd, prng_seed = run.matrix, run.pc_steps, run.pc_vpd, run.prng_seed
+    if tree is None:
+        tree = run.tree
     threads = run.threads if threads is None else threads
     order = _precalc_order(valid)
     view = _basedata_view(bd)

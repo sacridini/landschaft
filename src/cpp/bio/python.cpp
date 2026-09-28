@@ -273,10 +273,19 @@ void register_python(py::module_& m) {
                             mt.set_state(s);
                             return mt;
                         }));
+    py::class_<SpatialAlloc>(m, "BioSpatialAlloc", "Spatial allocation state of rand_structured (caches kept across iterations).")
+        .def(py::init([](const std::string& order, const std::string& backtracking, double reseed_prob,
+                         const std::vector<std::vector<std::vector<i32>>>& nbrs, bool same,
+                         const std::vector<std::vector<double>>& coords, bool have_seeds,
+                         const std::vector<i32>& seeds) {
+                 return new SpatialAlloc(order, backtracking, reseed_prob, nbrs, same, coords, have_seeds, seeds);
+             }),
+             py::arg("order"), py::arg("backtracking"), py::arg("reseed_prob"), py::arg("nbrs"), py::arg("same"),
+             py::arg("coords"), py::arg("have_seeds"), py::arg("seeds"));
     m.def(
         "bio_rand_structured",
         [](const CArray<i64>& indptr, const CArray<i32>& indices, const CArray<double>& counts, i64 n_groups,
-           i64 n_labels, MT64& rng, double multiplier, double addition) {
+           i64 n_labels, MT64& rng, double multiplier, double addition, SpatialAlloc* spatial) {
             CountsCsr bd;
             bd.n_groups = n_groups;
             bd.n_labels = n_labels;
@@ -286,12 +295,14 @@ void register_python(py::module_& m) {
             CountsCsr out;
             {
                 py::gil_scoped_release release;
-                out = rand_structured(bd, rng, multiplier, addition);
+                out = rand_structured(bd, rng, multiplier, addition, spatial);
             }
             return py::make_tuple(py::array_t<i64>(static_cast<py::ssize_t>(out.indptr.size()), out.indptr.data()),
                                   py::array_t<i32>(static_cast<py::ssize_t>(out.indices.size()), out.indices.data()),
                                   py::array_t<double>(static_cast<py::ssize_t>(out.counts.size()), out.counts.data()));
         },
+        py::arg("indptr"), py::arg("indices"), py::arg("counts"), py::arg("n_groups"), py::arg("n_labels"), py::arg("rng"),
+        py::arg("multiplier"), py::arg("addition"), py::arg("spatial") = static_cast<SpatialAlloc*>(nullptr),
         "Biodiverse's rand_structured on a groups x labels CSR (the generator advances).");
     m.def(
         "bio_rand_swaps",

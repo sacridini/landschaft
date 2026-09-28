@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "bio/conditions.hpp"
@@ -23,10 +24,39 @@ struct CountsCsr {
     std::vector<double> counts;
 };
 
+// Spatial allocation of rand_structured (rand_spatially_structured,
+// rand_diffusion, rand_random_walk): label occurrences go to the neighbours
+// of a seed group. Its caches live across iterations, as Biodiverse's do.
+class SpatialAlloc {
+public:
+    // order: "", "diffusion", "random_walk", "random" or "proximity";
+    // backtracking: "from_end", "from_start", "random" or ""; nbrs[group][set]
+    // are Biodiverse's stored neighbour lists (sorted); `same` when every
+    // condition gives every group the same list; coords are the group names
+    // as numbers (proximity); seeds the groups passing the seed condition.
+    SpatialAlloc(std::string order, std::string backtracking, double reseed_prob,
+                 std::vector<std::vector<std::vector<i32>>> nbrs, bool same, std::vector<std::vector<double>> coords,
+                 bool have_seeds, std::vector<i32> seeds);
+    const std::vector<std::vector<i32>>& lists(i32 group, MT64& rng);
+
+    std::string order, backtracking;
+    double reseed_prob;
+    bool have_seeds;
+    std::vector<i32> seeds;               // sorted
+    std::vector<std::uint8_t> seeded;     // labels whose seed groups were looked up (the cache)
+
+private:
+    std::vector<std::vector<std::vector<i32>>> nbrs_, cache_;
+    std::vector<std::uint8_t> cached_;
+    bool same_;
+    std::vector<std::vector<double>> coords_;
+};
+
 // rand_structured: labels, in random order, go to random groups until each
 // group reaches its target richness (floor (richness * multiplier + addition)),
 // then swaps reach the targets (swap_to_reach_richness_targets).
-CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, double addition);
+CountsCsr rand_structured(const CountsCsr& bd, MT64& rng, double multiplier, double addition,
+                          SpatialAlloc* spatial = nullptr);
 
 // Swap options (0: Biodiverse's defaults, twice the non-zero cells and 100
 // times as many attempts).
