@@ -81,6 +81,15 @@ target_include_directories(conncore PUBLIC src/cpp)
 # R's x87 sqrt and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp).
 target_link_libraries(conncore PUBLIC lsmcore)
 set_target_properties(conncore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Neutral landscape models (NLMR): R's and libstdc++'s generators, the models.
+add_library(nlmcore STATIC
+    src/cpp/nlm/rng.cpp
+)
+target_include_directories(nlmcore PUBLIC src/cpp)
+# R's x87 log (lsm/rmath.hpp).
+target_link_libraries(nlmcore PUBLIC lsmcore)
+set_target_properties(nlmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # R's x87 log/sqrt and LDOUBLE sums (see src/cpp/lsm/rmath.hpp): MSVC has no
 # x64 inline assembly. x86-64 only; every other target uses the C++ code.
 if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
@@ -96,6 +105,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(gtbcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(lsmcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(conncore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(nlmcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(circuitcore PUBLIC OpenMP::OpenMP_CXX)
     else()
         message(WARNING "OpenMP not found: building single-threaded")
@@ -108,17 +118,19 @@ if(MSVC)
     target_compile_options(gtbcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(lsmcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(conncore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(nlmcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(circuitcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(conncore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(nlmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(circuitcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
-pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp)
+pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp)
 target_link_libraries(_core PRIVATE eigen_headers)
-target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore)
+target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()

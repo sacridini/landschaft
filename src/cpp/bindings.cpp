@@ -40,6 +40,7 @@
 #include "gtb/restoration.hpp"
 #include "gtb/spa.hpp"
 #include "circuit/python.hpp"
+#include "nlm/python.hpp"
 #include "conn/cost.hpp"
 #include "conn/graph.hpp"
 #include "conn/nodes.hpp"
@@ -1390,6 +1391,7 @@ PYBIND11_MODULE(_core, m) {
     m.def("conn_edge_gains", &conn_edge_gains, py::arg("D"), py::arg("area"), py::arg("ea"), py::arg("eb"),
           py::arg("elen"), py::arg("hops"), py::arg("n_threads") = 0, "Gains of adding each edge.");
     circuit::register_python(m);
+    nlm::register_python(m);
     m.def("cpu_supports_avx2_fma", &cpu_supports_avx2_fma, "AVX2 and FMA usable (landschaft._circuit_avx2).");
     m.def("conn_raster_nodes", &conn_raster_nodes, py::arg("values"), py::arg("na"), py::arg("xmin"), py::arg("xmax"),
           py::arg("ymin"), py::arg("ymax"), py::arg("centroids"), py::arg("keep_index"), py::arg("n_threads") = 0,

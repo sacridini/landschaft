@@ -7,6 +7,12 @@ between minor versions.
 ## [Unreleased]
 
 ### Added
+- Groundwork for neutral landscape models (a port of the R package NLMR): R's random
+  number generator (`set.seed`, `runif`, `rnorm` by inversion, `sample`/`sample.int`
+  with and without weights, Walker's alias and the hashed `sample2`) and `std::mt19937`
+  with the distributions of GCC's libstdc++, both identical bit for bit to R 4.4 and to
+  the Rtools compiler that builds NLMR (`src/cpp/nlm/rng.cpp`,
+  `tools/make_reference_nlm.py`).
 - Documentation website: a *Learn* section, a course on landscape ecology for newcomers
   (concepts, theory and academic references behind every tool, and when to use each).
 - `Dockerfile`: a multi-stage image with the package built from source and every

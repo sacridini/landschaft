@@ -338,6 +338,78 @@ Omniscape 0.7 (o clone local, `Pkg.develop`) e Circuitscape 6.1 num depot separa
 `--project=...\env`; `jl.sh` lá dentro chama o Julia assim); script
 `tools/make_reference_omniscape.jl` gravando em `tests/data/reference/circuit`.
 
+## Modelos neutros de paisagem (NLMR)
+
+Análise de 2026-09-28. O NLMR 1.4.0 (`C:\Users\eduar\Documents\dev\NLMR`, R, GPL-3) simula
+paisagens neutras: gradientes (`nlm_planargradient`, `nlm_edgegradient`,
+`nlm_distancegradient`), aleatórios (`nlm_random`, `nlm_percolation`), agrupados
+(`nlm_randomcluster`, `nlm_curds`, `nlm_neigh`, `nlm_randomrectangularcluster`), fractais
+(`nlm_mpd`, `nlm_fbm`), campos gaussianos (`nlm_gaussianfield`), mosaicos
+(`nlm_mosaicfield`, `nlm_mosaictess`, `nlm_mosaicgibbs`) e a classificação
+`landscape_classify` (proporções ou quebras de Jenks). Não há nada disso no landschaft.
+
+A aleatoriedade vem de dois lugares, e os dois precisam ser reproduzidos para o mesmo
+`user_seed` dar o mesmo mapa:
+- R (`set.seed`, `runif`, `rnorm`, `sample`, `sample.int`): Mersenne-Twister do R com a
+  mistura inicial do `set.seed`, `unif_rand` com `fixup`, `norm_rand` por inversão
+  (`qnorm5` do AS241 sobre `u = (int)(2^27 u1) + u2`, com o `log` x87 do mingw),
+  `R_unif_index` por rejeição (`rbits` em pedaços de 16 bits), `sample` sem reposição
+  (Fisher-Yates parcial), com `prob` (`revsort` + busca linear; Walker com mais de 200
+  probabilidades relevantes; sem reposição com remoção), `sample2` com hash para
+  `n > 1e7`; mais tarde `rpois`/`exp_rand` para o spatstat;
+- C++ do NLMR (`mpd`, `neigh`, `randomrectangularcluster`): `std::mt19937` com as
+  distribuições da libstdc++ do Rtools (GCC 13.3): `generate_canonical` com duas palavras de
+  32 bits, normal polar com o valor guardado, inteiros pelo método de Lemire (64 bits) e o
+  `std::shuffle` que sorteia duas posições de uma vez quando `n² < 2^32`.
+
+Critério de igualdade: bit a bit com o NLMR para a mesma semente em tudo, menos nas
+tesselações de Voronoi (`mosaictess`, `mosaicgibbs`): o `st_union` ordena os germes e o
+`st_voronoi` do GEOS devolve as células na ordem da sua estrutura interna, e os valores são
+atribuídos nessa ordem. Ali: germes bit a bit, a mesma partição (a menos de empates exatos)
+e o mesmo conjunto de valores; a ordem do GEOS pode ser portada depois.
+
+Peculiaridades a reproduzir (com `nlmr_compat=True`, o padrão; `False` faz o que a
+documentação promete):
+- `mpd`: quadrado de lado `max(nrow, ncol) + 1` (ímpar), menos uma célula de cada borda,
+  então a saída não tem as dimensões pedidas; uma `normal_distribution` nova por célula
+  (o segundo valor do método polar é jogado fora);
+- `neigh`: `p_neigh` e `p_empty` passam por `float`; embaralhamento da libstdc++;
+- `distancegradient`: `origin` indexa `[linhas, colunas]` no terra, apesar das verificações
+  contra `ncol`;
+- `randomcluster`: o preenchimento olha o mapa antes de preencher (sem propagação); empates
+  por `sample(fili, 1)`, sem vizinho por `sample(prob = ai)` sem reposição;
+- `randomrectangularcluster`: varre a matriz inteira depois de cada retângulo (O(N·k));
+  um contador de células vazias dá o mesmo resultado;
+- `fbm` e `gaussianfield` estão desativadas no NLMR 1.4.0 (só uma mensagem); a referência
+  são as funções internas novas `NLMR:::simulate_fbm` e `simulate_gaussian_field`
+  (espectral e embutimento circulante com o `fft` do R).
+
+Proposta: motor C++ `src/cpp/nlm/` (`rng.hpp/.cpp` com os dois geradores, o `fft` do R
+portado, um arquivo por família de modelos) e o subpacote Python `landschaft.nlm`
+(`ls.nlm.mpd()`, `ls.nlm.random_cluster()`, ..., `ls.nlm.classify()`, `ls.nlm.rescale()`),
+devolvendo `xarray.DataArray` com a resolução, `seed` (o `user_seed` do NLMR; `None` sorteia
+e guarda em `attrs`), `rescale` e `n_threads`. Desempenho: o gerador é serial por natureza,
+mas o que vem depois dele é paralelo (uniformes em série e `qnorm` em paralelo; passos do
+diamond-square em paralelo; FFT 1D por linha/coluna; distância exata; rotulagem), e somem
+os custos do R (o `vapply` por célula do `percolation`, o `dplyr` por linha do
+`randomcluster`, as varreduras do `randomrectangularcluster`, o `disagg` do `curds`).
+
+Referência: NLMR do clone local instalado numa biblioteca R própria
+(`C:\Users\eduar\AppData\Local\R\landschaft-nlm-lib`, sem mexer na do RStudio), R 4.4.2,
+`tools/make_reference_nlm.py` gravando em `tests/data/reference/nlm`; as distribuições da
+libstdc++ conferidas com um programa compilado pelo g++ do Rtools.
+
+Fases:
+0. geradores do R e da libstdc++, biblioteca R com o NLMR, script de referência;
+1. gradientes, `random`, `percolation`, `rescale`, `classify` (com Jenks);
+2. `mpd`, `neigh`, `randomrectangularcluster`;
+3. `randomcluster`, `curds`;
+4. o `fft` do R portado; `gaussianfield`, `fbm`;
+5. `mosaicfield` (`rpoislinetess`, `rMosaicField`, `rLGCP` do spatstat);
+6. `mosaictess`, `mosaicgibbs` (`st_sample`, `rSSI`, Voronoi);
+7. opcionais: `blend`/`merge` do antigo landscapetools, modelos do NLMpy, gerador paralelo
+   rápido (`rng="fast"`, diferente do R) para rasters enormes.
+
 ## Observações para os testes
 
 - O círculo circunscrito do landscapemetrics usa um algoritmo aleatorizado: regerar
