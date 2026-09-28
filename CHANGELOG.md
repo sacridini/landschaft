@@ -6,6 +6,21 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.61.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis (a port of Biodiverse), first part: the `ls.bio` module with
+  `BaseData` (sample counts of labels per group, read from delimited text as
+  Biodiverse does, or from DataFrames, sparse matrices, xarray stacks, rasters and
+  vector files: points, and lines/polygons laid over the cell grid by cell, area or
+  length), `read_tree`/`read_trees` (Newick, Phylip, Nexus with translate tables) and
+  `read_matrix` (full and sparse label matrices). Groups, labels, coordinates, counts,
+  tree nodes and matrices are identical to Biodiverse's; `to_raster` and
+  `to_geodataframe` map per-group values.
+- Tools: `tools/bio_harness.py`, `tools/bio_reference.pl` and
+  `tools/make_reference_bio.py` run the original Biodiverse (Strawberry Perl) with its
+  hashes iterated in sorted order, for bit-for-bit references.
+
 ## [0.60.0] - 2026-09-28
 
 ### Added
