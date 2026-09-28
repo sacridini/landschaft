@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.57.0] - 2026-09-28
+
+### Added
+- Neutral landscape models, fourth part: `ls.nlm.gaussian_field` (a Gaussian field with
+  exponential covariance by circulant embedding, nugget and mean) and `ls.nlm.fbm`
+  (fractional Brownian motion from a power-law spectrum). NLMR 1.4 disabled
+  `nlm_gaussianfield` and `nlm_fbm` and ships these methods as internal functions;
+  Landschaft gives their values bit for bit with the same seed, 6 to 8 times faster
+  (`fbm` 1000 × 1000: 0.40 s → 0.05 s).
+- R's `fft()` ported to C++ (the same bits as R, with the transforms of the rows and
+  columns in parallel), and R's `exp()` and `x^y` on Windows (mingw-w64's x87 `exp`
+  and `powl`) for the metrics code as well (`lsm::r_exp`, `lsm::r_pow`).
+
 ## [0.56.0] - 2026-09-28
 
 ### Added

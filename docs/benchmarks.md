@@ -146,6 +146,8 @@ The same landscapes as NLMR (same seeds, identical values), one model call each
 | `nlm_randomrectangularcluster`, 300 × 300, sides 5–20 | 0.02 s | 0.003 s | 0.55 |
 | `nlm_randomcluster`, 200 × 200 | 19 s | 0.003 s | 0.56 |
 | `nlm_curds`, 512 × 512 (three steps) | 0.03 s | 0.003 s | 0.56 |
+| Gaussian field (`simulate_gaussian_field`), 500 × 500 | 0.36 s | 0.043 s | 0.57 |
+| Fractional Brownian motion (`simulate_fbm`), 1000 × 1000 | 0.40 s | 0.050 s | 0.57 |
 
 ## Accuracy
 
@@ -188,7 +190,7 @@ The same landscapes as NLMR (same seeds, identical values), one model call each
 | Omniscape | Omniscape 0.7 with the CHOLMOD solver: its test configurations and synthetic maps | 1.7e-11 |
 | Circuitscape raster modes | Circuitscape 6.1 with CHOLMOD: its own test cases (advanced, 17 pairwise, 25 one-to-all / all-to-one) | advanced: currents to 1.2e-13 of the largest; pairwise: resistances to 1e-12, maps to 3e-13; one-to-all: 5e-14 |
 | Circuitscape network mode | Circuitscape's network test cases and six synthetic ones | 1.1e-14 |
-| Neutral landscape models: random, percolation, gradients, midpoint displacement, random, neighbourhood and rectangular clusters, curds, classification | NLMR 1.4.0 (R 4.4.2) with the same seeds; R's generator and the libstdc++ distributions of NLMR's C++ code against R and the Rtools compiler | identical bits |
+| Neutral landscape models: random, percolation, gradients, midpoint displacement, fractional Brownian motion, Gaussian fields, random, neighbourhood and rectangular clusters, curds, classification | NLMR 1.4.0 (R 4.4.2) with the same seeds; R's generator and the libstdc++ distributions of NLMR's C++ code against R and the Rtools compiler | identical bits |
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an
 algebraic multigrid) is itself only about 2e-7 away from the exact solution;
