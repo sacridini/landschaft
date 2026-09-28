@@ -27,6 +27,11 @@ class MT64 {
 public:
     explicit MT64(const std::vector<std::uint64_t>& seed);
     std::uint64_t irand();
+    // Math::Random::MT::Auto::rand: [0, 1)
+    double rand() { return static_cast<double>(irand() >> 12) * 2.220446049250313080847263336181640625e-16; }
+    // state vector, position and count left (for saving and resuming)
+    std::vector<std::uint64_t> get_state() const;
+    void set_state(const std::vector<std::uint64_t>& s);
     // Math::Random::MT::Auto::shuffle (Fisher-Yates from the last element)
     template <class T>
     void shuffle(std::vector<T>& v) {

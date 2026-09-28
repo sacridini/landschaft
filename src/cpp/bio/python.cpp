@@ -12,6 +12,7 @@
 
 #include "bio/conditions.hpp"
 #include "bio/indices.hpp"
+#include "bio/perlmath.hpp"
 #include "bio/phylocom.hpp"
 
 namespace py = pybind11;
@@ -249,6 +250,37 @@ void register_python(py::module_& m) {
             return out;
         },
         "Shuffles of 0..n-1 by Math::Random::MT::Auto seeded with `seed` (tests).");
+    py::class_<MT64>(m, "BioRandom", "Biodiverse's PRNG (Math::Random::MT::Auto, 64-bit Mersenne Twister).")
+        .def(py::init([](std::uint64_t seed) { return MT64({seed}); }), py::arg("seed"))
+        .def("irand", &MT64::irand)
+        .def("rand", &MT64::rand)
+        .def(
+            "shuffle_indices",
+            [](MT64& mt, i64 n) {
+                std::vector<i64> v(static_cast<std::size_t>(n));
+                for (i64 i = 0; i < n; ++i) v[static_cast<std::size_t>(i)] = i;
+                mt.shuffle(v);
+                return py::array_t<i64>(static_cast<py::ssize_t>(v.size()), v.data());
+            },
+            "A shuffle of 0..n-1 (the permutation shuffle() applies to a list of n items).")
+        .def("get_state", &MT64::get_state)
+        .def("set_state", &MT64::set_state)
+        .def(py::pickle([](const MT64& mt) { return mt.get_state(); },
+                        [](const std::vector<std::uint64_t>& s) {
+                            MT64 mt({0});
+                            mt.set_state(s);
+                            return mt;
+                        }));
+    m.def(
+        "bio_perl_sqrt",
+        [](const CArray<double>& x) {
+            py::array_t<double> out(x.size());
+            auto o = out.mutable_data();
+            const double* in = x.data();
+            for (py::ssize_t i = 0; i < x.size(); ++i) o[i] = perl_sqrt(in[i]);
+            return out;
+        },
+        "Perl's sqrt (mingw x87) of each value.");
     m.def(
         "bio_ultrametric",
         [](const py::dict& tree) {

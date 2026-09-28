@@ -119,6 +119,20 @@ std::uint64_t MT64::algo() {
     return n1;
 }
 
+std::vector<std::uint64_t> MT64::get_state() const {
+    std::vector<std::uint64_t> s(state_, state_ + N);
+    s.push_back(static_cast<std::uint64_t>(next_));
+    s.push_back(static_cast<std::uint64_t>(left_));
+    return s;
+}
+
+void MT64::set_state(const std::vector<std::uint64_t>& s) {
+    if (s.size() != static_cast<std::size_t>(N) + 2) throw std::invalid_argument("invalid Mersenne Twister state");
+    std::copy(s.begin(), s.begin() + N, state_);
+    next_ = static_cast<int>(s[N]);
+    left_ = static_cast<std::int64_t>(s[N + 1]);
+}
+
 std::uint64_t MT64::irand() {
     std::uint64_t x = (--left_ == 0) ? algo() : state_[next_++];
     x ^= (x >> 29) & 0x0000000555555555ULL;

@@ -215,18 +215,29 @@
 "uses_nbr_lists": 1
 },
 "calc_element_lists_used": {
+"index_uses_nbr_lists": {
+"EL_LIST_ALL": 2,
+"EL_LIST_SET2": 2
+},
 "pre_calc": [
 "_calc_abc_any"
 ],
 "uses_nbr_lists": 1
 },
 "calc_element_lists_used_as_arrays": {
+"index_uses_nbr_lists": {
+"EL_ARRAY_ALL": 2,
+"EL_ARRAY_SET2": 2
+},
 "pre_calc": [
 "_calc_abc_any"
 ],
 "uses_nbr_lists": 1
 },
 "calc_elements_used": {
+"index_uses_nbr_lists": {
+"EL_COUNT_SET2": 2
+},
 "pre_calc": [
 "_calc_abc_any"
 ],
@@ -485,30 +496,55 @@
 "uses_nbr_lists": 1
 },
 "calc_local_range_lists": {
+"index_uses_nbr_lists": {
+"ABC2_LABELS_ALL": 2,
+"ABC2_LABELS_SET2": 2
+},
 "pre_calc": [
 "calc_abc2"
 ],
 "uses_nbr_lists": 1
 },
 "calc_local_range_stats": {
+"index_uses_nbr_lists": {
+"ABC2_MEAN_SET2": 2,
+"ABC2_SD_ALL": 2,
+"ABC2_SD_SET2": 2
+},
 "pre_calc": [
 "calc_abc2"
 ],
 "uses_nbr_lists": 1
 },
 "calc_local_sample_count_lists": {
+"index_uses_nbr_lists": {
+"ABC3_LABELS_ALL": 2,
+"ABC3_LABELS_SET2": 2
+},
 "pre_calc": [
 "calc_abc3"
 ],
 "uses_nbr_lists": 1
 },
 "calc_local_sample_count_quantiles": {
+"index_uses_nbr_lists": {
+"ABC3_QUANTILES_ALL": 2,
+"ABC3_QUANTILES_SET2": 2
+},
 "pre_calc": [
 "calc_abc3"
 ],
 "uses_nbr_lists": 1
 },
 "calc_local_sample_count_stats": {
+"index_uses_nbr_lists": {
+"ABC3_MEAN_ALL": 2,
+"ABC3_MEAN_SET2": 2,
+"ABC3_SD_ALL": 2,
+"ABC3_SD_SET2": 2,
+"ABC3_SUM_ALL": 2,
+"ABC3_SUM_SET2": 2
+},
 "pre_calc": [
 "calc_abc3"
 ],
@@ -543,6 +579,9 @@
 "uses_nbr_lists": 1
 },
 "calc_nonempty_elements_used": {
+"index_uses_nbr_lists": {
+"EL_COUNT_NONEMPTY_SET2": 2
+},
 "uses_nbr_lists": 1
 },
 "calc_nri_nti1": {
@@ -960,12 +999,18 @@
 "uses_nbr_lists": 1
 },
 "calc_redundancy": {
+"index_uses_nbr_lists": {
+"REDUNDANCY_SET2": 2
+},
 "pre_calc": [
 "calc_abc3"
 ],
 "uses_nbr_lists": 1
 },
 "calc_richness": {
+"index_uses_nbr_lists": {
+"RICHNESS_SET2": 2
+},
 "pre_calc": [
 "_calc_abc_any"
 ],

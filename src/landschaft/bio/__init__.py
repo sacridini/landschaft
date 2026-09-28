@@ -26,6 +26,7 @@ from ._conditions import Neighbourhoods, SpatialCondition, definition_query, nei
 from ._gbif import read_occurrences
 from ._matrix import Matrix, read_matrix
 from ._properties import read_properties
+from ._randomise import Randomisation, randomise
 from ._spatial import SpatialResult, list_calculations, spatial_analysis
 from ._tree import Tree, read_tree, read_trees
 
@@ -33,6 +34,7 @@ __all__ = [
     "BaseData",
     "Matrix",
     "Neighbourhoods",
+    "Randomisation",
     "SpatialCondition",
     "SpatialResult",
     "Tree",
@@ -41,6 +43,7 @@ __all__ = [
     "neighbours",
     "read_matrix",
     "read_occurrences",
+    "randomise",
     "read_properties",
     "read_tree",
     "read_trees",

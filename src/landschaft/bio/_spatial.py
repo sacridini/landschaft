@@ -466,6 +466,38 @@ def spatial_analysis(
             procs = procs[rep]
         else:
             expand = None
+    run = _Run(valid, nbrs, set1, set2, procs, expand, tree, matrix, pc_steps, pc_vpd, int(prng_seed), threads)
+    table, lists = _evaluate(bd, run)
+    res = SpatialResult(bd, table, lists, nbrs, [c.removeprefix("calc_") for c in valid])
+    res._run = run
+    return res
+
+
+class _Run:
+    """What an analysis needs to run again on other sample counts (randomisations)."""
+
+    def __init__(self, valid, nbrs, set1, set2, procs, expand, tree, matrix, pc_steps, pc_vpd, prng_seed, threads):
+        self.valid = valid
+        self.nbrs = nbrs
+        self.set1 = set1
+        self.set2 = set2
+        self.procs = procs
+        self.expand = expand
+        self.tree = tree
+        self.matrix = matrix
+        self.pc_steps = pc_steps
+        self.pc_vpd = pc_vpd
+        self.prng_seed = prng_seed
+        self.threads = threads
+
+
+def _evaluate(bd, run: _Run, threads: int | None = None):
+    """Run the calculations of an analysis on a basedata with the same groups (its neighbourhoods)."""
+    reg = _registry()
+    valid, nbrs, set1, set2, procs, expand = run.valid, run.nbrs, run.set1, run.set2, run.procs, run.expand
+    tree, matrix, pc_steps, pc_vpd, prng_seed = run.tree, run.matrix, run.pc_steps, run.pc_vpd, run.prng_seed
+    threads = run.threads if threads is None else threads
+    order = _precalc_order(valid)
     view = _basedata_view(bd)
     view["abc_any_variant"] = _abc_any_variant(valid)
     # the order Biodiverse runs the calculations in (shared statistics objects)
@@ -501,5 +533,12 @@ def spatial_analysis(
     names = [bd.groups[g] for g in nbrs.groups]
     table = pd.DataFrame(np.asarray(raw["scalars"]), index=pd.Index(names, name="group"),
                          columns=list(raw["scalar_names"]))
-    lists = ListIndices(bd, names, raw["lists"], list(raw["texts"]), node_names)
-    return SpatialResult(bd, table, lists, nbrs, [c.removeprefix("calc_") for c in valid])
+    # indices needing more neighbour sets than given are not reported (Biodiverse's indices_to_clear)
+    n_sets = 1 if set2 is None else 2
+    deps = _dependencies()
+    clear = {i for c in valid for i, n in deps.get(c, {}).get("index_uses_nbr_lists", {}).items() if n > n_sets}
+    if clear:
+        table = table.drop(columns=[c for c in table.columns if c in clear])
+    raw_lists = [item for item in raw["lists"] if item[0] not in clear]
+    lists = ListIndices(bd, names, raw_lists, list(raw["texts"]), node_names)
+    return table, lists

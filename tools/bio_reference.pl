@@ -222,6 +222,16 @@ sub run_spatial {
         calculations => $task->{calculations},
         calc_args($tree, $matrix, $task),
     );
+    #  randomisations compare against every spatial output of the basedata
+    foreach my $r (@{$task->{randomise} // []}) {
+        my $rand = $bd->add_randomisation_output(name => $r->{name});
+        $rand->run_analysis(
+            function   => $r->{function},
+            iterations => $r->{iterations},
+            seed       => $r->{seed},
+            %{$r->{args} // {}},
+        );
+    }
     my %results;
     my $pass = $sp->get_pass_def_query;
     foreach my $gp (sort $sp->get_element_list) {
@@ -289,6 +299,14 @@ sub dump_metadata {
             $h{$type} = ref $deps ? [@$deps] : [$deps];
         }
         $h{uses_nbr_lists} = eval { $md->get_uses_nbr_lists };
+        #  indices that need more neighbour sets than their calculation
+        my $idx = eval { $md->get_indices } // {};
+        my %more;
+        foreach my $index (sort keys %$idx) {
+            my $n = eval { $md->get_index_uses_nbr_lists($index) } // 1;
+            $more{$index} = $n if $n > ($h{uses_nbr_lists} // 1);
+        }
+        $h{index_uses_nbr_lists} = \%more if %more;
         $out{$name} = \%h;
     }
     return \%out;

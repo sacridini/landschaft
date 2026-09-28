@@ -651,7 +651,17 @@ Fases:
    aos resultados; as referências anteriores não mudaram). Campos vazios nos arquivos de
    propriedades ficam definidos sem valor (listados, fora das estatísticas); valores não
    numéricos são descartados. 90 mil grupos: 0,3 a 0,6 s;
-7. MT::Auto portado, randomizações, comparações, z-scores, significância, CANAPE;
+7. MT::Auto portado, randomizações, comparações, z-scores, significância, CANAPE.
+   **7a feita** (0.68.0): `ls.bio.randomise` com `rand_csr_by_group` e `rand_nochange`,
+   contadores C/Q/T/P/SUMX/SUMXX por índice e por item das listas, p-ranks, z-scores (com o
+   `sqrt` x87 do Perl) e as quatro variantes do CANAPE, iguais bit a bit (3 casos, com
+   reciclagem de resultados). Descobertas: o Biodiverse descarta índices que pedem mais
+   conjuntos de vizinhança que os dados (`index_uses_nbr_lists`, agora extraído com as
+   dependências por `make_reference_bio.py dependencies`), então `RICHNESS_SET2` etc. não
+   aparecem com um conjunto; o `RECYCLED_SET` interno entra nas comparações e é ignorado.
+   A análise é refeita pelo `_evaluate` com as vizinhanças originais. Faltam 7b
+   (`rand_structured`), 7c (trocas independentes, curveball) e 7d (variantes espacialmente
+   estruturadas, subconjuntos, rótulos fixos, propriedades de grupo, árvores);
 8. cluster e RegionGrower (ligações, tie-breakers, restrição espacial, índices por nó, export
    Newick/Nexus);
 9. grades hexagonais/H3, formato nativo de sessão, árvores de `Bio.Phylo`/`dendropy`/`ete`;

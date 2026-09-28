@@ -90,6 +90,18 @@ comparison of two neighbour sets. Values are identical to Biodiverse's.
 
 ::: landschaft.bio.SpatialResult
 
+## Randomisations
+
+The basedata is randomised and the analysis run again with the same
+neighbourhoods; per group and index, the comparisons give p-ranks, z-scores
+and, with PE and RPE, the CANAPE categories. The randomisations follow
+Biodiverse's (its Mersenne Twister, seeded with `seed`), so the same seed
+gives Biodiverse's results.
+
+::: landschaft.bio.randomise
+
+::: landschaft.bio.Randomisation
+
 ## Phylogenies
 
 ::: landschaft.bio.Tree

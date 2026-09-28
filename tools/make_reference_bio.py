@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors] [neighbours] [spatial] [phylo] [phylocom] [props]
+    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors] [neighbours] [spatial] [phylo] [phylocom] [props] [rand]
 
 ``data`` writes the synthetic inputs of ``tests/bio_cases.py`` into
 ``tests/data/bio``; the other parts run Biodiverse (Perl) through
@@ -180,6 +180,36 @@ def make_props(unsorted: bool) -> None:
     save("props", out)
 
 
+def make_dependencies(unsorted: bool) -> None:
+    """Biodiverse's calculation metadata used by landschaft (pre_calc order, neighbour sets)."""
+    import json
+
+    spec = dict(bio_cases.BASEDATA_CASES["site_100k"]["biodiverse"])
+    spec["file"] = _path(spec["file"])
+    meta = run({"basedata": spec, "tasks": [{"type": "metadata", "name": "metadata"}]}, unsorted)["metadata"]
+    out = ROOT / "src" / "landschaft" / "bio" / "data" / "biodiverse_dependencies.json"
+    out.write_text(json.dumps(meta, indent=0, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"wrote {out}")
+
+
+def make_rand(unsorted: bool) -> None:
+    out = {}
+    for name, case in bio_cases.RAND_CASES.items():
+        bdcase = bio_cases.BASEDATA_CASES[case["basedata"]]
+        spec = dict(bdcase["biodiverse"])
+        spec["file"] = _path(spec["file"])
+        task = {"type": "spatial", "name": name, "spatial_conditions": case["conditions"],
+                "calculations": case["calcs"],
+                "randomise": [{"name": "rnd", "function": case["function"], "iterations": case["iterations"],
+                               "seed": case["seed"], "args": case.get("args", {})}]}
+        job = {"basedata": spec, "tasks": [task]}
+        if "tree" in case:
+            job["tree"] = {"file": _path(case["tree"])}
+        print(name)
+        out[name] = run(job, unsorted)[name]
+    save("rand", out)
+
+
 def make_phylocom(unsorted: bool) -> None:
     out = {}
     for name, case in bio_cases.PHYLOCOM_CASES.items():
@@ -217,7 +247,7 @@ def make_matrices(unsorted: bool) -> None:
 
 def main(argv: list[str]) -> None:
     unsorted = "--unsorted" in argv
-    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours", "spatial", "phylo", "phylocom", "props"]
+    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours", "spatial", "phylo", "phylocom", "props", "rand"]
     if "data" in parts:
         bio_cases.write_synthetic_data()
         bio_cases.write_rasters()
@@ -248,6 +278,10 @@ def main(argv: list[str]) -> None:
         make_phylocom(unsorted)
     if "props" in parts:
         make_props(unsorted)
+    if "rand" in parts:
+        make_rand(unsorted)
+    if "dependencies" in parts:
+        make_dependencies(unsorted)
 
 
 if __name__ == "__main__":

@@ -301,6 +301,20 @@ def write_label_props() -> None:
             w.writerow(["Genus", sp, a, b, c])
 
 
+# randomisations (phase 7)
+RAND_CALCS = ["calc_richness", "calc_endemism_whole", "calc_pe", "calc_phylo_rpe2", "calc_pe_central",
+              "calc_phylo_rpe_central", "calc_pd"]
+RAND_CASES = {
+    "csr_circle": {"basedata": "site_100k", "tree": "Example_tree.nex", "conditions": ["sp_circle (radius => 200000)"],
+                   "calcs": RAND_CALCS + ["calc_pe_lists", "calc_endemism_whole_lists", "calc_local_range_lists"],
+                   "function": "rand_csr_by_group", "iterations": 9, "seed": 1234},
+    "csr_block": {"basedata": "site_100k", "tree": "Example_tree.nex", "conditions": ["sp_block (size => 300000)"],
+                  "calcs": RAND_CALCS, "function": "rand_csr_by_group", "iterations": 5, "seed": 7},
+    "nochange": {"basedata": "site_100k", "tree": "Example_tree.nex", "conditions": ["sp_self_only()"],
+                 "calcs": ["calc_richness", "calc_pe"], "function": "rand_nochange", "iterations": 3, "seed": 1},
+}
+
+
 def phylocom_calcs(case: dict) -> list[str]:
     return PHYLOCOM_CALCS + (PHYLOCOM_VPD if case.get("vpd") else [])
 
