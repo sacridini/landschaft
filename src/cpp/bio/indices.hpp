@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,7 @@ enum class KeyKind : i32 {
     Number = 3,  // a number (Perl stringifies it)
     GroupArray = 4,  // an array of groups (keys in order, values unused)
     Node = 5,    // tree node index
+    NumberArray = 6,  // an array of numbers (keys in order, values unused)
 };
 
 struct CalcInfo {
@@ -58,6 +60,25 @@ struct BaseDataView {
     i32 n_label_levels = 1;
     std::vector<i32> label_prefix;
     std::vector<std::string> prefix_names;
+    // element properties: per property the distinct values (as given, in Perl's
+    // string order), their numbers, and each element's value (-1: none)
+    struct Property {
+        std::string name;
+        std::vector<std::string> keys;
+        std::vector<double> values;
+        std::vector<i32> element_key;
+    };
+    std::vector<Property> label_props, group_props;
+    bool labels_numeric = false;
+    std::vector<double> label_values;  // labels as numbers
+    // label matrix: each label's row in `mx_values` (-1: not in the matrix)
+    bool has_matrix = false;
+    std::vector<i32> label_mx;
+    i32 mx_n = 0;
+    std::vector<double> mx_values;  // mx_n x mx_n, NaN where no value
+    double mx_self_similarity = std::numeric_limits<double>::quiet_NaN();
+    // order Biodiverse runs the calculations in (positions in the list given)
+    std::vector<i32> exec_order;
 };
 
 struct ListOut {

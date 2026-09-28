@@ -77,7 +77,12 @@ range-weighted), relative PD and PE (RPD, RPE, against trees with equalised
 branch lengths), RWiBaLD and the PhyloCom indices (MPD, MNTD, NRI, NTI, net
 VPD, with the exact expected values of Tsirogiannis et al. or, where
 Biodiverse samples random sets of tips, its Mersenne Twister draws: pass
-`prng_seed`). Values are identical to Biodiverse's.
+`prng_seed`). With label or group properties: their values, frequencies,
+summary statistics, quantiles and Getis-Ord Gi* (also weighted by local
+ranges); with numeric labels: their statistics, quantiles, harmonic and
+geometric means, dissimilarity between neighbour sets and Gi*; with a label
+matrix (`matrix=`): matrix statistics, Rao's quadratic entropy and the
+comparison of two neighbour sets. Values are identical to Biodiverse's.
 
 ::: landschaft.bio.spatial_analysis
 
@@ -98,3 +103,11 @@ Biodiverse samples random sets of tips, its Mersenne Twister draws: pass
 ::: landschaft.bio.Matrix
 
 ::: landschaft.bio.read_matrix
+
+## Element properties
+
+Label and group properties (Biodiverse's element properties files) are
+assigned with `BaseData.set_label_properties` and
+`BaseData.set_group_properties`.
+
+::: landschaft.bio.read_properties

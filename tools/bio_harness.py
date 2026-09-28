@@ -40,6 +40,12 @@ BIODIVERSE = Path(os.environ.get("LANDSCHAFT_BIODIVERSE", Path.home() / "Documen
 STRAWBERRY = Path(os.environ.get("LANDSCHAFT_STRAWBERRY", "C:/Strawberry"))
 PERL5 = Path(os.environ.get("LANDSCHAFT_BIO_PERL5", LOCAL / "landschaft-bio-perl5"))
 OVERLAY = PERL5 / "overlay"
+# CPAN modules whose hash iteration reaches Biodiverse's results (rewritten too)
+EXTRA_MODULES = [
+    "Statistics/Descriptive/PDL.pm",
+    "Statistics/Descriptive/PDL/Weighted.pm",
+    "Statistics/Descriptive/PDL/SampleWeighted.pm",
+]
 
 # Perl helpers: sorted keys, context-aware like the builtins.
 LSK_MODULE = r"""package LSK;
@@ -188,6 +194,11 @@ def _source_digest() -> str:
     for p in sorted((BIODIVERSE / "lib").rglob("*.pm")):
         h.update(str(p.relative_to(BIODIVERSE)).encode())
         h.update(p.read_bytes())
+    for rel in EXTRA_MODULES:
+        p = PERL5 / "lib" / "perl5" / rel
+        if p.exists():
+            h.update(rel.encode())
+            h.update(p.read_bytes())
     return h.hexdigest()
 
 
@@ -201,6 +212,11 @@ def build_overlay(force: bool = False) -> Path:
     if OVERLAY.exists():
         shutil.rmtree(OVERLAY)
     shutil.copytree(BIODIVERSE / "lib", lib)
+    for rel in EXTRA_MODULES:
+        src_path = PERL5 / "lib" / "perl5" / rel
+        if src_path.exists():
+            (lib / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src_path, lib / rel)
     total = 0
     for p in lib.rglob("*.pm"):
         if "GUI" in p.relative_to(lib).parts:

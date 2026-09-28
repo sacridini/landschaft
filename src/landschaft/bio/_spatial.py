@@ -16,7 +16,7 @@ from ._names import perl_number
 
 __all__ = ["SpatialResult", "list_calculations", "spatial_analysis"]
 
-_KEY_LABEL, _KEY_GROUP, _KEY_TEXT, _KEY_NUMBER, _KEY_GROUP_ARRAY, _KEY_NODE = range(6)
+_KEY_LABEL, _KEY_GROUP, _KEY_TEXT, _KEY_NUMBER, _KEY_GROUP_ARRAY, _KEY_NODE, _KEY_NUMBER_ARRAY = range(7)
 _DEPS = None
 
 
@@ -138,7 +138,15 @@ def _basedata_view(bd) -> dict:
         a = pd.to_numeric(props["ABUNDANCE"], errors="coerce").reindex(bd.labels).to_numpy(dtype=np.float64)
         abundance = np.where(np.isnan(a), sample, np.maximum(a, sample))
     levels, prefix, prefix_names = _label_hierarchy(bd)
+    from ._names import looks_like_number
+    from ._properties import property_tables
+
+    numeric = all(looks_like_number(lb) for lb in bd.labels)
     return {
+        "label_props": property_tables(bd.label_properties),
+        "group_props": property_tables(bd.group_properties),
+        "labels_numeric": numeric,
+        "label_values": np.array([float(lb) if numeric else np.nan for lb in bd.labels], dtype=np.float64),
         "label_sample_count": np.ascontiguousarray(sample),
         "abc_any_variant": 1,
         "n_label_levels": levels,
@@ -221,6 +229,9 @@ def _expand_raw(raw: dict, inverse: np.ndarray) -> dict:
     return out
 
 
+_MATRIX_CALCS = {"calc_matrix_stats", "calc_compare_dissim_matrix_values", "calc_mx_rao_qe"}
+
+
 def _calc_name(c: str) -> str:
     return c if c.startswith("calc_") else "calc_" + c
 
@@ -264,7 +275,7 @@ class ListIndices(dict):
     def _build(self, name: str) -> pd.DataFrame:
         kind, indptr, keys, values = self._raw[name]
         rows = np.repeat(np.arange(len(self._groups)), np.diff(indptr))
-        k = keys.astype(np.int64) if kind != _KEY_NUMBER else keys
+        k = keys.astype(np.int64) if kind not in (_KEY_NUMBER, _KEY_NUMBER_ARRAY) else keys
         if kind == _KEY_LABEL:
             key_col = np.asarray(self._bd.labels, dtype=object)[k]
         elif kind in (_KEY_GROUP, _KEY_GROUP_ARRAY):
@@ -273,6 +284,8 @@ class ListIndices(dict):
             key_col = self._texts[k]
         elif kind == _KEY_NODE:
             key_col = np.asarray(self._node_names, dtype=object)[k]
+        elif kind == _KEY_NUMBER_ARRAY:
+            key_col = keys.astype(np.float64)
         else:
             uniq, inv = np.unique(keys, return_inverse=True)
             key_col = np.asarray([perl_number(float(u)) for u in uniq], dtype=object)[inv]
@@ -331,6 +344,7 @@ def spatial_analysis(
     definition_query: str | SpatialCondition | None = None,
     *,
     tree=None,
+    matrix=None,
     prng_seed: int | None = None,
     n_threads: int | None = None,
     recycle: bool = True,
@@ -352,6 +366,9 @@ def spatial_analysis(
     tree : Tree, optional
         Phylogeny for the phylogenetic indices (``pd``, ``pe``...); its node
         names are matched to the labels.
+    matrix : Matrix, optional
+        Label matrix for the matrix indices (``matrix_stats``,
+        ``compare_dissim_matrix_values``, ``mx_rao_qe``).
     prng_seed : int, optional
         Seed of the Mersenne Twister Biodiverse draws random sets of tips
         with, for the expected NTI on trees that are not ultrametric and for
@@ -398,6 +415,19 @@ def spatial_analysis(
         needs = [c for c in valid if reg[c]["uses_tree"]]
         if needs:
             raise ValueError(f"these calculations need a tree: {', '.join(n.removeprefix('calc_') for n in needs)}")
+    if matrix is None:
+        needs = [c for c in valid if c in _MATRIX_CALCS]
+        if needs:
+            raise ValueError(f"these calculations need a matrix: {', '.join(n.removeprefix('calc_') for n in needs)}")
+    # Biodiverse's pre-conditions: calculations for data the basedata lacks are not run
+    from ._names import looks_like_number
+
+    if not all(looks_like_number(lb) for lb in bd.labels):
+        valid = [c for c in valid if not c.startswith(("calc_numeric_label", "calc_num_labels"))]
+    if not any(bd.label_properties[c].notna().any() for c in bd.label_properties.columns):
+        valid = [c for c in valid if not c.startswith("calc_lbprop")]
+    if not any(bd.group_properties[c].notna().any() for c in bd.group_properties.columns):
+        valid = [c for c in valid if not c.startswith("calc_gpprop")]
     if not valid:
         raise ValueError("none of the calculations can run with this many neighbour sets")
     threads = resolve(n_threads)
@@ -438,6 +468,22 @@ def spatial_analysis(
             expand = None
     view = _basedata_view(bd)
     view["abc_any_variant"] = _abc_any_variant(valid)
+    # the order Biodiverse runs the calculations in (shared statistics objects)
+    position = {c: i for i, c in enumerate(order)}
+    view["exec_order"] = sorted(range(len(valid)), key=lambda i: position.get(valid[i], len(order)))
+    if matrix is not None:
+        label_index = np.array([matrix._index.get(lb, -1) for lb in bd.labels], dtype=np.int64)
+        present = np.unique(label_index[label_index >= 0])
+        remap = np.full(len(matrix.elements), -1, dtype=np.int32)
+        remap[present] = np.arange(len(present), dtype=np.int32)
+        sub_values = matrix.values[np.ix_(present, present)]
+        ss = matrix.self_similarity
+        view["matrix"] = {
+            "label_index": np.where(label_index >= 0, remap[np.maximum(label_index, 0)], -1).astype(np.int32),
+            "n": int(len(present)),
+            "values": np.ascontiguousarray(sub_values, dtype=np.float64).ravel(),
+            "self_similarity": float("nan") if ss is None else float(ss),
+        }
     tview = None
     node_names = None
     if tree is not None and any(reg[c]["uses_tree"] for c in valid):

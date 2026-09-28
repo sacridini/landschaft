@@ -19,6 +19,7 @@
 
 #include "bio/perlmath.hpp"
 #include "bio/phylocom.hpp"
+#include "bio/props.hpp"
 #include "lsm/parallel.hpp"
 
 namespace bio {
@@ -255,6 +256,46 @@ std::vector<CalcInfo> make_registry() {
     addt("calc_phylo_rpe1", {"PHYLO_RPE1", "PHYLO_RPE_DIFF1", "PHYLO_RPE_NULL1"}, {}, 1);
     addt("calc_phylo_rpe2", {"PHYLO_RPE2", "PHYLO_RPE_DIFF2", "PHYLO_RPE_NULL2"}, {}, 1);
     addt("calc_phylo_rpe_central", {"PHYLO_RPEC", "PHYLO_RPE_DIFFC", "PHYLO_RPE_NULLC"}, {}, 1);
+    // Element properties (the per-property lists are added in run_indices)
+    add("calc_lbprop_lists", {}, {}, 1);
+    add("calc_lbprop_data", {}, {}, 1);
+    add("calc_lbprop_hashes", {}, {}, 1);
+    add("calc_lbprop_stats", {}, {{"LBPROP_STATS", K::Text}}, 1);
+    add("calc_lbprop_quantiles", {}, {{"LBPROP_QUANTILES", K::Text}}, 1);
+    add("calc_lbprop_gistar", {}, {{"LBPROP_GISTAR_LIST", K::Text}}, 1);
+    add("calc_lbprop_hashes_abc2", {}, {}, 1);
+    add("calc_lbprop_stats_abc2", {}, {{"LBPROP_STATS_ABC2", K::Text}}, 1);
+    add("calc_lbprop_quantiles_abc2", {}, {{"LBPROP_QUANTILES_ABC2", K::Text}}, 1);
+    add("calc_lbprop_gistar_abc2", {}, {{"LBPROP_GISTAR_LIST_ABC2", K::Text}}, 1);
+    add("calc_gpprop_lists", {}, {}, 1);
+    add("calc_gpprop_hashes", {}, {}, 1);
+    add("calc_gpprop_stats", {}, {{"GPPROP_STATS_LIST", K::Text}}, 1);
+    add("calc_gpprop_quantiles", {}, {{"GPPROP_QUANTILE_LIST", K::Text}}, 1);
+    add("calc_gpprop_gistar", {}, {{"GPPROP_GISTAR_LIST", K::Text}}, 1);
+    // Numeric labels
+    add("calc_numeric_label_stats",
+        {"NUM_CV", "NUM_KURT", "NUM_MAX", "NUM_MEAN", "NUM_MIN", "NUM_N", "NUM_RANGE", "NUM_SD", "NUM_SKEW"}, {}, 1);
+    add("calc_numeric_label_other_means", {"NUM_GMEAN", "NUM_HMEAN"}, {}, 1);
+    {
+        std::vector<std::string> q;
+        for (int v = 5; v <= 95; v += 5) {
+            char buf[16];
+            std::snprintf(buf, sizeof buf, "NUM_Q%03d", v);
+            q.push_back(buf);
+        }
+        add("calc_numeric_label_quantiles", q, {}, 1);
+    }
+    add("calc_numeric_label_data", {}, {{"NUM_DATA_ARRAY", K::NumberArray}}, 1);
+    add("calc_numeric_label_dissimilarity", {"NUMD_ABSMEAN", "NUMD_COUNT", "NUMD_VARIANCE"}, {}, 2);
+    add("calc_num_labels_gistar", {"NUM_GISTAR"}, {}, 1);
+    // Matrix
+    add("calc_matrix_stats",
+        {"MX_KURT", "MX_MAXVALUE", "MX_MEAN", "MX_MEDIAN", "MX_MINVALUE", "MX_N", "MX_PCT05", "MX_PCT25", "MX_PCT75",
+         "MX_PCT95", "MX_RANGE", "MX_SD", "MX_SKEW"},
+        {{"MX_LABELS", K::Label}, {"MX_VALUES", K::NumberArray}}, 1);
+    add("calc_compare_dissim_matrix_values", {"MXD_COUNT", "MXD_MEAN", "MXD_VARIANCE"},
+        {{"MXD_LIST1", K::Label}, {"MXD_LIST2", K::Label}}, 2);
+    add("calc_mx_rao_qe", {"MX_RAO_QE", "MX_RAO_TN"}, {{"MX_RAO_TLABELS", K::Label}}, 1);
     // PhyloCom
     for (const char* n : {"1", "2", "3"}) {
         const std::string d = n, a = "PMPD" + d, b = "PNTD" + d;
@@ -1089,6 +1130,24 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
             res.list_names.push_back(l.first);
             res.list_kinds.push_back(l.second);
         }
+        {
+            // one list per property
+            auto per_prop = [&](const std::vector<BaseDataView::Property>& props, const std::string& pfx,
+                                const std::string& sfx, KeyKind kind) {
+                for (const auto& p : props) {
+                    lslot[c].push_back(res.list_names.size());
+                    res.list_names.push_back(pfx + p.name + sfx);
+                    res.list_kinds.push_back(kind);
+                }
+            };
+            const std::string& n = ci.name;
+            if (n == "calc_lbprop_lists") per_prop(bd.label_props, "LBPROP_LIST_", "", K::Label);
+            if (n == "calc_lbprop_data") per_prop(bd.label_props, "LBPROP_STATS_", "_DATA", K::NumberArray);
+            if (n == "calc_lbprop_hashes") per_prop(bd.label_props, "LBPROP_STATS_", "_HASH", K::Text);
+            if (n == "calc_lbprop_hashes_abc2") per_prop(bd.label_props, "LBPROP_STATS_", "_HASH2", K::Text);
+            if (n == "calc_gpprop_lists") per_prop(bd.group_props, "GPPROP_STATS_", "_DATA", K::NumberArray);
+            if (n == "calc_gpprop_hashes") per_prop(bd.group_props, "GPPROP_STATS_", "_HASH", K::Text);
+        }
         if (ci.name == "calc_endemism_central_hier_part" || ci.name == "calc_endemism_whole_hier_part") {
             // PREFIX_i, PREFIX_C_i, PREFIX_E_i, PREFIX_OME_i for every label level
             const std::string pfx = ci.name == "calc_endemism_central_hier_part" ? "ENDC_HPART_" : "ENDW_HPART_";
@@ -1158,6 +1217,107 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
         }
     }
     const i32 key_rt = text_id("range_thresh"), key_nt = text_id("neg_len_thresh"), key_pt = text_id("pos_len_thresh");
+
+    // element properties: text keys and global summaries (Gi*)
+    static const char* lb_stats[] = {"count", "mean", "min", "max", "median", "sum", "skewness", "kurtosis", "sd", "iqr"};
+    static const char* gp_stats[] = {"count", "mean", "min", "max", "median", "sum", "sd", "iqr"};
+    static const char* prop_q[] = {"05", "10", "20", "30", "40", "50", "60", "70", "80", "90", "95"};
+    auto upper = [](std::string s) {
+        for (auto& ch : s) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+        return s;
+    };
+    struct PropTexts {
+        std::vector<i32> stat, quant;
+        std::unordered_map<std::string, i32> by_str;  // hash keys (Perl strings of the values)
+        i32 name = -1;
+    };
+    auto prop_texts = [&](const std::vector<BaseDataView::Property>& props, bool group) {
+        std::vector<PropTexts> out;
+        for (const auto& p : props) {
+            PropTexts t;
+            t.name = text_id(p.name);
+            if (group) {
+                for (const char* st : gp_stats) t.stat.push_back(text_id(p.name + "_" + upper(st)));
+                for (const char* q : prop_q) t.quant.push_back(text_id("GPPROP_STATS_" + p.name + "_Q" + q));
+            } else {
+                for (const char* st : lb_stats) t.stat.push_back(text_id(p.name + "_" + upper(st)));
+                for (const char* q : prop_q) t.quant.push_back(text_id(p.name + "_Q" + q));
+            }
+            for (double v : p.values) {
+                const std::string k = perl_str(v);
+                t.by_str.emplace(k, text_id(k));
+            }
+            out.push_back(std::move(t));
+        }
+        return out;
+    };
+    const auto lb_texts = prop_texts(bd.label_props, false);
+    const auto gp_texts = prop_texts(bd.group_props, true);
+    // get_element_properties_summary_stats: values weighted by 1 (or the label ranges)
+    auto global_summary = [&](const BaseDataView::Property& p, const std::vector<double>* weight) {
+        std::vector<double> acc(p.keys.size(), 0);
+        std::vector<std::uint8_t> used(p.keys.size(), 0);
+        for (std::size_t e = 0; e < p.element_key.size(); ++e) {
+            const i32 k = p.element_key[e];
+            if (k < 0) continue;
+            acc[static_cast<std::size_t>(k)] += weight ? (*weight)[e] : 1.0;
+            used[static_cast<std::size_t>(k)] = 1;
+        }
+        std::vector<double> d;
+        std::vector<std::int64_t> w;
+        for (std::size_t k = 0; k < acc.size(); ++k)
+            if (used[k]) {
+                d.push_back(p.values[k]);
+                w.push_back(static_cast<std::int64_t>(acc[k]));
+            }
+        GlobalSummary g;
+        bool any = !d.empty();
+        WStats s;
+        s.set(std::move(d), std::move(w));
+        if (any) {
+            g.mean = s.mean();
+            g.sum = s.sum();
+            g.sd = s.sd();
+            g.count = s.count();
+        }
+        return std::make_pair(any, g);
+    };
+    std::vector<std::pair<bool, GlobalSummary>> lb_global, lb_global_rw, gp_global;
+    for (const auto& p : bd.label_props) {
+        lb_global.push_back(global_summary(p, nullptr));
+        lb_global_rw.push_back(global_summary(p, &bd.label_range));
+    }
+    for (const auto& p : bd.group_props) gp_global.push_back(global_summary(p, nullptr));
+    // _get_num_label_global_summary_stats
+    GlobalSummary num_global;
+    if (bd.labels_numeric) {
+        double sumx = 0, sumxx = 0, n = 0;
+        bool first = true;
+        for (i64 l = 0; l < bd.n_labels; ++l) {
+            const double count = bd.label_sample_count[static_cast<std::size_t>(l)];
+            const double x = bd.label_values[static_cast<std::size_t>(l)];
+            if (first) {
+                sumx = count * x;
+                sumxx = count * perl_pow(x, 2);
+                n = count;
+                first = false;
+            } else {
+                sumx += count * x;
+                sumxx += count * perl_pow(x, 2);
+                n += count;
+            }
+        }
+        if (n != 0) {
+            const double mean = sumx / n;
+            double variance = sumxx - n * perl_pow(mean, 2);
+            variance /= n - 1;
+            variance = 0 < variance ? variance : 0.0;
+            num_global.mean = mean;
+            num_global.sd = perl_sqrt(variance);
+        }
+        num_global.sum = sumx;
+        num_global.count = n;
+    }
 
     // PhyloCom: path caches and expected values are shared across groups
     std::unique_ptr<PhyloCom> pc;
@@ -1337,7 +1497,78 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
                 return (num(obs) - num(mean)) / sd;
             };
 
-            for (std::size_t c = 0; c < ids.size(); ++c) {
+            // statistics objects shared by the calculations of this group
+            std::vector<WStats> lb_obj, lb2_obj, gp_obj;
+            WStats num_obj;
+            bool have_num = false;
+            auto build_props = [&](const std::vector<BaseDataView::Property>& props, std::vector<WStats>& objs,
+                                   int variant) {
+                objs.assign(props.size(), WStats());
+                for (std::size_t pi = 0; pi < props.size(); ++pi) {
+                    const auto& p = props[pi];
+                    std::vector<double> acc(p.keys.size(), 0);
+                    std::vector<std::uint8_t> used(p.keys.size(), 0);
+                    auto add = [&](i32 e, double w) {
+                        const i32 k = p.element_key[static_cast<std::size_t>(e)];
+                        if (k < 0) return;
+                        acc[static_cast<std::size_t>(k)] += w;
+                        used[static_cast<std::size_t>(k)] = 1;
+                    };
+                    if (variant == 0) {
+                        // groups of both sets, once each
+                        std::vector<i32> all;
+                        std::set_union(abc.g1.begin(), abc.g1.end(), abc.g2.begin(), abc.g2.end(), std::back_inserter(all));
+                        for (i32 g : all) add(g, 1);
+                    } else {
+                        for (i32 l : abc.lall) add(l, variant == 1 ? 1.0 : abc.all_count(l));
+                    }
+                    std::vector<double> d;
+                    std::vector<std::int64_t> w;
+                    for (std::size_t k = 0; k < acc.size(); ++k)
+                        if (used[k]) {
+                            d.push_back(p.values[k]);
+                            w.push_back(static_cast<std::int64_t>(acc[k]));
+                        }
+                    objs[pi].set(std::move(d), std::move(w));
+                }
+            };
+            auto lb_objects = [&]() -> std::vector<WStats>& {
+                if (lb_obj.size() != bd.label_props.size() || lb_obj.empty()) build_props(bd.label_props, lb_obj, 1);
+                return lb_obj;
+            };
+            auto lb2_objects = [&]() -> std::vector<WStats>& {
+                if (lb2_obj.size() != bd.label_props.size() || lb2_obj.empty()) build_props(bd.label_props, lb2_obj, 2);
+                return lb2_obj;
+            };
+            auto gp_objects = [&]() -> std::vector<WStats>& {
+                if (gp_obj.size() != bd.group_props.size() || gp_obj.empty()) build_props(bd.group_props, gp_obj, 0);
+                return gp_obj;
+            };
+            auto num_object = [&]() -> WStats& {
+                if (!have_num) {
+                    std::vector<double> d;
+                    std::vector<std::int64_t> w;
+                    for (i32 l : abc.lall) {
+                        d.push_back(bd.label_values[static_cast<std::size_t>(l)]);
+                        w.push_back(static_cast<std::int64_t>(abc.all_samples(l)));
+                    }
+                    num_obj.set(std::move(d), std::move(w));
+                    have_num = true;
+                }
+                return num_obj;
+            };
+            // matrix lookups (get_value with the self similarity; get_defined_value_aa)
+            auto mx_defined = [&](i32 l1, i32 l2) {
+                const i32 a = bd.label_mx[static_cast<std::size_t>(l1)], b = bd.label_mx[static_cast<std::size_t>(l2)];
+                return bd.mx_values[static_cast<std::size_t>(a) * static_cast<std::size_t>(bd.mx_n) + static_cast<std::size_t>(b)];
+            };
+            auto mx_value = [&](i32 l1, i32 l2) {
+                const double v = mx_defined(l1, l2);
+                return (std::isnan(v) && l1 == l2) ? bd.mx_self_similarity : v;
+            };
+
+            for (std::size_t cc = 0; cc < ids.size(); ++cc) {
+                const std::size_t c = bd.exec_order.empty() ? cc : static_cast<std::size_t>(bd.exec_order[cc]);
                 const std::string& name = reg[static_cast<std::size_t>(ids[c])].name;
                 const auto& S = sslot[c];
                 const auto& L = lslot[c];
@@ -2181,6 +2412,264 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
                         set(1, tree->trimmed_total_length * (num(pep) - num(null_)));
                         set(2, null_);
                     }
+                } else if (name == "calc_lbprop_lists") {
+                    for (std::size_t pi = 0; pi < bd.label_props.size(); ++pi) {
+                        const auto& p = bd.label_props[pi];
+                        for (i32 l : abc.lall) {
+                            const i32 k = p.element_key[static_cast<std::size_t>(l)];
+                            if (k >= 0)
+                                put(pi, l, p.values[static_cast<std::size_t>(k)]);
+                            else if (k == -2)
+                                put(pi, l, NaN);  // set but undefined
+                        }
+                    }
+                } else if (name == "calc_lbprop_data" || name == "calc_gpprop_lists") {
+                    auto& objs = name == "calc_lbprop_data" ? lb_objects() : gp_objects();
+                    for (std::size_t pi = 0; pi < objs.size(); ++pi) {
+                        const auto& d = objs[pi].data();
+                        const auto& w = objs[pi].weights();
+                        for (std::size_t i = 0; i < d.size(); ++i)
+                            for (std::int64_t r = 0; r < w[i]; ++r) put(pi, d[i], 0);
+                    }
+                } else if (name == "calc_lbprop_hashes" || name == "calc_lbprop_hashes_abc2" || name == "calc_gpprop_hashes") {
+                    const bool gp = name == "calc_gpprop_hashes";
+                    auto& objs = gp ? gp_objects() : (name == "calc_lbprop_hashes" ? lb_objects() : lb2_objects());
+                    for (std::size_t pi = 0; pi < objs.size(); ++pi) {
+                        // @h{@data} = @wts: a later value wins for the same key
+                        std::map<std::string, std::pair<double, double>> h;
+                        const auto& d = objs[pi].data();
+                        const auto& w = objs[pi].weights();
+                        for (std::size_t i = 0; i < d.size(); ++i) h[perl_str(d[i])] = {d[i], static_cast<double>(w[i])};
+                        const auto& by_str = (gp ? gp_texts : lb_texts)[pi].by_str;
+                        for (const auto& kv : h) {
+                            auto f = by_str.find(kv.first);
+                            if (f != by_str.end()) put(pi, f->second, kv.second.second);
+                        }
+                    }
+                } else if (name == "calc_lbprop_stats" || name == "calc_lbprop_stats_abc2" || name == "calc_gpprop_stats") {
+                    const bool gp = name == "calc_gpprop_stats";
+                    auto& objs = gp ? gp_objects() : (name == "calc_lbprop_stats" ? lb_objects() : lb2_objects());
+                    for (std::size_t pi = 0; pi < objs.size(); ++pi) {
+                        WStats& s = objs[pi];
+                        const auto& t = (gp ? gp_texts : lb_texts)[pi].stat;
+                        const std::size_t ns_ = gp ? 8 : 10;
+                        for (std::size_t k = 0; k < ns_; ++k) {
+                            const std::string st = gp ? gp_stats[k] : lb_stats[k];
+                            double v = NaN;
+                            if (st == "count") v = s.count();
+                            else if (st == "mean") v = s.mean();
+                            else if (st == "min") v = s.min();
+                            else if (st == "max") v = s.max();
+                            else if (st == "median") v = s.median();
+                            else if (st == "sum") v = s.sum();
+                            else if (st == "skewness") v = s.skewness();
+                            else if (st == "kurtosis") v = s.kurtosis();
+                            else if (st == "sd") v = s.sd();
+                            else if (st == "iqr") v = s.iqr();
+                            put(0, t[k], v);
+                        }
+                    }
+                } else if (name == "calc_lbprop_quantiles" || name == "calc_lbprop_quantiles_abc2" ||
+                           name == "calc_gpprop_quantiles") {
+                    const bool gp = name == "calc_gpprop_quantiles";
+                    auto& objs = gp ? gp_objects() : (name == "calc_lbprop_quantiles" ? lb_objects() : lb2_objects());
+                    for (std::size_t pi = 0; pi < objs.size(); ++pi) {
+                        const auto& t = (gp ? gp_texts : lb_texts)[pi].quant;
+                        for (std::size_t k = 0; k < 11; ++k) put(0, t[k], objs[pi].percentile(std::atof(prop_q[k])));
+                    }
+                } else if (name == "calc_lbprop_gistar" || name == "calc_lbprop_gistar_abc2" || name == "calc_gpprop_gistar") {
+                    const bool gp = name == "calc_gpprop_gistar";
+                    auto& objs = gp ? gp_objects() : (name == "calc_lbprop_gistar" ? lb_objects() : lb2_objects());
+                    const auto& glob = gp ? gp_global : (name == "calc_lbprop_gistar" ? lb_global : lb_global_rw);
+                    for (std::size_t pi = 0; pi < objs.size(); ++pi) {
+                        if (!glob[pi].first) continue;
+                        put(0, (gp ? gp_texts : lb_texts)[pi].name, gistar(glob[pi].second, objs[pi]));
+                    }
+                } else if (name == "calc_numeric_label_stats") {
+                    WStats& s = num_object();
+                    const double n = s.count();
+                    if (!std::isnan(n) && n != 0) {
+                        const double sd_ = s.sd(), mean_ = s.mean();
+                        const double cv = mean_ != 0 ? sd_ / mean_ : NaN;
+                        set(3, s.mean());
+                        set(7, s.sd());
+                        set(5, n);
+                        set(6, s.sample_range());
+                        set(8, n > 2 ? s.skewness() : NaN);
+                        set(1, n > 3 ? s.kurtosis() : NaN);
+                        set(0, cv);
+                        set(4, s.min());
+                        set(2, s.max());
+                    } else {
+                        set(5, n);
+                    }
+                } else if (name == "calc_numeric_label_other_means") {
+                    WStats& s = num_object();
+                    const double n = s.count();
+                    if (!std::isnan(n) && n != 0) {
+                        const double g = s.geometric_mean();
+                        const double h = s.harmonic_mean();
+                        set(0, g);
+                        set(1, h);
+                    }
+                } else if (name == "calc_numeric_label_quantiles") {
+                    WStats& s = num_object();
+                    for (int k = 0; k < 19; ++k) set(static_cast<std::size_t>(k), s.percentile(5.0 * (k + 1)));
+                } else if (name == "calc_numeric_label_data") {
+                    WStats& s = num_object();
+                    s.median();
+                    const auto& d = s.data();
+                    const auto& w = s.weights();
+                    for (std::size_t i = 0; i < d.size(); ++i)
+                        for (std::int64_t r = 0; r < w[i]; ++r) put(0, d[i], 0);
+                } else if (name == "calc_num_labels_gistar") {
+                    set(0, gistar(num_global, num_object()));
+                } else if (name == "calc_numeric_label_dissimilarity") {
+                    // label_hash1/2 of calc_abc3 (sample counts per set)
+                    const std::vector<i32>* la = &abc.l1;
+                    const std::vector<i32>* lbv = &abc.l2;
+                    const std::vector<double>* sa = &abc.s1;
+                    const std::vector<double>* sb = &abc.s2;
+                    if (la->empty() || lbv->empty()) {
+                        set(0, NaN);
+                        set(1, NaN);
+                        set(2, NaN);
+                    } else {
+                        if (la->size() > lbv->size()) {
+                            std::swap(la, lbv);
+                            std::swap(sa, sb);
+                        }
+                        auto numeric_sorted = [&](const std::vector<i32>& ls) {
+                            std::vector<i32> v = ls;  // string order, then a stable numeric sort
+                            std::stable_sort(v.begin(), v.end(), [&](i32 a, i32 b) {
+                                return bd.label_values[static_cast<std::size_t>(a)] < bd.label_values[static_cast<std::size_t>(b)];
+                            });
+                            return v;
+                        };
+                        const auto v1 = numeric_sorted(*la), v2 = numeric_sorted(*lbv);
+                        auto val = [&](i32 l) { return bd.label_values[static_cast<std::size_t>(l)]; };
+                        double ssq_v2 = 0, sum_v2 = 0, sum_wt2 = 0;
+                        std::vector<double> cum_sum, cum_wt2;
+                        for (i32 l2 : v2) {
+                            const double wt2 = (*sb)[static_cast<std::size_t>(l2)];
+                            const double x2 = val(l2);
+                            sum_v2 += x2 * wt2;
+                            ssq_v2 += perl_pow(x2, 2) * wt2;
+                            sum_wt2 += wt2;
+                            cum_sum.push_back(sum_v2);
+                            cum_wt2.push_back(sum_wt2);
+                        }
+                        const double v2min = val(v2.front()), v2max = val(v2.back());
+                        const double v2mean = sum_v2 / sum_wt2;
+                        double sum_abs = NaN, sum_sq = NaN, sum_wts = 0;
+                        auto acc = [](double& a, double v) { a = std::isnan(a) ? v : a + v; };
+                        i64 i = 0;
+                        const i64 last = static_cast<i64>(v2.size()) - 1;
+                        auto v2at = [&](i64 k) { return (k >= 0 && k <= last) ? val(v2[static_cast<std::size_t>(k)]) : 0.0; };
+                        auto at = [&](const std::vector<double>& a, i64 k) {
+                            return (k >= 0 && k < static_cast<i64>(a.size())) ? a[static_cast<std::size_t>(k)] : 0.0;
+                        };
+                        for (i32 l1 : v1) {
+                            const double wt1 = (*sa)[static_cast<std::size_t>(l1)];
+                            const double x1 = val(l1);
+                            acc(sum_sq, wt1 * (ssq_v2 - 2 * x1 * sum_v2 + sum_wt2 * perl_pow(x1, 2)));
+                            sum_wts += wt1 * sum_wt2;
+                            if (x1 < v2min || x1 > v2max) {
+                                acc(sum_abs, wt1 * sum_wt2 * std::fabs(x1 - v2mean));
+                                continue;
+                            }
+                            const i64 j = std::min(i, last);
+                            for (i64 it = j; it <= last; ++it) {
+                                if (x1 < v2at(i)) {
+                                    --i;
+                                    break;
+                                }
+                                if (x1 == v2at(i)) break;
+                                ++i;
+                            }
+                            const double cum_sum_i = at(cum_sum, i);
+                            const double n_le = at(cum_wt2, i);
+                            const double n_gt = sum_wt2 - n_le;
+                            const double mean_lt = at(cum_sum, i) / (n_le != 0 ? n_le : 1);
+                            const double mean_gt = (sum_v2 - cum_sum_i) / (n_gt != 0 ? n_gt : 1);
+                            const double diff_lt = std::fabs(x1 - mean_lt) * n_le;
+                            const double diff_gt = std::fabs(x1 - mean_gt) * n_gt;
+                            acc(sum_abs, wt1 * (diff_lt + diff_gt));
+                        }
+                        set(0, sum_wts != 0 ? num(sum_abs) / sum_wts : NaN);
+                        set(2, sum_wts != 0 ? num(sum_sq) / sum_wts : NaN);
+                        set(1, sum_wts);
+                    }
+                } else if (name == "calc_matrix_stats") {
+                    std::vector<i32> in;
+                    for (i32 l : abc.lall)
+                        if (bd.label_mx[static_cast<std::size_t>(l)] >= 0) in.push_back(l);
+                    std::vector<double> values;
+                    for (std::size_t a = 0; a < in.size(); ++a)
+                        for (std::size_t b = a; b < in.size(); ++b) {
+                            const double v = mx_value(in[a], in[b]);
+                            if (!std::isnan(v)) values.push_back(v);
+                        }
+                    DStats s;
+                    s.add(values);
+                    s.sort_data();
+                    for (double v : s.data()) put(1, v, 0);
+                    for (i32 l : in) put(0, l, 1);
+                    set(9, s.percentile(95));
+                    set(6, s.percentile(5));
+                    set(7, s.percentile(25));
+                    set(8, s.percentile(75));
+                    set(2, s.mean());
+                    set(11, s.sd());
+                    set(5, s.count());
+                    set(3, s.median());
+                    set(10, s.sample_range());
+                    set(4, s.min());
+                    set(1, s.max());
+                    set(12, s.skewness());
+                    set(0, s.kurtosis());
+                } else if (name == "calc_compare_dissim_matrix_values") {
+                    auto in_mx = [&](const std::vector<i32>& ls) {
+                        std::vector<i32> out;
+                        for (i32 l : ls)
+                            if (bd.label_mx[static_cast<std::size_t>(l)] >= 0) out.push_back(l);
+                        return out;
+                    };
+                    const auto a = in_mx(abc.l1), b = in_mx(abc.l2);
+                    double sx = NaN, sxx = NaN, count = 0;
+                    for (i32 l1 : a)
+                        for (i32 l2 : b) {
+                            double v = mx_value(l1, l2);
+                            if (std::isnan(v) || l1 == l2) v = 0;  // self_similarity argument
+                            sx = std::isnan(sx) ? v : sx + v;
+                            sxx = std::isnan(sxx) ? perl_pow(v, 2) : sxx + perl_pow(v, 2);
+                            count += 1;
+                        }
+                    set(1, count != 0 ? num(sx) / count : NaN);
+                    set(2, count != 0 ? num(sxx) / count : NaN);
+                    set(0, count);
+                    for (i32 l1 : a) put(0, l1, 1);
+                    if (!a.empty())
+                        for (i32 l2 : b) put(1, l2, static_cast<double>(a.size()));
+                } else if (name == "calc_mx_rao_qe") {
+                    std::vector<i32> in;
+                    for (i32 l : abc.lall)
+                        if (bd.label_mx[static_cast<std::size_t>(l)] >= 0) in.push_back(l);
+                    const double n = static_cast<double>(in.size());
+                    double qe = NaN;
+                    for (std::size_t a = 0; a < in.size(); ++a) {
+                        const double p1 = 1 / n;
+                        for (std::size_t b = a; b < in.size(); ++b) {
+                            const double p2 = 1 / n;
+                            double v = mx_defined(in[a], in[b]);
+                            if (std::isnan(v)) v = 0;  // self_similarity argument
+                            const double t = 2 * v * p1 * p2;
+                            qe = std::isnan(qe) ? t : qe + t;
+                        }
+                    }
+                    set(0, qe);
+                    set(1, perl_pow(n, 2));
+                    for (i32 l : in) put(0, l, 1 / n);
                 } else if (name.rfind("calc_phylo_mpd_mntd", 0) == 0) {
                     const MpdResult& m = pc_mpd[name.back() - '0'];
                     for (int p = 0; p < 2; ++p) {

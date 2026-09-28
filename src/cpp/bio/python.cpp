@@ -120,6 +120,33 @@ bio::BaseDataView basedata_from(const py::dict& d) {
     b.n_label_levels = d["n_label_levels"].cast<i32>();
     b.label_prefix = to_vector<i32>(d["label_prefix"]);
     b.prefix_names = d["prefix_names"].cast<std::vector<std::string>>();
+    auto props = [&](const char* key, std::vector<bio::BaseDataView::Property>& out) {
+        if (!d.contains(key)) return;
+        for (const auto& item : d[key].cast<py::list>()) {
+            const auto t = item.cast<py::tuple>();
+            bio::BaseDataView::Property p;
+            p.name = t[0].cast<std::string>();
+            p.keys = t[1].cast<std::vector<std::string>>();
+            p.values = to_vector<double>(t[2]);
+            p.element_key = to_vector<i32>(t[3]);
+            out.push_back(std::move(p));
+        }
+    };
+    props("label_props", b.label_props);
+    props("group_props", b.group_props);
+    if (d.contains("labels_numeric")) {
+        b.labels_numeric = d["labels_numeric"].cast<bool>();
+        b.label_values = to_vector<double>(d["label_values"]);
+    }
+    if (d.contains("matrix")) {
+        const auto m = d["matrix"].cast<py::dict>();
+        b.has_matrix = true;
+        b.label_mx = to_vector<i32>(m["label_index"]);
+        b.mx_n = m["n"].cast<i32>();
+        b.mx_values = to_vector<double>(m["values"]);
+        b.mx_self_similarity = m["self_similarity"].cast<double>();
+    }
+    if (d.contains("exec_order")) b.exec_order = d["exec_order"].cast<std::vector<i32>>();
     return b;
 }
 

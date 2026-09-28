@@ -52,6 +52,7 @@ BASEDATA_CASES = {
     "site_counts": _bd(SITE, [3, 4], [2], [50000, 50000], sample_count_columns=[0]),
     "site_binarise": _bd(SITE, [3, 4], [1, 2], [300000, 300000], sample_count_columns=[0], binarise_counts=1),
     "site_one_axis": _bd(SITE, [3], [1, 2], [100000]),
+    "numeric": _bd("Example_numeric_data.txt", [1, 2], [0], [10, 10]),
     "site_matrix_form": _bd("Example_site_data_matrix_form.csv", [1, 2], [], [25000, 25000],
                             data_in_matrix_form=1, label_start_col=3),
     "decimal": _bd("synthetic_decimal.csv", [1, 2], [0], [0.1, 0.1], [0.03, -0.02], sample_count_columns=[3]),
@@ -236,6 +237,68 @@ PHYLOCOM_CASES = {
     # every tip in the sample: mean nearest neighbour distance of the tree
     "all_tips": {"basedata": "site_100k", "tree": "tree_nu.nex", "conditions": ["sp_select_all()"], "seed": 3},
 }
+
+
+# element properties, numeric labels and matrices (phase 6)
+LABEL_PROPS = {"file": "label_props.csv", "element_columns": [0, 1], "properties": {"prop_a": 2, "prop_b": 3, "prop_c": 4}}
+GROUP_PROPS = {"file": "gp_props.csv", "element_columns": [0], "properties": {"num_mean": 3, "num_min": 4, "num_range": 5}}
+PROP_CALCS = [
+    "calc_lbprop_lists", "calc_lbprop_data", "calc_lbprop_hashes", "calc_lbprop_stats", "calc_lbprop_quantiles",
+    "calc_lbprop_gistar", "calc_lbprop_hashes_abc2", "calc_lbprop_stats_abc2", "calc_lbprop_quantiles_abc2",
+    "calc_lbprop_gistar_abc2", "calc_gpprop_lists", "calc_gpprop_hashes", "calc_gpprop_stats", "calc_gpprop_quantiles",
+    "calc_gpprop_gistar",
+]
+NUMERIC_CALCS = [
+    "calc_numeric_label_stats", "calc_numeric_label_other_means", "calc_numeric_label_quantiles",
+    "calc_numeric_label_data", "calc_num_labels_gistar",
+]
+MATRIX_CALCS = ["calc_matrix_stats", "calc_mx_rao_qe"]
+PROPERTY_CASES = {
+    "props_circle": {"basedata": "site_100k", "conditions": ["sp_circle (radius => 200000)"], "calcs": PROP_CALCS},
+    "props_two_sets": {"basedata": "site_100k", "conditions": ["sp_self_only()", "sp_circle (radius => 300000)"],
+                       "calcs": PROP_CALCS},
+    # without the calculations that sort the values first
+    "props_unsorted": {"basedata": "site_100k", "conditions": ["sp_circle (radius => 150000)"],
+                       "calcs": ["calc_lbprop_stats", "calc_lbprop_gistar", "calc_gpprop_stats", "calc_gpprop_gistar",
+                                 "calc_lbprop_data"]},
+    "numeric_circle": {"basedata": "numeric", "conditions": ["sp_circle (radius => 15)"], "calcs": NUMERIC_CALCS},
+    "numeric_two_sets": {"basedata": "numeric", "conditions": ["sp_self_only()", "sp_circle (radius => 25)"],
+                         "calcs": NUMERIC_CALCS + ["calc_numeric_label_dissimilarity"]},
+    "numeric_stats_only": {"basedata": "numeric", "conditions": ["sp_circle (radius => 15)"],
+                           "calcs": ["calc_numeric_label_stats", "calc_num_labels_gistar"]},
+    "matrix_circle": {"basedata": "site_100k", "matrix": "full", "conditions": ["sp_circle (radius => 200000)"],
+                      "calcs": MATRIX_CALCS},
+    "matrix_two_sets": {"basedata": "site_100k", "matrix": "full",
+                        "conditions": ["sp_self_only()", "sp_circle (radius => 300000)"],
+                        "calcs": MATRIX_CALCS + ["calc_compare_dissim_matrix_values"]},
+    "matrix_sparse": {"basedata": "site_100k", "matrix": "sparse", "conditions": ["sp_circle (radius => 300000)"],
+                      "calcs": MATRIX_CALCS},
+}
+
+
+def property_case_uses(case: dict) -> tuple[bool, bool]:
+    """Whether a case needs the label and the group properties."""
+    calcs = case["calcs"]
+    return any(c.startswith("calc_lbprop") for c in calcs), any(c.startswith("calc_gpprop") for c in calcs)
+
+
+def write_label_props() -> None:
+    """Synthetic label properties for the site data (decimals, repeated values, gaps)."""
+    import csv
+
+    import numpy as np
+
+    rng = np.random.default_rng(11)
+    labels = [f"sp{i}" for i in range(1, 32)]
+    with open(DATA / "label_props.csv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["genus", "species", "prop_a", "prop_b", "prop_c"])
+        pool_a = [f"{v:.3f}" for v in rng.uniform(0.5, 40, 12)]
+        for k, sp in enumerate(labels):
+            a = pool_a[int(rng.integers(len(pool_a)))]
+            b = str(int(rng.integers(1, 6)))
+            c = "" if k % 5 == 0 else ("n/a" if k % 7 == 0 else f"{rng.normal(100, 30):.6g}")
+            w.writerow(["Genus", sp, a, b, c])
 
 
 def phylocom_calcs(case: dict) -> list[str]:

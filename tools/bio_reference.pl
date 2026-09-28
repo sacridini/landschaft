@@ -22,6 +22,7 @@ use Biodiverse::ReadNexus;
 use Biodiverse::Tree;
 use Biodiverse::Indices;
 use Biodiverse::Matrix;
+use Biodiverse::ElementProperties;
 
 local $| = 1;
 
@@ -37,6 +38,12 @@ my $job = do {
 my $bd     = load_basedata($job->{basedata}) if $job->{basedata};
 my $tree   = load_tree($job->{tree})         if $job->{tree};
 my $matrix = load_matrix($job->{matrix})     if $job->{matrix};
+foreach my $type (qw /labels groups/) {
+    my $spec = $job->{"${type}_properties"} or next;
+    my $ep = Biodiverse::ElementProperties->new;
+    $ep->import_data(file => $spec->{file}, %{$spec->{args} // {}});
+    $bd->assign_element_properties(type => $type, properties_object => $ep);
+}
 
 my %output;
 foreach my $task (@{$job->{tasks} // []}) {

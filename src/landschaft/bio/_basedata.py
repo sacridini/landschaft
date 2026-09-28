@@ -179,6 +179,59 @@ class BaseData:
         self.label_properties = pd.DataFrame(index=pd.Index(self.labels, name="label"))
         self.group_properties = pd.DataFrame(index=pd.Index(self.groups, name="group"))
 
+    def set_label_properties(self, properties: pd.DataFrame) -> None:
+        """Assign label properties (Biodiverse's ``assign_element_properties``).
+
+        Parameters
+        ----------
+        properties : pandas.DataFrame
+            Indexed by label name, one column per property (see
+            :func:`read_properties`). Labels not in the basedata are ignored,
+            values that do not look like numbers are dropped, and the columns
+            ``INCLUDE``, ``EXCLUDE`` and ``REMAP`` are not properties. ``RANGE``
+            and ``ABUNDANCE`` also set the label ranges and abundances.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import landschaft as ls
+        >>> df = pd.DataFrame({"sp": ["a", "b"], "x": [0.5, 1.5], "y": [0.5, 0.5]})
+        >>> bd = ls.bio.BaseData.from_dataframe(df, ["x", "y"], "sp", cell_sizes=[1, 1])
+        >>> bd.set_label_properties(pd.DataFrame({"MASS": [1.5, 20]}, index=["a", "b"]))
+        >>> bd.label_properties["MASS"].tolist()
+        ['1.5', '20']
+        """
+        from ._properties import normalise_properties
+
+        out = normalise_properties(properties, self.labels)
+        out.index.name = "label"
+        self.label_properties = out
+
+    def set_group_properties(self, properties: pd.DataFrame) -> None:
+        """Assign group properties (Biodiverse's ``assign_element_properties``).
+
+        Parameters
+        ----------
+        properties : pandas.DataFrame
+            Indexed by group name, one column per property (see
+            :func:`read_properties`); as :meth:`set_label_properties`.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import landschaft as ls
+        >>> df = pd.DataFrame({"sp": ["a", "b"], "x": [0.5, 1.5], "y": [0.5, 0.5]})
+        >>> bd = ls.bio.BaseData.from_dataframe(df, ["x", "y"], "sp", cell_sizes=[1, 1])
+        >>> bd.set_group_properties(pd.DataFrame({"TEMP": [12.5, 14]}, index=bd.groups))
+        >>> bd.group_properties["TEMP"].tolist()
+        ['12.5', '14']
+        """
+        from ._properties import normalise_properties
+
+        out = normalise_properties(properties, self.groups)
+        out.index.name = "group"
+        self.group_properties = out
+
     # -- sizes and lookups -----------------------------------------------------------
     @property
     def n_groups(self) -> int:

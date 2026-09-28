@@ -638,7 +638,19 @@ Fases:
    paralelo, e o gerador volta ao ponto onde o Biodiverse para. 90 mil grupos, árvore de 500
    pontas: MPD+MNTD 2,2 s, NRI/NTI 1,1 s (ultramétrica) e 2,0 s (amostrado);
 6. propriedades de rótulos e grupos (estatísticas, quantis, Gi*), rótulos numéricos, índices
-   de matriz, Rao QE;
+   de matriz, Rao QE. **Feita** (0.67.0): 29 cálculos (`src/cpp/bio/props.cpp`), 9 análises
+   iguais bit a bit. Descobertas: as estatísticas vêm de um objeto
+   Statistics::Descriptive::PDL::SampleWeighted compartilhado pelos cálculos do grupo, com
+   cache e uma ordenação feita na primeira mediana ou quantil, depois da qual as somas seguem a
+   ordem ordenada: o resultado depende da ordem em que o Biodiverse roda os cálculos (a dos
+   pré-cálculos), reproduzida; os valores são as chaves de um hash (a string lida, então
+   "20.700" e "20.7" são valores distintos) com pesos inteiros truncados; o PDL soma a partir
+   de 0, eleva a potências inteiras por quadrados e tira raiz com arredondamento correto (o
+   `sqrt` do Perl é x87); o Gi* usa o `sqrt` do Perl. O overlay do harness passou a reescrever
+   também os módulos do Statistics::Descriptive::PDL (a ordem das chaves dentro deles chega
+   aos resultados; as referências anteriores não mudaram). Campos vazios nos arquivos de
+   propriedades ficam definidos sem valor (listados, fora das estatísticas); valores não
+   numéricos são descartados. 90 mil grupos: 0,3 a 0,6 s;
 7. MT::Auto portado, randomizações, comparações, z-scores, significância, CANAPE;
 8. cluster e RegionGrower (ligações, tie-breakers, restrição espacial, índices por nó, export
    Newick/Nexus);
