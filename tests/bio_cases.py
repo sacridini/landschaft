@@ -186,6 +186,9 @@ PHYLO_CALCS = [
     "calc_pe_single", "calc_phylo_abc", "calc_phylo_abundance", "calc_phylo_aed", "calc_phylo_aed_t",
     "calc_phylo_aed_t_wtlists", "calc_phylo_corrected_weighted_endemism", "calc_phylo_corrected_weighted_rarity",
     "calc_phylo_jaccard", "calc_phylo_rw_turnover", "calc_phylo_s2", "calc_phylo_sorenson",
+    # relative (phase 5a)
+    "calc_labels_on_trimmed_tree", "calc_labels_not_on_trimmed_tree", "calc_phylo_rpd1", "calc_phylo_rpd2",
+    "calc_phylo_rpe1", "calc_phylo_rpe2", "calc_phylo_rpe_central", "calc_rwibald",
 ]
 PHYLO_TWO_SET = {"calc_phylo_abc", "calc_phylo_jaccard", "calc_phylo_rw_turnover", "calc_phylo_s2",
                  "calc_phylo_sorenson"}
@@ -207,9 +210,83 @@ PHYLO_CASES = {
 }
 
 
+# PhyloCom indices (phase 5b)
+PHYLOCOM_CALCS = [
+    "calc_phylo_mpd_mntd1", "calc_phylo_mpd_mntd2", "calc_phylo_mpd_mntd3", "calc_nri_nti1", "calc_nri_nti2",
+    "calc_nri_nti3", "calc_nri_nti_expected_values",
+]
+PHYLOCOM_VPD = ["calc_net_vpd", "calc_vpd_expected_values"]
+PHYLOCOM_CASES = {
+    # ultrametric (Example_tree): exact expected values, path cache filled as groups are processed
+    "um_circle": {"basedata": "site_100k", "tree": "Example_tree.nex", "conditions": ["sp_circle (radius => 200000)"]},
+    "um_two_sets": {"basedata": "site_counts", "tree": "tree_species.nex",
+                    "conditions": ["sp_self_only()", "sp_circle (radius => 150000)"]},
+    # variances sampled on an ultrametric tree (their draws go through the path cache)
+    "um_vpd": {"basedata": "site_counts", "tree": "tree_species.nex", "conditions": ["sp_circle (radius => 150000)"],
+               "vpd": True, "seed": 1234},
+    # ultrametric with polytomies: only adjacent children share cached lengths
+    "polytomy": {"basedata": "site_100k", "tree": "tree_polytomy.nex", "conditions": ["sp_circle (radius => 300000)"]},
+    "polytomy_block": {"basedata": "site_100k", "tree": "tree_polytomy.nex",
+                       "conditions": ["sp_block (size => 300000)"], "vpd": True, "seed": 5},
+    # not ultrametric: sampled NTI
+    "sampled": {"basedata": "site_100k", "tree": "tree_trim.nex", "conditions": ["sp_circle (radius => 200000)"],
+                "seed": 42},
+    "sampled_vpd": {"basedata": "site_100k", "tree": "tree_nu.nex", "conditions": ["sp_block (size => 300000)"],
+                    "vpd": True, "seed": 7},
+    # every tip in the sample: mean nearest neighbour distance of the tree
+    "all_tips": {"basedata": "site_100k", "tree": "tree_nu.nex", "conditions": ["sp_select_all()"], "seed": 3},
+}
+
+
+def phylocom_calcs(case: dict) -> list[str]:
+    return PHYLOCOM_CALCS + (PHYLOCOM_VPD if case.get("vpd") else [])
+
+
 def phylo_calcs(case: dict) -> list[str]:
     calcs = list(PHYLO_CALCS) if case["calcs"] == "all" else [c for c in PHYLO_CALCS if c not in PHYLO_TWO_SET]
     return calcs + list(case.get("extra", []))
+
+
+def _newick(t, length, drop=()) -> str:
+    """Newick of a Tree with other branch lengths, dropping (collapsing) some internal nodes."""
+    import re
+
+    def fmt(name: str) -> str:
+        if name.endswith("___"):
+            return ""
+        return "'" + name + "'" if re.search(r"[\s(),:;'\[\]]", name) else name
+
+    def items(i: int, extra: float) -> list[str]:
+        if i in drop:
+            out = []
+            for c in t.children[i]:
+                out.extend(items(c, extra + length[i]))
+            return out
+        s = ""
+        if t.children[i]:
+            s = "(" + ",".join(x for c in t.children[i] for x in items(c, 0.0)) + ")"
+        return [s + fmt(t.names[i]) + ":" + repr(float(length[i] + extra))]
+
+    return items(t.root, 0.0)[0] + ";"
+
+
+def _write_tree_variants(t) -> None:
+    """An ultrametric tree with polytomies and a tree that is not ultrametric."""
+    import numpy as np
+
+    length = np.asarray(t.length, dtype=float)
+    internal = [i for i in range(len(t.names)) if t.children[i] and i != t.root]
+    # collapse every third internal node (by name) into its parent
+    by_name = sorted(internal, key=lambda i: t.names[i])
+    drop = set(by_name[1::3])
+    (DATA / "tree_polytomy.nex").write_text(
+        "#NEXUS\nbegin trees;\n\ttree polytomy = [&R] " + _newick(t, length, drop) + "\nend;\n", encoding="utf-8")
+    nu = length.copy()
+    tips = sorted((i for i in range(len(t.names)) if not t.children[i]), key=lambda i: t.names[i])
+    for k, i in enumerate(tips):
+        nu[i] = nu[i] * (1 + 0.15 * (k % 4))
+    (DATA / "tree_nu.nex").write_text(
+        "#NEXUS\nbegin trees;\n\ttree nu = [&R] " + _newick(t, nu) + "\nend;\n", encoding="utf-8")
 
 
 def write_trees() -> None:
@@ -231,6 +308,7 @@ def write_trees() -> None:
     nwk = t.to_newick().rstrip(";")
     nwk = nwk.replace("'Genus:sp1':", "'Other:tip0':")
     nwk = f"({nwk},(('Other:tip1':0.3,'Other:tip2':0.2)other_clade:0.4,'Other:tip3':0.1):0.25);"
+    _write_tree_variants(t)
     (DATA / "tree_trim.nex").write_text("#NEXUS\nbegin trees;\n\ttree trim = [&R] " + nwk + "\nend;\n",
                                         encoding="utf-8")
 

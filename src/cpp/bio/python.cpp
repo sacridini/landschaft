@@ -12,6 +12,7 @@
 
 #include "bio/conditions.hpp"
 #include "bio/indices.hpp"
+#include "bio/phylocom.hpp"
 
 namespace py = pybind11;
 
@@ -138,6 +139,18 @@ bio::TreeView tree_from(const py::dict& d) {
     t.root = d["root"].cast<i32>();
     t.label_node = to_vector<i32>(d["label_node"]);
     t.node_label = to_vector<i32>(d["node_label"]);
+    t.n_terminals = d["n_terminals"].cast<i32>();
+    t.n_trimmed_terminals = d["n_trimmed_terminals"].cast<i32>();
+    t.zero_length_count = d["zero_length_count"].cast<i32>();
+    t.eq_full_total = d["eq_full_total"].cast<double>();
+    t.eq_trimmed_total = d["eq_trimmed_total"].cast<double>();
+    t.eq_trimmed_length = d["eq_trimmed_length"].cast<double>();
+    t.default_eq_len = d["default_eq_len"].cast<double>();
+    if (d.contains("pc_steps")) {
+        t.pc_steps = d["pc_steps"].cast<std::vector<i32>>();
+        t.pc_vpd = d["pc_vpd"].cast<bool>();
+        t.pc_seed = d["pc_seed"].cast<std::uint64_t>();
+    }
     return t;
 }
 
@@ -195,6 +208,28 @@ void register_python(py::module_& m) {
         },
         "The calculations of the index engine: (name, scalar indices, list indices, neighbour sets, "
         "uses the processing group).");
+    m.def(
+        "bio_mt_shuffle",
+        [](std::uint64_t seed, i32 n, i32 times) {
+            MT64 mt({seed});
+            std::vector<std::vector<i32>> out;
+            for (i32 k = 0; k < times; ++k) {
+                std::vector<i32> v(static_cast<std::size_t>(n));
+                for (i32 i = 0; i < n; ++i) v[static_cast<std::size_t>(i)] = i;
+                mt.shuffle(v);
+                out.push_back(v);
+            }
+            return out;
+        },
+        "Shuffles of 0..n-1 by Math::Random::MT::Auto seeded with `seed` (tests).");
+    m.def(
+        "bio_ultrametric",
+        [](const py::dict& tree) {
+            const TreeView tv = tree_from(tree);
+            PhyloCom pc(tv, false, 0);
+            return py::make_tuple(pc.ultrametric, pc.multifurcating);
+        },
+        "Biodiverse's is_ultrametric, and whether a node has more than two children.");
     m.def(
         "bio_run_indices",
         [](const py::dict& basedata, const CArray<i32>& procs, const py::tuple& set1, const py::object& set2,

@@ -33,6 +33,19 @@ struct TreeView {
     i32 root = -1;
     std::vector<i32> label_node;      // per basedata label: node index or -1
     std::vector<i32> node_label;      // per node: basedata label index or -1
+    // counts and equalised-branch trees (Biodiverse::Indices::PhylogeneticRelative)
+    i32 n_terminals = 0;              // full tree
+    i32 n_trimmed_terminals = 0;
+    i32 zero_length_count = 0;        // full tree
+    double eq_full_total = 0;         // full tree with nonzero branches set to 1
+    double eq_trimmed_total = 0;      // trimmed tree with nonzero branches set to their mean
+    double eq_trimmed_length = 0;     // that mean
+    double default_eq_len = 0;
+    // PhyloCom: steps in Biodiverse's pre_calc order (0: expected values,
+    // 1-3: MPD/MNTD with calc_abc, calc_abc2, calc_abc3), variance sampling, seed
+    std::vector<i32> pc_steps;
+    bool pc_vpd = false;
+    std::uint64_t pc_seed = 0;
 };
 
 // Things computed once per analysis.
@@ -48,7 +61,15 @@ struct PhyloGlobals {
     std::vector<double> node_abundance;  // trimmed tree, sum of terminals' sample counts
     std::vector<i32> terminal_count;     // terminals below each trimmed-tree node
     bool have_pe = false, have_aed = false;
+    // RWiBaLD (get_rwibald_global_lists): per trimmed node code 0-3 and diff, thresholds
+    std::vector<i32> rwibald_code;
+    std::vector<double> rwibald_diff;
+    std::vector<std::uint8_t> rwibald_is_rr;
+    double rwibald_range_thresh = 0, rwibald_neg = 0, rwibald_pos = 0;
+    bool have_rwibald = false;
 };
+
+void build_rwibald(const TreeView& tree, PhyloGlobals& g);
 
 void build_phylo_globals(const BaseDataView& bd, const TreeView& tree, PhyloGlobals& g, bool pe, bool aed,
                          bool parallel);

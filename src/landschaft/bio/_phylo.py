@@ -122,7 +122,33 @@ def tree_view(tree, bd) -> dict:
                 first_t = False
             else:
                 trimmed_total += float(length[k])
+    # equalised-branch trees (PhylogeneticRelative) and counts
+    nonzero_trimmed = int(sum(1 for k in range(n) if alive[k] and length[k]))
+    mean_trimmed = trimmed_total / (nonzero_trimmed or 1)
+    eq_trimmed_total = 0.0
+    first_e = True
+    default_eq_len = 0.0
+    for k in range(n):
+        if not alive[k]:
+            continue
+        v = mean_trimmed if length[k] else 0.0
+        if default_eq_len == 0.0 and v:
+            default_eq_len = v
+        if first_e:
+            eq_trimmed_total = v
+            first_e = False
+        else:
+            eq_trimmed_total += v
+    eq_full_total = float(sum(1 for k in range(n) if length[k]))
+    trimmed_terminals = int(sum(1 for k in range(n) if alive[k] and trimmed_children[k] == 0))
     return {
+        "n_terminals": int(terminal.sum()),
+        "n_trimmed_terminals": trimmed_terminals,
+        "zero_length_count": int(sum(1 for k in range(n) if not length[k])),
+        "eq_full_total": eq_full_total,
+        "eq_trimmed_total": eq_trimmed_total,
+        "eq_trimmed_length": mean_trimmed,
+        "default_eq_len": default_eq_len,
         "n": n,
         "parent": parent,
         "length": np.ascontiguousarray(length),

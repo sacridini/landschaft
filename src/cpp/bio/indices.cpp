@@ -18,6 +18,7 @@
 #include <unordered_map>
 
 #include "bio/perlmath.hpp"
+#include "bio/phylocom.hpp"
 #include "lsm/parallel.hpp"
 
 namespace bio {
@@ -245,6 +246,35 @@ std::vector<CalcInfo> make_registry() {
                                     "PHYLO_RW_TURNOVER_C"}, {}, 2);
     addt("calc_phylo_s2", {"PHYLO_S2"}, {}, 2);
     addt("calc_phylo_sorenson", {"PHYLO_SORENSON"}, {}, 2);
+    // Phylogenetic indices (relative)
+    addt("calc_labels_on_trimmed_tree", {}, {{"PHYLO_LABELS_ON_TRIMMED_TREE", K::Label}}, 1);
+    addt("calc_labels_not_on_trimmed_tree", {"PHYLO_LABELS_NOT_ON_TRIMMED_TREE_N", "PHYLO_LABELS_NOT_ON_TRIMMED_TREE_P"},
+         {{"PHYLO_LABELS_NOT_ON_TRIMMED_TREE", K::Label}}, 1);
+    addt("calc_phylo_rpd1", {"PHYLO_RPD1", "PHYLO_RPD_DIFF1", "PHYLO_RPD_NULL1"}, {}, 1);
+    addt("calc_phylo_rpd2", {"PHYLO_RPD2", "PHYLO_RPD_DIFF2", "PHYLO_RPD_NULL2"}, {}, 1);
+    addt("calc_phylo_rpe1", {"PHYLO_RPE1", "PHYLO_RPE_DIFF1", "PHYLO_RPE_NULL1"}, {}, 1);
+    addt("calc_phylo_rpe2", {"PHYLO_RPE2", "PHYLO_RPE_DIFF2", "PHYLO_RPE_NULL2"}, {}, 1);
+    addt("calc_phylo_rpe_central", {"PHYLO_RPEC", "PHYLO_RPE_DIFFC", "PHYLO_RPE_NULLC"}, {}, 1);
+    // PhyloCom
+    for (const char* n : {"1", "2", "3"}) {
+        const std::string d = n, a = "PMPD" + d, b = "PNTD" + d;
+        addt("calc_phylo_mpd_mntd" + d,
+             {a + "_MAX", a + "_MEAN", a + "_MIN", a + "_N", a + "_RMSD", a + "_VARIANCE", b + "_MAX", b + "_MEAN",
+              b + "_MIN", b + "_N", b + "_RMSD", b + "_VARIANCE"},
+             {}, 1);
+        addt("calc_nri_nti" + d, {"PHYLO_NRI" + d, "PHYLO_NTI" + d}, {}, 1);
+    }
+    addt("calc_nri_nti_expected_values",
+         {"PHYLO_NRI_NTI_SAMPLE_N", "PHYLO_NRI_SAMPLE_MEAN", "PHYLO_NRI_SAMPLE_SD", "PHYLO_NTI_SAMPLE_MEAN",
+          "PHYLO_NTI_SAMPLE_SD"},
+         {}, 1);
+    addt("calc_net_vpd", {"PHYLO_NET_VPD"}, {}, 1);
+    addt("calc_vpd_expected_values", {"PHYLO_NET_VPD_SAMPLE_MEAN", "PHYLO_NET_VPD_SAMPLE_N", "PHYLO_NET_VPD_SAMPLE_SD"},
+         {}, 1);
+    addt("calc_rwibald", {},
+         {{"RWIBALD_CODES", K::Node}, {"RWIBALD_CODE_COUNTS", K::Number}, {"RWIBALD_DIFFS", K::Node},
+          {"RWIBALD_METADATA", K::Text}, {"RWIBALD_RR_DIFFS", K::Node}},
+         1);
     return r;
 }
 
@@ -1116,14 +1146,68 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
             need_tree = true;
             const std::string& nm = ci.name;
             if (nm.find("pe") != std::string::npos || nm == "calc_pd_endemism" || nm == "calc_phylo_rw_turnover" ||
-                nm == "calc_phylo_corrected_weighted_endemism")
+                nm == "calc_phylo_corrected_weighted_endemism" || nm.find("rpe") != std::string::npos)
                 need_pe = true;
             if (nm.find("aed") != std::string::npos || nm == "calc_phylo_corrected_weighted_rarity") need_aed = true;
         }
         if (need_tree) {
             if (!tree) throw std::invalid_argument("these calculations need a tree");
             build_phylo_globals(bd, *tree, pg, need_pe, need_aed, parallel);
+            for (i32 id : ids)
+                if (reg[static_cast<std::size_t>(id)].name == "calc_rwibald") build_rwibald(*tree, pg);
         }
+    }
+    const i32 key_rt = text_id("range_thresh"), key_nt = text_id("neg_len_thresh"), key_pt = text_id("pos_len_thresh");
+
+    // PhyloCom: path caches and expected values are shared across groups
+    std::unique_ptr<PhyloCom> pc;
+    bool pc_has_expected = false, pc_has_mpd = false;
+    if (tree && !tree->pc_steps.empty()) {
+        pc.reset(new PhyloCom(*tree, tree->pc_vpd, tree->pc_seed));
+        for (i32 st : tree->pc_steps) (st == 0 ? pc_has_expected : pc_has_mpd) = true;
+    }
+    // On ultrametric trees path lengths depend on the groups processed before.
+    // With two children per node they are settled by a pass in processing order
+    // (with the expected values, which draw from one random stream); otherwise
+    // groups are processed one after the other.
+    bool internal_labels = false;
+    if (pc)
+        for (i32 node : tree->label_node)
+            if (node >= 0 && !tree->terminal[static_cast<std::size_t>(node)]) internal_labels = true;
+    const bool pc_stateful = pc && pc->ultrametric && (pc_has_mpd || (tree->pc_vpd && pc_has_expected));
+    const bool pc_sequential = pc_stateful && (pc->multifurcating || internal_labels);
+    if (pc_sequential) parallel = false;
+    if (pc) pc->parallel_sampling = parallel;
+    if (pc && !pc_sequential && (pc_has_expected || pc_stateful)) {
+        Abc pa;
+        pa.init(bd.n_labels);
+        std::vector<i32> lot, nodes;
+        for (i64 r = 0; r < np; ++r) {
+            pa.clear();
+            pa.g1.assign(set1.indices.begin() + set1.indptr[r], set1.indices.begin() + set1.indptr[r + 1]);
+            pa.g2.clear();
+            if (set2) pa.g2.assign(set2->indices.begin() + set2->indptr[r], set2->indices.begin() + set2->indptr[r + 1]);
+            aggregate(bd, pa.g1, pa.l1, pa.in1, pa.c1, pa.s1);
+            aggregate(bd, pa.g2, pa.l2, pa.in2, pa.c2, pa.s2);
+            std::set_union(pa.l1.begin(), pa.l1.end(), pa.l2.begin(), pa.l2.end(), std::back_inserter(pa.lall));
+            lot.clear();
+            for (i32 l : pa.lall)
+                if (tree->label_node[static_cast<std::size_t>(l)] >= 0) lot.push_back(l);
+            for (i32 st : tree->pc_steps) {
+                if (st == 0) {
+                    pc->expected_step(lot.size());
+                    continue;
+                }
+                if (!pc->ultrametric || lot.size() <= 1) continue;
+                nodes.clear();
+                for (i32 l : lot) {
+                    const double v = st == 1 ? 1.0 : (st == 2 ? pa.all_count(l) : pa.all_samples(l));
+                    if (v != 0) nodes.push_back(tree->label_node[static_cast<std::size_t>(l)]);
+                }
+                pc->touch(nodes);
+            }
+        }
+        if (pc->ultrametric) pc->freeze();
     }
 
     std::string error;
@@ -1213,6 +1297,44 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
                 v.reserve(ls.size());
                 for (i32 l : ls) v.push_back(which == 1 ? abc.s1[l] : (which == 2 ? abc.s2[l] : abc.all_samples(l)));
                 return v;
+            };
+
+            // PhyloCom steps, in Biodiverse's order
+            MpdResult pc_mpd[4];
+            NriNti pc_exp;
+            bool pc_exp_defined = false;
+            if (pc) {
+                for (i32 st : tree->pc_steps) {
+                    const auto& lot = P().labels_on_tree();
+                    if (st == 0) {
+                        const NriNti* e = pc_sequential ? pc->expected_step(lot.size()) : pc->cached(lot.size());
+                        if (e) {
+                            pc_exp = *e;
+                            pc_exp_defined = true;
+                        }
+                        continue;
+                    }
+                    auto value = [&](i32 l) {
+                        return st == 1 ? 1.0 : (st == 2 ? abc.all_count(l) : abc.all_samples(l));
+                    };
+                    bool all_one = true;
+                    for (i32 l : abc.lall)
+                        if (value(l) != 1) all_one = false;
+                    std::vector<i32> nodes;
+                    std::vector<double> wts;
+                    for (i32 l : lot) {
+                        const double v = value(l);
+                        if (v != 0) {
+                            nodes.push_back(tree->label_node[static_cast<std::size_t>(l)]);
+                            wts.push_back(v);
+                        }
+                    }
+                    pc_mpd[st] = pc->mpd_mntd(nodes, wts, st != 1 && !all_one, 0, lot.size());
+                }
+            }
+            auto zscore = [](double obs, double mean, double sd) {
+                if (std::isnan(sd) || sd == 0) return NaN;  // division by zero in an eval
+                return (num(obs) - num(mean)) / sd;
             };
 
             for (std::size_t c = 0; c < ids.size(); ++c) {
@@ -1952,6 +2074,158 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
                         for (const auto& lw : wts) put(0, lw.first, lw.second);
                         for (const auto& lw : wts) put(1, lw.first, lw.second / aed_t);
                     }
+                } else if (name == "calc_labels_on_trimmed_tree" || name == "calc_labels_not_on_trimmed_tree") {
+                    double off = 0;
+                    for (i32 l : abc.lall) {
+                        const i32 node = tree->label_node[static_cast<std::size_t>(l)];
+                        const bool on = node >= 0 && tree->in_trimmed[static_cast<std::size_t>(node)];
+                        if (name == "calc_labels_on_trimmed_tree") {
+                            if (on) put(0, l, 1);
+                        } else if (!on) {
+                            off += 1;
+                            put(0, l, abc_any_value(l));
+                        }
+                    }
+                    if (name == "calc_labels_not_on_trimmed_tree") {
+                        const double q = safe_div(off, static_cast<double>(abc.lall.size()));
+                        set(0, off);
+                        set(1, truthy(q) ? q : 0.0);
+                    }
+                } else if (name == "calc_phylo_rpd1" || name == "calc_phylo_rpd2") {
+                    PhyloNbhd& p = P();
+                    p.pd_union();
+                    const double pdp = truthy(p.pd) ? p.pd / tree->total_length : NaN;
+                    double null_;
+                    if (name == "calc_phylo_rpd1") {
+                        null_ = safe_div(static_cast<double>(p.labels_on_tree().size()), tree->n_terminals);
+                    } else {
+                        double eq = 0;
+                        for (i32 node : p.pd_nodes)
+                            if (tree->zero_length_count == 0 || tree->length[static_cast<std::size_t>(node)] != 0) eq += 1;
+                        null_ = safe_div(eq, tree->eq_full_total);
+                    }
+                    set(0, safe_div(pdp, null_));
+                    set(1, tree->total_length * (num(pdp) - num(null_)));
+                    set(2, null_);
+                } else if (name == "calc_phylo_rpe1") {
+                    PhyloNbhd& p = P();
+                    p.pe();
+                    const Endemism& e = get_endw();
+                    double we = NaN;
+                    std::size_t wi = 0;
+                    for (i32 l : abc.lall) {
+                        const i32 node = tree->label_node[static_cast<std::size_t>(l)];
+                        if (node < 0 || !tree->in_trimmed[static_cast<std::size_t>(node)]) continue;
+                        while (wi < e.wts.size() && e.wts[wi].first < l) ++wi;
+                        if (wi < e.wts.size() && e.wts[wi].first == l) we = num(we) + e.wts[wi].second;
+                    }
+                    const double pep = p.pe_we_p();
+                    const double null_ = safe_div(we, tree->n_trimmed_terminals);
+                    set(0, safe_div(pep, null_));
+                    set(1, tree->trimmed_total_length * (num(pep) - num(null_)));
+                    set(2, null_);
+                } else if (name == "calc_phylo_rpe2" || name == "calc_phylo_rpe_central") {
+                    PhyloNbhd& p = P();
+                    p.pe();
+                    auto ri = [&](i32 node) {
+                        const double r = pg.range[static_cast<std::size_t>(node)];
+                        if (std::isnan(r)) return NaN;
+                        return r != 0 ? (tree->length[static_cast<std::size_t>(node)] != 0 ? 1.0 : 0.0) / r : 0.0;
+                    };
+                    const bool central_is_rpe2 = abc.g2.empty() || abc.C == 0;
+                    double pep = NaN, pe_null = NaN;
+                    if (name == "calc_phylo_rpe2" || central_is_rpe2) {
+                        pep = p.pe_we_p();
+                        std::vector<i32> all;
+                        std::set_union(abc.g1.begin(), abc.g1.end(), abc.g2.begin(), abc.g2.end(), std::back_inserter(all));
+                        for (i32 gi : all) {
+                            double gs = NaN;
+                            for (i64 k = pg.gp_ptr[static_cast<std::size_t>(gi)]; k < pg.gp_ptr[static_cast<std::size_t>(gi) + 1]; ++k)
+                                gs = num(gs) + num(ri(pg.gp_nodes[static_cast<std::size_t>(k)]));
+                            if (truthy(gs)) gs *= tree->default_eq_len;
+                            if (defined(gs)) pe_null = num(pe_null) + gs;
+                        }
+                        if (central_is_rpe2 && name == "calc_phylo_rpe_central") {
+                            // Biodiverse passes the central PE here (equal when nothing is only in set 2)
+                            p.abc_lists();
+                            double sub = 0;
+                            for (i32 node : p.c_list) sub += num(p.wt_of(node));
+                            const double pec = num(p.pe_we) - sub;
+                            pep = truthy(pec) ? pec / tree->trimmed_total_length : NaN;
+                        }
+                    } else {
+                        // central: nodes of the central PE lists, with their local ranges
+                        p.abc_lists();
+                        double sub = 0;
+                        for (i32 node : p.c_list) sub += num(p.wt_of(node));
+                        const double pec = num(p.pe_we) - sub;
+                        pep = truthy(pec) ? pec / tree->trimmed_total_length : NaN;
+                        std::vector<i32> ab;
+                        std::set_union(p.a_list.begin(), p.a_list.end(), p.b_list.begin(), p.b_list.end(),
+                                       std::back_inserter(ab));
+                        const bool single = (abc.g1.size() + abc.g2.size()) == 1;
+                        for (std::size_t i = 0; i < p.pe_nodes.size(); ++i) {
+                            const i32 node = p.pe_nodes[i];
+                            if (!std::binary_search(ab.begin(), ab.end(), node)) continue;
+                            pe_null = num(pe_null) + (single ? num(ri(node)) : num(ri(node)) * p.pe_lr[i]);
+                        }
+                        if (truthy(pe_null)) pe_null *= tree->default_eq_len;
+                    }
+                    if (name == "calc_phylo_rpe2" && !defined(pep)) {
+                        set(0, NaN);
+                        set(1, NaN);
+                        set(2, NaN);
+                    } else {
+                        const double null_ = safe_div(pe_null, tree->eq_trimmed_total);
+                        set(0, safe_div(pep, null_));
+                        set(1, tree->trimmed_total_length * (num(pep) - num(null_)));
+                        set(2, null_);
+                    }
+                } else if (name.rfind("calc_phylo_mpd_mntd", 0) == 0) {
+                    const MpdResult& m = pc_mpd[name.back() - '0'];
+                    for (int p = 0; p < 2; ++p) {
+                        const MpdStats& st = m.s[p == 0 ? 1 : 0];
+                        const std::size_t o = static_cast<std::size_t>(p) * 6;
+                        set(o + 0, st.max);
+                        set(o + 1, st.mean);
+                        set(o + 2, st.min);
+                        set(o + 3, st.n);
+                        set(o + 4, st.rmsd);
+                        set(o + 5, st.variance);
+                    }
+                } else if (name == "calc_nri_nti1" || name == "calc_nri_nti2" || name == "calc_nri_nti3") {
+                    const MpdResult& m = pc_mpd[name.back() - '0'];
+                    set(0, zscore(m.s[1].mean, pc_exp.nri_mean, pc_exp.nri_sd));
+                    set(1, zscore(m.s[0].mean, pc_exp.nti_mean, pc_exp.nti_sd));
+                } else if (name == "calc_nri_nti_expected_values") {
+                    if (pc_exp_defined) {
+                        set(0, pc_exp.n);
+                        set(1, pc_exp.nri_mean);
+                        set(2, pc_exp.nri_sd);
+                        set(3, pc_exp.nti_mean);
+                        set(4, pc_exp.nti_sd);
+                    }
+                } else if (name == "calc_net_vpd") {
+                    set(0, zscore(pc_mpd[1].s[1].variance, pc_exp.vpd_mean, pc_exp.vpd_sd));
+                } else if (name == "calc_vpd_expected_values") {
+                    set(0, pc_exp.vpd_mean);
+                    set(1, num(pc_exp.vpd_n));
+                    set(2, pc_exp.vpd_sd);
+                } else if (name == "calc_rwibald") {
+                    PhyloNbhd& p = P();
+                    p.pd_union();
+                    double counts[4] = {0, 0, 0, 0};
+                    for (i32 node : p.pd_nodes) {
+                        const i32 code = pg.rwibald_code[static_cast<std::size_t>(node)];
+                        put(0, node, code >= 0 ? code : NaN);
+                        if (code >= 0) counts[code] += 1;
+                        put(2, node, pg.rwibald_diff[static_cast<std::size_t>(node)]);
+                        put(4, node, pg.rwibald_is_rr[static_cast<std::size_t>(node)] ? pg.rwibald_diff[static_cast<std::size_t>(node)] : NaN);
+                    }
+                    for (int c = 0; c < 4; ++c) put(1, c, counts[c]);
+                    put(3, key_nt, pg.rwibald_neg);
+                    put(3, key_pt, pg.rwibald_pos);
+                    put(3, key_rt, pg.rwibald_range_thresh);
                 } else if (name == "calc_hierarchical_label_ratios") {
                     // Biodiverse computes the same A, B, C for every level (it never uses
                     // the per-level basedatas it builds): reproduced as is.

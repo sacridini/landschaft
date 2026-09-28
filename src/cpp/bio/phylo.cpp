@@ -10,8 +10,10 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
 #include "bio/indices.hpp"
+#include "bio/perlmath.hpp"
 #include "lsm/parallel.hpp"
 
 #if defined(_OPENMP)
@@ -165,6 +167,78 @@ void build_phylo_globals(const BaseDataView& bd, const TreeView& t, PhyloGlobals
         }
         g.have_aed = true;
     }
+}
+
+namespace {
+
+// get_elbow_threshold: the point of the sorted data farthest from the line
+// joining its ends (PDL arithmetic: runtime pow and sqrt of the C library).
+double elbow_threshold(std::vector<double> data) {
+    if (data.empty()) throw std::runtime_error("data is empty");
+    std::stable_sort(data.begin(), data.end());
+    const std::size_t n = data.size();
+    const double y1 = data[0];
+    double x_vec_max = static_cast<double>(n - 1);
+    double y_vec_max = data[n - 1] - y1;
+    const double normaliser = perl_sqrt(perl_pow(x_vec_max, 2) + perl_pow(y_vec_max, 2));
+    x_vec_max = x_vec_max / normaliser;
+    y_vec_max = y_vec_max / normaliser;
+    double best = -std::numeric_limits<double>::infinity();
+    std::size_t idx = 0;
+    std::vector<double> dist(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        const double vx = static_cast<double>(i);
+        const double vy = data[i] - y1;
+        const double sp = vx * x_vec_max + vy * y_vec_max;
+        const double lx = vx - sp * x_vec_max;
+        const double ly = vy - sp * y_vec_max;
+        dist[i] = perl_sqrt(lsm::r_pow(lx, 2) + lsm::r_pow(ly, 2));
+        if (dist[i] > best) best = dist[i];
+    }
+    for (std::size_t i = 0; i < n; ++i)
+        if (dist[i] == best) {
+            idx = i;
+            break;
+        }
+    return data[idx];
+}
+
+}  // namespace
+
+void build_rwibald(const TreeView& t, PhyloGlobals& g) {
+    const i32 n = t.n;
+    // over the trimmed tree's nodes, in name order
+    std::vector<double> inv, pos_d, neg_d;
+    std::vector<double> diff(static_cast<std::size_t>(n), NaN);
+    for (i32 i = 0; i < n; ++i) {
+        if (!t.in_trimmed[static_cast<std::size_t>(i)]) continue;
+        const double r = g.range[static_cast<std::size_t>(i)];
+        if (r != 0) inv.push_back(1 / r);
+        const double len = t.length[static_cast<std::size_t>(i)];
+        const double eq = len != 0 ? t.eq_trimmed_length : 0.0;
+        const double d = r != 0 ? (len - eq) / r : 0.0;
+        diff[static_cast<std::size_t>(i)] = d;
+        if (d >= 0) pos_d.push_back(d);
+        if (d <= 0) neg_d.push_back(d);
+    }
+    g.rwibald_range_thresh = elbow_threshold(inv);
+    g.rwibald_pos = elbow_threshold(pos_d);
+    g.rwibald_neg = elbow_threshold(neg_d);
+    g.rwibald_code.assign(static_cast<std::size_t>(n), -1);
+    g.rwibald_diff = diff;
+    g.rwibald_is_rr.assign(static_cast<std::size_t>(n), 0);
+    for (i32 i = 0; i < n; ++i) {
+        if (!t.in_trimmed[static_cast<std::size_t>(i)]) continue;
+        const double r = g.range[static_cast<std::size_t>(i)];
+        const double d = diff[static_cast<std::size_t>(i)];
+        if (r != 0 && (1 / r) >= g.rwibald_range_thresh) {
+            g.rwibald_is_rr[static_cast<std::size_t>(i)] = 1;
+            g.rwibald_code[static_cast<std::size_t>(i)] = d <= g.rwibald_neg ? 1 : (d >= g.rwibald_pos ? 3 : 2);
+        } else {
+            g.rwibald_code[static_cast<std::size_t>(i)] = 0;
+        }
+    }
+    g.have_rwibald = true;
 }
 
 }  // namespace bio

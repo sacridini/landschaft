@@ -331,6 +331,7 @@ def spatial_analysis(
     definition_query: str | SpatialCondition | None = None,
     *,
     tree=None,
+    prng_seed: int | None = None,
     n_threads: int | None = None,
     recycle: bool = True,
 ) -> SpatialResult:
@@ -351,6 +352,11 @@ def spatial_analysis(
     tree : Tree, optional
         Phylogeny for the phylogenetic indices (``pd``, ``pe``...); its node
         names are matched to the labels.
+    prng_seed : int, optional
+        Seed of the Mersenne Twister Biodiverse draws random sets of tips
+        with, for the expected NTI on trees that are not ultrametric and for
+        the net VPD (Biodiverse's ``prng_seed``; the same seed gives
+        Biodiverse's values). Random when not given.
     n_threads : int, optional
         Threads (default: all cores but one).
     recycle : bool
@@ -401,10 +407,28 @@ def spatial_analysis(
     set1 = nbrs.sets[0]
     set2 = nbrs.sets[1] if n_sets > 1 else None
     procs = np.ascontiguousarray(nbrs.groups, dtype=np.int32)
+    # PhyloCom: expected values drawn from one random stream, and (ultrametric
+    # trees) path lengths cached as groups are processed
+    order = _precalc_order(valid)
+    pc_steps = [0 if c == "_calc_nri_nti_expected_values" else int(c[-1]) for c in order
+                if c == "_calc_nri_nti_expected_values" or c.startswith("calc_phylo_mpd_mntd")]
+    pc_vpd = any(c in ("calc_net_vpd", "calc_vpd_expected_values") for c in valid)
+    order_sensitive = False
+    if pc_steps and tree is not None:
+        from ._phylo import tree_view as _tv
+
+        ultrametric, multifurcating = _core.bio_ultrametric(_tv(tree, bd))
+        order_sensitive = pc_vpd or (ultrametric and multifurcating)
+    if prng_seed is None:
+        import secrets
+
+        prng_seed = secrets.randbits(32)
     # Groups with the same neighbour sets get the same results (Biodiverse copies
     # them too when nothing depends on the processing group): compute each once.
+    # Not where results depend on the groups processed before, unless Biodiverse
+    # copies them too.
     expand = None
-    if not uses_proc and len(procs) > 1:
+    if not uses_proc and len(procs) > 1 and (not order_sensitive or nbrs.results_recyclable):
         rep, expand = _unique_rows(set1, set2)
         if len(rep) < len(procs):
             set1 = _take_rows(set1, rep)
@@ -421,6 +445,10 @@ def spatial_analysis(
 
         tview = tree_view(tree, bd)
         node_names = tview["names"]
+        if pc_steps:
+            tview["pc_steps"] = pc_steps
+            tview["pc_vpd"] = pc_vpd
+            tview["pc_seed"] = int(prng_seed) % (1 << 64)
     raw = _core.bio_run_indices(view, procs, set1, set2, valid, threads > 1, tview)
     if expand is not None:
         raw = _expand_raw(raw, expand)

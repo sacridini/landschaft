@@ -933,6 +933,8 @@ class Neighbourhoods:
         # the lists as Biodiverse leaves them stored after its analysis
         # (recycling can overwrite lists of groups processed before)
         self._stored = stored if stored is not None else sets
+        # Biodiverse copies results between groups with these neighbourhoods
+        self.results_recyclable = False
 
     def __repr__(self) -> str:
         sizes = ", ".join(str(int(s[1].size)) for s in self.sets)
@@ -1133,7 +1135,9 @@ def neighbours(
             for prev in sets:
                 cur = _csr_minus(cur, prev, n)
             sets.append(cur)
-        return Neighbourhoods(bd, procs, sets, conds)
+        out = Neighbourhoods(bd, procs, sets, conds)
+        out.results_recyclable = results_recyclable
+        return out
 
     n_sets = len(conds)
     recycled: list[dict[int, np.ndarray]] = [dict() for _ in range(n_sets)]
@@ -1181,7 +1185,9 @@ def neighbours(
                     results_same[x] = g
     sets = [_rows_to_csr([used[int(g)][i] for g in procs]) for i in range(n_sets)]
     stored_sets = [_rows_to_csr([stored[i].get(int(g), np.zeros(0, np.int32)) for g in procs]) for i in range(n_sets)]
-    return Neighbourhoods(bd, procs, sets, conds, stored=stored_sets)
+    out = Neighbourhoods(bd, procs, sets, conds, stored=stored_sets)
+    out.results_recyclable = results_recyclable
+    return out
 
 
 _PURE_CALLS = {

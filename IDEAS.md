@@ -622,7 +622,21 @@ Fases:
    sem o overlay varia nesse dígito. PD e PE em 90 mil grupos (árvore de 500 pontas): 0,5 s.
    O RWiBaLD depende da árvore de ramos equalizados e fica na fase 5;
 5. filogenéticos relativos (RPD/RPE, árvores aparadas), PhyloCom (MPD/MNTD, NRI/NTI, valores
-   esperados, VPD), RWiBaLD, CWE/CWR;
+   esperados, VPD), RWiBaLD, CWE/CWR. **Feita** (0.66.0): RPD1/2, RPE1/2/central, rótulos na
+   árvore aparada e RWiBaLD (limiares de cotovelo do PDL) iguais bit a bit nos 7 casos da fase 4;
+   PhyloCom (`src/cpp/bio/phylocom.cpp`) em 8 casos novos, bit a bit, inclusive NTI e VPD
+   amostrados. Descobertas: o cache de caminhos do Biodiverse depende da ordem dos grupos em
+   árvores ultramétricas (o comprimento é o dobro do caminho do primeiro rótulo do primeiro par
+   consultado sob cada ancestral, e só os filhos vizinhos por número de terminais recebem o
+   valor): em árvores binárias o valor de cada ancestral fica fixo no primeiro grupo que o
+   abrange, então uma passagem sequencial barata o determina e o resto roda em paralelo; com
+   politomias (ou rótulos em nós internos) o processamento é sequencial e grupos com a mesma
+   vizinhança não são deduplicados. O NTI amostrado usa o Math::Random::MT::Auto (MT19937-64,
+   portado e conferido com o Perl) num único fluxo na ordem de primeira aparição de cada número
+   de rótulos; com VPD, dois rótulos refazem a amostragem a cada grupo (consumindo o gerador) e
+   isso é reproduzido. Os sorteios são feitos em lotes: conjuntos em sequência, distâncias em
+   paralelo, e o gerador volta ao ponto onde o Biodiverse para. 90 mil grupos, árvore de 500
+   pontas: MPD+MNTD 2,2 s, NRI/NTI 1,1 s (ultramétrica) e 2,0 s (amostrado);
 6. propriedades de rótulos e grupos (estatísticas, quantis, Gi*), rótulos numéricos, índices
    de matriz, Rao QE;
 7. MT::Auto portado, randomizações, comparações, z-scores, significância, CANAPE;

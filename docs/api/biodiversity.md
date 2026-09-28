@@ -72,8 +72,12 @@ summaries. With a tree (`tree=`): phylogenetic diversity (PD, local PD,
 terminal lists), phylogenetic endemism (PE, central, single, lists, PD
 endemism, corrected weighted endemism), clade contributions and losses,
 evolutionary distinctiveness (ES, ED, AED, AED-T, corrected weighted rarity),
-phylogenetic abundance and phylogenetic turnover (Sorenson, Jaccard, S2,
-range-weighted). Values are identical to Biodiverse's.
+phylogenetic abundance, phylogenetic turnover (Sorenson, Jaccard, S2,
+range-weighted), relative PD and PE (RPD, RPE, against trees with equalised
+branch lengths), RWiBaLD and the PhyloCom indices (MPD, MNTD, NRI, NTI, net
+VPD, with the exact expected values of Tsirogiannis et al. or, where
+Biodiverse samples random sets of tips, its Mersenne Twister draws: pass
+`prng_seed`). Values are identical to Biodiverse's.
 
 ::: landschaft.bio.spatial_analysis
 
