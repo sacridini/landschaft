@@ -6,6 +6,17 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-09-28
+
+### Added
+- Neutral landscape models, second part: `ls.nlm.mpd` (midpoint displacement,
+  diamond-square), `ls.nlm.neigh` (neighbourhood-based clusters) and
+  `ls.nlm.random_rectangular_cluster`, NLMR's C++ models, identical bit for bit to
+  NLMR with the same seed (`std::mt19937` with GCC's libstdc++ distributions).
+  `mpd` keeps NLMR's grid size by default (square, `max(nrow, ncol) ± 1` cells, with
+  a warning); `nlmr_compat=False` gives the size asked for. 2 to 6 times faster than
+  NLMR (`mpd` 1025 × 1025: 0.13 s → 0.043 s).
+
 ## [0.54.0] - 2026-09-28
 
 ### Added

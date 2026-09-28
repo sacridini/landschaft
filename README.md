@@ -33,7 +33,7 @@ in the test suite, and runs from a few to several hundred times faster.
 | **Circuit connectivity** | omnidirectional and pairwise current flow, rasters and networks | Circuitscape, Omniscape |
 | **Distance & restoration** | cost surfaces, least-cost paths and corridors, isochrone maps | GuidosToolbox |
 | **Change detection** | simple and morphological change, fragmentation transitions | GuidosToolbox |
-| **Neutral landscape models** | simulated landscapes as null models: random, percolation, gradients, classification | NLMR |
+| **Neutral landscape models** | simulated landscapes as null models: random, percolation, gradients, fractal surfaces, clusters, classification | NLMR |
 | **Large data** | out-of-core tiles and row blocks, parallel batches of rasters | |
 
 ## Installation
@@ -112,7 +112,7 @@ floating-point solvers. Typical speed-ups on the benchmark cases:
 | Landscape metrics | landscapemetrics 2.2.2 | identical bits | 35–500× |
 | Habitat networks | Makurhini, Conefor | to 1e-12 | 13–620× |
 | Omniscape, Circuitscape | Omniscape 0.7, Circuitscape 6.1 | to 2e-11 | 3–45× |
-| Neutral landscape models | NLMR 1.4 (same seed) | identical bits | 3–110× |
+| Neutral landscape models | NLMR 1.4 (same seed) | identical bits | 2–110× |
 
 Methods, machines, full tables and the known differences are on the
 [benchmarks and accuracy page](docs/benchmarks.md). To run the tests:

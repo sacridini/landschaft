@@ -141,6 +141,9 @@ The same landscapes as NLMR (same seeds, identical values), one model call each
 | `nlm_distancegradient`, 2000 × 2000 | 0.25 s | 0.10 s | 0.54 |
 | `nlm_distancegradient`, 360 × 90 (great-circle distances) | 0.06 s | 0.011 s | 0.54 |
 | `landscape_classify` by proportions, 1000 × 1000 | 0.05 s | 0.019 s | 0.54 |
+| `nlm_mpd`, 1025 × 1025 | 0.13 s | 0.043 s | 0.55 |
+| `nlm_neigh`, 500 × 500 | 0.04 s | 0.023 s | 0.55 |
+| `nlm_randomrectangularcluster`, 300 × 300, sides 5–20 | 0.02 s | 0.003 s | 0.55 |
 
 ## Accuracy
 
@@ -183,7 +186,7 @@ The same landscapes as NLMR (same seeds, identical values), one model call each
 | Omniscape | Omniscape 0.7 with the CHOLMOD solver: its test configurations and synthetic maps | 1.7e-11 |
 | Circuitscape raster modes | Circuitscape 6.1 with CHOLMOD: its own test cases (advanced, 17 pairwise, 25 one-to-all / all-to-one) | advanced: currents to 1.2e-13 of the largest; pairwise: resistances to 1e-12, maps to 3e-13; one-to-all: 5e-14 |
 | Circuitscape network mode | Circuitscape's network test cases and six synthetic ones | 1.1e-14 |
-| Neutral landscape models: random, percolation, gradients, classification | NLMR 1.4.0 (R 4.4.2) with the same seeds; R's generator and the libstdc++ distributions of NLMR's C++ code against R and the Rtools compiler | identical bits |
+| Neutral landscape models: random, percolation, gradients, midpoint displacement, neighbourhood and rectangular clusters, classification | NLMR 1.4.0 (R 4.4.2) with the same seeds; R's generator and the libstdc++ distributions of NLMR's C++ code against R and the Rtools compiler | identical bits |
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an
 algebraic multigrid) is itself only about 2e-7 away from the exact solution;
