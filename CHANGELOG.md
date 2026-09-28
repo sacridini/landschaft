@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.73.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis: hexagonal and H3 grids (`BaseData.from_hex`, `BaseData.from_h3`,
+  `ls.bio.hex_centres`, `ls.bio.h3_cells`, hexagons in `BaseData.to_geodataframe`), a native
+  file format (`BaseData.save`/`load`, `ls.bio.save_session`/`load_session`: zips of
+  Parquet tables with basedatas, trees, matrices and results), and tree conversions to and
+  from Bio.Phylo, DendroPy and ete. New optional extra `bio` (h3, dendropy).
+
 ## [0.72.0] - 2026-09-28
 
 ### Added
