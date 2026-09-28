@@ -215,11 +215,18 @@ sub run_spatial {
         calc_args($tree, $matrix, $task),
     );
     my %results;
+    my $pass = $sp->get_pass_def_query;
     foreach my $gp (sort $sp->get_element_list) {
+        next if $pass && !$pass->{$gp};
         my %lists;
         foreach my $list (@{ $sp->get_lists(element => $gp) }) {
-            next if $list =~ /^_/;
-            $lists{$list} = $sp->get_list_ref(element => $gp, list => $list);
+            next if $list =~ /^_/ || $list eq 'RESULTS_SAME_AS';
+            my $ref = $sp->get_list_ref(element => $gp, list => $list);
+            if ($list eq 'SPATIAL_RESULTS') {
+                $ref = { %$ref };
+                delete $ref->{RECYCLED_SET};
+            }
+            $lists{$list} = $ref;
         }
         $results{$gp} = \%lists;
     }

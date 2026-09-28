@@ -25,6 +25,7 @@ from ._basedata import BaseData, snap_coordinates
 from ._conditions import Neighbourhoods, SpatialCondition, definition_query, neighbours
 from ._gbif import read_occurrences
 from ._matrix import Matrix, read_matrix
+from ._spatial import SpatialResult, list_calculations, spatial_analysis
 from ._tree import Tree, read_tree, read_trees
 
 __all__ = [
@@ -32,12 +33,15 @@ __all__ = [
     "Matrix",
     "Neighbourhoods",
     "SpatialCondition",
+    "SpatialResult",
     "Tree",
     "definition_query",
+    "list_calculations",
     "neighbours",
     "read_matrix",
     "read_occurrences",
     "read_tree",
     "read_trees",
     "snap_coordinates",
+    "spatial_analysis",
 ]

@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors] [neighbours]
+    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors] [neighbours] [spatial]
 
 ``data`` writes the synthetic inputs of ``tests/bio_cases.py`` into
 ``tests/data/bio``; the other parts run Biodiverse (Perl) through
@@ -128,6 +128,21 @@ def make_neighbours(unsorted: bool) -> None:
     save("neighbours", out)
 
 
+def make_spatial(unsorted: bool) -> None:
+    out = {}
+    for name, case in bio_cases.SPATIAL_CASES.items():
+        bdcase = bio_cases.BASEDATA_CASES[case["basedata"]]
+        spec = dict(bdcase["biodiverse"])
+        spec["file"] = _path(spec["file"])
+        task = {"type": "spatial", "name": name, "spatial_conditions": case["conditions"],
+                "calculations": bio_cases.spatial_calcs(case)}
+        if case.get("definition_query"):
+            task["definition_query"] = case["definition_query"]
+        print(name)
+        out[name] = run({"basedata": spec, "tasks": [task]}, unsorted)[name]
+    save("spatial", out)
+
+
 def make_trees(unsorted: bool) -> None:
     out = {"files": {}, "newick": {}}
     for f in bio_cases.TREE_FILES:
@@ -150,7 +165,7 @@ def make_matrices(unsorted: bool) -> None:
 
 def main(argv: list[str]) -> None:
     unsorted = "--unsorted" in argv
-    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours"]
+    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours", "spatial"]
     if "data" in parts:
         bio_cases.write_synthetic_data()
         bio_cases.write_rasters()
@@ -171,6 +186,8 @@ def main(argv: list[str]) -> None:
         make_vectors(unsorted)
     if "neighbours" in parts:
         make_neighbours(unsorted)
+    if "spatial" in parts:
+        make_spatial(unsorted)
 
 
 if __name__ == "__main__":

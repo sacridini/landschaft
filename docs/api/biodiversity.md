@@ -60,6 +60,22 @@ of lists between groups for non-overlapping conditions.
 
 ::: landschaft.bio.Neighbourhoods
 
+## Spatial analysis
+
+Indices computed over the neighbourhood of every group, as in Biodiverse's
+spatial analysis: richness, endemism (weighted, corrected, absolute,
+hierarchical), rarity, taxonomic turnover (Sorenson, Jaccard, Bray-Curtis,
+Kulczynski, S2, beta diversity, nestedness, range-weighted turnover),
+Simpson and Shannon diversity, Rao's quadratic entropy, richness estimators
+(Chao1, Chao2, ACE, ICE, Hurlbert's rarefaction) and label and sample count
+summaries. Values are identical to Biodiverse's.
+
+::: landschaft.bio.spatial_analysis
+
+::: landschaft.bio.list_calculations
+
+::: landschaft.bio.SpatialResult
+
 ## Phylogenies
 
 ::: landschaft.bio.Tree

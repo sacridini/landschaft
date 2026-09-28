@@ -589,7 +589,23 @@ Fases:
    fases seguintes as condições de ranges de rótulos, clusters, saídas espaciais e o
    `sp_select_block` (aleatório);
 3. análise espacial e índices não filogenéticos: contagens e listas, endemismo, raridade,
-   dissimilaridade taxonômica, estimadores de riqueza, rótulos hierárquicos;
+   dissimilaridade taxonômica, estimadores de riqueza, rótulos hierárquicos. **Feita**
+   (0.64.0): `ls.bio.spatial_analysis`, `list_calculations`, `SpatialResult` (tabela de
+   escalares, listas longas construídas sob demanda, `to_raster`); motor em C++
+   (`src/cpp/bio/indices.cpp`): agregação ABC por vizinhança (presença, grupos por rótulo,
+   soma das amostras grupo a grupo na ordem da lista, o conjunto 1 somado antes do 2) e os
+   45 cálculos portados linha a linha, com OpenMP por grupo. 11 análises (uma e duas
+   vizinhanças, blocos, *definition query*, contagens inteiras e fracionárias) iguais bit a
+   bit ao Biodiverse. Descobertas: o `sqrt` do Perl é o x87 do mingw (`r_sqrt`, arredondamento
+   duplo: 1 ulp em desvios padrão e erros do Chao/ACE); `Statistics::Descriptive` soma com
+   `List::Util::sum`, variância `(Σx² − n·média²)/(n−1)` limitada a 0, percentil pelo índice
+   `int(0.5 + (n−1)p/100)`; hashes de chaves numéricas (frequências nos estimadores) são
+   percorridos na ordem das chaves como texto; `calc_hierarchical_label_ratios` do Biodiverse
+   nunca usa as bases por nível que monta (todos os níveis dão o mesmo A/B/C), reproduzido; o
+   ACE divide por zero (e o Biodiverse aborta) quando `a2 == 1`. Grupos com as mesmas
+   vizinhanças são calculados uma vez quando nada depende do grupo processado (blocos:
+   19 s → 4 s em 90 mil grupos com todos os cálculos; o custo restante é o volume das
+   listas, ~180 milhões de entradas);
 4. filogenéticos: PD, família PE, clade contributions/loss, AED, PD local, turnover
    filogenético;
 5. filogenéticos relativos (RPD/RPE, árvores aparadas), PhyloCom (MPD/MNTD, NRI/NTI, valores

@@ -102,6 +102,7 @@ set_target_properties(nlmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Biodiversity analyses (Biodiverse): spatial conditions, indices, randomisations.
 add_library(biocore STATIC
     src/cpp/bio/conditions.cpp
+    src/cpp/bio/indices.cpp
 )
 target_include_directories(biocore PUBLIC src/cpp)
 # Perl's maths on Windows is mingw's x87 libm (lsm/rmath.hpp).

@@ -99,8 +99,8 @@ class Evaluator {
         }
         dist_.Dsqr = sum_d;
         dist_.Csqr = sum_c;
-        dist_.Dv = p_.use_euc ? round_precision(std::sqrt(sum_d)) : 0;
-        dist_.Cv = p_.use_cell ? round_precision(std::sqrt(sum_c)) : 0;
+        dist_.Dv = p_.use_euc ? round_precision(perl_sqrt(sum_d)) : 0;
+        dist_.Cv = p_.use_cell ? round_precision(perl_sqrt(sum_c)) : 0;
         dist_.computed = true;
         return dist_;
     }
@@ -415,7 +415,7 @@ class Evaluator {
                         if (v > r) return 0;
                         s += v * v;
                     }
-                    dist = std::sqrt(s);
+                    dist = perl_sqrt(s);
                 } else {
                     dist = d.Dv;
                 }
@@ -429,7 +429,7 @@ class Evaluator {
                         const double v = (k >= 0 && k < g_.ndim) ? d.C[k] : 0;
                         s += v * v;
                     }
-                    dist = std::sqrt(s);
+                    dist = perl_sqrt(s);
                 } else {
                     dist = d.Cv;
                 }
@@ -453,7 +453,7 @@ class Evaluator {
                         if (v > c.p[1]) return 0;
                         s += v * v;
                     }
-                    dist = std::sqrt(s);
+                    dist = perl_sqrt(s);
                 } else {
                     dist = d.Dv;
                 }
@@ -474,7 +474,7 @@ class Evaluator {
             case CallKind::Ellipse: {
                 const i32 a0 = c.axes[0], a1 = c.axes[1];
                 const double d0 = d.d[a0], d1 = d.d[a1];
-                const double D = std::sqrt(d0 * d0 + d1 * d1);
+                const double D = perl_sqrt(d0 * d0 + d1 * d1);
                 const double bearing = perl_atan2(d0, d1) + c.p[2];
                 const double rx = perl_sin(bearing) * D;
                 const double ry = perl_cos(bearing) * D;

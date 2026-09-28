@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "bio/conditions.hpp"
+#include "bio/indices.hpp"
 
 namespace py = pybind11;
 
@@ -104,6 +105,21 @@ bio::Program program_from(const py::dict& d) {
     return p;
 }
 
+bio::BaseDataView basedata_from(const py::dict& d) {
+    bio::BaseDataView b;
+    b.n_groups = d["n_groups"].cast<i64>();
+    b.n_labels = d["n_labels"].cast<i64>();
+    b.indptr = to_vector<i64>(d["indptr"]);
+    b.indices = to_vector<i32>(d["indices"]);
+    b.counts = to_vector<double>(d["counts"]);
+    b.label_range = to_vector<double>(d["label_range"]);
+    b.label_abundance = to_vector<double>(d["label_abundance"]);
+    b.n_label_levels = d["n_label_levels"].cast<i32>();
+    b.label_prefix = to_vector<i32>(d["label_prefix"]);
+    b.prefix_names = d["prefix_names"].cast<std::vector<std::string>>();
+    return b;
+}
+
 }  // namespace
 
 namespace bio {
@@ -144,6 +160,57 @@ void register_python(py::module_& m) {
             return vector_to_array(std::move(out));
         },
         py::arg("groups"), py::arg("program"), py::arg("parallel"), "Groups passing a compiled definition query.");
+    m.def(
+        "bio_calculations",
+        []() {
+            py::list out;
+            for (const CalcInfo& c : calculation_registry()) {
+                py::list lists;
+                for (const auto& l : c.lists) lists.append(py::make_tuple(l.first, static_cast<int>(l.second)));
+                out.append(py::make_tuple(c.name, c.scalars, lists, c.uses_nbr_lists, c.uses_processing_element));
+            }
+            return out;
+        },
+        "The calculations of the index engine: (name, scalar indices, list indices, neighbour sets, "
+        "uses the processing group).");
+    m.def(
+        "bio_run_indices",
+        [](const py::dict& basedata, const CArray<i32>& procs, const py::tuple& set1, const py::object& set2,
+           const std::vector<std::string>& calcs, bool parallel) {
+            const BaseDataView bd = basedata_from(basedata);
+            std::vector<i32> pr(procs.data(), procs.data() + procs.size());
+            const Csr s1 = csr_from(set1);
+            Csr s2;
+            const Csr* s2p = nullptr;
+            if (!set2.is_none()) {
+                s2 = csr_from(set2);
+                s2p = &s2;
+            }
+            IndexResult r;
+            {
+                py::gil_scoped_release release;
+                r = run_indices(bd, pr, s1, s2p, calcs, parallel);
+            }
+            py::dict out;
+            const auto np = static_cast<py::ssize_t>(pr.size());
+            const auto ns = static_cast<py::ssize_t>(r.scalar_names.size());
+            py::array_t<double> scal({np, ns});
+            std::copy(r.scalars.begin(), r.scalars.end(), scal.mutable_data());
+            out["scalar_names"] = r.scalar_names;
+            out["scalars"] = scal;
+            py::list lists;
+            for (std::size_t k = 0; k < r.lists.size(); ++k) {
+                ListOut& lo = r.lists[k];
+                lists.append(py::make_tuple(r.list_names[k], static_cast<int>(r.list_kinds[k]),
+                                            vector_to_array(std::move(lo.indptr)), vector_to_array(std::move(lo.keys)),
+                                            vector_to_array(std::move(lo.values))));
+            }
+            out["lists"] = lists;
+            out["texts"] = r.texts;
+            return out;
+        },
+        py::arg("basedata"), py::arg("procs"), py::arg("set1"), py::arg("set2"), py::arg("calculations"),
+        py::arg("parallel"), "Biodiverse indices of the processing groups over their neighbour sets.");
     m.def(
         "bio_side_rotation",
         [](const CArray<double>& coords, i32 a0, i32 a1, double angle) {

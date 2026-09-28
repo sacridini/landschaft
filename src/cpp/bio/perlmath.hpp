@@ -29,7 +29,7 @@ inline double perl_pow(double x, double y) {
     return lsm::r_pow(x, y);
 }
 
-inline double perl_sqrt(double x) { return std::sqrt(x); }
+inline double perl_sqrt(double x) { return lsm::r_sqrt(x); }
 inline double perl_sin(double x) { return lsm::r_sin(x); }
 inline double perl_cos(double x) { return lsm::r_cos(x); }
 inline double perl_atan2(double y, double x) { return lsm::r_atan2(y, x); }

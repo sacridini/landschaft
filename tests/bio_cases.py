@@ -131,6 +131,51 @@ NEIGHBOUR_CASES = {
 }
 NEIGHBOUR_DEFQ = {"defq": "$y > 2000000 && sp_richness_greater_than (threshold => 2)"}
 
+# spatial analyses (phase 3 calculations); "calcs": "one" = those needing one set, "all" = every one
+SPATIAL_CASES = {
+    "self_all": {"basedata": "site_100k", "conditions": ["sp_self_only()"], "calcs": "one"},
+    "circle_all": {"basedata": "site_100k", "conditions": ["sp_circle (radius => 200000)"], "calcs": "one"},
+    "two_sets": {"basedata": "site_100k", "conditions": ["sp_self_only()", "sp_circle (radius => 300000)"],
+                 "calcs": "all"},
+    "block": {"basedata": "site_100k", "conditions": ["sp_block (size => 400000)"], "calcs": "one"},
+    "defq": {"basedata": "site_100k", "conditions": ["sp_circle (radius => 300000)"], "calcs": "one",
+             "definition_query": "$y > 2000000"},
+    "counts_circle": {"basedata": "site_counts", "conditions": ["sp_circle (radius => 150000)"], "calcs": "one"},
+    "counts_two": {"basedata": "site_counts",
+                   "conditions": ["sp_circle (radius => 100000)", "sp_circle (radius => 250000)"], "calcs": "all"},
+    "decimal_two": {"basedata": "decimal", "conditions": ["sp_circle (radius => 0.25)", "$D <= 0.6"],
+                    "calcs": "all"},
+    # Biodiverse's ACE divides by zero on some of these blocks (a2 == 1)
+    "decimal_block": {"basedata": "decimal", "conditions": ["sp_block (size => 0.5)"], "calcs": "one",
+                      "exclude": ["calc_ace", "calc_ice"]},
+}
+# calculations of the index engine (phase 3)
+PHASE3_CALCS = [
+    "calc_richness", "calc_redundancy", "calc_abc_counts", "calc_d", "calc_elements_used",
+    "calc_nonempty_elements_used", "calc_element_lists_used", "calc_element_lists_used_as_arrays",
+    "calc_label_count_quantile_position", "calc_local_range_lists", "calc_local_range_stats",
+    "calc_local_sample_count_lists", "calc_local_sample_count_quantiles", "calc_local_sample_count_stats",
+    "calc_beta_diversity", "calc_bray_curtis", "calc_bray_curtis_norm_by_gp_counts", "calc_jaccard",
+    "calc_kulczynski2", "calc_nestedness_resultant", "calc_rw_turnover", "calc_s2", "calc_simpson_shannon",
+    "calc_sorenson", "calc_tx_rao_qe", "calc_endemism_central", "calc_endemism_central_lists",
+    "calc_endemism_central_normalised", "calc_endemism_whole", "calc_endemism_whole_lists",
+    "calc_endemism_whole_normalised", "calc_endemism_absolute", "calc_endemism_absolute_lists",
+    "calc_rarity_central", "calc_rarity_central_lists", "calc_rarity_whole", "calc_rarity_whole_lists",
+    "calc_chao1", "calc_chao2", "calc_ace", "calc_ice", "calc_hurlbert_es",
+    "calc_endemism_central_hier_part", "calc_endemism_whole_hier_part", "calc_hierarchical_label_ratios",
+]
+TWO_SET_CALCS = {
+    "calc_abc_counts", "calc_beta_diversity", "calc_bray_curtis", "calc_bray_curtis_norm_by_gp_counts",
+    "calc_jaccard", "calc_kulczynski2", "calc_nestedness_resultant", "calc_rw_turnover", "calc_s2", "calc_sorenson",
+    "calc_hierarchical_label_ratios",
+}
+
+
+def spatial_calcs(case: dict) -> list[str]:
+    calcs = list(PHASE3_CALCS) if case["calcs"] == "all" else [c for c in PHASE3_CALCS if c not in TWO_SET_CALCS]
+    return [c for c in calcs if c not in case.get("exclude", [])]
+
+
 TREE_FILES = ["Example_tree.nex", "Example_tree_with_colours.nex", "tree_with_nonmatching_names.nex"]
 
 NEWICK_CASES = {

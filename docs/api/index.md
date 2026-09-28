@@ -320,6 +320,9 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.bio.definition_query`](biodiversity.md#landschaft.bio.definition_query) | Boolean mask of the groups passing a definition query |
 | [`ls.bio.SpatialCondition`](biodiversity.md#landschaft.bio.SpatialCondition) | A Biodiverse spatial condition (Perl syntax) compiled for a BaseData |
 | [`ls.bio.Neighbourhoods`](biodiversity.md#landschaft.bio.Neighbourhoods) | Neighbour sets of the processing groups |
+| [`ls.bio.spatial_analysis`](biodiversity.md#landschaft.bio.spatial_analysis) | Biodiverse's spatial analysis: indices over the neighbourhood of every group |
+| [`ls.bio.list_calculations`](biodiversity.md#landschaft.bio.list_calculations) | The calculations available to `spatial_analysis` |
+| [`ls.bio.SpatialResult`](biodiversity.md#landschaft.bio.SpatialResult) | Results of `spatial_analysis` |
 | [`ls.bio.Tree`](biodiversity.md#landschaft.bio.Tree) | A rooted phylogenetic tree |
 | [`ls.bio.read_tree`](biodiversity.md#landschaft.bio.read_tree) | Read one tree (the first, or the one with index/name ``index``) |
 | [`ls.bio.read_trees`](biodiversity.md#landschaft.bio.read_trees) | Read every tree in a Newick, Phylip (several Newicks) or Nexus file |
