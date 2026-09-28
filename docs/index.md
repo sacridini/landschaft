@@ -104,6 +104,13 @@ from a single raster on a laptop to continental maps larger than memory.
     Folders of rasters in parallel, tiles for maps larger than memory,
     streaming tables with millions of rows.
 
+-   :material-dice-multiple-outline:{ .lg .middle } **Neutral landscapes**
+
+    ---
+
+    Simulated landscapes as null models: random maps, gradients, fractal
+    surfaces, Gaussian fields, clusters and mosaics.
+
 </div>
 
 ## A taste
@@ -195,7 +202,8 @@ from a single raster on a laptop to continental maps larger than memory.
     Landschaft reproduces the methods of GuidosToolbox (MSPA, fragmentation,
     accounting, restoration planning), the R package landscapemetrics and
     FRAGSTATS (landscape metrics), Conefor Sensinode and Makurhini (habitat
-    networks), and Circuitscape and Omniscape (circuit connectivity), and is
+    networks), Circuitscape and Omniscape (circuit connectivity), and NLMR
+    (neutral landscape models), and is
     [tested against their outputs](benchmarks.md#accuracy). You do not need to know any of them to use
     it: the [tutorials](tutorials/index.md) start from scratch, and the
     [Learn](learn/index.md) course explains the landscape ecology behind every

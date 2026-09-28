@@ -163,7 +163,8 @@ MSPA
 
 Neutral landscape model
 :   An artificial map with known properties, used as a baseline to test the
-    effects of pattern. [Ch. 3](fragmentation.md)
+    effects of pattern. [Ch. 3](fragmentation.md); tools:
+    [neutral landscapes](../tutorials/neutral-landscapes.md)
 
 Omnidirectional connectivity
 :   Connectivity mapped between all places within a moving window, without

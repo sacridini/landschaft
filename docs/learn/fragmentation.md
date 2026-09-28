@@ -156,6 +156,13 @@ Three lessons carry over to real landscapes:
    at lower amounts, as the neutral maps above suggested. Neutral models are
    a baseline, not a prediction.
 
+!!! tip "Neutral landscapes in Landschaft"
+    `ls.nlm` simulates the classic neutral landscape models (random maps,
+    gradients, fractal surfaces, Gaussian fields, clusters, mosaics) and turns
+    them into habitat maps of a chosen habitat share. The
+    [neutral landscapes tutorial](../tutorials/neutral-landscapes.md) uses them
+    for a null-model test.
+
 ## Measuring fragmentation around every cell
 
 Patch metrics ([chapter 5](metrics.md)) give one number per patch, class or
