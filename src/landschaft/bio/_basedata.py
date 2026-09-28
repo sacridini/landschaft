@@ -358,7 +358,7 @@ class BaseData:
     def _from_records(
         cls,
         axis_values: list[np.ndarray],
-        labels: np.ndarray,
+        labels: np.ndarray | tuple[np.ndarray, Sequence[str]],
         counts: np.ndarray,
         cell_sizes: Sequence[float],
         cell_origins: Sequence[float] | None,
@@ -367,107 +367,121 @@ class BaseData:
         allow_empty_groups: bool = False,
         allow_empty_labels: bool = False,
         crs: Any = None,
-        group_names: np.ndarray | None = None,
     ) -> BaseData:
-        """Build from per-record group axis values, label names and counts.
+        """Build from per-record group axis values, labels and counts.
 
-        ``axis_values[k]`` holds floats for axes with cell size >= 0 (already
-        numeric) or strings for text axes; ``labels`` is an object array of
-        names (None for group-only records); counts are summed per
-        (group, label) in record order, like Biodiverse's collation.
+        ``axis_values[k]``: floats (snapped here when the cell size is > 0,
+        kept when 0) or strings (text axes, or numbers kept as written).
+        ``labels``: object array of names (None: group-only record) or a
+        ``(codes, names)`` pair (code -1: group-only). Counts are summed per
+        (group, label) in record order, like Biodiverse's collation. Work is
+        done on integer codes; names are built once per distinct value.
         """
         n_axes = len(cell_sizes)
         if cell_origins is None:
             cell_origins = [0.0] * n_axes
-        n = len(labels)
-        # group name parts per axis
-        parts: list[np.ndarray] = []
-        coord_cols: list[np.ndarray] = []
+        counts = np.asarray(counts, dtype=np.float64)
+        n = len(counts)
+        codes: list[np.ndarray] = []
+        names: list[np.ndarray] = []
+        coords_u: list[np.ndarray] = []
         text_axes: list[int] = []
         for k in range(n_axes):
             size, origin = float(cell_sizes[k]), float(cell_origins[k])
-            vals = axis_values[k]
-            if size > 0:
-                snapped = snap_coordinates(np.asarray(vals, dtype=np.float64), size, origin)
-                uniq, inv = np.unique(snapped, return_inverse=True)
-                names_u = np.array([perl_number(u) for u in uniq], dtype=object)
-                parts.append(names_u[inv])
-                coord_cols.append(np.array([float(s) for s in names_u], dtype=np.float64)[inv])
-            elif size == 0:
-                # values kept as given: strings keep their text, numbers print as Perl does
-                if vals.dtype == object:
-                    strs = np.array([v if isinstance(v, str) else perl_number(v) for v in vals], dtype=object)
+            vals = np.asarray(axis_values[k])
+            if size < 0 or vals.dtype == object:
+                strs = np.array(["" if v is None else (v if isinstance(v, str) else perl_number(v)) for v in vals], dtype=object)
+                inv, uniq = pd.factorize(strs, sort=False)
+                uniq = np.asarray(uniq, dtype=object)
+                names.append(uniq)
+                codes.append(inv.astype(np.int64))
+                if size < 0:
+                    text_axes.append(k)
+                    coords_u.append(np.zeros(len(uniq)))
                 else:
-                    uniq, inv = np.unique(np.asarray(vals, dtype=np.float64), return_inverse=True)
-                    strs = np.array([perl_number(u) for u in uniq], dtype=object)[inv]
-                parts.append(strs)
-                coord_cols.append(np.array([float(s) for s in strs], dtype=np.float64))
-            else:
-                strs = np.array(["" if v is None else str(v) for v in vals], dtype=object)
-                parts.append(strs)
-                coord_cols.append(np.zeros(n))
-                text_axes.append(k)
-        if group_names is None:
-            if n_axes == 1:
-                gnames = np.array([dequote_element(csv_field(p)) for p in parts[0]], dtype=object)
-            else:
-                quoted = [np.array([csv_field(p) for p in col], dtype=object) for col in parts]
-                gnames = quoted[0].astype(object)
-                for col in quoted[1:]:
-                    gnames = gnames + ":" + col
+                    coords_u.append(np.array([float(u) for u in uniq], dtype=np.float64))
+                continue
+            v = vals.astype(np.float64)
+            if size > 0:
+                v = snap_coordinates(v, size, origin)
+            uniq, inv = np.unique(v, return_inverse=True)
+            nm = np.array([perl_number(u) for u in uniq], dtype=object)
+            # values that print alike are one group (e.g. 1.2500000000000002 and 1.25)
+            inv2, nm2 = pd.factorize(nm, sort=False)
+            names.append(np.asarray(nm2, dtype=object))
+            codes.append(inv2[inv].astype(np.int64))
+            coords_u.append(np.array([float(u) for u in nm2], dtype=np.float64))
+
+        # groups: mixed-radix key over the axis codes
+        key = np.zeros(n, dtype=np.int64)
+        for k in range(n_axes):
+            key = key * max(len(names[k]), 1) + codes[k]
+        g_keys, g_inv = np.unique(key, return_inverse=True)
+        n_g = len(g_keys)
+        g_axis_codes = np.zeros((n_g, n_axes), dtype=np.int64)
+        rem = g_keys.copy()
+        for k in reversed(range(n_axes)):
+            base = max(len(names[k]), 1)
+            g_axis_codes[:, k] = rem % base
+            rem //= base
+
+        if isinstance(labels, tuple):
+            l_codes, l_names = labels
+            l_codes = np.asarray(l_codes, dtype=np.int64)
+            l_names = np.asarray(list(l_names), dtype=object)
         else:
-            gnames = np.asarray(group_names, dtype=object)
+            lab = np.asarray(labels, dtype=object)
+            l_codes, l_names = pd.factorize(lab, sort=False, use_na_sentinel=True)
+            l_codes = l_codes.astype(np.int64)
+            l_names = np.asarray(l_names, dtype=object)
+        n_l = len(l_names)
+        has_label = l_codes >= 0
 
-        counts = np.asarray(counts, dtype=np.float64)
-        g_uniq, g_inv = np.unique(gnames.astype(str), return_inverse=True) if n else (np.array([], dtype=str), np.zeros(0, int))
-        has_label = np.array([lb is not None for lb in labels], dtype=bool)
-        lab_str = np.array([lb if lb is not None else "" for lb in labels], dtype=object)
-        l_uniq, l_inv = np.unique(lab_str.astype(str), return_inverse=True) if n else (np.array([], dtype=str), np.zeros(0, int))
-
-        # collate: sum in record order
-        key = g_inv.astype(np.int64) * max(len(l_uniq), 1) + l_inv
-        sel = has_label
-        k_uniq, k_inv = np.unique(key[sel], return_inverse=True)
+        # collate in record order
+        base = max(n_l, 1)
+        pair = g_inv[has_label].astype(np.int64) * base + l_codes[has_label]
+        k_uniq, k_inv = np.unique(pair, return_inverse=True)
         sums = np.zeros(len(k_uniq))
-        np.add.at(sums, k_inv, counts[sel])
+        np.add.at(sums, k_inv, counts[has_label])
         if binarise_counts:
             sums = (sums != 0).astype(np.float64)
-        rows = k_uniq // max(len(l_uniq), 1)
-        cols = k_uniq % max(len(l_uniq), 1)
+        rows = k_uniq // base
+        cols = k_uniq % base
         keep = sums != 0
 
-        group_used = np.zeros(len(g_uniq), bool)
+        group_used = np.zeros(n_g, bool)
         group_used[rows[keep]] = True
-        label_used = np.zeros(len(l_uniq), bool)
+        label_used = np.zeros(n_l, bool)
         label_used[cols[keep]] = True
         if allow_empty_groups:
-            group_used[g_inv] = True
+            group_used[:] = True
         if allow_empty_labels:
-            label_used[l_inv[has_label]] = True
+            label_used[l_codes[has_label]] = True
 
-        g_map = -np.ones(len(g_uniq), np.int64)
-        g_map[group_used] = np.arange(group_used.sum())
-        l_map = -np.ones(len(l_uniq), np.int64)
-        l_map[label_used] = np.arange(label_used.sum())
+        g_map = -np.ones(n_g, np.int64)
+        g_map[group_used] = np.arange(int(group_used.sum()))
+        l_map = -np.ones(n_l, np.int64)
+        l_map[label_used] = np.arange(int(label_used.sum()))
         mat = sp.csr_matrix(
             (sums[keep], (g_map[rows[keep]], l_map[cols[keep]])),
             shape=(int(group_used.sum()), int(label_used.sum())),
         )
-        # coordinates of each used group (first record)
-        first = np.full(len(g_uniq), -1, np.int64)
-        first[g_inv[::-1]] = np.arange(n)[::-1]
-        idx = first[group_used]
-        coords = np.column_stack([c[idx] for c in coord_cols]) if n_axes else np.zeros((len(idx), 0))
-        axes = [[parts[k][i] for k in range(n_axes)] for i in idx]
+        used = np.flatnonzero(group_used)
+        parts = [[names[k][g_axis_codes[g, k]] for k in range(n_axes)] for g in used]
+        if n_axes == 1:
+            gnames = [dequote_element(csv_field(pp[0])) for pp in parts]
+        else:
+            gnames = [":".join(csv_field(x) for x in pp) for pp in parts]
+        coords = np.column_stack([coords_u[k][g_axis_codes[used, k]] for k in range(n_axes)]) if n_axes else np.zeros((len(used), 0))
         bd = cls(
             mat,
-            [str(g) for g in g_uniq[group_used]],
-            [str(lb) for lb in l_uniq[label_used]],
+            gnames,
+            [str(x) for x in l_names[label_used]],
             coords,
             cell_sizes,
             cell_origins,
             crs=crs,
-            group_axes=axes,
+            group_axes=parts,
         )
         if text_axes:
             bd._set_text_axis_coords(text_axes)
@@ -810,13 +824,17 @@ class BaseData:
         threshold: float | None = None,
         x: str = "x",
         y: str = "y",
+        block_rows: int = 1024,
     ) -> BaseData:
         """Stack of per-label grids (a DataArray with a label dimension, or a Dataset).
 
         Each slice (or data variable) is a label and its cell values the counts
-        (Biodiverse's "labels as bands"); with ``threshold`` values >= it count
-        1 (presence), smaller values 0. NaN and nodata are skipped. Cells are
-        aggregated to ``cell_sizes`` (default: the grid resolution).
+        (Biodiverse's "labels as bands": e.g. a stack of species distribution
+        model outputs); with ``threshold`` values >= it count 1 (presence),
+        smaller values 0. NaN and nodata are skipped. Cells are aggregated to
+        ``cell_sizes`` (default: the grid resolution). The stack is read
+        ``block_rows`` rows at a time, so lazy (dask, NetCDF, Zarr) arrays
+        larger than memory work.
 
         Examples
         --------
@@ -849,29 +867,33 @@ class BaseData:
             dy = abs(ys[1] - ys[0]) if len(ys) > 1 else dx
             cell_sizes = [dx, dy]
         nodata = data.attrs.get("_FillValue", data.attrs.get("nodata"))
-        axis_x, axis_y, labels, counts = [], [], [], []
-        xx, yy = np.meshgrid(xs, ys)
-        for k, lab in enumerate(data[label_dim].values):
-            z = np.asarray(data.isel({label_dim: k}).values, dtype=np.float64)
-            ok = np.isfinite(z)
-            if nodata is not None:
-                ok &= z != nodata
-            if threshold is not None:
-                z = np.where(z >= threshold, 1.0, 0.0)
-            ok &= z != 0
-            axis_x.append(xx[ok])
-            axis_y.append(yy[ok])
-            labels.append(np.full(int(ok.sum()), str(lab), dtype=object))
-            counts.append(z[ok])
+        label_names = [str(v) for v in data[label_dim].values]
+        axis_x, axis_y, codes, counts = [], [], [], []
+        for k in range(len(label_names)):
+            for r0 in range(0, len(ys), block_rows):
+                r1 = min(r0 + block_rows, len(ys))
+                z = np.asarray(data.isel({label_dim: k, y: slice(r0, r1)}).values, dtype=np.float64)
+                ok = np.isfinite(z)
+                if nodata is not None:
+                    ok &= z != nodata
+                if threshold is not None:
+                    z = np.where(z >= threshold, 1.0, 0.0)
+                ok &= z != 0
+                rr, cc = np.nonzero(ok)
+                axis_x.append(xs[cc])
+                axis_y.append(ys[r0 + rr])
+                codes.append(np.full(len(rr), k, dtype=np.int64))
+                counts.append(z[rr, cc])
         crs = None
         try:
             crs = data.rio.crs
         except Exception:
             pass
+        cat = np.concatenate
         return cls._from_records(
-            [np.concatenate(axis_x), np.concatenate(axis_y)],
-            np.concatenate(labels) if labels else np.array([], dtype=object),
-            np.concatenate(counts) if counts else np.array([]),
+            [cat(axis_x) if axis_x else np.zeros(0), cat(axis_y) if axis_y else np.zeros(0)],
+            (cat(codes) if codes else np.zeros(0, np.int64), label_names),
+            cat(counts) if counts else np.zeros(0),
             cell_sizes,
             cell_origins,
             crs=crs,
@@ -888,6 +910,7 @@ class BaseData:
         given_label: str | None = None,
         strip_file_extensions: bool = True,
         threshold: float | None = None,
+        block_rows: int = 1024,
     ) -> BaseData:
         """Raster files read like Biodiverse's ``import_data_raster``.
 
@@ -907,13 +930,21 @@ class BaseData:
         strip_file_extensions : bool
             Drop the extension of file names used as labels.
         threshold : float, optional
-            With ``labels_as_bands``: values >= threshold count 1, others 0.
+            With ``labels_as_bands``: values >= threshold count 1, others 0
+            (presence from species distribution model outputs).
+        block_rows : int
+            Rows read at a time (Cloud-Optimised GeoTIFFs and other large
+            rasters are never read whole).
         """
         import rasterio
+        from rasterio.windows import Window
 
         if isinstance(files, (str, os.PathLike)):
             files = [files]
-        gx, gy, labs, cnts = [], [], [], []
+        gx, gy, codes, cnts = [], [], [], []
+        label_names: list[str] = []
+        label_code: dict[str, int] = {}
+        value_labels: list[np.ndarray] = []
         crs = None
         sizes = list(cell_sizes) if cell_sizes is not None else None
         origins = list(cell_origins) if cell_origins is not None else [0.0, 0.0]
@@ -927,20 +958,8 @@ class BaseData:
                 cs_e, cs_n = sizes
                 ox, oy = origins
                 cols = np.arange(src.width) + 0.5
-                rows = np.arange(src.height) + 0.5
                 for b in range(1, src.count + 1):
-                    z = src.read(b).astype(np.float64)
                     nd = src.nodatavals[b - 1]
-                    ok = np.isfinite(z)
-                    if nd is not None and not np.isnan(nd):
-                        ok &= z != nd
-                    xg = t.c + cols[None, :] * t.a + rows[:, None] * t.b
-                    yg = t.f + cols[None, :] * t.d + rows[:, None] * t.e
-                    xg = np.broadcast_to(xg, z.shape)
-                    yg = np.broadcast_to(yg, z.shape)
-                    xs = np.floor((xg[ok] - ox) / cs_e) * cs_e + ox + 0.5 * cs_e
-                    ys = np.floor((yg[ok] - oy) / cs_n) * cs_n + oy + 0.5 * cs_n
-                    vals = z[ok]
                     if labels_as_bands:
                         if given_label is not None:
                             lab = given_label
@@ -954,30 +973,51 @@ class BaseData:
                                 else:
                                     lab = f"band{b}"
                         lab = dequote_element(lab)
-                        if threshold is not None:
-                            vals = np.where(vals >= threshold, 1.0, 0.0)
-                        nz = vals != 0
-                        gx.append(xs[nz])
-                        gy.append(ys[nz])
-                        labs.append(np.full(int(nz.sum()), lab, dtype=object))
-                        cnts.append(vals[nz])
-                    else:
-                        gx.append(xs)
-                        gy.append(ys)
-                        labs.append(np.array([perl_number(v) for v in vals], dtype=object))
-                        cnts.append(np.ones(len(vals)))
+                        code = label_code.setdefault(lab, len(label_code))
+                        if code == len(label_names):
+                            label_names.append(lab)
+                    for r0 in range(0, src.height, block_rows):
+                        nr = min(block_rows, src.height - r0)
+                        z = src.read(b, window=Window(0, r0, src.width, nr)).astype(np.float64)
+                        ok = np.isfinite(z)
+                        if nd is not None and not np.isnan(nd):
+                            ok &= z != nd
+                        rows = np.arange(r0, r0 + nr) + 0.5
+                        rr, cc = np.nonzero(ok)
+                        xg = t.c + cols[cc] * t.a + rows[rr] * t.b
+                        yg = t.f + cols[cc] * t.d + rows[rr] * t.e
+                        xs = np.floor((xg - ox) / cs_e) * cs_e + ox + 0.5 * cs_e
+                        ys = np.floor((yg - oy) / cs_n) * cs_n + oy + 0.5 * cs_n
+                        vals = z[rr, cc]
+                        if labels_as_bands:
+                            if threshold is not None:
+                                vals = np.where(vals >= threshold, 1.0, 0.0)
+                            nz = vals != 0
+                            gx.append(xs[nz])
+                            gy.append(ys[nz])
+                            codes.append(np.full(int(nz.sum()), code, dtype=np.int64))
+                            cnts.append(vals[nz])
+                        else:
+                            gx.append(xs)
+                            gy.append(ys)
+                            value_labels.append(vals)
+                            cnts.append(np.ones(len(vals)))
         # groups are the snapped centres named as Perl prints them (no extra rounding)
         x = np.concatenate(gx) if gx else np.zeros(0)
         y = np.concatenate(gy) if gy else np.zeros(0)
-        names = np.array([f"{perl_number(a)}:{perl_number(b)}" for a, b in zip(x, y)], dtype=object)
+        if labels_as_bands:
+            labels_arg = (np.concatenate(codes) if codes else np.zeros(0, np.int64), label_names)
+        else:
+            v = np.concatenate(value_labels) if value_labels else np.zeros(0)
+            uniq, inv = np.unique(v, return_inverse=True)
+            labels_arg = (inv.astype(np.int64), [perl_number(u) for u in uniq])
         bd = cls._from_records(
-            [np.array([perl_number(a) for a in x], dtype=object), np.array([perl_number(b) for b in y], dtype=object)],
-            np.concatenate(labs) if labs else np.array([], dtype=object),
+            [x, y],
+            labels_arg,
             np.concatenate(cnts) if cnts else np.array([]),
             [0.0, 0.0],
             origins,
             crs=crs,
-            group_names=names,
         )
         bd.cell_sizes = (float(sizes[0]), float(sizes[1])) if sizes else (0.0, 0.0)
         return bd
@@ -1162,15 +1202,13 @@ class BaseData:
             x = ox + np.floor((x - ox) / sx) * sx + sx / 2
         if sy > 0:
             y = oy + np.floor((y - oy) / sy) * sy + sy / 2
-        names = np.array([f"{perl_number(a)}:{perl_number(b)}" for a, b in zip(x, y)], dtype=object)
         bd = cls._from_records(
-            [np.array([perl_number(a) for a in x], dtype=object), np.array([perl_number(b) for b in y], dtype=object)],
+            [x, y],
             np.asarray(labs, dtype=object),
             np.asarray(cnts, dtype=np.float64),
             [0.0, 0.0],
             [ox, oy],
             crs=gdf.crs,
-            group_names=names,
             binarise_counts=binarise_counts,
         )
         bd.cell_sizes = (sx, sy)
@@ -1199,9 +1237,78 @@ class BaseData:
         )
 
     @classmethod
+    def from_occurrences(
+        cls,
+        source,
+        cell_sizes: Sequence[float],
+        cell_origins: Sequence[float] | None = None,
+        *,
+        to_crs: Any = None,
+        label: str | Sequence[str] = "species",
+        count: str | None = None,
+        max_uncertainty: float | None = None,
+        basis_of_record: Iterable[str] | None = None,
+        exclude_issues: Iterable[str] | None = None,
+        present_only: bool = True,
+        drop_duplicates: bool = True,
+        chunksize: int = 500_000,
+    ) -> BaseData:
+        """Occurrence records of a GBIF download or Darwin Core Archive, in cells.
+
+        The records are cleaned by :func:`read_occurrences` (same arguments),
+        optionally reprojected from WGS 84 to ``to_crs``, and snapped to cells
+        of ``cell_sizes`` (degrees without ``to_crs``) as the text import does.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import landschaft as ls
+        >>> occ = pd.DataFrame({"species": ["A a", "B b", "A a"],
+        ...                     "decimalLongitude": [10.1, 10.4, 12.2],
+        ...                     "decimalLatitude": [-5.2, -5.9, -5.1]})
+        >>> bd = ls.bio.BaseData.from_occurrences(occ, cell_sizes=[1, 1])
+        >>> bd.to_dataframe()
+                   A a  B b
+        group
+        10.5:-5.5  1.0  1.0
+        12.5:-5.5  1.0  0.0
+        >>> ls.bio.BaseData.from_occurrences(occ, [100_000, 100_000], to_crs="EPSG:3857").groups
+        ['1150000:-550000', '1150000:-650000', '1350000:-550000']
+        """
+        from ._gbif import read_occurrences
+
+        df = read_occurrences(
+            source, label=label, count=count, max_uncertainty=max_uncertainty, basis_of_record=basis_of_record,
+            exclude_issues=exclude_issues, present_only=present_only, drop_duplicates=drop_duplicates,
+            chunksize=chunksize,
+        )
+        x = df["decimalLongitude"].to_numpy(dtype=np.float64)
+        y = df["decimalLatitude"].to_numpy(dtype=np.float64)
+        crs: Any = "EPSG:4326"
+        if to_crs is not None and len(x):
+            from rasterio.crs import CRS
+            from rasterio.warp import transform
+
+            xx, yy = transform(CRS.from_epsg(4326), CRS.from_user_input(to_crs), x, y)
+            x, y = np.asarray(xx, dtype=np.float64), np.asarray(yy, dtype=np.float64)
+            crs = to_crs
+        elif to_crs is not None:
+            crs = to_crs
+        return cls._from_records(
+            [x, y], df["label"].to_numpy(dtype=object), df["count"].to_numpy(dtype=np.float64),
+            cell_sizes, cell_origins, crs=crs,
+        )
+
+    @classmethod
     def from_file(cls, path: str | os.PathLike, **kwargs) -> BaseData:
-        """Dispatch on the extension: text tables, rasters, NetCDF/Zarr, vector points."""
+        """Dispatch on the extension: text tables, rasters, NetCDF/Zarr, vector features.
+
+        A ``.zip`` is read as a GBIF download or Darwin Core Archive
+        (:meth:`from_occurrences`).
+        """
         p = str(path).lower()
+        if p.endswith(".zip"):
+            return cls.from_occurrences(path, **kwargs)
         if p.endswith((".csv", ".txt", ".tsv")):
             return cls.from_table(path, **kwargs)
         if p.endswith((".tif", ".tiff", ".asc", ".img", ".vrt", ".jp2")):

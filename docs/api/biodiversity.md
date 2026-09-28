@@ -19,6 +19,12 @@ bd = ls.bio.BaseData.from_table("sites.csv", group_columns=["x", "y"],
                                 cell_sizes=[100000, 100000])
 tree = ls.bio.read_tree("tree.nex")
 bd.to_raster(bd.group_richness)       # species richness map
+
+# a GBIF download, in 50 km cells of an equal-area projection
+bd = ls.bio.BaseData.from_occurrences("0012345-260928.zip", [50_000, 50_000],
+                                      to_crs="EPSG:6933", max_uncertainty=10_000)
+# a stack of species distribution models, presence above 0.5
+bd = ls.bio.BaseData.from_raster("sdm_stack.tif", threshold=0.5)
 ```
 
 ## Sample counts per group
@@ -26,6 +32,15 @@ bd.to_raster(bd.group_richness)       # species richness map
 ::: landschaft.bio.BaseData
 
 ::: landschaft.bio.snap_coordinates
+
+## Occurrence records
+
+GBIF downloads (the "simple CSV" zip) and Darwin Core Archives are read in
+chunks and cleaned (absences, missing coordinates, uncertainty, basis of
+record, GBIF issues, duplicates) before they become sample counts per cell
+with `BaseData.from_occurrences`.
+
+::: landschaft.bio.read_occurrences
 
 ## Phylogenies
 

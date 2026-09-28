@@ -315,6 +315,7 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 |---|---|
 | [`ls.bio.BaseData`](biodiversity.md#landschaft.bio.BaseData) | Groups × labels sample counts with the group coordinates |
 | [`ls.bio.snap_coordinates`](biodiversity.md#landschaft.bio.snap_coordinates) | Cell centres as Biodiverse's text import computes them (before naming) |
+| [`ls.bio.read_occurrences`](biodiversity.md#landschaft.bio.read_occurrences) | Occurrence records of a GBIF download or a Darwin Core Archive, cleaned |
 | [`ls.bio.Tree`](biodiversity.md#landschaft.bio.Tree) | A rooted phylogenetic tree |
 | [`ls.bio.read_tree`](biodiversity.md#landschaft.bio.read_tree) | Read one tree (the first, or the one with index/name ``index``) |
 | [`ls.bio.read_trees`](biodiversity.md#landschaft.bio.read_trees) | Read every tree in a Newick, Phylip (several Newicks) or Nexus file |

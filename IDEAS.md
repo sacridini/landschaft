@@ -560,7 +560,14 @@ Fases:
    indefinido); a importação de texto arredonda `(x - origem) / tamanho` a 1e-10 antes do
    `floor`, a de feições e a de raster não; números viram texto com `%.15g` e as
    coordenadas são relidas do nome;
-1b. GBIF/Darwin Core e pilhas de SDM (em blocos);
+1b. GBIF/Darwin Core e pilhas de SDM (em blocos). **Feita** (0.62.0): `read_occurrences`
+   (download "simple CSV" do GBIF em zip ou tsv, Darwin Core Archive pelo `meta.xml`, ou
+   DataFrame do `pygbif`; lido em pedaços; filtros de ausência, coordenadas, incerteza,
+   `basisOfRecord`, issues e duplicatas) e `BaseData.from_occurrences` (reprojeção pelo
+   `rasterio.warp`, células como na importação de texto); `from_raster` e `from_xarray`
+   leem em blocos de linhas (COG, NetCDF/Zarr com dask); `_from_records` trabalha com
+   códigos inteiros e só nomeia os grupos distintos. Nomes com espaço: a importação de
+   texto põe aspas como o Biodiverse; as de ocorrências e de pilhas mantêm o nome puro;
 2. motor de vizinhança: parser das condições espaciais, todas as `sp_*`, *definition query*,
    reaproveitamento de vizinhanças;
 3. análise espacial e índices não filogenéticos: contagens e listas, endemismo, raridade,

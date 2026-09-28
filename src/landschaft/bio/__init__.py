@@ -22,6 +22,7 @@ Typical use::
 """
 
 from ._basedata import BaseData, snap_coordinates
+from ._gbif import read_occurrences
 from ._matrix import Matrix, read_matrix
 from ._tree import Tree, read_tree, read_trees
 
@@ -30,6 +31,7 @@ __all__ = [
     "Matrix",
     "Tree",
     "read_matrix",
+    "read_occurrences",
     "read_tree",
     "read_trees",
     "snap_coordinates",
