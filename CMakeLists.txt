@@ -87,6 +87,7 @@ add_library(nlmcore STATIC
     src/cpp/nlm/basic.cpp
     src/cpp/nlm/distance.cpp
     src/cpp/nlm/rng.cpp
+    src/cpp/nlm/stdmodels.cpp
 )
 target_include_directories(nlmcore PUBLIC src/cpp)
 # R's x87 log (lsm/rmath.hpp).

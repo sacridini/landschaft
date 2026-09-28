@@ -119,6 +119,34 @@ MODELS: dict[str, tuple[str, object]] = {
         lambda ls: ls.nlm.classify(
             ls.nlm.random(40, 30, seed=8),
             real_land=ls.nlm.classify(ls.nlm.random(40, 30, seed=9), weighting=[0.2, 0.3, 0.5]), mask_val=1)),
+    # NLMR's C++ models (std::mt19937)
+    "mpd_33": ("nlm_mpd(33, 33, user_seed = 1)", lambda ls: ls.nlm.mpd(33, 33, seed=1)),
+    "mpd_100x60": ("nlm_mpd(100, 60, roughness = 0.7, user_seed = 5, verbose = FALSE)",
+                   lambda ls: ls.nlm.mpd(100, 60, roughness=0.7, seed=5)),
+    "mpd_torus": ("nlm_mpd(64, 64, torus = TRUE, user_seed = 3, verbose = FALSE)",
+                  lambda ls: ls.nlm.mpd(64, 64, torus=True, seed=3)),
+    "mpd_raw": ("nlm_mpd(17, 9, rand_dev = 2, rescale = FALSE, user_seed = 11, verbose = FALSE)",
+                lambda ls: ls.nlm.mpd(17, 9, rand_dev=2, rescale=False, seed=11)),
+    "mpd_torus_big": ("nlm_mpd(257, 200, roughness = 0.3, torus = TRUE, user_seed = 42)",
+                      lambda ls: ls.nlm.mpd(257, 200, roughness=0.3, torus=True, seed=42)),
+    "mpd_big": ("nlm_mpd(300, 250, user_seed = 2147483647, verbose = FALSE)",
+                lambda ls: ls.nlm.mpd(300, 250, seed=2147483647)),
+    "neigh_50x40": ("nlm_neigh(50, 40, p_neigh = 0.7, p_empty = 0.1, user_seed = 2)",
+                    lambda ls: ls.nlm.neigh(50, 40, p_neigh=0.7, p_empty=0.1, seed=2)),
+    "neigh_8": ("nlm_neigh(60, 30, p_neigh = 0.5, p_empty = 0.05, categories = 5, neighbourhood = 8, user_seed = 4)",
+                lambda ls: ls.nlm.neigh(60, 30, p_neigh=0.5, p_empty=0.05, categories=5, neighbourhood=8, seed=4)),
+    "neigh_props": ("nlm_neigh(40, 40, p_neigh = 0.6, p_empty = 0.2, proportions = c(0.5, 0.3, 0.2), "
+                    "user_seed = 6, rescale = FALSE)",
+                    lambda ls: ls.nlm.neigh(40, 40, p_neigh=0.6, p_empty=0.2, proportions=[0.5, 0.3, 0.2], seed=6,
+                                            rescale=False)),
+    "neigh_big": ("nlm_neigh(300, 250, p_neigh = 0.8, p_empty = 0.01, categories = 4, user_seed = 9)",
+                  lambda ls: ls.nlm.neigh(300, 250, p_neigh=0.8, p_empty=0.01, categories=4, seed=9)),
+    "rrc_50x40": ("nlm_randomrectangularcluster(50, 40, minl = 3, maxl = 7, user_seed = 1)",
+                  lambda ls: ls.nlm.random_rectangular_cluster(50, 40, minl=3, maxl=7, seed=1)),
+    "rrc_raw": ("nlm_randomrectangularcluster(120, 80, minl = 1, maxl = 10, user_seed = 9, rescale = FALSE)",
+                lambda ls: ls.nlm.random_rectangular_cluster(120, 80, minl=1, maxl=10, seed=9, rescale=False)),
+    "rrc_wide": ("nlm_randomrectangularcluster(30, 30, minl = 5, maxl = 30, user_seed = 2)",
+                 lambda ls: ls.nlm.random_rectangular_cluster(30, 30, minl=5, maxl=30, seed=2)),
 }
 
 MODEL_CASES: dict[str, str] = {key: r for key, (r, _) in MODELS.items()}

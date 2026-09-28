@@ -44,6 +44,17 @@ std::vector<double> distance_haversine(const std::vector<std::uint8_t>& origin, 
                                        double ymax, double xres, double yres);
 std::vector<double> distance_exact(const std::vector<std::uint8_t>& origin, i64 nrow, i64 ncol, double res);
 
+// -- NLMR's C++ models (std::mt19937) --------------------------------------------------
+
+// rcpp_mpd()'s diamond-square on a size x size map (map[a][b] at
+// a * size + b), with rand_dev[step] the deviation of each step.
+std::vector<double> mpd_square(i64 size, const std::vector<double>& rand_dev, std::uint32_t seed, bool torus);
+// rcpp_neigh(): categories 0..n_categories (row-major nrow x ncol).
+std::vector<double> neigh(i64 nrow, i64 ncol, int n_categories, const std::vector<std::int64_t>& cells_per_cat,
+                          int neighbourhood, float p_neigh, float p_empty, std::uint32_t seed);
+// rcpp_randomrectangularcluster().
+std::vector<double> random_rectangular_cluster(i64 nrow, i64 ncol, int minl, int maxl, std::uint32_t seed);
+
 // -- classification -----------------------------------------------------------------
 
 // NLMR's rcpp_get_jenksbreaks(sorted d, k): k + 1 break values.

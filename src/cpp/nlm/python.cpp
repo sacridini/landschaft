@@ -215,6 +215,26 @@ py::array_t<double> py_cut(const CArray<double>& x, const CArray<double>& breaks
     return out;
 }
 
+py::array_t<double> py_mpd(i64 size, const std::vector<double>& rand_dev, std::uint32_t seed, bool torus) {
+    std::vector<double> v = run_parallel(0, [&] { return nlm::mpd_square(size, rand_dev, seed, torus); });
+    return raster_to_array(std::move(v), size, size);
+}
+
+py::array_t<double> py_neigh(i64 nrow, i64 ncol, int n_categories, const std::vector<std::int64_t>& cells_per_cat,
+                             int neighbourhood, float p_neigh, float p_empty, std::uint32_t seed) {
+    if (static_cast<i64>(cells_per_cat.size()) != n_categories + 1)
+        throw py::value_error("cells_per_cat must have n_categories + 1 values");
+    std::vector<double> v = run_parallel(0, [&] {
+        return nlm::neigh(nrow, ncol, n_categories, cells_per_cat, neighbourhood, p_neigh, p_empty, seed);
+    });
+    return raster_to_array(std::move(v), nrow, ncol);
+}
+
+py::array_t<double> py_random_rectangular_cluster(i64 nrow, i64 ncol, int minl, int maxl, std::uint32_t seed) {
+    std::vector<double> v = run_parallel(0, [&] { return nlm::random_rectangular_cluster(nrow, ncol, minl, maxl, seed); });
+    return raster_to_array(std::move(v), nrow, ncol);
+}
+
 // R's sum() and cumsum() of doubles (LDOUBLE accumulation).
 double py_r_sum(const CArray<double>& x) { return lsm::r_sum(x.data(), static_cast<i64>(x.size())); }
 
@@ -248,6 +268,12 @@ void register_python(py::module_& m) {
           py::arg("ymax") = 0.0, py::arg("xres") = 1.0, py::arg("yres") = 1.0,
           "Distance to the origin cells: 'gdal' / 'haversine' (terra::distance) or 'exact'.");
     m.def("nlm_jenks_breaks", &py_jenks_breaks, py::arg("sorted"), py::arg("k"), "NLMR's rcpp_get_jenksbreaks().");
+    m.def("nlm_mpd", &py_mpd, py::arg("size"), py::arg("rand_dev"), py::arg("seed"), py::arg("torus"),
+          "rcpp_mpd()'s diamond-square map (size x size).");
+    m.def("nlm_neigh", &py_neigh, py::arg("nrow"), py::arg("ncol"), py::arg("n_categories"), py::arg("cells_per_cat"),
+          py::arg("neighbourhood"), py::arg("p_neigh"), py::arg("p_empty"), py::arg("seed"), "rcpp_neigh().");
+    m.def("nlm_random_rectangular_cluster", &py_random_rectangular_cluster, py::arg("nrow"), py::arg("ncol"),
+          py::arg("minl"), py::arg("maxl"), py::arg("seed"), "rcpp_randomrectangularcluster().");
     m.def("nlm_r_sum", &py_r_sum, py::arg("x"), "R's sum() of doubles (80-bit accumulation).");
     m.def("nlm_r_cumsum", &py_r_cumsum, py::arg("x"), "R's cumsum() of doubles (80-bit accumulation).");
     m.def("nlm_cut", &py_cut, py::arg("x"), py::arg("breaks"),

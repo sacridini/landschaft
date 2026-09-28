@@ -1906,6 +1906,9 @@ d = ls.nlm.distance_gradient(200, 150, origin=(10, 20, 30, 40))
 classes = ls.nlm.classify(r, weighting=[0.5, 0.3, 0.2])   # int32 classes 1..3 (0 = missing)
 jenks = ls.nlm.classify(r, n=4)                           # Jenks natural breaks
 x = ls.nlm.rescale(some_array)                            # NLMR's util_rescale
+m = ls.nlm.mpd(257, 257, roughness=0.5, seed=1)           # diamond-square (NLMR's grid size)
+n = ls.nlm.neigh(200, 150, p_neigh=0.7, p_empty=0.1, categories=4, seed=2)
+rc = ls.nlm.random_rectangular_cluster(200, 150, minl=5, maxl=20, seed=3)
 ```
 
 NLMR behaviours kept with `nlmr_compat=True` (the default where they apply):
@@ -1917,6 +1920,17 @@ NLMR behaviours kept with `nlmr_compat=True` (the default where they apply):
   algorithm (cell units, float32). `nlmr_compat=False` gives exact Euclidean
   distances times `resolution`, with `origin = (first column, last column, first
   row, last row)`.
+- `mpd`: NLMR's grid is a square of side `max(nrow, ncol) + 1` (made odd) minus one
+  cell on each side, so the result is square (a warning says when it differs from
+  `nrow x ncol`); `nlmr_compat=False` builds a `2**k + 1` grid and crops it to the
+  size asked for. The normal deviates are drawn in NLMR's order (a fresh
+  `std::normal_distribution` per cell), their log/sqrt and each step's cells are
+  computed in parallel (in order on a torus, where cells of one step can meet).
+- `neigh`: categories are filled from `categories - 1` down to 0, a neighbour
+  "holds a category" when it is non-zero, the edges wrap, `p_neigh`/`p_empty` are
+  rounded to float as in NLMR's C++.
+- `random_rectangular_cluster`: a count of empty cells replaces NLMR's scan of the
+  whole matrix after every rectangle (same result).
 - `classify`: `sum`/`cumsum` of the weights in 80-bit precision as R; when all
   class boundaries are equal every cell becomes class 1; Jenks' breaks cost
   O(classes x cells^2) as in NLMR (parallel over the rows of each class column).

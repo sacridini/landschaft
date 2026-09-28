@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -28,7 +29,9 @@ def ref():
 def test_matches_nlmr(ref, key):
     if key not in ref:
         pytest.skip(f"{key} not in the reference file")
-    got = as_values(nlm_cases.MODELS[key][1](ls))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)  # NLMR's mpd sizes
+        got = as_values(nlm_cases.MODELS[key][1](ls))
     np.testing.assert_array_equal(got, ref[key])
 
 
@@ -148,3 +151,57 @@ def test_jenks_breaks_small():
     np.testing.assert_array_equal(ls._core.nlm_jenks_breaks(np.sort(x), 3), [1.0, 1.2, 5.1, 9.2])
     out = ls.nlm.classify(x.reshape(2, 4), n=3)
     np.testing.assert_array_equal(out.ravel(), [1, 1, 1, 2, 2, 3, 3, 3])
+
+
+def test_mpd_sizes():
+    with pytest.warns(UserWarning, match="nlmr_compat=False"):
+        m = ls.nlm.mpd(100, 60, seed=1)
+    assert m.shape == (99, 99)
+    with pytest.warns(UserWarning):
+        assert ls.nlm.mpd(10, 10, seed=1).shape == (9, 9)
+    assert ls.nlm.mpd(33, 33, seed=1).shape == (33, 33)
+    for ncol, nrow in ((100, 60), (1, 1), (129, 3), (130, 7)):
+        m = ls.nlm.mpd(ncol, nrow, seed=2, nlmr_compat=False)
+        assert m.shape == (nrow, ncol)
+    with pytest.raises(ValueError):
+        ls.nlm.mpd(10, 10, roughness=1.5)
+
+
+def test_mpd_roughness_and_threads():
+    smooth = ls.nlm.mpd(257, 257, roughness=0.2, seed=4, nlmr_compat=False, rescale=False).values
+    rough = ls.nlm.mpd(257, 257, roughness=0.9, seed=4, nlmr_compat=False, rescale=False).values
+    assert np.abs(np.diff(smooth, axis=1)).mean() < np.abs(np.diff(rough, axis=1)).mean()
+    for torus in (False, True):
+        with ls._threads.limit(1):
+            one = ls.nlm.mpd(513, 513, seed=5, torus=torus).values
+        with ls._threads.limit(4):
+            four = ls.nlm.mpd(513, 513, seed=5, torus=torus).values
+        np.testing.assert_array_equal(one, four)
+
+
+def test_neigh_counts():
+    n = ls.nlm.neigh(50, 40, p_neigh=0.7, p_empty=0.1, categories=4, seed=3, rescale=False)
+    assert n.dtype == np.int32
+    counts = np.bincount(n.values.ravel(), minlength=4)
+    # floor(2000 / 4) cells for categories 3..1; category 0 and the rest are 0
+    assert list(counts[1:]) == [500, 500, 500] and counts[0] == 500
+    p = ls.nlm.neigh(40, 25, p_neigh=0.6, p_empty=0.2, proportions=[0.2, 0.3, 0.5], seed=1, rescale=False)
+    assert list(np.bincount(p.values.ravel())) == [200, 300, 500]
+    # compact clusters: more same-category neighbours than a random arrangement
+    v = ls.nlm.neigh(100, 100, p_neigh=0.9, p_empty=0.01, categories=2, seed=5, rescale=False).values
+    assert (v[:, 1:] == v[:, :-1]).mean() > 0.7
+    with pytest.raises(ValueError):
+        ls.nlm.neigh(10, 10, p_neigh=0.5, p_empty=0.5, proportions=[0.5, 0.4, 0.2])
+    with pytest.raises(ValueError):
+        ls.nlm.neigh(10, 10, p_neigh=0, p_empty=0)
+    with pytest.raises(ValueError):
+        ls.nlm.neigh(10, 10, p_neigh=0.5, p_empty=0.5, neighbourhood=6)
+
+
+def test_random_rectangular_cluster():
+    r = ls.nlm.random_rectangular_cluster(80, 60, minl=4, maxl=9, seed=8, rescale=False).values
+    assert np.all((r >= 0) & (r < 1))
+    # patches of equal value are unions of rectangles: few distinct values per row run
+    assert np.unique(r).size < r.size / 8
+    with pytest.raises(ValueError):
+        ls.nlm.random_rectangular_cluster(10, 5, minl=3, maxl=6)

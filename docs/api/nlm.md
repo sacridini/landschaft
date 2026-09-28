@@ -32,6 +32,16 @@ habitat = ls.nlm.classify(r, weighting=[0.7, 0.3])
 
 ::: landschaft.nlm.distance_gradient
 
+## Fractal surfaces
+
+::: landschaft.nlm.mpd
+
+## Clusters
+
+::: landschaft.nlm.neigh
+
+::: landschaft.nlm.random_rectangular_cluster
+
 ## Classification and rescaling
 
 ::: landschaft.nlm.classify

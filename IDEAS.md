@@ -411,7 +411,11 @@ Fases:
    disso é o `GDALComputeProximity` (varredura com o alvo mais próximo propagado, float32).
    `sum`/`cumsum` das proporções do `classify` em 80 bits; o Jenks roda coluna a coluna
    com as linhas em paralelo (as mesmas somas);
-2. `mpd`, `neigh`, `randomrectangularcluster`;
+2. `mpd`, `neigh`, `randomrectangularcluster`. **Feita** (0.55.0, bit a bit na primeira
+   tentativa, também em toro e com o `shuffle` de mais de 65535 células; no `mpd` só o
+   gerador e o teste de aceitação do método polar ficam em série, o `log`/`sqrt` e as
+   células de cada passo vão em paralelo: 3× o NLMR em 1025²; `neigh` é serial por
+   natureza);
 3. `randomcluster`, `curds`;
 4. o `fft` do R portado; `gaussianfield`, `fbm`;
 5. `mosaicfield` (`rpoislinetess`, `rMosaicField`, `rLGCP` do spatstat);
