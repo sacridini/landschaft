@@ -6,6 +6,17 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.67.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis: label and group properties (`ls.bio.read_properties`,
+  `BaseData.set_label_properties`, `BaseData.set_group_properties`) and their indices
+  (lists, data, value frequencies, summary statistics, quantiles and Getis-Ord Gi*, also
+  weighted by local ranges); numeric label indices (statistics, quantiles, harmonic and
+  geometric means, data, dissimilarity between neighbour sets, Gi*); matrix indices
+  (`spatial_analysis(..., matrix=...)`: matrix statistics, Rao's quadratic entropy with a
+  matrix, comparison of the values between two neighbour sets). Identical to Biodiverse.
+
 ## [0.66.0] - 2026-09-28
 
 ### Added
