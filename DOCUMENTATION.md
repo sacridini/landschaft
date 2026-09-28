@@ -51,7 +51,7 @@ ls.set_default_threads(8)          # every call from now on: 8 threads
 * Python 3.10, 3.11, or 3.12+
 * C++17 compliant compiler (GCC 9+, Clang 10+, or MSVC 2019+)
 * CMake >= 3.20
-* OpenMP (optional, automatically detected for parallel multithreading)
+* OpenMP (optional, automatically detected for parallel multithreading; on macOS `llvm-openmp` from conda-forge or Homebrew's `libomp`)
 
 ### Installing from Source
 

@@ -6,6 +6,12 @@ between minor versions.
 
 ## [Unreleased]
 
+### Fixed
+- macOS: the build finds the OpenMP runtime of the conda environment (`llvm-openmp`) or
+  Homebrew's `libomp` with any CMake. With a CMake from outside the environment
+  (Homebrew's, for example) it used to build a single-threaded core (on an M4: landscape metrics 4.7 times, distances
+  3.3 times and MSPA 1.6 times faster once found).
+
 ## [0.74.0] - 2026-09-28
 
 ### Added

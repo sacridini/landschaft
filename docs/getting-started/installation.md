@@ -60,7 +60,9 @@ platform, which avoids most installation problems.
     ```
 
     `llvm-openmp` gives Apple's compiler the OpenMP runtime it lacks; without
-    it Landschaft builds and runs, single-threaded.
+    it Landschaft builds and runs, single-threaded. The build takes the
+    runtime of the conda environment it installs into, else Homebrew's
+    `libomp` (`brew install libomp`), whatever CMake it runs with.
 
 === "Linux"
 
@@ -168,7 +170,9 @@ pytest
 ??? question "`ls.max_threads()` returns 1"
     The core was built without OpenMP. On macOS install `llvm-openmp` (conda)
     or `libomp` (Homebrew) and reinstall; with GCC and MSVC OpenMP is always
-    available.
+    available. For a runtime elsewhere, point the build at it:
+    `pip install -Ccmake.define.OpenMP_ROOT=/path/to/libomp --no-build-isolation -e .`
+    (the folder with `include/omp.h` and `lib/libomp.dylib`).
 
 ??? question "`ImportError: DLL load failed` / `rasterio` cannot find GDAL"
     Mixing conda packages and pip wheels of GDAL-based libraries breaks them.

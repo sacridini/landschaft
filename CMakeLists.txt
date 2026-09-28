@@ -123,6 +123,34 @@ set_target_properties(lsmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(gtbcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(LANDSCHAFT_OPENMP)
+    # Apple's clang has no OpenMP runtime of its own and only conda's CMake
+    # looks in the environment for one: when building for a conda Python,
+    # take its environment's (llvm-openmp), else Homebrew's libomp, unless
+    # OpenMP_ROOT is given. The conda one first, as other packages of that
+    # environment may load it too (two libomp in one process abort).
+    if(APPLE AND NOT DEFINED OpenMP_ROOT AND NOT DEFINED ENV{OpenMP_ROOT})
+        set(_conda_python FALSE)
+        if(DEFINED ENV{CONDA_PREFIX} AND EXISTS "$ENV{CONDA_PREFIX}/include/omp.h")
+            set(_conda_prefix "$ENV{CONDA_PREFIX}")
+            cmake_path(IS_PREFIX _conda_prefix "${Python_EXECUTABLE}" NORMALIZE _conda_python)
+        endif()
+        if(_conda_python)
+            set(OpenMP_ROOT "$ENV{CONDA_PREFIX}")
+        else()
+            find_program(LANDSCHAFT_BREW brew)
+            if(LANDSCHAFT_BREW)
+                execute_process(COMMAND "${LANDSCHAFT_BREW}" --prefix libomp
+                                OUTPUT_VARIABLE _libomp_prefix OUTPUT_STRIP_TRAILING_WHITESPACE
+                                RESULT_VARIABLE _brew_result ERROR_QUIET)
+                if(_brew_result EQUAL 0 AND EXISTS "${_libomp_prefix}/include/omp.h")
+                    set(OpenMP_ROOT "${_libomp_prefix}")
+                endif()
+            endif()
+        endif()
+        if(DEFINED OpenMP_ROOT)
+            message(STATUS "OpenMP runtime from ${OpenMP_ROOT}")
+        endif()
+    endif()
     find_package(OpenMP COMPONENTS CXX)
     if(OpenMP_CXX_FOUND)
         target_link_libraries(gtbcore PUBLIC OpenMP::OpenMP_CXX)
@@ -131,6 +159,11 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(nlmcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(biocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(circuitcore PUBLIC OpenMP::OpenMP_CXX)
+        # conda's libomp is found through @rpath: keep its directory in the
+        # installed modules (created below) too, not only in the build tree.
+        if(APPLE)
+            set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
+        endif()
     else()
         message(WARNING "OpenMP not found: building single-threaded")
     endif()
