@@ -6,6 +6,16 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.59.0] - 2026-09-28
+
+### Added
+- Neutral landscape models, sixth part: `ls.nlm.mosaic_tess` (Voronoi tiles of random
+  germs) and `ls.nlm.mosaic_gibbs` (Voronoi tiles of a simple sequential inhibition
+  process with shuffled classes), identical bit for bit to NLMR with the same seed
+  when shapely is installed (NLMR's value order is GEOS's order of the Voronoi cells,
+  asked from GEOS through shapely; without it a warning and each germ its own value).
+  25 to 70 times faster than NLMR. Every NLMR model is now available in `ls.nlm`.
+
 ## [0.58.0] - 2026-09-28
 
 ### Added
