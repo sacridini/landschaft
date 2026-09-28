@@ -6,13 +6,22 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-09-28
+
 ### Added
-- Groundwork for neutral landscape models (a port of the R package NLMR): R's random
-  number generator (`set.seed`, `runif`, `rnorm` by inversion, `sample`/`sample.int`
-  with and without weights, Walker's alias and the hashed `sample2`) and `std::mt19937`
-  with the distributions of GCC's libstdc++, both identical bit for bit to R 4.4 and to
-  the Rtools compiler that builds NLMR (`src/cpp/nlm/rng.cpp`,
-  `tools/make_reference_nlm.py`).
+- Neutral landscape models, a port of the R package NLMR (`ls.nlm`), first part:
+  `random`, `percolation`, `planar_gradient`, `edge_gradient`, `distance_gradient`,
+  `classify` (class proportions, a real landscape's proportions or Jenks' natural
+  breaks) and `rescale`. With the same `seed` they give NLMR's landscapes bit for bit
+  (R's random number generator, `set.seed` / `runif` / `rnorm` by inversion /
+  `sample`, and the libstdc++ distributions behind NLMR's C++ code are reproduced),
+  3 to 110 times faster (`nlm_percolation` 1000 × 1000: 1.54 s → 0.014 s).
+  - `distance_gradient` keeps NLMR's behaviour by default (`nlmr_compat=True`): terra
+    treats a raster of at most 360 × 90 cells as longitude/latitude, so NLMR returns
+    great-circle distances in metres there, and GDAL's proximity algorithm (float32)
+    above; `nlmr_compat=False` gives exact Euclidean distances.
+  - API reference page *Neutral landscape models*; `tools/make_reference_nlm.py`
+    regenerates the NLMR references.
 - Documentation website: a *Learn* section, a course on landscape ecology for newcomers
   (concepts, theory and academic references behind every tool, and when to use each).
 - `Dockerfile`: a multi-stage image with the package built from source and every
