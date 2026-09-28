@@ -6,6 +6,20 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.74.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis: the inter-event interval indices of BiodiverseX (`iei_stats`,
+  `iei_data`), `SpatialResult.to_biodiverse_csv` (Biodiverse's "Delimited text" export,
+  the same text byte for byte), `ClusterResult.cut` (a dendrogram into k clusters),
+  Biodiverse's example data (`ls.bio.example_data`) and a biodiversity tutorial.
+
+### Changed
+- Faster randomisations: spatially structured allocation (`rand_diffusion`,
+  `rand_random_walk`...) 5-10 times faster, and the next iteration of the
+  `rand_structured` family is randomised while the current one is analysed. Results are
+  unchanged.
+
 ## [0.73.0] - 2026-09-28
 
 ### Added
