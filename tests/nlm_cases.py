@@ -147,6 +147,23 @@ MODELS: dict[str, tuple[str, object]] = {
                 lambda ls: ls.nlm.random_rectangular_cluster(120, 80, minl=1, maxl=10, seed=9, rescale=False)),
     "rrc_wide": ("nlm_randomrectangularcluster(30, 30, minl = 5, maxl = 30, user_seed = 2)",
                  lambda ls: ls.nlm.random_rectangular_cluster(30, 30, minl=5, maxl=30, seed=2)),
+    # R-level cluster models
+    "randomcluster_50x40": ("nlm_randomcluster(50, 40, p = 0.4, user_seed = 1)",
+                            lambda ls: ls.nlm.random_cluster(50, 40, p=0.4, seed=1)),
+    "randomcluster_ai": ("nlm_randomcluster(60, 45, p = 0.5, ai = c(0.3, 0.6, 0.1), user_seed = 7, rescale = FALSE)",
+                         lambda ls: ls.nlm.random_cluster(60, 45, p=0.5, ai=[0.3, 0.6, 0.1], seed=7, rescale=False)),
+    "randomcluster_8": ("nlm_randomcluster(70, 30, p = 0.3, ai = c(1, 1, 1, 1), neighbourhood = 8, user_seed = 3)",
+                        lambda ls: ls.nlm.random_cluster(70, 30, p=0.3, ai=[1, 1, 1, 1], neighbourhood=8, seed=3)),
+    "randomcluster_sparse": ("nlm_randomcluster(40, 40, p = 0.05, ai = c(0.2, 0.8), user_seed = 11)",
+                             lambda ls: ls.nlm.random_cluster(40, 40, p=0.05, ai=[0.2, 0.8], seed=11)),
+    "randomcluster_dense": ("nlm_randomcluster(80, 60, p = 0.62, ai = c(0.5, 0.25, 0.25), user_seed = 12)",
+                            lambda ls: ls.nlm.random_cluster(80, 60, p=0.62, ai=[0.5, 0.25, 0.25], seed=12)),
+    "curds": ("nlm_curds(c(0.5, 0.3, 0.6), c(32, 6, 2), user_seed = 1)",
+              lambda ls: ls.nlm.curds([0.5, 0.3, 0.6], [32, 6, 2], seed=1)),
+    "curds_wheyes": ("nlm_curds(c(0.5, 0.3, 0.6), c(32, 6, 2), wheyes = c(0.1, 0.05, 0.2), user_seed = 2)",
+                     lambda ls: ls.nlm.curds([0.5, 0.3, 0.6], [32, 6, 2], wheyes=[0.1, 0.05, 0.2], seed=2)),
+    "curds_small": ("nlm_curds(c(0.8, 0.5), c(3, 5), user_seed = 3)",
+                    lambda ls: ls.nlm.curds([0.8, 0.5], [3, 5], seed=3)),
 }
 
 MODEL_CASES: dict[str, str] = {key: r for key, (r, _) in MODELS.items()}

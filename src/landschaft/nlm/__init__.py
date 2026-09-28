@@ -17,10 +17,12 @@ Typical use::
 
 from ._basic import distance_gradient, edge_gradient, percolation, planar_gradient, random, rescale
 from ._classify import classify
+from ._cluster import curds, random_cluster
 from ._stdmodels import mpd, neigh, random_rectangular_cluster
 
 __all__ = [
     "classify",
+    "curds",
     "distance_gradient",
     "edge_gradient",
     "mpd",
@@ -28,6 +30,7 @@ __all__ = [
     "percolation",
     "planar_gradient",
     "random",
+    "random_cluster",
     "random_rectangular_cluster",
     "rescale",
 ]

@@ -38,9 +38,13 @@ habitat = ls.nlm.classify(r, weighting=[0.7, 0.3])
 
 ## Clusters
 
+::: landschaft.nlm.random_cluster
+
 ::: landschaft.nlm.neigh
 
 ::: landschaft.nlm.random_rectangular_cluster
+
+::: landschaft.nlm.curds
 
 ## Classification and rescaling
 

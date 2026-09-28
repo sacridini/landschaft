@@ -205,3 +205,41 @@ def test_random_rectangular_cluster():
     assert np.unique(r).size < r.size / 8
     with pytest.raises(ValueError):
         ls.nlm.random_rectangular_cluster(10, 5, minl=3, maxl=6)
+
+
+def test_random_cluster():
+    r = ls.nlm.random_cluster(80, 60, p=0.45, ai=[0.2, 0.3, 0.5], seed=6, rescale=False)
+    assert r.dtype == np.int32 and set(np.unique(r.values)) <= {1, 2, 3}
+    # clusters: most cells share their type with their right-hand neighbour
+    v = r.values
+    assert (v[:, 1:] == v[:, :-1]).mean() > 0.5
+    # the weights set the shares of the types, roughly
+    counts = np.bincount(ls.nlm.random_cluster(300, 300, p=0.5, ai=[0.2, 0.8], seed=1, rescale=False).values.ravel())
+    assert counts[2] > 2 * counts[1]
+    # p = 0: no clusters, every cell drawn with the weights
+    z = ls.nlm.random_cluster(20, 20, p=0, ai=[1, 0], seed=2, rescale=False)
+    assert np.all(z.values == 1)
+    with ls._threads.limit(1):
+        one = ls.nlm.random_cluster(400, 300, p=0.4, seed=9).values
+    with ls._threads.limit(4):
+        four = ls.nlm.random_cluster(400, 300, p=0.4, seed=9).values
+    np.testing.assert_array_equal(one, four)
+    with pytest.raises(ValueError):
+        ls.nlm.random_cluster(10, 10, p=0.5, ai=[-1, 2])
+    with pytest.raises(ValueError):
+        ls.nlm.random_cluster(10, 10, p=0.5, neighbourhood=6)
+
+
+def test_curds():
+    c = ls.nlm.curds([0.5, 0.5], [4, 4], seed=1)
+    assert c.shape == (16, 16) and c.dtype == np.uint8
+    # habitat kept: half of the 16 blocks, then half of their cells
+    assert int(c.sum()) == 8 * 8
+    blocks = c.values.reshape(4, 4, 4, 4).sum(axis=(1, 3))
+    assert (blocks == 0).sum() >= 8
+    w = ls.nlm.curds([0.5, 0.5], [4, 4], wheyes=[0.25, 0.0], seed=1)
+    assert int(w.sum()) > 64
+    with pytest.raises(ValueError):
+        ls.nlm.curds([0.5], [2, 2])
+    with pytest.raises(ValueError):
+        ls.nlm.curds([0.5], [0])

@@ -55,6 +55,16 @@ std::vector<double> neigh(i64 nrow, i64 ncol, int n_categories, const std::vecto
 // rcpp_randomrectangularcluster().
 std::vector<double> random_rectangular_cluster(i64 nrow, i64 ncol, int minl, int maxl, std::uint32_t seed);
 
+// -- NLMR's R-level cluster models ----------------------------------------------------------
+
+// nlm_randomcluster(): types 1..ai.size() (row-major nrow x ncol).
+std::vector<double> random_cluster(RRng& rng, i64 nrow, i64 ncol, double p, const std::vector<double>& ai,
+                                   int neighbourhood);
+// nlm_curds(): 1 for curds, 0 for the matrix, on a size x size grid (size =
+// the product of the steps).
+std::vector<double> curds(RRng& rng, const std::vector<double>& curds_p, const std::vector<std::int64_t>& steps,
+                          const std::vector<double>* wheyes, i64& size);
+
 // -- classification -----------------------------------------------------------------
 
 // NLMR's rcpp_get_jenksbreaks(sorted d, k): k + 1 break values.

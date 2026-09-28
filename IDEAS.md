@@ -416,7 +416,9 @@ Fases:
    gerador e o teste de aceitação do método polar ficam em série, o `log`/`sqrt` e as
    células de cada passo vão em paralelo: 3× o NLMR em 1025²; `neigh` é serial por
    natureza);
-3. `randomcluster`, `curds`;
+3. `randomcluster`, `curds`. **Feita** (0.56.0, bit a bit; o `terra::patches` numera pela
+   primeira célula de cada mancha em ordem de linha (a união guarda o menor rótulo, o R
+   renumera em ordem); `randomcluster` 200² 19 s no R contra 3 ms);
 4. o `fft` do R portado; `gaussianfield`, `fbm`;
 5. `mosaicfield` (`rpoislinetess`, `rMosaicField`, `rLGCP` do spatstat);
 6. `mosaictess`, `mosaicgibbs` (`st_sample`, `rSSI`, Voronoi);

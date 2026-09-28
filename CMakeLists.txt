@@ -85,6 +85,7 @@ set_target_properties(conncore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Neutral landscape models (NLMR): R's and libstdc++'s generators, the models.
 add_library(nlmcore STATIC
     src/cpp/nlm/basic.cpp
+    src/cpp/nlm/cluster.cpp
     src/cpp/nlm/distance.cpp
     src/cpp/nlm/rng.cpp
     src/cpp/nlm/stdmodels.cpp

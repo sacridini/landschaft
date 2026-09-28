@@ -235,6 +235,23 @@ py::array_t<double> py_random_rectangular_cluster(i64 nrow, i64 ncol, int minl, 
     return raster_to_array(std::move(v), nrow, ncol);
 }
 
+py::array_t<double> py_random_cluster(std::int32_t seed, i64 nrow, i64 ncol, double p, const std::vector<double>& ai,
+                                      int neighbourhood) {
+    nlm::RRng rng(seed);
+    std::vector<double> v = run_parallel(0, [&] { return nlm::random_cluster(rng, nrow, ncol, p, ai, neighbourhood); });
+    return raster_to_array(std::move(v), nrow, ncol);
+}
+
+py::array_t<double> py_curds(std::int32_t seed, const std::vector<double>& curds_p, const std::vector<std::int64_t>& steps,
+                             std::optional<std::vector<double>> wheyes) {
+    if (curds_p.size() != steps.size() || (wheyes && wheyes->size() != steps.size()))
+        throw py::value_error("curds, recursion_steps and wheyes must have the same length");
+    nlm::RRng rng(seed);
+    i64 size = 0;
+    std::vector<double> v = run_parallel(0, [&] { return nlm::curds(rng, curds_p, steps, wheyes ? &*wheyes : nullptr, size); });
+    return raster_to_array(std::move(v), size, size);
+}
+
 // R's sum() and cumsum() of doubles (LDOUBLE accumulation).
 double py_r_sum(const CArray<double>& x) { return lsm::r_sum(x.data(), static_cast<i64>(x.size())); }
 
@@ -274,6 +291,10 @@ void register_python(py::module_& m) {
           py::arg("neighbourhood"), py::arg("p_neigh"), py::arg("p_empty"), py::arg("seed"), "rcpp_neigh().");
     m.def("nlm_random_rectangular_cluster", &py_random_rectangular_cluster, py::arg("nrow"), py::arg("ncol"),
           py::arg("minl"), py::arg("maxl"), py::arg("seed"), "rcpp_randomrectangularcluster().");
+    m.def("nlm_random_cluster", &py_random_cluster, py::arg("seed"), py::arg("nrow"), py::arg("ncol"), py::arg("p"),
+          py::arg("ai"), py::arg("neighbourhood"), "nlm_randomcluster() before rescaling.");
+    m.def("nlm_curds", &py_curds, py::arg("seed"), py::arg("curds"), py::arg("steps"), py::arg("wheyes") = py::none(),
+          "nlm_curds() (1 curds, 0 matrix).");
     m.def("nlm_r_sum", &py_r_sum, py::arg("x"), "R's sum() of doubles (80-bit accumulation).");
     m.def("nlm_r_cumsum", &py_r_cumsum, py::arg("x"), "R's cumsum() of doubles (80-bit accumulation).");
     m.def("nlm_cut", &py_cut, py::arg("x"), py::arg("breaks"),
