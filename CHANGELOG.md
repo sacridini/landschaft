@@ -6,11 +6,17 @@ between minor versions.
 
 ## [Unreleased]
 
+### Changed
+- `fad` 4 times faster (8000 x 8000 on an M4: 0.69 s to 0.17 s): density, raw density,
+  classes and statistics come from one pass in C++ over integral images built once;
+  `fad_multiscale` classifies in the same pass as the average (1.4 times faster). Results
+  are unchanged.
+
 ### Fixed
 - macOS: the build finds the OpenMP runtime of the conda environment (`llvm-openmp`) or
   Homebrew's `libomp` with any CMake. With a CMake from outside the environment
-  (Homebrew's, for example) it used to build a single-threaded core (on an M4: landscape metrics 4.7 times, distances
-  3.3 times and MSPA 1.6 times faster once found).
+  (Homebrew's, for example) it used to build a single-threaded core (on an M4: landscape
+  metrics 4.7 times, distances 3.3 times and MSPA 1.6 times faster once found).
 - pandas 3: label and group properties kept their unset values as `None` (the new string
   dtype turned them into NaN and spatial analyses with properties failed).
 - `nlm.mosaic_tess` / `nlm.mosaic_gibbs` warn when GEOS is older than 3.11, which orders the

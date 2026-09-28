@@ -79,6 +79,17 @@ inline u8 fad_code(u8 orig) {
     }
 }
 
+// GTB's fragmentation class of a foreground density: 1 rare (< 10), 2 patchy (< 40),
+// 3 transitional (< 60), 4 dominant (< 90), 5 interior (< 100), 6 intact.
+inline u8 fad_class(u8 density) {
+    if (density == 100) return 6;
+    if (density >= 90) return 5;
+    if (density >= 60) return 4;
+    if (density >= 40) return 3;
+    if (density >= 10) return 2;
+    return 1;
+}
+
 }  // namespace
 
 ImageU8 compute_fad_density(
@@ -121,6 +132,74 @@ ImageU8 compute_fad_density(
     }
 
     return out;
+}
+
+FADSingleResultCpp compute_fad(const ImageU8& im, int window_size) {
+    if (window_size < 3 || window_size % 2 == 0) {
+        throw std::invalid_argument("window_size must be an odd integer >= 3");
+    }
+
+    const i64 nx = im.nx;
+    const i64 ny = im.ny;
+    const i64 pad = (window_size - 1) / 2;
+
+    IntegralImage2D sat_valid(nx, ny);
+    IntegralImage2D sat_fg(nx, ny);
+    build_integral_images(im, sat_valid, sat_fg);
+
+    FADSingleResultCpp res;
+    res.density = ImageU8(nx, ny);
+    res.raw = ImageU8(nx, ny);
+    res.classes = ImageU8(nx, ny);
+
+    i64 foreground = 0;
+    i64 c1 = 0, c2 = 0, c3 = 0, c4 = 0, c5 = 0, c6 = 0;
+    i64 density_sum = 0;
+
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(static) if (nx * ny >= kParallelThreshold) reduction(+:foreground, c1, c2, c3, c4, c5, c6, density_sum)
+#endif
+    for (i64 y = 0; y < ny; ++y) {
+        const i64 y0 = std::max<i64>(0, y - pad);
+        const i64 y1 = std::min<i64>(ny, y + pad + 1);
+
+        for (i64 x = 0; x < nx; ++x) {
+            const i64 x0 = std::max<i64>(0, x - pad);
+            const i64 x1 = std::min<i64>(nx, x + pad + 1);
+
+            const u8 byte_val = fad_percent(sat_fg.rect_sum(x0, y0, x1, y1), sat_valid.rect_sum(x0, y0, x1, y1));
+            const u8 orig = im.at(x, y);
+            const u8 code = fad_code(orig);
+            res.raw.at(x, y) = byte_val;
+            res.density.at(x, y) = code ? code : byte_val;
+            if (orig == 2) {
+                const u8 cls = fad_class(byte_val);
+                res.classes.at(x, y) = cls;
+                foreground += 1;
+                density_sum += byte_val;
+                switch (cls) {
+                    case 1: c1 += 1; break;
+                    case 2: c2 += 1; break;
+                    case 3: c3 += 1; break;
+                    case 4: c4 += 1; break;
+                    case 5: c5 += 1; break;
+                    default: c6 += 1; break;
+                }
+            } else {
+                res.classes.at(x, y) = code;
+            }
+        }
+    }
+
+    res.foreground = foreground;
+    res.class_counts[0] = c1;
+    res.class_counts[1] = c2;
+    res.class_counts[2] = c3;
+    res.class_counts[3] = c4;
+    res.class_counts[4] = c5;
+    res.class_counts[5] = c6;
+    res.density_sum = density_sum;
+    return res;
 }
 
 FADMultiscaleResultCpp compute_fad_multiscale(
@@ -222,6 +301,7 @@ FADMultiscaleResultCpp compute_fad_multiscale(
 
     // Multiscale average map
     ImageU8 multi_map(nx, ny);
+    ImageU8 multi_classes(nx, ny);
     i64 m_intact = 0;
     i64 m_interior = 0;
     i64 m_dominant = 0;
@@ -240,11 +320,13 @@ FADMultiscaleResultCpp compute_fad_multiscale(
 
             if (code) {
                 multi_map.at(x, y) = code;
+                multi_classes.at(x, y) = code;
             } else {
                 // IDL: byte(round(sum / 5.0)) in single precision
                 const float avg = static_cast<float>(sum_densities[static_cast<std::size_t>(idx)]) / static_cast<float>(num_scales);
                 const u8 byte_val = static_cast<u8>(std::round(avg));
                 multi_map.at(x, y) = byte_val;
+                multi_classes.at(x, y) = im.at(x, y) == 2 ? fad_class(byte_val) : 0;
                 m_sum_fad_fg += byte_val;
 
                 if (byte_val == 100) m_intact += 1;
@@ -258,6 +340,7 @@ FADMultiscaleResultCpp compute_fad_multiscale(
     }
 
     res.multiscale_map = std::move(multi_map);
+    res.multiscale_classes = std::move(multi_classes);
 
     auto& mst = res.stats[num_scales];
     mst.scale = 0; // 0 indicates multiscale average

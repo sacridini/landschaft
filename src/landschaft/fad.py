@@ -51,29 +51,6 @@ FAD_CLASSES: dict[int, str] = {
 }
 
 
-def _classify_fad(density_arr: np.ndarray, orig_arr: np.ndarray) -> np.ndarray:
-    """Classify byte FAD density into the 6 standard fragmentation classes."""
-    classes = np.zeros_like(density_arr, dtype=np.uint8)
-    fg = orig_arr == 2
-    bg = orig_arr == 1
-    missing = orig_arr == 0
-
-    classes[bg] = 101
-    classes[missing] = 102
-    classes[orig_arr == 3] = 105
-    classes[orig_arr == 4] = 106
-
-    d_fg = density_arr[fg]
-    c_fg = np.ones_like(d_fg, dtype=np.uint8) # Default 1 (Rare)
-    c_fg[d_fg >= 10] = 2  # Patchy
-    c_fg[d_fg >= 40] = 3  # Transitional
-    c_fg[d_fg >= 60] = 4  # Dominant
-    c_fg[d_fg >= 90] = 5  # Interior
-    c_fg[d_fg == 100] = 6 # Intact
-    classes[fg] = c_fg
-    return classes
-
-
 def _wrap_as_dataarray(
     arr: np.ndarray,
     reference: Any,
@@ -179,22 +156,13 @@ def fad(
     if window_size < 3 or window_size % 2 == 0:
         raise ValueError("window_size must be an odd integer >= 3")
 
-    c_density = _core.compute_fad_density(arr, window_size, True, threads)
-    c_raw = _core.compute_fad_density(arr, window_size, False, threads)
-    c_classes = _classify_fad(c_raw, arr)
+    res = _core.compute_fad(arr, window_size, threads)
+    c_density, c_raw, c_classes = res["density"], res["raw"], res["classes"]
 
-    fg_mask = arr == 2
-    fg_total = int(fg_mask.sum())
-
+    fg_total = res["foreground"]
     if fg_total > 0:
-        d_fg = c_raw[fg_mask]
-        intact = float((d_fg == 100).sum() / fg_total * 100.0)
-        interior = float(((d_fg >= 90) & (d_fg < 100)).sum() / fg_total * 100.0)
-        dominant = float(((d_fg >= 60) & (d_fg < 90)).sum() / fg_total * 100.0)
-        transitional = float(((d_fg >= 40) & (d_fg < 60)).sum() / fg_total * 100.0)
-        patchy = float(((d_fg >= 10) & (d_fg < 40)).sum() / fg_total * 100.0)
-        rare = float((d_fg < 10).sum() / fg_total * 100.0)
-        avg_fad = float(d_fg.mean())
+        rare, patchy, transitional, dominant, interior, intact = (n / fg_total * 100.0 for n in res["class_counts"])
+        avg_fad = res["density_sum"] / fg_total
     else:
         intact = interior = dominant = transitional = patchy = rare = avg_fad = 0.0
 
@@ -289,7 +257,7 @@ def fad_multiscale(
     ms_map = raw_res["multiscale_map"]
     ms_attrs = {"landschaft_product": "FAD_MULTISCALE", "colormap": "fad"}
     wrapped_ms = _wrap_as_dataarray(ms_map, data, "fad_multiscale", ms_attrs)
-    classes = _wrap_as_dataarray(_classify_fad(ms_map, arr), data, "fad_classes")
+    classes = _wrap_as_dataarray(raw_res["classes"], data, "fad_classes")
 
     # GTB's AVCON: average FAD scaled to the reporting unit (non-missing area)
     avcon_factor = int((arr == 2).sum()) / int((arr != 0).sum())

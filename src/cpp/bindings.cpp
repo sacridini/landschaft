@@ -143,6 +143,19 @@ py::array_t<std::uint8_t> compute_fad_density(
     return to_array(std::move(out));
 }
 
+py::dict compute_fad(const CArray<std::uint8_t>& input, int window_size, int n_threads) {
+    const gtb::ImageU8 im = to_image(input);
+    gtb::FADSingleResultCpp res = run_parallel(n_threads, [&] { return gtb::compute_fad(im, window_size); });
+    py::dict out;
+    out["density"] = to_array(std::move(res.density));
+    out["raw"] = to_array(std::move(res.raw));
+    out["classes"] = to_array(std::move(res.classes));
+    out["foreground"] = res.foreground;
+    out["class_counts"] = std::vector<std::int64_t>(std::begin(res.class_counts), std::end(res.class_counts));
+    out["density_sum"] = res.density_sum;
+    return out;
+}
+
 py::dict compute_fad_multiscale(
     const CArray<std::uint8_t>& input,
     const std::vector<int>& window_sizes,
@@ -168,6 +181,7 @@ py::dict compute_fad_multiscale(
     }
     out["raw_densities"] = raw_dens;
     out["multiscale_map"] = to_array(std::move(res.multiscale_map));
+    out["classes"] = to_array(std::move(res.multiscale_classes));
 
     py::list stats;
     for (const auto& row : res.stats) {
@@ -1422,6 +1436,8 @@ PYBIND11_MODULE(_core, m) {
     m.def("compute_fad_density", &compute_fad_density, py::arg("input"), py::arg("window_size"),
           py::arg("apply_gtb_mask") = true, py::arg("n_threads") = 0,
           "Compute Forest Area Density (FAD) for a single window size.");
+    m.def("compute_fad", &compute_fad, py::arg("input"), py::arg("window_size"), py::arg("n_threads") = 0,
+          "FAD for one window size in one pass: density (GTB's codes), raw density, classes and class counts.");
     m.def("compute_fad_multiscale", &compute_fad_multiscale, py::arg("input"),
           py::arg("window_sizes") = std::vector<int>{7, 13, 27, 81, 243}, py::arg("n_threads") = 0,
           "Compute multiscale FAD across multiple window sizes.");

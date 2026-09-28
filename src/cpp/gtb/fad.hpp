@@ -26,7 +26,18 @@ struct FADMultiscaleResultCpp {
     std::vector<ImageU8> single_scale_maps; // single scale FAD maps with GTB masking (101 bg, 102 missing)
     std::vector<ImageU8> raw_densities;     // raw density values [0, 100]
     ImageU8 multiscale_map;                 // average over scales with GTB masking
+    ImageU8 multiscale_classes;             // classes of the average (see FADSingleResultCpp::classes)
     std::vector<FADStatsRow> stats;
+};
+
+// Single-scale FAD in one pass over the map.
+struct FADSingleResultCpp {
+    ImageU8 density;               // [0, 100], GTB's codes (101, 102, 105, 106) off the foreground
+    ImageU8 raw;                   // [0, 100] everywhere
+    ImageU8 classes;               // 1 (rare) .. 6 (intact) on the foreground (2), GTB's codes elsewhere
+    i64 foreground = 0;            // pixels coded 2
+    i64 class_counts[6] = {};      // foreground pixels of classes 1 .. 6
+    i64 density_sum = 0;           // raw density summed over the foreground
 };
 
 // Computes local Forest Area Density (FAD) for a single window size.
@@ -37,6 +48,10 @@ ImageU8 compute_fad_density(
     int window_size,
     bool apply_gtb_mask = true
 );
+
+// The density with and without GTB's codes, the classes and the counts of the
+// statistics for one window size, the integral images built once.
+FADSingleResultCpp compute_fad(const ImageU8& im, int window_size);
 
 // Computes multiscale FAD across multiple window sizes (default: 7, 13, 27, 81, 243).
 FADMultiscaleResultCpp compute_fad_multiscale(
