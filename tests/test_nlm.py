@@ -352,3 +352,34 @@ def test_voronoi_without_shapely(monkeypatch):
     with pytest.warns(UserWarning, match="shapely"):
         t = ls.nlm.mosaic_tess(40, 30, germs=10, seed=1)
     assert t.shape == (30, 40)
+
+
+def test_merge():
+    g = ls.nlm.planar_gradient(40, 30, direction=90, rescale=False)
+    r = ls.nlm.random(40, 30, seed=1, rescale=False)
+    f = ls.nlm.fbm(40, 30, seed=2, rescale=False)
+    raw = ls.nlm.merge(g, [r, f], scaling=0.5, rescale=False)
+    np.testing.assert_array_equal(raw.values, g.values + (r.values + f.values) * 0.5)
+    one = ls.nlm.merge(g.values, r.values, rescale=False)
+    np.testing.assert_array_equal(one, g.values + r.values)
+    m = ls.nlm.merge(g, r)
+    assert float(m.min()) == 0 and float(m.max()) == 1 and m.attrs["model"] == "merge"
+    with pytest.raises(ValueError):
+        ls.nlm.merge(g, np.zeros((3, 3)))
+    with pytest.raises(ValueError):
+        ls.nlm.merge(g, [])
+
+
+def test_binarize():
+    f = ls.nlm.fbm(100, 80, seed=4)
+    h = ls.nlm.binarize(f, 0.3)
+    assert int((h == 2).sum()) == 2400 and h.attrs["levels"] == {1: "Matrix", 2: "Habitat"}
+    # habitat takes the highest values
+    assert float(f.values[h.values == 2].min()) >= float(f.values[h.values == 1].max())
+    stack = ls.nlm.binarize(f, [0.1, 0.3])
+    assert stack.dims[0] == "p" and list(stack.p.values) == [0.1, 0.3]
+    np.testing.assert_array_equal(stack.sel(p=0.3).values, h.values)
+    arr = ls.nlm.binarize(f.values, [0.1, 0.3])
+    assert isinstance(arr, np.ndarray) and arr.shape == (2, 80, 100)
+    with pytest.raises(ValueError):
+        ls.nlm.binarize(f, 1.5)

@@ -1916,7 +1916,12 @@ fb = ls.nlm.fbm(200, 150, fract_dim=1.2, seed=7)
 mf = ls.nlm.mosaic_field(200, 150, n=20, seed=8)          # dict with collect=/infinit=
 mt = ls.nlm.mosaic_tess(200, 150, germs=100, seed=9)
 mg = ls.nlm.mosaic_gibbs(200, 150, germs=80, R=8, patch_classes=4, seed=10)
+blend = ls.nlm.merge(g, [fb, gf], scaling=0.5)             # landscapetools' util_merge
+habitat = ls.nlm.binarize(fb, [0.2, 0.4])                  # util_binarize: 1 matrix, 2 habitat
 ```
+
+Tutorial: `docs/tutorials/neutral-landscapes.md` (a gallery, habitat maps, a
+null-model test of the example forest's aggregation).
 
 NLMR behaviours kept with `nlmr_compat=True` (the default where they apply):
 

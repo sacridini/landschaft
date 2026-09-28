@@ -74,4 +74,11 @@ and follow along.
     Folders of rasters, maps larger than memory, time stacks with dask and
     very large tables.
 
+-   :material-dice-multiple-outline:{ .lg .middle } **[Neutral landscapes](neutral-landscapes.md)**
+
+    ---
+
+    Simulated landscapes as null models: random, gradients, fractals,
+    clusters and mosaics; habitat maps and null-model tests.
+
 </div>

@@ -18,18 +18,21 @@ Typical use::
 from ._basic import distance_gradient, edge_gradient, percolation, planar_gradient, random, rescale
 from ._classify import classify
 from ._cluster import curds, random_cluster
+from ._extras import binarize, merge
 from ._mosaic import mosaic_field
 from ._spectral import fbm, gaussian_field
 from ._stdmodels import mpd, neigh, random_rectangular_cluster
 from ._tess import mosaic_gibbs, mosaic_tess
 
 __all__ = [
+    "binarize",
     "classify",
     "curds",
     "distance_gradient",
     "edge_gradient",
     "fbm",
     "gaussian_field",
+    "merge",
     "mosaic_field",
     "mosaic_gibbs",
     "mosaic_tess",

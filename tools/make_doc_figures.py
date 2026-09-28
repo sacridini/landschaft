@@ -575,6 +575,71 @@ def learn_processes():
     save(fig, "learn_processes")
 
 
+def nlm_models():
+    return {
+        "random": ls.nlm.random(200, 200, seed=1),
+        "planar gradient": ls.nlm.planar_gradient(200, 200, direction=60),
+        "edge gradient": ls.nlm.edge_gradient(200, 200, direction=60),
+        "distance gradient": ls.nlm.distance_gradient(200, 200, origin=(90, 110, 90, 110), nlmr_compat=False),
+        "midpoint displacement": ls.nlm.mpd(200, 200, roughness=0.6, seed=2, nlmr_compat=False),
+        "fractional Brownian motion": ls.nlm.fbm(200, 200, fract_dim=1.4, seed=3),
+        "Gaussian field": ls.nlm.gaussian_field(200, 200, autocorr_range=20, seed=4),
+        "random clusters": ls.nlm.random_cluster(200, 200, p=0.55, ai=[0.3, 0.3, 0.4], seed=5),
+        "neighbourhood clusters": ls.nlm.neigh(200, 200, p_neigh=0.95, p_empty=0.002, categories=4, seed=6),
+        "rectangular clusters": ls.nlm.random_rectangular_cluster(200, 200, minl=5, maxl=30, seed=7),
+        "Voronoi mosaic": ls.nlm.mosaic_tess(200, 200, germs=60, seed=8),
+        "Poisson line mosaic": ls.nlm.mosaic_field(200, 200, n=20, seed=9),
+    }
+
+
+@figure
+def nlm_gallery():
+    fig, axes = plt.subplots(3, 4, figsize=(11, 8.6))
+    for ax, (name, m) in zip(axes.ravel(), nlm_models().items()):
+        ax.imshow(m.values, cmap="viridis", interpolation="nearest")
+        ax.set_title(name)
+        ax.set_axis_off()
+    save(fig, "nlm_gallery")
+
+
+@figure
+def nlm_binarize():
+    surface = ls.nlm.fbm(200, 200, fract_dim=1.6, seed=3)
+    maps = ls.nlm.binarize(surface, [0.2, 0.4, 0.6])
+    fig, axes = plt.subplots(1, 4, figsize=(12, 3.2))
+    axes[0].imshow(surface.values, cmap="viridis", interpolation="nearest")
+    axes[0].set_title("fractal surface")
+    axes[0].set_axis_off()
+    for ax, b in zip(axes[1:], (0.2, 0.4, 0.6)):
+        palette_map(ax, maps.sel(p=b).values, BINARY, None, f"{int(b * 100)} % habitat")
+    save(fig, "nlm_binarize")
+
+
+@figure
+def nlm_null():
+    forest = ls.load_raster(ls.example_data("input")).values[:250, :250]
+    habitat = np.where(forest == 2, 2, 1)
+    share = float((habitat == 2).mean())
+
+    def aggregation(m):
+        table = ls.landscape_metrics(np.asarray(m), level="class", metric="ai")
+        return float(table.loc[table["class"] == 2, "value"].iloc[0])
+
+    observed = aggregation(habitat)
+    random_ai = [aggregation(ls.nlm.binarize(ls.nlm.random(250, 250, seed=s), share)) for s in range(1, 100)]
+    fractal_ai = [aggregation(ls.nlm.binarize(ls.nlm.fbm(250, 250, fract_dim=1.5, seed=s), share))
+                  for s in range(1, 100)]
+    fig, ax = plt.subplots(figsize=(7, 3.2))
+    bins = np.linspace(min(random_ai + fractal_ai + [observed]) - 1, max(random_ai + fractal_ai + [observed]) + 1, 60)
+    ax.hist(random_ai, bins=bins, color="#94a3b8", label="99 random landscapes")
+    ax.hist(fractal_ai, bins=bins, color="#0d9488", alpha=0.8, label="99 fractal landscapes (fbm, 1.5)")
+    ax.axvline(observed, color="#b91c1c", lw=2, label="example forest")
+    ax.set_xlabel("aggregation index of the habitat (ai, %)")
+    ax.set_ylabel("landscapes")
+    ax.legend(frameon=False)
+    save(fig, "nlm_null")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:

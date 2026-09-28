@@ -298,4 +298,6 @@ ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 | [`ls.random_rectangular_cluster`](nlm.md#landschaft.nlm.random_rectangular_cluster) | Random rectangular clusters (NLMR's ``nlm_randomrectangularcluster``, Gaucherel 2008) |
 | [`ls.curds`](nlm.md#landschaft.nlm.curds) | Hierarchical curdling (NLMR's ``nlm_curds``, Keitt 2000) |
 | [`ls.classify`](nlm.md#landschaft.nlm.classify) | Classify a continuous landscape into categories (NLMR's ``landscape_classify``) |
+| [`ls.binarize`](nlm.md#landschaft.nlm.binarize) | Habitat / matrix maps at given habitat shares (landscapetools' ``util_binarize``) |
 | [`ls.rescale`](nlm.md#landschaft.nlm.rescale) | Linearly rescale values to 0-1 (NLMR's ``util_rescale``) |
+| [`ls.merge`](nlm.md#landschaft.nlm.merge) | Merge neutral landscapes (landscapetools' ``util_merge``) |

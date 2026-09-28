@@ -439,7 +439,12 @@ Fases:
    25–70× o NLMR). Resta: portar a triangulação incremental do GEOS para não depender do
    shapely;
 7. opcionais: `blend`/`merge` do antigo landscapetools, modelos do NLMpy, gerador paralelo
-   rápido (`rng="fast"`, diferente do R) para rasters enormes.
+   rápido (`rng="fast"`, diferente do R) para rasters enormes. **Feita em parte** (0.60.0:
+   `merge` e `binarize` do landscapetools (sem referência em R: o pacote saiu do CRAN), o
+   tutorial *Neutral landscapes* com um teste de modelo nulo). Ficam de fora: o gerador
+   paralelo (o gerador serial não é o gargalo: `random` 2000² leva 44 ms) e os modelos do
+   NLMpy (outra referência, com o gerador do numpy); portar a triangulação do GEOS para
+   o `mosaictess`/`mosaicgibbs` dispensarem o shapely.
 
 ## Observações para os testes
 

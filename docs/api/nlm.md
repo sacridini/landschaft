@@ -3,7 +3,8 @@
 Simulated landscapes that follow a known rule (complete randomness, a
 gradient, clustering, fractal roughness) and nothing else: the null models of
 landscape ecology, to test whether a pattern or a process differs from what
-chance alone would give. They live in the `ls.nlm` module.
+chance alone would give. They live in the `ls.nlm` module. Tutorial:
+[neutral landscapes](../tutorials/neutral-landscapes.md).
 
 With the same `seed` every model gives the same landscape as the R package
 NLMR, value for value: the random number generators of R and of the C++
@@ -68,4 +69,8 @@ habitat = ls.nlm.classify(r, weighting=[0.7, 0.3])
 
 ::: landschaft.nlm.classify
 
+::: landschaft.nlm.binarize
+
 ::: landschaft.nlm.rescale
+
+::: landschaft.nlm.merge

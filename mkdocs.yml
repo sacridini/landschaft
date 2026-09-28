@@ -159,6 +159,7 @@ nav:
       - Distance & restoration: tutorials/distance-restoration.md
       - Change detection: tutorials/change-detection.md
       - Large data & batch: tutorials/large-data.md
+      - Neutral landscapes: tutorials/neutral-landscapes.md
   - API reference:
       - api/index.md
       - Data & configuration: api/data.md
