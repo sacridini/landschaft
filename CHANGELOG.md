@@ -6,6 +6,13 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.70.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis: swap randomisations `rand_independent_swaps`,
+  `rand_independent_swaps_modified` and `rand_curveball` (options `swap_count`,
+  `max_swap_attempts`, `stop_on_all_swapped`, `use_max_swap`), identical to Biodiverse.
+
 ## [0.69.0] - 2026-09-28
 
 ### Added
