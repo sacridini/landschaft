@@ -112,7 +112,7 @@ floating-point solvers. Typical speed-ups on the benchmark cases:
 | Landscape metrics | landscapemetrics 2.2.2 | identical bits | 35–500× |
 | Habitat networks | Makurhini, Conefor | to 1e-12 | 13–620× |
 | Omniscape, Circuitscape | Omniscape 0.7, Circuitscape 6.1 | to 2e-11 | 3–45× |
-| Neutral landscape models | NLMR 1.4 (same seed) | identical bits | 2–110× |
+| Neutral landscape models | NLMR 1.4 (same seed) | identical bits | 2–6000× |
 
 Methods, machines, full tables and the known differences are on the
 [benchmarks and accuracy page](docs/benchmarks.md). To run the tests:

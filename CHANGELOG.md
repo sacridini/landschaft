@@ -6,6 +6,16 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.56.0] - 2026-09-28
+
+### Added
+- Neutral landscape models, third part: `ls.nlm.random_cluster` (Saura and
+  Martínez-Millán's random clusters) and `ls.nlm.curds` (hierarchical curdling, with
+  or without wheying), identical bit for bit to NLMR with the same seed; clusters are
+  numbered as `terra::patches` does and the gaps filled in NLMR's order, with the
+  neighbour counts in parallel. `nlm_randomcluster` 200 × 200 takes 19 s in NLMR and
+  3 ms here; `curds` is 5 to 10 times faster.
+
 ## [0.55.0] - 2026-09-28
 
 ### Added
