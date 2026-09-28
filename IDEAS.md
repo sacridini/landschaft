@@ -607,7 +607,20 @@ Fases:
    19 s → 4 s em 90 mil grupos com todos os cálculos; o custo restante é o volume das
    listas, ~180 milhões de entradas);
 4. filogenéticos: PD, família PE, clade contributions/loss, AED, PD local, turnover
-   filogenético;
+   filogenético. **Feita** (0.65.0): 33 cálculos com `tree=` (`src/cpp/bio/phylo.cpp`:
+   árvore em arrays na ordem dos nomes, alcance dos nós na árvore podada por marcação dos
+   caminhos grupo a grupo, PE por grupo calculado uma vez, ES/ED/AED globais; por vizinhança,
+   uniões de caminhos com marcas e a sub-árvore de `get_sub_tree_as_hash` com os filhos na
+   ordem de inserção). 7 análises iguais bit a bit ao Biodiverse, também com poda e com
+   rótulos fora da árvore. Descobertas: o `trim` do Biodiverse só poda (termina com a remoção
+   dos nós `___` sem descendente nomeado, e só se algo foi removido antes); o PE_WE_P usa o
+   comprimento da árvore podada e o PD_P o da árvore inteira; `_calc_abc_any` repassa o
+   primeiro ABC calculado na ordem dos pré-cálculos (presença, grupos ou amostras), o que
+   muda os valores de `PHYLO_LABELS_NOT_ON_TREE`: a ordem é reproduzida em Python a partir
+   das dependências extraídas do Biodiverse (`bio/data/biodiverse_dependencies.json`); as
+   contribuições de clado truncam em 1e-11 (`int(1e11 x) / 1e11`), por isso o Biodiverse
+   sem o overlay varia nesse dígito. PD e PE em 90 mil grupos (árvore de 500 pontas): 0,5 s.
+   O RWiBaLD depende da árvore de ramos equalizados e fica na fase 5;
 5. filogenéticos relativos (RPD/RPE, árvores aparadas), PhyloCom (MPD/MNTD, NRI/NTI, valores
    esperados, VPD), RWiBaLD, CWE/CWR;
 6. propriedades de rótulos e grupos (estatísticas, quantis, Gi*), rótulos numéricos, índices

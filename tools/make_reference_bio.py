@@ -3,7 +3,7 @@
 
 Usage::
 
-    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors] [neighbours] [spatial]
+    python tools/make_reference_bio.py [data] [basedata] [trees] [matrices] [rasters] [vectors] [neighbours] [spatial] [phylo]
 
 ``data`` writes the synthetic inputs of ``tests/bio_cases.py`` into
 ``tests/data/bio``; the other parts run Biodiverse (Perl) through
@@ -143,6 +143,19 @@ def make_spatial(unsorted: bool) -> None:
     save("spatial", out)
 
 
+def make_phylo(unsorted: bool) -> None:
+    out = {}
+    for name, case in bio_cases.PHYLO_CASES.items():
+        bdcase = bio_cases.BASEDATA_CASES[case["basedata"]]
+        spec = dict(bdcase["biodiverse"])
+        spec["file"] = _path(spec["file"])
+        task = {"type": "spatial", "name": name, "spatial_conditions": case["conditions"],
+                "calculations": bio_cases.phylo_calcs(case)}
+        print(name)
+        out[name] = run({"basedata": spec, "tree": {"file": _path(case["tree"])}, "tasks": [task]}, unsorted)[name]
+    save("phylo", out)
+
+
 def make_trees(unsorted: bool) -> None:
     out = {"files": {}, "newick": {}}
     for f in bio_cases.TREE_FILES:
@@ -165,12 +178,13 @@ def make_matrices(unsorted: bool) -> None:
 
 def main(argv: list[str]) -> None:
     unsorted = "--unsorted" in argv
-    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours", "spatial"]
+    parts = [a for a in argv if not a.startswith("--")] or ["basedata", "trees", "matrices", "rasters", "vectors", "neighbours", "spatial", "phylo"]
     if "data" in parts:
         bio_cases.write_synthetic_data()
         bio_cases.write_rasters()
         bio_cases.write_points()
         bio_cases.write_site_polygons()
+        bio_cases.write_trees()
         print("wrote synthetic inputs")
     if not bio_harness.available():
         sys.exit("Biodiverse/Strawberry Perl not found (see tools/bio_harness.py)")
@@ -188,6 +202,8 @@ def main(argv: list[str]) -> None:
         make_neighbours(unsorted)
     if "spatial" in parts:
         make_spatial(unsorted)
+    if "phylo" in parts:
+        make_phylo(unsorted)
 
 
 if __name__ == "__main__":

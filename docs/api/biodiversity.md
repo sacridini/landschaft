@@ -68,7 +68,12 @@ hierarchical), rarity, taxonomic turnover (Sorenson, Jaccard, Bray-Curtis,
 Kulczynski, S2, beta diversity, nestedness, range-weighted turnover),
 Simpson and Shannon diversity, Rao's quadratic entropy, richness estimators
 (Chao1, Chao2, ACE, ICE, Hurlbert's rarefaction) and label and sample count
-summaries. Values are identical to Biodiverse's.
+summaries. With a tree (`tree=`): phylogenetic diversity (PD, local PD,
+terminal lists), phylogenetic endemism (PE, central, single, lists, PD
+endemism, corrected weighted endemism), clade contributions and losses,
+evolutionary distinctiveness (ES, ED, AED, AED-T, corrected weighted rarity),
+phylogenetic abundance and phylogenetic turnover (Sorenson, Jaccard, S2,
+range-weighted). Values are identical to Biodiverse's.
 
 ::: landschaft.bio.spatial_analysis
 

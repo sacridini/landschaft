@@ -50,6 +50,7 @@ foreach my $task (@{$job->{tasks} // []}) {
       : $type eq 'indices'  ? run_indices($bd, $tree, $matrix, $task)
       : $type eq 'spatial'  ? run_spatial($bd, $tree, $matrix, $task)
       : $type eq 'neighbours' ? run_neighbours($bd, $task)
+      : $type eq 'metadata' ? dump_metadata($bd)
       : croak "unknown task type $type";
     $output{$name} = $result;
 }
@@ -261,6 +262,29 @@ sub run_neighbours {
     }
     $bd->delete_output(output => $sp);
     return \%results;
+}
+
+#  Dependencies of every calculation (public and internal).
+sub dump_metadata {
+    my ($bd) = @_;
+    my $indices = Biodiverse::Indices->new(BASEDATA_REF => $bd);
+    my %subs = $indices->get_subs_with_prefix(prefix => 'get_metadata_');
+    my %out;
+    foreach my $meta_sub (sort keys %subs) {
+        my $name = $meta_sub =~ s/^get_metadata_//r;
+        next if $name !~ /^(?:_?calc_|get_|_get_|set_|is_)/;
+        my $md = eval { $indices->get_metadata(sub => $name) };
+        next if !$md;
+        my %h;
+        foreach my $type (qw/pre_calc pre_calc_global post_calc post_calc_global/) {
+            my $deps = eval { $md->get_dep_list($type) };
+            next if !defined $deps;
+            $h{$type} = ref $deps ? [@$deps] : [$deps];
+        }
+        $h{uses_nbr_lists} = eval { $md->get_uses_nbr_lists };
+        $out{$name} = \%h;
+    }
+    return \%out;
 }
 
 #  JSON with 17 significant digits for numbers and sorted keys.

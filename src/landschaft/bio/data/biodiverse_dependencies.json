@@ -1,0 +1,1234 @@
+{
+"_calc_abc_any": {
+"uses_nbr_lists": 1
+},
+"_calc_abc_scalars": {
+"uses_nbr_lists": 1
+},
+"_calc_endemism_absolute": {
+"pre_calc": [
+"calc_abc2"
+],
+"pre_calc_global": [
+"get_label_range_hash"
+],
+"uses_nbr_lists": 1
+},
+"_calc_endemism_central": {
+"pre_calc": [
+"calc_abc2"
+],
+"pre_calc_global": [
+"get_label_range_hash"
+],
+"uses_nbr_lists": 1
+},
+"_calc_endemism_whole": {
+"pre_calc": [
+"calc_abc2"
+],
+"pre_calc_global": [
+"get_label_range_hash"
+],
+"uses_nbr_lists": 1
+},
+"_calc_nri_nti_expected_values": {
+"pre_calc": [
+"calc_labels_on_tree"
+],
+"pre_calc_global": [
+"get_phylo_mpd_mntd_cum_path_length_cache",
+"get_phylo_mpd_mntd_matrix",
+"get_phylo_LCA_matrix",
+"get_prng_object",
+"get_phylo_nri_nti_cache"
+],
+"uses_nbr_lists": 1
+},
+"_calc_pd": {
+"pre_calc": [
+"calc_labels_on_tree"
+],
+"pre_calc_global": [
+"get_path_length_cache",
+"set_path_length_cache_by_group_flag"
+],
+"uses_nbr_lists": 1
+},
+"_calc_pe": {
+"pre_calc": [
+"calc_abc"
+],
+"pre_calc_global": [
+"get_node_range_hash",
+"get_trimmed_tree",
+"get_pe_element_cache",
+"get_path_length_cache",
+"set_path_length_cache_by_group_flag",
+"get_inverse_range_weighted_path_lengths"
+],
+"uses_nbr_lists": 1
+},
+"_calc_pe_lists": {
+"pre_calc": [
+"_calc_abc_any",
+"_calc_pe"
+],
+"pre_calc_global": [
+"get_node_range_hash",
+"get_trimmed_tree",
+"get_pe_element_cache",
+"get_path_length_cache",
+"set_path_length_cache_by_group_flag",
+"get_inverse_range_weighted_path_lengths"
+],
+"uses_nbr_lists": 1
+},
+"_calc_pe_lists_per_element_set": {
+"pre_calc": [],
+"pre_calc_global": [
+"get_node_range_hash",
+"get_trimmed_tree",
+"get_pe_element_cache",
+"get_path_length_cache",
+"set_path_length_cache_by_group_flag",
+"get_inverse_range_weighted_path_lengths"
+],
+"uses_nbr_lists": 1
+},
+"_calc_phylo_abc_lists": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"pre_calc_global": [
+"get_trimmed_tree",
+"get_path_length_cache",
+"set_path_length_cache_by_group_flag"
+],
+"uses_nbr_lists": 1
+},
+"_calc_phylo_aed_t": {
+"pre_calc": [
+"calc_abc3",
+"calc_phylo_aed"
+],
+"uses_nbr_lists": 1
+},
+"_calc_rarity_central": {
+"pre_calc": [
+"calc_abc3"
+],
+"pre_calc_global": [
+"get_label_abundance_hash"
+],
+"uses_nbr_lists": 1
+},
+"_calc_rarity_whole": {
+"pre_calc": [
+"calc_abc3"
+],
+"pre_calc_global": [
+"get_label_abundance_hash"
+],
+"uses_nbr_lists": 1
+},
+"_get_gpprop_global_summary_stats": {
+"uses_nbr_lists": 1
+},
+"_get_lbprop_global_summary_stats": {
+"uses_nbr_lists": 1
+},
+"_get_lbprop_global_summary_stats_range_weighted": {
+"uses_nbr_lists": 1
+},
+"_get_num_label_global_summary_stats": {
+"uses_nbr_lists": 1
+},
+"calc_abc": {
+"uses_nbr_lists": 1
+},
+"calc_abc2": {
+"uses_nbr_lists": 1
+},
+"calc_abc3": {
+"uses_nbr_lists": 1
+},
+"calc_abc_counts": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"uses_nbr_lists": 2
+},
+"calc_ace": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_beta_diversity": {
+"pre_calc": [
+"_calc_abc_scalars"
+],
+"uses_nbr_lists": 2
+},
+"calc_bray_curtis": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 2
+},
+"calc_bray_curtis_norm_by_gp_counts": {
+"pre_calc": [
+"calc_abc3",
+"calc_elements_used"
+],
+"uses_nbr_lists": 2
+},
+"calc_chao1": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_chao2": {
+"pre_calc": [
+"calc_abc2"
+],
+"uses_nbr_lists": 1
+},
+"calc_compare_dissim_matrix_values": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"uses_nbr_lists": 2
+},
+"calc_count_labels_on_tree": {
+"pre_calc": [
+"calc_labels_on_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_d": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"uses_nbr_lists": 1
+},
+"calc_element_lists_used": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"uses_nbr_lists": 1
+},
+"calc_element_lists_used_as_arrays": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"uses_nbr_lists": 1
+},
+"calc_elements_used": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_absolute": {
+"pre_calc": [
+"_calc_endemism_absolute"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_absolute_lists": {
+"pre_calc": [
+"_calc_endemism_absolute"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_central": {
+"pre_calc": [
+"_calc_endemism_central"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_central_hier_part": {
+"pre_calc": [
+"_calc_endemism_central",
+"calc_abc2"
+],
+"pre_calc_global": [
+"get_basedata_labels_as_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_central_lists": {
+"pre_calc": [
+"_calc_endemism_central"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_central_normalised": {
+"pre_calc": [
+"_calc_endemism_central",
+"calc_elements_used"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_whole": {
+"pre_calc": [
+"_calc_endemism_whole"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_whole_hier_part": {
+"pre_calc": [
+"_calc_endemism_whole",
+"calc_abc2"
+],
+"pre_calc_global": [
+"get_basedata_labels_as_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_whole_lists": {
+"pre_calc": [
+"_calc_endemism_whole"
+],
+"uses_nbr_lists": 1
+},
+"calc_endemism_whole_normalised": {
+"pre_calc": [
+"_calc_endemism_whole",
+"calc_elements_used"
+],
+"uses_nbr_lists": 1
+},
+"calc_gpprop_gistar": {
+"pre_calc": [
+"get_gpp_stats_objects"
+],
+"pre_calc_global": [
+"_get_gpprop_global_summary_stats"
+],
+"uses_nbr_lists": 1
+},
+"calc_gpprop_hashes": {
+"pre_calc": [
+"get_gpp_stats_objects"
+],
+"uses_nbr_lists": 1
+},
+"calc_gpprop_lists": {
+"pre_calc": [
+"get_gpp_stats_objects"
+],
+"uses_nbr_lists": 1
+},
+"calc_gpprop_quantiles": {
+"pre_calc": [
+"get_gpp_stats_objects"
+],
+"uses_nbr_lists": 1
+},
+"calc_gpprop_stats": {
+"pre_calc": [
+"get_gpp_stats_objects"
+],
+"uses_nbr_lists": 1
+},
+"calc_hierarchical_label_ratios": {
+"pre_calc_global": [
+"get_basedatas_by_label_hierarchy"
+],
+"uses_nbr_lists": 2
+},
+"calc_hurlbert_es": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_ice": {
+"pre_calc": [
+"calc_abc2",
+"calc_nonempty_elements_used"
+],
+"uses_nbr_lists": 1
+},
+"calc_jaccard": {
+"pre_calc": [
+"_calc_abc_scalars"
+],
+"uses_nbr_lists": 2
+},
+"calc_kulczynski2": {
+"pre_calc": [
+"_calc_abc_scalars"
+],
+"uses_nbr_lists": 2
+},
+"calc_label_count_quantile_position": {
+"pre_calc": [
+"calc_element_lists_used",
+"_calc_abc_any"
+],
+"uses_nbr_lists": 1
+},
+"calc_labels_not_on_tree": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"pre_calc_global": [
+"get_labels_not_on_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_labels_not_on_trimmed_tree": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"pre_calc_global": [
+"get_labels_not_on_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_labels_on_tree": {
+"pre_calc": [
+"calc_abc"
+],
+"pre_calc_global": [
+"get_labels_not_on_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_labels_on_trimmed_tree": {
+"pre_calc": [
+"calc_abc"
+],
+"pre_calc_global": [
+"get_trimmed_tree",
+"get_labels_not_on_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_last_shared_ancestor_props": {
+"pre_calc": [
+"_calc_abc_any",
+"get_sub_tree_as_hash",
+"get_last_shared_ancestor_from_subtree"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_data": {
+"pre_calc": [
+"get_lbp_stats_objects"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_gistar": {
+"pre_calc": [
+"get_lbp_stats_objects"
+],
+"pre_calc_global": [
+"_get_lbprop_global_summary_stats"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_gistar_abc2": {
+"pre_calc": [
+"get_lbp_stats_objects_abc2"
+],
+"pre_calc_global": [
+"_get_lbprop_global_summary_stats_range_weighted"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_hashes": {
+"pre_calc": [
+"get_lbp_stats_objects"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_hashes_abc2": {
+"pre_calc": [
+"get_lbp_stats_objects_abc2"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_lists": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_quantiles": {
+"pre_calc": [
+"get_lbp_stats_objects"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_quantiles_abc2": {
+"pre_calc": [
+"get_lbp_stats_objects_abc2"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_stats": {
+"pre_calc": [
+"get_lbp_stats_objects"
+],
+"uses_nbr_lists": 1
+},
+"calc_lbprop_stats_abc2": {
+"pre_calc": [
+"get_lbp_stats_objects_abc2"
+],
+"uses_nbr_lists": 1
+},
+"calc_local_range_lists": {
+"pre_calc": [
+"calc_abc2"
+],
+"uses_nbr_lists": 1
+},
+"calc_local_range_stats": {
+"pre_calc": [
+"calc_abc2"
+],
+"uses_nbr_lists": 1
+},
+"calc_local_sample_count_lists": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_local_sample_count_quantiles": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_local_sample_count_stats": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_matrix_stats": {
+"pre_calc": [
+"calc_abc"
+],
+"uses_nbr_lists": 1
+},
+"calc_mx_rao_qe": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_nestedness_resultant": {
+"pre_calc": [
+"_calc_abc_scalars"
+],
+"uses_nbr_lists": 2
+},
+"calc_net_vpd": {
+"pre_calc": [
+"calc_vpd_expected_values",
+"calc_phylo_mpd_mntd1"
+],
+"pre_calc_global": [
+"set_mpd_mntd_sample_variance_flag"
+],
+"uses_nbr_lists": 1
+},
+"calc_nonempty_elements_used": {
+"uses_nbr_lists": 1
+},
+"calc_nri_nti1": {
+"pre_calc": [
+"calc_nri_nti_expected_values",
+"calc_phylo_mpd_mntd1"
+],
+"uses_nbr_lists": 1
+},
+"calc_nri_nti2": {
+"pre_calc": [
+"calc_nri_nti_expected_values",
+"calc_phylo_mpd_mntd2"
+],
+"uses_nbr_lists": 1
+},
+"calc_nri_nti3": {
+"pre_calc": [
+"calc_nri_nti_expected_values",
+"calc_phylo_mpd_mntd3"
+],
+"uses_nbr_lists": 1
+},
+"calc_nri_nti_expected_values": {
+"pre_calc": [
+"_calc_nri_nti_expected_values"
+],
+"uses_nbr_lists": 1
+},
+"calc_num_labels_gistar": {
+"pre_calc": [
+"get_numeric_label_stats_object"
+],
+"pre_calc_global": [
+"_get_num_label_global_summary_stats"
+],
+"uses_nbr_lists": 1
+},
+"calc_numeric_label_data": {
+"pre_calc": [
+"get_numeric_label_stats_object"
+],
+"uses_nbr_lists": 1
+},
+"calc_numeric_label_dissimilarity": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 2
+},
+"calc_numeric_label_other_means": {
+"pre_calc": [
+"get_numeric_label_stats_object"
+],
+"uses_nbr_lists": 1
+},
+"calc_numeric_label_quantiles": {
+"pre_calc": [
+"get_numeric_label_stats_object"
+],
+"uses_nbr_lists": 1
+},
+"calc_numeric_label_stats": {
+"pre_calc": [
+"get_numeric_label_stats_object"
+],
+"uses_nbr_lists": 1
+},
+"calc_pd": {
+"pre_calc": [
+"_calc_pd"
+],
+"uses_nbr_lists": 1
+},
+"calc_pd_clade_contributions": {
+"pre_calc": [
+"calc_pd",
+"calc_pd_node_list",
+"get_sub_tree_as_hash"
+],
+"uses_nbr_lists": 1
+},
+"calc_pd_clade_loss": {
+"pre_calc": [
+"calc_pd_clade_contributions",
+"get_sub_tree_as_hash"
+],
+"uses_nbr_lists": 1
+},
+"calc_pd_clade_loss_ancestral": {
+"pre_calc": [
+"calc_pd_clade_contributions",
+"calc_pd_clade_loss"
+],
+"uses_nbr_lists": 1
+},
+"calc_pd_endemism": {
+"pre_calc": [
+"calc_pe_lists"
+],
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_pd_local": {
+"pre_calc": [
+"calc_pd",
+"get_last_shared_ancestor_from_subtree"
+],
+"uses_nbr_lists": 1
+},
+"calc_pd_node_list": {
+"pre_calc": [
+"_calc_pd"
+],
+"uses_nbr_lists": 1
+},
+"calc_pd_terminal_node_count": {
+"pre_calc": [
+"calc_pd_terminal_node_list"
+],
+"uses_nbr_lists": 1
+},
+"calc_pd_terminal_node_list": {
+"pre_calc": [
+"_calc_pd"
+],
+"uses_nbr_lists": 1
+},
+"calc_pe": {
+"pre_calc": [
+"_calc_pe"
+],
+"uses_nbr_lists": 1
+},
+"calc_pe_central": {
+"pre_calc": [
+"_calc_pe",
+"_calc_pe_lists",
+"_calc_phylo_abc_lists"
+],
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_pe_central_cwe": {
+"pre_calc": [
+"calc_pe_central",
+"calc_pe_central_lists",
+"calc_pd_node_list"
+],
+"uses_nbr_lists": 1
+},
+"calc_pe_central_lists": {
+"pre_calc": [
+"_calc_pe",
+"calc_pe_lists",
+"_calc_phylo_abc_lists"
+],
+"uses_nbr_lists": 1
+},
+"calc_pe_clade_contributions": {
+"pre_calc": [
+"_calc_pe",
+"_calc_pe_lists",
+"get_sub_tree_as_hash"
+],
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_pe_clade_loss": {
+"pre_calc": [
+"calc_pe_clade_contributions",
+"get_sub_tree_as_hash"
+],
+"uses_nbr_lists": 1
+},
+"calc_pe_clade_loss_ancestral": {
+"pre_calc": [
+"calc_pe_clade_contributions",
+"calc_pe_clade_loss"
+],
+"uses_nbr_lists": 1
+},
+"calc_pe_lists": {
+"pre_calc": [
+"_calc_pe_lists"
+],
+"pre_calc_global": [
+"get_node_range_hash"
+],
+"uses_nbr_lists": 1
+},
+"calc_pe_single": {
+"pre_calc": [
+"_calc_pe",
+"calc_pe_lists"
+],
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_abc": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"pre_calc_global": [
+"get_trimmed_tree",
+"get_path_length_cache",
+"set_path_length_cache_by_group_flag"
+],
+"uses_nbr_lists": 2
+},
+"calc_phylo_abundance": {
+"pre_calc": [
+"_calc_pd",
+"calc_abc3",
+"calc_labels_on_tree"
+],
+"pre_calc_global": [
+"get_trimmed_tree",
+"get_global_node_abundance_hash"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_aed": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"pre_calc_global": [
+"get_aed_scores"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_aed_t": {
+"pre_calc": [
+"_calc_phylo_aed_t"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_aed_t_wtlists": {
+"pre_calc": [
+"_calc_phylo_aed_t"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_corrected_weighted_endemism": {
+"pre_calc": [
+"calc_pe",
+"calc_pd"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_corrected_weighted_rarity": {
+"pre_calc": [
+"_calc_phylo_aed_t",
+"calc_pd"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_jaccard": {
+"pre_calc": [
+"calc_phylo_abc"
+],
+"uses_nbr_lists": 2
+},
+"calc_phylo_mpd_mntd1": {
+"pre_calc": [
+"calc_abc",
+"calc_labels_on_tree"
+],
+"pre_calc_global": [
+"get_phylo_mpd_mntd_matrix",
+"get_phylo_mpd_mntd_cum_path_length_cache",
+"get_phylo_LCA_matrix"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_mpd_mntd2": {
+"pre_calc": [
+"calc_abc2",
+"calc_labels_on_tree"
+],
+"pre_calc_global": [
+"get_phylo_mpd_mntd_matrix",
+"get_phylo_mpd_mntd_cum_path_length_cache",
+"get_phylo_LCA_matrix"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_mpd_mntd3": {
+"pre_calc": [
+"calc_abc3",
+"calc_labels_on_tree"
+],
+"pre_calc_global": [
+"get_phylo_mpd_mntd_matrix",
+"get_phylo_mpd_mntd_cum_path_length_cache",
+"get_phylo_LCA_matrix"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_rpd1": {
+"pre_calc": [
+"calc_pd",
+"calc_labels_on_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_rpd2": {
+"pre_calc": [
+"calc_pd",
+"calc_pd_node_list"
+],
+"pre_calc_global": [
+"get_tree_with_equalised_branch_lengths",
+"get_tree_zero_length_branch_count"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_rpe1": {
+"pre_calc": [
+"calc_pe",
+"calc_endemism_whole_lists",
+"calc_labels_on_trimmed_tree"
+],
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_rpe2": {
+"pre_calc": [
+"_calc_pe",
+"calc_elements_used",
+"_calc_abc_any"
+],
+"pre_calc_global": [
+"get_trimmed_tree",
+"get_trimmed_tree_with_equalised_branch_lengths",
+"get_trimmed_tree_eq_branch_lengths_node_length_hash",
+"get_trimmed_tree_range_inverse_hash_nonzero_len",
+"get_pe_element_cache",
+"get_rpe_element_cache",
+"get_node_range_hash"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_rpe_central": {
+"pre_calc": [
+"calc_pe_central",
+"calc_pe_central_lists",
+"calc_elements_used",
+"_calc_abc_any"
+],
+"pre_calc_global": [
+"get_trimmed_tree",
+"get_trimmed_tree_with_equalised_branch_lengths",
+"get_trimmed_tree_eq_branch_lengths_node_length_hash",
+"get_trimmed_tree_range_inverse_hash_nonzero_len",
+"get_pe_element_cache",
+"get_rpe_element_cache"
+],
+"uses_nbr_lists": 1
+},
+"calc_phylo_rw_turnover": {
+"pre_calc": [
+"_calc_pe_lists_per_element_set",
+"_calc_abc_any"
+],
+"pre_calc_global": [
+"get_node_range_hash"
+],
+"uses_nbr_lists": 2
+},
+"calc_phylo_s2": {
+"pre_calc": [
+"calc_phylo_abc"
+],
+"uses_nbr_lists": 2
+},
+"calc_phylo_sorenson": {
+"pre_calc": [
+"calc_phylo_abc"
+],
+"uses_nbr_lists": 2
+},
+"calc_rarity_central": {
+"pre_calc": [
+"_calc_rarity_central"
+],
+"uses_nbr_lists": 1
+},
+"calc_rarity_central_lists": {
+"pre_calc": [
+"_calc_rarity_central"
+],
+"uses_nbr_lists": 1
+},
+"calc_rarity_whole": {
+"pre_calc": [
+"_calc_rarity_whole"
+],
+"uses_nbr_lists": 1
+},
+"calc_rarity_whole_lists": {
+"pre_calc": [
+"_calc_rarity_whole"
+],
+"uses_nbr_lists": 1
+},
+"calc_redundancy": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_richness": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"uses_nbr_lists": 1
+},
+"calc_rw_turnover": {
+"pre_calc": [
+"calc_endemism_whole_lists",
+"calc_abc2"
+],
+"uses_nbr_lists": 2
+},
+"calc_rwibald": {
+"pre_calc": [
+"calc_pd_node_list"
+],
+"pre_calc_global": [
+"get_rwibald_global_lists"
+],
+"uses_nbr_lists": 1
+},
+"calc_s2": {
+"pre_calc": [
+"_calc_abc_scalars"
+],
+"uses_nbr_lists": 2
+},
+"calc_simpson_shannon": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_sorenson": {
+"pre_calc": [
+"_calc_abc_scalars"
+],
+"uses_nbr_lists": 2
+},
+"calc_tx_rao_qe": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"calc_vpd_expected_values": {
+"pre_calc": [
+"_calc_nri_nti_expected_values"
+],
+"pre_calc_global": [
+"set_mpd_mntd_sample_variance_flag"
+],
+"uses_nbr_lists": 1
+},
+"get_aed_scores": {
+"pre_calc": [
+"calc_abc"
+],
+"pre_calc_global": [
+"get_trimmed_tree",
+"get_global_node_abundance_hash",
+"get_global_node_terminal_count_cache"
+],
+"uses_nbr_lists": 1
+},
+"get_basedata_labels_as_tree": {
+"uses_nbr_lists": 1
+},
+"get_basedatas_by_label_hierarchy": {
+"uses_nbr_lists": 1
+},
+"get_global_node_abundance_hash": {
+"pre_calc_global": [
+"get_trimmed_tree",
+"get_node_abundance_global_cache"
+],
+"uses_nbr_lists": 1
+},
+"get_global_node_terminal_count_cache": {
+"pre_calc_global": [],
+"uses_nbr_lists": 1
+},
+"get_gpp_stats_objects": {
+"pre_calc": [
+"calc_element_lists_used"
+],
+"uses_nbr_lists": 1
+},
+"get_inverse_range_weighted_path_lengths": {
+"pre_calc_global": [
+"get_node_range_hash"
+],
+"uses_nbr_lists": 1
+},
+"get_label_abundance_hash": {
+"uses_nbr_lists": 1
+},
+"get_label_range_hash": {
+"uses_nbr_lists": 1
+},
+"get_labels_not_on_tree": {
+"uses_nbr_lists": 1
+},
+"get_labels_not_on_trimmed_tree": {
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"get_last_shared_ancestor_from_subtree": {
+"pre_calc": [
+"get_sub_tree_as_hash"
+],
+"uses_nbr_lists": 1
+},
+"get_lbp_stats_objects": {
+"pre_calc": [
+"calc_abc"
+],
+"uses_nbr_lists": 1
+},
+"get_lbp_stats_objects_abc2": {
+"pre_calc": [
+"calc_abc2"
+],
+"uses_nbr_lists": 1
+},
+"get_node_abundance_global_cache": {
+"uses_nbr_lists": 1
+},
+"get_node_range_hash": {
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"get_node_range_hash_as_lists": {
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"get_numeric_label_stats_object": {
+"pre_calc": [
+"calc_abc3"
+],
+"uses_nbr_lists": 1
+},
+"get_path_length_cache": {
+"uses_nbr_lists": 1
+},
+"get_path_lengths_to_root_node": {
+"pre_calc_global": [
+"get_path_length_cache"
+],
+"uses_nbr_lists": 1
+},
+"get_pe_element_cache": {
+"uses_nbr_lists": 1
+},
+"get_phylo_LCA_matrix": {
+"uses_nbr_lists": 1
+},
+"get_phylo_mpd_mntd_cum_path_length_cache": {
+"uses_nbr_lists": 1
+},
+"get_phylo_mpd_mntd_matrix": {
+"uses_nbr_lists": 1
+},
+"get_phylo_nri_nti_cache": {
+"uses_nbr_lists": 1
+},
+"get_prng_object": {
+"uses_nbr_lists": 1
+},
+"get_rpe_element_cache": {
+"uses_nbr_lists": 1
+},
+"get_rwibald_global_lists": {
+"pre_calc_global": [
+"get_node_range_hash",
+"get_trimmed_tree",
+"get_trimmed_tree_eq_branch_lengths_node_length_hash"
+],
+"uses_nbr_lists": 1
+},
+"get_sub_tree": {
+"pre_calc": [
+"calc_labels_on_tree"
+],
+"uses_nbr_lists": 1
+},
+"get_sub_tree_as_hash": {
+"pre_calc": [
+"calc_labels_on_tree"
+],
+"uses_nbr_lists": 1
+},
+"get_tree_node_length_hash": {
+"uses_nbr_lists": 1
+},
+"get_tree_with_equalised_branch_lengths": {
+"uses_nbr_lists": 1
+},
+"get_tree_zero_length_branch_count": {
+"uses_nbr_lists": 1
+},
+"get_trimmed_tree": {
+"uses_nbr_lists": 1
+},
+"get_trimmed_tree_as_matrix": {
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"get_trimmed_tree_child_name_hash": {
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"get_trimmed_tree_eq_branch_lengths_node_length_hash": {
+"pre_calc_global": [
+"get_trimmed_tree_with_equalised_branch_lengths"
+],
+"uses_nbr_lists": 1
+},
+"get_trimmed_tree_parent_name_hash": {
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"get_trimmed_tree_range_inverse_hash": {
+"pre_calc_global": [
+"get_node_range_hash"
+],
+"uses_nbr_lists": 1
+},
+"get_trimmed_tree_range_inverse_hash_nonzero_len": {
+"pre_calc_global": [
+"get_node_range_hash",
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"get_trimmed_tree_with_equalised_branch_lengths": {
+"pre_calc_global": [
+"get_trimmed_tree"
+],
+"uses_nbr_lists": 1
+},
+"is_dissimilarity_valid": {
+"pre_calc": [
+"_calc_abc_any"
+],
+"uses_nbr_lists": 1
+},
+"set_mpd_mntd_sample_variance_flag": {
+"uses_nbr_lists": 1
+},
+"set_path_length_cache_by_group_flag": {
+"uses_nbr_lists": 1
+}
+}

@@ -114,10 +114,31 @@ bio::BaseDataView basedata_from(const py::dict& d) {
     b.counts = to_vector<double>(d["counts"]);
     b.label_range = to_vector<double>(d["label_range"]);
     b.label_abundance = to_vector<double>(d["label_abundance"]);
+    b.label_sample_count = to_vector<double>(d["label_sample_count"]);
+    b.abc_any_variant = d["abc_any_variant"].cast<i32>();
     b.n_label_levels = d["n_label_levels"].cast<i32>();
     b.label_prefix = to_vector<i32>(d["label_prefix"]);
     b.prefix_names = d["prefix_names"].cast<std::vector<std::string>>();
     return b;
+}
+
+bio::TreeView tree_from(const py::dict& d) {
+    bio::TreeView t;
+    t.n = d["n"].cast<i32>();
+    t.parent = to_vector<i32>(d["parent"]);
+    t.length = to_vector<double>(d["length"]);
+    t.child_ptr = to_vector<i64>(d["child_ptr"]);
+    t.child_idx = to_vector<i32>(d["child_idx"]);
+    t.depth = to_vector<i32>(d["depth"]);
+    t.terminal = to_vector<std::uint8_t>(d["terminal"]);
+    t.in_trimmed = to_vector<std::uint8_t>(d["in_trimmed"]);
+    t.trimmed_child_count = to_vector<i32>(d["trimmed_child_count"]);
+    t.total_length = d["total_length"].cast<double>();
+    t.trimmed_total_length = d["trimmed_total_length"].cast<double>();
+    t.root = d["root"].cast<i32>();
+    t.label_node = to_vector<i32>(d["label_node"]);
+    t.node_label = to_vector<i32>(d["node_label"]);
+    return t;
 }
 
 }  // namespace
@@ -167,7 +188,8 @@ void register_python(py::module_& m) {
             for (const CalcInfo& c : calculation_registry()) {
                 py::list lists;
                 for (const auto& l : c.lists) lists.append(py::make_tuple(l.first, static_cast<int>(l.second)));
-                out.append(py::make_tuple(c.name, c.scalars, lists, c.uses_nbr_lists, c.uses_processing_element));
+                out.append(py::make_tuple(c.name, c.scalars, lists, c.uses_nbr_lists, c.uses_processing_element,
+                                          c.uses_tree));
             }
             return out;
         },
@@ -176,8 +198,14 @@ void register_python(py::module_& m) {
     m.def(
         "bio_run_indices",
         [](const py::dict& basedata, const CArray<i32>& procs, const py::tuple& set1, const py::object& set2,
-           const std::vector<std::string>& calcs, bool parallel) {
+           const std::vector<std::string>& calcs, bool parallel, const py::object& tree) {
             const BaseDataView bd = basedata_from(basedata);
+            TreeView tv;
+            const TreeView* tvp = nullptr;
+            if (!tree.is_none()) {
+                tv = tree_from(tree.cast<py::dict>());
+                tvp = &tv;
+            }
             std::vector<i32> pr(procs.data(), procs.data() + procs.size());
             const Csr s1 = csr_from(set1);
             Csr s2;
@@ -189,7 +217,7 @@ void register_python(py::module_& m) {
             IndexResult r;
             {
                 py::gil_scoped_release release;
-                r = run_indices(bd, pr, s1, s2p, calcs, parallel);
+                r = run_indices(bd, pr, s1, s2p, calcs, parallel, tvp);
             }
             py::dict out;
             const auto np = static_cast<py::ssize_t>(pr.size());
@@ -210,7 +238,8 @@ void register_python(py::module_& m) {
             return out;
         },
         py::arg("basedata"), py::arg("procs"), py::arg("set1"), py::arg("set2"), py::arg("calculations"),
-        py::arg("parallel"), "Biodiverse indices of the processing groups over their neighbour sets.");
+        py::arg("parallel"), py::arg("tree") = py::none(),
+        "Biodiverse indices of the processing groups over their neighbour sets.");
     m.def(
         "bio_side_rotation",
         [](const CArray<double>& coords, i32 a0, i32 a1, double angle) {

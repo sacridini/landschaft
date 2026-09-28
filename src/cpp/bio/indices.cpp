@@ -13,6 +13,7 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <memory>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -106,14 +107,19 @@ using K = KeyKind;
 std::vector<CalcInfo> make_registry() {
     std::vector<CalcInfo> r;
     auto add = [&](std::string name, std::vector<std::string> scalars,
-                   std::vector<std::pair<std::string, KeyKind>> lists, i32 nbr, bool proc = false) {
+                   std::vector<std::pair<std::string, KeyKind>> lists, i32 nbr, bool proc = false, bool tree = false) {
         CalcInfo c;
         c.name = std::move(name);
         c.scalars = std::move(scalars);
         c.lists = std::move(lists);
         c.uses_nbr_lists = nbr;
         c.uses_processing_element = proc;
+        c.uses_tree = tree;
         r.push_back(std::move(c));
+    };
+    auto addt = [&](std::string name, std::vector<std::string> scalars,
+                    std::vector<std::pair<std::string, KeyKind>> lists, i32 nbr) {
+        add(std::move(name), std::move(scalars), std::move(lists), nbr, false, true);
     };
     // Lists and counts
     add("calc_richness", {"RICHNESS_ALL", "RICHNESS_SET1", "RICHNESS_SET2"}, {}, 1);
@@ -193,6 +199,52 @@ std::vector<CalcInfo> make_registry() {
         {{"HIER_A", K::Number}, {"HIER_ARAT", K::Number}, {"HIER_ASUM", K::Number}, {"HIER_ASUMRAT", K::Number},
          {"HIER_B", K::Number}, {"HIER_BRAT", K::Number}, {"HIER_C", K::Number}, {"HIER_CRAT", K::Number}},
         2);
+    // Phylogenetic indices
+    addt("calc_count_labels_on_tree", {"PHYLO_LABELS_ON_TREE_COUNT"}, {}, 1);
+    addt("calc_labels_not_on_tree", {"PHYLO_LABELS_NOT_ON_TREE_N", "PHYLO_LABELS_NOT_ON_TREE_P"},
+         {{"PHYLO_LABELS_NOT_ON_TREE", K::Label}}, 1);
+    addt("calc_labels_on_tree", {}, {{"PHYLO_LABELS_ON_TREE", K::Label}}, 1);
+    addt("calc_last_shared_ancestor_props",
+         {"LAST_SHARED_ANCESTOR_DEPTH", "LAST_SHARED_ANCESTOR_DIST_TO_ROOT", "LAST_SHARED_ANCESTOR_DIST_TO_TIP",
+          "LAST_SHARED_ANCESTOR_LENGTH", "LAST_SHARED_ANCESTOR_POS_REL"},
+         {}, 1);
+    addt("calc_pd", {"PD", "PD_P", "PD_P_per_taxon", "PD_per_taxon"}, {}, 1);
+    addt("calc_pd_clade_contributions", {},
+         {{"PD_CLADE_CONTR", K::Node}, {"PD_CLADE_CONTR_P", K::Node}, {"PD_CLADE_SCORE", K::Node}}, 1);
+    addt("calc_pd_clade_loss", {},
+         {{"PD_CLADE_LOSS_CONTR", K::Node}, {"PD_CLADE_LOSS_CONTR_P", K::Node}, {"PD_CLADE_LOSS_SCORE", K::Node}}, 1);
+    addt("calc_pd_clade_loss_ancestral", {}, {{"PD_CLADE_LOSS_ANC", K::Node}, {"PD_CLADE_LOSS_ANC_P", K::Node}}, 1);
+    addt("calc_pd_endemism", {"PD_ENDEMISM", "PD_ENDEMISM_P"}, {{"PD_ENDEMISM_WTS", K::Node}}, 1);
+    addt("calc_pd_local", {"PD_LOCAL", "PD_LOCAL_P"}, {}, 1);
+    addt("calc_pd_node_list", {}, {{"PD_INCLUDED_NODE_LIST", K::Node}}, 1);
+    addt("calc_pd_terminal_node_count", {"PD_INCLUDED_TERMINAL_NODE_COUNT"}, {}, 1);
+    addt("calc_pd_terminal_node_list", {}, {{"PD_INCLUDED_TERMINAL_NODE_LIST", K::Node}}, 1);
+    addt("calc_pe", {"PE_WE", "PE_WE_P"}, {}, 1);
+    addt("calc_pe_central", {"PEC_WE", "PEC_WE_P"}, {}, 1);
+    addt("calc_pe_central_cwe", {"PEC_CWE", "PEC_CWE_PD"}, {}, 1);
+    addt("calc_pe_central_lists", {},
+         {{"PEC_LOCAL_RANGELIST", K::Node}, {"PEC_RANGELIST", K::Node}, {"PEC_WTLIST", K::Node}}, 1);
+    addt("calc_pe_clade_contributions", {},
+         {{"PE_CLADE_CONTR", K::Node}, {"PE_CLADE_CONTR_P", K::Node}, {"PE_CLADE_SCORE", K::Node}}, 1);
+    addt("calc_pe_clade_loss", {},
+         {{"PE_CLADE_LOSS_CONTR", K::Node}, {"PE_CLADE_LOSS_CONTR_P", K::Node}, {"PE_CLADE_LOSS_SCORE", K::Node}}, 1);
+    addt("calc_pe_clade_loss_ancestral", {}, {{"PE_CLADE_LOSS_ANC", K::Node}, {"PE_CLADE_LOSS_ANC_P", K::Node}}, 1);
+    addt("calc_pe_lists", {},
+         {{"PE_LOCAL_RANGELIST", K::Node}, {"PE_RANGELIST", K::Node}, {"PE_WTLIST", K::Node}}, 1);
+    addt("calc_pe_single", {"PE_WE_SINGLE", "PE_WE_SINGLE_P"}, {}, 1);
+    addt("calc_phylo_abc", {"PHYLO_A", "PHYLO_ABC", "PHYLO_B", "PHYLO_C"}, {}, 2);
+    addt("calc_phylo_abundance", {"PHYLO_ABUNDANCE"}, {{"PHYLO_ABUNDANCE_BRANCH_HASH", K::Node}}, 1);
+    addt("calc_phylo_aed", {},
+         {{"PHYLO_AED_LIST", K::Label}, {"PHYLO_ED_LIST", K::Label}, {"PHYLO_ES_LIST", K::Label}}, 1);
+    addt("calc_phylo_aed_t", {"PHYLO_AED_T"}, {}, 1);
+    addt("calc_phylo_aed_t_wtlists", {}, {{"PHYLO_AED_T_WTLIST", K::Label}, {"PHYLO_AED_T_WTLIST_P", K::Label}}, 1);
+    addt("calc_phylo_corrected_weighted_endemism", {"PE_CWE"}, {}, 1);
+    addt("calc_phylo_corrected_weighted_rarity", {"PHYLO_RARITY_CWR"}, {}, 1);
+    addt("calc_phylo_jaccard", {"PHYLO_JACCARD"}, {}, 2);
+    addt("calc_phylo_rw_turnover", {"PHYLO_RW_TURNOVER", "PHYLO_RW_TURNOVER_A", "PHYLO_RW_TURNOVER_B",
+                                    "PHYLO_RW_TURNOVER_C"}, {}, 2);
+    addt("calc_phylo_s2", {"PHYLO_S2"}, {}, 2);
+    addt("calc_phylo_sorenson", {"PHYLO_SORENSON"}, {}, 2);
     return r;
 }
 
@@ -710,6 +762,254 @@ std::vector<double> lgamma_table(i64 n) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// phylogenetic quantities of one neighbourhood, computed on demand
+
+struct PhyloScratch {
+    PathUnion pu;
+    std::vector<std::vector<i32>> st_children;  // sub tree as hash (children in insertion order)
+    std::vector<std::uint8_t> in_st;
+    std::vector<i32> st_nodes;
+    std::vector<double> lr;                     // local ranges (PE)
+    std::vector<i32> lr_touched;
+};
+
+struct PhyloNbhd {
+    const TreeView& t;
+    const PhyloGlobals& g;
+    const BaseDataView& bd;
+    const Abc& abc;
+    PhyloScratch& sc;
+
+    // labels on the tree (label indices, ascending)
+    bool have_lot = false;
+    std::vector<i32> lot;
+    const std::vector<i32>& labels_on_tree() {
+        if (!have_lot) {
+            for (i32 l : abc.lall)
+                if (t.label_node[static_cast<std::size_t>(l)] >= 0) lot.push_back(l);
+            have_lot = true;
+        }
+        return lot;
+    }
+
+    // PD: nodes on the paths of the labels on the tree (ascending) and their length sum
+    bool have_pd = false;
+    std::vector<i32> pd_nodes;
+    double pd = NaN;
+    void pd_union() {
+        if (have_pd) return;
+        sc.pu.reset(t.n);
+        for (i32 l : labels_on_tree()) sc.pu.add_path(t, t.label_node[static_cast<std::size_t>(l)]);
+        pd_nodes = sc.pu.nodes;
+        std::sort(pd_nodes.begin(), pd_nodes.end());
+        bool first = true;
+        for (i32 node : pd_nodes) {
+            const double len = t.length[static_cast<std::size_t>(node)];
+            if (first) {
+                pd = len;
+                first = false;
+            } else {
+                pd += len;
+            }
+        }
+        have_pd = true;
+    }
+
+    // union of the paths of the labels in a label list (keys only), ascending
+    std::vector<i32> path_of(const std::vector<i32>& labels) {
+        sc.pu.reset(t.n);
+        for (i32 l : labels) {
+            const i32 node = t.label_node[static_cast<std::size_t>(l)];
+            if (node >= 0 && t.in_trimmed[static_cast<std::size_t>(node)]) sc.pu.add_path(t, node);
+        }
+        std::vector<i32> out = sc.pu.nodes;
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+
+    // get_sub_tree_as_hash
+    bool have_st = false;
+    void sub_tree() {
+        if (have_st) return;
+        if (sc.in_st.size() != static_cast<std::size_t>(t.n)) {
+            sc.in_st.assign(static_cast<std::size_t>(t.n), 0);
+            sc.st_children.assign(static_cast<std::size_t>(t.n), {});
+        }
+        for (i32 node : sc.st_nodes) {
+            sc.in_st[static_cast<std::size_t>(node)] = 0;
+            sc.st_children[static_cast<std::size_t>(node)].clear();
+        }
+        sc.st_nodes.clear();
+        for (i32 l : labels_on_tree()) {
+            const i32 label = t.label_node[static_cast<std::size_t>(l)];
+            if (t.parent[static_cast<std::size_t>(label)] < 0) continue;  // the root has no parent
+            if (!sc.in_st[static_cast<std::size_t>(label)]) {
+                sc.in_st[static_cast<std::size_t>(label)] = 1;
+                sc.st_nodes.push_back(label);
+            }
+            sc.st_children[static_cast<std::size_t>(label)].clear();  // $subtree{$label} = []
+            i32 node = label;
+            i32 parent = t.parent[static_cast<std::size_t>(label)];
+            while (parent >= 0) {
+                const bool last = sc.in_st[static_cast<std::size_t>(parent)] != 0;
+                if (!last) {
+                    sc.in_st[static_cast<std::size_t>(parent)] = 1;
+                    sc.st_nodes.push_back(parent);
+                }
+                sc.st_children[static_cast<std::size_t>(parent)].push_back(node);
+                if (last) break;
+                node = parent;
+                parent = t.parent[static_cast<std::size_t>(node)];
+            }
+        }
+        std::sort(sc.st_nodes.begin(), sc.st_nodes.end());
+        have_st = true;
+    }
+    const std::vector<i32>& st_kids(i32 node) const { return sc.st_children[static_cast<std::size_t>(node)]; }
+
+    // get_last_shared_ancestor_from_subtree
+    i32 lsa() {
+        sub_tree();
+        i32 current = t.root;
+        if (!sc.st_nodes.empty()) {
+            while (st_kids(current).size() == 1) current = st_kids(current)[0];
+        }
+        return current;
+    }
+
+    // PE over the neighbourhood's groups
+    bool have_pe = false;
+    double pe_we = NaN;
+    std::vector<i32> pe_nodes;       // ascending
+    std::vector<double> pe_lr, pe_wt;
+    void pe_for(const std::vector<i32>& groups, std::vector<i32>& nodes, std::vector<double>& lrs,
+                std::vector<double>& wts, double* we) {
+        if (sc.lr.size() != static_cast<std::size_t>(t.n)) sc.lr.assign(static_cast<std::size_t>(t.n), 0.0);
+        sc.lr_touched.clear();
+        double sum = NaN;
+        for (i32 gi : groups) {
+            const double s = g.gp_score[static_cast<std::size_t>(gi)];
+            if (!std::isnan(s)) sum = num(sum) + s;
+            for (i64 k = g.gp_ptr[static_cast<std::size_t>(gi)]; k < g.gp_ptr[static_cast<std::size_t>(gi) + 1]; ++k) {
+                const i32 node = g.gp_nodes[static_cast<std::size_t>(k)];
+                if (sc.lr[static_cast<std::size_t>(node)] == 0) sc.lr_touched.push_back(node);
+                sc.lr[static_cast<std::size_t>(node)] += 1;
+            }
+        }
+        std::sort(sc.lr_touched.begin(), sc.lr_touched.end());
+        nodes = sc.lr_touched;
+        lrs.clear();
+        wts.clear();
+        for (i32 node : nodes) {
+            const double lr = sc.lr[static_cast<std::size_t>(node)];
+            lrs.push_back(lr);
+            wts.push_back(num(g.rw[static_cast<std::size_t>(node)]) * lr);
+            sc.lr[static_cast<std::size_t>(node)] = 0;
+        }
+        if (we) *we = sum;
+    }
+    void pe() {
+        if (have_pe) return;
+        std::vector<i32> all;
+        std::set_union(abc.g1.begin(), abc.g1.end(), abc.g2.begin(), abc.g2.end(), std::back_inserter(all));
+        pe_for(all, pe_nodes, pe_lr, pe_wt, &pe_we);
+        have_pe = true;
+    }
+    double pe_we_p() {
+        pe();
+        return t.trimmed_total_length == 0 ? NaN : num(pe_we) / t.trimmed_total_length;
+    }
+    double wt_of(i32 node) {
+        pe();
+        auto it = std::lower_bound(pe_nodes.begin(), pe_nodes.end(), node);
+        return (it != pe_nodes.end() && *it == node) ? pe_wt[static_cast<std::size_t>(it - pe_nodes.begin())] : NaN;
+    }
+
+    // _calc_phylo_abc_lists: nodes (lengths) only in set 1, both, only in set 2
+    bool have_abcl = false;
+    std::vector<i32> a_list, b_list, c_list;
+    void abc_lists() {
+        if (have_abcl) return;
+        const std::vector<i32> p1 = path_of(abc.l1);
+        if (abc.C == 0) {
+            b_list = p1;
+        } else {
+            const std::vector<i32> p2 = path_of(abc.l2);
+            std::set_intersection(p1.begin(), p1.end(), p2.begin(), p2.end(), std::back_inserter(a_list));
+            std::set_difference(p1.begin(), p1.end(), p2.begin(), p2.end(), std::back_inserter(b_list));
+            std::set_difference(p2.begin(), p2.end(), p1.begin(), p1.end(), std::back_inserter(c_list));
+        }
+        have_abcl = true;
+    }
+
+    // clade contributions of a weight list (nodes of the sub tree)
+    struct Clade {
+        std::vector<i32> nodes;  // ascending
+        std::vector<double> score, contr, contr_p;
+    };
+    Clade clade(const std::function<double(i32)>& weight, double p_score, double total) {
+        sub_tree();
+        Clade c;
+        c.nodes = sc.st_nodes;
+        const std::size_t m = c.nodes.size();
+        c.score.assign(m, NaN);
+        c.contr.assign(m, NaN);
+        c.contr_p.assign(m, NaN);
+        // by depth, deepest first; names in order within each depth
+        std::vector<std::size_t> order(m);
+        for (std::size_t i = 0; i < m; ++i) order[i] = i;
+        std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+            return t.depth[static_cast<std::size_t>(c.nodes[a])] > t.depth[static_cast<std::size_t>(c.nodes[b])];
+        });
+        auto pos = [&](i32 node) {
+            return static_cast<std::size_t>(std::lower_bound(c.nodes.begin(), c.nodes.end(), node) - c.nodes.begin());
+        };
+        for (std::size_t oi : order) {
+            const i32 node = c.nodes[oi];
+            double wt = weight(node);
+            for (i32 kid : st_kids(node)) wt = num(wt) + num(c.score[pos(kid)]);
+            c.contr[oi] = truthy(p_score) ? std::trunc(1e11 * num(wt) / p_score) / 1e11 : NaN;
+            c.contr_p[oi] = truthy(total) ? std::trunc(1e11 * num(wt) / total) / 1e11 : NaN;
+            c.score[oi] = wt;
+        }
+        return c;
+    }
+    // _calc_pd_pe_clade_loss
+    struct Loss {
+        std::vector<double> score, contr, contr_p;
+    };
+    Loss clade_loss(const Clade& c) {
+        const std::size_t m = c.nodes.size();
+        Loss L;
+        L.score.assign(m, NaN);
+        L.contr.assign(m, NaN);
+        L.contr_p.assign(m, NaN);
+        std::vector<std::uint8_t> done(m, 0);
+        auto pos = [&](i32 node) {
+            return static_cast<std::size_t>(std::lower_bound(c.nodes.begin(), c.nodes.end(), node) - c.nodes.begin());
+        };
+        for (std::size_t i = 0; i < m; ++i) {
+            if (done[i]) continue;
+            std::vector<std::size_t> anc{i};
+            i32 parent = t.parent[static_cast<std::size_t>(c.nodes[i])];
+            while (parent >= 0) {
+                if (st_kids(parent).size() > 1) break;
+                anc.push_back(pos(parent));
+                parent = t.parent[static_cast<std::size_t>(parent)];
+            }
+            const std::size_t last = anc.back();
+            for (std::size_t a : anc) {
+                L.contr[a] = c.contr[last];
+                L.score[a] = c.score[last];
+                L.contr_p[a] = c.contr_p[last];
+                done[a] = 1;
+            }
+        }
+        return L;
+    }
+};
+
+// ---------------------------------------------------------------------------------------------
 
 struct Engine {
     const BaseDataView& bd;
@@ -738,7 +1038,7 @@ const std::vector<CalcInfo>& calculation_registry() {
 }
 
 IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, const Csr& set1, const Csr* set2,
-                        const std::vector<std::string>& calcs, bool parallel) {
+                        const std::vector<std::string>& calcs, bool parallel, const TreeView* tree) {
     const auto& reg = calculation_registry();
     IndexResult res;
     std::vector<i32> ids;
@@ -806,12 +1106,33 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
     const double n_labels = static_cast<double>(bd.n_labels);
     const bool have_set2 = set2 != nullptr;
 
+    // phylogenetic globals
+    PhyloGlobals pg;
+    {
+        bool need_tree = false, need_pe = false, need_aed = false;
+        for (i32 id : ids) {
+            const CalcInfo& ci = reg[static_cast<std::size_t>(id)];
+            if (!ci.uses_tree) continue;
+            need_tree = true;
+            const std::string& nm = ci.name;
+            if (nm.find("pe") != std::string::npos || nm == "calc_pd_endemism" || nm == "calc_phylo_rw_turnover" ||
+                nm == "calc_phylo_corrected_weighted_endemism")
+                need_pe = true;
+            if (nm.find("aed") != std::string::npos || nm == "calc_phylo_corrected_weighted_rarity") need_aed = true;
+        }
+        if (need_tree) {
+            if (!tree) throw std::invalid_argument("these calculations need a tree");
+            build_phylo_globals(bd, *tree, pg, need_pe, need_aed, parallel);
+        }
+    }
+
     std::string error;
     bool failed = false;
     lsm::parallel_for_dynamic(parallel && np > 1, np, [&](i64 r) {
         if (failed) return;
         try {
             thread_local Abc abc;
+            thread_local PhyloScratch phylo_scratch;
             if (abc.in1.size() != static_cast<std::size_t>(bd.n_labels)) abc.init(bd.n_labels);
             abc.clear();
             abc.g1.assign(set1.indices.begin() + set1.indptr[r], set1.indices.begin() + set1.indptr[r + 1]);
@@ -864,6 +1185,16 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
                     have_rarec = true;
                 }
                 return rarec;
+            };
+            // phylogenetic pieces, built on first use
+            std::unique_ptr<PhyloNbhd> ph;
+            auto P = [&]() -> PhyloNbhd& {
+                if (!ph) ph.reset(new PhyloNbhd{*tree, pg, bd, abc, phylo_scratch});
+                return *ph;
+            };
+            auto abc_any_value = [&](i32 l) {
+                return bd.abc_any_variant == 3 ? abc.all_samples(l)
+                                               : (bd.abc_any_variant == 2 ? abc.all_count(l) : 1.0);
             };
             auto nonempty = [&](const std::vector<i32>& gs) {
                 double n = 0;
@@ -1266,6 +1597,360 @@ IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, c
                             put(static_cast<std::size_t>(2 * levels + i), key, expected);
                             put(static_cast<std::size_t>(3 * levels + i), key, expected - obs[i][kv.first]);
                         }
+                    }
+                } else if (name == "calc_labels_on_tree") {
+                    for (i32 l : P().labels_on_tree()) put(0, l, 1);
+                } else if (name == "calc_count_labels_on_tree") {
+                    set(0, static_cast<double>(P().labels_on_tree().size()));
+                } else if (name == "calc_labels_not_on_tree") {
+                    bool any_off = false;
+                    for (std::size_t l = 0; l < static_cast<std::size_t>(bd.n_labels); ++l)
+                        if (tree->label_node[l] < 0) {
+                            any_off = true;
+                            break;
+                        }
+                    if (!any_off) {
+                        set(0, 0);
+                        set(1, 0);
+                    } else {
+                        double off = 0;
+                        for (i32 l : abc.lall)
+                            if (tree->label_node[static_cast<std::size_t>(l)] < 0) {
+                                off += 1;
+                                put(0, l, abc_any_value(l));
+                            }
+                        const double q = safe_div(off, static_cast<double>(abc.lall.size()));
+                        set(0, off);
+                        set(1, truthy(q) ? q : 0.0);
+                    }
+                } else if (name == "calc_pd" || name == "calc_phylo_corrected_weighted_endemism" ||
+                           name == "calc_phylo_corrected_weighted_rarity") {
+                    PhyloNbhd& p = P();
+                    p.pd_union();
+                    const double pd = p.pd;
+                    if (name == "calc_pd") {
+                        const double pdp = truthy(pd) ? pd / tree->total_length : NaN;
+                        const double rich = static_cast<double>(p.labels_on_tree().size());
+                        set(0, pd);
+                        set(1, pdp);
+                        set(2, safe_div(pdp, rich));
+                        set(3, safe_div(pd, rich));
+                    } else if (name == "calc_phylo_corrected_weighted_endemism") {
+                        p.pe();
+                        set(0, truthy(pd) ? num(p.pe_we) / pd : NaN);
+                    } else {
+                        double aed_t = NaN;
+                        for (i32 l : abc.lall) {
+                            if (tree->label_node[static_cast<std::size_t>(l)] < 0 || std::isnan(pg.ed[static_cast<std::size_t>(l)])) continue;
+                            aed_t = num(aed_t) + abc.all_samples(l) * num(pg.aed[static_cast<std::size_t>(l)]);
+                        }
+                        set(0, truthy(pd) ? num(aed_t) / pd : NaN);
+                    }
+                } else if (name == "calc_pd_node_list") {
+                    PhyloNbhd& p = P();
+                    p.pd_union();
+                    for (i32 node : p.pd_nodes) put(0, node, tree->length[static_cast<std::size_t>(node)]);
+                } else if (name == "calc_pd_terminal_node_list" || name == "calc_pd_terminal_node_count") {
+                    PhyloNbhd& p = P();
+                    p.pd_union();
+                    double count = 0;
+                    for (i32 node : p.pd_nodes) {
+                        if (!tree->terminal[static_cast<std::size_t>(node)]) continue;
+                        count += 1;
+                        if (name == "calc_pd_terminal_node_list") put(0, node, tree->length[static_cast<std::size_t>(node)]);
+                    }
+                    if (name == "calc_pd_terminal_node_count") set(0, count);
+                } else if (name == "calc_pd_local") {
+                    PhyloNbhd& p = P();
+                    p.pd_union();
+                    double pd = p.pd;
+                    double pdp = truthy(pd) ? pd / tree->total_length : NaN;
+                    if (truthy(pd)) {
+                        i32 anc = p.lsa();
+                        if (!tree->terminal[static_cast<std::size_t>(anc)]) {
+                            double sum = 0;
+                            while (anc >= 0) {
+                                sum += tree->length[static_cast<std::size_t>(anc)];
+                                anc = tree->parent[static_cast<std::size_t>(anc)];
+                            }
+                            pd = pd - sum;
+                            pdp = truthy(pd) ? (pd / tree->total_length) : 0.0;
+                        }
+                    }
+                    set(0, pd);
+                    set(1, pdp);
+                } else if (name == "calc_last_shared_ancestor_props") {
+                    PhyloNbhd& p = P();
+                    const i32 anc0 = p.lsa();
+                    auto path_sum = [&](i32 node) {
+                        // sum (0, values %path_lengths): nodes of the path in name order
+                        std::vector<i32> path;
+                        while (node >= 0) {
+                            path.push_back(node);
+                            node = tree->parent[static_cast<std::size_t>(node)];
+                        }
+                        std::sort(path.begin(), path.end());
+                        double s = 0;
+                        for (i32 nd : path) s += tree->length[static_cast<std::size_t>(nd)];
+                        return s;
+                    };
+                    const double depth = tree->depth[static_cast<std::size_t>(anc0)];
+                    const double length = tree->length[static_cast<std::size_t>(anc0)];
+                    double tips = 0;
+                    if (!tree->terminal[static_cast<std::size_t>(anc0)]) {
+                        const double to_root = anc0 == tree->root ? 0.0 : path_sum(anc0);
+                        for (i32 l : abc.lall) {
+                            const i32 node = tree->label_node[static_cast<std::size_t>(l)];
+                            if (node < 0 || !p.sc.in_st[static_cast<std::size_t>(node)]) continue;
+                            tips = std::max(tips, path_sum(node));
+                        }
+                        tips -= to_root;
+                    }
+                    double to_root_walk = 0;
+                    if (anc0 != tree->root) {
+                        i32 a = anc0;
+                        while (a >= 0) {
+                            to_root_walk += tree->length[static_cast<std::size_t>(a)];
+                            a = tree->parent[static_cast<std::size_t>(a)];
+                        }
+                    }
+                    const double rel = (truthy(to_root_walk) || truthy(tips)) ? to_root_walk / (to_root_walk + tips) : 0.0;
+                    set(0, depth);
+                    set(1, to_root_walk);
+                    set(2, tips);
+                    set(3, length);
+                    set(4, rel);
+                } else if (name == "calc_pe") {
+                    PhyloNbhd& p = P();
+                    p.pe();
+                    set(0, p.pe_we);
+                    set(1, p.pe_we_p());
+                } else if (name == "calc_pe_lists") {
+                    PhyloNbhd& p = P();
+                    p.pe();
+                    for (std::size_t i = 0; i < p.pe_nodes.size(); ++i) {
+                        const i32 node = p.pe_nodes[i];
+                        put(0, node, p.pe_lr[i]);
+                        put(1, node, pg.range[static_cast<std::size_t>(node)]);
+                        put(2, node, p.pe_wt[i]);
+                    }
+                } else if (name == "calc_pe_single") {
+                    PhyloNbhd& p = P();
+                    p.pe();
+                    double single = NaN;
+                    for (i32 node : p.pe_nodes) {
+                        const double r = pg.range[static_cast<std::size_t>(node)];
+                        if (num(r) == 0) throw std::runtime_error("Illegal division by zero");
+                        single = num(single) + tree->length[static_cast<std::size_t>(node)] / r;
+                    }
+                    set(0, single);
+                    set(1, defined(single) ? single / tree->trimmed_total_length : NaN);
+                } else if (name == "calc_pd_endemism") {
+                    PhyloNbhd& p = P();
+                    p.pe();
+                    double pde = NaN;
+                    for (std::size_t i = 0; i < p.pe_nodes.size(); ++i) {
+                        const i32 node = p.pe_nodes[i];
+                        if (pg.range[static_cast<std::size_t>(node)] != p.pe_lr[i]) continue;
+                        pde = num(pde) + p.pe_wt[i];
+                        put(0, node, p.pe_wt[i]);
+                    }
+                    set(0, pde);
+                    set(1, (defined(pde) && truthy(tree->trimmed_total_length)) ? pde / tree->trimmed_total_length : NaN);
+                } else if (name == "calc_pe_central" || name == "calc_pe_central_lists" || name == "calc_pe_central_cwe") {
+                    PhyloNbhd& p = P();
+                    p.pe();
+                    p.abc_lists();
+                    // PEC_WE: PE minus the weights of nodes only in set 2
+                    double sub = 0;
+                    for (i32 node : p.c_list) sub += num(p.wt_of(node));
+                    const double pec = num(p.pe_we) - sub;
+                    const double pec_we = (defined(p.pe_we) || sub != 0) ? pec : NaN;
+                    // PEC lists: without the set 2 only nodes when there are some
+                    std::vector<std::size_t> keep;
+                    if (!p.c_list.empty()) {
+                        std::vector<i32> ab;
+                        std::set_union(p.a_list.begin(), p.a_list.end(), p.b_list.begin(), p.b_list.end(),
+                                       std::back_inserter(ab));
+                        for (std::size_t i = 0; i < p.pe_nodes.size(); ++i)
+                            if (std::binary_search(ab.begin(), ab.end(), p.pe_nodes[i])) keep.push_back(i);
+                    } else {
+                        for (std::size_t i = 0; i < p.pe_nodes.size(); ++i) keep.push_back(i);
+                    }
+                    if (name == "calc_pe_central") {
+                        set(0, pec_we);
+                        set(1, truthy(pec_we) ? pec_we / tree->trimmed_total_length : NaN);
+                    } else if (name == "calc_pe_central_lists") {
+                        for (std::size_t i : keep) {
+                            const i32 node = p.pe_nodes[i];
+                            put(0, node, p.pe_lr[i]);
+                            put(1, node, pg.range[static_cast<std::size_t>(node)]);
+                            put(2, node, p.pe_wt[i]);
+                        }
+                    } else {
+                        p.pd_union();
+                        double pdsum = NaN;
+                        for (std::size_t i : keep) {
+                            const i32 node = p.pe_nodes[i];
+                            const bool in_pd = std::binary_search(p.pd_nodes.begin(), p.pd_nodes.end(), node);
+                            pdsum = num(pdsum) + (in_pd ? tree->length[static_cast<std::size_t>(node)] : 0.0);
+                        }
+                        set(0, truthy(pdsum) ? num(pec_we) / pdsum : NaN);
+                        set(1, pdsum);
+                    }
+                } else if (name == "calc_pd_clade_contributions" || name == "calc_pd_clade_loss" ||
+                           name == "calc_pd_clade_loss_ancestral" || name == "calc_pe_clade_contributions" ||
+                           name == "calc_pe_clade_loss" || name == "calc_pe_clade_loss_ancestral") {
+                    PhyloNbhd& p = P();
+                    const bool is_pe = name.find("_pe_") != std::string::npos;
+                    PhyloNbhd::Clade c;
+                    if (is_pe) {
+                        p.pe();
+                        c = p.clade([&](i32 node) { return p.wt_of(node); }, num(p.pe_we), tree->trimmed_total_length);
+                    } else {
+                        p.pd_union();
+                        c = p.clade(
+                            [&](i32 node) {
+                                return std::binary_search(p.pd_nodes.begin(), p.pd_nodes.end(), node)
+                                           ? tree->length[static_cast<std::size_t>(node)]
+                                           : NaN;
+                            },
+                            num(p.pd), tree->total_length);
+                    }
+                    if (name.find("contributions") != std::string::npos) {
+                        for (std::size_t i = 0; i < c.nodes.size(); ++i) {
+                            put(0, c.nodes[i], c.contr[i]);
+                            put(1, c.nodes[i], c.contr_p[i]);
+                            put(2, c.nodes[i], c.score[i]);
+                        }
+                    } else {
+                        const PhyloNbhd::Loss L = p.clade_loss(c);
+                        if (name.find("ancestral") == std::string::npos) {
+                            for (std::size_t i = 0; i < c.nodes.size(); ++i) {
+                                put(0, c.nodes[i], L.contr[i]);
+                                put(1, c.nodes[i], L.contr_p[i]);
+                                put(2, c.nodes[i], L.score[i]);
+                            }
+                        } else {
+                            for (std::size_t i = 0; i < c.nodes.size(); ++i) {
+                                const double score = num(L.score[i]) - num(c.score[i]);
+                                put(0, c.nodes[i], score);
+                                put(1, c.nodes[i], truthy(L.score[i]) ? score / L.score[i] : 0.0);
+                            }
+                        }
+                    }
+                } else if (name == "calc_phylo_abc" || name == "calc_phylo_sorenson" || name == "calc_phylo_jaccard" ||
+                           name == "calc_phylo_s2") {
+                    PhyloNbhd& p = P();
+                    const std::vector<i32> l1 = abc.g1.empty() ? std::vector<i32>{} : p.path_of(abc.l1);
+                    const std::vector<i32> l2 = abc.g2.empty() ? std::vector<i32>{} : p.path_of(abc.l2);
+                    double aa = 0, bb = 0, cc = 0;
+                    for (i32 node : l1) {
+                        if (std::binary_search(l2.begin(), l2.end(), node))
+                            aa += tree->length[static_cast<std::size_t>(node)];
+                        else
+                            bb += tree->length[static_cast<std::size_t>(node)];
+                    }
+                    for (i32 node : l2)
+                        if (!std::binary_search(l1.begin(), l1.end(), node)) cc += tree->length[static_cast<std::size_t>(node)];
+                    const double abcs = aa + bb + cc;
+                    if (name == "calc_phylo_abc") {
+                        set(0, aa);
+                        set(1, abcs);
+                        set(2, bb);
+                        set(3, cc);
+                    } else {
+                        double v = NaN;
+                        if (truthy(aa) || (truthy(bb) && truthy(cc))) {
+                            if (name == "calc_phylo_sorenson") {
+                                const double q = safe_div(2 * aa, aa + abcs);
+                                v = defined(q) ? 1 - q : NaN;
+                            } else if (name == "calc_phylo_jaccard") {
+                                const double q = safe_div(aa, abcs);
+                                v = defined(q) ? 1 - q : NaN;
+                            } else {
+                                const double q = safe_div(aa, aa + std::min(bb, cc));
+                                v = defined(q) ? 1 - q : NaN;
+                            }
+                        }
+                        set(0, v);
+                    }
+                } else if (name == "calc_phylo_rw_turnover") {
+                    PhyloNbhd& p = P();
+                    std::vector<i32> n1, n2;
+                    std::vector<double> lr1, lr2, w1, w2;
+                    p.pe_for(abc.g1, n1, lr1, w1, nullptr);
+                    p.pe_for(abc.g2, n2, lr2, w2, nullptr);
+                    if (n1.empty() || n2.empty()) {
+                        set(0, NaN);
+                        set(1, NaN);
+                        set(2, NaN);
+                        set(3, NaN);
+                    } else {
+                        double aa = 0, bb = 0, cc = 0;
+                        for (std::size_t i = 0; i < n1.size(); ++i) {
+                            auto it = std::lower_bound(n2.begin(), n2.end(), n1[i]);
+                            if (it != n2.end() && *it == n1[i])
+                                aa += (w1[i] + w2[static_cast<std::size_t>(it - n2.begin())]);
+                            else
+                                bb += w1[i];
+                        }
+                        for (std::size_t j = 0; j < n2.size(); ++j)
+                            if (!std::binary_search(n1.begin(), n1.end(), n2[j])) cc += w2[j];
+                        double turnover = NaN;
+                        if ((truthy(aa) || truthy(bb)) && (truthy(aa) || truthy(cc))) {
+                            const double v = 1 - (aa / (aa + bb + cc));
+                            turnover = truthy(v) ? v : 0.0;
+                        }
+                        if (truthy(turnover) && turnover < 0) turnover = 0;
+                        set(0, turnover);
+                        set(1, aa);
+                        set(2, bb);
+                        set(3, cc);
+                    }
+                } else if (name == "calc_phylo_abundance") {
+                    PhyloNbhd& p = P();
+                    std::map<i32, double> branch;
+                    double total = NaN;
+                    for (i32 l : p.labels_on_tree()) {
+                        std::vector<i32> path;
+                        i32 node = tree->label_node[static_cast<std::size_t>(l)];
+                        while (node >= 0) {
+                            path.push_back(node);
+                            node = tree->parent[static_cast<std::size_t>(node)];
+                        }
+                        std::sort(path.begin(), path.end());
+                        const double ab = abc.all_samples(l);
+                        for (i32 nd : path) {
+                            const double val = ab * tree->length[static_cast<std::size_t>(nd)];
+                            branch[nd] += val;
+                            total = num(total) + val;
+                        }
+                    }
+                    set(0, total);
+                    for (const auto& kv : branch) put(0, kv.first, kv.second);
+                } else if (name == "calc_phylo_aed") {
+                    for (i32 l : abc.lall) {
+                        const double a = pg.aed[static_cast<std::size_t>(l)];
+                        if (tree->label_node[static_cast<std::size_t>(l)] < 0 || std::isnan(pg.ed[static_cast<std::size_t>(l)])) continue;
+                        put(0, l, a);
+                        put(1, l, pg.ed[static_cast<std::size_t>(l)]);
+                        put(2, l, pg.es[static_cast<std::size_t>(l)]);
+                    }
+                } else if (name == "calc_phylo_aed_t" || name == "calc_phylo_aed_t_wtlists") {
+                    double aed_t = NaN;
+                    std::vector<std::pair<i32, double>> wts;
+                    for (i32 l : abc.lall) {
+                        if (tree->label_node[static_cast<std::size_t>(l)] < 0 || std::isnan(pg.ed[static_cast<std::size_t>(l)])) continue;
+                        const double w = abc.all_samples(l) * num(pg.aed[static_cast<std::size_t>(l)]);
+                        wts.emplace_back(l, w);
+                        aed_t = num(aed_t) + w;
+                    }
+                    if (name == "calc_phylo_aed_t") {
+                        set(0, aed_t);
+                    } else {
+                        for (const auto& lw : wts) put(0, lw.first, lw.second);
+                        for (const auto& lw : wts) put(1, lw.first, lw.second / aed_t);
                     }
                 } else if (name == "calc_hierarchical_label_ratios") {
                     // Biodiverse computes the same A, B, C for every level (it never uses

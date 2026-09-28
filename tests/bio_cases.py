@@ -176,6 +176,65 @@ def spatial_calcs(case: dict) -> list[str]:
     return [c for c in calcs if c not in case.get("exclude", [])]
 
 
+# phylogenetic indices (phase 4)
+PHYLO_CALCS = [
+    "calc_count_labels_on_tree", "calc_labels_not_on_tree", "calc_labels_on_tree", "calc_last_shared_ancestor_props",
+    "calc_pd", "calc_pd_clade_contributions", "calc_pd_clade_loss", "calc_pd_clade_loss_ancestral",
+    "calc_pd_endemism", "calc_pd_local", "calc_pd_node_list", "calc_pd_terminal_node_count",
+    "calc_pd_terminal_node_list", "calc_pe", "calc_pe_central", "calc_pe_central_cwe", "calc_pe_central_lists",
+    "calc_pe_clade_contributions", "calc_pe_clade_loss", "calc_pe_clade_loss_ancestral", "calc_pe_lists",
+    "calc_pe_single", "calc_phylo_abc", "calc_phylo_abundance", "calc_phylo_aed", "calc_phylo_aed_t",
+    "calc_phylo_aed_t_wtlists", "calc_phylo_corrected_weighted_endemism", "calc_phylo_corrected_weighted_rarity",
+    "calc_phylo_jaccard", "calc_phylo_rw_turnover", "calc_phylo_s2", "calc_phylo_sorenson",
+]
+PHYLO_TWO_SET = {"calc_phylo_abc", "calc_phylo_jaccard", "calc_phylo_rw_turnover", "calc_phylo_s2",
+                 "calc_phylo_sorenson"}
+PHYLO_CASES = {
+    "circle": {"basedata": "site_100k", "tree": "Example_tree.nex", "conditions": ["sp_circle (radius => 200000)"],
+               "calcs": "one"},
+    "self": {"basedata": "site_100k", "tree": "Example_tree.nex", "conditions": ["sp_self_only()"], "calcs": "one"},
+    "two_sets": {"basedata": "site_100k", "tree": "Example_tree.nex",
+                 "conditions": ["sp_self_only()", "sp_circle (radius => 300000)"], "calcs": "all"},
+    "block": {"basedata": "site_100k", "tree": "Example_tree.nex", "conditions": ["sp_block (size => 400000)"],
+              "calcs": "one"},
+    "trimmed": {"basedata": "site_100k", "tree": "tree_trim.nex",
+                "conditions": ["sp_circle (radius => 150000)", "sp_circle (radius => 400000)"], "calcs": "all"},
+    "counts": {"basedata": "site_counts", "tree": "tree_species.nex",
+               "conditions": ["sp_circle (radius => 100000)", "sp_circle (radius => 250000)"], "calcs": "all"},
+    # the same calculations mixed with non-phylogenetic ones (changes the pre_calc order)
+    "mixed": {"basedata": "site_counts", "tree": "tree_species.nex", "conditions": ["sp_circle (radius => 200000)"],
+              "calcs": "one", "extra": ["calc_richness", "calc_local_range_lists", "calc_endemism_whole"]},
+}
+
+
+def phylo_calcs(case: dict) -> list[str]:
+    calcs = list(PHYLO_CALCS) if case["calcs"] == "all" else [c for c in PHYLO_CALCS if c not in PHYLO_TWO_SET]
+    return calcs + list(case.get("extra", []))
+
+
+def write_trees() -> None:
+    """Variants of the example tree: pruning needed, and species-only names."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    import landschaft as ls
+
+    t = ls.bio.read_tree(DATA / "Example_tree.nex")
+    # species-only names, for the site data read with the species column as label
+    nwk = t.to_newick()
+    for name in t.names:
+        if name.startswith("Genus:"):
+            nwk = nwk.replace(f"'{name}'", name.split(":", 1)[1]).replace(name, name.split(":", 1)[1])
+    (DATA / "tree_species.nex").write_text("#NEXUS\nbegin trees;\n\ttree species = [&R] " + nwk + "\nend;\n",
+                                           encoding="utf-8")
+    # a tree needing a trim: one label missing, extra tips and a named clade without labels
+    nwk = t.to_newick().rstrip(";")
+    nwk = nwk.replace("'Genus:sp1':", "'Other:tip0':")
+    nwk = f"({nwk},(('Other:tip1':0.3,'Other:tip2':0.2)other_clade:0.4,'Other:tip3':0.1):0.25);"
+    (DATA / "tree_trim.nex").write_text("#NEXUS\nbegin trees;\n\ttree trim = [&R] " + nwk + "\nend;\n",
+                                        encoding="utf-8")
+
+
 TREE_FILES = ["Example_tree.nex", "Example_tree_with_colours.nex", "tree_with_nonmatching_names.nex"]
 
 NEWICK_CASES = {

@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "bio/conditions.hpp"
+#include "bio/phylo.hpp"
 
 namespace bio {
 
@@ -26,6 +27,7 @@ enum class KeyKind : i32 {
     Text = 2,    // index into the engine's text table
     Number = 3,  // a number (Perl stringifies it)
     GroupArray = 4,  // an array of groups (keys in order, values unused)
+    Node = 5,    // tree node index
 };
 
 struct CalcInfo {
@@ -34,6 +36,7 @@ struct CalcInfo {
     std::vector<std::pair<std::string, KeyKind>> lists;
     i32 uses_nbr_lists = 1;
     bool uses_processing_element = false;
+    bool uses_tree = false;
 };
 
 // Every calculation the engine knows.
@@ -46,6 +49,10 @@ struct BaseDataView {
     std::vector<double> counts;
     std::vector<double> label_range;      // Biodiverse get_range (property or variety)
     std::vector<double> label_abundance;  // get_label_abundance
+    std::vector<double> label_sample_count;  // get_label_sample_count
+    // which label counts `_calc_abc_any` hands on (Biodiverse's pre_calc order):
+    // 1 presence, 2 groups per label, 3 samples per label
+    i32 abc_any_variant = 1;
     // label hierarchy from the label axes (BaseData::to_tree): for each label
     // and level (0 = first axis) the index of its prefix in prefix_names
     i32 n_label_levels = 1;
@@ -72,6 +79,6 @@ struct IndexResult {
 // Run `calcs` (names from the registry) for every processing group.
 // set1/set2 rows follow `procs`; set2 may be empty (one neighbour set).
 IndexResult run_indices(const BaseDataView& bd, const std::vector<i32>& procs, const Csr& set1, const Csr* set2,
-                        const std::vector<std::string>& calcs, bool parallel);
+                        const std::vector<std::string>& calcs, bool parallel, const TreeView* tree = nullptr);
 
 }  // namespace bio

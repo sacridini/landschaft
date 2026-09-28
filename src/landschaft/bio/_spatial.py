@@ -16,14 +16,77 @@ from ._names import perl_number
 
 __all__ = ["SpatialResult", "list_calculations", "spatial_analysis"]
 
-_KEY_LABEL, _KEY_GROUP, _KEY_TEXT, _KEY_NUMBER, _KEY_GROUP_ARRAY = range(5)
+_KEY_LABEL, _KEY_GROUP, _KEY_TEXT, _KEY_NUMBER, _KEY_GROUP_ARRAY, _KEY_NODE = range(6)
+_DEPS = None
+
+
+def _dependencies() -> dict:
+    """Biodiverse's pre_calc dependencies of every calculation (dumped from Biodiverse)."""
+    global _DEPS
+    if _DEPS is None:
+        import json
+        from pathlib import Path
+
+        _DEPS = json.loads((Path(__file__).parent / "data" / "biodiverse_dependencies.json").read_text())
+    return _DEPS
+
+
+def _precalc_order(calcs: list[str]) -> list[str]:
+    """The order Biodiverse runs pre_calcs in (parse_dependencies_for_calc + aggregation)."""
+    import re
+
+    deps = _dependencies()
+    agg: list[str] = []
+    for calc in sorted(calcs):
+        lst = [calc]
+        for c in lst:  # grows while iterating, as in Perl
+            lst.extend(deps.get(c, {}).get("pre_calc", []) or [])
+        seen = set()
+        rev = []
+        for c in reversed(lst):
+            if c not in seen:
+                seen.add(c)
+                rev.append(c)
+        agg.extend(rev)
+    seen = set()
+    u = []
+    for c in agg:
+        if c not in seen:
+            seen.add(c)
+            u.append(c)
+    if u:
+        if not any(re.match(r"^calc_abc[23]?", c) for c in u) and "_calc_abc_any" in u:
+            i = u.index("_calc_abc_any")
+            if i > 0:
+                u.insert(0, u.pop(i))
+        i23 = next((i for i, c in enumerate(u) if re.match(r"^calc_abc[23]", c)), -1)
+        if i23 > 0:
+            u.insert(0, u.pop(i23))
+        elif i23 < 0 and "calc_abc" in u and u.index("calc_abc") > 0:
+            u.insert(0, u.pop(u.index("calc_abc")))
+    return u
+
+
+def _abc_any_variant(calcs: list[str]) -> int:
+    """Label counts `_calc_abc_any` passes on: 1 presence, 2 groups, 3 samples."""
+    order = _precalc_order(calcs)
+    if "_calc_abc_any" not in order:
+        return 1
+    before = order[: order.index("_calc_abc_any")]
+    if "calc_abc" in before:
+        return 1
+    if "calc_abc2" in before:
+        return 2
+    if "calc_abc3" in before:
+        return 3
+    return 1
 
 
 def _registry() -> dict[str, dict]:
     out = {}
-    for name, scalars, lists, nbr, proc in _core.bio_calculations():
+    for name, scalars, lists, nbr, proc, tree in _core.bio_calculations():
         out[name] = {"scalars": list(scalars), "lists": [n for n, _ in lists], "uses_nbr_lists": int(nbr),
-                     "uses_processing_element": bool(proc)}
+                     "uses_processing_element": bool(proc), "uses_tree": bool(tree)}
     return out
 
 
@@ -76,6 +139,8 @@ def _basedata_view(bd) -> dict:
         abundance = np.where(np.isnan(a), sample, np.maximum(a, sample))
     levels, prefix, prefix_names = _label_hierarchy(bd)
     return {
+        "label_sample_count": np.ascontiguousarray(sample),
+        "abc_any_variant": 1,
         "n_label_levels": levels,
         "label_prefix": prefix,
         "prefix_names": prefix_names,
@@ -166,9 +231,10 @@ class ListIndices(dict):
     Each value is a long table with columns ``group``, ``key`` and ``value``.
     """
 
-    def __init__(self, bd, groups: list[str], raw_lists, texts: list[str]) -> None:
+    def __init__(self, bd, groups: list[str], raw_lists, texts: list[str], node_names=None) -> None:
         super().__init__()
         self._bd = bd
+        self._node_names = node_names or []
         self._groups = np.asarray(groups, dtype=object)
         self._texts = np.asarray(texts, dtype=object)
         self._raw = {name: (kind, np.asarray(ip), np.asarray(k), np.asarray(v)) for name, kind, ip, k, v in raw_lists}
@@ -205,6 +271,8 @@ class ListIndices(dict):
             key_col = np.asarray(self._bd.groups, dtype=object)[k]
         elif kind == _KEY_TEXT:
             key_col = self._texts[k]
+        elif kind == _KEY_NODE:
+            key_col = np.asarray(self._node_names, dtype=object)[k]
         else:
             uniq, inv = np.unique(keys, return_inverse=True)
             key_col = np.asarray([perl_number(float(u)) for u in uniq], dtype=object)[inv]
@@ -262,6 +330,7 @@ def spatial_analysis(
     calculations: str | Sequence[str],
     definition_query: str | SpatialCondition | None = None,
     *,
+    tree=None,
     n_threads: int | None = None,
     recycle: bool = True,
 ) -> SpatialResult:
@@ -279,6 +348,9 @@ def spatial_analysis(
         set are skipped when there is only one, as in Biodiverse.
     definition_query : condition, optional
         Only groups passing it are processed.
+    tree : Tree, optional
+        Phylogeny for the phylogenetic indices (``pd``, ``pe``...); its node
+        names are matched to the labels.
     n_threads : int, optional
         Threads (default: all cores but one).
     recycle : bool
@@ -316,6 +388,10 @@ def spatial_analysis(
             calcs.append(name)
     n_sets = len(conditions)
     valid = [c for c in calcs if reg[c]["uses_nbr_lists"] <= n_sets]
+    if tree is None:
+        needs = [c for c in valid if reg[c]["uses_tree"]]
+        if needs:
+            raise ValueError(f"these calculations need a tree: {', '.join(n.removeprefix('calc_') for n in needs)}")
     if not valid:
         raise ValueError("none of the calculations can run with this many neighbour sets")
     threads = resolve(n_threads)
@@ -336,11 +412,20 @@ def spatial_analysis(
             procs = procs[rep]
         else:
             expand = None
-    raw = _core.bio_run_indices(_basedata_view(bd), procs, set1, set2, valid, threads > 1)
+    view = _basedata_view(bd)
+    view["abc_any_variant"] = _abc_any_variant(valid)
+    tview = None
+    node_names = None
+    if tree is not None and any(reg[c]["uses_tree"] for c in valid):
+        from ._phylo import tree_view
+
+        tview = tree_view(tree, bd)
+        node_names = tview["names"]
+    raw = _core.bio_run_indices(view, procs, set1, set2, valid, threads > 1, tview)
     if expand is not None:
         raw = _expand_raw(raw, expand)
     names = [bd.groups[g] for g in nbrs.groups]
     table = pd.DataFrame(np.asarray(raw["scalars"]), index=pd.Index(names, name="group"),
                          columns=list(raw["scalar_names"]))
-    lists = ListIndices(bd, names, raw["lists"], list(raw["texts"]))
+    lists = ListIndices(bd, names, raw["lists"], list(raw["texts"]), node_names)
     return SpatialResult(bd, table, lists, nbrs, [c.removeprefix("calc_") for c in valid])
