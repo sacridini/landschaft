@@ -6,6 +6,18 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis, neighbourhoods: `ls.bio.neighbours` finds the neighbour sets
+  of every group from Biodiverse spatial conditions written in its Perl syntax
+  (`sp_circle`, `sp_block`, `sp_rectangle`, `sp_annulus`, `sp_ellipse`, sidedness,
+  text and regular expression matches, polygons and shapefiles, richness and
+  redundancy thresholds, `$D`, `$C`, `$d[0]`, `$nbr_y > $y`...), with an optional
+  definition query (`ls.bio.definition_query`). The lists are Biodiverse's own,
+  including its reuse of lists between groups; conditions run in C++ with OpenMP
+  and a grid search (half a million groups in half a second).
+
 ## [0.62.0] - 2026-09-28
 
 ### Added
