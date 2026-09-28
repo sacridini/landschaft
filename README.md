@@ -33,7 +33,7 @@ in the test suite, and runs from a few to several hundred times faster.
 | **Circuit connectivity** | omnidirectional and pairwise current flow, rasters and networks | Circuitscape, Omniscape |
 | **Distance & restoration** | cost surfaces, least-cost paths and corridors, isochrone maps | GuidosToolbox |
 | **Change detection** | simple and morphological change, fragmentation transitions | GuidosToolbox |
-| **Neutral landscape models** | simulated landscapes as null models: random, percolation, gradients, fractal surfaces, Gaussian fields, clusters, classification | NLMR |
+| **Neutral landscape models** | simulated landscapes as null models: random, percolation, gradients, fractal surfaces, Gaussian fields, mosaics, clusters, classification | NLMR |
 | **Large data** | out-of-core tiles and row blocks, parallel batches of rasters | |
 
 ## Installation
