@@ -6,6 +6,15 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.72.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis, cluster analyses: `ls.bio.cluster` (agglomerative clustering of
+  groups by Sorenson, Jaccard, S2, Bray-Curtis, phylogenetic Sorenson and other cluster
+  indices; average, unweighted average, minimum, maximum and recalculated linkages;
+  spatially constrained clustering; random tie breaking) and `ls.bio.region_grower`,
+  with the indices of each node's groups, identical to Biodiverse.
+
 ## [0.71.0] - 2026-09-28
 
 ### Added
