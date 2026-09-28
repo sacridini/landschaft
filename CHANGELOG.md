@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.68.0] - 2026-09-28
+
+### Added
+- Biodiversity analysis, randomisations: `ls.bio.randomise` randomises the basedata of a
+  spatial analysis (`rand_csr_by_group`, `rand_nochange`) with Biodiverse's Mersenne
+  Twister (`seed`), reruns the analysis with the same neighbourhoods and gives the
+  comparison counts, p-ranks, z-scores and CANAPE categories, identical to Biodiverse.
+  Runs can be continued (`Randomisation.run`).
+
+### Changed
+- `ls.bio.spatial_analysis` no longer reports indices that need two neighbour sets when
+  only one is given (such as `RICHNESS_SET2`), as Biodiverse.
+
 ## [0.67.0] - 2026-09-28
 
 ### Added
