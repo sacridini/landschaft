@@ -253,6 +253,9 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.cost.geo_correction`](cost.md#landschaft.cost.geo_correction) | Correct a transition for the distances between cell centres: gdistance's ``geoCorrection()`` |
 | [`ls.cost.normalize`](cost.md#landschaft.cost.normalize) | Normalise a transition matrix: gdistance's ``normalize()`` |
 | [`ls.cost.sum_reciprocal`](cost.md#landschaft.cost.sum_reciprocal) | Combine two transitions as resistances in series: gdistance's ``sumReciprocal()`` |
+| [`ls.cost.acc_cost`](cost.md#landschaft.cost.acc_cost) | Accumulated cost surface from the nearest origin: gdistance's ``accCost()`` |
+| [`ls.cost.cost_distance`](cost.md#landschaft.cost.cost_distance) | Least-cost distances between points: gdistance's ``costDistance()`` |
+| [`ls.cost.shortest_path`](cost.md#landschaft.cost.shortest_path) | Least-cost path from an origin to one or more goals: gdistance's ``shortestPath()`` |
 | [`ls.cost.example_data`](cost.md#landschaft.cost.example_data) | Path of an example data set for the grid distances |
 
 ### Distance & restoration

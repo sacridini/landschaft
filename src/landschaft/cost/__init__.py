@@ -18,6 +18,17 @@ Typical use::
 """
 
 from ._examples import example_data
+from ._lcp import acc_cost, cost_distance, shortest_path
 from ._transition import Transition, geo_correction, normalize, sum_reciprocal, transition
 
-__all__ = ["Transition", "example_data", "geo_correction", "normalize", "sum_reciprocal", "transition"]
+__all__ = [
+    "Transition",
+    "acc_cost",
+    "cost_distance",
+    "example_data",
+    "geo_correction",
+    "normalize",
+    "shortest_path",
+    "sum_reciprocal",
+    "transition",
+]

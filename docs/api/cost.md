@@ -34,6 +34,18 @@ conductance = ls.cost.geo_correction(speed)                                    #
 
 ::: landschaft.cost.sum_reciprocal
 
+## Least-cost surfaces, distances and paths
+
+The cost of a step between neighbouring cells is the reciprocal of the
+transition's value; among equally cheap paths, `shortest_path` returns the one
+gdistance returns.
+
+::: landschaft.cost.acc_cost
+
+::: landschaft.cost.cost_distance
+
+::: landschaft.cost.shortest_path
+
 ## Example data
 
 ::: landschaft.cost.example_data

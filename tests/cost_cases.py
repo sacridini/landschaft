@@ -73,6 +73,12 @@ def _rasters() -> dict[str, RasterSpec]:
     b[:, 3, 4] = np.nan
     b[2, 7, 11] = np.nan
     r["brick"] = RasterSpec(b, (0.0, 200.0, 0.0, 150.0), UTM)
+    # Ties everywhere: equal costs along many paths.
+    r["flat"] = RasterSpec(np.ones((20, 25)), (0.0, 250.0, 0.0, 200.0), UTM)
+    # gdistance's accCost / shortestPath example (GRASS r.cost).
+    r["grass"] = RasterSpec(np.array([[2, 2, 1, 1, 5, 5, 5], [2, 2, 8, 8, 5, 2, 1], [7, 1, 1, 8, 2, 2, 2],
+                                      [8, 7, 8, 8, 8, 8, 5], [8, 8, 1, 1, 5, 3, 9], [8, 1, 1, 2, 5, 3, 9]],
+                                     dtype=float), (0.0, 7.0, 0.0, 6.0), "+proj=utm +zone=1 +units=m")
     r["maungawhau"] = _dataset("maungawhau.tif", "+proj=nzmg +lat_0=-41 +lon_0=173 +x_0=2510000 +y_0=6023150 "
                                                  "+ellps=intl +units=m +no_defs")
     r["europe"] = _dataset("europe.tif", "+proj=longlat +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +no_defs")
@@ -281,10 +287,113 @@ def _ops(spec: RasterSpec) -> dict:
     }
 
 
+def cell_points(name: str, rc: list[tuple[int, int]]) -> np.ndarray:
+    """Coordinates of cell centres (row, column) of a raster, plus a point outside it."""
+    spec = RASTERS[name]
+    ny, nx = spec.values.shape[-2:]
+    xmin, xmax, ymin, ymax = spec.extent
+    xres, yres = (xmax - xmin) / nx, (ymax - ymin) / ny
+    return np.array([[(c + 0.5) * xres + xmin, ymax - (r + 0.5) * yres] for r, c in rc])
+
+
+def r_matrix(xy: np.ndarray) -> str:
+    return "matrix(c(" + ", ".join(repr(float(v)) for v in xy.T.ravel()) + f"), ncol = 2)"
+
+
+# (raster, R transition code, Python transition, points (row, col)).
+_LCP_SETUPS = {
+    "grass": ("geoCorrection(transition(r, function(x) 1 / mean(x), 8))",
+              lambda R: ls_cost().geo_correction(1 / _tr(R["grass"], "mean", 8)),
+              [(4, 5), (0, 1), (5, 0), (2, 6)]),
+    "flat8": ("geoCorrection(transition(r, mean, 8))",
+              lambda R: ls_cost().geo_correction(_tr(R["flat"], "mean", 8)),
+              [(10, 12), (0, 0), (19, 24), (3, 20), (15, 2), (10, 13)]),
+    "flat4": ("geoCorrection(transition(r, mean, 4))",
+              lambda R: ls_cost().geo_correction(_tr(R["flat"], "mean", 4)),
+              [(10, 12), (0, 0), (19, 24), (3, 20)]),
+    "flat16": ("geoCorrection(transition(r, mean, 16))",
+               lambda R: ls_cost().geo_correction(_tr(R["flat"], "mean", 16)),
+               [(10, 12), (0, 0), (19, 24), (3, 20)]),
+    "small": ("geoCorrection(transition(r, function(x) 1 / mean(x), 8))",
+              lambda R: ls_cost().geo_correction(1 / _tr(R["small"], "mean", 8)),
+              [(0, 0), (8, 7), (2, 5), (6, 2), (4, 4)]),  # (2, 5) is enclosed by NA, (6, 2) isolated
+    "rand": ("geoCorrection(transition(r, function(x) 1 / mean(x), 16))",
+             lambda R: ls_cost().geo_correction(1 / _tr(R["rand"], "mean", 16)),
+             [(1, 1), (28, 38), (15, 20), (5, 35), (25, 3)]),
+    "rect_asym": ("geoCorrection(transition(r, function(x) 1 / (1 + abs(x[2] - x[1]) + x[2]), 8, symm = FALSE))",
+                  lambda R: ls_cost().geo_correction(
+                      _tr(R["rect"], lambda x: 1 / (1 + np.abs(x[1] - x[0]) + x[1]), 8, symmetric=False)),
+                  [(0, 0), (24, 34), (12, 17), (3, 30)]),
+    "lonlat": ("geoCorrection(transition(r, function(x) 1 / mean(x), 8), type = 'c')",
+               lambda R: ls_cost().geo_correction(1 / _tr(R["lonlat"], "mean", 8), "c"),
+               [(2, 2), (18, 27), (10, 15), (0, 29)]),
+    "global_na": ("geoCorrection(transition(r, function(x) 1 / mean(x), 8), type = 'c')",
+                  lambda R: ls_cost().geo_correction(1 / _tr(R["global_na"], "mean", 8), "c"),
+                  [(6, 0), (6, 23), (1, 12), (10, 5)]),
+    "tobler": ("""hd <- transition(r, function(x) x[2] - x[1], 8, symm = FALSE)
+                  slope <- geoCorrection(hd)
+                  adj <- adjacent(r, cells = 1:ncell(r), pairs = TRUE, directions = 8)
+                  speed <- slope
+                  speed[adj] <- 6 * exp(-3.5 * abs(slope[adj] + 0.05))
+                  geoCorrection(speed)""",
+               lambda R: _tobler(R)["conductance"],
+               [(50, 26), (6, 20), (80, 55), (40, 5), (43, 30)]),
+}
+
+_LCP_RASTER = {"flat8": "flat", "flat4": "flat", "flat16": "flat", "rect_asym": "rect", "tobler": "maungawhau"}
+
+
+def _lcp_cases() -> dict[str, Case]:
+    cases: dict[str, Case] = {}
+    for key, (r_tr, py_tr, rc) in _LCP_SETUPS.items():
+        name = _LCP_RASTER.get(key, key)
+        pts = cell_points(name, rc)
+        origin, goals = pts[:1], pts[1:]
+        cases[f"lcp_{key}"] = Case(
+            name,
+            f"""tr <- {{
+                  {r_tr}
+                }}
+                pts <- {r_matrix(pts)}
+                o <- pts[1, , drop = FALSE]
+                g <- pts[-1, , drop = FALSE]
+                # per goal: SpatialLines fails on an unreachable goal (a line without points)
+                line_cells <- function(k) tryCatch({{
+                  l <- shortestPath(tr, o, g[k, , drop = FALSE], output = "SpatialLines")
+                  cellFromXY(r, l@lines[[1]]@Lines[[1]]@coords) - 1 }}, error = function(e) numeric(0))
+                list(
+                  acc1 = accCost(tr, o),
+                  acc_all = accCost(tr, pts),
+                  cd = as.matrix(costDistance(tr, pts)),
+                  cd_from_to = costDistance(tr, g, pts),
+                  path = shortestPath(tr, o, g),
+                  path_one = shortestPath(tr, o, g[1, , drop = FALSE]),
+                  cells = setNames(lapply(seq_len(nrow(g)), line_cells), paste0("g", seq_len(nrow(g)))))""",
+            lambda R, py_tr=py_tr, origin=origin, goals=goals, pts=pts: _lcp(py_tr(R), origin, goals, pts),
+            group="lcp",
+        )
+    return cases
+
+
+def _lcp(tr, origin, goals, pts) -> dict:
+    c = ls_cost()
+    cells = c.shortest_path(tr, origin, goals, output="cells")
+    return {
+        "acc1": c.acc_cost(tr, origin),
+        "acc_all": c.acc_cost(tr, pts),
+        "cd": c.cost_distance(tr, pts),
+        "cd_from_to": c.cost_distance(tr, goals, pts),
+        "path": c.shortest_path(tr, origin, goals),
+        "path_one": c.shortest_path(tr, origin, goals[:1]),
+        "cells": {f"g{k + 1}": p for k, p in enumerate(cells)},
+    }
+
+
 def _cases() -> dict[str, Case]:
     cases = {}
     cases.update(_transition_cases())
     cases.update(_operation_cases())
+    cases.update(_lcp_cases())
     return cases
 
 

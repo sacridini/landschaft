@@ -2039,6 +2039,34 @@ tr.to_sparse(); tr.to_raster("NZcolMeans"); tr.adjacency()
   it would make a dense matrix), `tr + number` is refused, `normalize(tr,
   "symm")` works on grids with missing cells (NaN or an error in gdistance).
 
+Least-cost analysis:
+
+```python
+cost = ls.cost.acc_cost(tr, [(x1, y1), (x2, y2)])       # raster: cost from the nearest origin
+d = ls.cost.cost_distance(tr, points)                   # n x n (symmetric for symmetric transitions)
+d2 = ls.cost.cost_distance(tr, sources, targets)        # n_from x n_to
+path = ls.cost.shortest_path(tr, origin, goals)         # Transition, 1/n_goals on the path steps
+cells = ls.cost.shortest_path(tr, origin, goals, output="cells")
+lines = ls.cost.shortest_path(tr, origin, goals, output="lines")  # GeoDataFrame
+```
+
+- The step cost is `1 / T[a, b]` (R: `E(g)$weight <- 1 / E(g)$weight`); a cost is the
+  sum along the cheapest path from the source, so any correct Dijkstra gives
+  gdistance's bits. As in `costDistance`, among one set of points on a symmetric
+  transition each pair is summed from its later point (`as.dist` keeps the lower
+  triangle); `acc_cost` starts all origins at 0 (gdistance's extra node with
+  weight `1 / Inf`).
+- `shortest_path` reproduces `igraph_get_shortest_paths_dijkstra` (igraph 2.1.3):
+  the two-way indexed heap (`core/indheap.c`: a new or improved element rises
+  above equal ones), incident edges in increasing neighbour order (undirected:
+  the smaller neighbours, then the larger ones), parents replaced only by
+  strictly shorter paths. The path transition is a general matrix with
+  `1/n_goals` added on both directions of every step, path after path.
+- Distances use a 4-ary heap without decrease-key and unsorted neighbours;
+  `cost_distance` runs its sources in parallel and stops once every target is
+  settled. Points outside the grid give NaN rows and columns (gdistance drops
+  them and misaligns its matrix).
+
 Reference: `tools/make_reference_cost.py` (gdistance 1.6.5, raster 3.6-31,
-Matrix 1.7-1, R 4.4.2; cases in `tests/cost_cases.py`), tests in
-`tests/test_cost_transition.py`.
+Matrix 1.7-1, igraph 2.1.3, R 4.4.2; cases in `tests/cost_cases.py`), tests in
+`tests/test_cost_transition.py` and `tests/test_cost_lcp.py`.

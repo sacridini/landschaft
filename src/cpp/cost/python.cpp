@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "cost/geodesic.hpp"
+#include "cost/shortest.hpp"
 #include "cost/transition.hpp"
 #include "lsm/extended.hpp"
 #include "lsm/rmath.hpp"
@@ -225,6 +226,63 @@ void register_python(py::module_& m) {
         },
         py::arg("name"), py::arg("x"), py::arg("y") = 0.0,
         "R's vectorised sqrt, exp, log and x^y (mingw's x87 maths) on an array.");
+
+    m.def(
+        "cost_acc_cost",
+        [](const CArray<double>& values, const py::tuple& grid, int directions, bool symmetric,
+           const std::vector<i64>& sources) {
+            const Grid g = grid_of(grid);
+            py::buffer_info b = values.request();
+            check_values(g, directions, symmetric, b);
+            const Layout t{&g, directions, symmetric, values.data()};
+            std::vector<double> out;
+            {
+                py::gil_scoped_release release;
+                out = accumulated_cost(t, sources);
+            }
+            return vector_to_array(std::move(out));
+        },
+        py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("sources"),
+        "Accumulated cost from the nearest source cell (gdistance's accCost).");
+
+    m.def(
+        "cost_cost_matrix",
+        [](const CArray<double>& values, const py::tuple& grid, int directions, bool symmetric,
+           const std::vector<i64>& from, const std::vector<i64>& to) {
+            const Grid g = grid_of(grid);
+            py::buffer_info b = values.request();
+            check_values(g, directions, symmetric, b);
+            const Layout t{&g, directions, symmetric, values.data()};
+            std::vector<double> out;
+            {
+                py::gil_scoped_release release;
+                out = cost_matrix(t, from, to);
+            }
+            py::array_t<double> a = vector_to_array(std::move(out));
+            return a.reshape({static_cast<py::ssize_t>(from.size()), static_cast<py::ssize_t>(to.size())});
+        },
+        py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("from_cells"),
+        py::arg("to_cells"), "Least costs between cells (gdistance's costDistance), sources in parallel.");
+
+    m.def(
+        "cost_shortest_paths",
+        [](const CArray<double>& values, const py::tuple& grid, int directions, bool symmetric, i64 origin,
+           const std::vector<i64>& goals) {
+            const Grid g = grid_of(grid);
+            py::buffer_info b = values.request();
+            check_values(g, directions, symmetric, b);
+            const Layout t{&g, directions, symmetric, values.data()};
+            std::vector<std::vector<i64>> paths;
+            {
+                py::gil_scoped_release release;
+                paths = shortest_paths(t, origin, goals);
+            }
+            py::list out;
+            for (auto& p : paths) out.append(vector_to_array(std::move(p)));
+            return out;
+        },
+        py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("origin"),
+        py::arg("goals"), "Cells of the least-cost paths from origin to each goal (igraph's ties).");
 
     m.def(
         "cost_r_mean", [](const CArray<double>& x) { return lsm::r_mean(x.data(), x.size()); }, py::arg("x"),

@@ -1,0 +1,507 @@
+{
+ "lcp_flat16/acc1": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "lcp_flat16/acc_all": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "lcp_flat16/cd": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_flat16/cd_from_to": {
+  "dim": [
+   3,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_flat16/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_flat16/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_flat16/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_flat16/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 500,
+  "symmetric": false
+ },
+ "lcp_flat16/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 500,
+  "symmetric": false
+ },
+ "lcp_flat4/acc1": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "lcp_flat4/acc_all": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "lcp_flat4/cd": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_flat4/cd_from_to": {
+  "dim": [
+   3,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_flat4/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_flat4/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_flat4/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_flat4/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 500,
+  "symmetric": false
+ },
+ "lcp_flat4/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 500,
+  "symmetric": false
+ },
+ "lcp_flat8/acc1": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "lcp_flat8/acc_all": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "lcp_flat8/cd": {
+  "dim": [
+   6,
+   6
+  ],
+  "kind": "matrix"
+ },
+ "lcp_flat8/cd_from_to": {
+  "dim": [
+   5,
+   6
+  ],
+  "kind": "matrix"
+ },
+ "lcp_flat8/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_flat8/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_flat8/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_flat8/cells/g4": {
+  "kind": "vector"
+ },
+ "lcp_flat8/cells/g5": {
+  "kind": "vector"
+ },
+ "lcp_flat8/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 500,
+  "symmetric": false
+ },
+ "lcp_flat8/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 500,
+  "symmetric": false
+ },
+ "lcp_global_na/acc1": {
+  "dim": [
+   12,
+   24
+  ],
+  "kind": "raster"
+ },
+ "lcp_global_na/acc_all": {
+  "dim": [
+   12,
+   24
+  ],
+  "kind": "raster"
+ },
+ "lcp_global_na/cd": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_global_na/cd_from_to": {
+  "dim": [
+   3,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_global_na/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_global_na/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_global_na/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_global_na/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 288,
+  "symmetric": false
+ },
+ "lcp_global_na/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 288,
+  "symmetric": false
+ },
+ "lcp_grass/acc1": {
+  "dim": [
+   6,
+   7
+  ],
+  "kind": "raster"
+ },
+ "lcp_grass/acc_all": {
+  "dim": [
+   6,
+   7
+  ],
+  "kind": "raster"
+ },
+ "lcp_grass/cd": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_grass/cd_from_to": {
+  "dim": [
+   3,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_grass/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_grass/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_grass/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_grass/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 42,
+  "symmetric": false
+ },
+ "lcp_grass/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 42,
+  "symmetric": false
+ },
+ "lcp_lonlat/acc1": {
+  "dim": [
+   20,
+   30
+  ],
+  "kind": "raster"
+ },
+ "lcp_lonlat/acc_all": {
+  "dim": [
+   20,
+   30
+  ],
+  "kind": "raster"
+ },
+ "lcp_lonlat/cd": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_lonlat/cd_from_to": {
+  "dim": [
+   3,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_lonlat/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_lonlat/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_lonlat/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_lonlat/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 600,
+  "symmetric": false
+ },
+ "lcp_lonlat/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 600,
+  "symmetric": false
+ },
+ "lcp_rand/acc1": {
+  "dim": [
+   30,
+   40
+  ],
+  "kind": "raster"
+ },
+ "lcp_rand/acc_all": {
+  "dim": [
+   30,
+   40
+  ],
+  "kind": "raster"
+ },
+ "lcp_rand/cd": {
+  "dim": [
+   5,
+   5
+  ],
+  "kind": "matrix"
+ },
+ "lcp_rand/cd_from_to": {
+  "dim": [
+   4,
+   5
+  ],
+  "kind": "matrix"
+ },
+ "lcp_rand/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_rand/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_rand/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_rand/cells/g4": {
+  "kind": "vector"
+ },
+ "lcp_rand/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 1200,
+  "symmetric": false
+ },
+ "lcp_rand/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 1200,
+  "symmetric": false
+ },
+ "lcp_rect_asym/acc1": {
+  "dim": [
+   25,
+   35
+  ],
+  "kind": "raster"
+ },
+ "lcp_rect_asym/acc_all": {
+  "dim": [
+   25,
+   35
+  ],
+  "kind": "raster"
+ },
+ "lcp_rect_asym/cd": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_rect_asym/cd_from_to": {
+  "dim": [
+   3,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "lcp_rect_asym/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_rect_asym/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_rect_asym/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_rect_asym/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 875,
+  "symmetric": false
+ },
+ "lcp_rect_asym/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 875,
+  "symmetric": false
+ },
+ "lcp_small/acc1": {
+  "dim": [
+   9,
+   8
+  ],
+  "kind": "raster"
+ },
+ "lcp_small/acc_all": {
+  "dim": [
+   9,
+   8
+  ],
+  "kind": "raster"
+ },
+ "lcp_small/cd": {
+  "dim": [
+   5,
+   5
+  ],
+  "kind": "matrix"
+ },
+ "lcp_small/cd_from_to": {
+  "dim": [
+   4,
+   5
+  ],
+  "kind": "matrix"
+ },
+ "lcp_small/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_small/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_small/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_small/cells/g4": {
+  "kind": "vector"
+ },
+ "lcp_small/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 72,
+  "symmetric": false
+ },
+ "lcp_small/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 72,
+  "symmetric": false
+ },
+ "lcp_tobler/acc1": {
+  "dim": [
+   87,
+   61
+  ],
+  "kind": "raster"
+ },
+ "lcp_tobler/acc_all": {
+  "dim": [
+   87,
+   61
+  ],
+  "kind": "raster"
+ },
+ "lcp_tobler/cd": {
+  "dim": [
+   5,
+   5
+  ],
+  "kind": "matrix"
+ },
+ "lcp_tobler/cd_from_to": {
+  "dim": [
+   4,
+   5
+  ],
+  "kind": "matrix"
+ },
+ "lcp_tobler/cells/g1": {
+  "kind": "vector"
+ },
+ "lcp_tobler/cells/g2": {
+  "kind": "vector"
+ },
+ "lcp_tobler/cells/g3": {
+  "kind": "vector"
+ },
+ "lcp_tobler/cells/g4": {
+  "kind": "vector"
+ },
+ "lcp_tobler/path": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 5307,
+  "symmetric": false
+ },
+ "lcp_tobler/path_one": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 5307,
+  "symmetric": false
+ }
+}

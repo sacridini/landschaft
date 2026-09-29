@@ -220,6 +220,14 @@ class Transition:
         return (f"Transition({self.shape[0]} x {self.shape[1]} cells, {self.directions} directions, {kind}, "
                 f"{self.matrix_values}, {self.n_connections} connections)")
 
+    def is_symmetric(self) -> bool:
+        """Whether the matrix is symmetric (gdistance's ``isSymmetric``): always for symmetric
+        transitions, and for asymmetric ones whose values happen to be."""
+        if self.symmetric:
+            return True
+        m = self.to_sparse()
+        return (m != m.T).nnz == 0
+
     def copy(self) -> "Transition":
         return Transition(self.values.copy(), self.grid, self.directions, self.symmetric, self.matrix_values,
                           self._template)
@@ -611,7 +619,7 @@ def sum_reciprocal(x1: Transition, x2: Transition) -> Transition:
     >>> import numpy as np
     >>> a = ls.cost.transition(np.full((2, 2), 2.0), "mean", 4)
     >>> b = ls.cost.transition(np.full((2, 2), 3.0), "mean", 4)
-    >>> float(ls.cost.sum_reciprocal(a, b).to_sparse()[0, 1])   # 1 / (1/2 + 1/3)
+    >>> round(float(ls.cost.sum_reciprocal(a, b).to_sparse()[0, 1]), 12)   # 1 / (1/2 + 1/3)
     1.2
     """
     def resist(t: Transition) -> Transition:

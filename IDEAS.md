@@ -771,7 +771,9 @@ Fases:
    em 43 casos, inclusive lon/lat e grade global; o `"mahal"` e o `normalize("symm")` com
    NA do gdistance falham, aqui dão o valor pretendido);
 2. menor custo: `acc_cost`, `cost_distance` (from/to, assimétrico), `shortest_path`
-   (células, raster, transição, linhas), Dijkstra direto na grade, origens em paralelo;
+   (células, raster, transição, linhas), Dijkstra direto na grade, origens em paralelo.
+   **Feita** (0.76.0: bit a bit em 10 cenários, caminhos iguais nos empates com o heap
+   indexado do igraph portado);
 3. passeio aleatório: `commute_distance` e `passage` sem `theta` com a Cholesky multifrontal
    do `circuit` (o `HabitatGraph` passa a usá-la no lugar do SuperLU);
 4. RSP: `passage(theta=...)` e `rsp_distance` (métodos 1/2, net/total); uma fatoração de

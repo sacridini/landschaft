@@ -6,6 +6,22 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.76.0] - 2026-09-29
+
+### Added
+- Grid distances, part 2: least-cost analysis over a transition. `ls.cost.acc_cost` (cost
+  surface from the nearest of several origins, points or a mask raster),
+  `ls.cost.cost_distance` (costs between points, or from one set to another; asymmetric
+  transitions give direction-dependent costs) and `ls.cost.shortest_path` (the path as a
+  transition, one transition per goal, the cells, or line strings). Identical bit for bit to
+  gdistance's `accCost`, `costDistance` and `shortestPath` on 10 reference setups (among
+  them uniform grids with 4, 8 and 16 directions, where many paths cost the same: the path
+  is the one gdistance returns, as igraph's indexed heap is reproduced). Dijkstra runs on
+  the grid itself (no graph is built), several origins in parallel; 4 million cells take
+  0.6 s from one origin. gdistance fails on `shortestPath(output = "TransitionStack")` with
+  several goals and on `output = "SpatialLines"` with an unreachable goal; landschaft
+  returns the paths (empty ones for unreachable goals).
+
 ## [0.75.0] - 2026-09-29
 
 ### Added

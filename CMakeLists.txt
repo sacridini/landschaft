@@ -102,6 +102,7 @@ set_target_properties(nlmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Distances and routes on grids (gdistance): transitions, least-cost and random-walk distances.
 add_library(costcore STATIC
     src/cpp/cost/geodesic.cpp
+    src/cpp/cost/shortest.cpp
     src/cpp/cost/transition.cpp
 )
 target_include_directories(costcore PUBLIC src/cpp)
