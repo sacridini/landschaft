@@ -33,6 +33,7 @@ from .circuit import omniscape
 from .collection import RasterCollection, RasterInfo
 from . import conn
 from .conn import HabitatGraph
+from . import cost
 from .contagion import clustering_fac, contagion_pff
 from .datasets import EXAMPLE_DATA, example_data
 from .distance import EuclideanDistanceResult, euclidean_distance
@@ -185,6 +186,7 @@ __all__ = [
     "change_colormap",
     "bio",
     "circuit",
+    "cost",
     "nlm",
     "batch",
     "clustering_fac",

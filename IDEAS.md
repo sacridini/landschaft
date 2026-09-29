@@ -729,6 +729,63 @@ Fases:
     randomizar a próxima enquanto a atual é analisada (~30 %; as trocas ficam em sequência
     porque o curveball perde velocidade ao lado das threads da análise).
 
+## Distâncias e rotas em grades (gdistance)
+
+Análise de 2026-09-29. O gdistance 1.6.4 (`C:\Users\eduar\Documents\dev\gdistance`, R,
+GPL >= 2; na biblioteca do RStudio está o 1.6.5, que só muda a documentação) calcula
+distâncias e rotas sobre o grafo de células vizinhas de um raster: a matriz de transição
+(`transition`, com uma função dos dois valores, 4/8/16 direções, simétrica ou não;
+`geoCorrection`; `normalize`; aritmética; `sumReciprocal`; barreiras, áreas e Mahalanobis),
+o menor custo (`accCost`, `costDistance`, `shortestPath`), o passeio aleatório
+(`commuteDistance`, `passage` sem `theta`), os passeios aleatórios de menor custo (RSP:
+`passage` com `theta`, `rSPDistance`) e a sobreposição de rotas (`pathInc`).
+
+O que já existia no landschaft: o grafo de condutância só por dentro do `conn` (duas funções,
+4/8 direções, simétrico, raster projetado), o `costDistance` e o `commuteDistance` só entre
+os nós de um `HabitatGraph`, e as versões do GTB (`ls.cost_distance`, `ls.least_cost_path`),
+com outra semântica, que ficam como estão.
+
+Desenho (aceito pelo usuário): submódulo `ls.cost` (`src/cpp/cost/`), nomes em snake_case.
+- `Transition`: um valor por célula e por direção (`values[d, célula]`; metade das direções
+  quando simétrica, o valor de `f(x[menor índice], x[maior índice])`; todas quando não, o
+  valor de `f(x[origem], x[destino])`), 0 = sem ligação. Mais compacto e previsível que uma
+  matriz esparsa genérica; lon/lat global dá a volta no meridiano 180 como o gdistance.
+- Funções prontas em C++ (`"mean"` com o `mean` do R, min, max, soma, origem, destino...)
+  ou qualquer callable vetorizado que recebe `x` (2 x n) como a função do R recebe `c(x1, x2)`;
+  `1 / tr`, `tr * tr2`, `tr.map(f, pairs="edges"|"all")` para o exemplo de Tobler.
+- Pontos como coordenadas (n x 2), pontos do shapely/GeoDataFrame, ou máscaras raster.
+
+Critério de igualdade (referências geradas no R com `tools/make_reference_cost.py`, casos em
+`tests/cost_cases.py`): bit a bit na transição, na geoCorrection (tentar também lon/lat:
+GeographicLib 2.0 do pacote raster com a libm do mingw), no normalize, na aritmética, no
+`acc_cost` e no `cost_distance`; o `shortest_path` com a mesma sequência de células,
+inclusive nos empates (ordem do heap do Dijkstra do igraph); commute, `passage`, RSP e
+`path_inc` com tolerância (~1e-10), porque os solvers esparsos somam em outra ordem.
+
+Fases:
+0. harness de referência, casos, dados de exemplo (`maungawhau`, `Europe`, `genDist`,
+   `popCoord`) e o esqueleto de `ls.cost`;
+1. `Transition` (motor C++/OpenMP, funções prontas e callables, 4/8/16 direções, assimétrica,
+   `geo_correction` c/r com lon/lat e volta global, `normalize`, aritmética,
+   `sum_reciprocal`, `to_raster`, `adjacency`, Mahalanobis);
+2. menor custo: `acc_cost`, `cost_distance` (from/to, assimétrico), `shortest_path`
+   (células, raster, transição, linhas), Dijkstra direto na grade, origens em paralelo;
+3. passeio aleatório: `commute_distance` e `passage` sem `theta` com a Cholesky multifrontal
+   do `circuit` (o `HabitatGraph` passa a usá-la no lugar do SuperLU);
+4. RSP: `passage(theta=...)` e `rsp_distance` (métodos 1/2, net/total); uma fatoração de
+   `I - W` e Sherman-Morrison por destino (`I - W_j` difere em uma linha) no lugar de uma
+   fatoração por par;
+5. `path_inc` (overlap/nonoverlap, pesos, barreiras e áreas), tutorial com figuras e
+   benchmarks contra o gdistance. O `pathInc` com `to=` do gdistance devolve só NA (o
+   `.finishFlowFromTo` copia a matriz vazia): implementar o comportamento pretendido;
+6. opcional, se o profiling justificar: LU multifrontal própria sem pivotamento para o RSP
+   (`I - W` é diagonal dominante), com a ordenação ND do `circuit`.
+
+Fora (não faz sentido portar 1:1): a estrutura S4 (`Coords`, `TransitionData`, `show`,
+`==`, `[<-` com matriz de índices, `Summary` linha a linha), a função do R chamada ligação
+por ligação (aqui vetorizada), o processamento em pedaços em arquivo temporário do
+`pathInc` e as duas rotinas internas de transição (mesmos valores).
+
 ## Observações para os testes
 
 - O círculo circunscrito do landscapemetrics usa um algoritmo aleatorizado: regerar
