@@ -33,6 +33,7 @@ in the test suite, and runs from a few to several hundred times faster.
 | **Circuit connectivity** | omnidirectional and pairwise current flow, rasters and networks | Circuitscape, Omniscape |
 | **Distance & restoration** | cost surfaces, least-cost paths and corridors, isochrone maps | GuidosToolbox |
 | **Change detection** | simple and morphological change, fragmentation transitions | GuidosToolbox |
+| **Routes on grids** | transitions from any rule, travel-time surfaces, least-cost distances and paths, random walks, randomised shortest paths, route overlap | gdistance |
 | **Neutral landscape models** | simulated landscapes as null models: random, percolation, gradients, fractal surfaces, Gaussian fields, mosaics, clusters, classification | NLMR |
 | **Large data** | out-of-core tiles and row blocks, parallel batches of rasters | |
 
@@ -112,6 +113,7 @@ floating-point solvers. Typical speed-ups on the benchmark cases:
 | Landscape metrics | landscapemetrics 2.2.2 | identical bits | 35–500× |
 | Habitat networks | Makurhini, Conefor | to 1e-12 | 13–620× |
 | Omniscape, Circuitscape | Omniscape 0.7, Circuitscape 6.1 | to 2e-11 | 3–45× |
+| Grid distances | gdistance 1.6 | identical bits (least cost); 1e-14 (random walks) | 3–400× |
 | Neutral landscape models | NLMR 1.4 (same seed) | identical bits | 2–6000× |
 
 Methods, machines, full tables and the known differences are on the

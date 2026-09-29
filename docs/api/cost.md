@@ -9,7 +9,7 @@ the `ls.cost` module.
 The results are those of the R package gdistance, value for value: the
 connections are built with R's arithmetic, and on longitude/latitude grids the
 distances between cells are the ellipsoidal ones of the R package raster, to
-the last bit.
+the last bit. Tutorial: [routes on grids](../tutorials/grid-routes.md).
 
 <!-- no-run -->
 ```python
@@ -65,6 +65,21 @@ routes more and more as `theta` grows (Saerens et al. 2009). `passage` with a
 `theta` gives their passages; `rsp_distance` their expected costs.
 
 ::: landschaft.cost.rsp_distance
+
+## Route overlap, barriers and areas
+
+How much the routes from a common origin to two locations share (van Etten
+and Hijmans 2010), optionally weighted by barriers or areas.
+
+::: landschaft.cost.path_inc
+
+::: landschaft.cost.overlap
+
+::: landschaft.cost.nonoverlap
+
+::: landschaft.cost.barriers
+
+::: landschaft.cost.areas
 
 ## Example data
 

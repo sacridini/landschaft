@@ -104,6 +104,13 @@ from a single raster on a laptop to continental maps larger than memory.
     Folders of rasters in parallel, tiles for maps larger than memory,
     streaming tables with millions of rows.
 
+-   :material-routes:{ .lg .middle } **Routes on grids**
+
+    ---
+
+    Travel-time surfaces, least-cost and random-walk distances, randomised
+    shortest paths and the overlap of dispersal routes.
+
 -   :material-dice-multiple-outline:{ .lg .middle } **Neutral landscapes**
 
     ---

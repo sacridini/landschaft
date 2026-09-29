@@ -8,6 +8,7 @@
 #include <pybind11/stl.h>
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -396,6 +397,79 @@ void register_python(py::module_& m) {
         py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("from_cells"),
         py::arg("to_cells"), py::arg("theta"), py::arg("net"), py::arg("method"),
         "Randomised-shortest-path distances (gdistance's rSPDistance), goals in parallel.");
+
+    m.def(
+        "cost_graph_edges",
+        [](const CArray<double>& values, const py::tuple& grid, int directions, bool symmetric) {
+            const Grid g = grid_of(grid);
+            py::buffer_info b = values.request();
+            check_values(g, directions, symmetric, b);
+            const Layout t{&g, directions, symmetric, values.data()};
+            GraphEdges e;
+            {
+                py::gil_scoped_release release;
+                e = rsp_edges(t);
+            }
+            return py::make_tuple(vector_to_array(std::move(e.from)), vector_to_array(std::move(e.to)),
+                                  vector_to_array(std::move(e.t)));
+        },
+        py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"),
+        "Connections (from, to, value) of the graph of cells with outgoing connections, in flow order.");
+
+    m.def(
+        "cost_path_flows",
+        [](const CArray<double>& values, const py::tuple& grid, int directions, bool symmetric, i64 origin,
+           const std::vector<i64>& locs, double theta, bool quirk) {
+            const Grid g = grid_of(grid);
+            py::buffer_info b = values.request();
+            check_values(g, directions, symmetric, b);
+            const Layout t{&g, directions, symmetric, values.data()};
+            std::vector<double> out;
+            std::size_t ne = 0;
+            {
+                py::gil_scoped_release release;
+                if (std::isnan(theta)) {  // random walk
+                    const WalkGraph wg = walk_graph(t);
+                    ne = wg.adj.size();
+                    const std::int32_t o = origin >= 0 && origin < g.ncell() ? wg.node_of[static_cast<std::size_t>(origin)] : -1;
+                    if (o < 0) throw std::invalid_argument("the origin is not on the transition's graph");
+                    std::vector<std::int32_t> nodes;
+                    for (const i64 c : locs) nodes.push_back(c >= 0 && c < g.ncell() ? wg.node_of[static_cast<std::size_t>(c)] : -1);
+                    out = walk_flows(wg, o, nodes, quirk, directions != 16 && !g.wrap, g.nx);
+                } else {
+                    out = rsp_flows(t, origin, locs, theta);
+                    ne = locs.empty() ? 0 : out.size() / locs.size();
+                }
+            }
+            py::array_t<double> a = vector_to_array(std::move(out));
+            if (locs.empty()) return a.reshape({static_cast<py::ssize_t>(0), static_cast<py::ssize_t>(0)});
+            return a.reshape({static_cast<py::ssize_t>(locs.size()), static_cast<py::ssize_t>(ne)});
+        },
+        py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("origin"),
+        py::arg("locs"), py::arg("theta"), py::arg("quirk") = true,
+        "Flows on every connection from the origin to each location (pathInc): random walk (theta NaN) or RSP.");
+
+    m.def(
+        "cost_path_overlap",
+        [](const CArray<double>& fa, const CArray<double>& fb, const CArray<double>& r,
+           const std::vector<int>& functions, bool upper) {
+            if (fa.ndim() != 2 || fb.ndim() != 2 || r.ndim() != 2 || fa.shape(1) != fb.shape(1) ||
+                r.shape(1) != fa.shape(1))
+                throw std::invalid_argument("flows (locations x connections) and weights (layers x connections)");
+            const i64 na = fa.shape(0), nb = fb.shape(0), ne = fa.shape(1), nr = r.shape(0);
+            const i64 nf = static_cast<i64>(functions.size());
+            py::array_t<double> out({nf, nr, na, nb});
+            double* o = out.mutable_data();
+            std::fill(o, o + nf * nr * na * nb, std::numeric_limits<double>::quiet_NaN());
+            const double *pa = fa.data(), *pb = fb.data(), *pr = r.data();
+            {
+                py::gil_scoped_release release;
+                path_overlap(pa, na, pb, nb, ne, pr, nr, functions, upper, o);
+            }
+            return out;
+        },
+        py::arg("fa"), py::arg("fb"), py::arg("r"), py::arg("functions"), py::arg("upper"),
+        "pathInc's sums of overlap (0) / nonoverlap (1) of flows weighted per connection.");
 
     m.def(
         "cost_r_mean", [](const CArray<double>& x) { return lsm::r_mean(x.data(), x.size()); }, py::arg("x"),

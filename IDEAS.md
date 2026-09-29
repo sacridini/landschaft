@@ -786,7 +786,9 @@ Fases:
    theta pequeno); assimétricas e método 2 por LU do Eigen em ordem de dissecção aninhada;
    1e-15 típico, 1e-10 no pior caso. O `rSPDistance(method = 2)` do gdistance falha;
 5. `path_inc` (overlap/nonoverlap, pesos, barreiras e áreas), tutorial com figuras e
-   benchmarks contra o gdistance. O `pathInc` com `to=` do gdistance devolve só NA (o
+   benchmarks contra o gdistance. **Feita** (0.79.0: 1e-14; tutorial "Routes on grids" com
+   Tobler, theta e R1b1b2 na Europa; os pesos padrão do `pathInc` do gdistance são lidos
+   das ligações erradas quando há células sem ligação). O `pathInc` com `to=` do gdistance devolve só NA (o
    `.finishFlowFromTo` copia a matriz vazia): implementar o comportamento pretendido;
 6. opcional, se o profiling justificar: LU multifrontal própria sem pivotamento para o RSP
    (`I - W` é diagonal dominante), com a ordenação ND do `circuit`.

@@ -279,3 +279,67 @@ std::vector<double> random_walk_passages(const WalkGraph& g, const std::vector<s
 }
 
 }  // namespace cost
+
+namespace cost {
+
+std::vector<double> walk_flows(const WalkGraph& g, std::int32_t origin, const std::vector<std::int32_t>& locs,
+                               bool quirk, bool geometric, i64 nx) {
+    const std::size_t ne = g.adj.size(), nl = locs.size();
+    std::vector<double> out(nl * ne, kNaN);
+    const std::int32_t comp = g.component[origin];
+    const auto members = members_of(g);
+    const auto& mem = members[static_cast<std::size_t>(comp)];
+    std::vector<std::int32_t> local(g.cell.size(), -1);
+    ComponentSystem cs;
+    build(g, mem, geometric, nx, cs, local);
+    const std::size_t nu = cs.nodes.size();
+    auto unknown = [&](std::int32_t node) -> std::int64_t {
+        if (node == cs.ground) return -1;
+        const auto it = std::lower_bound(cs.nodes.begin(), cs.nodes.end(), node);
+        return cs.iperm[static_cast<std::size_t>(it - cs.nodes.begin())];
+    };
+    // the locations in the origin's part
+    std::vector<std::size_t> todo;
+    for (std::size_t q = 0; q < nl; ++q)
+        if (locs[q] >= 0 && g.component[locs[q]] == comp) todo.push_back(q);
+    const std::size_t block = std::max<std::size_t>(1, std::min<std::size_t>(32, 20000000 / std::max<std::size_t>(1, nu)));
+    const std::size_t nblocks = (todo.size() + block - 1) / block;
+    const int nt = std::max(1, std::min(threads(), static_cast<int>(nblocks)));
+    std::vector<circuit::SolveScratch> scratch(static_cast<std::size_t>(nt));
+    const std::int64_t uo = unknown(origin);
+#pragma omp parallel for schedule(dynamic) num_threads(nt)
+    for (std::int64_t bi = 0; bi < static_cast<std::int64_t>(nblocks); ++bi) {
+        int tid = 0;
+#if defined(_OPENMP)
+        tid = omp_get_thread_num();
+#endif
+        const std::size_t c0 = static_cast<std::size_t>(bi) * block, c1 = std::min(todo.size(), c0 + block);
+        std::vector<double> x(nu * (c1 - c0), 0.0);
+        for (std::size_t a = c0; a < c1; ++a) {
+            double* col = x.data() + (a - c0) * nu;
+            // .currentM: e[from] <- C, then e[to] <- -C (C scaled away)
+            if (uo >= 0) col[static_cast<std::size_t>(uo)] = 1.0;
+            const std::int64_t ul = unknown(locs[todo[a]]);
+            if (ul >= 0) col[static_cast<std::size_t>(ul)] = -1.0;
+        }
+        cs.sys.solve_many(x.data(), static_cast<i64>(c1 - c0), scratch[static_cast<std::size_t>(tid)]);
+        std::vector<double> pot(g.cell.size(), 0.0);
+        for (std::size_t a = c0; a < c1; ++a) {
+            const double* col = x.data() + (a - c0) * nu;
+            for (std::size_t i = 0; i < nu; ++i) pot[static_cast<std::size_t>(cs.nodes[i])] = col[static_cast<std::size_t>(cs.iperm[i])];
+            pot[static_cast<std::size_t>(cs.ground)] =
+                quirk && nu > 0 ? pot[static_cast<std::size_t>(cs.nodes.back())] : 0.0;
+            double* f = out.data() + todo[a] * ne;
+            for (std::size_t e = 0; e < ne; ++e) f[e] = 0.0;
+            for (const std::int32_t k : mem) {
+                for (std::int64_t e = g.ptr[k]; e < g.ptr[k + 1]; ++e) {
+                    const std::int32_t l = g.adj[static_cast<std::size_t>(e)];
+                    f[e] = std::fabs(pot[k] - pot[l]) * g.w[static_cast<std::size_t>(e)];
+                }
+            }
+        }
+    }
+    return out;
+}
+
+}  // namespace cost

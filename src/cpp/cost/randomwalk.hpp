@@ -47,4 +47,11 @@ std::vector<double> random_walk_passages(const WalkGraph& g, const std::vector<s
                                          const std::vector<std::int32_t>& goals, bool quirk, bool geometric, i64 nx,
                                          i64 ncell);
 
+// gdistance's .currentM for pathInc: for each location, the current on every
+// connection (CSR order of the graph, both directions) when a unit current
+// enters at `origin` and leaves at the location: |V_k - V_l| g_kl. Rows of
+// locations in another part of the graph (or off it) are NaN.
+std::vector<double> walk_flows(const WalkGraph& g, std::int32_t origin, const std::vector<std::int32_t>& locs,
+                               bool quirk, bool geometric, i64 nx);
+
 }  // namespace cost

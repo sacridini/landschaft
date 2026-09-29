@@ -74,6 +74,13 @@ and follow along.
     Folders of rasters, maps larger than memory, time stacks with dask and
     very large tables.
 
+-   :material-routes:{ .lg .middle } **[Routes on grids](grid-routes.md)**
+
+    ---
+
+    Travel-time surfaces, least-cost routes, random walks and randomised
+    shortest paths; how much routes from a common origin overlap.
+
 -   :material-dice-multiple-outline:{ .lg .middle } **[Neutral landscapes](neutral-landscapes.md)**
 
     ---

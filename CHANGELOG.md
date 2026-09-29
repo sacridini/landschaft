@@ -6,6 +6,31 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.79.0] - 2026-09-29
+
+### Added
+- Grid distances, part 5: route overlap. `ls.cost.path_inc` (gdistance's `pathInc`): the
+  flows of random walks (or, with `theta`, randomised shortest paths) from a common origin
+  to every location, and for every pair of locations the weighted sum of `overlap` /
+  `nonoverlap` of their flows (or of any vectorised function), with the cost of each
+  connection, another transition or a list of transitions as weights. `ls.cost.barriers`
+  (continuous breaks or categories, symmetric or per direction) and `ls.cost.areas`, also
+  as `transition(x, "barriers" / "areas")`. Flows come from one block of solves (random
+  walk) or one factorisation per location (randomised shortest paths) and the pairwise
+  sums run in C++ in parallel. Agrees with gdistance to 1e-14 on 4 reference setups;
+  barrier and area transitions identical. Where gdistance's `pathInc` is wrong, landschaft
+  gives what its code intends: with `to` (gdistance returns only missing values) and on
+  grids with cells without connections (gdistance reads its default weights from the
+  wrong connections).
+- Tutorial *Routes on grids*: Tobler's hiking function on the Maungawhau volcano (travel
+  times, routes there and back), from least-cost paths to random walks with randomised
+  shortest paths, and the routes of the R1b1b2 haplogroup across Europe against genetic
+  distances. Benchmarks against gdistance on the benchmarks page.
+
+### Changed
+- `transition(x, "diff")` no longer warns about negative values (signed differences are
+  its purpose).
+
 ## [0.78.0] - 2026-09-29
 
 ### Added

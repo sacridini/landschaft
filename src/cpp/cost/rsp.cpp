@@ -561,3 +561,109 @@ std::vector<double> rsp_distances(const Layout& t, const std::vector<i64>& from,
 }
 
 }  // namespace cost
+
+namespace cost {
+
+GraphEdges rsp_edges(const Layout& t) {
+    RspOptions o;
+    o.solidify = true;
+    const RspGraph g = rsp_graph(t, o, {});
+    GraphEdges out;
+    const std::size_t n = g.cell.size();
+    for (std::size_t u = 0; u < n; ++u)
+        for (std::int64_t e = g.ptr[u]; e < g.ptr[u + 1]; ++e) {
+            out.from.push_back(g.cell[u]);
+            out.to.push_back(g.cell[static_cast<std::size_t>(g.adj[e])]);
+            out.t.push_back(g.t[e]);
+        }
+    return out;
+}
+
+std::vector<double> rsp_flows(const Layout& t, i64 origin, const std::vector<i64>& locs, double theta) {
+    RspOptions o;
+    o.theta = theta;
+    o.solidify = true;
+    const RspGraph g = rsp_graph(t, o, {});
+    const std::int32_t n = static_cast<std::int32_t>(g.cell.size());
+    const std::size_t ne = g.t.size(), nl = locs.size();
+    std::vector<double> out(nl * ne, kNaN);
+    const std::int32_t io = origin >= 0 && origin < static_cast<i64>(g.node_of.size()) ? g.node_of[origin] : -1;
+    if (io < 0) throw std::invalid_argument("the origin is not on the transition's graph");
+    std::vector<std::int64_t> rev(ne, -1);
+    for (std::int32_t u = 0; u < n; ++u)
+        for (std::int64_t e = g.ptr[u]; e < g.ptr[u + 1]; ++e) {
+            const std::int32_t l = g.adj[e];
+            for (std::int64_t f = g.ptr[l]; f < g.ptr[l + 1]; ++f)
+                if (g.adj[f] == u) rev[e] = f;
+        }
+    const bool geometric = geometric_of(t);
+    int threads = 1;
+#if defined(_OPENMP)
+    threads = std::max(1, std::min(omp_get_max_threads(), static_cast<int>(nl)));
+#endif
+    bool failed = false;
+#pragma omp parallel for schedule(dynamic) num_threads(threads)
+    for (std::int64_t qq = 0; qq < static_cast<std::int64_t>(nl); ++qq) {
+        const i64 c = locs[static_cast<std::size_t>(qq)];
+        const std::int32_t j = c >= 0 && c < static_cast<i64>(g.node_of.size()) ? g.node_of[c] : -1;
+        if (j < 0) continue;
+        try {
+            // .probPass with one goal: its row of W zeroed (Ij = 1 - 1/1)
+            std::vector<double> ij(static_cast<std::size_t>(n), 1.0);
+            ij[j] = 0.0;
+            const RspSystem sys(g, ij, geometric, t.grid->nx);
+            std::vector<double> ei(static_cast<std::size_t>(n), 0.0), ej(static_cast<std::size_t>(n), 0.0);
+            std::vector<double> zci(static_cast<std::size_t>(n)), zcj(static_cast<std::size_t>(n)), nkl(ne);
+            ei[io] = 1.0;
+            ej[j] = 1.0;
+            sys.solve_t(ei.data(), zci.data());
+            sys.solve(ej.data(), zcj.data());
+            const double zcij = zcj[io];
+            double* f = out.data() + static_cast<std::size_t>(qq) * ne;
+            if (zcij < 1e-300) {
+                std::fill(f, f + ne, 0.0);
+                continue;
+            }
+            for (std::int32_t u = 0; u < n; ++u)
+                for (std::int64_t e = g.ptr[u]; e < g.ptr[u + 1]; ++e)
+                    nkl[e] = zci[u] * (ij[u] * g.w[e]) * zcj[g.adj[e]] / zcij;
+            for (std::size_t e = 0; e < ne; ++e)  // skewpart(N) * 2, negatives to 0
+                f[e] = std::max(nkl[e] - (rev[e] >= 0 ? nkl[static_cast<std::size_t>(rev[e])] : 0.0), 0.0);
+        } catch (...) {
+#pragma omp critical(cost_rsp_flows_failed)
+            failed = true;
+        }
+    }
+    if (failed) throw std::runtime_error("I - W is singular for some location");
+    return out;
+}
+
+void path_overlap(const double* fa, std::int64_t na, const double* fb, std::int64_t nb, std::int64_t ne,
+                  const double* r, std::int64_t nr, const std::vector<int>& functions, bool upper, double* out) {
+    const std::int64_t nf = static_cast<std::int64_t>(functions.size());
+    const std::int64_t npairs = na * nb;
+#pragma omp parallel for schedule(dynamic)
+    for (std::int64_t pq = 0; pq < npairs; ++pq) {
+        const std::int64_t p = pq / nb, q = pq % nb;
+        if (upper && q < p) continue;
+        const double* a = fa + p * ne;
+        const double* b = fb + q * ne;
+        for (std::int64_t fi = 0; fi < nf; ++fi) {
+            for (std::int64_t ri = 0; ri < nr; ++ri) {
+                const double* w = r + ri * ne;
+                double s = 0;
+                if (functions[static_cast<std::size_t>(fi)] == 0) {  // overlap: pmin(a, b)
+                    for (std::int64_t e = 0; e < ne; ++e) s += std::min(a[e], b[e]) * w[e];
+                } else {  // nonoverlap: pmax(pmax(a, b) * (1 - pmin(a, b)) - pmin(a, b), 0)
+                    for (std::int64_t e = 0; e < ne; ++e) {
+                        const double lo = std::min(a[e], b[e]), hi = std::max(a[e], b[e]);
+                        s += std::max(hi * (1 - lo) - lo, 0.0) * w[e];
+                    }
+                }
+                out[((fi * nr + ri) * na + p) * nb + q] = s;
+            }
+        }
+    }
+}
+
+}  // namespace cost

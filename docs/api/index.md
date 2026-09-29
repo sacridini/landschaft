@@ -259,6 +259,11 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.cost.commute_distance`](cost.md#landschaft.cost.commute_distance) | Expected commute distances of a random walk between points: gdistance's ``commuteDistance()`` |
 | [`ls.cost.passage`](cost.md#landschaft.cost.passage) | Passages of a random walk from origins to goals: gdistance's ``passage()`` |
 | [`ls.cost.rsp_distance`](cost.md#landschaft.cost.rsp_distance) | Randomised-shortest-path distances between points: gdistance's ``rSPDistance()`` |
+| [`ls.cost.path_inc`](cost.md#landschaft.cost.path_inc) | Overlap and non-overlap of the routes from a common origin to each location: gdistance's ``pathInc()`` |
+| [`ls.cost.overlap`](cost.md#landschaft.cost.overlap) | gdistance's ``overlap``: the flow two routes share on each connection, ``min(a, b)`` |
+| [`ls.cost.nonoverlap`](cost.md#landschaft.cost.nonoverlap) | gdistance's ``nonoverlap``: ``max(max(a, b) * (1 - min(a, b)) - min(a, b), 0)`` |
+| [`ls.cost.barriers`](cost.md#landschaft.cost.barriers) | Barrier transitions: gdistance's ``transition(x, "barriers", directions)`` |
+| [`ls.cost.areas`](cost.md#landschaft.cost.areas) | Area transitions: gdistance's ``transition(x, "areas", directions)`` |
 | [`ls.cost.example_data`](cost.md#landschaft.cost.example_data) | Path of an example data set for the grid distances |
 
 ### Distance & restoration

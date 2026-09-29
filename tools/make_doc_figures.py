@@ -372,6 +372,9 @@ BENCHMARKS = [
     ("Omniscape 1000×1000, radius 100", "Omniscape", 275, 12.4),
     ("Pairwise with current map, 1000×1000", "Circuitscape", 76.5, 9.5),
     ("Network pairwise, 1 M nodes", "Circuitscape", 27.7, 5.0),
+    ("Transition + correction, 300×300", "gdistance", 2.0, 0.0049),
+    ("Randomised shortest paths, 300×300", "gdistance", 5.98, 0.21),
+    ("Route overlap, 10 locations, 300×300", "gdistance", 5.97, 0.157),
 ]
 
 
@@ -380,7 +383,7 @@ def bench_speedup():
     rows = sorted(BENCHMARKS, key=lambda r: r[2] / r[3])
     speedup = [orig / ours for _, _, orig, ours in rows]
     labels = [f"{task}  ·  {tool}" for task, tool, _, _ in rows]
-    fig, ax = plt.subplots(figsize=(9, 4.6))
+    fig, ax = plt.subplots(figsize=(9, 5.4))
     bars = ax.barh(range(len(rows)), speedup, color="#15803d", height=0.62)
     ax.set_xscale("log")
     ax.set_yticks(range(len(rows)), labels)
@@ -715,6 +718,113 @@ def bio_clusters():
     cmap = ListedColormap(["#0d9488", "#f59e0b", "#6366f1", "#e11d48", "#65a30d"])
     bio_map(ax, run["bd"].to_raster(groups), "five Sorenson clusters", cmap=cmap, vmin=0.5, vmax=5.5)
     save(fig, "bio_clusters")
+
+
+_COST: dict = {}
+
+
+def cost_hiking_run():
+    """The tutorial's hiking example on the Maungawhau volcano."""
+    if not _COST:
+        dem = ls.load_raster(ls.cost.example_data("maungawhau"), validate=None)
+        slope = ls.cost.geo_correction(ls.cost.transition(dem, "diff", 8, symmetric=False))
+        speed = slope.map(lambda s: 6 * np.exp(-3.5 * np.abs(s + 0.05)) / 3.6, pairs="all")
+        conductance = ls.cost.geo_correction(speed)
+        A, B = (2667670, 6479000), (2667800, 6479400)
+        _COST.update(dem=dem, conductance=conductance, A=A, B=B)
+    return _COST
+
+
+def _cost_extent(da):
+    t = da.rio.transform()
+    ny, nx = da.shape
+    return (t.c, t.c + nx * t.a, t.f + ny * t.e, t.f)
+
+
+@figure
+def cost_hiking():
+    run = cost_hiking_run()
+    dem, cond, A, B = run["dem"], run["conductance"], run["A"], run["B"]
+    minutes = np.asarray(ls.cost.acc_cost(cond, A)) / 60
+    there = ls.cost.shortest_path(cond, A, B, output="lines").geometry.iloc[0]
+    back = ls.cost.shortest_path(cond, B, A, output="lines").geometry.iloc[0]
+    ext = _cost_extent(dem)
+    fig, axes = plt.subplots(1, 2, figsize=(9.5, 5.2))
+    im = axes[0].imshow(dem.values, cmap="terrain", extent=ext)
+    axes[0].contour(dem.values, levels=np.arange(100, 200, 10), colors="k", linewidths=0.4, extent=ext,
+                    origin="upper")
+    fig.colorbar(im, ax=axes[0], shrink=0.7, label="elevation (m)")
+    axes[0].set_title("Maungawhau")
+    im = axes[1].imshow(minutes, cmap="magma_r", extent=ext)
+    fig.colorbar(im, ax=axes[1], shrink=0.7, label="minutes from A")
+    axes[1].set_title("walking time and routes")
+    for ax in axes:
+        ax.plot(*there.xy, color="#0ea5e9", lw=2, label="A to B")
+        ax.plot(*back.xy, color="#f43f5e", lw=2, ls="--", label="B to A")
+        for name, (x, y) in (("A", A), ("B", B)):
+            ax.plot(x, y, "o", color="white", mec="black", ms=7)
+            ax.annotate(name, (x, y), xytext=(6, 6), textcoords="offset points", fontweight="bold")
+        ax.set_axis_off()
+    axes[1].legend(loc="lower right", frameon=True, fontsize=8)
+    fig.tight_layout()
+    save(fig, "cost_hiking")
+
+
+@figure
+def cost_theta():
+    run = cost_hiking_run()
+    dem, cond, A, B = run["dem"], run["conductance"], run["A"], run["B"]
+    ext = _cost_extent(dem)
+    fig, axes = plt.subplots(1, 4, figsize=(12, 4))
+    for ax, theta in zip(axes, (0, 0.001, 0.01, 1)):
+        p = np.asarray(ls.cost.passage(cond, A, B, theta=theta))
+        ax.imshow(np.log10(np.clip(p, 1e-4, None)), cmap="viridis", vmin=-4, vmax=0, extent=ext)
+        ax.contour(dem.values, levels=np.arange(100, 200, 20), colors="w", linewidths=0.3, extent=ext,
+                   origin="upper")
+        ax.set_title("random walk (theta = 0)" if theta == 0 else f"theta = {theta:g}")
+        ax.set_axis_off()
+    sm = plt.cm.ScalarMappable(cmap="viridis", norm=plt.Normalize(-4, 0))
+    cb = fig.colorbar(sm, ax=axes, shrink=0.7, ticks=[-4, -3, -2, -1, 0])
+    cb.ax.set_yticklabels(["0.0001", "0.001", "0.01", "0.1", "1"])
+    cb.set_label("net passages")
+    save(fig, "cost_theta")
+
+
+@figure
+def cost_europe():
+    import pandas as pd
+
+    europe = ls.load_raster(ls.cost.example_data("europe"), validate=None)
+    pops = pd.read_csv(ls.cost.example_data("pop_coord"))
+    genetic = pd.read_csv(ls.cost.example_data("gen_dist"), index_col="population")
+    walk = ls.cost.geo_correction(ls.cost.transition(europe, "mean", 16), "r", scale=True)
+    xy = pops[["x", "y"]].to_numpy()
+    origin = (37.0, 39.0)
+    routes = ls.cost.path_inc(walk, origin, xy)
+    coast = ls.cost.geo_correction(ls.cost.transition(europe, "mean", 16), "c")
+    least = ls.cost.cost_distance(coast, xy)
+    pairs = np.triu_indices(len(pops), 1)
+    g = genetic.loc[pops["population"], pops["population"]].to_numpy()[pairs]
+    passages = np.asarray(ls.cost.passage(walk, origin, xy[0]))
+    fig, axes = plt.subplots(1, 3, figsize=(13, 3.8), gridspec_kw={"width_ratios": [1.3, 1, 1]})
+    ext = _cost_extent(europe)
+    land = np.where(np.isnan(europe.values.astype(float)) | (europe.values == 0), np.nan, 1.0)
+    axes[0].imshow(land, cmap=ListedColormap(["#e5e7eb"]), extent=ext)
+    axes[0].imshow(np.log10(np.clip(np.where(np.isnan(land), np.nan, passages), 1e-3, None)), cmap="viridis",
+                   alpha=0.85, vmin=-3, vmax=0, extent=ext)
+    axes[0].plot(*xy.T, "o", color="#f97316", mec="black", ms=4)
+    axes[0].plot(*origin, "*", color="#dc2626", mec="black", ms=12)
+    axes[0].set_title(f"random walk from Anatolia to {pops['population'][0]}")
+    axes[0].set_axis_off()
+    for ax, x, name in ((axes[1], routes["overlap"][pairs], "route overlap"),
+                        (axes[2], least[pairs] / 1000, "least-cost distance over land (km)")):
+        r = np.corrcoef(x, g)[0, 1]
+        ax.scatter(x, g, s=10, color="#0d9488", alpha=0.7)
+        ax.set_xlabel(name)
+        ax.set_ylabel("genetic distance")
+        ax.set_title(f"r = {r:.2f}")
+    fig.tight_layout()
+    save(fig, "cost_europe")
 
 
 def main() -> None:

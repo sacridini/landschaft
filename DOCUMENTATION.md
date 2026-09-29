@@ -2126,7 +2126,36 @@ d2 = ls.cost.rsp_distance(tr, sources, targets, theta=0.5, method=2)
   solidify). gdistance's `rSPDistance(method = 2)` fails; landschaft's is checked
   against a dense computation of the formula.
 
+Route overlap:
+
+```python
+out = ls.cost.path_inc(tr, origin, locations)                  # {"overlap": n x n, "nonoverlap": n x n}
+out = ls.cost.path_inc(tr, origin, locs_a, locs_b, theta=0.5)  # n_a x n_b, randomised shortest paths
+bars = ls.cost.barriers(r, 8, breaks=[100, 200])               # list of Transitions (resistance 1)
+cats = ls.cost.barriers(landcover, 8)                          # one layer per pair of categories
+out = ls.cost.path_inc(tr, origin, locations, weight=bars)     # (layers, n, n)
+out = ls.cost.path_inc(tr, origin, locations, functions=[lambda a, b: abs(a - b)])
+```
+
+- Flows (per connection, both directions, the order of the solidified graph):
+  random walk `|V_k - V_l| g_kl` for a unit current from the origin to the
+  location (`.currentM`, with the grounded cell's potential quirk under
+  `gdistance_compat`); randomised shortest paths the net passages
+  `max(N - N', 0)` with the location absorbing (`.probPass` with one goal).
+- Pairs: `sum_e f(flow_p, flow_q) * R_e`, `R` = 1 / conductance by default (Inf
+  set to 0), a transition's values (reciprocals of conductances), or one row per
+  layer; among one set of locations only the upper triangle is computed and the
+  diagonal is 0 (gdistance's `dist`); locations off the graph give NaN.
+- `barriers`: continuous: `min < b < max` of the two cells for each break;
+  categorical: gdistance's pair order (`.matrIndex`: (2,1), (3,1), ..., (3,2)),
+  both directions or one layer per direction; `areas`: `sum(v == k) / 2` with k
+  = 1..n (gdistance compares with the index, not the category value).
+- gdistance's pathInc with `to` returns only NA, and its default weights index the
+  full matrix with the reduced matrix's positions (wrong when cells without
+  connections precede others): the references use grids without missing cells.
+
 Reference: `tools/make_reference_cost.py` (gdistance 1.6.5, raster 3.6-31,
 Matrix 1.7-1, igraph 2.1.3, R 4.4.2; cases in `tests/cost_cases.py`), tests in
 `tests/test_cost_transition.py`, `tests/test_cost_lcp.py`,
-`tests/test_cost_randomwalk.py` and `tests/test_cost_rsp.py`.
+`tests/test_cost_randomwalk.py`, `tests/test_cost_rsp.py` and
+`tests/test_cost_pathinc.py`.

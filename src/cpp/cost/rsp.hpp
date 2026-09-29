@@ -38,4 +38,23 @@ std::vector<double> rsp_passages(const Layout& t, const std::vector<i64>& origin
 std::vector<double> rsp_distances(const Layout& t, const std::vector<i64>& from, const std::vector<i64>& to,
                                   const RspOptions& o);
 
+// The connections of the graph of cells with outgoing connections
+// (transitionSolidify), in the order of the flows below: from, to, value.
+struct GraphEdges {
+    std::vector<i64> from, to;
+    std::vector<double> t;
+};
+GraphEdges rsp_edges(const Layout& t);
+
+// gdistance's .randomSP for pathInc: for each location, the net passages of
+// the randomised shortest paths from `origin` to it on every connection
+// (skewpart(N) * 2, negatives set to 0); rows of zeros when the location
+// cannot be reached, NaN off the graph.
+std::vector<double> rsp_flows(const Layout& t, i64 origin, const std::vector<i64>& locs, double theta);
+
+// pathInc's reduction: out[(f, r, p, q)] = sum_e fn_f(fa[p, e], fb[q, e]) r[r, e]
+// for fn 0 = overlap (pmin), 1 = nonoverlap; `upper`: only q >= p.
+void path_overlap(const double* fa, std::int64_t na, const double* fb, std::int64_t nb, std::int64_t ne,
+                  const double* r, std::int64_t nr, const std::vector<int>& functions, bool upper, double* out);
+
 }  // namespace cost

@@ -65,6 +65,11 @@ def _rasters() -> dict[str, RasterSpec]:
     r["rect"] = RasterSpec(np.floor(_random((25, 35), 2, 1, 9)), (1000.0, 2050.0, 0.0, 500.0), UTM)
     r["lonlat"] = RasterSpec(_random((20, 30), 3), (-20.0, 10.0, 30.0, 50.0), LONLAT)
     r["lonlat_full"] = RasterSpec(_random((20, 30), 3, na=0.0), (-20.0, 10.0, 30.0, 50.0), LONLAT)
+    # Three categories in blocks, for categorical barriers and areas.
+    cats = np.ones((12, 15))
+    cats[:, 6:] = 2
+    cats[7:, 3:11] = 3
+    r["cats"] = RasterSpec(cats, (0.0, 150.0, 0.0, 120.0), UTM)
     r["rect_full"] = RasterSpec(np.floor(_random((25, 35), 12, 1, 9, na=0.0)), (1000.0, 2050.0, 0.0, 500.0), UTM)
     r["rand_full"] = RasterSpec(_random((30, 40), 11, na=0.0), (500_000.0, 500_400.0, 4_000_000.0, 4_000_300.0),
                                 UTM)
@@ -500,6 +505,93 @@ def _rsp(tr, pts, theta) -> dict:
     }
 
 
+# pathInc setups (NA-free, connected rasters: gdistance's default weights are misread otherwise)
+_PI_SETUPS = {
+    "global": (_RW_SETUPS["global"][0].replace("type = 'r', scl = TRUE", "type = 'c', scl = TRUE"),
+               lambda R: ls_cost().geo_correction(1 / _tr(R["global"], "mean", 8), "c", scale=True),
+               [(4, 9), (4, 0), (1, 15), (7, 3), (2, 5)], 0.5, [0.8, 1.6]),
+    "flat4": (_RW_SETUPS["flat4"][0], _RW_SETUPS["flat4"][1], [(10, 12), (0, 0), (18, 24), (3, 20), (15, 3)],
+              1.0, [0.5]),
+    "rand": (_RW_SETUPS["rand"][0], _RW_SETUPS["rand"][1], [(15, 20), (1, 1), (28, 38), (5, 35), (25, 3)],
+             0.5, [1.5, 3.0]),
+}
+_PI_RASTER = {"flat4": "flat", "rand": "rand_full"}
+
+
+def _pi_cases() -> dict[str, Case]:
+    cases: dict[str, Case] = {}
+    for key, (r_tr, py_tr, rc, theta, breaks) in _PI_SETUPS.items():
+        name = _PI_RASTER.get(key, key)
+        pts = cell_points(name, rc)
+        th = repr(float(theta))
+        br = "c(" + ", ".join(repr(float(b)) for b in breaks) + ")"
+        d = 8 if key != "flat4" else 4
+        cases[f"pi_{key}"] = Case(
+            name,
+            f"""tr <- {{
+                  {r_tr}
+                }}
+                pts <- {r_matrix(pts)}
+                o <- pts[1, ]
+                locs <- pts[-1, , drop = FALSE]
+                w <- transition(r, function(x) 1 + abs(x[1] - x[2]), {d})
+                bars <- transition(r, "barriers", {d}, intervalBreaks = {br})
+                list(
+                  rw = pathInc(tr, o, locs),
+                  rsp = pathInc(tr, o, locs, theta = {th}),
+                  wt = pathInc(tr, o, locs, weight = w),
+                  bar = pathInc(tr, o, locs, weight = bars),
+                  bars = bars)""",
+            lambda R, py_tr=py_tr, pts=pts, theta=theta, breaks=breaks, name=name, d=d:
+                _pi(py_tr(R), R[name], pts, theta, breaks, d),
+            group="pathinc",
+            tolerance=1e-9,
+        )
+    cases["pi_categories"] = Case(
+        "cats",
+        """rc <- ratify(r)
+           list(bar4 = transition(rc, "barriers", 4), bar8a = transition(rc, "barriers", 8, symm = FALSE),
+                areas = transition(rc, "areas", 8))""",
+        lambda R: {"bar4": _layers(ls_cost().barriers(R["cats"].values, 4, extent=R["cats"].extent,
+                                                       crs=R["cats"].crs)),
+                   "bar8a": _layers(ls_cost().barriers(R["cats"].values, 8, symmetric=False,
+                                                        extent=R["cats"].extent, crs=R["cats"].crs)),
+                   "areas": _layers(ls_cost().areas(R["cats"].values, 8, extent=R["cats"].extent,
+                                                    crs=R["cats"].crs))},
+        group="pathinc",
+    )
+    return cases
+
+
+def _layers(ts) -> dict:
+    return {str(k + 1): t for k, t in enumerate(ts)}
+
+
+def _pi(tr, spec, pts, theta, breaks, d) -> dict:
+    c = ls_cost()
+    o, locs = pts[0], pts[1:]
+    w = _tr(spec, lambda x: 1 + np.abs(x[0] - x[1]), d)
+    bars = c.barriers(spec.values, d, breaks=breaks, extent=spec.extent, crs=spec.crs)
+
+    def named(out, layers=None):
+        if layers is None:
+            return {"function1layer1": out["overlap"], "function2layer1": out["nonoverlap"]}
+        res = {}
+        for f, key in enumerate(("overlap", "nonoverlap")):
+            for k in range(layers):
+                res[f"function{f + 1}layer{k + 1}"] = out[key][k]
+        return res
+
+    return {
+        "rw": named(c.path_inc(tr, o, locs)),
+        "rsp": named(c.path_inc(tr, o, locs, theta=theta)),
+        "wt": named(c.path_inc(tr, o, locs, weight=w)),
+        "bar": named(c.path_inc(tr, o, locs, weight=bars), len(bars)),
+        # one break: gdistance's Xstack[[2:2]] is a single layer, not a stack
+        "bars": bars[0] if len(bars) == 1 else _layers(bars),
+    }
+
+
 def _cases() -> dict[str, Case]:
     cases = {}
     cases.update(_transition_cases())
@@ -507,6 +599,7 @@ def _cases() -> dict[str, Case]:
     cases.update(_lcp_cases())
     cases.update(_rw_cases())
     cases.update(_rsp_cases())
+    cases.update(_pi_cases())
     return cases
 
 

@@ -127,6 +127,27 @@ Against Omniscape 0.7 and Circuitscape 6.1 (Julia), both with 20 threads.
 Every window and every circuit is solved exactly (a sparse Cholesky
 factorisation), and the result does not depend on the number of threads.
 
+### Grid distances
+
+Against the R package gdistance 1.6.5 on a 300 × 300 grid of random
+resistances (8 directions; best of 3 runs in R, of 5 in Landschaft).
+
+| Task | gdistance (R) | Landschaft | Since |
+|---|---|---|---|
+| Transition (`1 / mean`) and geographic correction | 2.0 s | 0.005 s | 0.75 |
+| Cost surface from one point (`accCost`) | 0.10 s | 0.011 s | 0.76 |
+| Least-cost distances between 20 points | 0.31 s | 0.026 s | 0.76 |
+| Least-cost paths to 5 goals | 0.05 s | 0.012 s | 0.76 |
+| Commute distances between 10 points | 0.29 s | 0.084 s | 0.77 |
+| Random-walk passages | 0.36 s | 0.066 s | 0.77 |
+| Randomised-shortest-path passages (`theta = 0.5`) | 5.98 s | 0.21 s | 0.78 |
+| Randomised-shortest-path distances, 3 × 3 points | fails (a 60 GiB dense matrix) | 0.25 s | 0.78 |
+| … the same on 60 × 60 | 0.23 s | 0.0045 s | 0.78 |
+| Route overlap from a common origin, 10 locations | 5.97 s | 0.16 s | 0.79 |
+
+At scale: on 2000 × 2000 (4 million cells) a transition takes 0.15 s, a cost
+surface 0.6 s, a random-walk passage map 4.5 s.
+
 ### Neutral landscape models
 
 The same landscapes as NLMR (same seeds, identical values), one model call each
@@ -194,6 +215,8 @@ The same landscapes as NLMR (same seeds, identical values), one model call each
 | Omniscape | Omniscape 0.7 with the CHOLMOD solver: its test configurations and synthetic maps | 1.7e-11 |
 | Circuitscape raster modes | Circuitscape 6.1 with CHOLMOD: its own test cases (advanced, 17 pairwise, 25 one-to-all / all-to-one) | advanced: currents to 1.2e-13 of the largest; pairwise: resistances to 1e-12, maps to 3e-13; one-to-all: 5e-14 |
 | Circuitscape network mode | Circuitscape's network test cases and six synthetic ones | 1.1e-14 |
+| Grid distances: transitions (4/8/16 directions, symmetric or not, R's arithmetic, Mahalanobis), geographic correction (projected, longitude/latitude, global grids), normalisation, arithmetic, cost surfaces, least-cost distances and paths | gdistance 1.6.5 (R 4.4.2, raster 3.6-31, igraph 2.1.3): 53 reference cases, among them uniform grids where many paths cost the same | identical bits and the same paths |
+| Grid distances: commute distances, random-walk and randomised-shortest-path passages and distances, route overlap, barrier and area transitions | the same gdistance: 15 reference cases | 1e-14 typical, 1e-10 worst (different sparse factorisations than R's Matrix package); barrier and area transitions identical |
 | Neutral landscape models: random, percolation, gradients, midpoint displacement, fractional Brownian motion, Gaussian fields, Poisson line and Voronoi mosaics, random, neighbourhood and rectangular clusters, curds, classification | NLMR 1.4.0 (R 4.4.2) with the same seeds; R's generator and the libstdc++ distributions of NLMR's C++ code against R and the Rtools compiler | identical bits |
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an

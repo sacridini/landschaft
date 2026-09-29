@@ -19,18 +19,24 @@ Typical use::
 
 from ._examples import example_data
 from ._lcp import acc_cost, cost_distance, shortest_path
+from ._pathinc import areas, barriers, nonoverlap, overlap, path_inc
 from ._randomwalk import commute_distance, passage, rsp_distance
 from ._transition import Transition, geo_correction, normalize, sum_reciprocal, transition
 
 __all__ = [
     "Transition",
     "acc_cost",
+    "areas",
+    "barriers",
     "commute_distance",
     "cost_distance",
     "example_data",
     "geo_correction",
+    "nonoverlap",
     "normalize",
+    "overlap",
     "passage",
+    "path_inc",
     "rsp_distance",
     "shortest_path",
     "sum_reciprocal",

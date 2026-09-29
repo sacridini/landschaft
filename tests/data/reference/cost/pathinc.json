@@ -1,0 +1,300 @@
+{
+ "pi_categories/areas/1": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 180,
+  "symmetric": true
+ },
+ "pi_categories/areas/2": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 180,
+  "symmetric": true
+ },
+ "pi_categories/areas/3": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 180,
+  "symmetric": true
+ },
+ "pi_categories/bar4/1": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 180,
+  "symmetric": false
+ },
+ "pi_categories/bar4/2": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 180,
+  "symmetric": false
+ },
+ "pi_categories/bar4/3": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 180,
+  "symmetric": false
+ },
+ "pi_categories/bar8a/1": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 180,
+  "symmetric": false
+ },
+ "pi_categories/bar8a/2": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 180,
+  "symmetric": false
+ },
+ "pi_categories/bar8a/3": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 180,
+  "symmetric": false
+ },
+ "pi_categories/bar8a/4": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 180,
+  "symmetric": false
+ },
+ "pi_categories/bar8a/5": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 180,
+  "symmetric": false
+ },
+ "pi_categories/bar8a/6": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 180,
+  "symmetric": false
+ },
+ "pi_flat4/bar/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_flat4/bar/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_flat4/bars": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 500,
+  "symmetric": false
+ },
+ "pi_flat4/rsp/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_flat4/rsp/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_flat4/rw/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_flat4/rw/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_flat4/wt/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_flat4/wt/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/bar/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/bar/function1layer2": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/bar/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/bar/function2layer2": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/bars/1": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 162,
+  "symmetric": false
+ },
+ "pi_global/bars/2": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 162,
+  "symmetric": false
+ },
+ "pi_global/rsp/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/rsp/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/rw/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/rw/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/wt/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_global/wt/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/bar/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/bar/function1layer2": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/bar/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/bar/function2layer2": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/bars/1": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 1200,
+  "symmetric": false
+ },
+ "pi_rand/bars/2": {
+  "kind": "transition",
+  "matrix_values": "resistance",
+  "ncell": 1200,
+  "symmetric": false
+ },
+ "pi_rand/rsp/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/rsp/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/rw/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/rw/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/wt/function1layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "pi_rand/wt/function2layer1": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ }
+}

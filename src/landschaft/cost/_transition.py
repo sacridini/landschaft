@@ -429,7 +429,7 @@ def _clean(values: np.ndarray) -> np.ndarray:
 
 
 def transition(x, function: str | Callable = "mean", directions: int = 8, symmetric: bool = True, *,
-               extent=None, crs=None, band=None, nodata=None) -> Transition:
+               extent=None, crs=None, band=None, nodata=None, breaks=None):
     """Transition matrix from a raster: gdistance's ``transition()``.
 
     Connects every pair of neighbouring cells that both have a value with
@@ -447,7 +447,8 @@ def transition(x, function: str | Callable = "mean", directions: int = 8, symmet
         ``"geometric"`` (``exp(mean(log(x)))``), ``"from"`` (``x[1]``),
         ``"to"`` (``x[2]``), ``"diff"`` (``x[2] - x[1]``); ``"mahal"``: the
         normalised reciprocal of the Mahalanobis distance between the cells'
-        layers; or a vectorised callable that receives ``x`` (``2 x n``:
+        layers; ``"barriers"`` / ``"areas"``: lists of transitions, see
+        :func:`barriers` and :func:`areas`; or a vectorised callable that receives ``x`` (``2 x n``:
         ``x[0]`` the first cell, ``x[1]`` the second) as gdistance's function
         receives ``c(x1, x2)``, e.g. ``lambda x: x[1] - x[0]``. Values of 0
         leave the cells unconnected. For a conductance from a resistance use
@@ -463,10 +464,12 @@ def transition(x, function: str | Callable = "mean", directions: int = 8, symmet
         columns wrap around, as in gdistance.
     band, nodata
         Band to read (1-based) and value to treat as missing.
+    breaks
+        ``"barriers"`` only: the breaks of continuous values.
 
     Returns
     -------
-    Transition
+    Transition, or a list of them for ``"barriers"`` and ``"areas"``
 
     Examples
     --------
@@ -482,6 +485,13 @@ def transition(x, function: str | Callable = "mean", directions: int = 8, symmet
     >>> float(up.to_sparse()[1, 2]), float(up.to_sparse()[2, 1])
     (2.0, -2.0)
     """
+    if isinstance(function, str) and function in ("barriers", "areas"):
+        from ._pathinc import areas, barriers
+
+        kw = dict(extent=extent, crs=crs, band=band, nodata=nodata)
+        if function == "barriers":
+            return barriers(x, directions, breaks=breaks, symmetric=symmetric, **kw)
+        return areas(x, directions, **kw)
     if isinstance(function, str) and function == "mahal":
         from ._mahal import mahal_transition
 
@@ -493,7 +503,7 @@ def transition(x, function: str | Callable = "mean", directions: int = 8, symmet
             raise ValueError(f"unknown function {function!r}; built-in: {', '.join(BUILTINS)}, 'mahal'")
         v = _core.cost_builtin(np.ascontiguousarray(values), grid.core, directions, symmetric, function)
         tr = Transition(v, grid, directions, symmetric, "conductance", template)
-        if (v < 0).any():
+        if function != "diff" and (v < 0).any():  # differences are signed on purpose
             warnings.warn("transition function gives negative values", RuntimeWarning, stacklevel=2)
         return tr
     if not callable(function):

@@ -157,6 +157,7 @@ nav:
       - Habitat networks: tutorials/habitat-networks.md
       - Circuit connectivity: tutorials/circuit-connectivity.md
       - Distance & restoration: tutorials/distance-restoration.md
+      - Routes on grids: tutorials/grid-routes.md
       - Change detection: tutorials/change-detection.md
       - Large data & batch: tutorials/large-data.md
       - Neutral landscapes: tutorials/neutral-landscapes.md
