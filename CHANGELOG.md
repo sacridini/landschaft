@@ -6,7 +6,28 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.75.0] - 2026-09-29
+
 ### Added
+- Grid distances (`ls.cost`), a port of the R package gdistance, part 1: transition
+  matrices on a raster grid. `ls.cost.transition` connects neighbouring cells (4, 8 or 16
+  directions, symmetric or one value per direction) with a built-in function computed in
+  C++ with R's arithmetic (`"mean"`, `"min"`, `"max"`, `"sum"`, `"prod"`, `"harmonic"`,
+  `"geometric"`, `"from"`, `"to"`, `"diff"`), any vectorised callable, or the Mahalanobis
+  distance between the layers of a multi-band raster (`"mahal"`; R's `cov`, LAPACK's
+  `dgesv` and the reference BLAS reproduced). `Transition` objects combine with `*`, `+`,
+  `-`, numbers and `map()` (also over every pair of neighbours, as gdistance's
+  `tr[adjacent(...)] <-`), convert to scipy sparse matrices and rasters (`to_raster`,
+  gdistance's reduce methods), and `geo_correction` (types `"c"` and `"r"`, `scale`,
+  `factors`), `normalize` and `sum_reciprocal` work as in gdistance. On longitude/latitude
+  grids the distances between cells are the R package raster's ellipsoidal ones
+  (GeographicLib with mingw's maths) and global grids wrap around the 180th meridian.
+  Identical bit for bit to gdistance 1.6 on 43 reference cases (projected, non-square,
+  longitude/latitude and global grids, 4/8/16 directions, the Tobler hiking example);
+  4 million cells take 0.15 s. Example data of gdistance in `ls.cost.example_data`.
+- gdistance's own `transition(brick, "mahal")` fails (it leaves `transitionCells` empty)
+  and `normalize(tr, "symm")` gives NaN or fails on grids with missing cells; landschaft
+  gives the values their code intends.
 - Wheels: cibuildwheel configuration (`pyproject.toml`) for CPython 3.10-3.14 on Linux
   (x86_64, aarch64), Windows (x86_64) and macOS (arm64, x86_64), with the OpenMP runtime
   bundled (conda-forge's `libomp` on macOS 11+, delvewheel on Windows); a GitHub workflow

@@ -9,6 +9,7 @@ example you can run. Each page covers one topic; the
 import landschaft as ls             # most tools: ls.mspa, ls.fad, ls.Landscape...
 ls.conn.protconn(...)               # habitat networks and protected areas
 from landschaft import circuit      # Circuitscape
+ls.cost.transition(r, "mean", 8)    # distances and routes on grids
 ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 ls.bio.BaseData.from_table(...)     # biodiversity analysis
 ```
@@ -55,6 +56,12 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
     ---
 
     Omniscape and Circuitscape: current, resistance distance, networks.
+
+-   :material-routes:{ .lg .middle } **[Grid distances](cost.md)**
+
+    ---
+
+    Transitions, cost surfaces, least-cost and random-walk distances and paths.
 
 -   :material-map-marker-distance:{ .lg .middle } **[Distance & restoration](distance.md)**
 
@@ -236,6 +243,17 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`circuit.circuitscape_network_advanced`](circuits.md#landschaft.circuit.circuitscape_network_advanced) | Circuitscape's advanced mode on a network (``data_type = network``, ``scenario = advanced``) |
 | [`circuit.NetworkResult`](circuits.md#landschaft.circuit.NetworkResult) | Circuitscape's network outputs, with the node numbers it writes (from 1) |
 | [`circuit.read_graph`](circuits.md#landschaft.circuit.read_graph) | Read a Circuitscape edge list, as its ``load_graph`` |
+
+### Grid distances
+
+| Name | Summary |
+|---|---|
+| [`ls.cost.transition`](cost.md#landschaft.cost.transition) | Transition matrix from a raster: gdistance's ``transition()`` |
+| [`ls.cost.Transition`](cost.md#landschaft.cost.Transition) | A transition matrix on a raster grid: gdistance's ``TransitionLayer`` |
+| [`ls.cost.geo_correction`](cost.md#landschaft.cost.geo_correction) | Correct a transition for the distances between cell centres: gdistance's ``geoCorrection()`` |
+| [`ls.cost.normalize`](cost.md#landschaft.cost.normalize) | Normalise a transition matrix: gdistance's ``normalize()`` |
+| [`ls.cost.sum_reciprocal`](cost.md#landschaft.cost.sum_reciprocal) | Combine two transitions as resistances in series: gdistance's ``sumReciprocal()`` |
+| [`ls.cost.example_data`](cost.md#landschaft.cost.example_data) | Path of an example data set for the grid distances |
 
 ### Distance & restoration
 

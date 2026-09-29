@@ -24,6 +24,7 @@ It provides a native **C++17 / OpenMP** core exposed through zero-copy **pybind1
 14. [Habitat Connectivity Graphs (Conefor Sensinode / Makurhini)](#14-habitat-connectivity-graphs-conefor-sensinode--makurhini)
 15. [Circuit Connectivity (Circuitscape / Omniscape)](#15-circuit-connectivity-circuitscape--omniscape)
 16. [Neutral Landscape Models (NLMR)](#16-neutral-landscape-models-nlmr)
+17. [Distances and Routes on Grids (gdistance)](#17-distances-and-routes-on-grids-gdistance)
 
 ---
 
@@ -1983,3 +1984,61 @@ Reference: `tools/make_reference_nlm.py` (NLMR 1.4.0 installed from a clone into
 private R library, R 4.4.2; the libstdc++ distributions checked against a probe
 built with the Rtools g++), tests in `tests/test_nlm.py` and
 `tests/test_nlm_rng.py`.
+
+---
+
+## 17. Distances and Routes on Grids (gdistance)
+
+`ls.cost` ports the R package gdistance: a raster becomes a graph of
+neighbouring cells whose connections carry a conductance (a *transition*),
+over which cost surfaces, least-cost distances and paths and random-walk
+measures are computed. Plan and phases in IDEAS.md.
+
+```python
+import numpy as np
+import landschaft as ls
+
+r = ls.load_raster("resistance.tif", validate=None)
+tr = 1 / ls.cost.transition(r, "mean", 8)            # conductance = 1 / mean resistance
+tr = ls.cost.geo_correction(tr)                      # / distance between cell centres
+up = ls.cost.transition(r, "diff", 8, symmetric=False)          # x[to] - x[from]
+f = ls.cost.transition(r, lambda x: 2 / (x[0] + x[1]), 4)       # any vectorised function
+p = ls.cost.normalize(tr, "row")                     # random-walk probabilities
+both = ls.cost.sum_reciprocal(tr, other)             # resistances in series
+tr.to_sparse(); tr.to_raster("NZcolMeans"); tr.adjacency()
+```
+
+- `Transition.values` is `(directions, cells)`: the value of the connection from
+  each cell in each direction (`offsets`), 0 = none. Symmetric transitions keep
+  the directions after (0, 0) and hold `f(x[lower index], x[higher])`, as the
+  upper triangle of gdistance's `dsCMatrix`; asymmetric ones hold
+  `f(x[from], x[to])` for all directions. Cells with a missing value have no
+  connections; 16 directions add the knight moves (raster's `adjacent`); on a
+  longitude/latitude grid spanning -180 to 180 (raster's `.isGlobalLonLat`, also
+  a grid without CRS in that range) the columns wrap around.
+- Built-in functions use R's arithmetic (`mean` in 80-bit with its second pass,
+  `sum`/`prod` in 80-bit, x87 `log`/`exp` for `"geometric"`), so they give
+  gdistance's bits; callables get numpy's arithmetic. `map("sqrt"|"exp"|"log")`
+  applies R's (x87) functions; `tr ** p` is R's `^`.
+- `geo_correction`: distances between cell centres (`xyFromCell`) as raster's
+  `pointDistance`: planar with R's vector (x87) `sqrt`, or GeographicLib 2.0's
+  `geod_inverse` on WGS84 with mingw-w64's maths (x87 `sin`, `cos`, `atan2`, the
+  UCRT's `hypot`, Cephes' `cbrt`): the distances are raster's bits on Windows
+  (199,999 random pairs out of 200,000 identical; the other is a NaN on both
+  sides). Symmetric transitions measure from the lower-index cell (the upper
+  triangle); type `"r"` multiplies north-south connections by `cos(pi/180 *
+  rowMeans(lat))` (80-bit mean, x87 `cos`).
+- `normalize` and `to_raster` sum rows and columns as the Matrix package (1.7)
+  does: in double, in increasing index order.
+- `"mahal"`: `cov` of the complete cells (R's `cov.c`, 80-bit), `solve` (LAPACK
+  3.12's `dgetrf2`/`dgetrs` over the reference BLAS, ported), the quadratic
+  forms as R's two `dgemv`, R's vector `sqrt` and `mean`, in raster's `adjacent`
+  pair order. gdistance's own method cannot build its result (empty
+  `transitionCells`); the reference runs its code with that fixed.
+- Differences from gdistance: `number / tr` acts on the connections only (in R
+  it would make a dense matrix), `tr + number` is refused, `normalize(tr,
+  "symm")` works on grids with missing cells (NaN or an error in gdistance).
+
+Reference: `tools/make_reference_cost.py` (gdistance 1.6.5, raster 3.6-31,
+Matrix 1.7-1, R 4.4.2; cases in `tests/cost_cases.py`), tests in
+`tests/test_cost_transition.py`.

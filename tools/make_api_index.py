@@ -27,6 +27,8 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
           "Habitat graphs, IIC/PC/ECA, importance, ProtConn, grids, MSPA networks."),
          ("circuits.md", "Circuit connectivity", ":material-lightning-bolt-outline:",
           "Omniscape and Circuitscape: current, resistance distance, networks."),
+         ("cost.md", "Grid distances", ":material-routes:",
+          "Transitions, cost surfaces, least-cost and random-walk distances and paths."),
          ("distance.md", "Distance & restoration", ":material-map-marker-distance:",
           "Distances, resistance, least-cost paths, corridors, zones of influence."),
          ("change.md", "Change detection", ":material-compare-horizontal:",
@@ -49,6 +51,7 @@ example you can run. Each page covers one topic; the
 import landschaft as ls             # most tools: ls.mspa, ls.fad, ls.Landscape...
 ls.conn.protconn(...)               # habitat networks and protected areas
 from landschaft import circuit      # Circuitscape
+ls.cost.transition(r, "mean", 8)    # distances and routes on grids
 ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 ls.bio.BaseData.from_table(...)     # biodiversity analysis
 ```
@@ -94,6 +97,8 @@ def prefix(ident: str) -> str:
         return "ls.nlm."
     if ".bio." in ident:
         return "ls.bio."
+    if ".cost." in ident:
+        return "ls.cost."
     if ".circuit." in ident and name != "omniscape":
         return "circuit."
     return "ls."

@@ -188,18 +188,19 @@ def _operation_cases() -> dict[str, Case]:
                list(
                  prod = t1 * t2, sum = t1 + t2, diff = t2 - t1, quot = t1 / 3, scaled = t1 * 2.5,
                  sum4 = t1 + t4, prod4 = t1 * t4, sqrt = sqrt(t1),
-                 row = normalize(t1, "row"), col = normalize(t2, "col"), symm = normalize(t1, "symm"),
-                 recip = sumReciprocal(t1, t4),
+                 row = normalize(t1, "row"), col = normalize(t2, "col"),                 recip = sumReciprocal(t1, t4),
                  r_nzcol = raster(t2), r_nzrow = raster(t2, "NZrowMeans"), r_colsums = raster(t1, "colSums"),
                  r_rowmeans = raster(t2, "rowMeans"),
                  adjacency = adjacencyFromTransition(t2))""",
             lambda R, n=name: _ops(R[n]),
         )
-    # gdistance fails on an asymmetric matrix with empty rows (NA cells): no NA here.
-    cases["ops_symm_asym"] = Case(
+    # normalize(symm) on empty rows (NA cells) gives gdistance NaN (0 * Inf) or an error: no NA here.
+    cases["ops_symm"] = Case(
         "global",
-        """list(symm_asym = normalize(transition(r, function(x) x[1] + 2 * x[2], 8, symm = FALSE), "symm"))""",
-        lambda R: {"symm_asym": ls_cost().normalize(_tr(R["global"], lambda x: x[0] + 2 * x[1], 8, symmetric=False),
+        """list(symm = normalize(transition(r, mean, 8), "symm"),
+                symm_asym = normalize(transition(r, function(x) x[1] + 2 * x[2], 8, symm = FALSE), "symm"))""",
+        lambda R: {"symm": ls_cost().normalize(_tr(R["global"], "mean", 8), "symm"),
+                   "symm_asym": ls_cost().normalize(_tr(R["global"], lambda x: x[0] + 2 * x[1], 8, symmetric=False),
                                                      "symm")},
     )
     # gdistance's own method fails (it leaves transitionCells empty, an invalid object): its code
@@ -236,7 +237,6 @@ def _operation_cases() -> dict[str, Case]:
            speed[adj] <- 6 * exp(-3.5 * abs(slope[adj] + 0.05))
            list(slope = slope, speed = speed, conductance = geoCorrection(speed))""",
         _tobler,
-        tolerance=4e-16,  # R's exp is mingw's x87 exp
     )
     cases["europe"] = Case(
         "europe",
@@ -258,7 +258,8 @@ def _tobler(R) -> dict:
 
     hd = _tr(R["maungawhau"], lambda x: x[1] - x[0], 8, symmetric=False)
     slope = ls.cost.geo_correction(hd)
-    speed = slope.map(lambda s: 6 * np.exp(-3.5 * np.abs(s + 0.05)), pairs="all")
+    # R's exp is mingw's x87 exp (np.exp may differ in the last bit)
+    speed = slope.map(lambda s: 6 * ls._core.cost_rmath("exp", -3.5 * np.abs(s + 0.05)), pairs="all")
     return {"slope": slope, "speed": speed, "conductance": ls.cost.geo_correction(speed)}
 
 
@@ -271,9 +272,8 @@ def _ops(spec: RasterSpec) -> dict:
     adj = t2.adjacency()
     return {
         "prod": t1 * t2, "sum": t1 + t2, "diff": t2 - t1, "quot": t1 / 3, "scaled": t1 * 2.5,
-        "sum4": t1 + t4, "prod4": t1 * t4, "sqrt": t1.map(np.sqrt),
+        "sum4": t1 + t4, "prod4": t1 * t4, "sqrt": t1.map("sqrt"),
         "row": ls.cost.normalize(t1, "row"), "col": ls.cost.normalize(t2, "col"),
-        "symm": ls.cost.normalize(t1, "symm"),
         "recip": ls.cost.sum_reciprocal(t1, t4),
         "r_nzcol": t2.to_raster(), "r_nzrow": t2.to_raster("NZrowMeans"), "r_colsums": t1.to_raster("colSums"),
         "r_rowmeans": t2.to_raster("rowMeans"),

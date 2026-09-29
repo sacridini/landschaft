@@ -772,12 +772,6 @@
   "ncell": 288,
   "symmetric": true
  },
- "ops_global_na/symm": {
-  "kind": "transition",
-  "matrix_values": "conductance",
-  "ncell": 288,
-  "symmetric": true
- },
  "ops_rand/adjacency": {
   "dim": [
    8160,
@@ -874,12 +868,6 @@
   "symmetric": false
  },
  "ops_rand/sum4": {
-  "kind": "transition",
-  "matrix_values": "conductance",
-  "ncell": 1200,
-  "symmetric": true
- },
- "ops_rand/symm": {
   "kind": "transition",
   "matrix_values": "conductance",
   "ncell": 1200,
@@ -986,13 +974,13 @@
   "ncell": 72,
   "symmetric": true
  },
- "ops_small/symm": {
+ "ops_symm/symm": {
   "kind": "transition",
   "matrix_values": "conductance",
-  "ncell": 72,
+  "ncell": 162,
   "symmetric": true
  },
- "ops_symm_asym/symm_asym": {
+ "ops_symm/symm_asym": {
   "kind": "transition",
   "matrix_values": "conductance",
   "ncell": 162,

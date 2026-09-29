@@ -12,8 +12,12 @@ Typical use::
     import landschaft as ls
 
     dem = ls.load_raster(ls.cost.example_data("maungawhau"), validate=None)
+    slope = ls.cost.geo_correction(ls.cost.transition(dem, "diff", 8, symmetric=False))
+    speed = slope.map(lambda s: 6 * np.exp(-3.5 * np.abs(s + 0.05)), pairs="all")
+    conductance = ls.cost.geo_correction(speed)      # Tobler's hiking function
 """
 
 from ._examples import example_data
+from ._transition import Transition, geo_correction, normalize, sum_reciprocal, transition
 
-__all__ = ["example_data"]
+__all__ = ["Transition", "example_data", "geo_correction", "normalize", "sum_reciprocal", "transition"]

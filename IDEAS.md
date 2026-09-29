@@ -764,10 +764,12 @@ inclusive nos empates (ordem do heap do Dijkstra do igraph); commute, `passage`,
 
 Fases:
 0. harness de referência, casos, dados de exemplo (`maungawhau`, `Europe`, `genDist`,
-   `popCoord`) e o esqueleto de `ls.cost`;
+   `popCoord`) e o esqueleto de `ls.cost`. **Feita** (d122c50);
 1. `Transition` (motor C++/OpenMP, funções prontas e callables, 4/8/16 direções, assimétrica,
    `geo_correction` c/r com lon/lat e volta global, `normalize`, aritmética,
-   `sum_reciprocal`, `to_raster`, `adjacency`, Mahalanobis);
+   `sum_reciprocal`, `to_raster`, `adjacency`, Mahalanobis). **Feita** (0.75.0: bit a bit
+   em 43 casos, inclusive lon/lat e grade global; o `"mahal"` e o `normalize("symm")` com
+   NA do gdistance falham, aqui dão o valor pretendido);
 2. menor custo: `acc_cost`, `cost_distance` (from/to, assimétrico), `shortest_path`
    (células, raster, transição, linhas), Dijkstra direto na grade, origens em paralelo;
 3. passeio aleatório: `commute_distance` e `passage` sem `theta` com a Cholesky multifrontal

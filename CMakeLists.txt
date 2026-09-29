@@ -99,6 +99,16 @@ target_include_directories(nlmcore PUBLIC src/cpp)
 target_link_libraries(nlmcore PUBLIC lsmcore)
 set_target_properties(nlmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# Distances and routes on grids (gdistance): transitions, least-cost and random-walk distances.
+add_library(costcore STATIC
+    src/cpp/cost/geodesic.cpp
+    src/cpp/cost/transition.cpp
+)
+target_include_directories(costcore PUBLIC src/cpp)
+# R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp).
+target_link_libraries(costcore PUBLIC lsmcore)
+set_target_properties(costcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # Biodiversity analyses (Biodiverse): spatial conditions, indices, randomisations.
 add_library(biocore STATIC
     src/cpp/bio/conditions.cpp
@@ -158,6 +168,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(conncore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(nlmcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(biocore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(costcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(circuitcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
@@ -177,6 +188,7 @@ if(MSVC)
     target_compile_options(conncore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(nlmcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(biocore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(costcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(circuitcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -184,13 +196,14 @@ else()
     target_compile_options(conncore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(nlmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(biocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(costcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(circuitcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
 pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
-                    src/cpp/bio/python.cpp)
+                    src/cpp/bio/python.cpp src/cpp/cost/python.cpp)
 target_link_libraries(_core PRIVATE eigen_headers)
-target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore)
+target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()
