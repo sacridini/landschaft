@@ -780,7 +780,11 @@ Fases:
    aterrada do gdistance);
 4. RSP: `passage(theta=...)` e `rsp_distance` (métodos 1/2, net/total); uma fatoração de
    `I - W` e Sherman-Morrison por destino (`I - W_j` difere em uma linha) no lugar de uma
-   fatoração por par;
+   fatoração por par. **Feita** (0.78.0) de outro jeito: `I - W` escalado por linha é
+   simétrico definido positivo (transições simétricas, método 1) e vai para a Cholesky do
+   `circuit`, uma fatoração por destino (Sherman-Morrison cancela catastroficamente com
+   theta pequeno); assimétricas e método 2 por LU do Eigen em ordem de dissecção aninhada;
+   1e-15 típico, 1e-10 no pior caso. O `rSPDistance(method = 2)` do gdistance falha;
 5. `path_inc` (overlap/nonoverlap, pesos, barreiras e áreas), tutorial com figuras e
    benchmarks contra o gdistance. O `pathInc` com `to=` do gdistance devolve só NA (o
    `.finishFlowFromTo` copia a matriz vazia): implementar o comportamento pretendido;

@@ -6,6 +6,23 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.78.0] - 2026-09-29
+
+### Added
+- Grid distances, part 4: randomised shortest paths (Saerens et al. 2009). `ls.cost.passage`
+  with `theta` (net or total passages per cell or per connection, several goals as
+  gdistance's `1 - 1/n` absorption) and `ls.cost.rsp_distance` (expected costs between
+  points, net or total, methods 1 and 2), gdistance's `passage(theta = ...)` and
+  `rSPDistance`. For symmetric transitions `I - W` scaled row by row is symmetric positive
+  definite and is factorised with the circuit module's multifrontal Cholesky; asymmetric
+  ones (and method 2, whose `P^theta` rows can add up to more than 1) use a sparse LU in
+  nested-dissection order. gdistance factorises once per pair of points, landschaft once per
+  goal (goals in parallel). Results agree with gdistance to 1e-15 typically and 1e-10 at
+  worst on 6 reference setups (among them an asymmetric transition and longitude/latitude
+  and global grids); method 2 is checked against a dense computation, as gdistance's own
+  `rSPDistance(method = 2)` fails (it calls `adjacencyFromTransition` on a matrix). A
+  1000 x 1000 grid takes 1.7 s per passage map.
+
 ## [0.77.0] - 2026-09-29
 
 ### Added

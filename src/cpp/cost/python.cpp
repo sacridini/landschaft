@@ -15,6 +15,7 @@
 
 #include "cost/geodesic.hpp"
 #include "cost/randomwalk.hpp"
+#include "cost/rsp.hpp"
 #include "cost/shortest.hpp"
 #include "cost/transition.hpp"
 #include "lsm/extended.hpp"
@@ -347,6 +348,54 @@ void register_python(py::module_& m) {
         },
         py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("origins"),
         py::arg("goals"), py::arg("quirk") = true, "Net passages of a random walk (gdistance's passage without theta).");
+
+    m.def(
+        "cost_rsp_passages",
+        [](const CArray<double>& values, const py::tuple& grid, int directions, bool symmetric,
+           const std::vector<i64>& origins, const std::vector<i64>& goals, double theta, bool net, bool edges) {
+            const Grid g = grid_of(grid);
+            py::buffer_info b = values.request();
+            check_values(g, directions, symmetric, b);
+            const Layout t{&g, directions, symmetric, values.data()};
+            RspOptions o;
+            o.theta = theta;
+            o.net = net;
+            o.solidify = true;
+            std::vector<double> out;
+            {
+                py::gil_scoped_release release;
+                out = rsp_passages(t, origins, goals, o, edges);
+            }
+            return vector_to_array(std::move(out));
+        },
+        py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("origins"),
+        py::arg("goals"), py::arg("theta"), py::arg("net"), py::arg("edges"),
+        "Randomised-shortest-path passages (gdistance's passage with theta): per cell, or per connection.");
+
+    m.def(
+        "cost_rsp_distances",
+        [](const CArray<double>& values, const py::tuple& grid, int directions, bool symmetric,
+           const std::vector<i64>& from, const std::vector<i64>& to, double theta, bool net, int method) {
+            const Grid g = grid_of(grid);
+            py::buffer_info b = values.request();
+            check_values(g, directions, symmetric, b);
+            const Layout t{&g, directions, symmetric, values.data()};
+            RspOptions o;
+            o.theta = theta;
+            o.net = net;
+            o.method = method;
+            o.solidify = false;
+            std::vector<double> out;
+            {
+                py::gil_scoped_release release;
+                out = rsp_distances(t, from, to, o);
+            }
+            py::array_t<double> a = vector_to_array(std::move(out));
+            return a.reshape({static_cast<py::ssize_t>(from.size()), static_cast<py::ssize_t>(to.size())});
+        },
+        py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("from_cells"),
+        py::arg("to_cells"), py::arg("theta"), py::arg("net"), py::arg("method"),
+        "Randomised-shortest-path distances (gdistance's rSPDistance), goals in parallel.");
 
     m.def(
         "cost_r_mean", [](const CArray<double>& x) { return lsm::r_mean(x.data(), x.size()); }, py::arg("x"),

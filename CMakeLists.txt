@@ -103,6 +103,7 @@ set_target_properties(nlmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(costcore STATIC
     src/cpp/cost/geodesic.cpp
     src/cpp/cost/randomwalk.cpp
+    src/cpp/cost/rsp.cpp
     src/cpp/cost/shortest.cpp
     src/cpp/cost/transition.cpp
 )
@@ -110,6 +111,7 @@ target_include_directories(costcore PUBLIC src/cpp)
 # R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp); the
 # circuit module's multifrontal Cholesky for the random walks.
 target_link_libraries(costcore PUBLIC lsmcore circuitcore)
+target_link_libraries(costcore PRIVATE eigen_headers)
 set_target_properties(costcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Biodiversity analyses (Biodiverse): spatial conditions, indices, randomisations.

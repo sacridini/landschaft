@@ -1,0 +1,284 @@
+{
+ "rsp_asym/pass_many": {
+  "dim": [
+   25,
+   35
+  ],
+  "kind": "raster"
+ },
+ "rsp_asym/pass_net": {
+  "dim": [
+   25,
+   35
+  ],
+  "kind": "raster"
+ },
+ "rsp_asym/pass_total": {
+  "dim": [
+   25,
+   35
+  ],
+  "kind": "raster"
+ },
+ "rsp_asym/pass_tr_net": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 875,
+  "symmetric": false
+ },
+ "rsp_asym/pass_tr_total": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 875,
+  "symmetric": false
+ },
+ "rsp_asym/rsp_net": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_asym/rsp_total": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_flat4/pass_many": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "rsp_flat4/pass_net": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "rsp_flat4/pass_total": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "rsp_flat4/pass_tr_net": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 500,
+  "symmetric": false
+ },
+ "rsp_flat4/pass_tr_total": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 500,
+  "symmetric": false
+ },
+ "rsp_flat4/rsp_net": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_flat4/rsp_total": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_global/pass_many": {
+  "dim": [
+   9,
+   18
+  ],
+  "kind": "raster"
+ },
+ "rsp_global/pass_net": {
+  "dim": [
+   9,
+   18
+  ],
+  "kind": "raster"
+ },
+ "rsp_global/pass_total": {
+  "dim": [
+   9,
+   18
+  ],
+  "kind": "raster"
+ },
+ "rsp_global/pass_tr_net": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 162,
+  "symmetric": false
+ },
+ "rsp_global/pass_tr_total": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 162,
+  "symmetric": false
+ },
+ "rsp_global/rsp_net": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_global/rsp_total": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_grass/pass_many": {
+  "dim": [
+   6,
+   7
+  ],
+  "kind": "raster"
+ },
+ "rsp_grass/pass_net": {
+  "dim": [
+   6,
+   7
+  ],
+  "kind": "raster"
+ },
+ "rsp_grass/pass_total": {
+  "dim": [
+   6,
+   7
+  ],
+  "kind": "raster"
+ },
+ "rsp_grass/pass_tr_net": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 42,
+  "symmetric": false
+ },
+ "rsp_grass/pass_tr_total": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 42,
+  "symmetric": false
+ },
+ "rsp_grass/rsp_net": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_grass/rsp_total": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_lonlat/pass_many": {
+  "dim": [
+   20,
+   30
+  ],
+  "kind": "raster"
+ },
+ "rsp_lonlat/pass_net": {
+  "dim": [
+   20,
+   30
+  ],
+  "kind": "raster"
+ },
+ "rsp_lonlat/pass_total": {
+  "dim": [
+   20,
+   30
+  ],
+  "kind": "raster"
+ },
+ "rsp_lonlat/pass_tr_net": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 600,
+  "symmetric": false
+ },
+ "rsp_lonlat/pass_tr_total": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 600,
+  "symmetric": false
+ },
+ "rsp_lonlat/rsp_net": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_lonlat/rsp_total": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_rand/pass_many": {
+  "dim": [
+   30,
+   40
+  ],
+  "kind": "raster"
+ },
+ "rsp_rand/pass_net": {
+  "dim": [
+   30,
+   40
+  ],
+  "kind": "raster"
+ },
+ "rsp_rand/pass_total": {
+  "dim": [
+   30,
+   40
+  ],
+  "kind": "raster"
+ },
+ "rsp_rand/pass_tr_net": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 1200,
+  "symmetric": false
+ },
+ "rsp_rand/pass_tr_total": {
+  "kind": "transition",
+  "matrix_values": "conductance",
+  "ncell": 1200,
+  "symmetric": false
+ },
+ "rsp_rand/rsp_net": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ },
+ "rsp_rand/rsp_total": {
+  "dim": [
+   2,
+   2
+  ],
+  "kind": "matrix"
+ }
+}

@@ -2096,7 +2096,37 @@ p = ls.cost.passage(tr, origin_mask, goal_mask, gdistance_compat=False)
   when cells without connections come before them).
 - `HabitatGraph`'s commute-time distances use the same engine.
 
+Randomised shortest paths:
+
+```python
+p = ls.cost.passage(tr, origin, goal, theta=1)                       # net passages per cell
+p = ls.cost.passage(tr, origin, goals, theta=1, total_net="total")    # expected visits
+f = ls.cost.passage(tr, origin, goal, theta=1, output="transition")   # per connection
+d = ls.cost.rsp_distance(tr, sources, targets, theta=1)               # n_from x n_to
+d2 = ls.cost.rsp_distance(tr, sources, targets, theta=0.5, method=2)
+```
+
+- `W = exp(-theta / T) * P` (method 1; `P = T / rowSums(T)`, R's x87 `exp`) or
+  `P^theta` (method 2); the goals' rows are scaled by `Ij` (0 for one goal:
+  absorbing; `1 - 1/n` for several, as `passage`); `z_i = A^-T e_i`,
+  `z_j = A^-1 e_j`, `A = I - Ij W`; `N = diag(z_i) Ij W diag(z_j) / z_ij`.
+  Passages per cell: total `max(rowSums(N), colSums(N))`, net
+  `rowSums(|N - N'|) / 2` doubled at the origins and goals (NaN off the graph,
+  all 0 when `z_ij < 1e-300`); per connection: `N`, or `max(N - N', 0)`. Distances:
+  `sum(C * N)` (net: `max(N - N', 0)`), one goal at a time.
+- Solvers: rows with `Ij = 0` are fixed (identity) and moved to the right-hand
+  side. For symmetric transitions with method 1, row `k` scaled by
+  `rowSums_k / Ij_k` gives `M = diag(s / Ij) - exp(-theta C) * T`: symmetric and
+  (strictly) diagonally dominant, factorised with the circuit module's
+  Cholesky; `A x = b` is `M x = Q b + K b_F`, `A' y = e` is `y = Q M^-1 e`.
+  Otherwise Eigen's `SparseLU` on `A` permuted into the grid's nested-dissection
+  order (4x faster than its COLAMD order on a 1000 x 1000 grid).
+- `passage` uses the cells with outgoing connections (`transitionSolidify`),
+  `rsp_distance` every cell with a connection (gdistance's `rSPDistance` does not
+  solidify). gdistance's `rSPDistance(method = 2)` fails; landschaft's is checked
+  against a dense computation of the formula.
+
 Reference: `tools/make_reference_cost.py` (gdistance 1.6.5, raster 3.6-31,
 Matrix 1.7-1, igraph 2.1.3, R 4.4.2; cases in `tests/cost_cases.py`), tests in
-`tests/test_cost_transition.py`, `tests/test_cost_lcp.py` and
-`tests/test_cost_randomwalk.py`.
+`tests/test_cost_transition.py`, `tests/test_cost_lcp.py`,
+`tests/test_cost_randomwalk.py` and `tests/test_cost_rsp.py`.

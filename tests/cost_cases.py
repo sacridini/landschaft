@@ -65,6 +65,7 @@ def _rasters() -> dict[str, RasterSpec]:
     r["rect"] = RasterSpec(np.floor(_random((25, 35), 2, 1, 9)), (1000.0, 2050.0, 0.0, 500.0), UTM)
     r["lonlat"] = RasterSpec(_random((20, 30), 3), (-20.0, 10.0, 30.0, 50.0), LONLAT)
     r["lonlat_full"] = RasterSpec(_random((20, 30), 3, na=0.0), (-20.0, 10.0, 30.0, 50.0), LONLAT)
+    r["rect_full"] = RasterSpec(np.floor(_random((25, 35), 12, 1, 9, na=0.0)), (1000.0, 2050.0, 0.0, 500.0), UTM)
     r["rand_full"] = RasterSpec(_random((30, 40), 11, na=0.0), (500_000.0, 500_400.0, 4_000_000.0, 4_000_300.0),
                                 UTM)
     # Global: edges wrap around the 180th meridian.
@@ -444,12 +445,68 @@ def _rw(tr, pts) -> dict:
     }
 
 
+# RSP setups: (raster, R transition, Python transition, points, theta)
+_RSP_SETUPS = {
+    "grass": (_RW_SETUPS["grass"][0], _RW_SETUPS["grass"][1], _RW_SETUPS["grass"][2], 0.5),
+    "flat4": (_RW_SETUPS["flat4"][0], _RW_SETUPS["flat4"][1], _RW_SETUPS["flat4"][2], 1.0),
+    "rand": (_RW_SETUPS["rand"][0], _RW_SETUPS["rand"][1], _RW_SETUPS["rand"][2], 0.5),
+    "lonlat": (_RW_SETUPS["lonlat"][0], _RW_SETUPS["lonlat"][1], _RW_SETUPS["lonlat"][2], 0.5),
+    "global": (_RW_SETUPS["global"][0], _RW_SETUPS["global"][1], _RW_SETUPS["global"][2], 0.5),
+    "asym": ("transition(r, function(x) 1 / (1 + abs(x[2] - x[1]) + x[2]), 8, symm = FALSE)",
+             lambda R: _tr(R["rect_full"], lambda x: 1 / (1 + np.abs(x[1] - x[0]) + x[1]), 8, symmetric=False),
+             [(0, 0), (24, 33), (12, 17), (3, 30)], 0.2),
+}
+_RSP_RASTER = {"flat4": "flat", "rand": "rand_full", "lonlat": "lonlat_full", "asym": "rect_full"}
+
+
+def _rsp_cases() -> dict[str, Case]:
+    cases: dict[str, Case] = {}
+    for key, (r_tr, py_tr, rc, theta) in _RSP_SETUPS.items():
+        name = _RSP_RASTER.get(key, key)
+        pts = cell_points(name, rc)
+        th = repr(float(theta))
+        cases[f"rsp_{key}"] = Case(
+            name,
+            f"""tr <- {{
+                  {r_tr}
+                }}
+                pts <- {r_matrix(pts)}
+                list(
+                  pass_net = passage(tr, pts[1, ], pts[2, ], theta = {th}),
+                  pass_total = passage(tr, pts[1, ], pts[2, ], theta = {th}, totalNet = "total"),
+                  pass_many = passage(tr, pts[1, ], pts[-1, , drop = FALSE], theta = 2 * {th}),
+                  pass_tr_net = passage(tr, pts[1, ], pts[2, ], theta = {th}, output = "TransitionLayer"),
+                  pass_tr_total = passage(tr, pts[1, ], pts[2, ], theta = {th}, totalNet = "total",
+                                          output = "TransitionLayer"),
+                  rsp_net = rSPDistance(tr, pts[1:2, ], pts[3:4, ], theta = {th}),
+                  rsp_total = rSPDistance(tr, pts[1:2, ], pts[3:4, ], theta = {th}, totalNet = "total"))""",
+            lambda R, py_tr=py_tr, pts=pts, theta=theta: _rsp(py_tr(R), pts, theta),
+            group="rsp",
+            tolerance=1e-9,
+        )
+    return cases
+
+
+def _rsp(tr, pts, theta) -> dict:
+    c = ls_cost()
+    return {
+        "pass_net": c.passage(tr, pts[0], pts[1], theta=theta),
+        "pass_total": c.passage(tr, pts[0], pts[1], theta=theta, total_net="total"),
+        "pass_many": c.passage(tr, pts[0], pts[1:], theta=2 * theta),
+        "pass_tr_net": c.passage(tr, pts[0], pts[1], theta=theta, output="transition"),
+        "pass_tr_total": c.passage(tr, pts[0], pts[1], theta=theta, total_net="total", output="transition"),
+        "rsp_net": c.rsp_distance(tr, pts[0:2], pts[2:4], theta),
+        "rsp_total": c.rsp_distance(tr, pts[0:2], pts[2:4], theta, total_net="total"),
+    }
+
+
 def _cases() -> dict[str, Case]:
     cases = {}
     cases.update(_transition_cases())
     cases.update(_operation_cases())
     cases.update(_lcp_cases())
     cases.update(_rw_cases())
+    cases.update(_rsp_cases())
     return cases
 
 

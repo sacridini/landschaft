@@ -258,6 +258,7 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.cost.shortest_path`](cost.md#landschaft.cost.shortest_path) | Least-cost path from an origin to one or more goals: gdistance's ``shortestPath()`` |
 | [`ls.cost.commute_distance`](cost.md#landschaft.cost.commute_distance) | Expected commute distances of a random walk between points: gdistance's ``commuteDistance()`` |
 | [`ls.cost.passage`](cost.md#landschaft.cost.passage) | Passages of a random walk from origins to goals: gdistance's ``passage()`` |
+| [`ls.cost.rsp_distance`](cost.md#landschaft.cost.rsp_distance) | Randomised-shortest-path distances between points: gdistance's ``rSPDistance()`` |
 | [`ls.cost.example_data`](cost.md#landschaft.cost.example_data) | Path of an example data set for the grid distances |
 
 ### Distance & restoration

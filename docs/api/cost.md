@@ -58,6 +58,14 @@ computed with the same sparse Cholesky factorisation as the
 
 ::: landschaft.cost.passage
 
+## Randomised shortest paths
+
+Between the random walk and the least-cost path: walks that prefer cheap
+routes more and more as `theta` grows (Saerens et al. 2009). `passage` with a
+`theta` gives their passages; `rsp_distance` their expected costs.
+
+::: landschaft.cost.rsp_distance
+
 ## Example data
 
 ::: landschaft.cost.example_data
