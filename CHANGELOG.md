@@ -6,6 +6,26 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.77.0] - 2026-09-29
+
+### Added
+- Grid distances, part 3: random walks. `ls.cost.commute_distance` (expected commute
+  distances between points, gdistance's `commuteDistance`) and `ls.cost.passage` without
+  `theta` (net passages of a random walk from origins to goals, points or mask rasters,
+  gdistance's `passage`). The Laplacian of the transition's graph is grounded and
+  factorised per connected part with the circuit module's multifrontal Cholesky; the
+  results agree with gdistance (CHOLMOD) to 1e-14 typically, 8e-12 at worst, on 5
+  reference setups (projected, longitude/latitude and global grids, 4/8/16 directions).
+  `gdistance_compat=True` (default) keeps gdistance's potential of the grounded cell (the
+  one before it), which changes the passages around that cell; `False` gives the exact
+  currents. Where gdistance fails, landschaft answers: points on the grounded cell, several
+  parts (inf between parts, each part's volume), points off the graph (NaN).
+
+### Changed
+- `HabitatGraph.from_raster/from_vector(distance="commute-time")` and `distance_table`
+  solve with the same engine (multifrontal Cholesky instead of SuperLU); the distances stay
+  within 1e-11 of Makurhini/gdistance.
+
 ## [0.76.0] - 2026-09-29
 
 ### Added

@@ -1,0 +1,107 @@
+{
+ "rw_flat4/commute": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "rw_flat4/passage": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "rw_flat4/passage_many": {
+  "dim": [
+   20,
+   25
+  ],
+  "kind": "raster"
+ },
+ "rw_global/commute": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "rw_global/passage": {
+  "dim": [
+   9,
+   18
+  ],
+  "kind": "raster"
+ },
+ "rw_global/passage_many": {
+  "dim": [
+   9,
+   18
+  ],
+  "kind": "raster"
+ },
+ "rw_grass/commute": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "rw_grass/passage": {
+  "dim": [
+   6,
+   7
+  ],
+  "kind": "raster"
+ },
+ "rw_grass/passage_many": {
+  "dim": [
+   6,
+   7
+  ],
+  "kind": "raster"
+ },
+ "rw_lonlat/commute": {
+  "dim": [
+   4,
+   4
+  ],
+  "kind": "matrix"
+ },
+ "rw_lonlat/passage": {
+  "dim": [
+   20,
+   30
+  ],
+  "kind": "raster"
+ },
+ "rw_lonlat/passage_many": {
+  "dim": [
+   20,
+   30
+  ],
+  "kind": "raster"
+ },
+ "rw_rand/commute": {
+  "dim": [
+   5,
+   5
+  ],
+  "kind": "matrix"
+ },
+ "rw_rand/passage": {
+  "dim": [
+   30,
+   40
+  ],
+  "kind": "raster"
+ },
+ "rw_rand/passage_many": {
+  "dim": [
+   30,
+   40
+  ],
+  "kind": "raster"
+ }
+}

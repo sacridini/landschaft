@@ -64,6 +64,9 @@ def _rasters() -> dict[str, RasterSpec]:
     # Cells 30 x 20 m; values with ties (integers) for the asymmetric functions.
     r["rect"] = RasterSpec(np.floor(_random((25, 35), 2, 1, 9)), (1000.0, 2050.0, 0.0, 500.0), UTM)
     r["lonlat"] = RasterSpec(_random((20, 30), 3), (-20.0, 10.0, 30.0, 50.0), LONLAT)
+    r["lonlat_full"] = RasterSpec(_random((20, 30), 3, na=0.0), (-20.0, 10.0, 30.0, 50.0), LONLAT)
+    r["rand_full"] = RasterSpec(_random((30, 40), 11, na=0.0), (500_000.0, 500_400.0, 4_000_000.0, 4_000_300.0),
+                                UTM)
     # Global: edges wrap around the 180th meridian.
     r["global"] = RasterSpec(_random((9, 18), 4, na=0.0), (-180.0, 180.0, -90.0, 90.0), LONLAT)
     r["global_na"] = RasterSpec(_random((12, 24), 5), (-180.0, 180.0, -90.0, 90.0), LONLAT)
@@ -389,11 +392,64 @@ def _lcp(tr, origin, goals, pts) -> dict:
     }
 
 
+# (raster, R transition code, Python transition, points (row, col)) for the random walks:
+# connected graphs (gdistance's solve fails on a disconnected Laplacian).
+_RW_SETUPS = {
+    "grass": ("geoCorrection(transition(r, function(x) 1 / mean(x), 8), type = 'r')",
+              lambda R: ls_cost().geo_correction(1 / _tr(R["grass"], "mean", 8), "r"),
+              [(4, 5), (0, 1), (5, 0), (2, 6)]),
+    "flat4": ("transition(r, mean, 4)", lambda R: _tr(R["flat"], "mean", 4),
+              [(10, 12), (0, 0), (18, 24), (3, 20)]),  # gdistance fails on the last cell (its ground)
+    "rand": ("geoCorrection(transition(r, function(x) 1 / mean(x), 16), type = 'r', scl = TRUE)",
+             lambda R: ls_cost().geo_correction(1 / _tr(R["rand_full"], "mean", 16), "r", scale=True),
+             [(1, 1), (28, 38), (15, 20), (5, 35), (25, 3)]),
+    "lonlat": ("geoCorrection(transition(r, function(x) 1 / mean(x), 8), type = 'r', scl = TRUE)",
+               lambda R: ls_cost().geo_correction(1 / _tr(R["lonlat_full"], "mean", 8), "r", scale=True),
+               [(2, 2), (18, 27), (10, 15), (0, 29)]),
+    "global": ("geoCorrection(transition(r, function(x) 1 / mean(x), 8), type = 'r', scl = TRUE)",
+               lambda R: ls_cost().geo_correction(1 / _tr(R["global"], "mean", 8), "r", scale=True),
+               [(4, 0), (4, 17), (1, 9), (7, 3)]),
+}
+_RW_RASTER = {"flat4": "flat", "rand": "rand_full", "lonlat": "lonlat_full"}
+
+
+def _rw_cases() -> dict[str, Case]:
+    cases: dict[str, Case] = {}
+    for key, (r_tr, py_tr, rc) in _RW_SETUPS.items():
+        name = _RW_RASTER.get(key, key)
+        pts = cell_points(name, rc)
+        cases[f"rw_{key}"] = Case(
+            name,
+            f"""tr <- {{
+                  {r_tr}
+                }}
+                pts <- {r_matrix(pts)}
+                list(
+                  commute = as.matrix(commuteDistance(tr, pts)),
+                  passage = passage(tr, pts[1, ], pts[2, ]),
+                  passage_many = passage(tr, pts[1, ], pts[-1, , drop = FALSE]))""",
+            lambda R, py_tr=py_tr, pts=pts: _rw(py_tr(R), pts),
+            group="rw",
+            tolerance=1e-10,  # CHOLMOD vs the multifrontal Cholesky: 1e-14 typical, 8e-12 worst
+        )
+    return cases
+
+
+def _rw(tr, pts) -> dict:
+    c = ls_cost()
+    return {
+        "commute": c.commute_distance(tr, pts),
+        "passage": c.passage(tr, pts[0], pts[1]),
+        "passage_many": c.passage(tr, pts[0], pts[1:]),
+    }
+
+
 def _cases() -> dict[str, Case]:
     cases = {}
     cases.update(_transition_cases())
     cases.update(_operation_cases())
     cases.update(_lcp_cases())
+    cases.update(_rw_cases())
     return cases
 
 

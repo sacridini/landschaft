@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "cost/geodesic.hpp"
+#include "cost/randomwalk.hpp"
 #include "cost/shortest.hpp"
 #include "cost/transition.hpp"
 #include "lsm/extended.hpp"
@@ -283,6 +284,69 @@ void register_python(py::module_& m) {
         },
         py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("origin"),
         py::arg("goals"), "Cells of the least-cost paths from origin to each goal (igraph's ties).");
+
+    m.def(
+        "cost_commute",
+        [](const CArray<double>& values, const py::tuple& grid, int directions, bool symmetric,
+           const std::vector<i64>& cells) {
+            const Grid g = grid_of(grid);
+            py::buffer_info b = values.request();
+            check_values(g, directions, symmetric, b);
+            const Layout t{&g, directions, symmetric, values.data()};
+            const bool geometric = directions != 16 && !g.wrap;
+            std::vector<double> r;
+            std::vector<double> comp_vol;
+            std::vector<std::int32_t> comp;
+            double volume = 0;
+            {
+                py::gil_scoped_release release;
+                const WalkGraph wg = walk_graph(t);
+                std::vector<std::int32_t> nodes(cells.size(), -1);
+                for (std::size_t k = 0; k < cells.size(); ++k) {
+                    if (cells[k] >= 0 && cells[k] < g.ncell()) nodes[k] = wg.node_of[static_cast<std::size_t>(cells[k])];
+                    comp.push_back(nodes[k] >= 0 ? wg.component[nodes[k]] : -1);
+                }
+                r = effective_resistance(wg, nodes, geometric, g.nx);
+                volume = wg.volume;
+                comp_vol = wg.component_volume;
+            }
+            const auto n = static_cast<py::ssize_t>(cells.size());
+            py::array_t<double> out = vector_to_array(std::move(r));
+            return py::make_tuple(out.reshape({n, n}), volume, vector_to_array(std::move(comp_vol)),
+                                  vector_to_array(std::move(comp)));
+        },
+        py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("cells"),
+        "Effective resistances between cells of a symmetric transition, its volume, the volume of each "
+        "component and each cell's component.");
+
+    m.def(
+        "cost_rw_passages",
+        [](const CArray<double>& values, const py::tuple& grid, int directions, bool symmetric,
+           const std::vector<i64>& origins, const std::vector<i64>& goals, bool quirk) {
+            const Grid g = grid_of(grid);
+            py::buffer_info b = values.request();
+            check_values(g, directions, symmetric, b);
+            const Layout t{&g, directions, symmetric, values.data()};
+            const bool geometric = directions != 16 && !g.wrap;
+            std::vector<double> out;
+            {
+                py::gil_scoped_release release;
+                const WalkGraph wg = walk_graph(t);
+                auto nodes = [&](const std::vector<i64>& cells) {
+                    std::vector<std::int32_t> v;
+                    for (const i64 c : cells) {
+                        const std::int32_t n = (c >= 0 && c < g.ncell()) ? wg.node_of[static_cast<std::size_t>(c)] : -1;
+                        if (n < 0) throw std::invalid_argument("an origin or goal is not on the transition's graph");
+                        v.push_back(n);
+                    }
+                    return v;
+                };
+                out = random_walk_passages(wg, nodes(origins), nodes(goals), quirk, geometric, g.nx, g.ncell());
+            }
+            return vector_to_array(std::move(out));
+        },
+        py::arg("values"), py::arg("grid"), py::arg("directions"), py::arg("symmetric"), py::arg("origins"),
+        py::arg("goals"), py::arg("quirk") = true, "Net passages of a random walk (gdistance's passage without theta).");
 
     m.def(
         "cost_r_mean", [](const CArray<double>& x) { return lsm::r_mean(x.data(), x.size()); }, py::arg("x"),

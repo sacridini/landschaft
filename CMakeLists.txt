@@ -102,12 +102,14 @@ set_target_properties(nlmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Distances and routes on grids (gdistance): transitions, least-cost and random-walk distances.
 add_library(costcore STATIC
     src/cpp/cost/geodesic.cpp
+    src/cpp/cost/randomwalk.cpp
     src/cpp/cost/shortest.cpp
     src/cpp/cost/transition.cpp
 )
 target_include_directories(costcore PUBLIC src/cpp)
-# R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp).
-target_link_libraries(costcore PUBLIC lsmcore)
+# R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp); the
+# circuit module's multifrontal Cholesky for the random walks.
+target_link_libraries(costcore PUBLIC lsmcore circuitcore)
 set_target_properties(costcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Biodiversity analyses (Biodiverse): spatial conditions, indices, randomisations.

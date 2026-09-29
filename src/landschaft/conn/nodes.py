@@ -407,64 +407,24 @@ def _node_points(nodes, *, id, habitat, directions, nodata, band, n_threads):
 
 def _commute_distances(res, cells: np.ndarray, directions: int, function: str):
     """Commute-time distances between the node cells (pairs i < j in the same component), and which nodes
-    are on the conductance graph."""
-    from scipy import sparse
-    from scipy.sparse.csgraph import connected_components
-    from scipy.sparse.linalg import splu
+    are on the conductance graph: gdistance's transition + geoCorrection + commuteDistance, solved with
+    ls.cost's random-walk engine (the circuit module's Cholesky, one factorisation per component)."""
+    from ..cost._transition import GridInfo
 
-    xmin, xmax, ymin, ymax = res.extent
-    e = _core.conn_conductance(res.values, xmin, xmax, ymin, ymax, directions, function)
-    a, b, c = e["a"], e["b"], e["conductance"]
-    empty = pd.DataFrame({"i": np.zeros(0, np.int64), "j": np.zeros(0, np.int64), "distance": np.zeros(0)})
-    if a.size == 0:
-        return empty, np.zeros(cells.size, dtype=bool)
-    # Cells with a conductance (gdistance's transitionSolidify), numbered 0..m-1.
-    used = np.unique(np.concatenate([a, b]))
-    ia, ib = np.searchsorted(used, a), np.searchsorted(used, b)
-    m = used.size
-    volume = 2.0 * float(c.sum())  # sum(transitionMatrix): both triangles
-    adjacency = sparse.coo_matrix((np.concatenate([c, c]), (np.concatenate([ia, ib]), np.concatenate([ib, ia]))),
-                                  shape=(m, m)).tocsr()
-    degree = np.asarray(adjacency.sum(axis=1)).ravel()
-    laplacian = (sparse.diags(degree) - adjacency).tocsc()
-    n_comp, label = connected_components(adjacency, directed=False)
-    pos = np.searchsorted(used, cells)
-    inside = (cells >= 0) & (pos < m) & (used[np.clip(pos, 0, m - 1)] == cells)
-    vertex = np.where(inside, pos, -1)
-    frames = []
-    for comp in np.unique(label[vertex[inside]]):
-        nodes = np.flatnonzero(inside & (label[np.clip(vertex, 0, None)] == comp))
-        if nodes.size < 2:
-            continue
-        verts = np.flatnonzero(label == comp)
-        targets = np.unique(vertex[nodes])  # distinct cells
-        local = np.searchsorted(verts, targets)
-        ground = local[-1]
-        keep = np.ones(verts.size, dtype=bool)
-        keep[ground] = False
-        sub = laplacian[verts][:, verts][keep][:, keep].tocsc()
-        # Row of each target in the grounded system (the ground has none).
-        rows = np.searchsorted(np.flatnonzero(keep), local[:-1])
-        k = rows.size
-        G = np.zeros((k + 1, k + 1))  # Laplacian's inverse on the targets, the ground last (0)
-        if k:
-            lu = splu(sub, permc_spec="MMD_AT_PLUS_A", diag_pivot_thresh=0.0, options={"SymmetricMode": True})
-            block = max(1, min(64, int(2e7 // max(1, sub.shape[0]))))
-            for s in range(0, k, block):
-                cols = rows[s:s + block]
-                rhs = np.zeros((sub.shape[0], cols.size))
-                rhs[cols, np.arange(cols.size)] = 1.0
-                G[:k, s:s + cols.size] = lu.solve(rhs)[rows]
-        G = (G + G.T) / 2
-        d = np.diag(G)
-        R = (d[:, None] + d[None, :] - 2 * G) * volume
-        np.fill_diagonal(R, 0.0)
-        where = np.searchsorted(targets, vertex[nodes])
-        i, j = np.triu_indices(nodes.size, 1)
-        frames.append(pd.DataFrame({"i": nodes[i], "j": nodes[j], "distance": R[where[i], where[j]]}))
-    if not frames:
-        return empty, inside
-    return pd.concat(frames).sort_values(["i", "j"], kind="stable").reset_index(drop=True), inside
+    ny, nx = res.values.shape
+    grid = GridInfo((ny, nx), tuple(float(v) for v in res.extent), None, False, False)
+    # Makurhini: 1 / x[2] (the cell of larger index) or 1 / mean, over the distance between centres
+    values = _core.cost_builtin(res.values, grid.core, directions, True, "to" if function == "makurhini" else "mean")
+    m = values != 0
+    values[m] = 1.0 / values[m]
+    values = _core.cost_geo_correction(values, grid.core, directions, True, False, "c", False, False, False)
+    r, volume, _, _ = _core.cost_commute(values, grid.core, directions, True, cells.tolist())
+    on_graph = np.diag(r) == 0
+    i, j = np.triu_indices(cells.size, 1)
+    d = r[i, j] * volume  # gdistance: the volume of the whole matrix
+    keep = np.isfinite(d)
+    table = pd.DataFrame({"i": i[keep], "j": j[keep], "distance": d[keep]})
+    return table, on_graph
 
 
 def _least_cost_table(nodes, *, id, max_distance, habitat, directions, nodata, band, resistance, cost_directions,

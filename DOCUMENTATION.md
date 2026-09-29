@@ -2067,6 +2067,36 @@ lines = ls.cost.shortest_path(tr, origin, goals, output="lines")  # GeoDataFrame
   settled. Points outside the grid give NaN rows and columns (gdistance drops
   them and misaligns its matrix).
 
+Random walks:
+
+```python
+tr = ls.cost.geo_correction(1 / ls.cost.transition(r, "mean", 8), "r")
+c = ls.cost.commute_distance(tr, points)                 # n x n
+p = ls.cost.passage(tr, origin, goal)                    # raster of net passages
+p = ls.cost.passage(tr, origin_mask, goal_mask, gdistance_compat=False)
+```
+
+- The graph is the cells with a connection (`transitionSolidify`: row mean
+  > 1e-300), its Laplacian `diag(colSums(T)) - T` (column sums in the Matrix
+  order); each connected part is grounded at its last cell and factorised
+  with the circuit module's multifrontal Cholesky (the grid's nested
+  dissection for 4/8 directions without wrapping, the graph's own
+  otherwise). gdistance grounds the whole graph at its last cell and solves
+  with CHOLMOD, so it fails on several parts and on points at that cell.
+- `commute_distance` = volume x effective resistance, the resistances from
+  `G = L_g^-1` on the points' columns (block solves in parallel); the volume
+  is `sum(transitionMatrix)` for a connected graph, each part's own
+  otherwise.
+- `passage` (no theta): unit current in at the origins (1/n each), out at the
+  goals; node passage = `colSums(|V_i - V_j| g_ij) / 2`, 1 at origins and
+  goals, 0 off the graph. gdistance's `.currentR` gives the grounded cell the
+  potential of the one before it (`c(x, x[length(x)])`): kept with
+  `gdistance_compat=True`. Mask rasters are mapped to the graph's cells
+  (gdistance uses the raster cell numbers as graph indices, which is wrong
+  when cells without connections come before them).
+- `HabitatGraph`'s commute-time distances use the same engine.
+
 Reference: `tools/make_reference_cost.py` (gdistance 1.6.5, raster 3.6-31,
 Matrix 1.7-1, igraph 2.1.3, R 4.4.2; cases in `tests/cost_cases.py`), tests in
-`tests/test_cost_transition.py` and `tests/test_cost_lcp.py`.
+`tests/test_cost_transition.py`, `tests/test_cost_lcp.py` and
+`tests/test_cost_randomwalk.py`.

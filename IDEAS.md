@@ -775,7 +775,9 @@ Fases:
    **Feita** (0.76.0: bit a bit em 10 cenários, caminhos iguais nos empates com o heap
    indexado do igraph portado);
 3. passeio aleatório: `commute_distance` e `passage` sem `theta` com a Cholesky multifrontal
-   do `circuit` (o `HabitatGraph` passa a usá-la no lugar do SuperLU);
+   do `circuit` (o `HabitatGraph` passa a usá-la no lugar do SuperLU). **Feita** (0.77.0:
+   1e-14 típico, 8e-12 no pior caso; `gdistance_compat` mantém o potencial errado da célula
+   aterrada do gdistance);
 4. RSP: `passage(theta=...)` e `rsp_distance` (métodos 1/2, net/total); uma fatoração de
    `I - W` e Sherman-Morrison por destino (`I - W_j` difere em uma linha) no lugar de uma
    fatoração por par;

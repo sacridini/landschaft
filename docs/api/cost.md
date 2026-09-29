@@ -46,6 +46,18 @@ gdistance returns.
 
 ::: landschaft.cost.shortest_path
 
+## Random walks
+
+A random walk moves from a cell to a neighbour with a probability proportional
+to the conductance of the connection. Its commute distances and passages are
+those of an electrical circuit (the transition's conductances as resistors),
+computed with the same sparse Cholesky factorisation as the
+[circuit tools](circuits.md).
+
+::: landschaft.cost.commute_distance
+
+::: landschaft.cost.passage
+
 ## Example data
 
 ::: landschaft.cost.example_data
