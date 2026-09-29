@@ -791,7 +791,11 @@ Fases:
    das ligações erradas quando há células sem ligação). O `pathInc` com `to=` do gdistance devolve só NA (o
    `.finishFlowFromTo` copia a matriz vazia): implementar o comportamento pretendido;
 6. opcional, se o profiling justificar: LU multifrontal própria sem pivotamento para o RSP
-   (`I - W` é diagonal dominante), com a ordenação ND do `circuit`.
+   (`I - W` é diagonal dominante), com a ordenação ND do `circuit`. **Feita** (0.80.0:
+   `frontal_lu.cpp`; o maior ganho veio de outra descoberta do profiling: os fatores de
+   `I - W` decaem até subnormais, e a aritmética com eles era 30x mais lenta; FTZ/DAZ por
+   thread durante fatoração e soluções. Assimétrico 1000²: 10,2 s -> 1,5 s; simétrico
+   2,2 s -> 0,96 s). Todas as fases do plano concluídas.
 
 Fora (não faz sentido portar 1:1): a estrutura S4 (`Coords`, `TransitionData`, `show`,
 `==`, `[<-` com matriz de índices, `Summary` linha a linha), a função do R chamada ligação

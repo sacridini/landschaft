@@ -140,13 +140,14 @@ resistances (8 directions; best of 3 runs in R, of 5 in Landschaft).
 | Least-cost paths to 5 goals | 0.05 s | 0.012 s | 0.76 |
 | Commute distances between 10 points | 0.29 s | 0.084 s | 0.77 |
 | Random-walk passages | 0.36 s | 0.066 s | 0.77 |
-| Randomised-shortest-path passages (`theta = 0.5`) | 5.98 s | 0.21 s | 0.78 |
-| Randomised-shortest-path distances, 3 × 3 points | fails (a 60 GiB dense matrix) | 0.25 s | 0.78 |
-| … the same on 60 × 60 | 0.23 s | 0.0045 s | 0.78 |
+| Randomised-shortest-path passages (`theta = 0.5`) | 5.98 s | 0.078 s | 0.80 |
+| Randomised-shortest-path distances, 3 × 3 points | fails (a 60 GiB dense matrix) | 0.15 s | 0.80 |
+| … the same on 60 × 60 | 0.23 s | 0.0043 s | 0.80 |
 | Route overlap from a common origin, 10 locations | 5.97 s | 0.16 s | 0.79 |
 
 At scale: on 2000 × 2000 (4 million cells) a transition takes 0.15 s, a cost
-surface 0.6 s, a random-walk passage map 4.5 s.
+surface 0.6 s, a random-walk passage map 4.5 s, a randomised-shortest-path
+passage map 4.6 s (7.8 s for an asymmetric transition).
 
 ### Neutral landscape models
 

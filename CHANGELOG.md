@@ -6,6 +6,20 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.80.0] - 2026-09-30
+
+### Changed
+- Randomised shortest paths (`ls.cost.passage(theta=...)`, `rsp_distance`, `path_inc(theta=...)`)
+  are 2 to 8 times faster. Asymmetric transitions are factorised with a new multifrontal LU
+  without pivoting (`I - W` is an M-matrix) on the circuit module's nested dissection,
+  subtrees in parallel and tiled dense kernels, instead of Eigen's `SparseLU` (1000 x 1000:
+  10.2 s to 1.5 s; 2000 x 2000: about 60 s to 7.8 s). The factors of `I - W` decay into
+  subnormal numbers, whose arithmetic is two orders of magnitude slower: the factorisations
+  and solves now flush them to zero (each thread's floating-point control word is restored
+  afterwards), which also halves the symmetric (Cholesky) case (1000 x 1000: 2.2 s to
+  0.96 s). Method 2, whose `P^theta` rows can add up to more than 1, keeps the pivoting LU.
+  Results stay within 1e-10 of gdistance.
+
 ## [0.79.0] - 2026-09-29
 
 ### Added

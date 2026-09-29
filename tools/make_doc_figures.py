@@ -373,7 +373,7 @@ BENCHMARKS = [
     ("Pairwise with current map, 1000×1000", "Circuitscape", 76.5, 9.5),
     ("Network pairwise, 1 M nodes", "Circuitscape", 27.7, 5.0),
     ("Transition + correction, 300×300", "gdistance", 2.0, 0.0049),
-    ("Randomised shortest paths, 300×300", "gdistance", 5.98, 0.21),
+    ("Randomised shortest paths, 300×300", "gdistance", 5.98, 0.078),
     ("Route overlap, 10 locations, 300×300", "gdistance", 5.97, 0.157),
 ]
 

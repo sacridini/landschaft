@@ -2119,8 +2119,16 @@ d2 = ls.cost.rsp_distance(tr, sources, targets, theta=0.5, method=2)
   `rowSums_k / Ij_k` gives `M = diag(s / Ij) - exp(-theta C) * T`: symmetric and
   (strictly) diagonally dominant, factorised with the circuit module's
   Cholesky; `A x = b` is `M x = Q b + K b_F`, `A' y = e` is `y = Q M^-1 e`.
-  Otherwise Eigen's `SparseLU` on `A` permuted into the grid's nested-dissection
-  order (4x faster than its COLAMD order on a 1000 x 1000 grid).
+  Otherwise (asymmetric transitions, method 1) a multifrontal LU without
+  pivoting (`src/cpp/cost/frontal_lu.cpp`: the Cholesky's symbolic analysis,
+  full square fronts keeping L and U12, the L part assembled from the reverse
+  connections, subtrees in parallel then the fronts above by heights, dense
+  kernels blocked by 64 with 256 x 128 tiles); method 2 (rows of `P^theta` can
+  add up to more than 1) and a failed LU fall back to Eigen's pivoting
+  `SparseLU` in nested-dissection order. Factorisations and solves flush
+  subnormal numbers to zero (MXCSR FTZ/DAZ per OpenMP thread, restored after):
+  the factors of `I - W` decay below 1e-308 and subnormal arithmetic made them
+  2 to 30 times slower.
 - `passage` uses the cells with outgoing connections (`transitionSolidify`),
   `rsp_distance` every cell with a connection (gdistance's `rSPDistance` does not
   solidify). gdistance's `rSPDistance(method = 2)` fails; landschaft's is checked

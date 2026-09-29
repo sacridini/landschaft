@@ -196,7 +196,8 @@ def rsp_distance(x: Transition, from_coords, to_coords, theta: float, *, total_n
     gdistance factorises ``I - W`` once per pair of points; here once per
     goal (the goals in parallel), with a sparse Cholesky factorisation for
     symmetric transitions (``I - W`` scaled row by row is symmetric positive
-    definite) and sparse LU otherwise. The results agree to about 1e-12.
+    definite) and a multifrontal LU without pivoting otherwise (``I - W`` is
+    an M-matrix). The results agree to about 1e-12.
 
     Examples
     --------

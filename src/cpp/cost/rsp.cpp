@@ -14,10 +14,15 @@
 #include <omp.h>
 #endif
 
+#if defined(_M_X64) || defined(__x86_64__) || defined(__SSE2__)
+#include <xmmintrin.h>
+#endif
+
 #include <Eigen/SparseCore>
 #include <Eigen/SparseLU>
 
 #include "circuit/system.hpp"
+#include "cost/frontal_lu.hpp"
 #include "lsm/rmath.hpp"
 
 namespace cost {
@@ -58,6 +63,8 @@ struct RspGraph {
     // I - W scaled is symmetric positive definite: a symmetric transition with
     // method 1 (rows of W sum to at most 1; method 2's P^theta can exceed 1)
     bool spd = false;
+    // method 1: I - Ij W is an M-matrix, so an LU without pivoting is stable
+    bool dominant = false;
 };
 
 RspGraph rsp_graph(const Layout& t, const RspOptions& o, const std::vector<i64>& extra) {
@@ -121,6 +128,7 @@ RspGraph rsp_graph(const Layout& t, const RspOptions& o, const std::vector<i64>&
     RspGraph G;
     G.symmetric = t.symmetric;
     G.spd = t.symmetric && o.method == 1;
+    G.dominant = o.method == 1;
     std::vector<char> keep(static_cast<std::size_t>(ncell), 0);
 #pragma omp parallel for schedule(static)
     for (i64 a = 0; a < ncell; ++a) {
@@ -200,6 +208,28 @@ RspGraph rsp_graph(const Layout& t, const RspOptions& o, const std::vector<i64>&
         }
     }
     return G;
+}
+
+// f() with flush-to-zero / denormals-are-zero on every OpenMP thread: the
+// factors of I - W decay into subnormal numbers, whose arithmetic is two
+// orders of magnitude slower (values below 1e-308 do not matter here). Each
+// thread's control word is restored afterwards.
+template <class F>
+bool factorize_flushing(F&& f) {
+#if defined(_M_X64) || defined(__x86_64__) || defined(__SSE2__)
+    static thread_local unsigned int saved = 0;
+#pragma omp parallel
+    {
+        saved = _mm_getcsr();
+        _mm_setcsr(saved | 0x8040u);
+    }
+    const bool ok = f();
+#pragma omp parallel
+    { _mm_setcsr(saved); }
+    return ok;
+#else
+    return f();
+#endif
 }
 
 // A = I - Ij W over the nodes, the rows with Ij = 0 fixed (identity), solved
@@ -298,7 +328,7 @@ private:
         chol_->share(circuit::frontal_analyze_graph(bx, by, cell, ptr, adj));
         timer("  analyse");
         chol_->set_values(diag.data(), off.data());
-        if (!chol_->factorize()) return false;
+        if (!factorize_flushing([&] { return chol_->factorize(); })) return false;
         timer("  factorise (numeric)");
         const auto& perm = chol_->perm();
         iperm_.assign(m, -1);
@@ -349,6 +379,28 @@ private:
         }
         const auto sym = circuit::frontal_analyze_graph(bx, by, cell, ptr, adj);
         order_.assign(sym->perm.begin(), sym->perm.end());  // new position -> row
+        if (g.dominant) {
+            // values on the symmetrised pattern (0 where only the reverse exists) and reverse entries
+            std::vector<double> val(adj.size(), 0.0), diag(m, 1.0);
+            std::vector<std::int64_t> rev(adj.size(), -1);
+            for (std::size_t i = 0; i < m; ++i) {
+                const std::int32_t u = rows_[i];
+                for (std::int64_t e = g.ptr[u]; e < g.ptr[u + 1]; ++e) {
+                    const std::int32_t l = local_[g.adj[e]];
+                    if (l < 0) continue;
+                    const auto b = adj.begin() + ptr[i], en = adj.begin() + ptr[i + 1];
+                    val[static_cast<std::size_t>(std::lower_bound(b, en, l) - adj.begin())] = -ij_[u] * g.w[e];
+                }
+                for (std::int64_t k = ptr[i]; k < ptr[i + 1]; ++k) {
+                    const std::int32_t l = adj[static_cast<std::size_t>(k)];
+                    const auto b = adj.begin() + ptr[l], en = adj.begin() + ptr[l + 1];
+                    rev[static_cast<std::size_t>(k)] = std::lower_bound(b, en, static_cast<std::int32_t>(i)) - adj.begin();
+                }
+            }
+            flu_ = std::make_unique<FrontalLU>(sym);
+            if (flu_->factorize(diag.data(), val.data(), rev.data())) return;
+            flu_.reset();
+        }
         std::vector<int> pos(m);
         for (std::size_t q = 0; q < m; ++q) pos[static_cast<std::size_t>(order_[q])] = static_cast<int>(q);
         std::vector<Eigen::Triplet<double>> tri;
@@ -375,10 +427,24 @@ private:
         std::vector<double> out(m);
         if (m == 0) return out;
         if (chol_) {
+#if defined(_M_X64) || defined(__x86_64__) || defined(__SSE2__)
+            struct Flush {  // subnormal factors (see factorize_flushing)
+                unsigned int saved = _mm_getcsr();
+                Flush() { _mm_setcsr(saved | 0x8040u); }
+                ~Flush() { _mm_setcsr(saved); }
+            } flush;
+#endif
             std::vector<double> b(m), x(m);
             for (std::size_t i = 0; i < m; ++i) b[static_cast<std::size_t>(iperm_[i])] = rhs[i];
             chol_->solve(b.data(), x.data());
             for (std::size_t i = 0; i < m; ++i) out[i] = x[static_cast<std::size_t>(iperm_[i])];
+            return out;
+        }
+        if (flu_) {
+            std::vector<double> x(m);
+            for (std::size_t q = 0; q < m; ++q) x[q] = rhs[static_cast<std::size_t>(order_[q])];
+            flu_->solve(x.data(), transposed);
+            for (std::size_t q = 0; q < m; ++q) out[static_cast<std::size_t>(order_[q])] = x[q];
             return out;
         }
         Eigen::VectorXd b(static_cast<Eigen::Index>(m));
@@ -394,6 +460,7 @@ private:
     std::vector<std::int32_t> rows_, local_, iperm_;
     std::unique_ptr<circuit::CellSystem> chol_;
     std::vector<std::int32_t> order_;  // LU: position -> row
+    std::unique_ptr<FrontalLU> flu_;
     std::unique_ptr<Eigen::SparseLU<Eigen::SparseMatrix<double>, Eigen::NaturalOrdering<int>>> lu_;
 };
 
