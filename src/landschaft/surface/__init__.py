@@ -4,8 +4,10 @@
 Gradient surface metrics describe a continuous surface (NDVI, elevation,
 canopy height...) without classifying it into patches: its amplitude, slopes,
 peaks and valleys, the shape of its height distribution, its spatial
-autocorrelation and orientation. A port of the R package geodiv (Smith et al.
-2021): the same values, bit for bit, computed in C++ with OpenMP.
+autocorrelation and orientation; and terrain indices of DEMs (TPI, TRI, VRM,
+curvature, heat load...). Ports of the R packages geodiv (Smith et al. 2021)
+and spatialEco (Evans 2021), computed in C++ with OpenMP: their values, bit for
+bit where they are right, and the corrected ones where they err.
 
 Typical use::
 
@@ -25,18 +27,23 @@ from ._hybrid import flat_area, sdq, sdq6, sdr, surface_area
 from ._metrics import list_metrics, metrics
 from ._plane import best_fit_plane, fit_plane, remove_plane
 from ._spatial import aacf, scl, sfd, srw, std, stxr
+from ._terrain import curvature, dissection, hli, hsp, spherical_sd, srr, terrain, tpi, trasp, tri, vrm
 from ._window import window_metrics
 
 __all__ = [
     "aacf",
     "bearing_area",
     "best_fit_plane",
+    "curvature",
+    "dissection",
     "example_data",
     "find_peaks",
     "find_valleys",
     "fit_plane",
     "flat_area",
     "height_ba",
+    "hli",
+    "hsp",
     "list_metrics",
     "metrics",
     "remove_plane",
@@ -55,8 +62,10 @@ __all__ = [
     "sku",
     "smean",
     "sph",
+    "spherical_sd",
     "spk",
     "sq",
+    "srr",
     "srw",
     "ssc",
     "ssk",
@@ -66,5 +75,10 @@ __all__ = [
     "sv",
     "svi",
     "svk",
+    "terrain",
+    "tpi",
+    "trasp",
+    "tri",
+    "vrm",
     "window_metrics",
 ]

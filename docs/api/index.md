@@ -290,6 +290,17 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.surface.srw`](surface.md#landschaft.surface.srw) | Dominant radial wavelength (Srw), its index (Srwi) and the half-power wavelength (Shw) |
 | [`ls.surface.sfd`](surface.md#landschaft.surface.sfd) | Fractal dimension of the surface (Sfd), by triangular prisms |
 | [`ls.surface.window_metrics`](surface.md#landschaft.surface.window_metrics) | Surface metrics in a moving window: one texture image per metric |
+| [`ls.surface.terrain`](surface.md#landschaft.surface.terrain) | Slope or aspect of a DEM, as terra's ``terrain`` |
+| [`ls.surface.tpi`](surface.md#landschaft.surface.tpi) | Topographic position index: the elevation minus the mean of the window |
+| [`ls.surface.tri`](surface.md#landschaft.surface.tri) | Terrain ruggedness index (Riley et al. 1999) |
+| [`ls.surface.vrm`](surface.md#landschaft.surface.vrm) | Vector ruggedness measure (Sappington et al. 2007) |
+| [`ls.surface.srr`](surface.md#landschaft.surface.srr) | Surface relief ratio (Pike & Wilson 1971): (mean - min) / (max - min) of the window |
+| [`ls.surface.dissection`](surface.md#landschaft.surface.dissection) | Martonne's modified dissection: (z - min) / (max - min) of the window |
+| [`ls.surface.curvature`](surface.md#landschaft.surface.curvature) | Surface curvature of a DEM |
+| [`ls.surface.spherical_sd`](surface.md#landschaft.surface.spherical_sd) | Spherical standard deviation of the slope and aspect (terrain heterogeneity) |
+| [`ls.surface.hsp`](surface.md#landschaft.surface.hsp) | Hierarchical slope position (Murphy et al. 2010) |
+| [`ls.surface.trasp`](surface.md#landschaft.surface.trasp) | Transformed aspect (Roberts & Cooper 1989): (1 - cos(aspect - 30 deg)) / 2 |
+| [`ls.surface.hli`](surface.md#landschaft.surface.hli) | Heat load index (McCune & Keon 2002) |
 | [`ls.surface.fit_plane`](surface.md#landschaft.surface.fit_plane) | The least-squares polynomial surface of a given order |
 | [`ls.surface.best_fit_plane`](surface.md#landschaft.surface.best_fit_plane) | The polynomial surface of order 0 to 3 that fits a surface best |
 | [`ls.surface.remove_plane`](surface.md#landschaft.surface.remove_plane) | A surface minus its best-fitting polynomial surface (geodiv's ``remove_plane``) |

@@ -139,4 +139,25 @@ enum WindowMetric : int {
 std::vector<std::vector<double>> window_metrics(const Grid& g, bool lonlat, int size, bool circle,
                                                 const std::vector<int>& ids);
 
+// -- terrain (spatialEco's tpi, tri, curvature, hsp; terra's terrain) --------
+
+// Slope or aspect (radians, or degrees) as terra::terrain: Horn's 8 or 4
+// neighbours, NA on the edge cells.
+std::vector<double> terrain(const Grid& g, bool lonlat, int neighbors, bool degrees, bool aspect);
+
+enum FocalStat : int { kFocalMean, kFocalSum, kFocalMin, kFocalMax, kFocalSd };
+// A statistic of the cells of a wr x wc window mask around every cell (NA
+// where any of them is NA or beyond the edge).
+std::vector<double> focal(const Grid& g, int wr, int wc, const std::vector<char>& mask, FocalStat stat);
+
+std::vector<double> tri(const Grid& g, int wr, int wc);
+
+enum Curvature : int { kCurvPlanform, kCurvProfile, kCurvTotal, kCurvMcnab, kCurvBolstad };
+std::vector<double> curvature(const Grid& g, int type);
+
+std::vector<double> tpi(const Grid& g, int wr, int wc, const std::vector<char>& mask, bool normalize);
+// masks[k]: the rows[k] x cols[k] window mask of scale k.
+std::vector<double> hsp(const Grid& g, const std::vector<int>& rows, const std::vector<int>& cols,
+                        const std::vector<std::vector<char>>& masks, bool normalize);
+
 }  // namespace surf

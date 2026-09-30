@@ -895,7 +895,14 @@ Fases:
    `focal_metrics` transpõe as janelas, então a referência é a métrica em cada janela, em
    R; o `find_flat` escolhe a janela por somas prefixadas e só confirma as candidatas com
    a média do R, 100x mais rápido. Fora da memória fica para depois, se precisar);
-6. terreno do spatialEco;
+6. terreno do spatialEco. **Feita** (0.86.0: `terrain` (declividade/aspecto do terra,
+   bit a bit; em lon/lat 1e-12, as geodésicas do terra usam sin/cos da UCRT), `tpi`, `tri`,
+   `vrm`, `srr`, `dissection`, `curvature`, `spherical_sd`, `hsp`, `trasp`, `hli`. O
+   `focal2` do terra desliza somas (bits dependem dos blocos): aqui cada janela é somada
+   direto, tolerância 1e-11 contra o spatialEco. Corrigidos (conferidos bit a bit contra
+   `fx$`): curvatura (r e t / L^2, bordas NA, sem arredondar, dy, McNab / 8, Bolstad),
+   `hsp` (z-score), `trasp` (pi), `hli` (hemisfério sul e radianos), círculos exatos;
+   `zero.correct` do `tpi` não é oferecido);
 7. tutorial, API, benchmarks contra geodiv e spatialEco.
 
 Fora: `plot_ba_curve` e os gráficos de `scl`/`std`/`srw` (`create_plot`), `rotate`,

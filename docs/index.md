@@ -115,8 +115,8 @@ from a single raster on a laptop to continental maps larger than memory.
 
     ---
 
-    Roughness and height distribution of continuous rasters (ISO 25178)
-    such as NDVI or elevation, with their trend removed.
+    Roughness, height distribution and texture of continuous rasters
+    (ISO 25178) such as NDVI or elevation, and terrain indices of DEMs.
 
 -   :material-dice-multiple-outline:{ .lg .middle } **Neutral landscapes**
 
@@ -217,7 +217,7 @@ from a single raster on a laptop to continental maps larger than memory.
     accounting, restoration planning), the R package landscapemetrics and
     FRAGSTATS (landscape metrics), Conefor Sensinode and Makurhini (habitat
     networks), Circuitscape and Omniscape (circuit connectivity), gdistance (routes on
-    grids), geodiv (surface metrics) and NLMR (neutral landscape models), and is
+    grids), geodiv and spatialEco (surface metrics) and NLMR (neutral landscape models), and is
     [tested against their outputs](benchmarks.md#accuracy). You do not need to know any of them to use
     it: the [tutorials](tutorials/index.md) start from scratch, and the
     [Learn](learn/index.md) course explains the landscape ecology behind every

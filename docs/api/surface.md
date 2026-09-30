@@ -106,6 +106,33 @@ ls.surface.metrics(z)                   # every metric in one table
 
 ::: landschaft.surface.window_metrics
 
+## Terrain
+
+Indices of a DEM's shape as the R package spatialEco computes them (over
+terra's slope and aspect), corrected where it errs.
+
+::: landschaft.surface.terrain
+
+::: landschaft.surface.tpi
+
+::: landschaft.surface.tri
+
+::: landschaft.surface.vrm
+
+::: landschaft.surface.srr
+
+::: landschaft.surface.dissection
+
+::: landschaft.surface.curvature
+
+::: landschaft.surface.spherical_sd
+
+::: landschaft.surface.hsp
+
+::: landschaft.surface.trasp
+
+::: landschaft.surface.hli
+
 ## Trend surfaces
 
 ::: landschaft.surface.fit_plane

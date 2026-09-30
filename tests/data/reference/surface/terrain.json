@@ -1,0 +1,397 @@
+{
+ "arrays": {
+  "terrain_dem/aspect": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/aspect4": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/bolstad": {
+   "kind": "vector"
+  },
+  "terrain_dem/dissection": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/hli": {
+   "kind": "vector"
+  },
+  "terrain_dem/hli_direct": {
+   "kind": "vector"
+  },
+  "terrain_dem/hli_south": {
+   "kind": "vector"
+  },
+  "terrain_dem/hsp": {
+   "kind": "vector"
+  },
+  "terrain_dem/hsp_circle": {
+   "kind": "vector"
+  },
+  "terrain_dem/hsp_norm": {
+   "kind": "vector"
+  },
+  "terrain_dem/mcnab": {
+   "kind": "vector"
+  },
+  "terrain_dem/planform": {
+   "kind": "vector"
+  },
+  "terrain_dem/profile": {
+   "kind": "vector"
+  },
+  "terrain_dem/slope": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/slope4": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/spherical": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/spherical_var": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/srr": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/total": {
+   "kind": "vector"
+  },
+  "terrain_dem/tpi": {
+   "kind": "vector"
+  },
+  "terrain_dem/tpi_circle": {
+   "kind": "vector"
+  },
+  "terrain_dem/tpi_norm": {
+   "kind": "vector"
+  },
+  "terrain_dem/trasp": {
+   "kind": "vector"
+  },
+  "terrain_dem/tri": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/tri5": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/vrm": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem/vrm5": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/aspect": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/aspect4": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/bolstad": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/dissection": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/hli": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/hli_direct": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/hli_south": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/hsp": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/hsp_circle": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/hsp_norm": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/mcnab": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/planform": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/profile": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/slope": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/slope4": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/spherical": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/spherical_var": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/srr": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/total": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/tpi": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/tpi_circle": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/tpi_norm": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/trasp": {
+   "kind": "vector"
+  },
+  "terrain_dem_rect/tri": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/tri5": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/vrm": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_dem_rect/vrm5": {
+   "dim": [
+    30,
+    36
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/aspect": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/aspect4": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/bolstad": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/dissection": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/hli": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/hli_direct": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/hli_south": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/hsp": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/hsp_circle": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/hsp_norm": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/mcnab": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/planform": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/profile": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/slope": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/slope4": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/spherical": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/spherical_var": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/srr": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/total": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/tpi": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/tpi_circle": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/tpi_norm": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/trasp": {
+   "kind": "vector"
+  },
+  "terrain_elev_small/tri": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/tri5": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/vrm": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  },
+  "terrain_elev_small/vrm5": {
+   "dim": [
+    40,
+    40
+   ],
+   "kind": "raster"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "geodiv": "1.1.1",
+  "spatialEco": "2.0.5",
+  "terra": "1.9.50"
+ }
+}

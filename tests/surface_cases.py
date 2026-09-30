@@ -53,6 +53,17 @@ def _normal(shape, seed, na=0.0, scale=1.0, trend=0.0) -> np.ndarray:
     return v
 
 
+def _dem(shape, seed, na=0.0) -> np.ndarray:
+    """A smooth DEM (metres) with hills and valleys and some noise."""
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:shape[0], 0:shape[1]].astype(float)
+    v = (500 + 60 * np.sin(xx / 6.0) * np.cos(yy / 7.0) + 25 * np.sin((xx + 2 * yy) / 11.0) + 0.8 * xx
+         + rng.normal(0, 1.5, shape))
+    if na:
+        v[rng.random(shape) < na] = np.nan
+    return v
+
+
 def _rasters() -> dict[str, RasterSpec]:
     r = {}
     r["rand"] = RasterSpec(_normal((20, 30), 1), (500_000.0, 500_300.0, 4_000_000.0, 4_000_200.0), UTM)
@@ -74,6 +85,14 @@ def _rasters() -> dict[str, RasterSpec]:
     xmin, xmax, ymin, ymax = nf.extent
     ny, nx = nf.values.shape
     xr, yr = (xmax - xmin) / nx, (ymax - ymin) / ny
+    r["dem"] = RasterSpec(_dem((40, 50), 9), (400_000.0, 401_500.0, 5_000_000.0, 5_001_200.0), UTM)
+    r["dem_rect"] = RasterSpec(_dem((30, 36), 10, na=0.01), (0.0, 36 * 25.0, 0.0, 30 * 40.0), UTM)
+    el = r["orelevation"]
+    exmin, exmax, eymin, eymax = el.extent
+    eny, enx = el.values.shape
+    exr, eyr = (exmax - exmin) / enx, (eymax - eymin) / eny
+    r["elev_small"] = RasterSpec(el.values[100:140, 150:190].copy(),
+                                 (exmin + 150 * exr, exmin + 190 * exr, eymax - 140 * eyr, eymax - 100 * eyr), el.crs)
     r["nf_small"] = RasterSpec(nf.values[100:115, 120:135].copy(),
                                (xmin + 120 * xr, xmin + 135 * xr, ymax - 115 * yr, ymax - 100 * yr), nf.crs)
     return r
@@ -88,7 +107,7 @@ class Case:
     r: str  # R code giving a named list
     py: Callable[[dict[str, RasterSpec]], dict]
     group: str
-    tolerance: float = 0.0  # 0: identical bits
+    tolerance: float | dict = 0.0  # 0: identical bits; or {key: (rtol, atol)}
     notes: str = field(default="")
 
 
@@ -303,6 +322,67 @@ def _window_cases() -> dict[str, Case]:
     return cases
 
 
+TERRAIN_R = """{
+  slp <- terra::terrain(r, v = "slope", unit = "degrees"); asp <- terra::terrain(r, v = "aspect", unit = "degrees")
+  list(slope = slp, aspect = asp, slope4 = terra::terrain(r, v = "slope", neighbors = 4, unit = "radians"),
+       aspect4 = terra::terrain(r, v = "aspect", neighbors = 4, unit = "radians"),
+       tri = spatialEco::tri(r), tri5 = spatialEco::tri(r, 5), vrm = spatialEco::vrm(r), vrm5 = spatialEco::vrm(r, 5),
+       srr = spatialEco::srr(r), dissection = spatialEco::dissection(r),
+       spherical = spatialEco::spherical.sd(r, 3), spherical_var = spatialEco::spherical.sd(r, 5, variance = TRUE),
+       tpi = fx$tpi(r, 5), tpi_norm = fx$tpi(r, 5, normalize = TRUE), tpi_circle = fx$tpi(r, CIRCLE, "circle"),
+       planform = fx$curvature(r, "planform"), profile = fx$curvature(r, "profile"), total = fx$curvature(r, "total"),
+       mcnab = fx$curvature(r, "mcnab"), bolstad = fx$curvature(r, "bolstad"),
+       hsp = fx$hsp(r, 3, 11, 4), hsp_norm = fx$hsp(r, 3, 11, 4, normalize = TRUE),
+       hsp_circle = fx$hsp(r, CIRCLE, CIRCLE2, CIRCLE, "circle"),
+       trasp = fx$trasp(r), hli = fx$hli(asp, slp, 45), hli_direct = fx$hli(asp, slp, 45, direct = TRUE),
+       hli_south = fx$hli(asp, slp, -30, hemisphere = "southern", equation = 2))
+}"""
+# vs spatialEco / terra's running sums, numpy's trigonometry: tolerances
+TERRAIN_TOL = {k: (1e-11, 1e-12) for k in ("vrm", "vrm5", "srr", "spherical", "spherical_var", "trasp", "hli",
+                                             "hli_direct", "hli_south")}
+
+
+def _terrain(name: str, circle: float) -> Callable[[dict], dict]:
+    def run(rasters):
+        s, spec = surface(), rasters[name]
+        z, g = spec.values, _grid(spec)
+        slp, asp = s.terrain(z, "slope", **g), s.terrain(z, "aspect", **g)
+        out = {"slope": slp.values, "aspect": asp.values,
+               "slope4": s.terrain(z, "slope", "radians", 4, **g).values,
+               "aspect4": s.terrain(z, "aspect", "radians", 4, **g).values,
+               "tri": s.tri(z, **g).values, "tri5": s.tri(z, 5, **g).values, "vrm": s.vrm(z, **g).values,
+               "vrm5": s.vrm(z, 5, **g).values, "srr": s.srr(z, **g).values, "dissection": s.dissection(z, **g).values,
+               "spherical": s.spherical_sd(z, 3, **g).values,
+               "spherical_var": s.spherical_sd(z, 5, variance=True, **g).values,
+               "tpi": s.tpi(z, 5, **g).values, "tpi_norm": s.tpi(z, 5, normalize=True, **g).values,
+               "tpi_circle": s.tpi(z, circle, "circle", **g).values}
+        for t in ("planform", "profile", "total", "mcnab", "bolstad"):
+            out[t] = s.curvature(z, t, **g).values
+        out["hsp"] = s.hsp(z, 3, 11, 4, **g).values
+        out["hsp_norm"] = s.hsp(z, 3, 11, 4, normalize=True, **g).values
+        out["hsp_circle"] = s.hsp(z, circle, 2 * circle, circle, "circle", **g).values
+        out["trasp"] = s.trasp(z, **g).values
+        out["hli"] = s.hli(asp, slp, 45).values
+        out["hli_direct"] = s.hli(asp, slp, 45, direct=True).values
+        out["hli_south"] = s.hli(asp, slp, -30, hemisphere="southern", equation=2).values
+        return {k: v.ravel() for k, v in out.items()}
+
+    return run
+
+
+def _terrain_cases() -> dict[str, Case]:
+    cases = {}
+    for name, circle in (("dem", 75.0), ("dem_rect", 100.0), ("elev_small", 0.0007)):
+        code = TERRAIN_R.replace("CIRCLE2", repr(2 * circle)).replace("CIRCLE", repr(circle))
+        tol = dict(TERRAIN_TOL)
+        if name == "elev_small":  # longitude/latitude: cell sizes from geodesics, which terra computes with the
+            # UCRT's sin/cos (ls.cost's GeographicLib uses the x87 ones of the raster package): last bits
+            tol.update({"slope": (1e-12, 1e-14), "slope4": (1e-12, 1e-14), "aspect": (1e-12, 1e-14, 360.0),
+                        "aspect4": (1e-12, 1e-14, 2 * np.pi)})
+        cases[f"terrain_{name}"] = Case(name, code, _terrain(name, circle), "terrain", tol)
+    return cases
+
+
 def _cases() -> dict[str, Case]:
     cases = {}
     cases.update(_amplitude_cases())
@@ -313,6 +393,7 @@ def _cases() -> dict[str, Case]:
     cases.update(_spatial_cases())
     cases.update(_fractal_cases())
     cases.update(_window_cases())
+    cases.update(_terrain_cases())
     return cases
 
 

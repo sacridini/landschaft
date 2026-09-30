@@ -30,10 +30,24 @@ def case_ids(group: str) -> list[str]:
     return [k for k, c in surface_cases.CASES.items() if c.group == group]
 
 
-def assert_values(ours, ref, tolerance: float, what: str, ulps: float = 0) -> None:
+def assert_values(ours, ref, tolerance, what: str, ulps: float = 0) -> None:
     ours = np.asarray(ours, dtype=np.float64)
     ref = np.asarray(ref, dtype=np.float64)
+    if ours.shape != ref.shape and ours.size == ref.size and ours.ndim and ref.ndim:  # rasters as vectors
+        ours, ref = ours.ravel(), ref.ravel()
     assert ours.shape == ref.shape, f"{what}: shape {ours.shape} != {ref.shape}"
+    if isinstance(tolerance, tuple) and len(tolerance) == 3:  # angles: (rtol, atol, period), compared around
+        rtol, atol, period = tolerance
+        d = np.abs(ours - ref)
+        d = np.minimum(d, period - d)
+        ok = (np.isnan(ours) & np.isnan(ref)) | (d <= atol * period + rtol * np.abs(ref))
+        assert ok.all(), f"{what}: {int((~ok).sum())} angles differ"
+        return
+    if isinstance(tolerance, tuple):  # (rtol, atol relative to the largest |value|)
+        rtol, atol = tolerance
+        scale = np.nanmax(np.abs(ref)) if np.isfinite(ref).any() else 1.0
+        np.testing.assert_allclose(ours, ref, rtol=rtol, atol=atol * scale, equal_nan=True, err_msg=what)
+        return
     if tolerance == 0:
         same = (ours == ref) | (np.isnan(ours) & np.isnan(ref))
         if ulps:
@@ -62,7 +76,8 @@ def compare(case: str, result: dict, group: str, tolerance: float = 0.0) -> int:
             ref = ref.reshape(info["dim"])
         elif np.ndim(value) == 0:
             ref = ref.reshape(())
-        assert_values(value, ref, tolerance, full, ulps)
+        tol = tolerance.get(key, 0.0) if isinstance(tolerance, dict) else tolerance
+        assert_values(value, ref, tol, full, ulps)
     return len(flat)
 
 

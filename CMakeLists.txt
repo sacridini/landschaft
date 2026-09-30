@@ -138,11 +138,12 @@ add_library(surfcore STATIC
     src/cpp/surf/hybrid.cpp
     src/cpp/surf/plane.cpp
     src/cpp/surf/spatial.cpp
+    src/cpp/surf/terrain.cpp
     src/cpp/surf/window.cpp
 )
 target_include_directories(surfcore PUBLIC src/cpp)
-# R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp), R's fft (nlm/rfft.hpp).
-target_link_libraries(surfcore PUBLIC lsmcore nlmcore)
+# R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp), R's fft (nlm/rfft.hpp), geodesics (cost/geodesic.hpp).
+target_link_libraries(surfcore PUBLIC lsmcore nlmcore costcore)
 set_target_properties(surfcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # R's x87 log/sqrt and LDOUBLE sums (see src/cpp/lsm/rmath.hpp): MSVC has no
 # x64 inline assembly. x86-64 only; every other target uses the C++ code.

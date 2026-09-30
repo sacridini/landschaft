@@ -226,6 +226,71 @@ void register_python(py::module_& m) {
         return out;
     }, py::arg("z"), py::arg("extent"), py::arg("lonlat"), py::arg("size"), py::arg("circle"),
        py::arg("ids"), "Surface metrics in a moving window (one raster per metric id).");
+    using Mask = std::vector<int>;
+    auto chars = [](const Mask& m) { return std::vector<char>(m.begin(), m.end()); };
+    auto grid2d = [](const Array& z, const Extent& e) { return grid_of(z, e); };
+    m.def("surf_terrain", [grid2d](const Array& z, const Extent& e, bool lonlat, int neighbors, bool degrees,
+                                   bool aspect) {
+        const surf::Grid g = grid2d(z, e);
+        std::vector<double> v;
+        {
+            py::gil_scoped_release release;
+            v = surf::terrain(g, lonlat, neighbors, degrees, aspect);
+        }
+        return to_raster(std::move(v), g.ny, g.nx);
+    }, py::arg("z"), py::arg("extent"), py::arg("lonlat"), py::arg("neighbors"), py::arg("degrees"),
+       py::arg("aspect"), "terra's terrain: slope or aspect.");
+    m.def("surf_focal", [grid2d, chars](const Array& z, const Extent& e, int wr, int wc, const Mask& mask, int stat) {
+        const surf::Grid g = grid2d(z, e);
+        std::vector<double> v;
+        {
+            py::gil_scoped_release release;
+            v = surf::focal(g, wr, wc, chars(mask), static_cast<surf::FocalStat>(stat));
+        }
+        return to_raster(std::move(v), g.ny, g.nx);
+    }, py::arg("z"), py::arg("extent"), py::arg("wr"), py::arg("wc"), py::arg("mask"), py::arg("stat"),
+       "A focal statistic (0 mean, 1 sum, 2 min, 3 max, 4 sd) over a window mask.");
+    m.def("surf_tri", [grid2d](const Array& z, const Extent& e, int wr, int wc) {
+        const surf::Grid g = grid2d(z, e);
+        std::vector<double> v;
+        {
+            py::gil_scoped_release release;
+            v = surf::tri(g, wr, wc);
+        }
+        return to_raster(std::move(v), g.ny, g.nx);
+    }, py::arg("z"), py::arg("extent"), py::arg("wr"), py::arg("wc"), "spatialEco's tri.");
+    m.def("surf_curvature", [grid2d](const Array& z, const Extent& e, int type) {
+        const surf::Grid g = grid2d(z, e);
+        std::vector<double> v;
+        {
+            py::gil_scoped_release release;
+            v = surf::curvature(g, type);
+        }
+        return to_raster(std::move(v), g.ny, g.nx);
+    }, py::arg("z"), py::arg("extent"), py::arg("type"), "Curvature (0 planform, 1 profile, 2 total, 3 mcnab, 4 bolstad).");
+    m.def("surf_tpi", [grid2d, chars](const Array& z, const Extent& e, int wr, int wc, const Mask& mask, bool normalize) {
+        const surf::Grid g = grid2d(z, e);
+        std::vector<double> v;
+        {
+            py::gil_scoped_release release;
+            v = surf::tpi(g, wr, wc, chars(mask), normalize);
+        }
+        return to_raster(std::move(v), g.ny, g.nx);
+    }, py::arg("z"), py::arg("extent"), py::arg("wr"), py::arg("wc"), py::arg("mask"), py::arg("normalize"),
+       "Topographic position index.");
+    m.def("surf_hsp", [grid2d, chars](const Array& z, const Extent& e, const std::vector<int>& rows,
+                                      const std::vector<int>& cols, const std::vector<Mask>& masks, bool normalize) {
+        const surf::Grid g = grid2d(z, e);
+        std::vector<double> v;
+        {
+            py::gil_scoped_release release;
+            std::vector<std::vector<char>> cm;
+            for (const auto& mk : masks) cm.push_back(chars(mk));
+            v = surf::hsp(g, rows, cols, cm, normalize);
+        }
+        return to_raster(std::move(v), g.ny, g.nx);
+    }, py::arg("z"), py::arg("extent"), py::arg("rows"), py::arg("cols"), py::arg("masks"), py::arg("normalize"),
+       "Hierarchical slope position.");
     m.def("surf_s10z", [](const Array& z, const Extent& e) { return grid_metric(z, e, surf::s10z); },
           py::arg("z"), py::arg("extent"), "s10z.");
     m.def("surf_amplitude", &py_amplitude, py::arg("z"), py::arg("parts") = 63u,

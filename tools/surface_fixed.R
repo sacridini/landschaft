@@ -425,3 +425,119 @@ fx$window <- function(r, size, circle, f, names) {
   names(out) <- names
   out
 }
+
+# -- terrain (spatialEco, corrected) ------------------------------------------------
+#
+#   focal statistics  summed per window in row order (terra slides running sums)
+#   circle windows    exact distances (focalMat: GDAL's float, cell width twice)
+#   tpi               the mean of the window; normalize by its sample sd
+#                     (zero.correct is the same mean, and its sd is 0)
+#   curvature         second derivatives over L^2 (spatialEco: 2 L^2), NA edges
+#                     (spatialEco: 0), no rounding, the cell height in y; McNab
+#                     / 8 (spatialEco: / 9 - 1); Bolstad with res(x)
+#   hsp               (tpi - mean) / sd (spatialEco: tpi - mean / sd)
+#   trasp             pi (spatialEco: 3.142)
+#   hli               southern hemisphere folded in radians with abs() and the
+#                     absolute latitude; aspect in radians left as it is
+
+# a statistic of the masked window around every cell, NA if any masked cell is
+fx$focal_stat <- function(x, m, stat) {
+  z <- fx$zmat(x)
+  N <- nrow(z); M <- ncol(z); wr <- nrow(m); wc <- ncol(m); hr <- wr %/% 2; hc <- wc %/% 2
+  zp <- matrix(NA_real_, N + 2 * hr, M + 2 * hc)
+  zp[(hr + 1):(hr + N), (hc + 1):(hc + M)] <- z
+  shifts <- list()
+  for (a in 1:wr) for (b in 1:wc) if (m[a, b] != 0) shifts[[length(shifts) + 1]] <- zp[a:(a + N - 1), b:(b + M - 1)]
+  k <- length(shifts)
+  if (stat == "min") { out <- shifts[[1]]; for (S in shifts[-1]) out <- pmin(out, S); return(out) }
+  if (stat == "max") { out <- shifts[[1]]; for (S in shifts[-1]) out <- pmax(out, S); return(out) }
+  s <- 0
+  for (S in shifts) s <- s + S
+  if (stat == "sum") return(s)
+  mean <- s / k
+  if (stat == "mean") return(mean)
+  ss <- 0
+  for (S in shifts) ss <- ss + ((S - mean) * (S - mean))
+  sqrt(ss / (k - 1))
+}
+
+fx$circle_weights <- function(r, d) {
+  rs <- res(r)
+  nx <- 1 + 2 * floor(d / rs[1]); ny <- 1 + 2 * floor(d / rs[2])
+  cx <- nx %/% 2; cy <- ny %/% 2
+  xx <- matrix(rep(0:(nx - 1), each = ny), ny, nx); yy <- matrix(rep(0:(ny - 1), nx), ny, nx)
+  (sqrt((((xx - cx) * rs[1])^2) + (((yy - cy) * rs[2])^2)) <= d) * 1
+}
+
+fx$win <- function(r, scale, win) if (win == "circle") fx$circle_weights(r, scale) else matrix(1, scale, scale)
+
+fx$tpi <- function(x, scale = 3, win = "rectangle", normalize = FALSE) {
+  m <- fx$win(x, scale, win)
+  z <- fx$zmat(x)
+  tp <- z - fx$focal_stat(x, m, "mean")
+  if (normalize) tp <- tp / fx$focal_stat(x, m, "sd")
+  fx$rowwise(tp)
+}
+
+fx$curvature <- function(x, type = "planform") {
+  z <- fx$zmat(x)
+  N <- nrow(z); M <- ncol(z)
+  lx <- res(x)[1]; ly <- res(x)[2]
+  if (type == "bolstad") return(fx$rowwise(10000 * (((z - fx$focal_stat(x, matrix(1, 3, 3), "mean")) / 1000) / (lx + lx / 2))))
+  if (type == "mcnab") {
+    zp <- matrix(NA_real_, N + 2, M + 2); zp[2:(N + 1), 2:(M + 1)] <- z
+    out <- matrix(NA_real_, N, M)
+    for (i in 1:N) for (j in 1:M) {
+      w <- as.vector(t(zp[i:(i + 2), j:(j + 2)]))
+      if (!is.na(w[5])) out[i, j] <- sum(w[5] - w[-5], na.rm = TRUE) / 8
+    }
+    return(fx$rowwise(out / max(out, na.rm = TRUE)))
+  }
+  i <- 2:(N - 1); j <- 2:(M - 1)
+  s <- function(dr, dc) z[i + dr, j + dc, drop = FALSE]
+  m1 <- s(-1, -1); m2 <- s(-1, 0); m3 <- s(-1, 1); m4 <- s(0, -1); m5 <- s(0, 0); m6 <- s(0, 1)
+  m7 <- s(1, -1); m8 <- s(1, 0); m9 <- s(1, 1)
+  p <- (m6 - m4) / (2 * lx)
+  q <- (m2 - m8) / (2 * ly)
+  r <- ((m4 + m6) - (2 * m5)) / (lx * lx)
+  ss <- (((m3 + m7) - m1) - m9) / ((4 * lx) * ly)
+  tt <- ((m2 + m8) - (2 * m5)) / (ly * ly)
+  p2 <- p * p; q2 <- q * q
+  root <- sqrt((1 + p2) + q2)
+  plan <- -(((q2 * r) - (((2 * p) * q) * ss)) + (p2 * tt)) / ((p2 + q2) * root)
+  prof <- -(((p2 * r) + (((2 * p) * q) * ss)) + (q2 * tt)) / ((p2 + q2) * root^3)
+  out <- matrix(NA_real_, N, M)
+  out[i, j] <- switch(type, planform = plan, profile = prof, total = plan + prof)
+  fx$rowwise(out)
+}
+
+fx$hsp <- function(x, min.scale = 3, max.scale = 27, inc = 4, win = "rectangle", normalize = FALSE) {
+  scales <- rev(seq(from = min.scale, to = max.scale, by = inc))
+  acc <- NULL
+  for (s in scales) {
+    tp <- fx$tpi(x, s, win)
+    zs <- 100 * ((tp - mean(tp, na.rm = TRUE)) / sd(tp, na.rm = TRUE))
+    acc <- if (is.null(acc)) zs else acc + zs
+  }
+  if (normalize) acc <- (acc - min(acc, na.rm = TRUE)) / (max(acc, na.rm = TRUE) - min(acc, na.rm = TRUE))
+  acc
+}
+
+fx$trasp <- function(x) {
+  asp <- values(terra::terrain(x, v = "aspect", unit = "degrees"))[, 1]
+  (1 - cos((pi / 180) * (asp - 30))) / 2
+}
+
+fx$hli <- function(aspect, slope, latitude, direct = FALSE, hemisphere = "northern", equation = 1) {
+  A0 <- values(aspect)[, 1] * (pi / 180); S <- values(slope)[, 1] * (pi / 180)
+  if (hemisphere == "northern") {
+    A <- if (direct) pi - abs(A0 - pi) else abs(pi - abs(A0 - pi * 5 / 4))
+    L <- latitude * (pi / 180)
+  } else {
+    A <- if (direct) abs(A0 - pi) else abs(pi - abs(A0 - pi * 7 / 4))
+    L <- abs(latitude) * (pi / 180)
+  }
+  if (equation == 1) -1.467 + 1.582 * cos(L) * cos(S) - 1.5 * cos(A) * sin(S) * sin(L) - 0.262 * sin(L) * sin(S) + 0.607 * sin(A) * sin(S)
+  else if (equation == 2) -1.236 + 1.35 * cos(L) * cos(S) - 1.376 * cos(A) * sin(S) * sin(L) - 0.331 * sin(L) * sin(S) + 0.375 * sin(A) * sin(S)
+  else 0.339 + 0.808 * cos(L) * cos(S) - 0.196 * sin(L) * sin(S) - 0.482 * cos(A) * sin(S)
+}

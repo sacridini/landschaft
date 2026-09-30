@@ -6,6 +6,29 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.86.0] - 2026-09-30
+
+### Added
+- Surface metrics, part 6: terrain indices of DEMs, from the R package spatialEco 2.0-5
+  over terra 1.9-50. `ls.surface.terrain` (slope and aspect as terra's `terrain`: Horn's
+  8 or 4 neighbours, geodesic cell sizes on longitude/latitude rasters), `tpi` (square or
+  circular windows, normalised), `tri`, `vrm`, `srr`, `dissection`, `curvature`
+  (planform, profile, total, McNab, Bolstad), `spherical_sd`, `hsp`, `trasp`, `hli`. Slope,
+  aspect, tri and dissection identical to terra / spatialEco bit for bit; vrm, srr and
+  spherical_sd within 1e-11 (terra slides running sums whose rounding depends on its
+  blocks; here each window is summed directly); on longitude/latitude rasters slope and
+  aspect within 1e-12 (terra's geodesics use the UCRT's sin and cos).
+- Where spatialEco errs, the method's intent, checked bit for bit against spatialEco with
+  the errors corrected in R: curvature's second derivatives over L^2 (spatialEco halves
+  them), missing edges (spatialEco pads with 0), no rounding to 6 decimals, the cell height
+  for y, McNab's mean over 8 neighbours (spatialEco: / 9 - 1) and Bolstad's with the cell
+  width (it fails in spatialEco); hsp's z-scores ((tpi - mean) / sd; spatialEco:
+  tpi - mean / sd); trasp with pi (spatialEco: 3.142); hli's southern hemisphere folded in
+  radians with absolute values and the absolute latitude, and radians left as they are;
+  circular windows by exact distances (terra's focalMat measures in single precision with
+  the cell width in both directions). spatialEco's `zero.correct` (the same mean, and a
+  standard deviation of 0 when normalising) is not offered.
+
 ## [0.85.0] - 2026-09-30
 
 ### Added
