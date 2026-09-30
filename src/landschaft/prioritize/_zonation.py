@@ -683,7 +683,7 @@ def _run(src, name, param, a) -> ZonationResult:
 
     # statistics: maxima, empty layers
     stats = _core.PrioStats(nodata.tolist(), extract.tolist(), thresholds.tolist())
-    for y0, y1, _ in _inputs.blocks(H, W, L0, src.block_rows):
+    for y0, y1 in _inputs.chunks(H, W, L0):
         stats.add_block(_inputs.read_rows(src.layers, y0, y1, W), _inputs.area_rows(area_layer, y0, y1, which))
     maxv = np.asarray(stats.max_values, dtype=np.float32)
     kept = [i for i in range(L0) if maxv[i] > 0]
@@ -727,7 +727,9 @@ def _run(src, name, param, a) -> ZonationResult:
     kl = [src.layers[i] for i in kept]
     if cond_layers:
         data.set_conditions(cond_index[kept].tolist(), renorm[kept].tolist())
-    for y0, y1, end in _inputs.blocks(H, W, L + len(cond_layers), src.block_rows):
+    # Zonation adds up the layers block of rows by block (the files' blocks; arrays: one block)
+    zonation_rows = src.block_rows or H
+    for y0, y1 in _inputs.chunks(H, W, L + len(cond_layers)):
         conds = None
         if cond_layers:
             conds = _inputs.read_rows(cond_layers, y0, y1, W)
@@ -736,9 +738,8 @@ def _run(src, name, param, a) -> ZonationResult:
                 c[np.isnan(c) | (c == cl.nodata)] = 0.0
             if (conds < 0).any() or (conds > 1).any():
                 raise ValueError("condition rasters must have values in [0, 1]")
-        data.add_block(_inputs.read_rows(kl, y0, y1, W), _inputs.area_rows(area_layer, y0, y1, which), conds)
-        if end:
-            data.flush()
+        data.add_block(_inputs.read_rows(kl, y0, y1, W), _inputs.area_rows(area_layer, y0, y1, which), conds,
+                       zonation_rows)
     data.finish()
     if data.cells == 0:
         raise ValueError("no cells with data")

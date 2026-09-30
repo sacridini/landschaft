@@ -6,6 +6,25 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.95.0] - 2026-09-30
+
+### Added
+- Spatial prioritization, part 7: the tutorial "Conservation priorities" (features from land cover,
+  performance curves, complementarity against richness hotspots, rules, weights, costs, existing
+  reserves, connectivity, ties) and chapter 12 of the course, "Conservation priorities"
+  (systematic conservation planning, complementarity and irreplaceability, how Zonation ranks,
+  performance curves, costs, reserves, connectivity, data and uncertainty), with glossary terms and
+  further reading. `tools/benchmark_prioritize.py` times z5 and Landschaft on synthetic features and
+  checks the rank maps; the benchmarks page has the results: on 12 threads 4 to 11 times faster than
+  z5 on 12 threads, with z5's rank map on one thread bit for bit.
+
+### Changed
+- `ls.prioritize.zonation` reads the features in large chunks of rows and closes Zonation's per-block
+  sums at the files' block boundaries inside the chunk: GeoTIFFs in strips of one or two rows were
+  read row by row (loading 30 features of 1000 × 1000: 3.7 s to 0.3 s).
+- The course's "From question to tool" is now chapter 13; the home page and README list the
+  biodiversity and prioritization modules.
+
 ## [0.94.0] - 2026-09-30
 
 ### Added

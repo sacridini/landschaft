@@ -1,4 +1,4 @@
-<p class="ls-chapter">Chapter 12</p>
+<p class="ls-chapter">Chapter 13</p>
 
 # From question to tool
 
@@ -68,6 +68,9 @@ and a checklist of what to report.
 | the best route between two areas | `ls.least_cost_path`, least-cost corridors | [9](restoration.md) |
 | what restoring a corridor or a patch would gain | `ls.restoration_corridor`, `HabitatGraph(restoration=...)` | [9](restoration.md), [7](networks.md) |
 | where natural regeneration is likely | `ls.euclidean_distance` | [9](restoration.md) |
+| which places matter most for many species at once | `ls.prioritize.zonation` | [12](prioritization.md) |
+| how much of every species a share of the land would protect | performance curves (`feature_curves`) | [12](prioritization.md) |
+| what existing reserves miss, and how to complete them | hierarchic mask, gap analysis | [12](prioritization.md) |
 | **Change** | | |
 | what was gained and lost, and whether it is real | `ls.simple_change`, `ls.morphological_change` | [10](change.md) |
 | how fragmentation classes shifted | `ls.fos_change`, `ls.fad_multiscale_change` | [10](change.md) |

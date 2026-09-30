@@ -128,8 +128,14 @@ Data::Data(ReadRules r, std::vector<float> max_values, std::vector<std::uint8_t>
 
 // The layers are quantized in parallel, each summed in cell order as Zonation
 // does; the runs of the cells are written in parallel chunks, then joined.
-void Data::add_block(const float* values, i64 h, i64 w, const std::uint8_t* area, const float* cond) {
+void Data::add_block(const float* values, i64 h, i64 w, const std::uint8_t* area, const float* cond,
+                     i64 block_rows) {
     const int L = rules.layers;
+    const i64 row0 = w > 0 ? pixels / w : 0;  // the map row of the first row of the block
+    // whether a block of Zonation's rows ends with the cell c of the block
+    auto ends_block = [&](i64 c) {
+        return block_rows > 0 && (c + 1) % w == 0 && (row0 + (c + 1) / w) % block_rows == 0;
+    };
     const bool conditioned = cond && !condition.empty();
     const i64 plane = h * w;
     const float scale = static_cast<float>(storage_scale);
@@ -153,6 +159,11 @@ void Data::add_block(const float* values, i64 h, i64 w, const std::uint8_t* area
             sl[c] = nd || (!keep_zeros[l] && scaled_nq == 0.0f);
             nq += static_cast<double>(normalized);
             sum += static_cast<double>(ql[c]) * scale_r;
+            if (ends_block(c)) {
+                nq_sums[l] += nq;
+                max_norm_sums[l] += sum;
+                nq = sum = 0.0;
+            }
         }
         block_nq_[l] = nq;
         block_sums_[l] = sum;
@@ -204,8 +215,13 @@ void Data::add_block(const float* values, i64 h, i64 w, const std::uint8_t* area
         const std::uint16_t* ql = q.data() + l * plane;
         const std::uint8_t* sl = skip.data() + l * plane;
         double sum = block_cond_[l];
-        for (i64 c = 0; c < plane; ++c)
+        for (i64 c = 0; c < plane; ++c) {
             if (has[c] && !sl[c]) sum += static_cast<double>(ql[c]) * scale_r;
+            if (ends_block(c)) {
+                condition_sums[l] += sum;
+                sum = 0.0;
+            }
+        }
         block_cond_[l] = sum;
     }
     pixels += plane;

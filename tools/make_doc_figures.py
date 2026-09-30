@@ -379,6 +379,8 @@ BENCHMARKS = [
     ("Slopes and area (sdq, sdq6, sdr)", "geodiv", 2.16, 0.0048),
     ("Texture image of Sk, 30×30", "geodiv", 134, 0.0219),
     ("Curvature, 371×371", "spatialEco", 1.58, 0.0016),
+    ("Zonation CAZ2, 2000×2000, 30 features", "Zonation 5", 48.0, 7.29),
+    ("Zonation CAZ2, 1000×1000, 200 features", "Zonation 5", 33.6, 3.16),
 ]
 
 
@@ -946,6 +948,214 @@ def learn_aacf():
         ax.set_axis_off()
     fig.colorbar(im, ax=axes, shrink=0.7, label="autocorrelation")
     save(fig, "learn_aacf")
+
+
+# ---- Spatial prioritization (tutorial and course) ---------------------------
+
+_PRIO = {}
+PRIO_NAMES = ["broadleaf_bird", "conifer_bird", "mire_plant", "wetland_bird",
+              "grassland_butterfly", "farmland_bird", "edge_bat", "forest_mammal"]
+# Zonation's usual rank classes: the best 2 %, 5 %, 10 %, 25 %, 50 % and the rest
+RANK_BOUNDS = [0, 0.5, 0.75, 0.9, 0.95, 0.98, 1.0]
+RANK_COLORS = ["#e2e8f0", "#93c5fd", "#2563eb", "#facc15", "#f97316", "#b91c1c"]
+RANK_LABELS = ["rest", "best 50 %", "best 25 %", "best 10 %", "best 5 %", "best 2 %"]
+
+
+def prio_share(*codes):
+    import xarray as xr  # noqa: F401
+
+    if "clc" not in _PRIO:
+        _PRIO["clc"] = ls.load_raster(ls.example_data("clc"), validate=None)
+    clc = _PRIO["clc"]
+    return clc.isin(codes).coarsen(x=5, y=5).mean().astype("float32")
+
+
+def prio_species():
+    """The tutorial's eight hypothetical species (docs/tutorials/prioritization.md)."""
+    import xarray as xr
+
+    if "species" not in _PRIO:
+        share = prio_share
+        broadleaf, conifer, mixed = share(23), share(24), share(25)
+        forest = broadleaf + conifer + mixed
+        _PRIO["species"] = xr.concat([
+            broadleaf + 0.5 * mixed, conifer + 0.5 * mixed, share(35, 36), share(35, 36, 40, 41), share(18, 26),
+            share(20, 21) + 0.3 * share(12), 4 * forest * (1 - forest), forest ** 2,
+        ], dim="species").assign_coords(species=PRIO_NAMES)
+    return _PRIO["species"]
+
+
+def prio_run(key, **kw):
+    if key not in _PRIO:
+        _PRIO[key] = ls.prioritize.zonation(prio_species(), names=PRIO_NAMES, **kw)
+    return _PRIO[key]
+
+
+def rank_map(ax, rank, title=""):
+    cmap = ListedColormap(RANK_COLORS)
+    ax.imshow(np.asarray(rank), cmap=cmap, norm=BoundaryNorm(RANK_BOUNDS, len(RANK_COLORS)), interpolation="nearest")
+    ax.set_title(title)
+    ax.set_axis_off()
+
+
+def rank_legend(ax):
+    handles = [Patch(color=c, label=lab) for c, lab in zip(RANK_COLORS[::-1], RANK_LABELS[::-1])]
+    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1), frameon=False, fontsize=8)
+
+
+def curves_plot(ax, res, marks=(0.1, 0.3)):
+    fc = res.feature_curves
+    x = fc["rank"].to_numpy()
+    colors = plt.get_cmap("tab10").colors
+    for i, name in enumerate(fc.columns[1:]):
+        ax.plot(x, fc[name].to_numpy(), color=colors[i % 10], lw=1.6, label=name.replace("_", " "))
+    for m in marks:
+        ax.axvline(1 - m, color="#475569", lw=0.8, ls="--")
+        ax.text(1 - m, 1.02, f"best {m:.0%}", ha="center", va="bottom", fontsize=8, color="#475569")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1.08)
+    ax.set_xlabel("share of the landscape removed (rank)")
+    ax.set_ylabel("share of the feature remaining")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(color="#e2e8f0")
+    ax.set_axisbelow(True)
+    ax.legend(loc="lower left", fontsize=7.5, frameon=False)
+
+
+def best_map(ax, rank, best, title, color="#15803d"):
+    v = (np.asarray(rank) >= 1 - best).astype(float)
+    v[~np.isfinite(np.asarray(rank))] = np.nan
+    ax.imshow(v, cmap=ListedColormap(["#f1f5f9", color]), vmin=0, vmax=1, interpolation="nearest")
+    ax.set_title(title)
+    ax.set_axis_off()
+
+
+@figure
+def prio_features():
+    sp = prio_species()
+    fig, axes = plt.subplots(2, 4, figsize=(12, 6.2))
+    for ax, name in zip(axes.flat, PRIO_NAMES):
+        im = ax.imshow(sp.sel(species=name).values, cmap="YlGn", vmin=0, vmax=1, interpolation="nearest")
+        ax.set_title(name.replace("_", " "))
+        ax.set_axis_off()
+    fig.colorbar(im, ax=axes, shrink=0.6, label="habitat value (share of the cell)")
+    save(fig, "prio_features")
+
+
+@figure
+def prio_rank():
+    res = prio_run("caz2")
+    fig, (a, b) = plt.subplots(1, 2, figsize=(12, 4.8), gridspec_kw={"width_ratios": [1, 1.25]})
+    rank_map(a, res.rank, "Rank (CAZ2)")
+    rank_legend(a)
+    curves_plot(b, res)
+    b.set_title("Performance curves")
+    fig.tight_layout()
+    save(fig, "prio_rank")
+
+
+@figure
+def prio_hotspots():
+    sp = prio_species()
+    res = prio_run("caz2")
+    richness = (sp / sp.sum(dim=("y", "x"))).sum("species")
+    hot = ls.prioritize.zonation(sp, names=PRIO_NAMES, rule="LOAD", solution=richness)
+
+    def kept(r, best):
+        fc = r.feature_curves
+        return fc.iloc[(fc["rank"] - (1 - best)).abs().argmin(), 1:]
+
+    fig = plt.figure(figsize=(14, 4.2))
+    g = fig.add_gridspec(1, 3, width_ratios=[1, 1, 1.3], wspace=0.55)
+    best_map(fig.add_subplot(g[0, 0]), hot.rank, 0.3, "Best 30 % by richness", "#b45309")
+    best_map(fig.add_subplot(g[0, 1]), res.rank, 0.3, "Best 30 % by Zonation (CAZ2)")
+    ax = fig.add_subplot(g[0, 2])
+    y = np.arange(len(PRIO_NAMES))
+    ax.barh(y + 0.2, kept(hot, 0.3).to_numpy(), height=0.38, color="#b45309", label="richness hotspots")
+    ax.barh(y - 0.2, kept(res, 0.3).to_numpy(), height=0.38, color="#15803d", label="Zonation")
+    ax.set_yticks(y, [n.replace("_", " ") for n in PRIO_NAMES])
+    ax.invert_yaxis()
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("share of the species in the best 30 %")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.legend(frameon=False, fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=2)
+    save(fig, "prio_hotspots")
+
+
+@figure
+def prio_cost_mask():
+    sp = prio_species()
+    towns = prio_share(*range(1, 12))
+    near = ls.prioritize.convolve(towns.values, ls.prioritize.Kernel("gaussian", 8, cut=3))
+    cost = towns.copy(data=(1 + 20 * near).astype("float32"))
+    cheap = ls.prioritize.zonation(sp, names=PRIO_NAMES, cost=cost)
+    reserves = (prio_share(36) > 0.5).astype("uint8")
+    prot = ls.prioritize.zonation(sp, names=PRIO_NAMES, hierarchic_mask=reserves)
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.4))
+    im = axes[0].imshow(cost.values, cmap="magma_r", interpolation="nearest")
+    axes[0].set_title("Cost (higher near towns)")
+    axes[0].set_axis_off()
+    fig.colorbar(im, ax=axes[0], shrink=0.75)
+    rank_map(axes[1], cheap.rank, "Rank with cost")
+    rank_map(axes[2], prot.rank, "Rank around a reserve (outlined)")
+    axes[2].contour(reserves.values, levels=[0.5], colors="black", linewidths=0.8)
+    rank_legend(axes[2])
+    save(fig, "prio_cost_mask")
+
+
+@figure
+def prio_connectivity():
+    res = prio_run("caz2")
+    kernels = [ls.prioritize.Kernel("negexp", d) for d in (4, 4, 1, 8, 2, 4, 8, 16)]
+    con = prio_run("conn", connectivity=kernels)
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4.8))
+    best_map(axes[0], res.rank, 0.1, "Best 10 %, features as mapped")
+    best_map(axes[1], con.rank, 0.1, "Best 10 %, with dispersal kernels")
+    fig.tight_layout()
+    save(fig, "prio_connectivity")
+
+
+@figure
+def learn_complementarity():
+    sites = np.array([[1, 1, 0, 1], [1, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0]])
+    fig, axes = plt.subplots(1, 2, figsize=(9, 3.2))
+    for ax, picks, title, color in ((axes[0], (0, 1), "Two richest sites: 3 species", "#b45309"),
+                                    (axes[1], (0, 2), "Two complementary sites: 4 species", "#15803d")):
+        ax.imshow(np.zeros_like(sites), cmap=ListedColormap(["white"]), vmin=0, vmax=1)
+        for c in picks:
+            ax.add_patch(plt.Rectangle((c - 0.5, -0.5), 1, 4, color=color, alpha=0.18, lw=0))
+        for r in range(4):
+            for c in range(4):
+                if sites[r, c]:
+                    covered = c in picks
+                    ax.plot(c, r, "o", ms=16, color=color if covered else "#94a3b8")
+        ax.set_xticks(range(4), ["A", "B", "C", "D"])
+        ax.set_yticks(range(4), [f"species {i}" for i in range(1, 5)])
+        ax.set_xticks(np.arange(-0.5, 4), minor=True)
+        ax.set_yticks(np.arange(-0.5, 4), minor=True)
+        ax.grid(which="minor", color="#cbd5e1")
+        ax.tick_params(which="minor", length=0)
+        ax.set_title(title)
+        ax.set_xlabel("site")
+    fig.tight_layout()
+    save(fig, "learn_complementarity")
+
+
+@figure
+def learn_prio_curves():
+    import xarray as xr
+
+    share = prio_share
+    names = ["forest_bird", "mire_plant", "grassland_butterfly", "farmland_bird"]
+    sp = xr.concat([share(23, 24, 25), share(35, 36), share(18, 26), share(20, 21) + 0.3 * share(12)], dim="species")
+    res = ls.prioritize.zonation(sp, names=names, connectivity=[ls.prioritize.Kernel("negexp", 4)] * 4)
+    fig, (a, b) = plt.subplots(1, 2, figsize=(12, 4.8), gridspec_kw={"width_ratios": [1, 1.25]})
+    rank_map(a, res.rank, "Rank of four species")
+    rank_legend(a)
+    curves_plot(b, res, marks=(0.17, 0.3))
+    b.set_title("Performance curves")
+    fig.tight_layout()
+    save(fig, "learn_prio_curves")
 
 
 def main() -> None:

@@ -36,6 +36,8 @@ in the test suite, and runs from a few to several hundred times faster.
 | **Routes on grids** | transitions from any rule, travel-time surfaces, least-cost distances and paths, random walks, randomised shortest paths, route overlap | gdistance |
 | **Surface metrics** | texture of continuous rasters (ISO 25178): roughness, height distribution, bearing area curve, slopes, peaks and valleys, autocorrelation, orientation, fractal dimension, trend surfaces, texture images; terrain indices (TPI, TRI, VRM, curvature, HLI...) | geodiv, spatialEco |
 | **Neutral landscape models** | simulated landscapes as null models: random, percolation, gradients, fractal surfaces, Gaussian fields, mosaics, clusters, classification | NLMR |
+| **Biodiversity analysis** | species records in grid cells: richness, endemism, phylogenetic diversity and endemism, randomisations, CANAPE, clustering | Biodiverse |
+| **Spatial prioritization** | ranking of whole landscapes for many features (CAZ and ABF rules), weights, costs, hierarchic masks, connectivity transforms, performance curves, post-processing, impact assessment; maps larger than memory | Zonation 5 |
 | **Large data** | out-of-core tiles and row blocks, parallel batches of rasters | |
 
 ## Installation
@@ -116,6 +118,7 @@ floating-point solvers. Typical speed-ups on the benchmark cases:
 | Omniscape, Circuitscape | Omniscape 0.7, Circuitscape 6.1 | to 2e-11 | 3–45× |
 | Grid distances | gdistance 1.6 | identical bits (least cost); 1e-14 (random walks) | 3–400× |
 | Neutral landscape models | NLMR 1.4 (same seed) | identical bits | 2–6000× |
+| Spatial prioritization | Zonation 5 v2.4 | identical rank maps and output files | 4–11× |
 
 Methods, machines, full tables and the known differences are on the
 [benchmarks and accuracy page](docs/benchmarks.md). To run the tests:

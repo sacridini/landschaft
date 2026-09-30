@@ -39,7 +39,8 @@ tables below (logarithmic scale). The original's time is its own run,
 including its input and output where noted; Landschaft is timed in memory.
 
 !!! info "How these were measured"
-    The MSPA table was measured with `tools/benchmark.py` (version 0.53) on a
+    The MSPA table was measured with `tools/benchmark.py` (version 0.53), and
+    the spatial prioritization table with `tools/benchmark_prioritize.py`, on a
     desktop Intel Core i5-13600K (14 cores, 20 threads, 64 GB, Windows 11),
     the fastest of 10 alternating runs, with both programs kept on the
     performance cores. The other timings were recorded in the
@@ -210,6 +211,31 @@ sums and standard deviations use compensated prefix sums along the rows
 (within about 1e-13 of summing each window), so a window costs one step per
 row whatever its size.
 
+### Spatial prioritization
+
+Against Zonation 5 v2.4 (`z5.exe`, and `z5_16bit.exe` for 16 bits) on
+synthetic species maps: seeded Gaussian random fields above a threshold, each
+feature on 60 % of the cells (10 % in the 200-feature case), written as
+GeoTIFFs. Measured with `tools/benchmark_prioritize.py` (version 0.95) on the
+performance cores, one run of z5 and the fastest of 3 of Landschaft; both
+times include reading the GeoTIFFs, and z5's writing its outputs. Every rank
+map is the same, bit for bit, as z5's on one thread.
+
+| Map | Features | Rule | Iterations | z5, 1 thread | z5, 12 threads | Landschaft, 1 thread | Landschaft, 12 threads | Since |
+|---|---|---|---|---|---|---|---|---|
+| 1000 × 1000 | 30 | CAZ2 | 60 | 20.6 s | 12.4 s | 9.5 s | 1.86 s | 0.95 |
+| 2000 × 2000 | 30 | CAZ2 | 60 | 102.8 s | 48.0 s | 45.6 s | 7.29 s | 0.95 |
+| 2000 × 2000 | 30 | ABF | 20 | 53.6 s | 23.4 s | 36.5 s | 5.90 s | 0.95 |
+| 2000 × 2000 | 30 | CAZ2, 16 bits | 60 | 104.4 s | 49.7 s | 46.2 s | 8.71 s | 0.95 |
+| 1000 × 1000 | 200 sparse | CAZ2 | 59 | 105.8 s | 33.6 s | 15.0 s | 3.16 s | 0.95 |
+
+On one thread Landschaft is 1.5 to 7 times faster than z5, most with many
+sparse features: each feature is walked along its own occurrences, where z5
+visits every feature in every cell. With 12 threads the gap grows to 4 to 11
+times: z5 gains 1.7 to 3 times from its 12 threads, Landschaft 4.7 to 6.3. Memory: about 130 bytes per
+cell with data during the ranking, plus 1 to 2 bytes per value that is not
+zero; `storage=` puts the large arrays in memory-mapped files.
+
 ## Accuracy
 
 ### How results are compared
@@ -255,6 +281,7 @@ row whatever its size.
 | Grid distances: commute distances, random-walk and randomised-shortest-path passages and distances, route overlap, barrier and area transitions | the same gdistance: 15 reference cases | 1e-14 typical, 1e-10 worst (different sparse factorisations than R's Matrix package); barrier and area transitions identical |
 | Surface metrics: amplitude parameters (`sa`, `sq`, `ssk`, `sku`, `sv`, `sph`, `smean`), trend surfaces of order 0-3 and the choice of the best one, slopes and developed area (`sdq`, `sdq6`, `sdr`), peaks, valleys, `sds`, `ssc`, `s10z`, the bearing area curve and its parameters (`sdc`, `sbi`, `svi`, `sci`, `sk`, `spk`, `svk`), autocorrelation, correlation lengths, texture direction and wavelength, fractal dimension, texture images | geodiv 1.1.1 (R 4.4.2, terra 1.9.50, spatial 7.3-17), and where geodiv errs geodiv with its errors corrected (`tools/surface_fixed.R`): 70 reference cases, projected and longitude/latitude, among them geodiv's example rasters, NA cells, non-square cells and ties | identical bits |
 | Terrain indices: slope, aspect, tpi, tri, vrm, srr, dissection, curvature, spherical standard deviation, hsp, trasp, hli | spatialEco 2.0-5 and terra 1.9-50 (R 4.4.2), and where spatialEco errs spatialEco with its errors corrected (`tools/surface_fixed.R`): 3 DEMs (square and rectangular cells, missing cells, longitude/latitude) | identical bits; focal means (tpi, hsp, srr, vrm, spherical standard deviation, Bolstad's curvature) within 1e-12 of summing each window (compensated prefix sums), 1e-11 of terra's running sums; on longitude/latitude slope and aspect within 1e-12 |
+| Spatial prioritization: the ranking (8 rules, weights and weight groups, output groups, thresholds, zero modes, value extraction, costs, hierarchic masks, analysis areas, smoothing, 8 and 16 bits), condition, retention, pre-processing maps, transformed layers, connectivity transforms, post-processing, impact assessment | Zonation 5 v2.4 (`z5.exe`, `z5_16bit.exe`, on one thread): 64 reference projects, and the timing cases below | identical rank maps and iterations; curve, statistics, post-processing and impact files digit for digit |
 | Neutral landscape models: random, percolation, gradients, midpoint displacement, fractional Brownian motion, Gaussian fields, Poisson line and Voronoi mosaics, random, neighbourhood and rectangular clusters, curds, classification | NLMR 1.4.0 (R 4.4.2) with the same seeds; R's generator and the libstdc++ distributions of NLMR's C++ code against R and the Rtools compiler | identical bits |
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an
@@ -286,6 +313,16 @@ its code:
       approximation near the tile seams when objects are larger than the
       overlap. A map that fits in one tile gets the MSPA of the whole map
       (GuidosToolbox drops the first `overlap / 2` columns).
+    - **Zonation 5's curves** (performance curves, AUC, `features_info`,
+      histograms and flexibility maps) come from the order of its
+      second-to-last sort, while its rank map comes from the last one.
+      Landschaft's describe the rank map it returns; they are compared with z5
+      evaluating that rank map (`LOAD` mode). Flexibility maps are identical
+      where the two orders give the same curves, and otherwise compared with a
+      direct reproduction of Zonation's algorithm.
+    - **Zonation 5 on several threads** adds up the layers per thread, and its
+      results can differ from its run on one thread; Landschaft's do not
+      depend on the threads and equal z5's on one thread.
 
 ## Reproduce
 
@@ -309,4 +346,6 @@ The live runs look for the originals in these environment variables:
 
 `tools/make_reference*.py` regenerate the stored references from the
 originals, and `python tools/benchmark.py --exe <mspa executable>` repeats
-the MSPA timings.
+the MSPA timings. `tools/make_reference_prioritize.py` and
+`tools/benchmark_prioritize.py` look for Zonation 5's `z5.exe` and
+`z5_16bit.exe` in `LANDSCHAFT_Z5_DIR`.

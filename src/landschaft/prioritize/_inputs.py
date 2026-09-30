@@ -219,17 +219,12 @@ def open_aux(x, grid: Grid, what: str, sources: Sources, nodata=None) -> Layer |
     return layers[0]
 
 
-def blocks(height: int, width: int, layers: int, block_rows: int | None) -> Iterator[tuple[int, int, bool]]:
-    """Blocks of rows (y0, y1, ends_block): Zonation's blocks for files, split to bound memory."""
+def chunks(height: int, width: int, layers: int) -> Iterator[tuple[int, int]]:
+    """Chunks of rows (y0, y1) of about BLOCK_BYTES of float32 values, read at once."""
     per_row = max(1, width * max(layers, 1) * 4)
     step = max(1, BLOCK_BYTES // per_row)
-    z = block_rows or height
-    y = 0
-    while y < height:
-        zend = min(height, (y // z + 1) * z)
-        y1 = min(zend, y + step)
-        yield y, y1, y1 == zend
-        y = y1
+    for y in range(0, height, step):
+        yield y, min(height, y + step)
 
 
 def read_rows(layers: list[Layer], y0: int, y1: int, width: int) -> np.ndarray:
@@ -286,7 +281,7 @@ def gather(layer: Layer | None, cell_index: np.ndarray, grid: Grid, *, lo=None, 
     h, w = grid.shape
     out = np.zeros(cell_index.size, dtype=np.float64)
     rows = cell_index // w
-    for y0, y1, _ in blocks(h, w, 1, None):
+    for y0, y1 in chunks(h, w, 1):
         a, b = np.searchsorted(rows, [y0, y1])
         if a == b:
             continue

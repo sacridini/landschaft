@@ -102,4 +102,11 @@ and follow along.
     Species records in grid cells: richness, endemism, phylogenetic
     diversity and endemism, randomisations, CANAPE and regions.
 
+-   :material-map-marker-star-outline:{ .lg .middle } **[Conservation priorities](prioritization.md)**
+
+    ---
+
+    Rank a landscape for many species with Zonation: performance curves,
+    weights, costs, existing reserves and connectivity.
+
 </div>

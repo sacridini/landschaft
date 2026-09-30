@@ -21,7 +21,7 @@ any thread further.
       `plot` extra ([installation](../getting-started/installation.md)).
     - **Answer the questions** at the end of each chapter before opening the
       answers.
-    - **Come back to [chapter 12](choosing.md)** when you start a project: it
+    - **Come back to [chapter 13](choosing.md)** when you start a project: it
       goes from questions to tools.
 
 ## Chapters
@@ -105,7 +105,15 @@ any thread further.
     Gradients instead of patches: surface metrics, the bearing area curve,
     autocorrelation and texture, terrain indices of elevation models.
 
--   **12 · [From question to tool](choosing.md)**
+-   **12 · [Conservation priorities](prioritization.md)**
+
+    ---
+
+    Systematic conservation planning: complementarity and irreplaceability,
+    how Zonation ranks a landscape, performance curves, costs, reserves and
+    connectivity.
+
+-   **13 · [From question to tool](choosing.md)**
 
     ---
 

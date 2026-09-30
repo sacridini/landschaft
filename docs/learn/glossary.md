@@ -2,6 +2,9 @@
 
 The terms of the course, with the chapter where each is introduced.
 
+Additive benefit function (ABF)
+:   A Zonation rule: the marginal loss of a cell is the sum over the features of the loss of a benefit that saturates with the share kept (R<sup>z</sup>). [Ch. 12](prioritization.md#how-zonation-ranks)
+
 Aggregation
 :   The tendency of cells or patches of a class to be clumped together rather
     than dispersed. Measured by `ai`, `clumpy`, `cohesion`, `contag`.
@@ -33,6 +36,9 @@ Class
 :   A category of a categorical map (a land-cover type); class-level metrics
     summarise all patches of one class. [Ch. 5](metrics.md)
 
+Complementarity
+:   The value of an area for what it adds to the areas already chosen: a site with species found elsewhere adds little, one with species found nowhere else adds much. [Ch. 12](prioritization.md#core-ideas)
+
 Component
 :   A group of habitat patches joined, directly or through others, by links
     shorter than a threshold distance. [Ch. 7](networks.md)
@@ -58,6 +64,9 @@ Contagion
 Core area
 :   The part of a patch further from its edge than a given depth, where
     interior conditions prevail. [Ch. 4](morphology.md)
+
+Core-area Zonation (CAZ)
+:   A Zonation rule: the marginal loss of a cell follows the features that would lose the largest fraction of what remains of them (`CAZMAX`; `CAZ1` and `CAZ2` combine the fractions as sums or sums of squares). [Ch. 12](prioritization.md#how-zonation-ranks)
 
 Cost distance
 :   The accumulated resistance along the cheapest route between two places.
@@ -104,6 +113,9 @@ Fragmentation *per se*
     smaller, more isolated patches for the same amount.
     [Ch. 3](fragmentation.md)
 
+Gap analysis
+:   The measure of how much of every feature existing protected areas hold, and of what they miss. [Ch. 12](prioritization.md#weights-costs-and-what-is-already-protected)
+
 Gradient model
 :   A view of landscape structure as continuous variation in space, of which patches are a special case; the alternative to the patch-mosaic model. [Ch. 11](surfaces.md#patches-or-gradients)
 
@@ -129,9 +141,15 @@ Habitat availability (reachability)
 :   The amount of habitat reachable from within the habitat, counting the
     habitat of each patch and of the patches connected to it. [Ch. 7](networks.md)
 
+Hierarchic mask
+:   In Zonation, levels of cells removed in order (all cells of a level before any of the next): existing reserves ranked on top of the rest. [Ch. 12](prioritization.md#weights-costs-and-what-is-already-protected)
+
 IIC
 :   Integral index of connectivity: habitat availability on a binary graph,
     discounting pairs by the number of links between them. [Ch. 7](networks.md)
+
+Irreplaceability
+:   How much the conservation goals depend on an area; an area holding the only population of a species cannot be replaced. [Ch. 12](prioritization.md#core-ideas)
 
 Islet
 :   In MSPA, a patch too small or thin to contain any core. [Ch. 4](morphology.md)
@@ -147,6 +165,9 @@ Landscape mosaic
 Least-cost path
 :   The route of minimum accumulated cost between two places; a least-cost
     corridor includes near-optimal routes. [Ch. 9](restoration.md)
+
+Marginal loss
+:   In Zonation, the loss to the features of removing a cell at the point where it is removed, given the cells still remaining. [Ch. 12](prioritization.md#how-zonation-ranks)
 
 Matrix
 :   The dominant, most connected land cover in which habitat patches are
@@ -197,6 +218,9 @@ Perforation
 :   Holes inside habitat; also the MSPA class of the boundaries of such holes.
     [Ch. 4](morphology.md), [ch. 10](change.md)
 
+Performance curve
+:   The share of a feature remaining as the cells of a ranking are removed, from the least to the most important. [Ch. 12](prioritization.md#reading-the-results)
+
 Pinch point
 :   A narrow place where movement is funnelled, marked by high current
     density. [Ch. 8](circuits.md)
@@ -216,12 +240,18 @@ Scale of effect
 Shrinkage
 :   The reduction of patch size, typically from the edges. [Ch. 10](change.md)
 
+Spatial prioritization
+:   The ranking or selection of areas for conservation actions, balancing many features, costs and constraints. [Ch. 12](prioritization.md)
+
 Structuring element
 :   In mathematical morphology, the small reference shape used to probe the
     habitat (erosion, dilation). [Ch. 4](morphology.md)
 
 Surface metrics
 :   Measures of a continuous raster (ISO 25178, *gradient surface metrics*): amplitude, height distribution, slopes, features and spatial structure, computed without a threshold. [Ch. 11](surfaces.md)
+
+Systematic conservation planning
+:   Choosing areas for conservation with explicit goals, measuring what exists, and selecting areas for what they add to the whole (Margules & Pressey 2000). [Ch. 12](prioritization.md#why-prioritize-systematically)
 
 Texture image
 :   A map of a surface metric computed in a moving window around every cell. [Ch. 11](surfaces.md#surfaces-in-moving-windows)

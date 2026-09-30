@@ -14,7 +14,10 @@ is removed, with the core-area (CAZ, driven by the features that lose the larges
 fraction) or additive-benefit (ABF) rules, and sorted again until the order is
 consistent. Landschaft gives the rank maps and curves of the z5 program (v2.4)
 bit for bit, faster, with the curves of the ranking it returns (Zonation's own
-report those of the order before its last sort).
+report those of the order before its last sort). The
+[tutorial](../tutorials/prioritization.md) walks through a project, and the
+course chapter [Conservation priorities](../learn/prioritization.md) explains
+the method.
 
 <!-- no-run -->
 ```python

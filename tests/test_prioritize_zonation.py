@@ -599,3 +599,31 @@ def test_data_runs_roundtrip(bits, tmp_path):
             want[layer] = np.where(want[layer] >= 0, new, -1)
         got = np.stack([np.asarray(d.layer(i, scaled=False, missing=-1)) for i in range(L)])
         assert np.array_equal(got, want)
+
+
+def test_block_sums_inside_chunks():
+    """Zonation's per-block sums, flushed inside a chunk of rows, equal adding and
+    flushing block by block (bit for bit)."""
+    from landschaft import _core
+
+    rng = np.random.default_rng(8)
+    L, h, w, z = 5, 23, 17, 4
+    v = (rng.random((L, h, w)) ** 3).astype(np.float32)
+    cond = rng.random((1, h, w)).astype(np.float32)
+
+    def build():
+        d = _core.PrioData([np.nan] * L, [np.nan] * L, [0.0] * L, [float(v[i].max()) for i in range(L)], [1] * L, 8)
+        d.set_conditions([0, -1, 0, -1, -1], [0] * L)
+        return d
+
+    a = build()
+    for y in range(0, h, z):
+        a.add_block(v[:, y:y + z], None, cond[:, y:y + z])
+        a.flush()
+    a.finish()
+    b = build()
+    for y0, y1 in ((0, 9), (9, 10), (10, h)):  # chunks across the blocks
+        b.add_block(v[:, y0:y1], None, cond[:, y0:y1], block_rows=z)
+    b.finish()
+    for k in ("max_norm_sums", "layer_scale", "initial_levels", "quantization_errors"):
+        assert np.array_equal(getattr(a, k), getattr(b, k)), k

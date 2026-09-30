@@ -147,7 +147,8 @@ nav:
       - 9 · Distance, cost and restoration: learn/restoration.md
       - 10 · Landscape change: learn/change.md
       - 11 · Continuous surfaces: learn/surfaces.md
-      - 12 · From question to tool: learn/choosing.md
+      - 12 · Conservation priorities: learn/prioritization.md
+      - 13 · From question to tool: learn/choosing.md
       - Glossary: learn/glossary.md
       - Further reading: learn/reading.md
   - Tutorials:
@@ -164,6 +165,7 @@ nav:
       - Neutral landscapes: tutorials/neutral-landscapes.md
       - Surface texture: tutorials/surface-texture.md
       - Biodiversity analysis: tutorials/biodiversity.md
+      - Conservation priorities: tutorials/prioritization.md
   - API reference:
       - api/index.md
       - Data & configuration: api/data.md

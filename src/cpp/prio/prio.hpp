@@ -44,8 +44,11 @@ struct Stats {
 // from the layers that are not empty.
 struct Data {
     Data(ReadRules rules, std::vector<float> max_values, std::vector<std::uint8_t> keep_zeros, int bits);
-    // cond: (conditions, h, w) condition values in [0, 1] (Zonation's -c), or null
-    void add_block(const float* values, i64 h, i64 w, const std::uint8_t* area, const float* cond = nullptr);
+    // cond: (conditions, h, w) condition values in [0, 1] (Zonation's -c), or null;
+    // block_rows > 0: Zonation's blocks of rows are block_rows high (from the first
+    // row of the map), their sums added at the end of each (else by flush())
+    void add_block(const float* values, i64 h, i64 w, const std::uint8_t* area, const float* cond = nullptr,
+                   i64 block_rows = 0);
     void flush();   // end of one of Zonation's blocks of rows: add its sums
     void finish();
     // Zonation's retention transform of a layer (-r): kind 0 absolute values, 1

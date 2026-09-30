@@ -39,7 +39,7 @@ from a single raster on a laptop to continental maps larger than memory.
 
 <div class="ls-stats">
 <div><strong>130+</strong><small>landscape metrics</small></div>
-<div><strong>7</strong><small>established tools reproduced and validated</small></div>
+<div><strong>9</strong><small>established tools reproduced and validated</small></div>
 <div><strong>up to 600×</strong><small>faster than the tools it reproduces</small></div>
 <div><strong>Out-of-core</strong><small>rasters larger than memory</small></div>
 </div>
@@ -124,6 +124,20 @@ from a single raster on a laptop to continental maps larger than memory.
 
     Simulated landscapes as null models: random maps, gradients, fractal
     surfaces, Gaussian fields, clusters and mosaics.
+
+-   :material-leaf:{ .lg .middle } **Biodiversity analysis**
+
+    ---
+
+    Species records in grid cells: richness, endemism, phylogenetic
+    diversity and endemism, randomisations and regions (Biodiverse).
+
+-   :material-map-marker-star-outline:{ .lg .middle } **Conservation priorities**
+
+    ---
+
+    Rank whole landscapes for many species with Zonation 5: performance
+    curves, costs, reserves, connectivity and impact assessment.
 
 </div>
 

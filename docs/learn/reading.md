@@ -52,6 +52,21 @@ at the end of each chapter give the primary sources of every method.
 
 </div>
 
+### Conservation planning
+
+<div class="ls-refs" markdown>
+
+- Margules, C. R., & Pressey, R. L. (2000). Systematic conservation planning. *Nature*, 405, 243–253.
+  The framework: explicit goals, gap analysis, complementary selection, implementation.
+- Moilanen, A., Wilson, K. A., & Possingham, H. P. (Eds.) (2009). *Spatial Conservation Prioritization: Quantitative Methods and Computational Tools*. Oxford University Press.
+  The methods and software of spatial prioritization, Zonation and Marxan among them, by their authors.
+- Kukkala, A. S., & Moilanen, A. (2013). Core concepts of spatial prioritisation in systematic conservation planning. *Biological Reviews*, 88(2), 443–464.
+  Complementarity, irreplaceability, efficiency and the other concepts, defined and related.
+- Moilanen, A., Lehtinen, P., Kohonen, I., Jalkanen, J., Virtanen, E. A., & Kujala, H. (2022). Novel methods for spatial prioritization with applications in conservation, land use planning and ecological impact avoidance. *Methods in Ecology and Evolution*, 13(5), 1062–1072.
+  Zonation 5: the iterated ranking, its rules and uses.
+
+</div>
+
 ### Landscape metrics
 
 <div class="ls-refs" markdown>

@@ -215,7 +215,7 @@ void register_python(py::module_& m) {
              py::arg("keep_zeros"), py::arg("bits"), py::arg("storage") = "")
         .def(
             "add_block",
-            [](Data& d, const Floats& values, const py::object& area, const py::object& cond) {
+            [](Data& d, const Floats& values, const py::object& area, const py::object& cond, i64 block_rows) {
                 check_block(d.rules.layers, values, area);
                 Bytes a = area.is_none() ? Bytes() : area.cast<Bytes>();
                 const std::uint8_t* ap = area.is_none() ? nullptr : a.data();
@@ -225,9 +225,10 @@ void register_python(py::module_& m) {
                     throw std::invalid_argument("conditions: (conditions, rows, cols) of the block");
                 const float* cp = cond.is_none() ? nullptr : cv.data();
                 py::gil_scoped_release release;
-                d.add_block(values.data(), values.shape(1), values.shape(2), ap, cp);
+                d.add_block(values.data(), values.shape(1), values.shape(2), ap, cp, block_rows);
             },
-            py::arg("values"), py::arg("area") = py::none(), py::arg("conditions") = py::none())
+            py::arg("values"), py::arg("area") = py::none(), py::arg("conditions") = py::none(),
+            py::arg("block_rows") = 0)
         .def(
             "set_conditions",
             [](Data& d, std::vector<int> condition, std::vector<std::uint8_t> renormalize) {
