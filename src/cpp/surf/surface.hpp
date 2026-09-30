@@ -34,8 +34,13 @@ struct Amplitude {
     double sv, sph, smean;
 };
 
+// What amplitude() computes (the others are left at 0).
+enum AmplitudeParts : unsigned {
+    kSa = 1u, kSq = 2u, kSsk = 4u, kSku = 8u, kExtremes = 16u, kSmean = 32u, kAllAmplitude = 63u
+};
+
 // The amplitude parameters of the values (NaN = NA) of z.
-Amplitude amplitude(const double* z, i64 n);
+Amplitude amplitude(const double* z, i64 n, unsigned parts = kAllAmplitude);
 
 // -- trend surfaces (geodiv's fitplane: spatial::surf.ls) ---------------------
 
@@ -47,5 +52,25 @@ std::vector<double> fit_plane(const Grid& g, int order, int* ifail = nullptr);
 // geodiv's bestfitplane: the surface of order 0-3 whose residuals have the
 // smallest absolute mean (the lowest order on ties). `order` gets it.
 std::vector<double> best_fit_plane(const Grid& g, int* order = nullptr);
+
+// -- hybrid parameters (geodiv's sdq.R, surfacearea.R) ------------------------
+// `iso`: the corrections of convention="iso" (sdq6's stencil; surface areas on
+// the heights and cell sizes as they are, not rescaled).
+
+double sdq(const Grid& g);
+double sdq6(const Grid& g, bool iso);
+double surface_area(const Grid& g, bool iso);
+double flat_area(const Grid& g, bool iso);
+double sdr(const Grid& g, bool iso);
+
+// -- local features (geodiv's localsurface.R) ---------------------------------
+
+// The peaks / valleys (cell indices, row order). `transposed`: geodiv's
+// findvalleys, which reads the neighbours from the values filled by columns.
+std::vector<i64> find_peaks(const Grid& g);
+std::vector<i64> find_valleys(const Grid& g, bool transposed);
+double sds(const Grid& g);
+double ssc(const Grid& g);
+double s10z(const Grid& g, bool transposed_valleys);
 
 }  // namespace surf

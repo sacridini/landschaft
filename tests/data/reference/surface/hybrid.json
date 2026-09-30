@@ -1,0 +1,175 @@
+{
+ "arrays": {
+  "hybrid_const/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_const/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_const/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_const/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_const/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_normforest/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_normforest/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_normforest/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_normforest/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_normforest/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_orelevation/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_orelevation/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_orelevation/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_orelevation/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_orelevation/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_orforest/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_orforest/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_orforest/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_orforest/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_orforest/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_positive/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_positive/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_positive/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_positive/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_positive/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_rand/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_rand/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_rand/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_rand/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_rand/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_rand_na/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_rand_na/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_rand_na/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_rand_na/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_rand_na/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_rect/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_rect/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_rect/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_rect/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_rect/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_square/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_square/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_square/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_square/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_square/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_ties/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_ties/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_ties/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_ties/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_ties/surface_area": {
+   "kind": "vector"
+  },
+  "hybrid_tiny/flatsa": {
+   "kind": "vector"
+  },
+  "hybrid_tiny/sdq": {
+   "kind": "vector"
+  },
+  "hybrid_tiny/sdq6": {
+   "kind": "vector"
+  },
+  "hybrid_tiny/sdr": {
+   "kind": "vector"
+  },
+  "hybrid_tiny/surface_area": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "geodiv": "1.1.1",
+  "spatialEco": "2.0.5",
+  "terra": "1.9.50"
+ }
+}

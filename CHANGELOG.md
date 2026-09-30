@@ -6,6 +6,26 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.82.0] - 2026-09-30
+
+### Added
+- Surface metrics, part 2: slopes, developed area and local features, as geodiv. `ls.surface.sdq`,
+  `sdq6`, `surface_area`, `flat_area`, `sdr`; `find_peaks`, `find_valleys` (tables of cells
+  with coordinates, value, row and column), `sds`, `ssc`, `s10z`; the new metrics in
+  `ls.surface.metrics`. Identical to geodiv, bit for bit, on 19 reference setups.
+- `convention="iso"` (`sdq6`, `surface_area`, `flat_area`, `sdr`, `find_valleys`, `s10z`,
+  `metrics`) for ISO 25178's definitions where geodiv departs from them: geodiv's `sdq6`
+  stencil has `- 9 z[+2]` twice in place of `+ 9 z[-2]` and it takes the root of the sum of
+  the squares, not of their mean (`length()` of a raster is 1 in R); its `findvalleys` reads
+  each cell's neighbours from the values arranged by columns (on geodiv's `normforest` it
+  finds 33041 valleys where there are 5167); its areas rescale the heights to 0-1. The
+  default stays geodiv's, for comparability with studies done in R.
+
+### Changed
+- `ls.surface` amplitude functions compute only what they return (`sa` 4x faster);
+  `fit_plane` / `best_fit_plane` fill the regression matrix in parallel and run the
+  Householder products of each step's columns in parallel (same bits).
+
 ## [0.81.0] - 2026-09-30
 
 ### Added

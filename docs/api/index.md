@@ -264,6 +264,16 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.surface.sv`](surface.md#landschaft.surface.sv) | Maximum valley depth (Sv): the absolute value of the lowest height |
 | [`ls.surface.sph`](surface.md#landschaft.surface.sph) | Maximum peak height (Sp): the absolute value of the highest height |
 | [`ls.surface.smean`](surface.md#landschaft.surface.smean) | Mean peak height: the mean of the positive heights |
+| [`ls.surface.sdq`](surface.md#landschaft.surface.sdq) | Root mean square slope (Sdq) |
+| [`ls.surface.sdq6`](surface.md#landschaft.surface.sdq6) | Area root mean square slope (Sdq6), from seven-point derivatives |
+| [`ls.surface.sdr`](surface.md#landschaft.surface.sdr) | Developed interfacial area ratio (Sdr), in percent |
+| [`ls.surface.surface_area`](surface.md#landschaft.surface.surface_area) | Area of the surface, triangulated |
+| [`ls.surface.flat_area`](surface.md#landschaft.surface.flat_area) | Area of the surface's projection on a plane (geodiv's ``flatsa``) |
+| [`ls.surface.find_peaks`](surface.md#landschaft.surface.find_peaks) | The peaks of a surface: cells higher than their 8 neighbours and than 0 |
+| [`ls.surface.find_valleys`](surface.md#landschaft.surface.find_valleys) | The valleys of a surface: cells lower than their 8 neighbours and than 0 |
+| [`ls.surface.sds`](surface.md#landschaft.surface.sds) | Density of summits (Sds): peaks per cell |
+| [`ls.surface.ssc`](surface.md#landschaft.surface.ssc) | Mean summit curvature (Ssc) |
+| [`ls.surface.s10z`](surface.md#landschaft.surface.s10z) | Ten-point height (S10z) |
 | [`ls.surface.fit_plane`](surface.md#landschaft.surface.fit_plane) | The least-squares polynomial surface of a given order |
 | [`ls.surface.best_fit_plane`](surface.md#landschaft.surface.best_fit_plane) | The polynomial surface of order 0 to 3 that fits a surface best |
 | [`ls.surface.remove_plane`](surface.md#landschaft.surface.remove_plane) | A surface minus its best-fitting polynomial surface (geodiv's ``remove_plane``) |

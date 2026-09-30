@@ -860,11 +860,16 @@ uma só tabela de somas para todas as escalas; `vrm` com as três somas num kern
 Fases:
 0. harness de referência (`tools/make_reference_surface.py`, `tools/surface_reference.R`,
    casos em `tests/surface_cases.py`, referências em `tests/data/reference/surface/`) e o
-   esqueleto de `ls.surface`;
+   esqueleto de `ls.surface`. **Feita** (junto com a fase 1);
 1. amplitude (`sa`, `sq`, `ssk`, `sku`, `sv`, `sph`, `smean`) e plano (`fit_plane`,
-   `best_fit_plane`, `remove_plane`);
-2. híbridas e feições: `sdq`, `sdq6`, `surface_area`, `flat_sa`, `sdr`, `find_peaks`,
-   `find_valleys`, `sds`, `ssc`, `s10z`;
+   `best_fit_plane`, `remove_plane`). **Feita** (0.81.0: bit a bit em 18 casos; o
+   `bestfitplane` escolhe a ordem pelo ruído de arredondamento da média dos resíduos, que o
+   R soma por colunas em 80 bits; com menos células que coeficientes o `spatial` lê fora da
+   matriz: aqui é erro);
+2. híbridas e feições: `sdq`, `sdq6`, `surface_area`, `flat_area`, `sdr`, `find_peaks`,
+   `find_valleys`, `sds`, `ssc`, `s10z`. **Feita** (0.82.0: bit a bit em 19 casos; mais um
+   defeito: o `sdq6` divide por `length(x)`, que é 1 num SpatRaster; o `findvalleys` acha
+   33041 "vales" no `normforest`, onde há 5167; `convention="iso"` corrige);
 3. curva de Abbott-Firestone: `bearing_area`, `height_ba`, `sdc`, `sbi`, `svi`, `sci`,
    `sk`, `spk`, `svk`;
 4. espaciais e fractal: `aacf`, `scl`, `stxr`, `std` (Std/Stdi), `srw` (Srw/Srwi/Shw),

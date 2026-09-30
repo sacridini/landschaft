@@ -10,9 +10,13 @@ from ._grid import read_surface
 __all__ = ["sa", "sq", "ssk", "sku", "sv", "sph", "smean"]
 
 
-def _amplitude(x, extent, crs, band, nodata) -> dict:
+# the parts of _core.surf_amplitude each metric needs
+PARTS = {"sa": 1, "sq": 2, "ssk": 4, "sku": 8, "sv": 16, "sph": 16, "smean": 32}
+
+
+def _amplitude(x, extent, crs, band, nodata, part: str) -> dict:
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
-    return _core.surf_amplitude(s.values)
+    return _core.surf_amplitude(s.values, PARTS[part])
 
 
 @threaded
@@ -46,7 +50,7 @@ def sa(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     >>> round(ls.surface.sa(z), 6)
     0.044294
     """
-    return _amplitude(x, extent, crs, band, nodata)["sa"]
+    return _amplitude(x, extent, crs, band, nodata, "sa")["sa"]
 
 
 @threaded
@@ -73,7 +77,7 @@ def sq(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     >>> round(ls.surface.sq(z), 6)
     0.064846
     """
-    return _amplitude(x, extent, crs, band, nodata)["sq"]
+    return _amplitude(x, extent, crs, band, nodata, "sq")["sq"]
 
 
 @threaded
@@ -105,7 +109,7 @@ def ssk(x, adj: bool = True, *, extent=None, crs=None, band=None, nodata=None) -
     >>> round(ls.surface.ssk(z), 4), round(ls.surface.ssk(z, adj=False), 4)
     (-1.9341, -1.9341)
     """
-    a = _amplitude(x, extent, crs, band, nodata)
+    a = _amplitude(x, extent, crs, band, nodata, "ssk")
     return a["ssk"] if adj else a["ssk_unadj"]
 
 
@@ -136,7 +140,7 @@ def sku(x, excess: bool = True, *, extent=None, crs=None, band=None, nodata=None
     >>> round(ls.surface.sku(z), 4), round(ls.surface.sku(z, excess=False), 4)
     (6.4977, 9.4977)
     """
-    a = _amplitude(x, extent, crs, band, nodata)
+    a = _amplitude(x, extent, crs, band, nodata, "sku")
     return a["sku"] if excess else a["sku_raw"]
 
 
@@ -162,7 +166,7 @@ def sv(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     >>> round(ls.surface.sv(z), 6)
     0.585464
     """
-    return _amplitude(x, extent, crs, band, nodata)["sv"]
+    return _amplitude(x, extent, crs, band, nodata, "sv")["sv"]
 
 
 @threaded
@@ -187,7 +191,7 @@ def sph(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     >>> round(ls.surface.sph(z), 6)
     0.158592
     """
-    return _amplitude(x, extent, crs, band, nodata)["sph"]
+    return _amplitude(x, extent, crs, band, nodata, "sph")["sph"]
 
 
 @threaded
@@ -213,4 +217,4 @@ def smean(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     >>> round(ls.surface.smean(z), 6)
     0.036899
     """
-    return _amplitude(x, extent, crs, band, nodata)["smean"]
+    return _amplitude(x, extent, crs, band, nodata, "smean")["smean"]

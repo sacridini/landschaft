@@ -139,10 +139,61 @@ def _plane_cases() -> dict[str, Case]:
             for name in ("rand", "rand_na", "rect", "square", "ties", "normforest", "orforest", "orelevation")}
 
 
+def _hybrid(name: str) -> Callable[[dict], dict]:
+    def run(rasters):
+        s, spec = surface(), rasters[name]
+        z, g = spec.values, _grid(spec)
+        return {"sdq": s.sdq(z, **g), "sdq6": s.sdq6(z, **g), "surface_area": s.surface_area(z, **g),
+                "flatsa": s.flat_area(z, **g), "sdr": s.sdr(z, **g)}
+
+    return run
+
+
+HYBRID_R = """list(sdq = geodiv::sdq(r), sdq6 = geodiv::sdq6(r), surface_area = geodiv::surface_area(r),
+     flatsa = geodiv::flatsa(r), sdr = geodiv::sdr(r))"""
+
+
+def _hybrid_cases() -> dict[str, Case]:
+    return {f"hybrid_{name}": Case(name, HYBRID_R, _hybrid(name), "hybrid")
+            for name in ("rand", "rand_na", "rect", "square", "ties", "positive", "const", "tiny", "normforest",
+                         "orforest", "orelevation")}
+
+
+def _geodiv_points(df, ny: int, nx: int) -> dict:
+    """findpeaks' columns from ls.surface.find_peaks: 1-based rows and columns, and
+    ``ind``, the number of the cell among the interior cells."""
+    row, col = df["row"].to_numpy() + 1, df["col"].to_numpy() + 1
+    return {"x": df["x"].to_numpy(), "y": df["y"].to_numpy(), "val": df["value"].to_numpy(),
+            "ind": (row - 2) * (nx - 2) + (col - 1), "row": row, "col": col}
+
+
+def _features(name: str) -> Callable[[dict], dict]:
+    def run(rasters):
+        s, spec = surface(), rasters[name]
+        z, g = spec.values, _grid(spec)
+        ny, nx = z.shape
+        return {"peaks": _geodiv_points(s.find_peaks(z, **g), ny, nx),
+                "valleys": _geodiv_points(s.find_valleys(z, **g), ny, nx),
+                "sds": s.sds(z, **g), "ssc": s.ssc(z, **g), "s10z": s.s10z(z, **g)}
+
+    return run
+
+
+FEATURES_R = """list(peaks = geodiv::findpeaks(r), valleys = geodiv::findvalleys(r), sds = geodiv::sds(r),
+     ssc = geodiv::ssc(r), s10z = geodiv::s10z(r))"""
+
+
+def _features_cases() -> dict[str, Case]:
+    return {f"features_{name}": Case(name, FEATURES_R, _features(name), "features")
+            for name in ("rand", "rand_na", "rect", "square", "ties", "tiny", "normforest", "orelevation")}
+
+
 def _cases() -> dict[str, Case]:
     cases = {}
     cases.update(_amplitude_cases())
     cases.update(_plane_cases())
+    cases.update(_hybrid_cases())
+    cases.update(_features_cases())
     return cases
 
 

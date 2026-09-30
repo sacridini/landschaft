@@ -38,45 +38,51 @@ double central_moment(const std::vector<double>& v, double zbar, double p) {
 
 }  // namespace
 
-Amplitude amplitude(const double* z, i64 n) {
+Amplitude amplitude(const double* z, i64 n, unsigned parts) {
     Amplitude a{};
-    const std::vector<double> v = present(z, n);
-    const i64 N = static_cast<i64>(v.size());
-    const double dn = static_cast<double>(N);
-    const double zbar = lsm::r_mean(v.data(), N);
+    if (parts & (kSa | kSq | kSsk | kSku)) {
+        const std::vector<double> v = present(z, n);
+        const i64 N = static_cast<i64>(v.size());
+        const double dn = static_cast<double>(N);
+        const double zbar = lsm::r_mean(v.data(), N);
 
-    // sa: sum(abs(z - zbar), na.rm = TRUE) / N
-    std::vector<double> t(v.size());
+        if (parts & kSa) {  // sum(abs(z - zbar), na.rm = TRUE) / N
+            std::vector<double> t(v.size());
 #pragma omp parallel for schedule(static) if (N > 65536)
-    for (i64 i = 0; i < N; ++i) t[static_cast<std::size_t>(i)] = std::fabs(v[static_cast<std::size_t>(i)] - zbar);
-    a.sa = lsm::r_sum(t.data(), N) / dn;
-
-    // sq: sd(z, na.rm = TRUE)
-    const double s = lsm::r_sd(v.data(), N, zbar);
-    a.sq = s;
-
-    // ssk: (sum((z - zbar)^3) / N) / s^3, times sqrt(N (N - 1)) / (N - 2)
-    a.ssk_unadj = N ? central_moment(v, zbar, 3.0) / lsm::r_pow(s, 3.0) : NaN;
-    a.ssk = (std::sqrt(dn * (dn - 1.0)) / (dn - 2.0)) * a.ssk_unadj;
-
-    // sku: (sum((z - zbar)^4) / N) / s^4, minus 3 for the excess
-    a.sku_raw = N ? central_moment(v, zbar, 4.0) / lsm::r_pow(s, 4.0) : NaN;
-    a.sku = a.sku_raw - 3.0;
-
-    // sv, sph: abs(min(z)), abs(max(z)) (Inf / -Inf without values, as R)
-    double lo = std::numeric_limits<double>::infinity(), hi = -lo;
-    for (double x : v) {
-        if (x < lo) lo = x;
-        if (x > hi) hi = x;
+            for (i64 i = 0; i < N; ++i)
+                t[static_cast<std::size_t>(i)] = std::fabs(v[static_cast<std::size_t>(i)] - zbar);
+            a.sa = lsm::r_sum(t.data(), N) / dn;
+        }
+        if (parts & (kSq | kSsk | kSku)) {
+            // sq: sd(z, na.rm = TRUE)
+            const double s = lsm::r_sd(v.data(), N, zbar);
+            a.sq = s;
+            if (parts & kSsk) {  // (sum((z - zbar)^3) / N) / s^3, times sqrt(N (N - 1)) / (N - 2)
+                a.ssk_unadj = N ? central_moment(v, zbar, 3.0) / lsm::r_pow(s, 3.0) : NaN;
+                a.ssk = (std::sqrt(dn * (dn - 1.0)) / (dn - 2.0)) * a.ssk_unadj;
+            }
+            if (parts & kSku) {  // (sum((z - zbar)^4) / N) / s^4, minus 3 for the excess
+                a.sku_raw = N ? central_moment(v, zbar, 4.0) / lsm::r_pow(s, 4.0) : NaN;
+                a.sku = a.sku_raw - 3.0;
+            }
+        }
     }
-    a.sv = std::fabs(lo);
-    a.sph = std::fabs(hi);
-
-    // smean: mean(z[z > 0], na.rm = TRUE)
-    std::vector<double> pos;
-    for (double x : v)
-        if (x > 0) pos.push_back(x);
-    a.smean = lsm::r_mean(pos.data(), static_cast<i64>(pos.size()));
+    if (parts & kExtremes) {  // sv, sph: abs(min(z)), abs(max(z)) (Inf / -Inf without values, as R)
+        double lo = std::numeric_limits<double>::infinity(), hi = -lo;
+        for (i64 i = 0; i < n; ++i) {
+            const double x = z[i];
+            if (x < lo) lo = x;
+            if (x > hi) hi = x;
+        }
+        a.sv = std::fabs(lo);
+        a.sph = std::fabs(hi);
+    }
+    if (parts & kSmean) {  // smean: mean(z[z > 0], na.rm = TRUE)
+        std::vector<double> pos;
+        for (i64 i = 0; i < n; ++i)
+            if (z[i] > 0) pos.push_back(z[i]);
+        a.smean = lsm::r_mean(pos.data(), static_cast<i64>(pos.size()));
+    }
     return a;
 }
 

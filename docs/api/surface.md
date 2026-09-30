@@ -7,7 +7,9 @@ areal surface texture parameters of ISO 25178, brought to landscape ecology as
 *gradient surface metrics*, and live in the `ls.surface` module.
 
 Every value is the one the R package geodiv gives, bit for bit, so studies done
-in R can be repeated and extended here.
+in R can be repeated and extended here. Where geodiv departs from ISO 25178
+(`sdq6`, `sdr`, the valleys of `find_valleys` and `s10z`), `convention="iso"`
+gives the standard's definition instead.
 
 <!-- no-run -->
 ```python
@@ -39,6 +41,30 @@ ls.surface.metrics(z)                   # every metric in one table
 ::: landschaft.surface.sph
 
 ::: landschaft.surface.smean
+
+## Slopes and developed area
+
+::: landschaft.surface.sdq
+
+::: landschaft.surface.sdq6
+
+::: landschaft.surface.sdr
+
+::: landschaft.surface.surface_area
+
+::: landschaft.surface.flat_area
+
+## Peaks and valleys
+
+::: landschaft.surface.find_peaks
+
+::: landschaft.surface.find_valleys
+
+::: landschaft.surface.sds
+
+::: landschaft.surface.ssc
+
+::: landschaft.surface.s10z
 
 ## Trend surfaces
 

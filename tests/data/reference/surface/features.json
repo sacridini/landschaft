@@ -1,0 +1,370 @@
+{
+ "arrays": {
+  "features_normforest/peaks/col": {
+   "kind": "vector"
+  },
+  "features_normforest/peaks/ind": {
+   "kind": "vector"
+  },
+  "features_normforest/peaks/row": {
+   "kind": "vector"
+  },
+  "features_normforest/peaks/val": {
+   "kind": "vector"
+  },
+  "features_normforest/peaks/x": {
+   "kind": "vector"
+  },
+  "features_normforest/peaks/y": {
+   "kind": "vector"
+  },
+  "features_normforest/s10z": {
+   "kind": "vector"
+  },
+  "features_normforest/sds": {
+   "kind": "vector"
+  },
+  "features_normforest/ssc": {
+   "kind": "vector"
+  },
+  "features_normforest/valleys/col": {
+   "kind": "vector"
+  },
+  "features_normforest/valleys/ind": {
+   "kind": "vector"
+  },
+  "features_normforest/valleys/row": {
+   "kind": "vector"
+  },
+  "features_normforest/valleys/val": {
+   "kind": "vector"
+  },
+  "features_normforest/valleys/x": {
+   "kind": "vector"
+  },
+  "features_normforest/valleys/y": {
+   "kind": "vector"
+  },
+  "features_orelevation/peaks/col": {
+   "kind": "vector"
+  },
+  "features_orelevation/peaks/ind": {
+   "kind": "vector"
+  },
+  "features_orelevation/peaks/row": {
+   "kind": "vector"
+  },
+  "features_orelevation/peaks/val": {
+   "kind": "vector"
+  },
+  "features_orelevation/peaks/x": {
+   "kind": "vector"
+  },
+  "features_orelevation/peaks/y": {
+   "kind": "vector"
+  },
+  "features_orelevation/s10z": {
+   "kind": "vector"
+  },
+  "features_orelevation/sds": {
+   "kind": "vector"
+  },
+  "features_orelevation/ssc": {
+   "kind": "vector"
+  },
+  "features_orelevation/valleys/col": {
+   "kind": "vector"
+  },
+  "features_orelevation/valleys/ind": {
+   "kind": "vector"
+  },
+  "features_orelevation/valleys/row": {
+   "kind": "vector"
+  },
+  "features_orelevation/valleys/val": {
+   "kind": "vector"
+  },
+  "features_orelevation/valleys/x": {
+   "kind": "vector"
+  },
+  "features_orelevation/valleys/y": {
+   "kind": "vector"
+  },
+  "features_rand/peaks/col": {
+   "kind": "vector"
+  },
+  "features_rand/peaks/ind": {
+   "kind": "vector"
+  },
+  "features_rand/peaks/row": {
+   "kind": "vector"
+  },
+  "features_rand/peaks/val": {
+   "kind": "vector"
+  },
+  "features_rand/peaks/x": {
+   "kind": "vector"
+  },
+  "features_rand/peaks/y": {
+   "kind": "vector"
+  },
+  "features_rand/s10z": {
+   "kind": "vector"
+  },
+  "features_rand/sds": {
+   "kind": "vector"
+  },
+  "features_rand/ssc": {
+   "kind": "vector"
+  },
+  "features_rand/valleys/col": {
+   "kind": "vector"
+  },
+  "features_rand/valleys/ind": {
+   "kind": "vector"
+  },
+  "features_rand/valleys/row": {
+   "kind": "vector"
+  },
+  "features_rand/valleys/val": {
+   "kind": "vector"
+  },
+  "features_rand/valleys/x": {
+   "kind": "vector"
+  },
+  "features_rand/valleys/y": {
+   "kind": "vector"
+  },
+  "features_rand_na/peaks/col": {
+   "kind": "vector"
+  },
+  "features_rand_na/peaks/ind": {
+   "kind": "vector"
+  },
+  "features_rand_na/peaks/row": {
+   "kind": "vector"
+  },
+  "features_rand_na/peaks/val": {
+   "kind": "vector"
+  },
+  "features_rand_na/peaks/x": {
+   "kind": "vector"
+  },
+  "features_rand_na/peaks/y": {
+   "kind": "vector"
+  },
+  "features_rand_na/s10z": {
+   "kind": "vector"
+  },
+  "features_rand_na/sds": {
+   "kind": "vector"
+  },
+  "features_rand_na/ssc": {
+   "kind": "vector"
+  },
+  "features_rand_na/valleys/col": {
+   "kind": "vector"
+  },
+  "features_rand_na/valleys/ind": {
+   "kind": "vector"
+  },
+  "features_rand_na/valleys/row": {
+   "kind": "vector"
+  },
+  "features_rand_na/valleys/val": {
+   "kind": "vector"
+  },
+  "features_rand_na/valleys/x": {
+   "kind": "vector"
+  },
+  "features_rand_na/valleys/y": {
+   "kind": "vector"
+  },
+  "features_rect/peaks/col": {
+   "kind": "vector"
+  },
+  "features_rect/peaks/ind": {
+   "kind": "vector"
+  },
+  "features_rect/peaks/row": {
+   "kind": "vector"
+  },
+  "features_rect/peaks/val": {
+   "kind": "vector"
+  },
+  "features_rect/peaks/x": {
+   "kind": "vector"
+  },
+  "features_rect/peaks/y": {
+   "kind": "vector"
+  },
+  "features_rect/s10z": {
+   "kind": "vector"
+  },
+  "features_rect/sds": {
+   "kind": "vector"
+  },
+  "features_rect/ssc": {
+   "kind": "vector"
+  },
+  "features_rect/valleys/col": {
+   "kind": "vector"
+  },
+  "features_rect/valleys/ind": {
+   "kind": "vector"
+  },
+  "features_rect/valleys/row": {
+   "kind": "vector"
+  },
+  "features_rect/valleys/val": {
+   "kind": "vector"
+  },
+  "features_rect/valleys/x": {
+   "kind": "vector"
+  },
+  "features_rect/valleys/y": {
+   "kind": "vector"
+  },
+  "features_square/peaks/col": {
+   "kind": "vector"
+  },
+  "features_square/peaks/ind": {
+   "kind": "vector"
+  },
+  "features_square/peaks/row": {
+   "kind": "vector"
+  },
+  "features_square/peaks/val": {
+   "kind": "vector"
+  },
+  "features_square/peaks/x": {
+   "kind": "vector"
+  },
+  "features_square/peaks/y": {
+   "kind": "vector"
+  },
+  "features_square/s10z": {
+   "kind": "vector"
+  },
+  "features_square/sds": {
+   "kind": "vector"
+  },
+  "features_square/ssc": {
+   "kind": "vector"
+  },
+  "features_square/valleys/col": {
+   "kind": "vector"
+  },
+  "features_square/valleys/ind": {
+   "kind": "vector"
+  },
+  "features_square/valleys/row": {
+   "kind": "vector"
+  },
+  "features_square/valleys/val": {
+   "kind": "vector"
+  },
+  "features_square/valleys/x": {
+   "kind": "vector"
+  },
+  "features_square/valleys/y": {
+   "kind": "vector"
+  },
+  "features_ties/peaks/col": {
+   "kind": "vector"
+  },
+  "features_ties/peaks/ind": {
+   "kind": "vector"
+  },
+  "features_ties/peaks/row": {
+   "kind": "vector"
+  },
+  "features_ties/peaks/val": {
+   "kind": "vector"
+  },
+  "features_ties/peaks/x": {
+   "kind": "vector"
+  },
+  "features_ties/peaks/y": {
+   "kind": "vector"
+  },
+  "features_ties/s10z": {
+   "kind": "vector"
+  },
+  "features_ties/sds": {
+   "kind": "vector"
+  },
+  "features_ties/ssc": {
+   "kind": "vector"
+  },
+  "features_ties/valleys/col": {
+   "kind": "vector"
+  },
+  "features_ties/valleys/ind": {
+   "kind": "vector"
+  },
+  "features_ties/valleys/row": {
+   "kind": "vector"
+  },
+  "features_ties/valleys/val": {
+   "kind": "vector"
+  },
+  "features_ties/valleys/x": {
+   "kind": "vector"
+  },
+  "features_ties/valleys/y": {
+   "kind": "vector"
+  },
+  "features_tiny/peaks/col": {
+   "kind": "vector"
+  },
+  "features_tiny/peaks/ind": {
+   "kind": "vector"
+  },
+  "features_tiny/peaks/row": {
+   "kind": "vector"
+  },
+  "features_tiny/peaks/val": {
+   "kind": "vector"
+  },
+  "features_tiny/peaks/x": {
+   "kind": "vector"
+  },
+  "features_tiny/peaks/y": {
+   "kind": "vector"
+  },
+  "features_tiny/s10z": {
+   "kind": "vector"
+  },
+  "features_tiny/sds": {
+   "kind": "vector"
+  },
+  "features_tiny/ssc": {
+   "kind": "vector"
+  },
+  "features_tiny/valleys/col": {
+   "kind": "vector"
+  },
+  "features_tiny/valleys/ind": {
+   "kind": "vector"
+  },
+  "features_tiny/valleys/row": {
+   "kind": "vector"
+  },
+  "features_tiny/valleys/val": {
+   "kind": "vector"
+  },
+  "features_tiny/valleys/x": {
+   "kind": "vector"
+  },
+  "features_tiny/valleys/y": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "geodiv": "1.1.1",
+  "spatialEco": "2.0.5",
+  "terra": "1.9.50"
+ }
+}
