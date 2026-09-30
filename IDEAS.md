@@ -874,7 +874,11 @@ Fases:
    `sk`, `spk`, `svk`. **Feita** (0.83.0: bit a bit em 9 casos; `ecdf`, `quantile` tipo 7,
    `seq` e o `lm()` do R reproduzidos; o `rlm.cpp` passou a devolver o intercepto);
 4. espaciais e fractal: `aacf`, `scl`, `stxr`, `std` (Std/Stdi), `srw` (Srw/Srwi/Shw),
-   `sfd`;
+   `sfd`. **Feita** (0.84.0: bit a bit em 12 casos, projetados e lon/lat; reproduz o `crop`
+   do terra 1.9-50, o `distance` (proximity do GDAL 3.9 em float nos projetados, haversine
+   x87 em lon/lat), a `fft` do R e a janela de Hann do e1071. Com NA o `scl` do geodiv
+   falha (centro do raster inteiro na imagem recortada): aqui usa o centro recortado; o
+   `sfd` lê fora da matriz quando o quadrado central encosta na borda: aqui é erro);
 5. motor de janela móvel (`window_metrics`, quadrada e circular, `pad_edges`) com os
    caminhos O(1), fora da memória por blocos de linhas;
 6. terreno do spatialEco;

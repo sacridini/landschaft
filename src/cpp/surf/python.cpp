@@ -159,6 +159,23 @@ py::dict py_bearing(const Array& z, py::object probs, double sq, bool parameters
     return d;
 }
 
+py::tuple py_aacf(const Array& z, const Extent& extent, bool lonlat) {
+    const surf::Grid g = grid_of(z, extent);
+    surf::Raster r;
+    {
+        py::gil_scoped_release release;
+        r = surf::aacf_image(g, lonlat);
+    }
+    return py::make_tuple(to_raster(std::move(r.v), r.ny, r.nx), py::make_tuple(r.xmin, r.xmax, r.ymin, r.ymax));
+}
+
+template <class F>
+std::vector<double> grid_vector(const Array& z, const Extent& extent, F&& f) {
+    const surf::Grid g = grid_of(z, extent);
+    py::gil_scoped_release release;
+    return f(g);
+}
+
 }  // namespace
 
 namespace surf {
@@ -183,6 +200,27 @@ void register_python(py::module_& m) {
           py::arg("parameters") = false,
           "geodiv's bearing area curve (bearing, height), height_ba at probs and, with parameters, "
           "sbi (from sq), svi, sci, sk, spk, svk.");
+    m.def("surf_aacf", &py_aacf, py::arg("z"), py::arg("extent"), py::arg("lonlat"),
+          "geodiv's aacf: the image and its extent (xmin, xmax, ymin, ymax).");
+    m.def("surf_scl", [](const Array& z, const Extent& e, bool lonlat, const std::vector<double>& t) {
+        return grid_vector(z, e, [&](const surf::Grid& g) { return surf::scl(g, lonlat, t); });
+    }, py::arg("z"), py::arg("extent"), py::arg("lonlat"), py::arg("thresholds"), "geodiv's scl.");
+    m.def("surf_std", [](const Array& z, const Extent& e, bool lonlat) {
+        return grid_vector(z, e, [&](const surf::Grid& g) { return surf::texture_direction(g, lonlat); });
+    }, py::arg("z"), py::arg("extent"), py::arg("lonlat"), "geodiv's std: (std, stdi).");
+    m.def("surf_srw", [](const Array& z, const Extent& e, bool lonlat) {
+        return grid_vector(z, e, [&](const surf::Grid& g) { return surf::radial_wavelength(g, lonlat); });
+    }, py::arg("z"), py::arg("extent"), py::arg("lonlat"), "geodiv's srw: (srw, srwi, shw).");
+    m.def("surf_sfd", [](const Array& z, const Extent& e) {
+        const surf::Grid g = grid_of(z, e);
+        bool oob = false;
+        double v;
+        {
+            py::gil_scoped_release release;
+            v = surf::sfd(g, &oob);
+        }
+        return py::make_tuple(v, oob);
+    }, py::arg("z"), py::arg("extent"), "geodiv's sfd and whether it would read past the matrix.");
     m.def("surf_s10z", [](const Array& z, const Extent& e, bool transposed) {
         return grid_metric(z, e, [transposed](const surf::Grid& g) { return surf::s10z(g, transposed); });
     }, py::arg("z"), py::arg("extent"), py::arg("transposed_valleys"), "geodiv's s10z.");

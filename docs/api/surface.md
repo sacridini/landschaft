@@ -86,6 +86,20 @@ ls.surface.metrics(z)                   # every metric in one table
 
 ::: landschaft.surface.svk
 
+## Autocorrelation, orientation and wavelength
+
+::: landschaft.surface.aacf
+
+::: landschaft.surface.scl
+
+::: landschaft.surface.stxr
+
+::: landschaft.surface.std
+
+::: landschaft.surface.srw
+
+::: landschaft.surface.sfd
+
 ## Trend surfaces
 
 ::: landschaft.surface.fit_plane

@@ -6,6 +6,25 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.84.0] - 2026-09-30
+
+### Added
+- Surface metrics, part 4: spatial parameters and fractal dimension, as geodiv.
+  `ls.surface.aacf` (areal autocorrelation image), `scl` (correlation lengths), `stxr`
+  (texture aspect ratio), `std` (texture direction and index), `srw` (dominant radial
+  wavelength, its index, half-power wavelength), `sfd` (triangular-prism fractal
+  dimension); in `ls.surface.metrics` as `sal`, `str`, `std`, `stdi`, `srw`, `srwi`, `shw`,
+  `sfd`. Identical to geodiv, bit for bit, on 12 reference setups, projected and
+  longitude/latitude: R's `fft`, e1071's Hann window, terra 1.9's `crop` (snapping to the
+  grid) and `distance` (GDAL 3.9's proximity in single precision on projected rasters,
+  the haversine on longitude/latitude ones).
+- Where geodiv fails, the intended result: `scl` / `stxr` on rasters with missing cells
+  (geodiv looks for the centre of the cropped image with the size of the whole raster).
+  `sfd` raises an error where geodiv reads past the raster (its central square reaching
+  the last row or column); `metrics` gives NaN there.
+- geodiv's search for the largest square without missing cells runs on a summed-area
+  table (2000 x 2000 with one missing cell: 0.26 s).
+
 ## [0.83.0] - 2026-09-30
 
 ### Added

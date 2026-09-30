@@ -283,6 +283,12 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.surface.sk`](surface.md#landschaft.surface.sk) | Core roughness depth (Sk): the height range of the core line |
 | [`ls.surface.spk`](surface.md#landschaft.surface.spk) | Reduced peak height (Spk): the peaks above the core |
 | [`ls.surface.svk`](surface.md#landschaft.surface.svk) | Reduced valley depth (Svk): the valleys below the core |
+| [`ls.surface.aacf`](surface.md#landschaft.surface.aacf) | Areal autocorrelation function of a surface |
+| [`ls.surface.scl`](surface.md#landschaft.surface.scl) | Correlation lengths: how far the autocorrelation takes to decay |
+| [`ls.surface.stxr`](surface.md#landschaft.surface.stxr) | Texture aspect ratio (Str): fastest over slowest decay length |
+| [`ls.surface.std`](surface.md#landschaft.surface.std) | Texture direction (Std) and texture direction index (Stdi) |
+| [`ls.surface.srw`](surface.md#landschaft.surface.srw) | Dominant radial wavelength (Srw), its index (Srwi) and the half-power wavelength (Shw) |
+| [`ls.surface.sfd`](surface.md#landschaft.surface.sfd) | Fractal dimension of the surface (Sfd), by triangular prisms |
 | [`ls.surface.fit_plane`](surface.md#landschaft.surface.fit_plane) | The least-squares polynomial surface of a given order |
 | [`ls.surface.best_fit_plane`](surface.md#landschaft.surface.best_fit_plane) | The polynomial surface of order 0 to 3 that fits a surface best |
 | [`ls.surface.remove_plane`](surface.md#landschaft.surface.remove_plane) | A surface minus its best-fitting polynomial surface (geodiv's ``remove_plane``) |

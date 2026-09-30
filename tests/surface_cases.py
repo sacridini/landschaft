@@ -219,6 +219,47 @@ def _bearing_cases() -> dict[str, Case]:
                          "orelevation")}
 
 
+def _spatial(name: str, lengths: bool = True) -> Callable[[dict], dict]:
+    def run(rasters):
+        s, spec = surface(), rasters[name]
+        z, g = spec.values, _grid(spec)
+        out = {"aacf": s.aacf(z, **g).values, "std": s.std(z, **g), "srw": s.srw(z, **g)}
+        if lengths:
+            out.update(scl=s.scl(z, **g), stxr=s.stxr(z, **g))
+        return out
+
+    return run
+
+
+SPATIAL_R = """list(aacf = geodiv::aacf(r), scl = geodiv::scl(r), stxr = geodiv::stxr(r), std = geodiv::std(r),
+     srw = geodiv::srw(r))"""
+# With NA cells geodiv's scl (and stxr) fail: they look for the centre of the
+# cropped autocorrelation image with the size of the whole raster.
+SPATIAL_NA_R = "list(aacf = geodiv::aacf(r), std = geodiv::std(r), srw = geodiv::srw(r))"
+
+
+def _spatial_cases() -> dict[str, Case]:
+    cases = {f"spatial_{name}": Case(name, SPATIAL_R, _spatial(name), "spatial")
+             for name in ("rand", "square", "ties", "positive", "normforest", "orelevation")}
+    cases.update({f"spatial_{name}": Case(name, SPATIAL_NA_R, _spatial(name, False), "spatial")
+                  for name in ("rand_na", "rect")})
+    return cases
+
+
+def _fractal(name: str) -> Callable[[dict], dict]:
+    def run(rasters):
+        spec = rasters[name]
+        return {"sfd": surface().sfd(spec.values, extent=spec.extent, crs=spec.crs)}
+
+    return run
+
+
+def _fractal_cases() -> dict[str, Case]:
+    # square rasters: on others geodiv's sfd_ reads past the matrix
+    return {f"fractal_{name}": Case(name, "list(sfd = geodiv::sfd(r, silent = TRUE))", _fractal(name), "fractal")
+            for name in ("square", "normforest", "orforest", "orelevation")}
+
+
 def _cases() -> dict[str, Case]:
     cases = {}
     cases.update(_amplitude_cases())
@@ -226,6 +267,8 @@ def _cases() -> dict[str, Case]:
     cases.update(_hybrid_cases())
     cases.update(_features_cases())
     cases.update(_bearing_cases())
+    cases.update(_spatial_cases())
+    cases.update(_fractal_cases())
     return cases
 
 

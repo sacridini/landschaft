@@ -24,8 +24,10 @@ from ._features import find_peaks, find_valleys, s10z, sds, ssc
 from ._hybrid import flat_area, sdq, sdq6, sdr, surface_area
 from ._metrics import list_metrics, metrics
 from ._plane import best_fit_plane, fit_plane, remove_plane
+from ._spatial import aacf, scl, sfd, srw, std, stxr
 
 __all__ = [
+    "aacf",
     "bearing_area",
     "best_fit_plane",
     "example_data",
@@ -41,19 +43,24 @@ __all__ = [
     "sa",
     "sbi",
     "sci",
+    "scl",
     "sdc",
     "sdq",
     "sdq6",
     "sdr",
     "sds",
+    "sfd",
     "sk",
     "sku",
     "smean",
     "sph",
     "spk",
     "sq",
+    "srw",
     "ssc",
     "ssk",
+    "std",
+    "stxr",
     "surface_area",
     "sv",
     "svi",

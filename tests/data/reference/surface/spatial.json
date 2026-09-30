@@ -1,0 +1,150 @@
+{
+ "arrays": {
+  "spatial_normforest/aacf": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "raster"
+  },
+  "spatial_normforest/scl": {
+   "kind": "vector"
+  },
+  "spatial_normforest/srw": {
+   "kind": "vector"
+  },
+  "spatial_normforest/std": {
+   "kind": "vector"
+  },
+  "spatial_normforest/stxr": {
+   "kind": "vector"
+  },
+  "spatial_orelevation/aacf": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "raster"
+  },
+  "spatial_orelevation/scl": {
+   "kind": "vector"
+  },
+  "spatial_orelevation/srw": {
+   "kind": "vector"
+  },
+  "spatial_orelevation/std": {
+   "kind": "vector"
+  },
+  "spatial_orelevation/stxr": {
+   "kind": "vector"
+  },
+  "spatial_positive/aacf": {
+   "dim": [
+    12,
+    16
+   ],
+   "kind": "raster"
+  },
+  "spatial_positive/scl": {
+   "kind": "vector"
+  },
+  "spatial_positive/srw": {
+   "kind": "vector"
+  },
+  "spatial_positive/std": {
+   "kind": "vector"
+  },
+  "spatial_positive/stxr": {
+   "kind": "vector"
+  },
+  "spatial_rand/aacf": {
+   "dim": [
+    20,
+    30
+   ],
+   "kind": "raster"
+  },
+  "spatial_rand/scl": {
+   "kind": "vector"
+  },
+  "spatial_rand/srw": {
+   "kind": "vector"
+  },
+  "spatial_rand/std": {
+   "kind": "vector"
+  },
+  "spatial_rand/stxr": {
+   "kind": "vector"
+  },
+  "spatial_rand_na/aacf": {
+   "dim": [
+    6,
+    6
+   ],
+   "kind": "raster"
+  },
+  "spatial_rand_na/srw": {
+   "kind": "vector"
+  },
+  "spatial_rand_na/std": {
+   "kind": "vector"
+  },
+  "spatial_rect/aacf": {
+   "dim": [
+    8,
+    8
+   ],
+   "kind": "raster"
+  },
+  "spatial_rect/srw": {
+   "kind": "vector"
+  },
+  "spatial_rect/std": {
+   "kind": "vector"
+  },
+  "spatial_square/aacf": {
+   "dim": [
+    32,
+    32
+   ],
+   "kind": "raster"
+  },
+  "spatial_square/scl": {
+   "kind": "vector"
+  },
+  "spatial_square/srw": {
+   "kind": "vector"
+  },
+  "spatial_square/std": {
+   "kind": "vector"
+  },
+  "spatial_square/stxr": {
+   "kind": "vector"
+  },
+  "spatial_ties/aacf": {
+   "dim": [
+    15,
+    18
+   ],
+   "kind": "raster"
+  },
+  "spatial_ties/scl": {
+   "kind": "vector"
+  },
+  "spatial_ties/srw": {
+   "kind": "vector"
+  },
+  "spatial_ties/std": {
+   "kind": "vector"
+  },
+  "spatial_ties/stxr": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "geodiv": "1.1.1",
+  "spatialEco": "2.0.5",
+  "terra": "1.9.50"
+ }
+}

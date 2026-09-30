@@ -1,0 +1,22 @@
+{
+ "arrays": {
+  "fractal_normforest/sfd": {
+   "kind": "vector"
+  },
+  "fractal_orelevation/sfd": {
+   "kind": "vector"
+  },
+  "fractal_orforest/sfd": {
+   "kind": "vector"
+  },
+  "fractal_square/sfd": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "geodiv": "1.1.1",
+  "spatialEco": "2.0.5",
+  "terra": "1.9.50"
+ }
+}

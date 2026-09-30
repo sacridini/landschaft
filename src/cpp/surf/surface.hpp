@@ -101,4 +101,32 @@ struct BearingParameters {
 // sbi needs sq (the standard deviation of the values).
 BearingParameters bearing_parameters(const Bearing& b, double sq);
 
+// -- spatial parameters and fractal dimension (geodiv's aacf.R, fourier.R,
+// sfd.cpp) --------------------------------------------------------------------
+
+// A raster with its values, as terra's SpatRaster (row order).
+struct Raster {
+    std::vector<double> v;
+    int ny = 0, nx = 0;
+    double xmin = 0, xmax = 0, ymin = 0, ymax = 0;
+    bool lonlat = false;
+    double xres() const { return (xmax - xmin) / nx; }
+    double yres() const { return (ymax - ymin) / ny; }
+    double x(int col) const { return xmin + ((col + 0.5) * xres()); }
+    double y(int row) const { return ymax - ((row + 0.5) * yres()); }
+};
+
+// geodiv's aacf: the normalised areal autocorrelation image (on the largest
+// square without NA around the centre when there are NA).
+Raster aacf_image(const Grid& g, bool lonlat);
+// geodiv's scl: the fastest decay lengths to each threshold, then the slowest.
+std::vector<double> scl(const Grid& g, bool lonlat, const std::vector<double>& thresholds);
+// geodiv's std: the texture direction (degrees) and index.
+std::vector<double> texture_direction(const Grid& g, bool lonlat);
+// geodiv's srw: the dominant radial wavelength, its index, the half wavelength.
+std::vector<double> radial_wavelength(const Grid& g, bool lonlat);
+// geodiv's sfd (triangular prisms); NaN and `out_of_bounds` where geodiv
+// reads past the matrix.
+double sfd(const Grid& g, bool* out_of_bounds);
+
 }  // namespace surf

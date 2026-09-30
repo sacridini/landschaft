@@ -13,6 +13,7 @@ from .._threads import threaded
 from ._bearing import bearing_parameters
 from ._grid import Surface, read_surface
 from ._hybrid import iso
+from ._spatial import spatial_parameters
 
 __all__ = ["metrics", "list_metrics"]
 
@@ -37,6 +38,10 @@ def _hybrid(s: Surface, iso: bool) -> dict:
 
 def _bearing(s: Surface, iso: bool) -> dict:
     return bearing_parameters(s)
+
+
+def _spatial(s: Surface, iso: bool) -> dict:
+    return spatial_parameters(s)
 
 
 def _features(s: Surface, iso: bool) -> dict:
@@ -65,6 +70,14 @@ METRICS: dict[str, Metric] = {m.name: m for m in [
     Metric("sk", "bearing", "core roughness depth", _bearing),
     Metric("spk", "bearing", "reduced peak height", _bearing),
     Metric("svk", "bearing", "reduced valley depth", _bearing),
+    Metric("sal", "spatial", "autocorrelation length (fastest decay to 0.2)", _spatial),
+    Metric("str", "spatial", "texture aspect ratio (at 0.2)", _spatial),
+    Metric("std", "spatial", "texture direction (degrees)", _spatial),
+    Metric("stdi", "spatial", "texture direction index", _spatial),
+    Metric("srw", "spatial", "dominant radial wavelength", _spatial),
+    Metric("srwi", "spatial", "radial wavelength index", _spatial),
+    Metric("shw", "spatial", "half-power wavelength", _spatial),
+    Metric("sfd", "spatial", "fractal dimension", _spatial),
 ]}
 
 
