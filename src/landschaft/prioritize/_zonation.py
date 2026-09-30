@@ -56,6 +56,8 @@ class ZonationResult:
     transformed : dict
         With ``transformed``: the feature layers as ranked (after quantization,
         condition and retention), normalized to sum 1, by feature name.
+    hierarchic_mask_ranks : dict
+        With a hierarchic mask: the lowest rank of each of its levels.
     """
 
     rank: object
@@ -72,6 +74,234 @@ class ZonationResult:
     info: dict = field(default_factory=dict, repr=False)
     preprocessing: dict = field(default_factory=dict, repr=False)
     transformed: dict = field(default_factory=dict, repr=False)
+    hierarchic_mask_ranks: dict = field(default_factory=dict, repr=False)
+    _ctx: dict = field(default_factory=dict, repr=False)
+
+    # ------------------------------------------------------------ post-processing
+
+    def _packed_rank(self) -> np.ndarray:
+        return self._ctx["rank_packed"]
+
+    def area_statistics(self, areas):
+        """Statistics of areas of the landscape: their size, mean rank, the share
+        of every feature they hold and how rich they are relative to their size
+        (Zonation's ``area_statistics_external``).
+
+        Parameters
+        ----------
+        areas
+            Raster of area numbers (0 or NoData: none) on the features' grid.
+
+        Returns
+        -------
+        AreaStatistics
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> x = np.random.default_rng(0).random((3, 20, 30))
+        >>> res = ls.prioritize.zonation(x)
+        >>> zones = np.repeat([[1, 2, 3]], 20 * 10, axis=0).reshape(20, 30)
+        >>> st = res.area_statistics(zones)
+        >>> st.areas[["area", "size"]].values.tolist()
+        [[1, 200], [2, 200], [3, 200]]
+        """
+        from . import _inputs, _postprocess
+
+        c = self._ctx
+        src = _inputs.Sources([], c["grid"])
+        try:
+            layer = _inputs.open_aux(areas, c["grid"], "areas", src)
+            mask = _inputs.gather(layer, c["cells"], c["grid"], round_int=True).astype(np.int32)
+        finally:
+            src.close()
+        return _postprocess.area_statistics(c, self._packed_rank(), mask)
+
+    def area_statistics_rank_range(self, min_rank: float, max_rank: float = 1.0):
+        """:meth:`area_statistics` of the cells ranked in [min_rank, max_rank]
+        (Zonation's ``area_statistics_rank_range``); the mask is in the result.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> res = ls.prioritize.zonation(np.random.default_rng(0).random((3, 20, 30)))
+        >>> top = res.area_statistics_rank_range(0.9)      # about the best 10 %
+        >>> int(top.areas["size"].iloc[0])                  # 540/600 in float32 is just below 0.9
+        59
+        """
+        from . import _postprocess
+
+        mask = _postprocess.rank_range_mask(self._packed_rank(), min_rank, max_rank)
+        st = _postprocess.area_statistics(self._ctx, self._packed_rank(), mask)
+        st.mask = self._unpacked(mask.astype(np.uint8), 0)
+        return st
+
+    def area_statistics_separate_areas(self, min_rank: float, max_rank: float = 1.0, min_area_size: int = 1):
+        """:meth:`area_statistics` of the separate (8-connected) areas of cells
+        ranked in [min_rank, max_rank] of at least ``min_area_size`` cells
+        (Zonation's ``area_statistics_separate_areas``).
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> res = ls.prioritize.zonation(np.random.default_rng(0).random((3, 20, 30)))
+        >>> st = res.area_statistics_separate_areas(0.8, 1.0, min_area_size=3)
+        >>> bool((st.areas["size"] >= 3).all())
+        True
+        """
+        from . import _postprocess
+
+        c = self._ctx
+        labels = _postprocess.separate_areas(np.asarray(self.rank, dtype=np.float32), min_rank, max_rank,
+                                             int(min_area_size))
+        mask = labels.ravel()[c["cells"]]
+        st = _postprocess.area_statistics(c, self._packed_rank(), mask)
+        st.mask = labels
+        return st
+
+    def solution_comparison(self, other, min_rank: float, max_rank: float, min_value: float, max_value: float):
+        """Compare the cells ranked in [min_rank, max_rank] with the cells of another
+        solution with values in [min_value, max_value] (Zonation's
+        ``solution_comparison``).
+
+        Returns
+        -------
+        dict
+            ``both``, ``only_this``, ``only_other``, ``neither`` (cell counts) and
+            ``map`` (1 both, 2 only this, 3 only the other, 4 neither, 0 no data).
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> res = ls.prioritize.zonation(np.random.default_rng(0).random((3, 20, 30)))
+        >>> cmp = res.solution_comparison(res.rank, 0.5, 1.0, 0.5, 1.0)   # itself
+        >>> cmp["both"], cmp["only_this"], cmp["only_other"]
+        (300, 0, 0)
+        """
+        from . import _inputs
+
+        c = self._ctx
+        src = _inputs.Sources([], c["grid"])
+        try:
+            ext = _inputs.gather(_inputs.open_aux(other, c["grid"], "solution", src), c["cells"], c["grid"])
+        finally:
+            src.close()
+        ext = ext.astype(np.float32)
+        r = self._packed_rank()
+        in_p = (r >= np.float32(min_rank)) & (r <= np.float32(max_rank))
+        in_e = (ext >= np.float32(min_value)) & (ext <= np.float32(max_value))
+        code = np.full(r.size, 4, np.uint8)
+        code[in_p & in_e] = 1
+        code[in_p & ~in_e] = 2
+        code[~in_p & in_e] = 3
+        return {"both": int((in_p & in_e).sum()), "only_this": int((in_p & ~in_e).sum()),
+                "only_other": int((~in_p & in_e).sum()), "neither": int((~in_p & ~in_e).sum()),
+                "map": self._unpacked(code, 0)}
+
+    def histogram(self, min_rank: float, max_rank: float = 1.0, bins: int = 10) -> dict:
+        """How many features keep which fraction in the cells ranked in [min_rank,
+        max_rank]: per weight class and output group, the count of features per bin
+        of coverage (Zonation's ``histogram``).
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> res = ls.prioritize.zonation(np.random.default_rng(0).random((3, 20, 30)))
+        >>> h = res.histogram(0.9, bins=10)["pos"]
+        >>> int(h["count"].sum())
+        3
+        """
+        from . import _postprocess
+
+        c = self._ctx
+        levels = self.feature_curves.iloc[:, 1:].to_numpy(np.float32)
+        crank = self.feature_curves["rank"].to_numpy(np.float32)
+        return _postprocess.histogram(c, crank, levels, float(min_rank), float(max_rank), int(bins))
+
+    def flexibility_map(self, max_error: float = 2.0, *, up: bool = True, down: bool = True) -> dict:
+        """How far each cell could move in the ranking before its marginal loss, at the
+        other position, differs from that of the cell there by ``max_error`` %
+        (Zonation's ``flexibility_map``): ``up``, ``down`` and their sum ``both``,
+        as fractions of the cells.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> res = ls.prioritize.zonation(np.random.default_rng(0).random((3, 20, 30)))
+        >>> f = res.flexibility_map(5.0)
+        >>> sorted(f)
+        ['both', 'down', 'up']
+        """
+        from . import _postprocess
+
+        c = self._ctx
+        levels = self.feature_curves.iloc[:, 1:].to_numpy(np.float32)
+        crank = self.feature_curves["rank"].to_numpy(np.float32)
+        pos, neg = _postprocess.flexibility(c, c["order_packed"], crank, levels, max_error, up, down)
+        out = {}
+        if up:
+            out["up"] = self._unpacked(pos, np.nan)
+        if down:
+            out["down"] = self._unpacked(neg, np.nan)
+        if up and down:
+            out["both"] = self._unpacked((pos + neg).astype(np.float32), np.nan)
+        return out
+
+    def postprocess(self, calls, directory) -> list:
+        """Run Zonation's post-processing calls and write its files into ``directory``.
+
+        Parameters
+        ----------
+        calls
+            A post-processing file (its paths are relative to it), its text, or a list
+            of ``(name, [parameters])``: ``area_statistics_external(file, id)``,
+            ``area_statistics_rank_range(min_rank, max_rank, id)``,
+            ``area_statistics_separate_areas(min_rank, max_rank, min_area_size, id)``,
+            ``solution_comparison(min_rank, max_rank, file, min_value, max_value, id)``,
+            ``histogram(min_rank, max_rank, bins, id)``,
+            ``flexibility_map(max_error, both, up, down, id)``.
+        directory
+            Output directory.
+
+        Returns
+        -------
+        list of pathlib.Path
+            The files written.
+
+        Examples
+        --------
+        >>> import tempfile
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> res = ls.prioritize.zonation(np.random.default_rng(0).random((3, 20, 30)))
+        >>> files = res.postprocess('histogram(0.9, 1.0, 10, "top")', tempfile.mkdtemp())
+        >>> [f.name for f in files]
+        ['histogram.pos.top.txt']
+        """
+        from . import _postprocess
+
+        base = Path.cwd()
+        if isinstance(calls, os.PathLike) or (isinstance(calls, str) and "(" not in calls):
+            base = Path(calls).resolve().parent
+            calls = Path(calls).read_text(encoding="utf-8")
+        if isinstance(calls, str):
+            calls = _postprocess.parse_calls(calls)
+        return _postprocess.run_calls(self, calls, Path(directory), base)
+
+    def _unpacked(self, values, fill):
+        from ._zonation import _raster
+
+        c = self._ctx
+        H, W = c["grid"].shape
+        out = np.full(H * W, fill, dtype=np.asarray(values).dtype)
+        out[c["cells"]] = values
+        return _raster(out.reshape(H, W), c["grid"])
 
     def __repr__(self) -> str:
         n = int(np.isfinite(np.asarray(self.rank)).sum())
@@ -529,6 +759,22 @@ def _run(src, name, param, a) -> ZonationResult:
             "quantization_error": float(np.mean(np.asarray(data.quantization_errors)))}
     res = ZonationResult(rank, fc, sc, dc, gc, features, int(r["iterations"]), float(r["ranking_error"]) * 100.0,
                          float(r["auc"]), history, cells[np.asarray(r["order"])], info)
+    rank_packed = np.asarray(r["rank"], dtype=np.float32)
+    if hmask is not None:
+        hm = hmask.astype(np.uint8)
+        res.hierarchic_mask_ranks = {int(lv): float(rank_packed[hm == lv].min()) for lv in np.unique(hm)}
+    res._ctx = {
+        "data": data, "grid": src.grid, "cells": cells, "rank_packed": rank_packed,
+        "order_packed": np.asarray(r["order"], dtype=np.uint32), "weights": w, "classes": classes,
+        "groups": None if ogroups is None else ogroups[kept], "groups_on": ogroups is not None, "names": lnames,
+        "headers": headers, "numbers": kept,
+        "quoted_names": [f'"{names[i]}"' if names else '""' for i in kept],
+        "files": [str(src.layers[i].source) if _inputs._is_path(src.layers[i].source) else "" for i in kept],
+        "cost": None if cost is None else cost.astype(np.float32), "cost_in_ranking": bool(a["cost_in_ranking"]),
+        "hmask": None if hmask is None else hmask.astype(np.uint8), "rule": name, "param": param,
+        "abf_z": abf_z[kept], "curve_interval": int(r["curve_interval"]),
+        "curve_scalar": data.cells / int(r["curve_interval"]),
+    }
     if a["preprocessing"]:
         res.preprocessing = _preprocessing(data, w, classes, weights_on, ogroups[kept] if ogroups is not None
                                            else None, cells, src.grid)

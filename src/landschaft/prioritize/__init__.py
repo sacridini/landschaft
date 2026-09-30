@@ -23,8 +23,9 @@ Typical use::
 """
 
 from ._connectivity import Interaction, Kernel, convolve
+from ._postprocess import AreaStatistics
 from ._project import read_project, run_project
 from ._zonation import RULES, ZonationResult, zonation
 
-__all__ = ["Interaction", "Kernel", "RULES", "ZonationResult", "convolve", "read_project", "run_project",
-           "zonation"]
+__all__ = ["AreaStatistics", "Interaction", "Kernel", "RULES", "ZonationResult", "convolve", "read_project",
+           "run_project", "zonation"]

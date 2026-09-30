@@ -111,14 +111,17 @@ def read_project(settings, flags="", *, mode: str | None = None) -> dict:
         ``-w`` weights, ``-W`` weight groups, ``-g`` output groups, ``-t``
         thresholds, ``-c`` conditions, ``-r`` retention, ``-x``/``-X`` cost
         (tracked / in the ranking), ``-h`` hierarchic mask, ``-a`` analysis area
-        (``--area=N``), ``-b`` pre-processing maps, ``-f`` transformed layers.
+        (``--area=N``), ``-b`` pre-processing maps, ``-f`` transformed layers,
+        ``-d``/``-i``/``-I``/``-m`` connectivity, ``-p`` post-processing (run by
+        :func:`run_project` with an ``output``).
     mode
         The marginal loss rule (z5's ``--mode``), e.g. ``"CAZ2"`` or ``"ABF 0.25"``.
 
     Returns
     -------
     dict
-        Keyword arguments of :func:`zonation` (``features`` included).
+        Keyword arguments of :func:`zonation` (``features`` included; with ``-p``,
+        ``postprocessing_file`` too, which :func:`run_project` runs).
 
     Examples
     --------
@@ -243,6 +246,8 @@ def read_project(settings, flags="", *, mode: str | None = None) -> dict:
         kw["solution"] = _resolve(st["external solution"], base)
     if "b" in on:
         kw["preprocessing"] = True
+    if "p" in on and st.get("post-processing file"):
+        kw["postprocessing_file"] = _resolve(st["post-processing file"], base)
     if "f" in on and "tr_out" in cols:
         kw["transformed"] = [bool(v) for v in num("tr_out", int)]
     for key, arg, cast in (("max iterations", "max_iterations", int),
@@ -293,8 +298,11 @@ def run_project(settings, flags="", *, mode: str | None = None, output=None, **o
     from ._zonation import zonation
 
     kw = read_project(settings, flags, mode=mode)
+    pp = kw.pop("postprocessing_file", None)
     kw.update(overrides)
     res = zonation(kw.pop("features"), **kw)
     if output is not None:
         res.write(output)
+        if pp is not None:
+            res.postprocess(pp, Path(output) / "post_processing")
     return res

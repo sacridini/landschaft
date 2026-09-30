@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.92.0] - 2026-09-30
+
+### Added
+- Spatial prioritization, part 4: Zonation 5's post-processing as methods of `ZonationResult`:
+  `area_statistics` (external zones), `area_statistics_rank_range`, `area_statistics_separate_areas`
+  (sizes, mean ranks, feature coverage, relative richness and cost per area, per weight class and
+  output group; `AreaStatistics`), `solution_comparison`, `histogram` and `flexibility_map`;
+  `hierarchic_mask_ranks`; `postprocess` runs Zonation's post-processing files and writes its files
+  (`run_project` with `-p`). Area statistics, comparisons and histograms digit for digit with z5
+  (on its LOAD run of the ranking); flexibility maps bit for bit where z5's curves are those of its
+  ranking, and against a direct port of its algorithm elsewhere (z5 computes them from the curves
+  of the order before its last sort).
+
 ## [0.91.0] - 2026-09-30
 
 ### Added

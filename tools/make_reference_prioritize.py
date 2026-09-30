@@ -147,6 +147,15 @@ def collect(out: Path, prefix: str, arrays: dict, meta: dict) -> None:
                 v = src.read(1)
             name = tif.stem if key == "pre" else tif.name.split(".layer", 1)[1].split(".", 1)[0]
             arrays[f"{prefix}{key}/{name}"] = np.where(np.isfinite(v), v, np.nan).astype(np.float32)
+    post = out / "post_processing"
+    for f in sorted(post.iterdir()) if post.exists() else ():
+        key = f"{prefix}post/{f.name}"
+        if f.suffix == ".tif":
+            with rasterio.open(f) as src:
+                arrays[key] = src.read(1)
+        elif f.suffix in (".txt", ".csv"):
+            text = f.read_bytes().replace(b"\r\n", b"\n")
+            arrays[key] = np.frombuffer(lzma.compress(text), dtype=np.uint8)
     names, values, text = read_table(out / "features_info.csv")
     arrays[f"{prefix}features_info"] = values
     meta[f"{prefix}features_info"] = names

@@ -994,7 +994,8 @@ planejamento e corredores não existem no Z5).
 * As curvas, a AUC e o `features_info` de alvos são calculados com a ordem da **penúltima** ordenação, mas o
   `rankmap` sai da ordenação seguinte; as nossas curvas descrevem o ranking devolvido. Teste: contra o próprio
   Z5 em modo `LOAD` com o nosso rankmap final como solução externa.
-* (lista a completar durante o porte)
+* O histograma e o mapa de flexibilidade do pós-processamento usam essas curvas: os nossos, as do ranking
+  devolvido.
 
 ### Paridade e testes
 * Referência: `z5.exe --maxthreads=1` (e `z5_16bit.exe`), GeoTIFFs escritos com um único bloco de linhas.
@@ -1033,7 +1034,11 @@ planejamento e corredores não existem no Z5).
    ordem do Z5 (overlap-add, blocos do tamanho do kernel, x mais rápido), a normalização do kernel pela soma
    double do Eigen, e a renormalização (máximo -> 2^bits - 1, arredondamento, somas em sequência).
 4. Pós-processamento: estatísticas de área, comparação de soluções, histograma, mapa de flexibilidade, ranks da
-   máscara hierárquica.
+   máscara hierárquica. **Feito na 0.92.0**: 4 casos (grupo `post`, 8 chamadas cada). Estatísticas, comparação
+   e histogramas iguais ao texto do Z5 (corrida LOAD); o mapa de flexibilidade usa as curvas, então herda o erro
+   do Z5 (curvas da penúltima ordenação): idêntico onde elas coincidem (`post_presence`) e conferido contra um
+   porte direto do algoritmo em NumPy (`tests/prioritize_flex_reference.py`) nos demais (93-99 % das células
+   iguais às do Z5). Achado: ranks em float32 (540/600 < 0,9 em float) valem nas faixas de rank.
 5. Avaliação de impactos (cenários, zonas, cumulativos, transformada de distância).
 6. Escala: carga por blocos/dask, ranking out-of-core, benchmarks continentais.
 7. Tutorial, benchmarks contra o Z5, capítulo do Learn.

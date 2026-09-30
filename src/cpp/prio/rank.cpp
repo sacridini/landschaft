@@ -280,6 +280,8 @@ class Ranker {
     }
 
     RankResult run();
+    void flexibility(const RankResult& ranking, double max_error, bool up, bool down, std::vector<float>& pos,
+                     std::vector<float>& neg) const;
 
   private:
     const Data& data_;
@@ -619,6 +621,7 @@ void Ranker::curves(const std::vector<u32>& order, RankResult& res) {
         si = std::max<i64>(1, N / 100000);
     else
         si = req;
+    res.curve_interval = si;
     std::vector<i64> at;
     for (i64 k = 0; k < N; k += si) at.push_back(k);
     at.push_back(N);
@@ -750,9 +753,146 @@ RankResult Ranker::run() {
 
 }  // namespace
 
+void Ranker::flexibility(const RankResult& rr, double max_error, bool up, bool down, std::vector<float>& fpos,
+                         std::vector<float>& fneg) const {
+    const i64 N = N_;
+    const double ndr = 1.0 / static_cast<double>(N);
+    const auto& order = rr.order;
+    const i64 S = static_cast<i64>(rr.curve_rank.size());
+    const double scalar = static_cast<double>(N) / static_cast<double>(rr.curve_interval);
+    const Rule rule = set_.rule;
+    const bool maxrule = rule == Rule::CAZMAX;
+    const double root = (rule == Rule::CAZP || rule == Rule::CAZPW) && p_ > 0 ? 1.0 / p_ : 0.0;
+    const double* scale = data_.layer_scale.data();
+    const double* init = data_.initial_levels.data();
+    const auto& ptr = data_.cell_ptr;
+    const auto& lay = data_.entry_layer;
+    const auto& val = data_.entry_value;
+    const bool calc_pos = up, calc_neg = down;
+    if (calc_pos) fpos.assign(static_cast<size_t>(N), 0.0f);
+    if (calc_neg) fneg.assign(static_cast<size_t>(N), 0.0f);
+    // getInterpolatedOccurrences: the curve sample columns and the weight of the next one
+    auto interp = [&](float rank, i64& i1, i64& i2, float& t) {
+        i1 = std::min<i64>(static_cast<i64>(static_cast<double>(rank) * scalar), S - 1);
+        i2 = std::min<i64>(S - 1, i1 + 1);
+        const float r = rr.curve_rank[i2] - rr.curve_rank[i1];
+        t = r > 0.0f ? (rank - rr.curve_rank[i1]) / r : 0.0f;
+    };
+    // the loss of a cell at the remaining levels (Zonation's BalancingMethod::sum(remaining, features))
+    auto cell_sum = [&](u32 cell, i64 i1, i64 i2, float t) {
+        auto rem = [&](int l) {
+            const float v1 = rr.curve_levels[static_cast<size_t>(i1) * L_ + l];
+            const float v2 = rr.curve_levels[static_cast<size_t>(i2) * L_ + l];
+            return static_cast<double>((v2 - v1) * t + v1);
+        };
+        auto loss = [&](int l, std::uint16_t q) {
+            const double Rb = rem(l), Ra = Rb - static_cast<double>(q) * scale[l];
+            if (rule == Rule::ABF) {
+                auto b_of = [&](double r) {
+                    const double x = w_[l] >= 0 ? r : init[l] - r;
+                    return vdt::fast_pow(x > 0.0 ? x : 0.0, z_[l]);
+                };
+                return (b_of(Rb) - b_of(Ra)) * w_[l];
+            }
+            const double ob = Rb - Ra;
+            double od = w_[l] >= 0 ? Rb : init[l] - Ra;
+            od = od > 0 ? ob / od : 0.0;
+            if (rule != Rule::CAZPW) od *= wabs_[l];
+            if (rule == Rule::CAZ2)
+                od = od * od;
+            else if (rule == Rule::CAZP || rule == Rule::CAZPW)
+                od = vdt::fast_pow(od, p_);
+            if (rule == Rule::CAZPW) od *= wabs_[l];
+            return od;
+        };
+        Sum s;
+        auto add = [&](int l, double v) {
+            double& acc = w_[l] >= 0 ? s.pos : s.neg;
+            if (maxrule)
+                acc = std::max(acc, v);
+            else
+                acc += v;
+        };
+        int l = 0;
+        for (i64 e = ptr[cell]; e < ptr[cell + 1]; ++e) {
+            if (!val[e]) continue;
+            const int le = lay[e];
+            if (dense_)
+                for (; l < le; ++l) add(l, absent_[l]);
+            add(le, loss(le, val[e]));
+            l = le + 1;
+        }
+        if (dense_)
+            for (; l < L_; ++l) add(l, absent_[l]);
+        if (rule == Rule::CAZ2) {
+            s.pos = std::sqrt(s.pos);
+            s.neg = std::sqrt(s.neg);
+        } else if (root > 0) {
+            s = packet_pow(s, root);
+        }
+        return s;
+    };
+#pragma omp parallel for schedule(dynamic, 256)
+    for (i64 index = 0; index < N; ++index) {
+        const u32 cell = order[index];
+        auto rank_error = [&](i64 offset) {
+            const i64 ti = index + offset;
+            if (ti < 0 || ti >= N) return max_error;
+            const u32 other = order[ti];
+            i64 i1, i2;
+            float t;
+            interp(static_cast<float>(static_cast<double>(ti) * ndr), i1, i2, t);
+            Sum test = cell_sum(cell, i1, i2, t);
+            Sum real = cell_sum(other, i1, i2, t);
+            if (!cls_.empty() && cls_[cell] != cls_[other]) return max_error;
+            if (cost_prio_) {
+                test = modified(test, set_.cost[cell]);
+                real = modified(real, set_.cost[other]);
+            }
+            const double diff = std::fabs(test.value() - real.value());
+            const double div = test.pos + test.neg;
+            if (diff == 0) return 0.0;
+            if (div <= 0) return max_error;
+            return diff / div;
+        };
+        auto test_rank = [&](i64 dir, i64 i) {
+            const double e1 = rank_error(dir * i), e2 = rank_error(dir * (i + 1));
+            return (e1 + e2) / 2 >= max_error;
+        };
+        // upperBound(first, last, 9 iterations, comp)
+        auto upper = [&](i64 first, i64 last, i64 dir) {
+            i64 count = last - first;
+            int iter = 9;
+            while (count > 0 && iter-- > 0) {
+                const i64 step = count / 2;
+                const i64 i = first + step;
+                if (!test_rank(dir, i)) {
+                    first = i + 1;
+                    count -= step + 1;
+                } else {
+                    count = step;
+                }
+            }
+            return first;
+        };
+        if (calc_pos) fpos[cell] = static_cast<float>(static_cast<double>(upper(1, N - index, 1)) * ndr);
+        if (calc_neg) fneg[cell] = static_cast<float>(static_cast<double>(upper(1, index, -1)) * ndr);
+    }
+}
+
 RankResult rank(const Data& data, const RankSettings& settings) {
     Ranker r(data, settings);
     return r.run();
+}
+
+}  // namespace prio
+
+namespace prio {
+
+void flexibility(const Data& data, const RankSettings& settings, const RankResult& ranking, double max_error,
+                 bool up, bool down, std::vector<float>& pos, std::vector<float>& neg) {
+    Ranker r(data, settings);
+    r.flexibility(ranking, max_error, up, down, pos, neg);
 }
 
 }  // namespace prio

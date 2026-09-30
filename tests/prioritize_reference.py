@@ -80,4 +80,6 @@ def run_case(name: str, tmp: Path, **overrides):
             v = [None if x is None else dataclasses.replace(x, resource=path(x.resource)) for x in v]
         kwargs[k] = v
     kwargs.update(overrides)
+    for r in case.extra:  # rasters named by link or post-processing files
+        path(r)
     return ls.prioritize.zonation([path(r) for r in case.layers], **kwargs)

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-GROUPS = ["core", "transform", "connectivity"]
+GROUPS = ["core", "transform", "connectivity", "post"]
 
 EPSG = 32633
 
@@ -344,4 +344,36 @@ def IA(t):
     return Interaction(kern, res, pos, beta, norm)
 
 
-CASES: dict[str, Case] = {**_core(), **_transform(), **_connectivity()}
+PP_CALLS = [
+    'area_statistics_external("areas.tif", "ext")',
+    'area_statistics_rank_range(0.8, 1.0, "top")',
+    'area_statistics_separate_areas(0.7, 1.0, 5, "sep")',
+    'solution_comparison(0.8, 1.0, "sp7.tif", 0.5, 1.0, "cmp")',
+    'histogram(0.8, 1.0, 10, "h")',
+    'histogram(0.0, 1.0, 7, "")',
+    'flexibility_map(2.0, true, true, true, "flex")',
+    'flexibility_map(10.0, true, false, false, "wide")',
+]
+
+
+def _post() -> dict[str, Case]:
+    c: dict[str, Case] = {}
+    g = "post"
+    pp = chr(10).join(PP_CALLS) + chr(10)
+    base = {"post-processing file": "file:pp.txt"}
+    wneg = [2.0, 1.0, -1.0, 3.0, 0.0, 1.0, -0.5, 1.0]
+    grp = [1, 1, 2, 2, 2, 3, 3, 3]
+    c["post_presence"] = Case(g, ["pa0", "pa1"], "CAZ1", settings=base, files={"pp.txt": pp}, flags=("-p",),
+                              extra=("areas", "sp7"), params={"rule": "CAZ1"})
+    c["post_caz2"] = Case(g, SP, "CAZ2", {"weight": wneg, "group": grp}, settings=base, files={"pp.txt": pp},
+                          flags=("-w", "-g", "-p"), extra=("areas",), params={"weights": wneg, "groups": grp})
+    c["post_abf_cost_hmask"] = Case(g, SP, "ABF 0.25", {"weight": W8},
+                                    settings={**base, "cost layer": "cost", "hierarchic mask layer": "hmask"},
+                                    files={"pp.txt": pp}, flags=("-w", "-X", "-h", "-p"), extra=("areas",),
+                                    params={"rule": "ABF", "weights": W8, "cost": "cost", "hierarchic_mask": "hmask"})
+    c["post_cazp"] = Case(g, SP, "CAZP 0.5", settings=base, files={"pp.txt": pp}, flags=("-p",), extra=("areas",),
+                          params={"rule": "CAZP", "rule_param": 0.5})
+    return c
+
+
+CASES: dict[str, Case] = {**_core(), **_transform(), **_connectivity(), **_post()}

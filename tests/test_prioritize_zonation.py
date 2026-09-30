@@ -365,3 +365,104 @@ def test_self_multiply_and_interaction_forms():
     assert c.feature_curves.iloc[0, 2] < 1.0  # the level is what remains
     with pytest.raises(ValueError, match="matrix"):
         ls.prioritize.zonation(x, matrix_connectivity=[(k, "M"), (k, "M"), None], matrices={"M": np.eye(3)})
+
+
+# ---------------------------------------------------------------- post-processing (phase 4)
+
+
+def _compare_file(ours, ref_arrays, key, name):
+    import rasterio
+
+    if name.endswith(".tif"):
+        a = rasterio.open(ours).read(1)
+        b = ref_arrays[key]
+        return ((a == b) | (np.isnan(a) & np.isnan(b))).all()
+    want = table_text(ref_arrays, key).splitlines()
+    got = ours.read_text(encoding="utf-8").splitlines()
+    if name.startswith("highest"):  # the file paths differ
+        want = [" ".join(ln.split()[:3]) for ln in want]
+        got = [" ".join(ln.split()[:3]) for ln in got]
+    if name.startswith("solution"):
+        want, got = want[1:], got[1:]
+    return [ln.strip() for ln in got] == [ln.strip() for ln in want]
+
+
+@pytest.mark.reference
+@pytest.mark.parametrize("name", case_ids("post"))
+def test_postprocessing_matches_zonation(name, rasters, tmp_path):
+    """Area statistics, solution comparison and histograms digit for digit (Zonation's LOAD
+    run: the curves of the returned ranking); flexibility maps bit for bit where Zonation's
+    curves are those of its ranking, and else against a direct port of its algorithm."""
+    arrays, _ = load("post")
+    case = prioritize_cases.CASES[name]
+    res = _run(name, rasters)
+    pp = rasters / f"pp_{name}.txt"
+    pp.write_text(case.files["pp.txt"], encoding="utf-8")
+    files = {f.name: f for f in res.postprocess(pp, tmp_path)}
+    ref = sorted(k.split("/post/")[1] for k in arrays if k.startswith(f"{name}/post/"))
+    assert sorted(files) == ref
+    for fname in ref:
+        if fname.startswith("flexibility"):
+            continue
+        assert _compare_file(files[fname], arrays, f"{name}/load/post/{fname}", fname), fname
+    flex = [f for f in ref if f.startswith("flexibility")]
+    if name == "post_presence":  # its last sort did not change the order: Zonation's curves are ours
+        for fname in flex:
+            assert _compare_file(files[fname], arrays, f"{name}/post/{fname}", fname), fname
+    else:
+        import rasterio
+
+        for fname in flex:  # Zonation's curves come from the order before its last sort: close
+            a = rasterio.open(files[fname]).read(1)
+            b = arrays[f"{name}/post/{fname}"]
+            ok = np.isfinite(b)
+            assert (a[ok] == b[ok]).mean() > 0.9, fname
+        import prioritize_flex_reference as fr
+
+        cells = res._ctx["cells"]
+        f = res.flexibility_map(2.0)
+        up = np.asarray(f["up"]).ravel()[cells]
+        down = np.asarray(f["down"]).ravel()[cells]
+        U, D = fr.flexibility(res, 2.0, range(0, cells.size, 11))
+        assert all(U[c] == up[c] and D[c] == down[c] for c in U)
+
+
+@pytest.mark.reference
+def test_hierarchic_mask_ranks(rasters):
+    _, meta = load("core")
+    res = _run("caz2_hmask", rasters)
+    stats = meta["caz2_hmask/stats"]
+    from landschaft.prioritize._tables import _g
+
+    for level, rank in res.hierarchic_mask_ranks.items():
+        assert _g(rank) == stats[f"Hierarchic mask level {level} minimum rank"]
+
+
+def test_run_project_postprocessing(tmp_path):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    from make_reference_prioritize import write_project
+
+    case = prioritize_cases.CASES["post_caz2"]
+    write_project(case, tmp_path)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ls.prioritize.run_project(tmp_path / "settings.z5", case.flags, mode=case.mode, output=tmp_path / "out")
+    names = {p.name for p in (tmp_path / "out" / "post_processing").iterdir()}
+    assert "area_stats.pos.ext.csv" in names and "flexibilitymap.flex.tif" in names
+
+
+def test_postprocessing_errors():
+    res = ls.prioritize.zonation(np.random.default_rng(14).random((2, 10, 12)))
+    with pytest.raises(ValueError, match="min_rank"):
+        res.area_statistics_rank_range(0.9, 0.1)
+    with pytest.raises(ValueError, match="0 and 1"):
+        res.area_statistics_rank_range(-0.1, 0.5)
+    with pytest.raises(ValueError, match="min_area_size"):
+        res.area_statistics_separate_areas(0.5, 1.0, 0)
+    with pytest.raises(ValueError, match="bars"):
+        res.histogram(0.5, 1.0, 0)
+    with pytest.raises(ValueError, match="max error"):
+        res.flexibility_map(0.0)

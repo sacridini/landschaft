@@ -117,9 +117,17 @@ struct RankResult {
     std::vector<double> curve_cost;       // samples
     double auc = 0.0;
     double total_cost = 0.0;
+    i64 curve_interval = 1;  // cells between curve samples
 };
 
 RankResult rank(const Data& data, const RankSettings& settings);
+
+// Zonation's flexibility map (flexibilitymap.cpp) of a ranking: for every cell, how
+// far up (and down) the order it could move before the loss of the cells there,
+// compared with its own at their remaining levels (interpolated from the curves),
+// differs by max_error (fraction). Returns the offsets up and down as fractions.
+void flexibility(const Data& data, const RankSettings& settings, const RankResult& ranking, double max_error,
+                 bool up, bool down, std::vector<float>& pos, std::vector<float>& neg);
 
 // Zonation's sum of a float column (Eigen 3.4's reduction with AVX packets of 8,
 // the column starting `offset` floats after a 32-byte boundary).

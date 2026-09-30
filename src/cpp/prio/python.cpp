@@ -73,10 +73,9 @@ std::vector<T> vec_of(const py::object& o) {
     return std::vector<T>(a.data(), a.data() + a.size());
 }
 
-py::dict py_rank(const prio::Data& data, const std::string& rule, double param, const std::vector<float>& weights,
-                 const std::vector<float>& abf_z, const py::object& cost, bool cost_in_ranking,
-                 const py::object& hmask, const py::object& solution, int max_iterations, float ranking_error,
-                 bool stop_on_plateau, float smoothing, float curves_interval, std::uint64_t seed) {
+prio::RankSettings settings_of(const std::string& rule, double param, const std::vector<float>& weights,
+                               const std::vector<float>& abf_z, const py::object& cost, bool cost_in_ranking,
+                               const py::object& hmask, const py::object& solution) {
     prio::RankSettings s;
     s.rule = rule_of(rule);
     s.param = param;
@@ -86,6 +85,14 @@ py::dict py_rank(const prio::Data& data, const std::string& rule, double param, 
     s.cost_in_ranking = cost_in_ranking;
     s.hmask = vec_of<std::uint8_t>(hmask);
     s.solution = vec_of<float>(solution);
+    return s;
+}
+
+py::dict py_rank(const prio::Data& data, const std::string& rule, double param, const std::vector<float>& weights,
+                 const std::vector<float>& abf_z, const py::object& cost, bool cost_in_ranking,
+                 const py::object& hmask, const py::object& solution, int max_iterations, float ranking_error,
+                 bool stop_on_plateau, float smoothing, float curves_interval, std::uint64_t seed) {
+    prio::RankSettings s = settings_of(rule, param, weights, abf_z, cost, cost_in_ranking, hmask, solution);
     s.max_iterations = max_iterations;
     s.ranking_error = ranking_error;
     s.stop_on_plateau = stop_on_plateau;
@@ -114,7 +121,30 @@ py::dict py_rank(const prio::Data& data, const std::string& rule, double param, 
     d["curve_cost"] = to_array(std::move(r.curve_cost));
     d["auc"] = r.auc;
     d["total_cost"] = r.total_cost;
+    d["curve_interval"] = r.curve_interval;
     return d;
+}
+
+py::tuple py_flexibility(const prio::Data& data, const std::string& rule, double param,
+                         const std::vector<float>& weights, const std::vector<float>& abf_z, const py::object& cost,
+                         bool cost_in_ranking, const py::object& hmask, const py::object& order,
+                         const py::object& curve_rank, const Floats& curve_levels, i64 curve_interval,
+                         double max_error, bool up, bool down) {
+    const prio::RankSettings s = settings_of(rule, param, weights, abf_z, cost, cost_in_ranking, hmask, py::none());
+    prio::RankResult r;
+    r.order = vec_of<std::uint32_t>(order);
+    r.curve_rank = vec_of<float>(curve_rank);
+    r.curve_levels.assign(curve_levels.data(), curve_levels.data() + curve_levels.size());
+    r.curve_interval = curve_interval;
+    if (static_cast<i64>(r.order.size()) != data.cells()) throw std::invalid_argument("one position per cell");
+    if (static_cast<i64>(r.curve_levels.size()) != static_cast<i64>(r.curve_rank.size()) * data.rules.layers)
+        throw std::invalid_argument("curve levels: (samples, layers)");
+    std::vector<float> pos, neg;
+    {
+        py::gil_scoped_release release;
+        prio::flexibility(data, s, r, max_error, up, down, pos, neg);
+    }
+    return py::make_tuple(to_array(std::move(pos)), to_array(std::move(neg)));
 }
 
 // Zonation's float sums of the rows of a (samples, layers) matrix: its columns of
@@ -268,6 +298,10 @@ void register_python(py::module_& m) {
           py::arg("max_iterations"), py::arg("ranking_error"), py::arg("stop_on_plateau"), py::arg("smoothing"),
           py::arg("curves_interval"), py::arg("seed"),
           "Zonation 5's priority ranking of the cells of a PrioData.");
+    m.def("prio_flexibility", &py_flexibility, py::arg("data"), py::arg("rule"), py::arg("param"),
+          py::arg("weights"), py::arg("abf_z"), py::arg("cost"), py::arg("cost_in_ranking"), py::arg("hmask"),
+          py::arg("order"), py::arg("curve_rank"), py::arg("curve_levels"), py::arg("curve_interval"),
+          py::arg("max_error"), py::arg("up"), py::arg("down"), "Zonation's flexibility map of a ranking.");
     m.def("prio_eigen_sums", &py_eigen_sums, py::arg("matrix"), py::arg("subset") = py::none(),
           "Zonation's (Eigen AVX) float sums of the rows of a (samples, layers) matrix.");
     m.def(

@@ -55,3 +55,12 @@ connectivity of a resource, or mixed with others by a matrix.
 ::: landschaft.prioritize.Interaction
 
 ::: landschaft.prioritize.convolve
+
+## Post-processing
+
+Analyses of a ranking (methods of `ZonationResult`): statistics of areas
+(external zones, the top fraction, separate high-priority areas), comparison with
+another solution, histograms of the features' coverage and the flexibility map;
+`ZonationResult.postprocess` runs Zonation's post-processing files.
+
+::: landschaft.prioritize.AreaStatistics
