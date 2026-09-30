@@ -1026,7 +1026,12 @@ planejamento e corredores não existem no Z5).
    condicionada (renormalize: escala / nível); a retenção subtrai do valor quantizado e trunca, sem renormalizar
    (a curva termina na fração retida); mapas de pré-processamento = soma float do Eigen (AVX) sobre todas as
    camadas com multiplicador 0/1.
-3. Conectividade: kernels, FFT, feição única, interações 1/2, matriz.
+3. Conectividade: kernels, FFT, feição única, interações 1/2, matriz. **Feito na 0.91.0**: 6 casos
+   (grupo `connectivity`, grade 200 x 300 com vários blocos de FFT) bit a bit: camadas suavizadas, rank e
+   tabelas. A FFT do Z5 (fftss, double, planejada com FFTW_MEASURE) e a nossa (scipy/pocketfft) diferem
+   ~1e-16, invisível depois do cast para float; o que importa reproduzir é a soma em float dos blocos na
+   ordem do Z5 (overlap-add, blocos do tamanho do kernel, x mais rápido), a normalização do kernel pela soma
+   double do Eigen, e a renormalização (máximo -> 2^bits - 1, arredondamento, somas em sequência).
 4. Pós-processamento: estatísticas de área, comparação de soluções, histograma, mapa de flexibilidade, ranks da
    máscara hierárquica.
 5. Avaliação de impactos (cenários, zonas, cumulativos, transformada de distância).

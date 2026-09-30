@@ -202,6 +202,12 @@ def zonation(
     seed: int | None = None,
     condition=None,
     renormalize=False,
+    connectivity=None,
+    self_multiply=False,
+    interaction=None,
+    interaction2=None,
+    matrix_connectivity=None,
+    matrices: dict | None = None,
     retention=None,
     preprocessing: bool = False,
     transformed=False,
@@ -283,6 +289,21 @@ def zonation(
         and the feature's initial level becomes the conditioned fraction.
     renormalize
         Per feature (or for all), rescale a conditioned feature to level 1.
+    connectivity
+        Per feature, a :class:`Kernel` (``None``: none; Zonation's ``-d``): the
+        feature is replaced by its convolution with the kernel (its connectivity),
+        kept where it had data, and quantized again.
+    self_multiply
+        Per feature (or for all): multiply the smoothed feature by the feature.
+    interaction, interaction2
+        Per feature, an :class:`Interaction` (``-i``, ``-I``): the feature weighted
+        by (or reduced by) the connectivity of a resource. The second set is applied
+        after the matrix transforms.
+    matrix_connectivity, matrices
+        Per feature, ``(kernel, key)`` (``-m``): the features sharing a key are
+        smoothed and mixed by the matrix ``matrices[key]`` (row: source feature,
+        column: target feature, in the features' order), then multiplied by the
+        target feature.
     retention
         Per feature (Zonation's ``-r``): ``None``; a number, the fraction of the
         feature retained everywhere; a raster of fractions retained per cell; or
@@ -443,6 +464,26 @@ def _run(src, name, param, a) -> ZonationResult:
     hmask = _inputs.gather(_inputs.open_aux(a["hierarchic_mask"], src.grid, "hierarchic mask", src), cells,
                            src.grid, lo=0, hi=255, round_int=True)
     solution = _inputs.gather(_inputs.open_aux(a["solution"], src.grid, "solution", src), cells, src.grid)
+    if any(a[k] is not None for k in ("connectivity", "interaction", "interaction2", "matrix_connectivity")):
+        from ._connectivity import apply as _connect
+
+        def per(key, default=None):
+            v = a[key]
+            if v is None:
+                return None
+            if key == "self_multiply" and isinstance(v, bool):
+                return [v] * L0
+            v = list(v)
+            if len(v) != L0:
+                raise ValueError(f"{key}: {len(v)} for {L0} features")
+            return v
+
+        _connect(data, kept, cells, src.grid, connectivity=per("connectivity"), self_multiply=per("self_multiply"),
+                 interaction=per("interaction"), interaction2=per("interaction2"),
+                 matrix_connectivity=per("matrix_connectivity"), matrices=a["matrices"] or {},
+                 open_aux=lambda r: _inputs.open_aux(r, src.grid, "interaction resource", src),
+                 gather=lambda layer, c: _inputs.gather(layer, c, src.grid),
+                 workers=_threads.current())
     _retention(data, a["retention"], kept, L0, cells, src)
     seed = a["seed"]
     if seed is None:

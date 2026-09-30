@@ -287,3 +287,81 @@ def test_mixed_sign_group_warns():
     x = np.random.default_rng(11).random((3, 8, 8))
     with pytest.warns(UserWarning, match="output group 1"):
         ls.prioritize.zonation(x, weights=[1, -1, 1], groups=[1, 1, 2])
+
+
+# ---------------------------------------------------------------- connectivity (phase 3)
+
+
+@pytest.mark.reference
+@pytest.mark.parametrize("name", case_ids("connectivity"))
+def test_connectivity_matches_zonation(name, rasters, tmp_path):
+    """Single-feature, interaction and matrix connectivity: the smoothed layers and the ranking."""
+    arrays, meta = load("connectivity")
+    res = _run(name, rasters)
+    ref = arrays[f"{name}/rank"]
+    ours = np.asarray(res.rank)
+    assert ((ours == ref) | (np.isnan(ours) & np.isnan(ref))).all()
+    assert res.iterations == int(meta[f"{name}/stats"]["Number of iterations"])
+    number = list(res.features["number"])
+    tr = {int(k.split("/tr/")[1]): v for k, v in arrays.items() if k.startswith(f"{name}/tr/")}
+    assert tr
+    for i, v in tr.items():
+        a = np.asarray(res.transformed[res.features["name"][number.index(i)]])
+        assert ((a == v) | (np.isnan(a) & np.isnan(v))).all(), i
+    out = res.write(tmp_path)
+    for key, fname in TABLES.items():
+        k = f"{name}/load/{key}"
+        if k in arrays:
+            want = [ln.strip() for ln in table_text(arrays, k).splitlines()]
+            got = [ln.strip() for ln in (out / fname).read_text(encoding="utf-8").splitlines()]
+            assert got == want, key
+
+
+def test_kernel_sizes_and_shapes():
+    K = ls.prioritize.Kernel
+    assert K("negexp", 4, 3).size() == 128  # at least Z5_FILTER_MIN_SIZE
+    assert K("negexp", 40, 3).size() == 256  # 2 * 2^ceil(log2(121))
+    assert K("uniform", 100).size() == 256
+    assert K("uniform", 100).size(max_distance=50) == 128
+    img = K("uniform", 3).image()
+    c = img.shape[0] // 2
+    assert img[c, c] == 1 and img[c, c + 3] == 1 and img[c, c + 4] == 0
+    tri = K("triangular", 4).image()
+    assert tri[c, c + 2] == pytest.approx(0.5)
+    g = K("gaussian", 2, 3).image()
+    assert g[c, c + 7] == 0 and g[c, c + 6] > 0
+    with pytest.raises(ValueError, match="kernel"):
+        K("box", 3)
+    with pytest.raises(ValueError, match="> 0"):
+        K("negexp", 0)
+
+
+def test_convolve_matches_direct_convolution():
+    from scipy.signal import convolve2d
+
+    rng = np.random.default_rng(12)
+    img = rng.random((150, 170))
+    k = ls.prioritize.Kernel("negexp", 3, 3)
+    ours = ls.prioritize.convolve(img, k)
+    ker = k.image()
+    ker = ker / ker.sum()
+    full = convolve2d(img, ker, mode="full")
+    n = ker.shape[0]
+    want = full[n // 2:n // 2 + 150, n // 2:n // 2 + 170]
+    np.testing.assert_allclose(ours, want, rtol=1e-5, atol=1e-7)
+
+
+def test_self_multiply_and_interaction_forms():
+    rng = np.random.default_rng(13)
+    x = (rng.random((3, 40, 50)) ** 2).astype(np.float32)
+    res_r = rng.random((40, 50)).astype(np.float32)
+    k = ls.prioritize.Kernel("gaussian", 2, 3)
+    a = ls.prioritize.zonation(x, connectivity=[k, None, k], self_multiply=True, transformed=True)
+    b = ls.prioritize.zonation(x, connectivity=[k, None, k], self_multiply=False, transformed=True)
+    assert not np.array_equal(np.asarray(a.transformed["feature_0"]), np.asarray(b.transformed["feature_0"]))
+    np.testing.assert_array_equal(np.asarray(a.transformed["feature_1"]), np.asarray(b.transformed["feature_1"]))
+    ia = ls.prioritize.Interaction(k, res_r, positive=False, beta=0.5, normalize=False)
+    c = ls.prioritize.zonation(x, interaction=[None, ia, None])
+    assert c.feature_curves.iloc[0, 2] < 1.0  # the level is what remains
+    with pytest.raises(ValueError, match="matrix"):
+        ls.prioritize.zonation(x, matrix_connectivity=[(k, "M"), (k, "M"), None], matrices={"M": np.eye(3)})

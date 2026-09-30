@@ -6,6 +6,18 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.91.0] - 2026-09-30
+
+### Added
+- Spatial prioritization, part 3: Zonation 5's connectivity transforms in `ls.prioritize.zonation`:
+  single-feature connectivity with dispersal kernels (`connectivity`, `self_multiply`; `-d`),
+  interaction connectivity with a resource, positive or negative (`interaction`, `interaction2`;
+  `-i`, `-I`), and matrix connectivity between features (`matrix_connectivity`, `matrices`; `-m`);
+  `ls.prioritize.Kernel` (uniform, triangular, negative exponential, Gaussian, with cut-off),
+  `Interaction`, and `convolve` (FFT convolution in blocks, as Zonation). `read_project` reads the
+  connectivity link files and matrices. Bit for bit with z5 on 6 more runs (smoothed layers, rank
+  maps, tables), on a grid spanning several FFT blocks.
+
 ## [0.90.0] - 2026-09-30
 
 ### Added

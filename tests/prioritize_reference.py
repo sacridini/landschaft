@@ -74,6 +74,10 @@ def run_case(name: str, tmp: Path, **overrides):
             v = raster(v)
         elif k in ("condition", "retention"):
             v = [raster(x) for x in v]
+        elif k in ("interaction", "interaction2"):
+            import dataclasses
+
+            v = [None if x is None else dataclasses.replace(x, resource=path(x.resource)) for x in v]
         kwargs[k] = v
     kwargs.update(overrides)
     return ls.prioritize.zonation([path(r) for r in case.layers], **kwargs)

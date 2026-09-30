@@ -54,6 +54,10 @@ struct Data {
 
     std::vector<int> condition;             // condition of each layer (-1: none)
     std::vector<std::uint8_t> renormalize;  // renormalize a conditioned layer to level 1
+    // Zonation's replacement of a layer by a transformed one (connectivity.cpp
+    // normalize + replaceLayer): the values per data cell scaled to the storage
+    // range and rounded; its level becomes `level`. Returns the quantization error (%).
+    double replace_layer(int layer, std::vector<float> values, double level);
 
     ReadRules rules;
     int bits = 8;
@@ -120,5 +124,7 @@ RankResult rank(const Data& data, const RankSettings& settings);
 // Zonation's sum of a float column (Eigen 3.4's reduction with AVX packets of 8,
 // the column starting `offset` floats after a 32-byte boundary).
 float eigen_avx_sum(const float* v, i64 n, i64 offset);
+// the same for doubles (packets of 4)
+double eigen_avx_sum(const double* v, i64 n, i64 offset);
 
 }  // namespace prio

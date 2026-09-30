@@ -224,6 +224,14 @@ void register_python(py::module_& m) {
                 return to_array(std::move(out));
             },
             py::arg("mult"), py::arg("weights") = py::none(), py::arg("unscaled") = false)
+        .def(
+            "replace_layer",
+            [](Data& d, int layer, const Floats& values, double level) {
+                std::vector<float> v(values.data(), values.data() + values.size());
+                py::gil_scoped_release release;
+                return d.replace_layer(layer, std::move(v), level);
+            },
+            py::arg("layer"), py::arg("values"), py::arg("level"))
         .def("flush", &Data::flush)
         .def("finish", &Data::finish)
         .def_readonly("bits", &Data::bits)
@@ -262,6 +270,12 @@ void register_python(py::module_& m) {
           "Zonation 5's priority ranking of the cells of a PrioData.");
     m.def("prio_eigen_sums", &py_eigen_sums, py::arg("matrix"), py::arg("subset") = py::none(),
           "Zonation's (Eigen AVX) float sums of the rows of a (samples, layers) matrix.");
+    m.def(
+        "prio_eigen_sum_double",
+        [](const py::array_t<double, py::array::c_style | py::array::forcecast>& v) {
+            return eigen_avx_sum(v.data(), static_cast<i64>(v.size()), 0);
+        },
+        py::arg("values"), "Zonation's (Eigen AVX) sum of a fresh double array.");
 }
 
 }  // namespace prio

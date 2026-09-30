@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-GROUPS = ["core", "transform"]
+GROUPS = ["core", "transform", "connectivity"]
 
 EPSG = 32633
 
@@ -117,6 +117,15 @@ def _rasters() -> dict[str, RasterSpec]:
     ra = 0.4 * _blobs(shape, 53, n=4)
     ra[sea] = np.nan
     r["retabs"] = RasterSpec(ra)
+    # connectivity: a grid spanning several FFT blocks, and resource rasters
+    cshape = (200, 300)
+    csea = _outline(cshape, 3)
+    for i in range(5):
+        r[f"conn{i}"] = RasterSpec(_blobs(cshape, 200 + i, n=5 + i, zero_below=0.15 * (i % 2), na=csea))
+    for k, seed in (("res1", 210), ("res2", 211)):
+        v = _blobs(cshape, seed, n=6)
+        v[csea] = np.nan
+        r[k] = RasterSpec(v)
     # a larger stack for realistic numbers of cells and iterations
     big = (120, 160)
     bsea = _outline(big, 2)
@@ -267,4 +276,72 @@ def _transform() -> dict[str, Case]:
     return c
 
 
-CASES: dict[str, Case] = {**_core(), **_transform()}
+CONN = [f"conn{i}" for i in range(5)]
+
+
+def _connectivity() -> dict[str, Case]:
+    from landschaft.prioritize import Interaction, Kernel
+
+    c: dict[str, Case] = {}
+    g = "connectivity"
+    sf_links = "1 0 negexp(4, 3)|2 1 gaussian(3, 2)|3 0 uniform(5)|4 1 triangular(6)|5 0 negexp(40, 3)|"
+    sf_links = sf_links.replace("|", chr(10))
+    kern = {1: Kernel("negexp", 4, 3), 2: Kernel("gaussian", 3, 2), 3: Kernel("uniform", 5),
+            4: Kernel("triangular", 6), 5: Kernel("negexp", 40, 3)}
+    selfm = {1: False, 2: True, 3: False, 4: True, 5: False}
+    sf = [1, 2, 3, 4, 5]
+    sf_params = {"connectivity": [kern[i] for i in sf], "self_multiply": [selfm[i] for i in sf],
+                 "transformed": True}
+    c["conn_sf"] = Case(g, CONN, "CAZ2", {"sf_conn": sf, "tr_out": [1] * 5},
+                        settings={"single-feature connectivity link file": "file:sf.txt"},
+                        files={"sf.txt": sf_links}, flags=("-d", "-f"), params=sf_params)
+    c["conn_sf_abf_16bit"] = Case(g, CONN, "ABF 0.25", {"sf_conn": sf, "tr_out": [1] * 5},
+                                  settings={"single-feature connectivity link file": "file:sf.txt"},
+                                  files={"sf.txt": sf_links}, flags=("-d", "-f"), bits=16,
+                                  params={**sf_params, "rule": "ABF", "bits": 16})
+    small = [2, -1, 1, 3, -1, 4, 1, -1]
+    c["conn_sf_small"] = Case(g, SP, "CAZ2", {"sf_conn": small, "tr_out": [1] * 8},
+                              settings={"single-feature connectivity link file": "file:sf.txt"},
+                              files={"sf.txt": sf_links}, flags=("-d", "-f"),
+                              params={"connectivity": [kern.get(i) for i in small],
+                                      "self_multiply": [selfm.get(i, False) for i in small], "transformed": True})
+    ia_links = ("1 1 1.0 1 negexp(3, 4) res1.tif|2 0 0.8 1 gaussian(2, 3) res2.tif|"
+                "3 0 0.5 0 negexp(5, 2) res1.tif|").replace("|", chr(10))
+    ia = {1: ("res1", Kernel("negexp", 3, 4), True, 1.0, True), 2: ("res2", Kernel("gaussian", 2, 3), False, 0.8, True),
+          3: ("res1", Kernel("negexp", 5, 2), False, 0.5, False)}
+    ia_ids = [1, -1, 2, 3, -1]
+    c["conn_interaction"] = Case(g, CONN, "CAZ2", {"ia_conn1": ia_ids, "tr_out": [1] * 5},
+                                 settings={"interaction connectivity link file": "file:ia.txt"},
+                                 files={"ia.txt": ia_links}, flags=("-i", "-f"), extra=("res1", "res2"),
+                                 params={"interaction": [IA(ia[i]) if i in ia else None for i in ia_ids],
+                                         "transformed": True})
+    ia2_ids = [-1, 2, 1, -1, 3]
+    c["conn_sf_interaction2"] = Case(g, CONN, "CAZ1", {"sf_conn": sf, "ia_conn2": ia2_ids, "tr_out": [1] * 5},
+                                     settings={"single-feature connectivity link file": "file:sf.txt",
+                                               "interaction connectivity link file": "file:ia.txt"},
+                                     files={"sf.txt": sf_links, "ia.txt": ia_links}, flags=("-d", "-I", "-f"),
+                                     extra=("res1", "res2"),
+                                     params={**sf_params, "rule": "CAZ1",
+                                             "interaction2": [IA(ia[i]) if i in ia else None for i in ia2_ids]})
+    m_links = "1 negexp(3, 4) matrix.txt|2 gaussian(2, 3) matrix.txt|".replace("|", chr(10))
+    matrix = "0.8 0.1 0.3|0.2 0.7 0.0|0.0 0.2 1.0|".replace("|", chr(10))
+    m_ids = [1, 1, -1, 2, -1]
+    mk = {1: Kernel("negexp", 3, 4), 2: Kernel("gaussian", 2, 3)}
+    c["conn_matrix"] = Case(g, CONN, "CAZ2", {"matrix_conn": m_ids, "tr_out": [1] * 5},
+                            settings={"matrix connectivity link file": "file:m.txt"},
+                            files={"m.txt": m_links, "matrix.txt": matrix}, flags=("-m", "-f"),
+                            params={"matrix_connectivity": [(mk[i], "M") if i in mk else None for i in m_ids],
+                                    "matrices": {"M": np.array([[0.8, 0.1, 0.3], [0.2, 0.7, 0.0], [0.0, 0.2, 1.0]])},
+                                    "transformed": True})
+    return c
+
+
+def IA(t):
+    """An Interaction with its resource as a raster name (the tests give its path)."""
+    from landschaft.prioritize import Interaction
+
+    res, kern, pos, beta, norm = t
+    return Interaction(kern, res, pos, beta, norm)
+
+
+CASES: dict[str, Case] = {**_core(), **_transform(), **_connectivity()}

@@ -235,6 +235,65 @@ std::vector<float> Data::preprocessing(const float* mult, const float* weights, 
     return out;
 }
 
+double Data::replace_layer(int layer, std::vector<float> packed, double level) {
+    if (layer < 0 || layer >= rules.layers) throw std::out_of_range("layer");
+    if (static_cast<i64>(packed.size()) != cells()) throw std::invalid_argument("one value per data cell");
+    const float fscale = static_cast<float>(storage_scale);
+    const double scale_r = 1.0 / storage_scale;
+    float maxv = 0.0f;
+    for (float v : packed) maxv = std::max(v, maxv);
+    double sum = 0.0, nqsum = 0.0;
+    if (maxv > 0) {
+        const float m = fscale / maxv;
+        for (float& v : packed) v = std::min(v * m, fscale);
+        for (float v : packed) nqsum += static_cast<double>(v) * scale_r;
+        for (float& v : packed) v = std::min(std::round(v), fscale);
+        for (float v : packed) sum += static_cast<double>(static_cast<std::uint16_t>(v)) * scale_r;
+    }
+    layer_scale[layer] = sum > 0 ? level / (sum * storage_scale) : 0.0;
+    initial_levels[layer] = level;
+    for (i64 c = 0; c < cells(); ++c)
+        for (i64 e = cell_ptr[c]; e < cell_ptr[c + 1]; ++e)
+            if (entry_layer[e] == layer) {
+                entry_value[e] = static_cast<std::uint16_t>(packed[c]);
+                break;
+            }
+    return nqsum > 0 ? std::fabs(nqsum - sum) / nqsum * 100.0 : 0.0;
+}
+
+double eigen_avx_sum(const double* v, i64 n, i64 offset) {
+    // Packet4d: predux adds the halves (k + k+2), then 0 + 1
+    if (n <= 0) return 0.0;
+    const i64 P = 4;
+    const i64 start = std::min<i64>((P - offset % P) % P, n);
+    const i64 size2 = ((n - start) / (2 * P)) * (2 * P);
+    const i64 size1 = ((n - start) / P) * P;
+    const i64 end2 = start + size2, end1 = start + size1;
+    double res;
+    if (size1) {
+        double r0[4], r1[4];
+        for (int k = 0; k < 4; ++k) r0[k] = v[start + k];
+        if (size1 > P) {
+            for (int k = 0; k < 4; ++k) r1[k] = v[start + P + k];
+            for (i64 i = start + 2 * P; i < end2; i += 2 * P)
+                for (int k = 0; k < 4; ++k) {
+                    r0[k] = r0[k] + v[i + k];
+                    r1[k] = r1[k] + v[i + P + k];
+                }
+            for (int k = 0; k < 4; ++k) r0[k] = r0[k] + r1[k];
+            if (end1 > end2)
+                for (int k = 0; k < 4; ++k) r0[k] = r0[k] + v[end2 + k];
+        }
+        res = (r0[0] + r0[2]) + (r0[1] + r0[3]);
+        for (i64 i = 0; i < start; ++i) res = res + v[i];
+        for (i64 i = end1; i < n; ++i) res = res + v[i];
+    } else {
+        res = v[0];
+        for (i64 i = 1; i < n; ++i) res = res + v[i];
+    }
+    return res;
+}
+
 float eigen_avx_sum(const float* v, i64 n, i64 offset) {
     // Redux.h, LinearVectorizedTraversal: packets of 8 from the first 32-byte
     // aligned element, two accumulators, predux (lanes k + k+4, then (0+2)+(1+3)),

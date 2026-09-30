@@ -69,6 +69,36 @@ def _flags(flags) -> tuple[set[str], int]:
     return on, area
 
 
+_KERNEL = re.compile(r"\s*([A-Za-z]+)\s*\(([^)]*)\)\s*")
+
+
+def _kernel_links(path: Path, kind: str) -> dict:
+    """A connectivity link file: id [options] kernel(parameters) [file] per line."""
+    from ._connectivity import Interaction, Kernel
+
+    out = {}
+    for line in Path(path).read_text(encoding="utf-8-sig").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        m = _KERNEL.search(line)
+        if not m:
+            raise ValueError(f"{path}: no kernel in {line!r}")
+        head = line[:m.start()].split()
+        tail = shlex.split(line[m.end():])
+        params = [float(x) for x in m.group(2).split(",") if x.strip()]
+        shape = m.group(1).lower()
+        kern = Kernel(shape, params[0], params[1] if len(params) > 1 else 1.0)
+        kid = int(float(head[0]))
+        if kind == "sf":
+            out[kid] = (kern, bool(int(float(head[1]))) if len(head) > 1 else False)
+        elif kind == "ia":
+            positive, beta, normalize = bool(int(float(head[1]))), float(head[2]), bool(int(float(head[3])))
+            out[kid] = Interaction(kern, _resolve(tail[0], path.parent), positive, beta, normalize)
+        else:
+            out[kid] = (kern, str(_resolve(tail[0], path.parent)))
+    return out
+
+
 def read_project(settings, flags="", *, mode: str | None = None) -> dict:
     """The :func:`zonation` arguments of a Zonation 5 project.
 
@@ -182,6 +212,25 @@ def read_project(settings, flags="", *, mode: str | None = None) -> dict:
             else:
                 links[rid] = float(r[2])
         kw["retention"] = [links.get(i) for i in num("retention", int)]
+    if "d" in on and st.get("single-feature connectivity link file") and "sf_conn" in cols:
+        links = _kernel_links(_resolve(st["single-feature connectivity link file"], base), "sf")
+        ids = num("sf_conn", int)
+        kw["connectivity"] = [links[i][0] if i in links else None for i in ids]
+        kw["self_multiply"] = [links[i][1] if i in links else False for i in ids]
+    for flag, col, key in (("i", "ia_conn1", "interaction"), ("I", "ia_conn2", "interaction2")):
+        if flag in on and st.get("interaction connectivity link file") and col in cols:
+            links = _kernel_links(_resolve(st["interaction connectivity link file"], base), "ia")
+            kw[key] = [links.get(i) for i in num(col, int)]
+    if "m" in on and st.get("matrix connectivity link file") and "matrix_conn" in cols:
+        links = _kernel_links(_resolve(st["matrix connectivity link file"], base), "m")
+        ids = num("matrix_conn", int)
+        kw["matrix_connectivity"] = [links[i] if i in links else None for i in ids]
+        kw["matrices"] = {}
+        for i in ids:
+            if i in links:
+                f = links[i][1]
+                n = sum(1 for j in ids if j in links and links[j][1] == f)
+                kw["matrices"][f] = np.array([[float(v) for v in r] for r in _rows(Path(f))][:n], dtype=np.float32)
     if "x" in on and st.get("cost layer"):
         kw["cost"] = _resolve(st["cost layer"], base)
         kw["cost_in_ranking"] = "X" in on

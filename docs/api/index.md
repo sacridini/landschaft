@@ -446,3 +446,6 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 | [`ls.ZonationResult`](prioritization.md#landschaft.prioritize.ZonationResult) | The result of `zonation` |
 | [`ls.run_project`](prioritization.md#landschaft.prioritize.run_project) | Run a Zonation 5 project (see `read_project`) |
 | [`ls.read_project`](prioritization.md#landschaft.prioritize.read_project) | The `zonation` arguments of a Zonation 5 project |
+| [`ls.Kernel`](prioritization.md#landschaft.prioritize.Kernel) | A dispersal kernel of Zonation 5's connectivity transforms |
+| [`ls.Interaction`](prioritization.md#landschaft.prioritize.Interaction) | An interaction connectivity transform (Zonation's ``-i``/``-I``): a feature weighted by the connectivity of a resource (``positive``) or reduced by it |
+| [`ls.convolve`](prioritization.md#landschaft.prioritize.convolve) | Convolve a raster with a kernel normalized to sum 1, as Zonation 5 does |

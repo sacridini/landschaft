@@ -42,3 +42,16 @@ the z5 command line.
 ::: landschaft.prioritize.run_project
 
 ::: landschaft.prioritize.read_project
+
+## Connectivity
+
+Dispersal kernels for the connectivity transforms of the features (the
+``connectivity``, ``interaction`` and ``matrix_connectivity`` arguments of
+`zonation`): a feature smoothed by the dispersal of its species, weighted by the
+connectivity of a resource, or mixed with others by a matrix.
+
+::: landschaft.prioritize.Kernel
+
+::: landschaft.prioritize.Interaction
+
+::: landschaft.prioritize.convolve
