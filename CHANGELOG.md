@@ -6,6 +6,22 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.81.0] - 2026-09-30
+
+### Added
+- Surface metrics, part 1: the new `ls.surface` module, the texture of continuous rasters
+  (ISO 25178 areal parameters as *gradient surface metrics*), ported from the R package
+  geodiv 1.1.1. Amplitude parameters `sa`, `sq`, `ssk` (adjusted or not), `sku` (excess or
+  not), `sv`, `sph`, `smean`; trend surfaces `fit_plane` (least-squares polynomials of
+  order 0-6 as `spatial::surf.ls`), `best_fit_plane` and `remove_plane`; `metrics` (every
+  metric in one table, shared computations done once) and `list_metrics`; geodiv's three
+  example rasters (`ls.surface.example_data`). Identical to geodiv, bit for bit, on 18
+  reference setups, including `bestfitplane`'s choice of order, which rests on rounding
+  errors (R sums the residual matrix column by column in 80 bits). With fewer cells than
+  coefficients `spatial` reads past its matrix; here that is an error.
+- Reference harness for the surface metrics: `tools/make_reference_surface.py` runs the
+  cases of `tests/surface_cases.py` through geodiv and spatialEco in R.
+
 ## [0.80.0] - 2026-09-30
 
 ### Changed

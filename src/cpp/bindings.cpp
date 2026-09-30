@@ -43,6 +43,7 @@
 #include "nlm/python.hpp"
 #include "cost/python.hpp"
 #include "bio/python.hpp"
+#include "surf/python.hpp"
 #include "conn/cost.hpp"
 #include "conn/graph.hpp"
 #include "conn/nodes.hpp"
@@ -1410,6 +1411,7 @@ PYBIND11_MODULE(_core, m) {
     nlm::register_python(m);
     cost::register_python(m);
     bio::register_python(m);
+    surf::register_python(m);
     m.def("cpu_supports_avx2_fma", &cpu_supports_avx2_fma, "AVX2 and FMA usable (landschaft._circuit_avx2).");
     m.def("conn_raster_nodes", &conn_raster_nodes, py::arg("values"), py::arg("na"), py::arg("xmin"), py::arg("xmax"),
           py::arg("ymin"), py::arg("ymax"), py::arg("centroids"), py::arg("keep_index"), py::arg("n_threads") = 0,

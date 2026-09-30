@@ -1,0 +1,280 @@
+{
+ "arrays": {
+  "amplitude_const/sa": {
+   "kind": "vector"
+  },
+  "amplitude_const/sku": {
+   "kind": "vector"
+  },
+  "amplitude_const/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_const/smean": {
+   "kind": "vector"
+  },
+  "amplitude_const/sph": {
+   "kind": "vector"
+  },
+  "amplitude_const/sq": {
+   "kind": "vector"
+  },
+  "amplitude_const/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_const/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_const/sv": {
+   "kind": "vector"
+  },
+  "amplitude_normforest/sa": {
+   "kind": "vector"
+  },
+  "amplitude_normforest/sku": {
+   "kind": "vector"
+  },
+  "amplitude_normforest/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_normforest/smean": {
+   "kind": "vector"
+  },
+  "amplitude_normforest/sph": {
+   "kind": "vector"
+  },
+  "amplitude_normforest/sq": {
+   "kind": "vector"
+  },
+  "amplitude_normforest/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_normforest/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_normforest/sv": {
+   "kind": "vector"
+  },
+  "amplitude_orelevation/sa": {
+   "kind": "vector"
+  },
+  "amplitude_orelevation/sku": {
+   "kind": "vector"
+  },
+  "amplitude_orelevation/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_orelevation/smean": {
+   "kind": "vector"
+  },
+  "amplitude_orelevation/sph": {
+   "kind": "vector"
+  },
+  "amplitude_orelevation/sq": {
+   "kind": "vector"
+  },
+  "amplitude_orelevation/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_orelevation/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_orelevation/sv": {
+   "kind": "vector"
+  },
+  "amplitude_orforest/sa": {
+   "kind": "vector"
+  },
+  "amplitude_orforest/sku": {
+   "kind": "vector"
+  },
+  "amplitude_orforest/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_orforest/smean": {
+   "kind": "vector"
+  },
+  "amplitude_orforest/sph": {
+   "kind": "vector"
+  },
+  "amplitude_orforest/sq": {
+   "kind": "vector"
+  },
+  "amplitude_orforest/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_orforest/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_orforest/sv": {
+   "kind": "vector"
+  },
+  "amplitude_positive/sa": {
+   "kind": "vector"
+  },
+  "amplitude_positive/sku": {
+   "kind": "vector"
+  },
+  "amplitude_positive/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_positive/smean": {
+   "kind": "vector"
+  },
+  "amplitude_positive/sph": {
+   "kind": "vector"
+  },
+  "amplitude_positive/sq": {
+   "kind": "vector"
+  },
+  "amplitude_positive/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_positive/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_positive/sv": {
+   "kind": "vector"
+  },
+  "amplitude_rand/sa": {
+   "kind": "vector"
+  },
+  "amplitude_rand/sku": {
+   "kind": "vector"
+  },
+  "amplitude_rand/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_rand/smean": {
+   "kind": "vector"
+  },
+  "amplitude_rand/sph": {
+   "kind": "vector"
+  },
+  "amplitude_rand/sq": {
+   "kind": "vector"
+  },
+  "amplitude_rand/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_rand/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_rand/sv": {
+   "kind": "vector"
+  },
+  "amplitude_rand_na/sa": {
+   "kind": "vector"
+  },
+  "amplitude_rand_na/sku": {
+   "kind": "vector"
+  },
+  "amplitude_rand_na/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_rand_na/smean": {
+   "kind": "vector"
+  },
+  "amplitude_rand_na/sph": {
+   "kind": "vector"
+  },
+  "amplitude_rand_na/sq": {
+   "kind": "vector"
+  },
+  "amplitude_rand_na/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_rand_na/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_rand_na/sv": {
+   "kind": "vector"
+  },
+  "amplitude_rect/sa": {
+   "kind": "vector"
+  },
+  "amplitude_rect/sku": {
+   "kind": "vector"
+  },
+  "amplitude_rect/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_rect/smean": {
+   "kind": "vector"
+  },
+  "amplitude_rect/sph": {
+   "kind": "vector"
+  },
+  "amplitude_rect/sq": {
+   "kind": "vector"
+  },
+  "amplitude_rect/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_rect/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_rect/sv": {
+   "kind": "vector"
+  },
+  "amplitude_ties/sa": {
+   "kind": "vector"
+  },
+  "amplitude_ties/sku": {
+   "kind": "vector"
+  },
+  "amplitude_ties/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_ties/smean": {
+   "kind": "vector"
+  },
+  "amplitude_ties/sph": {
+   "kind": "vector"
+  },
+  "amplitude_ties/sq": {
+   "kind": "vector"
+  },
+  "amplitude_ties/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_ties/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_ties/sv": {
+   "kind": "vector"
+  },
+  "amplitude_tiny/sa": {
+   "kind": "vector"
+  },
+  "amplitude_tiny/sku": {
+   "kind": "vector"
+  },
+  "amplitude_tiny/sku_raw": {
+   "kind": "vector"
+  },
+  "amplitude_tiny/smean": {
+   "kind": "vector"
+  },
+  "amplitude_tiny/sph": {
+   "kind": "vector"
+  },
+  "amplitude_tiny/sq": {
+   "kind": "vector"
+  },
+  "amplitude_tiny/ssk": {
+   "kind": "vector"
+  },
+  "amplitude_tiny/ssk_unadj": {
+   "kind": "vector"
+  },
+  "amplitude_tiny/sv": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "geodiv": "1.1.1",
+  "spatialEco": "2.0.5",
+  "terra": "1.9.50"
+ }
+}

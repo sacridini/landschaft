@@ -10,6 +10,7 @@ import landschaft as ls             # most tools: ls.mspa, ls.fad, ls.Landscape.
 ls.conn.protconn(...)               # habitat networks and protected areas
 from landschaft import circuit      # Circuitscape
 ls.cost.transition(r, "mean", 8)    # distances and routes on grids
+ls.surface.metrics(z)               # surface texture of continuous rasters
 ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 ls.bio.BaseData.from_table(...)     # biodiversity analysis
 ```
@@ -56,6 +57,12 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
     ---
 
     Omniscape and Circuitscape: current, resistance distance, networks.
+
+-   :material-terrain:{ .lg .middle } **[Surface metrics](surface.md)**
+
+    ---
+
+    Texture of continuous rasters (ISO 25178): roughness, shape, trend surfaces.
 
 -   :material-routes:{ .lg .middle } **[Grid distances](cost.md)**
 
@@ -243,6 +250,24 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`circuit.circuitscape_network_advanced`](circuits.md#landschaft.circuit.circuitscape_network_advanced) | Circuitscape's advanced mode on a network (``data_type = network``, ``scenario = advanced``) |
 | [`circuit.NetworkResult`](circuits.md#landschaft.circuit.NetworkResult) | Circuitscape's network outputs, with the node numbers it writes (from 1) |
 | [`circuit.read_graph`](circuits.md#landschaft.circuit.read_graph) | Read a Circuitscape edge list, as its ``load_graph`` |
+
+### Surface metrics
+
+| Name | Summary |
+|---|---|
+| [`ls.surface.metrics`](surface.md#landschaft.surface.metrics) | Surface metrics of a raster, as a Series indexed by metric |
+| [`ls.surface.list_metrics`](surface.md#landschaft.surface.list_metrics) | The surface metrics `metrics` computes |
+| [`ls.surface.sa`](surface.md#landschaft.surface.sa) | Average roughness (Sa): the mean absolute deviation from the mean height |
+| [`ls.surface.sq`](surface.md#landschaft.surface.sq) | Root mean square roughness (Sq): the standard deviation of the heights |
+| [`ls.surface.ssk`](surface.md#landschaft.surface.ssk) | Skewness of the height distribution (Ssk) |
+| [`ls.surface.sku`](surface.md#landschaft.surface.sku) | Kurtosis of the height distribution (Sku) |
+| [`ls.surface.sv`](surface.md#landschaft.surface.sv) | Maximum valley depth (Sv): the absolute value of the lowest height |
+| [`ls.surface.sph`](surface.md#landschaft.surface.sph) | Maximum peak height (Sp): the absolute value of the highest height |
+| [`ls.surface.smean`](surface.md#landschaft.surface.smean) | Mean peak height: the mean of the positive heights |
+| [`ls.surface.fit_plane`](surface.md#landschaft.surface.fit_plane) | The least-squares polynomial surface of a given order |
+| [`ls.surface.best_fit_plane`](surface.md#landschaft.surface.best_fit_plane) | The polynomial surface of order 0 to 3 that fits a surface best |
+| [`ls.surface.remove_plane`](surface.md#landschaft.surface.remove_plane) | A surface minus its best-fitting polynomial surface (geodiv's ``remove_plane``) |
+| [`ls.surface.example_data`](surface.md#landschaft.surface.example_data) | Path of an example surface |
 
 ### Grid distances
 

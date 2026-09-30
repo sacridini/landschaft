@@ -81,6 +81,7 @@ from .io import (
 )
 from .morphology import ParcellationResult, contortion, parcellation
 from . import nlm
+from . import surface
 from .lsm import (
     Landscape,
     SpatialSignatureAnalysis,
@@ -188,6 +189,7 @@ __all__ = [
     "circuit",
     "cost",
     "nlm",
+    "surface",
     "batch",
     "clustering_fac",
     "conefor_inputs",

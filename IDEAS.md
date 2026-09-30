@@ -802,6 +802,82 @@ Fora (não faz sentido portar 1:1): a estrutura S4 (`Coords`, `TransitionData`, 
 por ligação (aqui vetorizada), o processamento em pedaços em arquivo temporário do
 `pathInc` e as duas rotinas internas de transição (mesmos valores).
 
+## Métricas de superfície contínua (ISO 25178: geodiv; terreno: spatialEco)
+
+Análise de 2026-09-30. A ideia inicial era partir do spatialEco
+(`C:\Users\eduar\Documents\dev\spatialEco`, 2.0-5), mas ele não tem as métricas ISO 25178:
+tem métricas de terreno em janela móvel (`tpi`, `tri`, `vrm`, `srr`, `dissection`,
+`curvature`, `spherical.sd`, `hsp`, `trasp`, `hli`). As métricas ISO 25178 de gradiente de
+superfície (McGarigal et al. 2009) estão no geodiv 1.1.1 (Smith et al. 2021,
+github.com/bioXgeo/geodiv, MIT; CRAN 2026-07-21). Em Python o mais próximo é o surfalize
+(ISO 25178 para perfilometria: métricas globais corretas, sem janela móvel nem raster
+georreferenciado) e o xDEM (TPI, TRI, rugosidade de DEMs); nenhum reproduz o geodiv.
+
+Referências: geodiv para a ISO 25178, spatialEco (sobre terra 1.9.50) para o terreno.
+Biblioteca R privada `%LOCALAPPDATA%\R\landschaft-surf-lib` (geodiv 1.1.1 compilado da
+fonte do CRAN com Rtools44, porque o binário do CRAN para R 4.4 é o 1.1.0; spatialEco do
+clone local) na frente da biblioteca do RStudio (terra, sf, pracma, e1071, dplyr, zoo).
+
+Desenho (aceito pelo usuário): submódulo `ls.surface` (`src/cpp/surf/`), nomes do geodiv
+em minúsculas.
+- métricas globais: `ls.surface.sa(z)`, ..., `ls.surface.metrics(z, metrics=None)` numa
+  tabela; `aacf(z)` devolve o raster; pré-processamento `fit_plane(z, order)`,
+  `best_fit_plane`, `remove_plane` (polinômio de ordem 0 a 3, `spatial::surf.ls`);
+- janela móvel: `ls.surface.window_metrics(z, window=5, shape="square"|"circle",
+  metrics=[...])` (o `texture_image`/`focal_metrics` do geodiv) num `xarray.Dataset`;
+- terreno: `ls.surface.tpi`, `tri`, `vrm`, `srr`, `dissection`, `curvature`,
+  `spherical_sd`, `hsp`, `trasp`, `hli`;
+- entrada: caminho, `DataArray` ou matriz (como no `ls.cost`), `n_threads` em tudo.
+
+Defeitos do geodiv encontrados na leitura (e conferidos no R): `sdq6` usa `-9 * z(x+2)`
+duas vezes no lugar de `+9 * z(x-2)` (idem em y); `findvalleys` monta a matriz em ordem de
+coluna (`findpeaks` usa `byrow = TRUE`): vales transpostos (5 de 6 num 9x12), afeta `s10z`;
+`surface_area` normaliza z para [0, 1] (`scale = TRUE`), o `sdr` depende da amplitude;
+`mean(deltax, deltay)` é `deltax` (o segundo argumento é `trim`); `ssk`/`sku` misturam
+`sd()` (N - 1) com momentos por N; `findpeaks`/`findvalleys` exigem z > 0 / z < 0
+(superfície já centrada); `sfd_` lê fora do vetor em rasters não quadrados (aviso
+"subscript out of bounds"); `aacf`/`std`/`srw` recortam o maior quadrado sem NA em volta
+do centro e usam `terra::distance` (com extent "de lon/lat" e sem CRS o terra supõe
+lon/lat: usar CRS projetado nos casos); `terra::sds` mascara `geodiv::sds` (chamar
+sempre com `geodiv::`).
+
+Critério de igualdade: `convention="geodiv"` (padrão) reproduz o geodiv bit a bit, com
+os defeitos, como o `lsm` segue o landscapemetrics; `convention="iso"` corrige `sdq6`,
+`findvalleys` e a normalização do `sdr` (conferir contra o surfalize onde houver a mesma
+definição). O que já existe e dá os bits do R: `nlm::r_fft2` (FFT do R), `lsm/extended.hpp`
+e `rmath.hpp` (somas em 80 bits, `sqrt`/`log` x87), `lsm/rlm.cpp` (`lm()`). Terreno igual
+ao spatialEco + terra (bordas e NA do `terra::focal`, declividade/aspecto de Horn do
+`terra::terrain`).
+
+Otimizações da janela móvel (o geodiv chama uma função R por célula): picos e vales numa
+máscara 3x3 global e contagem O(1) com tabela de somas no interior (w - 2)²; máximo e
+mínimo deslizantes (van Herk/Gil-Werman) para `sph`, `sv`, `srr`, `dissection`; momentos
+por janela em precisão estendida (exato, padrão) ou por somas acumuladas centradas
+(`exact=False`, O(1), sem garantia de bits); curva de Abbott-Firestone com a janela
+ordenada uma vez e quantis tipo 7 em forma fechada; um plano de FFT por thread; `hsp` com
+uma só tabela de somas para todas as escalas; `vrm` com as três somas num kernel.
+
+Fases:
+0. harness de referência (`tools/make_reference_surface.py`, `tools/surface_reference.R`,
+   casos em `tests/surface_cases.py`, referências em `tests/data/reference/surface/`) e o
+   esqueleto de `ls.surface`;
+1. amplitude (`sa`, `sq`, `ssk`, `sku`, `sv`, `sph`, `smean`) e plano (`fit_plane`,
+   `best_fit_plane`, `remove_plane`);
+2. híbridas e feições: `sdq`, `sdq6`, `surface_area`, `flat_sa`, `sdr`, `find_peaks`,
+   `find_valleys`, `sds`, `ssc`, `s10z`;
+3. curva de Abbott-Firestone: `bearing_area`, `height_ba`, `sdc`, `sbi`, `svi`, `sci`,
+   `sk`, `spk`, `svk`;
+4. espaciais e fractal: `aacf`, `scl`, `stxr`, `std` (Std/Stdi), `srw` (Srw/Srwi/Shw),
+   `sfd`;
+5. motor de janela móvel (`window_metrics`, quadrada e circular, `pad_edges`) com os
+   caminhos O(1), fora da memória por blocos de linhas;
+6. terreno do spatialEco;
+7. tutorial, API, benchmarks contra geodiv e spatialEco.
+
+Fora: `plot_ba_curve` e os gráficos de `scl`/`std`/`srw` (`create_plot`), `rotate`,
+`raster.moments`/`raster.deviation`/`raster.entropy`/`sobel` do spatialEco (estatística
+focal genérica), o paralelismo por `parLapply` do geodiv.
+
 ## Observações para os testes
 
 - O círculo circunscrito do landscapemetrics usa um algoritmo aleatorizado: regerar

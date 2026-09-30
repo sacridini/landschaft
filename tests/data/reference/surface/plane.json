@@ -1,0 +1,346 @@
+{
+ "arrays": {
+  "plane_normforest/best": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "raster"
+  },
+  "plane_normforest/fit0": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_normforest/fit1": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_normforest/fit2": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_normforest/fit3": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_normforest/removed": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "raster"
+  },
+  "plane_orelevation/best": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "raster"
+  },
+  "plane_orelevation/fit0": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_orelevation/fit1": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_orelevation/fit2": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_orelevation/fit3": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_orelevation/removed": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "raster"
+  },
+  "plane_orforest/best": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "raster"
+  },
+  "plane_orforest/fit0": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_orforest/fit1": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_orforest/fit2": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_orforest/fit3": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "matrix"
+  },
+  "plane_orforest/removed": {
+   "dim": [
+    371,
+    371
+   ],
+   "kind": "raster"
+  },
+  "plane_rand/best": {
+   "dim": [
+    20,
+    30
+   ],
+   "kind": "raster"
+  },
+  "plane_rand/fit0": {
+   "dim": [
+    20,
+    30
+   ],
+   "kind": "matrix"
+  },
+  "plane_rand/fit1": {
+   "dim": [
+    20,
+    30
+   ],
+   "kind": "matrix"
+  },
+  "plane_rand/fit2": {
+   "dim": [
+    20,
+    30
+   ],
+   "kind": "matrix"
+  },
+  "plane_rand/fit3": {
+   "dim": [
+    20,
+    30
+   ],
+   "kind": "matrix"
+  },
+  "plane_rand/removed": {
+   "dim": [
+    20,
+    30
+   ],
+   "kind": "raster"
+  },
+  "plane_rand_na/best": {
+   "dim": [
+    24,
+    24
+   ],
+   "kind": "raster"
+  },
+  "plane_rand_na/fit0": {
+   "dim": [
+    24,
+    24
+   ],
+   "kind": "matrix"
+  },
+  "plane_rand_na/fit1": {
+   "dim": [
+    24,
+    24
+   ],
+   "kind": "matrix"
+  },
+  "plane_rand_na/fit2": {
+   "dim": [
+    24,
+    24
+   ],
+   "kind": "matrix"
+  },
+  "plane_rand_na/fit3": {
+   "dim": [
+    24,
+    24
+   ],
+   "kind": "matrix"
+  },
+  "plane_rand_na/removed": {
+   "dim": [
+    24,
+    24
+   ],
+   "kind": "raster"
+  },
+  "plane_rect/best": {
+   "dim": [
+    25,
+    35
+   ],
+   "kind": "raster"
+  },
+  "plane_rect/fit0": {
+   "dim": [
+    25,
+    35
+   ],
+   "kind": "matrix"
+  },
+  "plane_rect/fit1": {
+   "dim": [
+    25,
+    35
+   ],
+   "kind": "matrix"
+  },
+  "plane_rect/fit2": {
+   "dim": [
+    25,
+    35
+   ],
+   "kind": "matrix"
+  },
+  "plane_rect/fit3": {
+   "dim": [
+    25,
+    35
+   ],
+   "kind": "matrix"
+  },
+  "plane_rect/removed": {
+   "dim": [
+    25,
+    35
+   ],
+   "kind": "raster"
+  },
+  "plane_square/best": {
+   "dim": [
+    32,
+    32
+   ],
+   "kind": "raster"
+  },
+  "plane_square/fit0": {
+   "dim": [
+    32,
+    32
+   ],
+   "kind": "matrix"
+  },
+  "plane_square/fit1": {
+   "dim": [
+    32,
+    32
+   ],
+   "kind": "matrix"
+  },
+  "plane_square/fit2": {
+   "dim": [
+    32,
+    32
+   ],
+   "kind": "matrix"
+  },
+  "plane_square/fit3": {
+   "dim": [
+    32,
+    32
+   ],
+   "kind": "matrix"
+  },
+  "plane_square/removed": {
+   "dim": [
+    32,
+    32
+   ],
+   "kind": "raster"
+  },
+  "plane_ties/best": {
+   "dim": [
+    15,
+    18
+   ],
+   "kind": "raster"
+  },
+  "plane_ties/fit0": {
+   "dim": [
+    15,
+    18
+   ],
+   "kind": "matrix"
+  },
+  "plane_ties/fit1": {
+   "dim": [
+    15,
+    18
+   ],
+   "kind": "matrix"
+  },
+  "plane_ties/fit2": {
+   "dim": [
+    15,
+    18
+   ],
+   "kind": "matrix"
+  },
+  "plane_ties/fit3": {
+   "dim": [
+    15,
+    18
+   ],
+   "kind": "matrix"
+  },
+  "plane_ties/removed": {
+   "dim": [
+    15,
+    18
+   ],
+   "kind": "raster"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "geodiv": "1.1.1",
+  "spatialEco": "2.0.5",
+  "terra": "1.9.50"
+ }
+}

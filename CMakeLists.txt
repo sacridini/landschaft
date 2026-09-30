@@ -129,6 +129,16 @@ target_include_directories(biocore PUBLIC src/cpp)
 # Perl's maths on Windows is mingw's x87 libm (lsm/rmath.hpp).
 target_link_libraries(biocore PUBLIC lsmcore)
 set_target_properties(biocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Surface metrics (geodiv's ISO 25178 parameters, spatialEco's terrain indices).
+add_library(surfcore STATIC
+    src/cpp/surf/amplitude.cpp
+    src/cpp/surf/plane.cpp
+)
+target_include_directories(surfcore PUBLIC src/cpp)
+# R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp).
+target_link_libraries(surfcore PUBLIC lsmcore)
+set_target_properties(surfcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # R's x87 log/sqrt and LDOUBLE sums (see src/cpp/lsm/rmath.hpp): MSVC has no
 # x64 inline assembly. x86-64 only; every other target uses the C++ code.
 if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
@@ -176,6 +186,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(biocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(costcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(circuitcore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(surfcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
         if(APPLE)
@@ -196,6 +207,7 @@ if(MSVC)
     target_compile_options(biocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(costcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(circuitcore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(surfcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -204,12 +216,13 @@ else()
     target_compile_options(biocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(costcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(circuitcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(surfcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
 pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
-                    src/cpp/bio/python.cpp src/cpp/cost/python.cpp)
+                    src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp)
 target_link_libraries(_core PRIVATE eigen_headers)
-target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore)
+target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()
