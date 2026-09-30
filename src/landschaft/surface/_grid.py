@@ -33,8 +33,15 @@ class Surface:
 
     def raster(self, values: np.ndarray, name: str, attrs: dict | None = None) -> xr.DataArray:
         """``values`` on this grid: the input's coordinates, or cell centres of the extent."""
-        if self.template is not None:
-            t = self.template
+        t = self.template
+        if t is not None and t.shape == values.shape:
+            # the input's coordinates and spatial reference (spatial_ref), not its attributes
+            da = t.copy(deep=False, data=values)
+            da.name = name
+            da.attrs = dict(attrs or {})
+            da.encoding = {}
+            return da
+        if t is not None:
             da = xr.DataArray(values, coords={k: t.coords[k] for k in t.dims}, dims=t.dims, name=name,
                               attrs=dict(attrs or {}))
             try:

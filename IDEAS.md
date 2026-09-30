@@ -898,8 +898,9 @@ Fases:
 6. terreno do spatialEco. **Feita** (0.86.0: `terrain` (declividade/aspecto do terra,
    bit a bit; em lon/lat 1e-12, as geodésicas do terra usam sin/cos da UCRT), `tpi`, `tri`,
    `vrm`, `srr`, `dissection`, `curvature`, `spherical_sd`, `hsp`, `trasp`, `hli`. O
-   `focal2` do terra desliza somas (bits dependem dos blocos): aqui cada janela é somada
-   direto, tolerância 1e-11 contra o spatialEco. Corrigidos (conferidos bit a bit contra
+   `focal2` do terra desliza somas (bits dependem dos blocos); em 0.88.0 médias, somas e
+   desvios focais passaram a somas prefixadas compensadas por linha (pedido do usuário:
+   velocidade no TPI/HSP), ~1e-13 da soma direta, tolerância 1e-12 contra `fx$`. Corrigidos (conferidos bit a bit contra
    `fx$`): curvatura (r e t / L^2, bordas NA, sem arredondar, dy, McNab / 8, Bolstad),
    `hsp` (z-score), `trasp` (pi), `hli` (hemisfério sul e radianos), círculos exatos;
    `zero.correct` do `tpi` não é oferecido);
@@ -911,6 +912,379 @@ Fases:
 Fora: `plot_ba_curve` e os gráficos de `scl`/`std`/`srw` (`create_plot`), `rotate`,
 `raster.moments`/`raster.deviation`/`raster.entropy`/`sobel` do spatialEco (estatística
 focal genérica), o paralelismo por `parLapply` do geodiv.
+
+## Síntese de licenças e viabilidade legal dos novos módulos
+
+Todos os módulos planejados são plenamente viáveis e compatíveis com a licença do landschaft (**GPL-3.0-or-later**):
+
+| Módulo / Ferramenta de Referência | Status / Licença Original | Compatibilidade e Estratégia |
+|---|---|---|
+| **Zonation 5** (CAZ / ABF / BLP) | **GPL-3.0** (C++ Core aberto) | **100% compatível**. Reimplementação nativa em C++17 dos algoritmos de remoção iterativa. |
+| **PLUS Model** (CARS / Inércia) | **GPL-3.0 / Open Source** | **100% compatível**. Absorção do sorteio estocástico de roleta multiclasse e inércia dinâmica. |
+| **TerraME** (Vizinhanças Híbridas) | **LGPL / GPL** (C++/Lua aberto) | **100% compatível**. Inspiração para acoplamento de grade raster com redes e zonas. |
+| **lulcc** / **MOLUSCE** (WoE + CA) | **GPL-3 / GPL-2** (R e Python) | **100% compatível**. Referência aberta para equações bayesianas de Pesos de Evidência. |
+| **Dinâmica EGO** (Expander / Patcher) | *Freeware / Closed-source* | **Legalmente seguro via Clean-room**. Os métodos matemáticos (Soares-Filho et al., 2002) estão em domínio público na literatura científica. |
+| **biomod2** / **CoordinateCleaner** / **spThin** / **blockCV** | **GPL-2 / GPL-3 / MIT** (R) | **100% compatível**. Reimplementação em Python dos algoritmos de limpeza espacial, desbaste e spatial CV. |
+
+---
+
+## Priorização espacial sistemática (Zonation 5)
+
+Análise de 2026-09-30. A priorização espacial sistemática define áreas prioritárias para conservação
+e restauração balanceando biodiversidade, conectividade e custos de oportunidade.
+
+### O problema e a vantagem arquitetural
+Enquanto pacotes baseados em Programação Linear Inteira Mista (MILP), como o *prioritizr*, exigem solvers
+comerciais proprietários (Gurobi) ou dependências externas complexas (Cbc, HiGHS), o **Zonation**
+(Atte Moilanen et al., GPL-3.0) opera sob o paradigma de **ranqueamento hierárquico determinístico por
+remoção iterativa de células** (*iterative cell-removal*):
+* **Zero dependência externa:** Código algorítmico C++ puro, sem necessidade de solvers de programação linear;
+* **Nativamente matricial:** Opera célula a célula sobre rasters de feições de biodiversidade e custos, gerando
+  um mapa de prioridade contínuo de 0.0 (primeira célula removida / menor prioridade) a 1.0 (última célula
+  retida / prioridade máxima).
+
+### Algoritmos de remoção propostos (`ls.prioritize`)
+A cada iteração, calcula-se o valor de perda marginal ($\delta_i$) de cada célula ativa $i$ considerando o
+valor residual de conservação das espécies/feições $j$:
+
+* **Core-Area Zonation (CAZ):**
+  $$\delta_i = \max_j \left( \frac{q_{ij}}{R_j} \cdot \frac{w_j}{c_i} \right)$$
+  *Onde $q_{ij}$ é a ocorrência/probabilidade da espécie $j$ na célula $i$, $R_j$ é a distribuição restante
+  da espécie na paisagem, $w_j$ o peso da espécie e $c_i$ o custo da célula.*
+  * **Comportamento:** Retém áreas-núcleo de alta qualidade para todas as espécies, sendo especialmente eficaz
+    para espécies raras ou de distribuição restrita.
+
+* **Additive Benefit Function (ABF):**
+  $$\delta_i = \frac{1}{c_i} \sum_j w_j \cdot f\left( \frac{q_{ij}}{R_j} \right)$$
+  *Onde $f(\cdot)$ é uma função de benefício côncava (ex: lei de potência da relação espécie-área $S = cA^z$).*
+  * **Comportamento:** Maximiza a representação média acumulada e a complementaridade, favorecendo áreas com alta
+    riqueza de espécies.
+
+### Mecanismos integrados de conectividade
+* **Penalidade de Borda (*Boundary Length Penalty - BLP*):** Modifica a perda marginal $\delta_i$ com base no
+  perímetro compartilhado com células já eliminadas, desfavorecendo pixels isolados e forçando a seleção de
+  áreas contíguas e compactas.
+* **Suavização da Distribuição (Metapopulações):** Antes da remoção, aplica convoluções com kernel gaussiano 2D
+  ($e^{-d/\alpha_j}$), onde $\alpha_j$ representa o raio de dispersão da espécie. No landschaft, isso é executado
+  via **convoluções separáveis 2D vetorizadas em AVX2/OpenMP**.
+
+### Desempenho e engenharia em C++
+* Remoção em lotes fracionários (*warp factors* adaptativos) e uso de **Radix Heaps / Priority Queues** para
+  gerenciar as células candidatas a remoção sem ordenação global a cada passo;
+* Atualização seletiva dos totais $R_j$ apenas para as espécies presentes nas células removidas no lote atual;
+* Suporte nativo ao processamento out-of-core por blocos de linhas (`block_rows`).
+
+```python
+import landschaft as ls
+
+prio = ls.prioritize.zonation(
+    features="species_stack.tif",  # ou lista de rasters de adequabilidade / presença
+    costs="land_cost.tif",
+    weights={"species_1": 2.0, "species_2": 1.0},
+    method="caz",                  # "caz" ou "abf"
+    blp=0.001,                     # penalidade de borda (conectividade estrutural)
+    smoothing={"species_1": 2500}, # raio de dispersão alpha_j em metros (kernel AVX2)
+)
+prio.rank_raster.rio.to_raster("priority_rank.tif")
+prio.performance_curves.to_csv("curves.csv")
+```
+
+---
+
+## Simulação de mudança do uso da terra e autômatos celulares (LULCC)
+
+> **Escopo:** Exclusivamente modelagem espacial, morfológica e biofísica de transições de paisagem em C++17
+> (submódulo `ls.simulate`).
+
+### Operadores morfológicos realistas (do Dinâmica EGO)
+Supera os autômatos celulares tradicionais (que apenas expandem bordas homogêneas) através do desacoplamento
+estocástico:
+* **Expander:** Dedicado exclusivamente a expandir manchas existentes de forma contígua a partir das bordas;
+* **Patcher (Nucleação Estocástica de Novas Manchas):**
+  * Sorteia sementes no interior da matriz para gerar novos fragmentos e clareiras isoladas;
+  * **Distribuição calibrada de tamanho:** Sorteia o tamanho de cada nova mancha a partir de uma distribuição
+    log-normal (definida por média e variância empíricas observadas na paisagem real);
+  * **Coeficiente de isometria de forma:** Controla se o crescimento ao redor da semente é compacto/circular ou
+    dendrítico/alongado.
+
+### Variáveis dinâmicas em malha fechada (*Moving Frontier*)
+* Capacidade de configurar variáveis explicativas dinâmicas que sofrem recálculo a cada passo temporal $t \to t+1$
+  (ex: o raster de *distância à borda da floresta* ou *densidade de clareiras* é recomputado internamente em C++
+  após cada rodada de desmatamento, alimentando o passo seguinte).
+* Simula com fidelidade o avanço em cadeia da fronteira pioneira (*moving frontier*).
+
+### Pesos de evidência com discretização adaptativa (WoE)
+* Cálculo estatístico bayesiano dos pesos de contraste espacial:
+  $$W^+ = \ln \left( \frac{P(D|T)}{P(D|\bar{T})} \right), \quad W^- = \ln \left( \frac{P(\bar{D}|T)}{P(\bar{D}|\bar{T})} \right)$$
+* **Binning Adaptativo:** Algoritmo de discretização de variáveis contínuas (declividade, elevação, distâncias) que
+  calcula automaticamente quebras de faixas com suporte estatístico mínimo e contraste ótimo ($W^+ - W^-$);
+* Testes embutidos de independência condicional entre evidências (*Cramer's V* e *Joint Information Uncertainty*).
+
+### Competição multiclasse com inércia adaptativa (do PLUS / CARS)
+* **Sorteio Estocástico por Roleta Multiclasse:** Em cada célula, múltiplas classes (ex: agricultura, pastagem,
+  silvicultura, regeneração) disputam a ocupação simultaneamente com base na probabilidade de transição local, no
+  efeito de vizinhança e na matriz de custos de conversão;
+* **Inércia Dinâmica:** Mecanismo adaptativo que monitora a demanda acumulada de cada classe a cada ano:
+  * Se a classe estiver expandindo abaixo da meta, seu coeficiente de inércia aumenta dinamicamente;
+  * Se estiver expandindo rápido demais, a inércia é reduzida, garantindo convergência estrita com as metas macro
+    do cenário.
+
+### Espaços celulares híbridos e acoplamento grade-rede (do TerraME)
+* Conexão das células do raster a múltiplos níveis topológicos de vizinhança:
+  1. *Vizinhança Local:* $3 \times 3$ ou $5 \times 5$ pixels contíguos;
+  2. *Vizinhança Zonal:* Restrições e atratores agregados em nível de bacia hidrográfica ou zona municipal;
+  3. *Vizinhança de Rede:* Células conectadas a grafos de transporte viário (estradas) ou hidrográficos (rios),
+     transmitindo efeitos de acessibilidade a longa distância.
+
+### Validação multiescala por similaridade fuzzy (*Fuzzy Similarity*)
+* Elimina a armadilha do índice Kappa pixel a pixel para rasters de alta resolução;
+* Compara o mapa simulado com o mapa real através de janelas móveis concêntricas crescentes ($1 \times 1, 3 \times 3,
+  5 \times 5, \dots, 15 \times 15$ pixels) com decaimento exponencial de distância (Hagen/Costanza);
+* Fornece curvas de concordância estrutural e morfológica por escala de observação.
+
+### Calibração orientada a padrões (*Pattern-Oriented Modeling*)
+* **Sinergia nativa com o motor do landschaft:**
+  * Uso das métricas de paisagem (`ls.landscape_metrics`) e classes de fragmentação MSPA (`ls.mspa`) como função de
+    perda para calibração automática dos hiperparâmetros de simulação (taxa expander/patcher, isometria, peso de
+    vizinhança):
+    $$\min_{\theta} \sum_{m \in \mathcal{M}} w_m \left| M_m^{\text{simulado}}(\theta) - M_m^{\text{observado}} \right|$$
+  * Permite rodar algoritmos de otimização (Nelder-Mead, otimização Bayesiana ou Algoritmos Genéticos) calibrando
+    cenários futuros para que sejam estruturalmente indistinguíveis da dinâmica real da paisagem.
+
+---
+
+## Modelagem de distribuição de espécies (SDM / ENM: biomod2, elapid, scikit-learn)
+
+Análise de 2026-09-30. A modelagem de distribuição de espécies (SDM / *Species Distribution Modeling*) e nicho
+ecológico (ENM) gera mapas contínuos de probabilidade de presença ou adequabilidade de habitat a partir de registros
+de ocorrência e preditores ambientais (clima, relevo, uso do solo).
+
+### O papel ecológico no landschaft e o diagnóstico do ecossistema
+1. **O elo fundamental da conservação:** A camada de adequabilidade de habitat gerada pelo SDM é a entrada primordial
+   para quase todas as análises de paisagem aplicada:
+   * Define as superfícies de custo/resistência para conectividade (`ls.circuit.omniscape`, `ls.least_cost_path`);
+   * Gera as camadas de feições biológicas $q_{ij}$ para priorização espacial (`ls.prioritize`);
+   * Alimenta os mapas de restrição e atratores de regeneração na simulação do uso do solo (`ls.simulate`).
+2. **O abismo entre R e Python:**
+   * No ecossistema R, ferramentas consolidadas como `biomod2`, `dismo`, `CoordinateCleaner`, `spThin`, `blockCV`
+     e `ENMTools` dominam a pesquisa há mais de uma década.
+   * No ecossistema Python, o cenário é fragmentado e incompleto: `elapid` foca primordialmente no algoritmo MaxEnt,
+     `pyimpute` está descontinuado, `pygbif` é apenas um cliente REST cru, e a maioria dos pesquisadores recorre a
+     scripts manuais com `geopandas` e `rasterio`.
+   * Não existe hoje em Python um fluxo unificado e de alta performance que una curadoria, validação espacial,
+     modelagem em ensemble e projeção matricial em larga escala.
+
+### Estratégia de machine learning: scikit-learn como motor, landschaft nos gargalos espaciais
+Reinventar algoritmos tradicionais de ML (Random Forest, Gradient Boosting, SVM, GLM) seria redundante e contraproducente:
+* O `scikit-learn` (e bibliotecas complementares como `xgboost` e `lightgbm`) já possui implementações estado-da-arte,
+  paralelizadas em C/Cython e amplamente validadas pela comunidade científica.
+* O landschaft adota a API padrão do scikit-learn (`fit`, `predict`, `predict_proba`), permitindo acoplar qualquer
+  estimador compatível.
+* **Exceção de algoritmo próprio:** Implementação nativa e leve do **MaxEnt** (Maximum Entropy Model) baseada em
+  otimização convexa de entropia máxima via `scipy.optimize` / C++, eliminando a dependência do runtime Java do
+  MaxEnt original.
+* O verdadeiro diferencial e gargalo do SDM consome 80% do tempo do pesquisador e reside no **pré e pós-processamento
+  espacial e ecológico**, onde o landschaft atua com precisão.
+
+### Os 4 gargalos operacionais resolvidos no `ls.sdm`
+
+#### 1. Curadoria e desbaste espacial de ocorrências (`ls.sdm.clean_occurrences`, `ls.sdm.spatial_thin`)
+* **Download integrado:** Integração com GBIF (aproveitando o parser Darwin Core já introduzido em
+  `ls.bio.read_occurrences`) e speciesLink;
+* **Limpeza automatizada de anomalias geográficas:**
+  * Remoção de coordenadas nulas `(0, 0)`;
+  * Detecção de centróides de países e capitais (artefato comum de geocodificação sem precisão municipal);
+  * Máscara marinha/terrestre de alta resolução para remover registros em oceanos para espécies terrestres;
+  * Detecção de buffers ao redor de jardins botânicos, zoológicos e herbários;
+  * Filtragem por incerteza espacial (`coordinateUncertaintyInMeters`).
+* **Desbaste Espacial (*Spatial Thinning*):**
+  * Dados de ocorrência sofrem de viés de amostragem severo (aglomerações próximas a estradas, universidades e trilhas);
+  * Algoritmo de desbaste por distância euclidiana/geodésica mínima ($d_{\min}$) acelerado por KD-Tree ou indexação
+    espacial em C++, eliminando o viés de esforço amostral com garantia de espaçamento uniforme.
+
+#### 2. Preditores ambientais e amostragem de background (`ls.sdm.vif_filter`, `ls.sdm.sample_background`)
+* **Multicolinearidade de Preditores (VIF):**
+  * Camadas bioclimáticas (ex: WorldClim 19 variáveis) possuem altíssima correlação, inflando a variância dos
+    coeficientes de modelos estatísticos;
+  * Filtragem iterativa baseada no Fator de Inflação da Variância:
+    $$\text{VIF}_k = \frac{1}{1 - R_k^2}$$
+    com eliminação recursiva dos preditores que ultrapassam o limiar ($\text{VIF} > 5$ ou $10$), combinada com matriz
+    de correlação cruzada (Pearson / Spearman).
+* **Amostragem de Fundo / Pseudo-Ausências:**
+  * Para modelos de presença-apenas, a escolha do background define o envelope de calibração;
+  * Métodos suportados:
+    1. *Uniforme:* sorteio aleatório sobre a área de estudo ou máscara de bioma;
+    2. *Buffer Geográfico:* amostragem restrita a um raio ao redor das presenças conhecidas;
+    3. *Target-Group Background (TGB):* amostragem a partir de pontos de ocorrência de todo o grupo taxonômico superior
+       (ex: todos os mamíferos para modelar uma espécie específica de mamífero), neutralizando matematicamente o viés de
+       esforço de coleta.
+* **Extração Pontual Otimizada:** Extração dos valores de múltiplos rasters nos pontos de presença e background sem
+  necessidade de carregar o raster inteiro em memória.
+
+#### 3. Validação cruzada espacial e métricas ecológicas (`ls.sdm.SpatialBlockCV`, `ls.sdm.evaluate`)
+* **O perigo da validação aleatória tradicional:**
+  * O particionamento puramente aleatório (`train_test_split`) comete erro metodológico em dados espaciais: a
+    autocorrelação espacial (SAC) faz os pontos de teste estarem colados aos de treino, gerando métricas artificialmente
+    infladas (AUC > 0.95) que falham completamente em generalizar na paisagem real.
+* **Validação Cruzada em Blocos Espaciais (*Spatial Block CV*):**
+  * Geração de blocos contíguos regulares (*checkerboard*), faixas espaciais ou k-means geográfico para garantir
+    independência espacial estrita entre dobras (*folds*) de calibração e teste.
+* **Métricas Especializadas de Avaliação:**
+  * **TSS** (*True Skill Statistic*): $\text{TSS} = \text{Sensibilidade} + \text{Especificidade} - 1$, imune a
+    variações de prevalência;
+  * **Índice Contínuo de Boyce** (*Continuous Boyce Index*): Mede a correlação entre a frequência prevista/esperada
+    em janelas móveis de adequabilidade, sendo a métrica padrão-ouro para dados de presença-apenas e background;
+  * **AUC-ROC** e **AUC-PR**;
+  * **Seleção de Limiar Ótimo (*Thresholding*):** Maximização de TSS, ponto de igualdade entre sensibilidade e
+    especificidade, ou corte pelo 10º percentil de treino (LPT).
+
+#### 4. Projeção espacial massiva, ensembles e incerteza (`ls.sdm.project`, `ls.sdm.ensemble`, `ls.sdm.mess`)
+* **Projeção em Rasters Gigantescos (Out-of-Core):**
+  * O scikit-learn não suporta predição direta sobre GeoTIFFs de alta resolução. O landschaft aproveita sua
+    infraestrutura de *tiling* e blocos de linhas (`block_rows` / Dask) para projetar os modelos treinados sobre rasters
+    de escala continental sem sobrecarregar a memória RAM;
+* **Modelagem em Ensemble:**
+  * Agregação de predições de múltiplos algoritmos ponderada por desempenho (peso proporcional a TSS ou AUC),
+    gerando mapas consensuais de adequabilidade (média ponderada, mediana);
+  * **Mapa de Incerteza Espacial:** Desvio-padrão célula a célula entre as predições dos diferentes algoritmos do
+    ensemble, evidenciando geograficamente as áreas onde os modelos divergem;
+* **Detecção de Extrapolação Climática (MESS e ExDet):**
+  * Ao projetar modelos sobre cenários de mudanças climáticas futuras (IPCC CMIP6 / SSP), calcula a Superfície de
+    Similaridade Ambiental Multivariada (**MESS** - *Multivariate Environmental Similarity Surface*);
+  * Aponta exatamente onde as variáveis climáticas futuras extrapolam o espaço ambiental conhecido na calibração,
+    alertando o pesquisador sobre extrapolações não confiáveis.
+
+### Proposta de API (`ls.sdm`)
+
+```python
+import landschaft as ls
+from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
+
+# 1. Curadoria e desbaste espacial
+occ = ls.sdm.download_occurrences("Tapirus terrestris", source="gbif")
+clean_occ = ls.sdm.clean_occurrences(
+    occ,
+    drop_zeros=True,
+    drop_centroids=True,
+    drop_marine=True,
+    max_uncertainty=5000,
+)
+thinned_occ = ls.sdm.spatial_thin(clean_occ, min_distance=10_000)
+
+# 2. Preditores ambientais e pseudo-ausências
+env_rasters = ls.sdm.vif_filter("data/bioclim/*.tif", vif_threshold=7.0)
+bg_points = ls.sdm.sample_background(
+    env_rasters,
+    n=10_000,
+    method="target_group",
+    mask="data/bioma_pantanal.tif",
+)
+dataset = ls.sdm.prepare_dataset(
+    presences=thinned_occ,
+    background=bg_points,
+    rasters=env_rasters,
+)
+
+# 3. Validação cruzada espacial e treino em ensemble
+cv = ls.sdm.SpatialBlockCV(block_size=50_000, n_splits=5)
+ensemble = ls.sdm.SDMEnsemble(
+    models={
+        "rf": RandomForestClassifier(n_estimators=100),
+        "hgb": HistGradientBoostingClassifier(),
+        "maxent": ls.sdm.MaxEnt(),
+    },
+    cv=cv,
+)
+results = ensemble.fit(dataset)
+print(results.metrics)  # TSS, Boyce Index, AUC-ROC
+
+# 4. Projeção espacial out-of-core e mapa de incerteza
+proj = ensemble.project(
+    rasters=env_rasters,
+    out_suitability="suitability_present.tif",
+    out_uncertainty="uncertainty_sd.tif",
+    weights="tss",
+)
+
+# 5. Projeção futura e teste de novidade climática
+future_rasters = "data/bioclim_ssp585_2050/*.tif"
+proj_future = ensemble.project(future_rasters, out_suitability="suitability_2050.tif")
+mess_map = ls.sdm.mess(reference=dataset.X, future=future_rasters, out_file="mess_2050.tif")
+```
+
+### Estratégia de dependências e modularidade
+O núcleo do landschaft permanece focado em C++ e dependências geoespaciais básicas. O submódulo de SDM é instalado
+como extra opcional:
+```bash
+pip install "landschaft[sdm]"
+```
+Adicionando `scikit-learn` e bibliotecas leves de download/requisição (`pygbif`, `requests`), sem sobrecarregar o
+ambiente de usuários focados estritamente em métricas de paisagem.
+
+---
+
+## Roteiro integrado dos novos módulos
+
+A integração entre os módulos do landschaft consolida um ecossistema completo para ecologia espacial e planejamento
+da conservação:
+
+```mermaid
+flowchart TD
+    subgraph landschaft_Core ["Núcleo Landschaft Existente"]
+        LSM["ls.landscape_metrics<br>(133 métricas em C++)"]
+        MSPA["ls.mspa<br>(Morfologia e fragmentação)"]
+        CONN["ls.HabitatGraph / Circuit<br>(Conectividade e Grafos)"]
+        RNG["src/cpp/nlm/rng.cpp<br>(Geradores RNG paralelos)"]
+        BIO["ls.bio.read_occurrences<br>(GBIF e Darwin Core)"]
+    end
+
+    subgraph Modulo_SDM ["1. Modelagem de Distribuição (ls.sdm)"]
+        CLEAN["Limpeza Espacial & Desbaste (Spatial Thinning)"]
+        VIF["Seleção de Preditores & VIF"]
+        BG["Pseudo-Ausências (Buffer / Target-Group)"]
+        SPAT_CV["Spatial Block Cross-Validation"]
+        ENS["Ensemble ML (scikit-learn + MaxEnt)"]
+        PROJ["Projeção Out-of-Core & Incerteza (SD / MESS)"]
+
+        CLEAN & VIF & BG --> SPAT_CV
+        SPAT_CV --> ENS
+        ENS --> PROJ
+    end
+
+    subgraph Modulo_Prioritizacao ["2. Priorização Espacial (ls.prioritize)"]
+        CAZ["Core-Area Zonation (CAZ)"]
+        ABF["Additive Benefit Function (ABF)"]
+        BLP["Boundary Length Penalty (BLP)"]
+        KERN["Suavização Metapopulacional 2D (AVX2)"]
+        HEAP["Radix Heap / Remoção Iterativa em C++"]
+        
+        CAZ & ABF & BLP & KERN --> HEAP
+        HEAP --> MAP_PRIO["Mapa de Prioridade Hierárquica [0.0 - 1.0]"]
+    end
+
+    subgraph Modulo_Simulacao ["3. Simulação de Paisagem (ls.simulate)"]
+        WOE["Pesos de Evidência Adaptativo (WoE)"]
+        CA_EXP["Operador Expander (Borda)"]
+        CA_PAT["Operador Patcher (Log-normal)"]
+        CARS["Competição Multiclasse com Inércia"]
+        MOV_FRONT["Moving Frontier (Feedback de Distância)"]
+        
+        WOE & CA_EXP & CA_PAT & CARS & MOV_FRONT --> SIM_STEP["Simulação Temporal (t -> t+n)"]
+        SIM_STEP --> FUZZY["Validação por Similaridade Fuzzy"]
+    end
+
+    %% Conexões e Sinergias
+    BIO --> CLEAN
+    PROJ -->|"Superfície de Adequabilidade (Feições q_ij)"| CAZ & ABF
+    PROJ -->|"Inverso da Adequabilidade (Resistência)"| CONN
+    RNG --> CA_PAT & CARS
+    CONN --> CAZ & ABF
+    SIM_STEP -.-> LSM & MSPA
+    LSM & MSPA -.->|"Calibração Orientada a Padrões (Loss Function)"| SIM_STEP
+    MAP_PRIO -.->|"Zona de Restrição / Custo de Conversão"| SIM_STEP
+```
+
+---
 
 ## Observações para os testes
 

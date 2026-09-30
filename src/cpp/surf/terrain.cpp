@@ -6,9 +6,10 @@
 //   longitude/latitude rasters the cell width in metres per row, GeographicLib
 //   geodesics); atan2 as mingw-w64's x87 libm, atan as the UCRT's;
 // - focal statistics over a window mask, NA where any masked cell is NA or
-//   beyond the edge (terra's focal with na.rm = FALSE), each window summed in
-//   row order (terra slides running sums, whose rounding depends on its
-//   blocks);
+//   beyond the edge (terra's focal with na.rm = FALSE): minimum and maximum
+//   over the window; sums, means and standard deviations from prefix sums
+//   along each row (compensated, of the values minus their mean), one run of
+//   the mask per row, so a window costs its number of rows, not of cells;
 // - curvature: Zevenbergen & Thorne's second derivatives over L^2 (spatialEco
 //   divides by 2 L^2), NA at the edges (spatialEco pads with 0), no rounding,
 //   the cell height for the y derivatives; McNab's mean difference over the 8
@@ -18,8 +19,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "cost/geodesic.hpp"
@@ -39,6 +42,160 @@ using Index = std::size_t;
 inline double r_atan(double x) { return std::atan(x); }
 
 inline double dmod(double x, double n) { return x - n * std::floor(x / n); }
+
+// a + b = s + e exactly (Knuth's TwoSum).
+inline void two_sum(double a, double b, double& s, double& e) {
+    s = a + b;
+    const double bb = s - a;
+    e = (a - (s - bb)) + (b - bb);
+}
+
+// A compensated sum (Neumaier): hi + lo.
+struct Acc {
+    double hi = 0.0, lo = 0.0;
+    void add(double v) {
+        double s, e;
+        two_sum(hi, v, s, e);
+        hi = s;
+        lo += e;
+    }
+    double value() const { return hi + lo; }
+};
+
+// Prefix sums along every row of z - shift, of its squares (both compensated)
+// and of the NA cells; shift is the mean of the values.
+struct RowPrefix {
+    int nr = 0, nc = 0;
+    double shift = 0.0;
+    std::vector<double> sh, sl, qh, ql;
+    std::vector<std::int32_t> na;
+
+    // `squares`: also the prefix sums of the squares (for standard deviations).
+    RowPrefix(const Grid& g, bool squares) : nr(g.ny), nc(g.nx) {
+        const Index W = static_cast<Index>(nc) + 1, n = W * static_cast<Index>(nr);
+        double m = 0.0;  // any value near the values' centre does (it only shrinks them)
+        i64 k = 0;
+        for (i64 i = 0; i < g.size(); ++i)
+            if (!std::isnan(g.z[i])) {
+                m += g.z[i];
+                ++k;
+            }
+        shift = k ? m / static_cast<double>(k) : 0.0;
+        sh.assign(n, 0.0);
+        sl.assign(n, 0.0);
+        if (squares) {
+            qh.assign(n, 0.0);
+            ql.assign(n, 0.0);
+        }
+        na.assign(n, 0);
+#pragma omp parallel for schedule(static) if (g.size() > 65536)
+        for (int r = 0; r < nr; ++r) {
+            Acc s, q;
+            std::int32_t cnt = 0;
+            const Index base = static_cast<Index>(r) * W;
+            for (int c = 0; c < nc; ++c) {
+                const double v = g.z[static_cast<i64>(r) * nc + c];
+                if (std::isnan(v)) {
+                    ++cnt;
+                } else {
+                    const double d = v - shift;
+                    s.add(d);
+                    if (squares) q.add(d * d);
+                }
+                sh[base + c + 1] = s.hi;
+                sl[base + c + 1] = s.lo;
+                if (squares) {
+                    qh[base + c + 1] = q.hi;
+                    ql[base + c + 1] = q.lo;
+                }
+                na[base + c + 1] = cnt;
+            }
+        }
+    }
+
+    // Adds the cells [c0, c1) of row r to s and q (false when one is NA).
+    bool add(int r, int c0, int c1, Acc& s, Acc& q, bool squares) const {
+        const Index base = static_cast<Index>(r) * (static_cast<Index>(nc) + 1);
+        if (na[base + c1] != na[base + c0]) return false;
+        double d, e;
+        two_sum(sh[base + c1], -sh[base + c0], d, e);
+        s.add(d);
+        s.add(e + (sl[base + c1] - sl[base + c0]));
+        if (squares) {
+            two_sum(qh[base + c1], -qh[base + c0], d, e);
+            q.add(d);
+            q.add(e + (ql[base + c1] - ql[base + c0]));
+        }
+        return true;
+    }
+};
+
+// The runs of a window mask: for each row, its [b0, b1) column ranges.
+std::vector<std::vector<std::pair<int, int>>> mask_runs(int wr, int wc, const std::vector<char>& mask) {
+    std::vector<std::vector<std::pair<int, int>>> runs(static_cast<Index>(wr));
+    for (int a = 0; a < wr; ++a) {
+        int b = 0;
+        while (b < wc) {
+            if (!mask[static_cast<Index>(a) * wc + b]) {
+                ++b;
+                continue;
+            }
+            const int b0 = b;
+            while (b < wc && mask[static_cast<Index>(a) * wc + b]) ++b;
+            runs[static_cast<Index>(a)].push_back({b0, b});
+        }
+    }
+    return runs;
+}
+
+// Sum, mean or sample standard deviation of the masked window around every
+// cell from the row prefix sums (NA where a masked cell is NA or outside).
+std::vector<double> prefix_focal(const Grid& g, const RowPrefix& p, int wr, int wc, const std::vector<char>& mask,
+                                 FocalStat stat) {
+    const int nr = g.ny, nc = g.nx, hr = wr / 2, hc = wc / 2;
+    const auto runs = mask_runs(wr, wc, mask);
+    i64 k = 0;
+    for (char m : mask) k += m != 0;
+    const double dk = static_cast<double>(k);
+    const bool squares = stat == kFocalSd;
+    std::vector<double> out(static_cast<Index>(g.size()), NaN);
+    if (k == 0) return out;
+#pragma omp parallel for schedule(static) if (g.size() > 16384)
+    for (int r = 0; r < nr; ++r)
+        for (int c = 0; c < nc; ++c) {
+            Acc s, q;
+            bool ok = true;
+            for (int a = 0; a < wr && ok; ++a) {
+                const auto& row = runs[static_cast<Index>(a)];
+                if (row.empty()) continue;
+                const int rr = r - hr + a;
+                if (rr < 0 || rr >= nr) {
+                    ok = false;
+                    break;
+                }
+                for (const auto& run : row) {
+                    const int c0 = c - hc + run.first, c1 = c - hc + run.second;
+                    if (c0 < 0 || c1 > nc || !p.add(rr, c0, c1, s, q, squares)) {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if (!ok) continue;
+            const double sv = s.value();
+            double v;
+            if (stat == kFocalSum) {
+                v = sv + dk * p.shift;
+            } else if (stat == kFocalMean) {
+                v = p.shift + sv / dk;
+            } else {
+                const double var = (q.value() - sv * (sv / dk)) / (dk - 1);
+                v = std::sqrt(var > 0 ? var : 0.0);
+            }
+            out[static_cast<Index>(r) * nc + c] = v;
+        }
+    return out;
+}
 
 }  // namespace
 
@@ -102,6 +259,10 @@ std::vector<double> terrain(const Grid& g, bool lonlat, int neighbors, bool degr
 }
 
 std::vector<double> focal(const Grid& g, int wr, int wc, const std::vector<char>& mask, FocalStat stat) {
+    if (stat == kFocalMean || stat == kFocalSum || stat == kFocalSd) {
+        const RowPrefix p(g, stat == kFocalSd);
+        return prefix_focal(g, p, wr, wc, mask, stat);
+    }
     const int nr = g.ny, nc = g.nx, hr = wr / 2, hc = wc / 2;
     std::vector<double> out(static_cast<Index>(g.size()), NaN);
     i64 k = 0;
@@ -238,11 +399,12 @@ std::vector<double> curvature(const Grid& g, int type) {
 }
 
 std::vector<double> tpi(const Grid& g, int wr, int wc, const std::vector<char>& mask, bool normalize) {
-    const std::vector<double> mean = focal(g, wr, wc, mask, kFocalMean);
+    const RowPrefix pre(g, normalize);
+    const std::vector<double> mean = prefix_focal(g, pre, wr, wc, mask, kFocalMean);
     std::vector<double> out(static_cast<Index>(g.size()));
     for (i64 i = 0; i < g.size(); ++i) out[static_cast<Index>(i)] = g.z[i] - mean[static_cast<Index>(i)];
     if (normalize) {
-        const std::vector<double> sd = focal(g, wr, wc, mask, kFocalSd);
+        const std::vector<double> sd = prefix_focal(g, pre, wr, wc, mask, kFocalSd);
         for (Index i = 0; i < out.size(); ++i) out[i] = out[i] / sd[i];
     }
     return out;
@@ -250,11 +412,14 @@ std::vector<double> tpi(const Grid& g, int wr, int wc, const std::vector<char>& 
 
 std::vector<double> hsp(const Grid& g, const std::vector<int>& rows, const std::vector<int>& cols,
                         const std::vector<std::vector<char>>& masks, bool normalize) {
-    // sum over the scales (largest first) of 100 z-scores of the tpi
+    // sum over the scales (largest first) of 100 z-scores of the tpi; the row
+    // prefix sums once for all of them
+    const RowPrefix pre(g, false);
     std::vector<double> acc(static_cast<Index>(g.size()), 0.0);
     bool first = true;
     for (Index k = rows.size(); k-- > 0;) {
-        std::vector<double> t = tpi(g, rows[k], cols[k], masks[k], false);
+        std::vector<double> t = prefix_focal(g, pre, rows[k], cols[k], masks[k], kFocalMean);
+        for (i64 i = 0; i < g.size(); ++i) t[static_cast<Index>(i)] = g.z[i] - t[static_cast<Index>(i)];
         std::vector<double> v;
         v.reserve(t.size());
         for (double x : t)

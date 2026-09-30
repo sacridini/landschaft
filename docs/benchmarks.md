@@ -194,19 +194,21 @@ same.
 | Correlation lengths and aspect ratio (scl, stxr) | 0.13 s | 28 ms | 0.85 |
 | Texture direction and wavelength (std, srw) | 0.61 s | 28 ms | 0.85 |
 | Fractal dimension (sfd) | 6.3 ms | 2.2 ms | 0.85 |
-| Texture image, Sa in 5 × 5 windows, 100 × 100 (`focal_metrics`) | 0.17 s | 3.7 ms | 0.85 |
+| Texture image, Sa in 5 × 5 windows, 100 × 100 (`focal_metrics`) | 0.17 s | 1.0 ms | 0.85 |
 | Texture image, Sk in 5 × 5 windows, 30 × 30 (`focal_metrics`) | 134 s | 22 ms | 0.85 |
-| TPI, 5 × 5 | 8.5 ms | 4.3 ms | 0.86 |
-| TRI | 0.97 s | 4.1 ms | 0.86 |
+| TPI, 5 × 5 | 8.5 ms | 2.5 ms | 0.88 |
+| TRI | 0.97 s | 1.9 ms | 0.88 |
 | VRM | 80 ms | 15 ms | 0.86 |
-| Curvature (total) | 1.58 s | 4.0 ms | 0.86 |
-| Hierarchical slope position, scales 3-27 | 0.11 s | 63 ms | 0.86 |
+| Curvature (total) | 1.58 s | 1.6 ms | 0.88 |
+| Hierarchical slope position, scales 3-27 | 0.11 s | 14 ms | 0.88 |
 | Spherical standard deviation | 73 ms | 12 ms | 0.86 |
 
 The gains are largest where the R packages compute cell by cell in R (texture
 images, peaks, curvature, TRI) and smallest where terra's focal functions do
-the work in C++ with running sums (TPI, HSP); Landschaft sums each window
-directly, which keeps its results exact.
+the work in C++ with running sums (TPI, HSP, VRM). Landschaft's focal means,
+sums and standard deviations use compensated prefix sums along the rows
+(within about 1e-13 of summing each window), so a window costs one step per
+row whatever its size.
 
 ## Accuracy
 
@@ -252,7 +254,7 @@ directly, which keeps its results exact.
 | Grid distances: transitions (4/8/16 directions, symmetric or not, R's arithmetic, Mahalanobis), geographic correction (projected, longitude/latitude, global grids), normalisation, arithmetic, cost surfaces, least-cost distances and paths | gdistance 1.6.5 (R 4.4.2, raster 3.6-31, igraph 2.1.3): 53 reference cases, among them uniform grids where many paths cost the same | identical bits and the same paths |
 | Grid distances: commute distances, random-walk and randomised-shortest-path passages and distances, route overlap, barrier and area transitions | the same gdistance: 15 reference cases | 1e-14 typical, 1e-10 worst (different sparse factorisations than R's Matrix package); barrier and area transitions identical |
 | Surface metrics: amplitude parameters (`sa`, `sq`, `ssk`, `sku`, `sv`, `sph`, `smean`), trend surfaces of order 0-3 and the choice of the best one, slopes and developed area (`sdq`, `sdq6`, `sdr`), peaks, valleys, `sds`, `ssc`, `s10z`, the bearing area curve and its parameters (`sdc`, `sbi`, `svi`, `sci`, `sk`, `spk`, `svk`), autocorrelation, correlation lengths, texture direction and wavelength, fractal dimension, texture images | geodiv 1.1.1 (R 4.4.2, terra 1.9.50, spatial 7.3-17), and where geodiv errs geodiv with its errors corrected (`tools/surface_fixed.R`): 70 reference cases, projected and longitude/latitude, among them geodiv's example rasters, NA cells, non-square cells and ties | identical bits |
-| Terrain indices: slope, aspect, tpi, tri, vrm, srr, dissection, curvature, spherical standard deviation, hsp, trasp, hli | spatialEco 2.0-5 and terra 1.9-50 (R 4.4.2), and where spatialEco errs spatialEco with its errors corrected (`tools/surface_fixed.R`): 3 DEMs (square and rectangular cells, missing cells, longitude/latitude) | identical bits; vrm, srr and spherical standard deviation within 1e-11 (terra's running focal sums); on longitude/latitude slope and aspect within 1e-12 |
+| Terrain indices: slope, aspect, tpi, tri, vrm, srr, dissection, curvature, spherical standard deviation, hsp, trasp, hli | spatialEco 2.0-5 and terra 1.9-50 (R 4.4.2), and where spatialEco errs spatialEco with its errors corrected (`tools/surface_fixed.R`): 3 DEMs (square and rectangular cells, missing cells, longitude/latitude) | identical bits; focal means (tpi, hsp, srr, vrm, spherical standard deviation, Bolstad's curvature) within 1e-12 of summing each window (compensated prefix sums), 1e-11 of terra's running sums; on longitude/latitude slope and aspect within 1e-12 |
 | Neutral landscape models: random, percolation, gradients, midpoint displacement, fractional Brownian motion, Gaussian fields, Poisson line and Voronoi mosaics, random, neighbourhood and rectangular clusters, curds, classification | NLMR 1.4.0 (R 4.4.2) with the same seeds; R's generator and the libstdc++ distributions of NLMR's C++ code against R and the Rtools compiler | identical bits |
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an

@@ -6,6 +6,24 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.88.0] - 2026-09-30
+
+### Added
+- Learn, chapter 11 *Continuous surfaces*: the patch-mosaic and gradient models (what a
+  threshold does to a continuous map), surface metrics by hand, the bearing area curve,
+  autocorrelation, anisotropy and wavelength, texture images, terrain indices, pitfalls;
+  figures `learn_threshold` and `learn_aacf`, six glossary terms. *From question to tool*
+  becomes chapter 12.
+
+### Changed
+- Faster focal means, sums and standard deviations in `ls.surface` (`tpi`, `hsp`, `srr`, `vrm`,
+  `spherical_sd`, Bolstad's `curvature`): compensated prefix sums along the rows of the
+  values minus their mean, one step per window row instead of one per cell, and for `hsp`
+  one set of sums for all scales. Results within about 1e-13 of summing each window (no
+  longer bit for bit); `hsp` on 2000 x 2000 with scales 3-27: 1.9 s to 0.44 s.
+- `ls.surface` outputs on a DataArray's grid reuse its coordinates and spatial reference
+  instead of writing them again (about 1 ms less per call).
+
 ## [0.87.0] - 2026-09-30
 
 ### Added

@@ -212,7 +212,9 @@ def srw(x, *, extent=None, crs=None, band=None, nodata=None) -> np.ndarray:
     circles around zero frequency (up to 100, evenly spaced): Srw is the
     radius with the largest sum, Srwi the mean sum over the largest, Shw the
     radius that splits the summed amplitude in half (NaN on ties), measured
-    from zero frequency (geodiv: from one row above it).
+    from zero frequency (geodiv: from one row above it). Radii are distances in
+    the spectrum in map units: a texture repeating k times across a raster of
+    n cells has its peak at k cell sizes, a wavelength of n / k cells.
 
     Parameters
     ----------

@@ -378,7 +378,7 @@ BENCHMARKS = [
     ("Peaks and valleys (sds, ssc, s10z)", "geodiv", 1.84, 0.0017),
     ("Slopes and area (sdq, sdq6, sdr)", "geodiv", 2.16, 0.0048),
     ("Texture image of Sk, 30×30", "geodiv", 134, 0.0219),
-    ("Curvature, 371×371", "spatialEco", 1.58, 0.004),
+    ("Curvature, 371×371", "spatialEco", 1.58, 0.0016),
 ]
 
 
@@ -904,6 +904,48 @@ def surf_terrain():
         fig.colorbar(im, ax=ax, shrink=0.75)
     fig.tight_layout()
     save(fig, "surf_terrain")
+
+
+@figure
+def learn_threshold():
+    ndvi = _surface("orforest").values
+    fig = plt.figure(figsize=(11, 3.4))
+    grid = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 1.5], wspace=0.3)
+    for i, t in enumerate((0.60, 0.70, 0.75)):
+        ax = fig.add_subplot(grid[0, i])
+        palette_map(ax, np.where(ndvi >= t, 2, 1).astype("uint8"), BINARY, None, f"NDVI ≥ {t:.2f}")
+    ax = fig.add_subplot(grid[0, 3])
+    thresholds = np.round(np.arange(0.50, 0.82, 0.01), 2)
+    n = [int(ls.Landscape(np.where(ndvi >= t, 2, 1).astype("uint8")).class_metrics(["np"]).set_index("class").loc[2, "np"])
+         if (ndvi >= t).any() else 0 for t in thresholds]
+    ax.plot(thresholds, n, color="#15803d", lw=2, marker="o", ms=3)
+    ax.set_xlabel("NDVI threshold for habitat")
+    ax.set_ylabel("habitat patches")
+    ax.set_title("One map, many patch structures")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(color="#e2e8f0")
+    ax.set_axisbelow(True)
+    fig.subplots_adjust(left=0.02, right=0.98)
+    ax.set_position(ax.get_position().translated(0.05, 0))
+    save(fig, "learn_threshold")
+
+
+@figure
+def learn_aacf():
+    field = ls.nlm.gaussian_field(120, 120, autocorr_range=15, seed=1)
+    x = np.arange(120)
+    ridges = np.sin(2 * np.pi * x / 12)[None, :] + 0.3 * field.values
+    fig, axes = plt.subplots(1, 4, figsize=(12, 3.3))
+    for col, (name, s) in enumerate((("isotropic field", field.values), ("ridges", ridges))):
+        axes[2 * col].imshow(s, cmap="viridis")
+        axes[2 * col].set_title(name)
+        a = ls.surface.aacf(s).values
+        im = axes[2 * col + 1].imshow(a, cmap="RdBu_r", vmin=-1, vmax=1)
+        axes[2 * col + 1].set_title(f"its autocorrelation")
+    for ax in axes:
+        ax.set_axis_off()
+    fig.colorbar(im, ax=axes, shrink=0.7, label="autocorrelation")
+    save(fig, "learn_aacf")
 
 
 def main() -> None:

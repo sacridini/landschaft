@@ -145,6 +145,10 @@ def tpi(x, scale=3, win: str = "rectangle", normalize: bool = False, *, extent=N
 
     Notes
     -----
+    The window means (and standard deviations) come from compensated prefix
+    sums along the rows, one step per window row: within about 1e-13 of the
+    values' range of summing each window.
+
     spatialEco's ``zero.correct`` option computes the same mean (and, with
     ``normalize``, a standard deviation of 0 by a misplaced parenthesis): it
     is not offered.

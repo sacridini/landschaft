@@ -15,6 +15,12 @@ Area-weighted mean (`_am`)
 Attrition
 :   The disappearance of patches, typically small ones. [Ch. 10](change.md)
 
+Autocorrelation length (Sal)
+:   The shortest distance at which a surface's autocorrelation falls to 0.2: the size of the grain of its texture. [Ch. 11](surfaces.md#spatial-structure)
+
+Bearing area curve
+:   The heights of a surface sorted from the highest, against the share of the surface at or above each; its core, peak and valley zones give Sk, Spk and Svk. [Ch. 11](surfaces.md#the-bearing-area-curve)
+
 Bridge
 :   In MSPA, a non-core strip of habitat connecting two different core
     areas; a structural corridor. [Ch. 4](morphology.md)
@@ -97,6 +103,9 @@ Fragmentation *per se*
 :   The breaking apart of habitat independently of habitat loss: more,
     smaller, more isolated patches for the same amount.
     [Ch. 3](fragmentation.md)
+
+Gradient model
+:   A view of landscape structure as continuous variation in space, of which patches are a special case; the alternative to the patch-mosaic model. [Ch. 11](surfaces.md#patches-or-gradients)
 
 Grain
 :   The finest spatial resolution of the data: the cell size of a raster.
@@ -211,8 +220,17 @@ Structuring element
 :   In mathematical morphology, the small reference shape used to probe the
     habitat (erosion, dilation). [Ch. 4](morphology.md)
 
+Surface metrics
+:   Measures of a continuous raster (ISO 25178, *gradient surface metrics*): amplitude, height distribution, slopes, features and spatial structure, computed without a threshold. [Ch. 11](surfaces.md)
+
+Texture image
+:   A map of a surface metric computed in a moving window around every cell. [Ch. 11](surfaces.md#surfaces-in-moving-windows)
+
 Thematic resolution
 :   How finely the classes of a map are defined. [Ch. 2](scale.md)
+
+Topographic position index (TPI)
+:   Elevation minus the mean elevation of a window: positive on ridges, negative in valleys. [Ch. 11](surfaces.md#elevation-terrain-indices)
 
 Transition matrix
 :   A table of the cells that moved from each class at one date to each class

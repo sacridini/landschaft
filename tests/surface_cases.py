@@ -340,6 +340,9 @@ TERRAIN_R = """{
 # vs spatialEco / terra's running sums, numpy's trigonometry: tolerances
 TERRAIN_TOL = {k: (1e-11, 1e-12) for k in ("vrm", "vrm5", "srr", "spherical", "spherical_var", "trasp", "hli",
                                              "hli_direct", "hli_south")}
+# focal means from compensated prefix sums, not window by window: ~1e-13 of the values' range
+TERRAIN_TOL.update({k: (1e-12, 1e-12) for k in ("tpi", "tpi_norm", "tpi_circle", "hsp", "hsp_norm", "hsp_circle",
+                                                "bolstad")})
 
 
 def _terrain(name: str, circle: float) -> Callable[[dict], dict]:
