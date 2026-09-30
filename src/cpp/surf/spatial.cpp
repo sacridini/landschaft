@@ -1,22 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// geodiv's spatial parameters (aacf.R, fourier.R) and fractal dimension
-// (sfd.cpp), with what they call:
+// The spatial parameters (geodiv's aacf.R, fourier.R) and fractal dimension
+// (its sfd.cpp), with what they call:
 // - R's fft() (nlm::r_fft2), e1071's hanning.window (R's cos: the x87 fcos
 //   of mingw-w64), geodiv's fftshift;
 // - terra 1.9-50's crop() (align with snap "near", origin, setExtent keeping
-//   the resolution, colFromX / rowFromY) for the upper half of the images and
-//   for the square without NA around the centre that geodiv looks for;
-// - terra's distance() to one cell: GDAL 3.9's GDALComputeProximity on
-//   projected rasters (whole-pixel offsets, the distance rounded to float,
-//   times the cell width, rounded to float again), terra's haversine on
-//   longitude/latitude ones.
+//   the resolution, colFromX / rowFromY) for the square without NA around the
+//   centre that geodiv looks for.
+// Corrected where geodiv errs: the images' upper half includes the row of zero
+// lag / frequency (row floor(N/2), column floor(M/2), where fftshift puts it;
+// geodiv's leaves it out and std's angles start one column off), distances
+// are exact in map units (geodiv: GDAL's proximity in single precision, with
+// the cell width in both directions; on longitude/latitude rasters terra's
+// haversine, kept), std leaves out the zero frequency and keeps to the largest
+// circle within the half image, and sfd has its typo, extremes and indices
+// fixed.
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
 #include <vector>
+
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
 
 #include "lsm/extended.hpp"
 #include "lsm/rmath.hpp"
@@ -202,7 +210,12 @@ std::vector<double> r_fft(const std::vector<double>& m, int ny, int nx, bool com
                 z[k + 1] = 0.0;
             }
         }
-    nlm::r_fft2(z, ny, nx, inverse, true);
+#if defined(_OPENMP)
+    const bool parallel = !omp_in_parallel();  // not inside the moving windows' threads
+#else
+    const bool parallel = false;
+#endif
+    nlm::r_fft2(z, ny, nx, inverse, parallel);
     return z;
 }
 
@@ -223,23 +236,28 @@ std::vector<double> hanning(int n) {
     return w;
 }
 
-// The upper half of an image (geodiv: crop to ymax - (ymax - ymin) / 2).
+// The upper half of an image with the zero row: rows 0 .. floor(ny / 2).
 Raster upper_half(const Raster& r) {
-    const double half = (r.ymax - r.ymin) / 2;
-    return crop(r, r.xmin, r.xmax, r.ymax - half, r.ymax);
+    const int nr = r.ny / 2 + 1;
+    const double yr = (r.ymax - r.ymin) / r.ny;
+    Raster out = r;
+    out.ny = nr;
+    out.ymin = r.ymax - nr * yr;
+    out.v.assign(r.v.begin(), r.v.begin() + static_cast<std::ptrdiff_t>(nr) * r.nx);
+    return out;
 }
 
-// terra::distance() of every cell to cell (tr, tc).
+// The distance of every cell to cell (tr, tc): in map units on projected
+// rasters, terra's haversine (metres) on longitude/latitude ones.
 std::vector<double> distance_to(const Raster& g, int tr, int tc) {
     std::vector<double> d(static_cast<Index>(g.ny) * g.nx);
     if (!g.lonlat) {
-        // GDALComputeProximity with DISTUNITS=GEO
-        const double mult = std::fabs(g.xres());
+        const double xr = g.xres(), yr = g.yres();
+        const bool scalar = d.size() == 1;  // R's sqrt of one value
         for (int r = 0; r < g.ny; ++r)
             for (int c = 0; c < g.nx; ++c) {
-                const double dx = static_cast<double>(tc) - c, dy = static_cast<double>(tr) - r;
-                const float p = static_cast<float>(std::sqrt(dx * dx + dy * dy));
-                d[static_cast<Index>(r) * g.nx + c] = p > 0.0f ? static_cast<float>(p * mult) : p;
+                const double dx = static_cast<double>(c - tc) * xr, dy = static_cast<double>(r - tr) * yr;
+                d[static_cast<Index>(r) * g.nx + c] = lsm::r_sqrt((dx * dx) + (dy * dy), scalar);
             }
         return d;
     }
@@ -365,11 +383,8 @@ std::vector<double> scl(const Grid& g, bool lonlat, const std::vector<double>& t
     for (double v : img.v) all_na &= std::isnan(v);
     if (all_na) return out;
     const Raster half = upper_half(img);
-    // the target: last row, column ceiling(ncol / 2) + (1 if ncol is even);
-    // geodiv takes ncol from the raster before its NA crop, which fails there
-    const int center = (img.nx + 1) / 2;
-    const int nce = half.nx % 2 == 0 ? 1 : 0;
-    const std::vector<double> d = distance_to(half, half.ny - 1, center + nce - 1);
+    // distances from zero lag: the last row of the half, column floor(M / 2)
+    const std::vector<double> d = distance_to(half, half.ny - 1, half.nx / 2);
     const Index k = thresholds.size();
     for (Index t = 0; t < k; ++t) {
         double lo = Inf, hi = -Inf;
@@ -390,21 +405,21 @@ std::vector<double> texture_direction(const Grid& g, bool lonlat) {
     for (double v : x.v) all_na &= std::isnan(v);
     if (all_na) return {NaN, NaN};
     const Raster amp = amplitude_half(x);
-    const int center = (x.nx + 1) / 2;
-    const int nce = amp.nx % 2 == 0 ? 1 : 0;
-    const std::vector<double> d = distance_to(amp, amp.ny - 1, center + nce - 1);
-    // min(max(distances of the last row), distance of cell center + nce)
-    double last = -Inf;
-    for (int c = 0; c < amp.nx; ++c) last = std::max(last, d[static_cast<Index>(amp.ny - 1) * amp.nx + c]);
-    const double min_dist = std::min(last, d[static_cast<Index>(center + nce - 1)]);
-    // angles (degrees) from the centre cell (last row, column `center`)
-    const double xc = amp.x(center - 1), yc = amp.y(amp.ny - 1);
-    const int na = 361;  // seq(0, 180, 0.5)
+    const int r0 = amp.ny - 1, c0 = amp.nx / 2;
+    const std::vector<double> d = distance_to(amp, r0, c0);
+    // the largest circle around zero frequency within the half image
+    auto at = [&](int r, int c) { return d[static_cast<Index>(r) * amp.nx + c]; };
+    const double min_dist = std::min(std::min(at(r0, 0), at(r0, amp.nx - 1)), at(0, c0));
+    // angles (degrees) from zero frequency, summed in bins of 0.5 degree
+    const double xc = amp.x(c0), yc = amp.y(r0);
+    // orientations 0 to 179.5 degrees: in the zero row only the positive side
+    // (the negative side repeats it at 180 degrees)
+    const int na = 360;  // seq(0, 179.5, 0.5)
     Sums a(static_cast<Index>(na));
     for (int r = 0; r < amp.ny; ++r)
         for (int c = 0; c < amp.nx; ++c) {
             const Index i = static_cast<Index>(r) * amp.nx + c;
-            if (!(d[i] <= min_dist)) continue;
+            if (!(d[i] <= min_dist) || (r == r0 && c <= c0)) continue;
             const double angle = lsm::r_atan2(amp.y(r) - yc, amp.x(c) - xc) / (kPi / 180);
             const int k0 = static_cast<int>(std::floor(angle * 2)) - 1;
             for (int k = std::max(0, k0); k <= std::min(na - 1, k0 + 3); ++k)
@@ -430,9 +445,7 @@ std::vector<double> radial_wavelength(const Grid& g, bool lonlat) {
     if (all_na) return {NaN, NaN, NaN};
     const Raster amp = amplitude_half(x);
     const int ncircles = std::floor(0.5 * amp.nx) <= 100 ? static_cast<int>(std::floor(0.5 * amp.nx)) : 100;
-    const int center = (x.nx + 1) / 2;
-    const int nce = amp.nx % 2 == 0 ? 1 : 0;
-    const std::vector<double> d = distance_to(amp, amp.ny - 1, center + nce - 1);
+    const std::vector<double> d = distance_to(amp, amp.ny - 1, amp.nx / 2);
     double half = -Inf;
     for (int c = 0; c < amp.nx; ++c) half = std::max(half, d[static_cast<Index>(amp.ny - 1) * amp.nx + c]);
     // radius <- seq(0, half_dist, length.out = ncircles)
@@ -493,99 +506,90 @@ std::vector<double> radial_wavelength(const Grid& g, bool lonlat) {
     return {srw, srwi, shw};
 }
 
-double sfd(const Grid& g, bool* out_of_bounds) {
+double sfd(const Grid& g) {
+    // geodiv's sfd_ (Clarke's triangular prisms), corrected: the extremes of
+    // the data (not 99999 / -99999), (b - c)^2 for its typo (b - e)(b - c),
+    // the central square from 0-based indices (geodiv reads past the matrix);
+    // prism areas summed per step as R sums a vector
     const int rowmax = g.ny, colmax = g.nx;
-    auto mat = [&](int r, int c) { return g.z[static_cast<i64>(r) * colmax + c]; };
-    double minimum = 99999, maximum = -99999;
-    for (int x = 0; x < rowmax; ++x)
-        for (int y = 0; y < colmax; ++y) minimum = std::min(mat(x, y), minimum);
-    for (int x = 0; x < rowmax; ++x)
-        for (int y = 0; y < colmax; ++y) maximum = std::max(mat(x, y), maximum);
-    std::vector<double> nm(static_cast<Index>(rowmax) * colmax);
-    for (int x = 0; x < rowmax; ++x)
-        for (int y = 0; y < colmax; ++y) nm[static_cast<Index>(x) * colmax + y] = (mat(x, y) - minimum) / (maximum - minimum);
-    auto newmat = [&](int r, int c) { return nm[static_cast<Index>(r) * colmax + c]; };
-    int n = 1;
-    const int size = rowmax > colmax ? colmax : rowmax;
-    int steps = 1;
+    const i64 n_all = g.size();
+    double lo = Inf, hi = -Inf;
+    for (i64 i = 0; i < n_all; ++i) {
+        if (std::isnan(g.z[i])) return NaN;
+        lo = std::min(lo, g.z[i]);
+        hi = std::max(hi, g.z[i]);
+    }
+    std::vector<double> nm(static_cast<Index>(n_all));
+    for (i64 i = 0; i < n_all; ++i) nm[static_cast<Index>(i)] = (g.z[i] - lo) / (hi - lo);
+    auto at = [&](int r, int c) { return nm[static_cast<Index>(r) * colmax + c]; };
+    const int size = std::min(rowmax, colmax);
+    int n = 1, steps = 1;
     do {
         steps++;
         n *= 2;
     } while (n < size);
     n /= 2;
     steps--;
-    int slop = static_cast<int>(std::floor((rowmax - n) / 2.));
-    const int begin_row = slop + 1, end_row = n + slop + 1;
-    slop = static_cast<int>(std::floor((colmax - n) / 2.));
-    const int begin_col = slop + 1, end_col = n + slop + 1;
-    // geodiv reads past the matrix where row + step or col + step reaches its size
-    if (out_of_bounds) *out_of_bounds = false;
-    {
-        int step = 1;
-        for (int t = 1; t <= steps; ++t) {
-            const int last_row = begin_row + ((end_row - 1 - begin_row) / step) * step;
-            const int last_col = begin_col + ((end_col - 1 - begin_col) / step) * step;
-            if (begin_row < end_row && begin_col < end_col && (last_row + step >= rowmax || last_col + step >= colmax)) {
-                if (out_of_bounds) *out_of_bounds = true;
-                return NaN;
-            }
-            step *= 2;
-        }
-    }
-    std::vector<double> area(static_cast<Index>(steps) + 1), resolution(static_cast<Index>(steps) + 1);
+    const int br = (rowmax - n) / 2, bc = (colmax - n) / 2;  // 0-based first row / column
+    std::vector<double> la(static_cast<Index>(steps)), lr(static_cast<Index>(steps));
+    std::vector<double> sums;
     int step = 1;
-    for (int time = 1; time <= steps; ++time) {
-        double surface_area = 0.0;
-        const double side = static_cast<double>(step);
-        const double diag = static_cast<double>(step) * std::sqrt(2.0) / 2.0;
-        for (int row = begin_row; row < end_row; row += step) {
-            for (int col = begin_col; col < end_col; col += step) {
-                const double a = newmat(row, col), b = newmat(row, col + step);
-                const double c = newmat(row + step, col + step), d = newmat(row + step, col);
+    for (int t = 0; t < steps; ++t) {
+        const double side = step;
+        const double diag = step * std::sqrt(2.0) / 2;
+        const int nb = (n + step - 1) / step;  // rows (and columns) of blocks
+        const bool scalar = nb == 1;
+        auto S = [scalar](double v) { return lsm::r_sqrt(v, scalar); };
+        sums.assign(static_cast<Index>(nb) * nb, 0.0);
+#pragma omp parallel for schedule(static) if (nb > 64)
+        for (int i = 0; i < nb; ++i)
+            for (int j = 0; j < nb; ++j) {
+                const int row = br + i * step, col = bc + j * step;
+                const double a = at(row, col), b = at(row, col + step);
+                const double c = at(row + step, col + step), d = at(row + step, col);
                 const double e = 0.25 * (a + b + c + d);
-                const double w = std::sqrt((a - b) * (a - b) + side * side);
-                const double x = std::sqrt((b - e) * (b - c) + side * side);
-                const double y = std::sqrt((c - d) * (c - d) + side * side);
-                const double z = std::sqrt((a - d) * (a - d) + side * side);
-                const double o = std::sqrt((a - e) * (a - e) + diag * diag);
-                const double p = std::sqrt((b - e) * (b - e) + diag * diag);
-                const double q = std::sqrt((c - e) * (c - e) + diag * diag);
-                const double r = std::sqrt((d - e) * (d - e) + diag * diag);
-                const double sa = 0.5 * (w + p + o);
-                const double sb = 0.5 * (x + p + q);
-                const double sc = 0.5 * (y + q + r);
-                const double sd = 0.5 * (z + o + r);
-                const double aa = std::sqrt(std::fabs(sa * (sa - w) * (sa - p) * (sa - o)));
-                const double ab = std::sqrt(std::fabs(sb * (sb - x) * (sb - p) * (sb - q)));
-                const double ac = std::sqrt(std::fabs(sc * (sc - y) * (sc - q) * (sc - r)));
-                const double ad = std::sqrt(std::fabs(sd * (sd - z) * (sd - o) * (sd - r)));
-                surface_area += aa + ab + ac + ad;
+                const double w = S((a - b) * (a - b) + side * side);
+                const double x = S((b - c) * (b - c) + side * side);
+                const double y = S((c - d) * (c - d) + side * side);
+                const double z = S((a - d) * (a - d) + side * side);
+                const double o = S((a - e) * (a - e) + diag * diag);
+                const double p = S((b - e) * (b - e) + diag * diag);
+                const double q = S((c - e) * (c - e) + diag * diag);
+                const double s = S((d - e) * (d - e) + diag * diag);
+                const double sa = 0.5 * (w + p + o), sb = 0.5 * (x + p + q);
+                const double sc = 0.5 * (y + q + s), sd = 0.5 * (z + o + s);
+                const double aa = S(std::fabs(sa * (sa - w) * (sa - p) * (sa - o)));
+                const double ab = S(std::fabs(sb * (sb - x) * (sb - p) * (sb - q)));
+                const double ac = S(std::fabs(sc * (sc - y) * (sc - q) * (sc - s)));
+                const double ad = S(std::fabs(sd * (sd - z) * (sd - o) * (sd - s)));
+                sums[static_cast<Index>(i) * nb + j] = aa + ab + ac + ad;
             }
-        }
-        area[static_cast<Index>(time)] = surface_area;
-        resolution[static_cast<Index>(time)] = step * step;
+        const double area = lsm::r_sum(sums.data(), static_cast<i64>(sums.size()));
+        la[static_cast<Index>(t)] = area;
+        lr[static_cast<Index>(t)] = static_cast<double>(step) * step;
         step *= 2;
     }
-    double resavg = 0.0, areaavg = 0.0, cross = 0.0, sumres = 0.0, sumarea = 0.0;
-    for (int k = 1; k <= steps; ++k) {
-        resolution[static_cast<Index>(k)] = lsm::r_log(resolution[static_cast<Index>(k)]);
-        area[static_cast<Index>(k)] = lsm::r_log(area[static_cast<Index>(k)]);
-        resavg += resolution[static_cast<Index>(k)];
-        areaavg += area[static_cast<Index>(k)];
+    // log (R's vector log), the regression's slope
+    const bool one = steps == 1;
+    (void)one;
+    for (int t = 0; t < steps; ++t) {
+        lr[static_cast<Index>(t)] = lsm::r_log(lr[static_cast<Index>(t)]);
+        la[static_cast<Index>(t)] = lsm::r_log(la[static_cast<Index>(t)]);
     }
-    resavg /= static_cast<double>(steps);
-    areaavg /= static_cast<double>(steps);
-    for (int k = 1; k <= steps; ++k) {
-        const double dr = resolution[static_cast<Index>(k)] - resavg, da = area[static_cast<Index>(k)] - areaavg;
-        cross += (dr * da);
-        sumres += (dr * dr);
-        sumarea += (da * da);
+    const double mr = lsm::r_sum(lr.data(), steps) / steps, ma = lsm::r_sum(la.data(), steps) / steps;
+    std::vector<double> cr(static_cast<Index>(steps)), rr(static_cast<Index>(steps)), aa2(static_cast<Index>(steps));
+    for (int t = 0; t < steps; ++t) {
+        const double dr = lr[static_cast<Index>(t)] - mr, da = la[static_cast<Index>(t)] - ma;
+        cr[static_cast<Index>(t)] = dr * da;
+        rr[static_cast<Index>(t)] = dr * dr;
+        aa2[static_cast<Index>(t)] = da * da;
     }
-    if (sumres == 0.0) sumres = 1;
-    if (sumarea == 0.0) sumarea = 1;
+    double cross = lsm::r_sum(cr.data(), steps), sumres = lsm::r_sum(rr.data(), steps),
+           sumarea = lsm::r_sum(aa2.data(), steps);
+    if (sumres == 0) sumres = 1;
+    if (sumarea == 0) sumarea = 1;
     const double crossr = cross / std::sqrt(sumres * sumarea);
-    const double beta = crossr * std::sqrt(sumarea) / std::sqrt(sumres);
-    return 2.0 - beta;
+    return 2 - ((crossr * std::sqrt(sumarea)) / std::sqrt(sumres));
 }
 
 }  // namespace surf

@@ -38,9 +38,9 @@ def bearing_area(x, *, extent=None, crs=None, band=None, nodata=None) -> pd.Data
     """The bearing area (Abbott-Firestone) curve: the share of the surface at
     or above each height.
 
-    As geodiv, the empirical distribution of 1 - z: for every distinct height,
-    the fraction of cells whose height is at least that high (heights are
-    1 - (1 - z), which can differ from z in the last digit).
+    For every distinct height, from the highest, the fraction of cells whose
+    height is at least that high (geodiv's curve is that of 1 - z, which puts
+    rounding errors in the heights).
 
     Parameters
     ----------
@@ -79,8 +79,8 @@ def bearing_area(x, *, extent=None, crs=None, band=None, nodata=None) -> pd.Data
 def height_ba(x, xval, *, extent=None, crs=None, band=None, nodata=None):
     """Height of the bearing area curve at a bearing fraction.
 
-    The height below which a fraction 1 - ``xval`` of the surface lies (R's
-    type-7 quantile of 1 - z at ``xval``, subtracted from 1, as geodiv).
+    The height above which a fraction ``xval`` of the surface lies: R's type-7
+    quantile of z at 1 - ``xval``.
 
     Parameters
     ----------
@@ -163,7 +163,7 @@ def sbi(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     --------
     >>> import landschaft as ls
     >>> round(ls.surface.sbi(ls.surface.example_data("normforest")), 6)
-    0.801447
+    0.801444
     """
     return bearing_parameters(_read(x, extent, crs, band, nodata))["sbi"]
 
@@ -172,9 +172,11 @@ def sbi(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
 def svi(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     """Valley fluid retention index (Svi): the void volume of the valley zone.
 
-    geodiv's definition: the area above the bearing area curve between 80 % and
-    100 % bearing (Simpson's rule on 500 intervals; the curve is shifted up
-    when it goes below 0).
+    The area between the bearing area curve and its top from 80 % to 100 %
+    bearing (Simpson's rule on 500 intervals), in height units (geodiv's
+    definition, corrected: its area depends on whether the curve dips below 0,
+    which gives negative values on positive surfaces, and its Simpson's rule
+    drops the last point).
 
     Parameters
     ----------
@@ -191,7 +193,7 @@ def svi(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     --------
     >>> import landschaft as ls
     >>> round(ls.surface.svi(ls.surface.example_data("normforest")), 6)
-    0.012783
+    0.012704
     """
     return bearing_parameters(_read(x, extent, crs, band, nodata))["svi"]
 
@@ -200,8 +202,8 @@ def svi(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
 def sci(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     """Core fluid retention index (Sci): the void volume of the core zone.
 
-    geodiv's definition: the area above the bearing area curve between 5 % and
-    100 % bearing (1000 intervals) minus :func:`svi`.
+    The area between the bearing area curve and its top from 5 % to 100 %
+    bearing (1000 intervals) minus :func:`svi`.
 
     Parameters
     ----------
@@ -218,7 +220,7 @@ def sci(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     --------
     >>> import landschaft as ls
     >>> round(ls.surface.sci(ls.surface.example_data("normforest")), 6)
-    0.06914
+    0.069002
     """
     return bearing_parameters(_read(x, extent, crs, band, nodata))["sci"]
 
@@ -229,8 +231,9 @@ def sk(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
 
     The core line is the least-squares line through the bearing area curve
     over the flattest 40 % of it (geodiv's ``find_flat``: the curve's slopes by
-    central differences at 10000 points, their mean absolute value over each
-    40 % window); Sk is the difference of its heights at 0 % and 100 %.
+    central differences at 10000 points, one-sided at the ends, their mean
+    absolute value over each 40 % window); Sk is the difference of its heights
+    at 0 % and 100 %.
 
     Parameters
     ----------

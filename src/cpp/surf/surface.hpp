@@ -54,46 +54,44 @@ std::vector<double> fit_plane(const Grid& g, int order, int* ifail = nullptr);
 std::vector<double> best_fit_plane(const Grid& g, int* order = nullptr);
 
 // -- hybrid parameters (geodiv's sdq.R, surfacearea.R) ------------------------
-// `iso`: the corrections of convention="iso" (sdq6's stencil; surface areas on
-// the heights and cell sizes as they are, not rescaled).
 
 double sdq(const Grid& g);
-double sdq6(const Grid& g, bool iso);
-double surface_area(const Grid& g, bool iso);
-double flat_area(const Grid& g, bool iso);
-double sdr(const Grid& g, bool iso);
+double sdq6(const Grid& g);
+double surface_area(const Grid& g);
+double flat_area(const Grid& g);
+double sdr(const Grid& g);
 
 // -- local features (geodiv's localsurface.R) ---------------------------------
 
-// The peaks / valleys (cell indices, row order). `transposed`: geodiv's
-// findvalleys, which reads the neighbours from the values filled by columns.
+// The peaks / valleys (cell indices, row order).
 std::vector<i64> find_peaks(const Grid& g);
-std::vector<i64> find_valleys(const Grid& g, bool transposed);
+std::vector<i64> find_valleys(const Grid& g);
 double sds(const Grid& g);
 double ssc(const Grid& g);
-double s10z(const Grid& g, bool transposed_valleys);
+double s10z(const Grid& g);
 
 // -- bearing area curve (geodiv's bearingarea.R, bestfit.R, simpsons.R) ------
 
-// The Abbott-Firestone curve of the values: R's ecdf(1 - z).
+// The Abbott-Firestone curve of the values.
 struct Bearing {
-    std::vector<double> s;          // 1 - z sorted (no NA)
-    std::vector<double> vals, cum;  // the distinct values and the ecdf there
-    double quantile(double p) const;  // R's quantile(type = 7)
-    double ecdf(double v) const;
-    double height(double p) const { return 1 - quantile(p); }  // geodiv's height_ba
+    std::vector<double> s;                 // z sorted (no NA)
+    std::vector<double> heights, bearing;  // distinct heights from the top, share at or above each
+    double quantile(double q) const;       // R's quantile(z, q, type = 7)
+    double share_above(double v) const;
+    double height(double p) const { return quantile(1 - p); }  // the height at bearing p
 };
 Bearing bearing_curve(const double* z, i64 n);
 
-// geodiv's area_above(f, a, b, n) (Simpson's rule).
+// The area between the curve and its top over bearings [a, b] (Simpson, n
+// intervals).
 double area_above(const Bearing& b, double a, double bb, int n);
 
 // geodiv's find_flat: the core line's heights at 0 and 1 and the bearing
-// ratios Smr1, Smr2 where it crosses the curve (NaN where geodiv gives NA).
+// ratios Smr1, Smr2 where it crosses the curve (NaN where there is none).
 struct CoreLine {
     double high, low, smr1, smr2;
 };
-CoreLine find_flat(const Bearing& b, double perc);
+CoreLine find_flat(const Bearing& b);
 
 struct BearingParameters {
     double sbi, svi, sci, sk, spk, svk;
@@ -125,8 +123,20 @@ std::vector<double> scl(const Grid& g, bool lonlat, const std::vector<double>& t
 std::vector<double> texture_direction(const Grid& g, bool lonlat);
 // geodiv's srw: the dominant radial wavelength, its index, the half wavelength.
 std::vector<double> radial_wavelength(const Grid& g, bool lonlat);
-// geodiv's sfd (triangular prisms); NaN and `out_of_bounds` where geodiv
-// reads past the matrix.
-double sfd(const Grid& g, bool* out_of_bounds);
+// The fractal dimension by triangular prisms (geodiv's sfd, corrected).
+double sfd(const Grid& g);
+
+// -- moving windows ------------------------------------------------------------
+
+// The metrics window_metrics() computes (the order of ls.surface.window_metrics).
+enum WindowMetric : int {
+    kWSa, kWSq, kWSsk, kWSku, kWSv, kWSph, kWSmean, kWSdq, kWSdq6, kWSdr, kWSds, kWSsc, kWS10z,
+    kWSbi, kWSci, kWSvi, kWSk, kWSpk, kWSvk, kWSal, kWStr, kWStd, kWStdi, kWSrw, kWSrwi, kWShw, kWSfd
+};
+
+// Every metric of `ids` in the size x size window around each cell (row
+// order; NA beyond the edges and, with `circle`, beyond size / 2 cells).
+std::vector<std::vector<double>> window_metrics(const Grid& g, bool lonlat, int size, bool circle,
+                                                const std::vector<int>& ids);
 
 }  // namespace surf

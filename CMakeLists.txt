@@ -138,6 +138,7 @@ add_library(surfcore STATIC
     src/cpp/surf/hybrid.cpp
     src/cpp/surf/plane.cpp
     src/cpp/surf/spatial.cpp
+    src/cpp/surf/window.cpp
 )
 target_include_directories(surfcore PUBLIC src/cpp)
 # R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp), R's fft (nlm/rfft.hpp).

@@ -28,7 +28,7 @@ def test_amplitude_by_definition():
     z = rng.normal(size=(40, 50))
     z[rng.random(z.shape) < 0.1] = np.nan
     v = z[~np.isnan(z)]
-    n, m, s = v.size, v.mean(), v.std(ddof=1)
+    n, m, s = v.size, v.mean(), v.std()  # ISO's Sq: over N
     assert ls.surface.sa(z) == pytest.approx(np.abs(v - m).mean(), rel=1e-13)
     assert ls.surface.sq(z) == pytest.approx(s, rel=1e-13)
     g1 = ((v - m) ** 3).mean() / s**3

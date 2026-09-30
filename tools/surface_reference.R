@@ -6,7 +6,7 @@
 # case's R code (a named list) and writes every result as raw float64 files
 # plus a manifest.
 #
-#   Rscript tools/surface_reference.R job.json out_dir
+#   Rscript tools/surface_reference.R job.json out_dir tools/surface_fixed.R
 
 suppressMessages({
   library(terra)
@@ -18,6 +18,7 @@ suppressMessages({
 args <- commandArgs(TRUE)
 job <- fromJSON(args[1], simplifyVector = FALSE)
 out <- args[2]
+source(args[3])  # geodiv with its errors corrected: fx$...
 
 load_raster <- function(meta) {
   v <- readBin(meta$file, "double", n = meta$nrows * meta$ncols, endian = "little")

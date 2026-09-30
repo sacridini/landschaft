@@ -1,0 +1,175 @@
+{
+ "arrays": {
+  "window_amplitude_rand_5_square/sa": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_5_square/sku": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_5_square/smean": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_5_square/sph": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_5_square/sq": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_5_square/ssk": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_5_square/sv": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_na_5_circle/sa": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_na_5_circle/sku": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_na_5_circle/smean": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_na_5_circle/sph": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_na_5_circle/sq": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_na_5_circle/ssk": {
+   "kind": "vector"
+  },
+  "window_amplitude_rand_na_5_circle/sv": {
+   "kind": "vector"
+  },
+  "window_amplitude_ties_3_square/sa": {
+   "kind": "vector"
+  },
+  "window_amplitude_ties_3_square/sku": {
+   "kind": "vector"
+  },
+  "window_amplitude_ties_3_square/smean": {
+   "kind": "vector"
+  },
+  "window_amplitude_ties_3_square/sph": {
+   "kind": "vector"
+  },
+  "window_amplitude_ties_3_square/sq": {
+   "kind": "vector"
+  },
+  "window_amplitude_ties_3_square/ssk": {
+   "kind": "vector"
+  },
+  "window_amplitude_ties_3_square/sv": {
+   "kind": "vector"
+  },
+  "window_bearing_positive_5_square/sbi": {
+   "kind": "vector"
+  },
+  "window_bearing_positive_5_square/sci": {
+   "kind": "vector"
+  },
+  "window_bearing_positive_5_square/sk": {
+   "kind": "vector"
+  },
+  "window_bearing_positive_5_square/spk": {
+   "kind": "vector"
+  },
+  "window_bearing_positive_5_square/svi": {
+   "kind": "vector"
+  },
+  "window_bearing_positive_5_square/svk": {
+   "kind": "vector"
+  },
+  "window_hybrid_rand_7_square/s10z": {
+   "kind": "vector"
+  },
+  "window_hybrid_rand_7_square/sdq": {
+   "kind": "vector"
+  },
+  "window_hybrid_rand_7_square/sdq6": {
+   "kind": "vector"
+  },
+  "window_hybrid_rand_7_square/sdr": {
+   "kind": "vector"
+  },
+  "window_hybrid_rand_7_square/sds": {
+   "kind": "vector"
+  },
+  "window_hybrid_rand_7_square/ssc": {
+   "kind": "vector"
+  },
+  "window_hybrid_rect_7_circle/s10z": {
+   "kind": "vector"
+  },
+  "window_hybrid_rect_7_circle/sdq": {
+   "kind": "vector"
+  },
+  "window_hybrid_rect_7_circle/sdq6": {
+   "kind": "vector"
+  },
+  "window_hybrid_rect_7_circle/sdr": {
+   "kind": "vector"
+  },
+  "window_hybrid_rect_7_circle/sds": {
+   "kind": "vector"
+  },
+  "window_hybrid_rect_7_circle/ssc": {
+   "kind": "vector"
+  },
+  "window_spatial_nf_small_7_circle/sal": {
+   "kind": "vector"
+  },
+  "window_spatial_nf_small_7_circle/sfd": {
+   "kind": "vector"
+  },
+  "window_spatial_nf_small_7_circle/shw": {
+   "kind": "vector"
+  },
+  "window_spatial_nf_small_7_circle/srw": {
+   "kind": "vector"
+  },
+  "window_spatial_nf_small_7_circle/srwi": {
+   "kind": "vector"
+  },
+  "window_spatial_nf_small_7_circle/std": {
+   "kind": "vector"
+  },
+  "window_spatial_nf_small_7_circle/stdi": {
+   "kind": "vector"
+  },
+  "window_spatial_nf_small_7_circle/str": {
+   "kind": "vector"
+  },
+  "window_spatial_positive_5_square/sal": {
+   "kind": "vector"
+  },
+  "window_spatial_positive_5_square/sfd": {
+   "kind": "vector"
+  },
+  "window_spatial_positive_5_square/shw": {
+   "kind": "vector"
+  },
+  "window_spatial_positive_5_square/srw": {
+   "kind": "vector"
+  },
+  "window_spatial_positive_5_square/srwi": {
+   "kind": "vector"
+  },
+  "window_spatial_positive_5_square/std": {
+   "kind": "vector"
+  },
+  "window_spatial_positive_5_square/stdi": {
+   "kind": "vector"
+  },
+  "window_spatial_positive_5_square/str": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "geodiv": "1.1.1",
+  "spatialEco": "2.0.5",
+  "terra": "1.9.50"
+ }
+}

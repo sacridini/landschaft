@@ -9,7 +9,19 @@
   "fractal_orforest/sfd": {
    "kind": "vector"
   },
+  "fractal_positive/sfd": {
+   "kind": "vector"
+  },
+  "fractal_rand/sfd": {
+   "kind": "vector"
+  },
   "fractal_square/sfd": {
+   "kind": "vector"
+  },
+  "fractal_ties/sfd": {
+   "kind": "vector"
+  },
+  "fractal_tiny/sfd": {
    "kind": "vector"
   }
  },

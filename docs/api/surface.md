@@ -6,10 +6,12 @@ how its heights are distributed, how its trend can be removed. They are the
 areal surface texture parameters of ISO 25178, brought to landscape ecology as
 *gradient surface metrics*, and live in the `ls.surface` module.
 
-Every value is the one the R package geodiv gives, bit for bit, so studies done
-in R can be repeated and extended here. Where geodiv departs from ISO 25178
-(`sdq6`, `sdr`, the valleys of `find_valleys` and `s10z`), `convention="iso"`
-gives the standard's definition instead.
+The metrics follow the R package geodiv, bit for bit wherever geodiv is
+right; where it errs (Sq and the moments built on it, the seven-point slopes,
+the valleys, the summit curvature, the areas of the bearing area curve, the
+centre of its Fourier images, the fractal dimension's prisms, the choice of
+trend surface), Landschaft computes what the method intends, and each
+function's notes say what differs.
 
 <!-- no-run -->
 ```python
@@ -99,6 +101,10 @@ ls.surface.metrics(z)                   # every metric in one table
 ::: landschaft.surface.srw
 
 ::: landschaft.surface.sfd
+
+## Texture images
+
+::: landschaft.surface.window_metrics
 
 ## Trend surfaces
 

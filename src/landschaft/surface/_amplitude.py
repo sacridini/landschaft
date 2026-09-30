@@ -55,9 +55,9 @@ def sa(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
 
 @threaded
 def sq(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
-    """Root mean square roughness (Sq): the standard deviation of the heights.
-
-    As geodiv, the sample standard deviation (divided by N - 1).
+    """Root mean square roughness (Sq): the root mean square of the heights
+    about their mean, sqrt(sum((z - mean(z))^2) / N) (ISO 25178; geodiv uses
+    the sample standard deviation, over N - 1).
 
     Parameters
     ----------
@@ -84,10 +84,10 @@ def sq(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
 def ssk(x, adj: bool = True, *, extent=None, crs=None, band=None, nodata=None) -> float:
     """Skewness of the height distribution (Ssk).
 
-    (sum((z - mean(z))^3) / N) / Sq^3, with Sq the sample standard deviation
-    (:func:`sq`); with ``adj``, multiplied by sqrt(N (N - 1)) / (N - 2) (the
-    adjusted Fisher-Pearson coefficient). Negative: valleys dominate; positive:
-    peaks dominate.
+    (sum((z - mean(z))^3) / N) / Sq^3 with Sq from :func:`sq`; with ``adj``,
+    multiplied by sqrt(N (N - 1)) / (N - 2) (the adjusted Fisher-Pearson
+    coefficient). Negative: valleys dominate; positive: peaks dominate.
+    (geodiv divides by the sample standard deviation cubed.)
 
     Parameters
     ----------
@@ -117,8 +117,9 @@ def ssk(x, adj: bool = True, *, extent=None, crs=None, band=None, nodata=None) -
 def sku(x, excess: bool = True, *, extent=None, crs=None, band=None, nodata=None) -> float:
     """Kurtosis of the height distribution (Sku).
 
-    (sum((z - mean(z))^4) / N) / Sq^4, with Sq the sample standard deviation
-    (:func:`sq`); with ``excess``, minus 3 (0 for a normal distribution).
+    (sum((z - mean(z))^4) / N) / Sq^4 with Sq from :func:`sq`; with
+    ``excess``, minus 3 (0 for a normal distribution). (geodiv divides by the
+    sample standard deviation to the fourth.)
 
     Parameters
     ----------
@@ -138,7 +139,7 @@ def sku(x, excess: bool = True, *, extent=None, crs=None, band=None, nodata=None
     >>> import landschaft as ls
     >>> z = ls.surface.example_data("normforest")
     >>> round(ls.surface.sku(z), 4), round(ls.surface.sku(z, excess=False), 4)
-    (6.4977, 9.4977)
+    (6.4979, 9.4979)
     """
     a = _amplitude(x, extent, crs, band, nodata, "sku")
     return a["sku"] if excess else a["sku_raw"]

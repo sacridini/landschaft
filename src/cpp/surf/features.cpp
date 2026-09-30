@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// geodiv's local features (localsurface.R): findpeaks, findvalleys, sds, ssc,
-// s10z. A peak is an interior cell above zero and above its 8 neighbours (all
-// with a value); a valley one below zero and below them. geodiv's findvalleys
-// fills its matrix by columns (findpeaks by rows), so it compares each cell
-// with the 8 neighbours of its place in the matrix read by columns:
-// `transposed_valleys` reproduces that.
+// The local features (geodiv's localsurface.R): findpeaks, findvalleys, sds,
+// ssc, s10z. A peak is an interior cell above zero and above its 8 neighbours
+// (all with a value); a valley one below zero and below them (geodiv's
+// findvalleys fills its matrix by columns and so compares each cell with
+// other cells' neighbours).
 
 #include <algorithm>
 #include <cmath>
@@ -57,15 +56,9 @@ std::vector<i64> find_peaks(const Grid& g) {
     return local_extremes(g, n, [](double a, double b) { return a > b; });
 }
 
-std::vector<i64> find_valleys(const Grid& g, bool transposed) {
-    auto below = [](double a, double b) { return a < b; };
-    if (!transposed) {
-        auto n = [&](int r, int c) { return g.z[static_cast<i64>(r) * g.nx + c]; };
-        return local_extremes(g, n, below);
-    }
-    // matrix(z, nrow = ny, ncol = nx)[r, c]: element c * ny + r of the values
-    auto n = [&](int r, int c) { return g.z[static_cast<i64>(c) * g.ny + r]; };
-    return local_extremes(g, n, below);
+std::vector<i64> find_valleys(const Grid& g) {
+    auto n = [&](int r, int c) { return g.z[static_cast<i64>(r) * g.nx + c]; };
+    return local_extremes(g, n, [](double a, double b) { return a < b; });
 }
 
 double sds(const Grid& g) {
@@ -74,9 +67,12 @@ double sds(const Grid& g) {
 }
 
 double ssc(const Grid& g) {
+    // ISO 25178's mean summit curvature, -1/(2n) sum(d2z/dx2 + d2z/dy2) over
+    // the n peaks, by second differences of the heights rescaled to 0-1 with
+    // geodiv's cell spacing (x 1, y the ratio of the resolutions); geodiv has
+    // the opposite sign and first differences / dx
     const std::vector<i64> peaks = find_peaks(g);
     if (peaks.empty()) return NaN;
-    // zshift(scale = TRUE) and deltax / deltay as geodiv (see hybrid.cpp)
     double lo = std::numeric_limits<double>::infinity(), hi = -lo;
     for (i64 i = 0; i < g.size(); ++i) {
         const double v = g.z[i];
@@ -89,17 +85,12 @@ double ssc(const Grid& g) {
     const double rx = (g.xmax - g.xmin) / g.nx, ry = (g.ymax - g.ymin) / g.ny;
     const double dx = rx / rx, dy = ry / rx;
     const i64 m = static_cast<i64>(peaks.size());
-    const double sx = lsm::sum_of(0, m, [&](i64 k) {
+    const double sum = lsm::sum_of(0, m, [&](i64 k) {
         const i64 i = peaks[static_cast<std::size_t>(k)];
         const double v = zn(i);
-        return (((v - zn(i + 1)) + (v - zn(i - 1))) / 2) / dx;
+        return (((zn(i + 1) - (2 * v)) + zn(i - 1)) / (dx * dx)) + (((zn(i + g.nx) - (2 * v)) + zn(i - g.nx)) / (dy * dy));
     });
-    const double sy = lsm::sum_of(0, m, [&](i64 k) {
-        const i64 i = peaks[static_cast<std::size_t>(k)];
-        const double v = zn(i);
-        return (((v - zn(i + g.nx)) + (v - zn(i - g.nx))) / 2) / dy;
-    });
-    return -(1 / (2 * static_cast<double>(m))) * (sx + sy);
+    return -(1 / (2 * static_cast<double>(m))) * sum;
 }
 
 namespace {
@@ -121,10 +112,10 @@ std::vector<double> first5(const Grid& g, const std::vector<i64>& cells, Before 
 
 }  // namespace
 
-double s10z(const Grid& g, bool transposed_valleys) {
+double s10z(const Grid& g) {
     // the 5 highest peaks and the 5 deepest valleys, in R's stable order
     const std::vector<double> sp = first5(g, find_peaks(g), [](double a, double b) { return a > b; });
-    const std::vector<double> sv = first5(g, find_valleys(g, transposed_valleys),
+    const std::vector<double> sv = first5(g, find_valleys(g),
                                           [](double a, double b) { return a < b; });
     const double hi = lsm::sum_of(0, static_cast<i64>(sp.size()), [&](i64 k) { return sp[static_cast<std::size_t>(k)]; });
     const double lo = lsm::sum_of(0, static_cast<i64>(sv.size()),

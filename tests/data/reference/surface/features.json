@@ -30,19 +30,10 @@
   "features_normforest/valleys/col": {
    "kind": "vector"
   },
-  "features_normforest/valleys/ind": {
-   "kind": "vector"
-  },
   "features_normforest/valleys/row": {
    "kind": "vector"
   },
   "features_normforest/valleys/val": {
-   "kind": "vector"
-  },
-  "features_normforest/valleys/x": {
-   "kind": "vector"
-  },
-  "features_normforest/valleys/y": {
    "kind": "vector"
   },
   "features_orelevation/peaks/col": {
@@ -75,19 +66,10 @@
   "features_orelevation/valleys/col": {
    "kind": "vector"
   },
-  "features_orelevation/valleys/ind": {
-   "kind": "vector"
-  },
   "features_orelevation/valleys/row": {
    "kind": "vector"
   },
   "features_orelevation/valleys/val": {
-   "kind": "vector"
-  },
-  "features_orelevation/valleys/x": {
-   "kind": "vector"
-  },
-  "features_orelevation/valleys/y": {
    "kind": "vector"
   },
   "features_rand/peaks/col": {
@@ -120,19 +102,10 @@
   "features_rand/valleys/col": {
    "kind": "vector"
   },
-  "features_rand/valleys/ind": {
-   "kind": "vector"
-  },
   "features_rand/valleys/row": {
    "kind": "vector"
   },
   "features_rand/valleys/val": {
-   "kind": "vector"
-  },
-  "features_rand/valleys/x": {
-   "kind": "vector"
-  },
-  "features_rand/valleys/y": {
    "kind": "vector"
   },
   "features_rand_na/peaks/col": {
@@ -165,19 +138,10 @@
   "features_rand_na/valleys/col": {
    "kind": "vector"
   },
-  "features_rand_na/valleys/ind": {
-   "kind": "vector"
-  },
   "features_rand_na/valleys/row": {
    "kind": "vector"
   },
   "features_rand_na/valleys/val": {
-   "kind": "vector"
-  },
-  "features_rand_na/valleys/x": {
-   "kind": "vector"
-  },
-  "features_rand_na/valleys/y": {
    "kind": "vector"
   },
   "features_rect/peaks/col": {
@@ -210,19 +174,10 @@
   "features_rect/valleys/col": {
    "kind": "vector"
   },
-  "features_rect/valleys/ind": {
-   "kind": "vector"
-  },
   "features_rect/valleys/row": {
    "kind": "vector"
   },
   "features_rect/valleys/val": {
-   "kind": "vector"
-  },
-  "features_rect/valleys/x": {
-   "kind": "vector"
-  },
-  "features_rect/valleys/y": {
    "kind": "vector"
   },
   "features_square/peaks/col": {
@@ -255,19 +210,10 @@
   "features_square/valleys/col": {
    "kind": "vector"
   },
-  "features_square/valleys/ind": {
-   "kind": "vector"
-  },
   "features_square/valleys/row": {
    "kind": "vector"
   },
   "features_square/valleys/val": {
-   "kind": "vector"
-  },
-  "features_square/valleys/x": {
-   "kind": "vector"
-  },
-  "features_square/valleys/y": {
    "kind": "vector"
   },
   "features_ties/peaks/col": {
@@ -300,19 +246,10 @@
   "features_ties/valleys/col": {
    "kind": "vector"
   },
-  "features_ties/valleys/ind": {
-   "kind": "vector"
-  },
   "features_ties/valleys/row": {
    "kind": "vector"
   },
   "features_ties/valleys/val": {
-   "kind": "vector"
-  },
-  "features_ties/valleys/x": {
-   "kind": "vector"
-  },
-  "features_ties/valleys/y": {
    "kind": "vector"
   },
   "features_tiny/peaks/col": {
@@ -345,19 +282,10 @@
   "features_tiny/valleys/col": {
    "kind": "vector"
   },
-  "features_tiny/valleys/ind": {
-   "kind": "vector"
-  },
   "features_tiny/valleys/row": {
    "kind": "vector"
   },
   "features_tiny/valleys/val": {
-   "kind": "vector"
-  },
-  "features_tiny/valleys/x": {
-   "kind": "vector"
-  },
-  "features_tiny/valleys/y": {
    "kind": "vector"
   }
  },

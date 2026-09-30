@@ -54,8 +54,10 @@ def test_fractal_dimension():
     rough = np.random.default_rng(2).normal(size=(n, n))
     smooth = np.sin(xx / 20) + np.cos(yy / 25)
     assert ls.surface.sfd(rough) > ls.surface.sfd(smooth) >= 2.0
-    with pytest.raises(ValueError, match="edge of the raster"):
-        ls.surface.sfd(np.ones((9, 12)))
+    assert np.isfinite(ls.surface.sfd(rough[:9, :12]))  # geodiv reads past this one
+    z = rough.copy()
+    z[3, 3] = np.nan
+    assert np.isnan(ls.surface.sfd(z))
 
 
 def test_spatial_metrics_table():
@@ -66,4 +68,14 @@ def test_spatial_metrics_table():
     assert [t["std"], t["stdi"]] == ls.surface.std(z).tolist()
     assert [t["srw"], t["srwi"], t["shw"]] == ls.surface.srw(z).tolist()
     assert t["sfd"] == ls.surface.sfd(z)
-    assert np.isnan(ls.surface.metrics(np.ones((9, 12)), "sfd")["sfd"])
+
+
+def test_texture_direction_of_stripes():
+    n = 64
+    yy, xx = np.mgrid[0:n, 0:n].astype(float)
+    # stripes varying along x: frequency vector along x (0 degrees); along y: 90
+    assert ls.surface.std(np.sin(2 * np.pi * xx / 8))[0] == 0.0
+    assert ls.surface.std(np.sin(2 * np.pi * yy / 8))[0] == 90.0
+    assert ls.surface.std(np.sin(2 * np.pi * (xx - yy) / 8))[0] == 45.0
+    # a wavelength of 8 cells: 64 / 8 = 8 frequency steps
+    assert ls.surface.srw(np.sin(2 * np.pi * yy / 8))[0] == pytest.approx(8, abs=0.6)

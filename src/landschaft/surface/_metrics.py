@@ -12,7 +12,6 @@ from .. import _core
 from .._threads import threaded
 from ._bearing import bearing_parameters
 from ._grid import Surface, read_surface
-from ._hybrid import iso
 from ._spatial import spatial_parameters
 
 __all__ = ["metrics", "list_metrics"]
@@ -23,31 +22,31 @@ class Metric:
     name: str
     group: str
     description: str
-    # the computation shared by the metrics of a group: (Surface, iso) -> {metric: value}
-    compute: Callable[[Surface, bool], dict]
+    # the computation shared by the metrics of a group: Surface -> {metric: value}
+    compute: Callable[[Surface], dict]
 
 
-def _amplitude(s: Surface, iso: bool) -> dict:
+def _amplitude(s: Surface) -> dict:
     a = _core.surf_amplitude(s.values)
     return {k: a[k] for k in ("sa", "sq", "ssk", "sku", "sv", "sph", "smean")}
 
 
-def _hybrid(s: Surface, iso: bool) -> dict:
-    return _core.surf_hybrid(s.values, tuple(map(float, s.extent)), iso)
+def _hybrid(s: Surface) -> dict:
+    return _core.surf_hybrid(s.values, tuple(map(float, s.extent)))
 
 
-def _bearing(s: Surface, iso: bool) -> dict:
+def _bearing(s: Surface) -> dict:
     return bearing_parameters(s)
 
 
-def _spatial(s: Surface, iso: bool) -> dict:
+def _spatial(s: Surface) -> dict:
     return spatial_parameters(s)
 
 
-def _features(s: Surface, iso: bool) -> dict:
+def _features(s: Surface) -> dict:
     e = tuple(map(float, s.extent))
     return {"sds": _core.surf_sds(s.values, e), "ssc": _core.surf_ssc(s.values, e),
-            "s10z": _core.surf_s10z(s.values, e, not iso)}
+            "s10z": _core.surf_s10z(s.values, e)}
 
 
 METRICS: dict[str, Metric] = {m.name: m for m in [
@@ -103,8 +102,8 @@ def list_metrics() -> pd.DataFrame:
 
 
 @threaded
-def metrics(x, metrics: str | Iterable[str] | None = None, convention: str = "geodiv", *, extent=None, crs=None,
-            band=None, nodata=None) -> pd.Series:
+def metrics(x, metrics: str | Iterable[str] | None = None, *, extent=None, crs=None, band=None,
+            nodata=None) -> pd.Series:
     """Surface metrics of a raster, as a Series indexed by metric.
 
     Parameters
@@ -115,9 +114,6 @@ def metrics(x, metrics: str | Iterable[str] | None = None, convention: str = "ge
     metrics : str or list of str, optional
         Names from :func:`list_metrics` (default: all). Metrics that share a
         computation are computed once.
-    convention : {"geodiv", "iso"}, default "geodiv"
-        ``"geodiv"``: the values of geodiv; ``"iso"``: its errors corrected
-        (see :func:`sdq6`, :func:`sdr`, :func:`find_valleys`).
     extent : tuple of float, optional
         ``(xmin, xmax, ymin, ymax)`` of an array (default: unit cells).
     crs : optional
@@ -138,20 +134,19 @@ def metrics(x, metrics: str | Iterable[str] | None = None, convention: str = "ge
     >>> ls.surface.metrics(z, ["sa", "sq", "sku"]).round(4)
     sa     0.0443
     sq     0.0648
-    sku    6.4977
+    sku    6.4979
     dtype: float64
     """
     names = list(METRICS) if metrics is None else [metrics] if isinstance(metrics, str) else list(metrics)
     unknown = [n for n in names if n not in METRICS]
     if unknown:
         raise ValueError(f"unknown surface metric(s) {', '.join(map(repr, unknown))}; see ls.surface.list_metrics()")
-    use_iso = iso(convention)
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
     done: dict[Callable, dict] = {}
     out = {}
     for n in names:
         f = METRICS[n].compute
         if f not in done:
-            done[f] = f(s, use_iso)
+            done[f] = f(s)
         out[n] = done[f][n]
     return pd.Series(out, dtype=float)

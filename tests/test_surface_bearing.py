@@ -23,13 +23,12 @@ def test_curve_and_heights_by_definition():
     z[rng.random(z.shape) < 0.05] = np.nan
     v = z[~np.isnan(z)]
     curve = ls.surface.bearing_area(z)
-    u = np.unique(1 - v)  # geodiv's ecdf of 1 - z: heights 1 - (1 - z)
-    np.testing.assert_array_equal(curve["height"], 1 - u)
-    np.testing.assert_allclose(curve["height"], np.unique(v)[::-1], rtol=0, atol=1e-15)
-    share = np.array([(1 - v <= w).sum() for w in u]) / v.size
-    np.testing.assert_allclose(curve["bearing"], share, rtol=1e-15)
+    heights = np.unique(v)[::-1]
+    np.testing.assert_array_equal(curve["height"], heights)
+    share = np.array([(v >= h).sum() for h in heights]) / v.size
+    np.testing.assert_array_equal(curve["bearing"], share)
     probs = [0, 0.05, 0.37, 0.5, 1]
-    expected = 1 - np.quantile(1 - v, probs)  # numpy's default is R's type 7
+    expected = np.quantile(v, 1 - np.array(probs))  # numpy's default is R's type 7
     np.testing.assert_allclose(ls.surface.height_ba(z, probs), expected, rtol=1e-13)
     assert ls.surface.height_ba(z, 0.5) == ls.surface.height_ba(z, [0.5])[0]
     assert ls.surface.sdc(z, 0.2, 0.7) == pytest.approx(

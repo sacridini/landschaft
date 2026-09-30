@@ -258,7 +258,7 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.surface.metrics`](surface.md#landschaft.surface.metrics) | Surface metrics of a raster, as a Series indexed by metric |
 | [`ls.surface.list_metrics`](surface.md#landschaft.surface.list_metrics) | The surface metrics `metrics` computes |
 | [`ls.surface.sa`](surface.md#landschaft.surface.sa) | Average roughness (Sa): the mean absolute deviation from the mean height |
-| [`ls.surface.sq`](surface.md#landschaft.surface.sq) | Root mean square roughness (Sq): the standard deviation of the heights |
+| [`ls.surface.sq`](surface.md#landschaft.surface.sq) | Root mean square roughness (Sq): the root mean square of the heights about their mean, sqrt(sum((z - mean(z))^2) / N) (ISO 25178; geodiv uses the sample standard deviation, over N - 1) |
 | [`ls.surface.ssk`](surface.md#landschaft.surface.ssk) | Skewness of the height distribution (Ssk) |
 | [`ls.surface.sku`](surface.md#landschaft.surface.sku) | Kurtosis of the height distribution (Sku) |
 | [`ls.surface.sv`](surface.md#landschaft.surface.sv) | Maximum valley depth (Sv): the absolute value of the lowest height |
@@ -267,7 +267,7 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.surface.sdq`](surface.md#landschaft.surface.sdq) | Root mean square slope (Sdq) |
 | [`ls.surface.sdq6`](surface.md#landschaft.surface.sdq6) | Area root mean square slope (Sdq6), from seven-point derivatives |
 | [`ls.surface.sdr`](surface.md#landschaft.surface.sdr) | Developed interfacial area ratio (Sdr), in percent |
-| [`ls.surface.surface_area`](surface.md#landschaft.surface.surface_area) | Area of the surface, triangulated |
+| [`ls.surface.surface_area`](surface.md#landschaft.surface.surface_area) | Area of the surface, triangulated, in geodiv's units |
 | [`ls.surface.flat_area`](surface.md#landschaft.surface.flat_area) | Area of the surface's projection on a plane (geodiv's ``flatsa``) |
 | [`ls.surface.find_peaks`](surface.md#landschaft.surface.find_peaks) | The peaks of a surface: cells higher than their 8 neighbours and than 0 |
 | [`ls.surface.find_valleys`](surface.md#landschaft.surface.find_valleys) | The valleys of a surface: cells lower than their 8 neighbours and than 0 |
@@ -289,6 +289,7 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.surface.std`](surface.md#landschaft.surface.std) | Texture direction (Std) and texture direction index (Stdi) |
 | [`ls.surface.srw`](surface.md#landschaft.surface.srw) | Dominant radial wavelength (Srw), its index (Srwi) and the half-power wavelength (Shw) |
 | [`ls.surface.sfd`](surface.md#landschaft.surface.sfd) | Fractal dimension of the surface (Sfd), by triangular prisms |
+| [`ls.surface.window_metrics`](surface.md#landschaft.surface.window_metrics) | Surface metrics in a moving window: one texture image per metric |
 | [`ls.surface.fit_plane`](surface.md#landschaft.surface.fit_plane) | The least-squares polynomial surface of a given order |
 | [`ls.surface.best_fit_plane`](surface.md#landschaft.surface.best_fit_plane) | The polynomial surface of order 0 to 3 that fits a surface best |
 | [`ls.surface.remove_plane`](surface.md#landschaft.surface.remove_plane) | A surface minus its best-fitting polynomial surface (geodiv's ``remove_plane``) |

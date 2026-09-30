@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// geodiv's amplitude parameters (basics.R): sa, sq, ssk, sku, sv, sph, smean,
-// with R's arithmetic: mean() and sd() and sum() in 80 bits, x^3 and x^4 by
-// mingw-w64's powl, the scalar sqrt of the byte-code interpreter.
+// The amplitude parameters (geodiv's basics.R): sa, sq, ssk, sku, sv, sph,
+// smean, with R's arithmetic: mean() and sum() in 80 bits, x^3 and x^4 by
+// mingw-w64's powl, the scalar sqrt of the byte-code interpreter. Sq is ISO
+// 25178's root mean square (geodiv uses sd(), over N - 1).
 
 #include <cmath>
 #include <limits>
@@ -54,8 +55,13 @@ Amplitude amplitude(const double* z, i64 n, unsigned parts) {
             a.sa = lsm::r_sum(t.data(), N) / dn;
         }
         if (parts & (kSq | kSsk | kSku)) {
-            // sq: sd(z, na.rm = TRUE)
-            const double s = lsm::r_sd(v.data(), N, zbar);
+            // sq: ISO 25178's root mean square, sqrt(sum((z - zbar)^2) / N)
+            // (geodiv: sd(), over N - 1, also inside ssk and sku)
+            const double s = N ? std::sqrt(lsm::sum_of(0, N, [&](i64 i) {
+                                               const double d = v[static_cast<std::size_t>(i)] - zbar;
+                                               return d * d;
+                                           }) / dn)
+                               : NaN;
             a.sq = s;
             if (parts & kSsk) {  // (sum((z - zbar)^3) / N) / s^3, times sqrt(N (N - 1)) / (N - 2)
                 a.ssk_unadj = N ? central_moment(v, zbar, 3.0) / lsm::r_pow(s, 3.0) : NaN;

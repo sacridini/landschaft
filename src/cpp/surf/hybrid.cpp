@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// geodiv's hybrid parameters (sdq.R, surfacearea.R): sdq, sdq6, surface_area,
-// flatsa, sdr. Cells are visited in R's order (zshift: row by row), sums are
-// R's 80-bit sums, R's vector sqrt is the x87 one (a single value: sqrtsd).
+// The hybrid parameters (geodiv's sdq.R, surfacearea.R): sdq, sdq6,
+// surface_area, flatsa, sdr. Cells are visited in R's order (zshift: row by
+// row), sums are R's 80-bit sums, R's vector sqrt is the x87 one (a single
+// value: sqrtsd). Areas are geodiv's: heights rescaled to 0-1, cells 1 wide.
 
 #include <cmath>
 #include <limits>
@@ -17,10 +18,6 @@ namespace surf {
 namespace {
 
 constexpr double NaN = std::numeric_limits<double>::quiet_NaN();
-
-// R's sum(a, b, na.rm = TRUE) of two sums: do_summary adds each argument's
-// rsum into a double.
-inline double sum2(double a, double b) { return a + b; }
 
 // zshift(..., scale = TRUE): (z - min) / (max - min), min and max without NA.
 std::vector<double> rescaled(const Grid& g) {
@@ -93,72 +90,59 @@ void geodiv_spacing(const Grid& g, double& dx, double& dy) {
 
 }  // namespace
 
+// The root of the mean of term(r, c) over the cells of [r0, r1) x [c0, c1)
+// where it is defined (row order; R's sum(na.rm = TRUE) / sum(!is.na())).
+template <class Term>
+double root_mean(int r0, int r1, int c0, int c1, Term term) {
+    const i64 w = c1 > c0 ? c1 - c0 : 0, h = r1 > r0 ? r1 - r0 : 0;
+    i64 n = 0;
+    const double s = lsm::sum_of(0, w * h, [&](i64 k) {
+        const double v = term(r0 + k / w, c0 + k % w);
+        n += !std::isnan(v);
+        return v;
+    }, true);
+    return std::sqrt(s / static_cast<double>(n));
+}
+
 double sdq(const Grid& g) {
-    if (g.ny < 2 || g.nx < 2) return NaN;
-    const i64 m = static_cast<i64>(g.ny - 1) * (g.nx - 1);
+    // (z - z[x+1])^2 + (z - z[y+1])^2 over the pairs with both values (geodiv
+    // divides by the number of cells, missing ones too)
     const int nx = g.nx;
     const double* z = g.z;
-    return std::sqrt(lsm::sum_of(0, m, [&](i64 k) {
-               const i64 r = k / (nx - 1), c = k % (nx - 1), i = r * nx + c;
-               const double ex = z[i] - z[i + 1], ey = z[i] - z[i + nx];
-               return (ex * ex) + (ey * ey);
-           }, true) / static_cast<double>(m));
+    return root_mean(0, g.ny - 1, 0, nx - 1, [&](i64 r, i64 c) {
+        const i64 i = r * nx + c;
+        const double ex = (z[i] - z[i + 1]) / 1, ey = (z[i] - z[i + nx]) / 1;
+        return (ex * ex) + (ey * ey);
+    });
 }
 
-double sdq6(const Grid& g, bool iso) {
-    const int ny = g.ny, nx = g.nx;
+double sdq6(const Grid& g) {
+    // ISO 25178's seven-point derivatives, (z[+3] - 9 z[+2] + 45 z[+1] -
+    // 45 z[-1] + 9 z[-2] - z[-3]) / 60, at the cells 3 or more cells from the
+    // edges; the root mean square (geodiv: - 9 z[+2] twice, and no mean)
+    const int nx = g.nx;
+    if (g.ny < 7 || nx < 7) return NaN;
     const double* z = g.z;
-    const int r0 = 3, r1 = ny - 3, c0 = 3, c1 = nx - 3;  // rows / columns [r0, r1)
-    const i64 w = c1 > c0 ? c1 - c0 : 0, h = r1 > r0 ? r1 - r0 : 0;
     const double k = 1.0 / (60.0 * 1.0);
     auto at = [&](i64 r, i64 c) { return z[r * nx + c]; };
-    auto px = [&](i64 j) {
-        const i64 r = r0 + j / w, c = c0 + j % w;
-        double t = at(r, c + 3) - (9 * at(r, c + 2));
-        t = t + (45 * at(r, c + 1));
-        t = t - (45 * at(r, c - 1));
-        t = iso ? t + (9 * at(r, c - 2)) : t - (9 * at(r, c + 2));
-        t = t - at(r, c - 3);
-        const double p = k * t;
-        return p * p;
-    };
-    auto py = [&](i64 j) {
-        const i64 r = r0 + j / w, c = c0 + j % w;
-        double t = at(r + 3, c) - (9 * at(r + 2, c));
-        t = t + (45 * at(r + 1, c));
-        t = t - (45 * at(r - 1, c));
-        t = iso ? t + (9 * at(r - 2, c)) : t - (9 * at(r + 2, c));
-        t = t - at(r - 3, c);
-        const double p = k * t;
-        return p * p;
-    };
-    const i64 m = w * h;
-    const double sx = m ? lsm::sum_of(0, m, px, true) : 0.0;
-    const double sy = m ? lsm::sum_of(0, m, py, true) : 0.0;
-    // geodiv divides by length(x), which is 1 for a SpatRaster; ISO by the
-    // number of cells the slopes are taken at
-    const double n = iso ? static_cast<double>(m) : 1.0;
-    return std::sqrt((1.0 / n) * sum2(sx, sy));
+    return root_mean(3, g.ny - 3, 3, nx - 3, [&](i64 r, i64 c) {
+        const double px = k * (((((at(r, c + 3) - (9 * at(r, c + 2))) + (45 * at(r, c + 1))) - (45 * at(r, c - 1))) +
+                                (9 * at(r, c - 2))) - at(r, c - 3));
+        const double py = k * (((((at(r + 3, c) - (9 * at(r + 2, c))) + (45 * at(r + 1, c))) - (45 * at(r - 1, c))) +
+                                (9 * at(r - 2, c))) - at(r - 3, c));
+        return (px * px) + (py * py);
+    });
 }
 
-double surface_area(const Grid& g, bool iso) {
-    if (iso) {
-        const std::vector<double> z(g.z, g.z + g.size());
-        return triangulated_area(z, g.ny, g.nx, (g.xmax - g.xmin) / g.nx, (g.ymax - g.ymin) / g.ny);
-    }
+double surface_area(const Grid& g) {
     double dx, dy;
     geodiv_spacing(g, dx, dy);
     return triangulated_area(rescaled(g), g.ny, g.nx, dx, dy);
 }
 
-double flat_area(const Grid& g, bool iso) {
+double flat_area(const Grid& g) {
     double dx, dy;
-    if (iso) {
-        dx = (g.xmax - g.xmin) / g.nx;
-        dy = (g.ymax - g.ymin) / g.ny;
-    } else {
-        geodiv_spacing(g, dx, dy);
-    }
+    geodiv_spacing(g, dx, dy);
     // triangulated_area of the heights set to 0: the same area for every
     // complete block (R's vector sqrt, or sqrtsd for a single block)
     const int ny = g.ny, nx = g.nx;
@@ -180,9 +164,9 @@ double flat_area(const Grid& g, bool iso) {
     }, true);
 }
 
-double sdr(const Grid& g, bool iso) {
-    const double flat = flat_area(g, iso);
-    const double area = surface_area(g, iso);
+double sdr(const Grid& g) {
+    const double flat = flat_area(g);
+    const double area = surface_area(g);
     return ((area - flat) / flat) * 100;
 }
 

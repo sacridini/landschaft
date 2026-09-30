@@ -86,15 +86,15 @@ double grid_metric(const Array& z, const Extent& extent, F&& f) {
     return f(g);
 }
 
-py::dict py_hybrid(const Array& z, const Extent& extent, bool iso) {
+py::dict py_hybrid(const Array& z, const Extent& extent) {
     const surf::Grid g = grid_of(z, extent);
     double sdq, sdq6, area, flat;
     {
         py::gil_scoped_release release;
         sdq = surf::sdq(g);
-        sdq6 = surf::sdq6(g, iso);
-        area = surf::surface_area(g, iso);
-        flat = surf::flat_area(g, iso);
+        sdq6 = surf::sdq6(g);
+        area = surf::surface_area(g);
+        flat = surf::flat_area(g);
     }
     py::dict d;
     d["sdq"] = sdq;
@@ -121,12 +121,12 @@ py::array_t<std::int64_t> py_find_peaks(const Array& z, const Extent& extent) {
     return cells_array(std::move(cells));
 }
 
-py::array_t<std::int64_t> py_find_valleys(const Array& z, const Extent& extent, bool transposed) {
+py::array_t<std::int64_t> py_find_valleys(const Array& z, const Extent& extent) {
     const surf::Grid g = grid_of(z, extent);
     std::vector<surf::i64> cells;
     {
         py::gil_scoped_release release;
-        cells = surf::find_valleys(g, transposed);
+        cells = surf::find_valleys(g);
     }
     return cells_array(std::move(cells));
 }
@@ -143,10 +143,8 @@ py::dict py_bearing(const Array& z, py::object probs, double sq, bool parameters
         if (parameters) p = surf::bearing_parameters(b, sq);
     }
     py::dict d;
-    d["bearing"] = py::array_t<double>(static_cast<py::ssize_t>(b.cum.size()), b.cum.data());
-    std::vector<double> height(b.vals.size());
-    for (std::size_t k = 0; k < height.size(); ++k) height[k] = 1 - b.vals[k];
-    d["height"] = py::array_t<double>(static_cast<py::ssize_t>(height.size()), height.data());
+    d["bearing"] = py::array_t<double>(static_cast<py::ssize_t>(b.bearing.size()), b.bearing.data());
+    d["height"] = py::array_t<double>(static_cast<py::ssize_t>(b.heights.size()), b.heights.data());
     d["heights"] = py::array_t<double>(static_cast<py::ssize_t>(heights.size()), heights.data());
     if (parameters) {
         d["sbi"] = p.sbi;
@@ -181,17 +179,16 @@ std::vector<double> grid_vector(const Array& z, const Extent& extent, F&& f) {
 namespace surf {
 
 void register_python(py::module_& m) {
-    m.def("surf_hybrid", &py_hybrid, py::arg("z"), py::arg("extent"), py::arg("iso"),
-          "geodiv's sdq, sdq6, surface_area, flatsa and sdr (iso: the corrected definitions).");
+    m.def("surf_hybrid", &py_hybrid, py::arg("z"), py::arg("extent"),
+          "sdq, sdq6, surface_area, flat_area and sdr.");
     m.def("surf_sdq", [](const Array& z, const Extent& e) { return grid_metric(z, e, surf::sdq); },
           py::arg("z"), py::arg("extent"), "geodiv's sdq.");
-    m.def("surf_sdq6", [](const Array& z, const Extent& e, bool iso) {
-        return grid_metric(z, e, [iso](const surf::Grid& g) { return surf::sdq6(g, iso); });
-    }, py::arg("z"), py::arg("extent"), py::arg("iso"), "geodiv's sdq6.");
+    m.def("surf_sdq6", [](const Array& z, const Extent& e) { return grid_metric(z, e, surf::sdq6); },
+          py::arg("z"), py::arg("extent"), "sdq6.");
     m.def("surf_find_peaks", &py_find_peaks, py::arg("z"), py::arg("extent"),
           "geodiv's findpeaks: the peak cells (row-order indices).");
-    m.def("surf_find_valleys", &py_find_valleys, py::arg("z"), py::arg("extent"), py::arg("transposed"),
-          "geodiv's findvalleys: the valley cells (transposed: as geodiv reads the neighbours).");
+    m.def("surf_find_valleys", &py_find_valleys, py::arg("z"), py::arg("extent"),
+          "The valley cells (row-order indices).");
     m.def("surf_sds", [](const Array& z, const Extent& e) { return grid_metric(z, e, surf::sds); },
           py::arg("z"), py::arg("extent"), "geodiv's sds.");
     m.def("surf_ssc", [](const Array& z, const Extent& e) { return grid_metric(z, e, surf::ssc); },
@@ -213,17 +210,24 @@ void register_python(py::module_& m) {
     }, py::arg("z"), py::arg("extent"), py::arg("lonlat"), "geodiv's srw: (srw, srwi, shw).");
     m.def("surf_sfd", [](const Array& z, const Extent& e) {
         const surf::Grid g = grid_of(z, e);
-        bool oob = false;
-        double v;
+        py::gil_scoped_release release;
+        return surf::sfd(g);
+    }, py::arg("z"), py::arg("extent"), "The fractal dimension (triangular prisms).");
+    m.def("surf_window", [](const Array& z, const Extent& e, bool lonlat, int size, bool circle,
+                            const std::vector<int>& ids) {
+        const surf::Grid g = grid_of(z, e);
+        std::vector<std::vector<double>> res;
         {
             py::gil_scoped_release release;
-            v = surf::sfd(g, &oob);
+            res = surf::window_metrics(g, lonlat, size, circle, ids);
         }
-        return py::make_tuple(v, oob);
-    }, py::arg("z"), py::arg("extent"), "geodiv's sfd and whether it would read past the matrix.");
-    m.def("surf_s10z", [](const Array& z, const Extent& e, bool transposed) {
-        return grid_metric(z, e, [transposed](const surf::Grid& g) { return surf::s10z(g, transposed); });
-    }, py::arg("z"), py::arg("extent"), py::arg("transposed_valleys"), "geodiv's s10z.");
+        py::list out;
+        for (auto& r : res) out.append(to_raster(std::move(r), g.ny, g.nx));
+        return out;
+    }, py::arg("z"), py::arg("extent"), py::arg("lonlat"), py::arg("size"), py::arg("circle"),
+       py::arg("ids"), "Surface metrics in a moving window (one raster per metric id).");
+    m.def("surf_s10z", [](const Array& z, const Extent& e) { return grid_metric(z, e, surf::s10z); },
+          py::arg("z"), py::arg("extent"), "s10z.");
     m.def("surf_amplitude", &py_amplitude, py::arg("z"), py::arg("parts") = 63u,
           "geodiv's sa, sq, ssk, sku, sv, sph and smean of the values (NaN = NA); parts: "
           "1 sa, 2 sq, 4 ssk, 8 sku, 16 sv and sph, 32 smean.");

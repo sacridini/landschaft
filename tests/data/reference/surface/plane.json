@@ -5,7 +5,7 @@
     371,
     371
    ],
-   "kind": "raster"
+   "kind": "matrix"
   },
   "plane_normforest/fit0": {
    "dim": [
@@ -35,6 +35,9 @@
    ],
    "kind": "matrix"
   },
+  "plane_normforest/order": {
+   "kind": "vector"
+  },
   "plane_normforest/removed": {
    "dim": [
     371,
@@ -47,7 +50,7 @@
     371,
     371
    ],
-   "kind": "raster"
+   "kind": "matrix"
   },
   "plane_orelevation/fit0": {
    "dim": [
@@ -77,6 +80,9 @@
    ],
    "kind": "matrix"
   },
+  "plane_orelevation/order": {
+   "kind": "vector"
+  },
   "plane_orelevation/removed": {
    "dim": [
     371,
@@ -89,7 +95,7 @@
     371,
     371
    ],
-   "kind": "raster"
+   "kind": "matrix"
   },
   "plane_orforest/fit0": {
    "dim": [
@@ -119,6 +125,9 @@
    ],
    "kind": "matrix"
   },
+  "plane_orforest/order": {
+   "kind": "vector"
+  },
   "plane_orforest/removed": {
    "dim": [
     371,
@@ -131,7 +140,7 @@
     20,
     30
    ],
-   "kind": "raster"
+   "kind": "matrix"
   },
   "plane_rand/fit0": {
    "dim": [
@@ -161,6 +170,9 @@
    ],
    "kind": "matrix"
   },
+  "plane_rand/order": {
+   "kind": "vector"
+  },
   "plane_rand/removed": {
    "dim": [
     20,
@@ -173,7 +185,7 @@
     24,
     24
    ],
-   "kind": "raster"
+   "kind": "matrix"
   },
   "plane_rand_na/fit0": {
    "dim": [
@@ -203,6 +215,9 @@
    ],
    "kind": "matrix"
   },
+  "plane_rand_na/order": {
+   "kind": "vector"
+  },
   "plane_rand_na/removed": {
    "dim": [
     24,
@@ -215,7 +230,7 @@
     25,
     35
    ],
-   "kind": "raster"
+   "kind": "matrix"
   },
   "plane_rect/fit0": {
    "dim": [
@@ -245,6 +260,9 @@
    ],
    "kind": "matrix"
   },
+  "plane_rect/order": {
+   "kind": "vector"
+  },
   "plane_rect/removed": {
    "dim": [
     25,
@@ -257,7 +275,7 @@
     32,
     32
    ],
-   "kind": "raster"
+   "kind": "matrix"
   },
   "plane_square/fit0": {
    "dim": [
@@ -287,6 +305,9 @@
    ],
    "kind": "matrix"
   },
+  "plane_square/order": {
+   "kind": "vector"
+  },
   "plane_square/removed": {
    "dim": [
     32,
@@ -299,7 +320,7 @@
     15,
     18
    ],
-   "kind": "raster"
+   "kind": "matrix"
   },
   "plane_ties/fit0": {
    "dim": [
@@ -328,6 +349,9 @@
     18
    ],
    "kind": "matrix"
+  },
+  "plane_ties/order": {
+   "kind": "vector"
   },
   "plane_ties/removed": {
    "dim": [

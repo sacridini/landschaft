@@ -64,9 +64,10 @@ def fit_plane(x, order: int, *, extent=None, crs=None, band=None, nodata=None) -
 def best_fit_plane(x, *, extent=None, crs=None, band=None, nodata=None) -> xr.DataArray:
     """The polynomial surface of order 0 to 3 that fits a surface best.
 
-    As geodiv's ``bestfitplane``: of the four least-squares surfaces
-    (:func:`fit_plane`), the one whose residuals have the smallest absolute
-    mean, the lowest order on ties. The order is in ``attrs["order"]``.
+    Of the four least-squares surfaces (:func:`fit_plane`), the one with the
+    least Bayesian information criterion, N log(RSS / N) + p log(N) (N cells
+    with a value, p coefficients), the lowest order on ties. The order is in
+    ``attrs["order"]``.
 
     Parameters
     ----------
@@ -81,17 +82,17 @@ def best_fit_plane(x, *, extent=None, crs=None, band=None, nodata=None) -> xr.Da
 
     Notes
     -----
-    Every least-squares fit with a constant term has residuals that average to
-    zero, so the choice rests on rounding errors (about 1e-17): it reproduces
-    geodiv, which is what this function is for. To remove a trend of a chosen
-    order, subtract :func:`fit_plane`.
+    geodiv's ``bestfitplane`` takes the smallest absolute mean residual, but
+    every least-squares fit with a constant term has residuals that average to
+    zero: its choice rests on rounding errors (about 1e-17). To remove a trend
+    of a chosen order, subtract :func:`fit_plane`.
 
     Examples
     --------
     >>> import landschaft as ls
     >>> ndvi = ls.surface.example_data("orforest")
     >>> ls.surface.best_fit_plane(ndvi).attrs["order"]
-    1
+    2
     """
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
     _check_points(s, 3)
@@ -124,7 +125,7 @@ def remove_plane(x, *, extent=None, crs=None, band=None, nodata=None) -> xr.Data
     >>> ndvi = ls.surface.example_data("orforest")
     >>> flat = ls.surface.remove_plane(ndvi)
     >>> flat.attrs["order"], round(float(flat.mean()), 12)
-    (1, 0.0)
+    (2, 0.0)
     """
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
     _check_points(s, 3)

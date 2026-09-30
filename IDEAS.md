@@ -841,10 +841,19 @@ do centro e usam `terra::distance` (com extent "de lon/lat" e sem CRS o terra su
 lon/lat: usar CRS projetado nos casos); `terra::sds` mascara `geodiv::sds` (chamar
 sempre com `geodiv::`).
 
-Critério de igualdade: `convention="geodiv"` (padrão) reproduz o geodiv bit a bit, com
-os defeitos, como o `lsm` segue o landscapemetrics; `convention="iso"` corrige `sdq6`,
-`findvalleys` e a normalização do `sdr` (conferir contra o surfalize onde houver a mesma
-definição). O que já existe e dá os bits do R: `nlm::r_fft2` (FFT do R), `lsm/extended.hpp`
+Critério de igualdade (decisão do usuário em 2026-09-30, na fase 5: "se detectamos os
+bugs, podemos implementar somente da forma correta"): onde o geodiv está certo, bit a bit
+com ele; onde erra, só a forma correta, conferida bit a bit contra o geodiv com o erro
+corrigido em R (`tools/surface_fixed.R`, `fx$...`). Sem `convention`. Correções: Sq como
+RMS da ISO (N, não N - 1), também em `ssk`/`sku`; `sdq` pela média dos pares válidos;
+`sdq6` com o estêncil certo e a média; vales com os próprios vizinhos (e `s10z`); `ssc` da
+ISO (sinal e segunda diferença); curva de Abbott-Firestone sobre z, `area_above` = área
+entre a curva e o topo com Simpson completo, derivadas de borda por h; `scl`/`std`/`srw`
+a partir da frequência zero (a metade do geodiv deixa essa linha de fora), distâncias
+exatas, `std` em 0-179,5 graus sem a frequência zero; `sfd` sem o erro de digitação, com
+os extremos dos dados e índices base 0; `bestfitplane` por BIC; `fftshift` também com uma
+linha/coluna. Mantidos (definições, não erros): alturas reescaladas 0-1 no Sdr e no Ssc,
+picos só acima de 0, haversine do terra em lon/lat. O que já existe e dá os bits do R: `nlm::r_fft2` (FFT do R), `lsm/extended.hpp`
 e `rmath.hpp` (somas em 80 bits, `sqrt`/`log` x87), `lsm/rlm.cpp` (`lm()`). Terreno igual
 ao spatialEco + terra (bordas e NA do `terra::focal`, declividade/aspecto de Horn do
 `terra::terrain`).
@@ -880,7 +889,12 @@ Fases:
    falha (centro do raster inteiro na imagem recortada): aqui usa o centro recortado; o
    `sfd` lê fora da matriz quando o quadrado central encosta na borda: aqui é erro);
 5. motor de janela móvel (`window_metrics`, quadrada e circular, `pad_edges`) com os
-   caminhos O(1), fora da memória por blocos de linhas;
+   caminhos O(1), fora da memória por blocos de linhas. **Feita** (0.85.0, junto com as
+   correções: cada janela calculada como um raster, em paralelo; atalhos exatos para
+   `sv`/`sph`/`sds`; o `texture_image` do geodiv não funciona com o terra atual e o
+   `focal_metrics` transpõe as janelas, então a referência é a métrica em cada janela, em
+   R; o `find_flat` escolhe a janela por somas prefixadas e só confirma as candidatas com
+   a média do R, 100x mais rápido. Fora da memória fica para depois, se precisar);
 6. terreno do spatialEco;
 7. tutorial, API, benchmarks contra geodiv e spatialEco.
 

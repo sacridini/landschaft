@@ -83,10 +83,16 @@
    ],
    "kind": "raster"
   },
+  "spatial_rand_na/scl": {
+   "kind": "vector"
+  },
   "spatial_rand_na/srw": {
    "kind": "vector"
   },
   "spatial_rand_na/std": {
+   "kind": "vector"
+  },
+  "spatial_rand_na/stxr": {
    "kind": "vector"
   },
   "spatial_rect/aacf": {
@@ -96,10 +102,16 @@
    ],
    "kind": "raster"
   },
+  "spatial_rect/scl": {
+   "kind": "vector"
+  },
   "spatial_rect/srw": {
    "kind": "vector"
   },
   "spatial_rect/std": {
+   "kind": "vector"
+  },
+  "spatial_rect/stxr": {
    "kind": "vector"
   },
   "spatial_square/aacf": {

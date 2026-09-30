@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Local features of a surface: peaks, valleys and what they add up to
-(ISO 25178; geodiv's localsurface.R)."""
+(ISO 25178; geodiv's localsurface.R, corrected)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import pandas as pd
 from .. import _core
 from .._threads import threaded
 from ._grid import Surface, read_surface
-from ._hybrid import iso
 
 __all__ = ["find_peaks", "find_valleys", "sds", "ssc", "s10z"]
 
@@ -72,8 +71,7 @@ def find_peaks(x, *, extent=None, crs=None, band=None, nodata=None) -> pd.DataFr
 
 
 @threaded
-def find_valleys(x, convention: str = "geodiv", *, extent=None, crs=None, band=None,
-                 nodata=None) -> pd.DataFrame:
+def find_valleys(x, *, extent=None, crs=None, band=None, nodata=None) -> pd.DataFrame:
     """The valleys of a surface: cells lower than their 8 neighbours and than 0.
 
     As :func:`find_peaks`, downwards.
@@ -82,12 +80,6 @@ def find_valleys(x, convention: str = "geodiv", *, extent=None, crs=None, band=N
     ----------
     x : str, path, xarray.DataArray or array_like
         The surface (see :func:`find_peaks`).
-    convention : {"geodiv", "iso"}, default "geodiv"
-        ``"geodiv"``: as geodiv, which reads each cell's neighbours from the
-        values arranged by columns, not by rows: on a square raster it
-        compares each cell with the neighbours of the transposed cell, on
-        others with unrelated cells, and finds far more "valleys" than there
-        are (below: 33041 against 5167); ``"iso"``: the cell's own neighbours.
     extent, crs, band, nodata
         As in :func:`find_peaks`.
 
@@ -96,15 +88,21 @@ def find_valleys(x, convention: str = "geodiv", *, extent=None, crs=None, band=N
     pandas.DataFrame
         As :func:`find_peaks`.
 
+    Notes
+    -----
+    geodiv's ``findvalleys`` reads each cell's neighbours from the values
+    arranged by columns, not by rows: on its ``normforest`` it finds 33041
+    "valleys" where there are 5167.
+
     Examples
     --------
     >>> import landschaft as ls
     >>> z = ls.surface.example_data("normforest")
-    >>> len(ls.surface.find_valleys(z)), len(ls.surface.find_valleys(z, "iso"))
-    (33041, 5167)
+    >>> len(ls.surface.find_valleys(z))
+    5167
     """
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
-    return _table(s, _core.surf_find_valleys(s.values, _extent(s), not iso(convention)))
+    return _table(s, _core.surf_find_valleys(s.values, _extent(s)))
 
 
 @threaded
@@ -139,10 +137,11 @@ def sds(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
 def ssc(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     """Mean summit curvature (Ssc).
 
-    Over the n :func:`find_peaks`, with heights rescaled to 0-1:
-    -1 / (2n) times the sum of ((z - z[x+1]) + (z - z[x-1])) / 2 / dx and
-    ((z - z[y+1]) + (z - z[y-1])) / 2 / dy, dx = 1 and dy the ratio of the
-    cell's height to its width (geodiv's definition).
+    ISO 25178's -1 / (2n) times the sum of the second derivatives in x and y
+    at the n :func:`find_peaks`, (z[x+1] - 2 z + z[x-1]) / dx^2 and
+    (z[y+1] - 2 z + z[y-1]) / dy^2, with geodiv's units: heights rescaled to
+    0-1, dx = 1 and dy the ratio of the cell's height to its width. Positive:
+    peaks are rounded upwards.
 
     Parameters
     ----------
@@ -156,19 +155,24 @@ def ssc(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     float
         NaN without peaks.
 
+    Notes
+    -----
+    geodiv has the opposite sign and first differences divided by dx, not
+    second differences divided by dx^2.
+
     Examples
     --------
     >>> import landschaft as ls
     >>> z = ls.surface.example_data("normforest")
     >>> round(ls.surface.ssc(z), 6)
-    -0.021922
+    0.043845
     """
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
     return _core.surf_ssc(s.values, _extent(s))
 
 
 @threaded
-def s10z(x, convention: str = "geodiv", *, extent=None, crs=None, band=None, nodata=None) -> float:
+def s10z(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     """Ten-point height (S10z).
 
     (sum of the 5 highest peaks + sum of the absolute depths of the 5 deepest
@@ -179,8 +183,6 @@ def s10z(x, convention: str = "geodiv", *, extent=None, crs=None, band=None, nod
     ----------
     x : str, path, xarray.DataArray or array_like
         The surface (see :func:`find_peaks`).
-    convention : {"geodiv", "iso"}, default "geodiv"
-        Which valleys, as in :func:`find_valleys`.
     extent, crs, band, nodata
         As in :func:`find_peaks`.
 
@@ -192,8 +194,8 @@ def s10z(x, convention: str = "geodiv", *, extent=None, crs=None, band=None, nod
     --------
     >>> import landschaft as ls
     >>> z = ls.surface.example_data("normforest")
-    >>> round(ls.surface.s10z(z), 6), round(ls.surface.s10z(z, "iso"), 6)
-    (0.718518, 0.665448)
+    >>> round(ls.surface.s10z(z), 6)
+    0.665448
     """
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
-    return _core.surf_s10z(s.values, _extent(s), not iso(convention))
+    return _core.surf_s10z(s.values, _extent(s))

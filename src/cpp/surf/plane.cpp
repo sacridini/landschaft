@@ -200,27 +200,29 @@ std::vector<double> fit_plane(const Grid& g, int order, int* ifail) {
 }
 
 std::vector<double> best_fit_plane(const Grid& g, int* order) {
+    // the order 0-3 with the least BIC, N log(RSS / N) + p log(N) (geodiv takes
+    // the least absolute mean residual, which is 0 for every fit: rounding
+    // decides)
     std::array<std::vector<double>, 4> fits;
-    std::array<double, 4> err{};
+    std::array<double, 4> bic{};
+    i64 n = 0;
+    for (i64 i = 0; i < g.size(); ++i) n += !std::isnan(g.z[i]);
+    const double dn = static_cast<double>(n);
     for (int k = 0; k < 4; ++k) {
         fits[static_cast<Index>(k)] = fit_plane(g, k);
-        // abs(mean(xmat - fit, na.rm = TRUE)): the matrix by columns
         const auto& fit = fits[static_cast<Index>(k)];
-        std::vector<double> e;
-        e.reserve(fit.size());
-        for (int c = 0; c < g.nx; ++c)
-            for (int r = 0; r < g.ny; ++r) {
-                const i64 i = static_cast<i64>(r) * g.nx + c;
-                if (!std::isnan(g.z[i])) e.push_back(g.z[i] - fit[static_cast<Index>(i)]);
-            }
-        err[static_cast<Index>(k)] = std::fabs(lsm::r_mean(e.data(), static_cast<i64>(e.size())));
+        const double rss = lsm::sum_of(0, g.size(), [&](i64 i) {
+            const double d = g.z[i] - fit[static_cast<Index>(i)];
+            return d * d;
+        }, true);
+        const double p = static_cast<double>((k + 1) * (k + 2) / 2);
+        bic[static_cast<Index>(k)] = (dn * lsm::r_log(rss / dn)) + (p * lsm::r_log(dn));
     }
-    // which(meanerr == min(meanerr, na.rm = TRUE)), the first one
     double lo = std::numeric_limits<double>::infinity();
-    for (double e : err)
-        if (e < lo) lo = e;
+    for (double b : bic)
+        if (b < lo) lo = b;
     int best = 0;
-    while (best < 3 && !(err[static_cast<Index>(best)] == lo)) ++best;
+    while (best < 3 && !(bic[static_cast<Index>(best)] == lo)) ++best;
     if (order) *order = best;
     return std::move(fits[static_cast<Index>(best)]);
 }

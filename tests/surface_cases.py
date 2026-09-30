@@ -5,7 +5,9 @@ Every raster is a float64 array (NaN = NA) with an extent and a CRS; R rebuilds
 it with ``terra::rast(nrows, ncols, xmin, xmax, ymin, ymax, crs)``. Every case
 runs R code on it (``r`` is the case's raster, the others by name) giving a
 named list, and a Python function giving a dict with the same keys. Call the
-geodiv functions as ``geodiv::`` (``terra::sds`` masks ``geodiv::sds``).
+geodiv functions as ``geodiv::`` (``terra::sds`` masks ``geodiv::sds``), and
+``fx$`` for geodiv with its errors corrected (tools/surface_fixed.R) where
+ls.surface corrects them.
 """
 
 from __future__ import annotations
@@ -67,6 +69,13 @@ def _rasters() -> dict[str, RasterSpec]:
     r["normforest"] = _dataset("normforest")
     r["orforest"] = _dataset("orforest")
     r["orelevation"] = _dataset("orelevation")
+    # a 15 x 15 corner of normforest (longitude/latitude) for the windows
+    nf = r["normforest"]
+    xmin, xmax, ymin, ymax = nf.extent
+    ny, nx = nf.values.shape
+    xr, yr = (xmax - xmin) / nx, (ymax - ymin) / ny
+    r["nf_small"] = RasterSpec(nf.values[100:115, 120:135].copy(),
+                               (xmin + 120 * xr, xmin + 135 * xr, ymax - 115 * yr, ymax - 100 * yr), nf.crs)
     return r
 
 
@@ -104,8 +113,8 @@ def _amplitude(name: str) -> Callable[[dict], dict]:
     return run
 
 
-AMPLITUDE_R = """list(sa = geodiv::sa(r), sq = geodiv::sq(r), ssk = geodiv::ssk(r),
-     ssk_unadj = geodiv::ssk(r, adj = FALSE), sku = geodiv::sku(r), sku_raw = geodiv::sku(r, excess = FALSE),
+AMPLITUDE_R = """list(sa = geodiv::sa(r), sq = fx$sq(r), ssk = fx$ssk(r),
+     ssk_unadj = fx$ssk(r, adj = FALSE), sku = fx$sku(r), sku_raw = fx$sku(r, excess = FALSE),
      sv = geodiv::sv(r), sph = geodiv::sph(r), smean = geodiv::smean(r))"""
 
 
@@ -120,7 +129,9 @@ def _plane(name: str, orders=(0, 1, 2, 3)) -> Callable[[dict], dict]:
         s, spec = surface(), rasters[name]
         z, g = spec.values, _grid(spec)
         out = {f"fit{k}": s.fit_plane(z, k, **g).values for k in orders}
-        out["best"] = s.best_fit_plane(z, **g).values
+        best = s.best_fit_plane(z, **g)
+        out["best"] = best.values
+        out["order"] = best.attrs["order"]
         out["removed"] = s.remove_plane(z, **g).values
         return out
 
@@ -129,7 +140,8 @@ def _plane(name: str, orders=(0, 1, 2, 3)) -> Callable[[dict], dict]:
 
 def _plane_r(orders=(0, 1, 2, 3)) -> str:
     fits = ", ".join(f"fit{k} = geodiv::fitplane(r, {k})" for k in orders)
-    return f"list({fits}, best = geodiv::bestfitplane(r), removed = geodiv::remove_plane(r))"
+    return (f"{{ b <- fx$bestfitplane(r)\n  list({fits}, best = b$fit, order = b$order, "
+            f"removed = r - setValues(r, b$fit)) }}")
 
 
 def _plane_cases() -> dict[str, Case]:
@@ -149,7 +161,7 @@ def _hybrid(name: str) -> Callable[[dict], dict]:
     return run
 
 
-HYBRID_R = """list(sdq = geodiv::sdq(r), sdq6 = geodiv::sdq6(r), surface_area = geodiv::surface_area(r),
+HYBRID_R = """list(sdq = fx$sdq(r), sdq6 = fx$sdq6(r), surface_area = geodiv::surface_area(r),
      flatsa = geodiv::flatsa(r), sdr = geodiv::sdr(r))"""
 
 
@@ -172,15 +184,17 @@ def _features(name: str) -> Callable[[dict], dict]:
         s, spec = surface(), rasters[name]
         z, g = spec.values, _grid(spec)
         ny, nx = z.shape
+        valleys = s.find_valleys(z, **g)
         return {"peaks": _geodiv_points(s.find_peaks(z, **g), ny, nx),
-                "valleys": _geodiv_points(s.find_valleys(z, **g), ny, nx),
+                "valleys": {"row": valleys["row"].to_numpy() + 1, "col": valleys["col"].to_numpy() + 1,
+                            "val": valleys["value"].to_numpy()},
                 "sds": s.sds(z, **g), "ssc": s.ssc(z, **g), "s10z": s.s10z(z, **g)}
 
     return run
 
 
-FEATURES_R = """list(peaks = geodiv::findpeaks(r), valleys = geodiv::findvalleys(r), sds = geodiv::sds(r),
-     ssc = geodiv::ssc(r), s10z = geodiv::s10z(r))"""
+FEATURES_R = """list(peaks = geodiv::findpeaks(r), valleys = fx$findvalleys(r), sds = geodiv::sds(r),
+     ssc = fx$ssc(r), s10z = fx$s10z(r))"""
 
 
 def _features_cases() -> dict[str, Case]:
@@ -205,11 +219,13 @@ def _bearing(name: str) -> Callable[[dict], dict]:
 
 
 BEARING_R = f"""{{
-  f <- geodiv::bearing_area(r)
-  list(curve_x = environment(f)$y, curve_y = 1 - environment(f)$x,
-       height = sapply(c({", ".join(map(str, BEARING_PROBS))}), function(p) geodiv::height_ba(r, p)),
-       sdc = geodiv::sdc(r, 0.1, 0.8), sbi = geodiv::sbi(r), svi = geodiv::svi(r), sci = geodiv::sci(r),
-       sk = geodiv::sk(r), spk = geodiv::spk(r), svk = geodiv::svk(r))
+  z <- fx$vals(r)
+  cv <- fx$curve(r)
+  b <- fx$bearing(r)
+  list(curve_x = cv$bearing, curve_y = cv$height,
+       height = fx$height(z, c({", ".join(map(str, BEARING_PROBS))})),
+       sdc = fx$height(z, 0.1) - fx$height(z, 0.8), sbi = b$sbi, svi = b$svi, sci = b$sci,
+       sk = b$sk, spk = b$spk, svk = b$svk)
 }}"""
 
 
@@ -219,31 +235,22 @@ def _bearing_cases() -> dict[str, Case]:
                          "orelevation")}
 
 
-def _spatial(name: str, lengths: bool = True) -> Callable[[dict], dict]:
+def _spatial(name: str) -> Callable[[dict], dict]:
     def run(rasters):
         s, spec = surface(), rasters[name]
         z, g = spec.values, _grid(spec)
-        out = {"aacf": s.aacf(z, **g).values, "std": s.std(z, **g), "srw": s.srw(z, **g)}
-        if lengths:
-            out.update(scl=s.scl(z, **g), stxr=s.stxr(z, **g))
-        return out
+        return {"aacf": s.aacf(z, **g).values, "scl": s.scl(z, **g), "stxr": s.stxr(z, **g),
+                "std": s.std(z, **g), "srw": s.srw(z, **g)}
 
     return run
 
 
-SPATIAL_R = """list(aacf = geodiv::aacf(r), scl = geodiv::scl(r), stxr = geodiv::stxr(r), std = geodiv::std(r),
-     srw = geodiv::srw(r))"""
-# With NA cells geodiv's scl (and stxr) fail: they look for the centre of the
-# cropped autocorrelation image with the size of the whole raster.
-SPATIAL_NA_R = "list(aacf = geodiv::aacf(r), std = geodiv::std(r), srw = geodiv::srw(r))"
+SPATIAL_R = """list(aacf = geodiv::aacf(r), scl = fx$scl(r), stxr = fx$stxr(r), std = fx$std(r), srw = fx$srw(r))"""
 
 
 def _spatial_cases() -> dict[str, Case]:
-    cases = {f"spatial_{name}": Case(name, SPATIAL_R, _spatial(name), "spatial")
-             for name in ("rand", "square", "ties", "positive", "normforest", "orelevation")}
-    cases.update({f"spatial_{name}": Case(name, SPATIAL_NA_R, _spatial(name, False), "spatial")
-                  for name in ("rand_na", "rect")})
-    return cases
+    return {f"spatial_{name}": Case(name, SPATIAL_R, _spatial(name), "spatial")
+            for name in ("rand", "rand_na", "rect", "square", "ties", "positive", "normforest", "orelevation")}
 
 
 def _fractal(name: str) -> Callable[[dict], dict]:
@@ -255,9 +262,45 @@ def _fractal(name: str) -> Callable[[dict], dict]:
 
 
 def _fractal_cases() -> dict[str, Case]:
-    # square rasters: on others geodiv's sfd_ reads past the matrix
-    return {f"fractal_{name}": Case(name, "list(sfd = geodiv::sfd(r, silent = TRUE))", _fractal(name), "fractal")
-            for name in ("square", "normforest", "orforest", "orelevation")}
+    return {f"fractal_{name}": Case(name, "list(sfd = fx$sfd(r))", _fractal(name), "fractal")
+            for name in ("rand", "square", "ties", "positive", "tiny", "normforest", "orforest", "orelevation")}
+
+
+# window metrics: (R function of a window raster, names) per set
+WINDOW_SETS = {
+    "amplitude": ("function(w) c(geodiv::sa(w), fx$sq(w), fx$ssk(w), fx$sku(w), geodiv::sv(w), geodiv::sph(w), "
+                  "geodiv::smean(w))", ("sa", "sq", "ssk", "sku", "sv", "sph", "smean")),
+    "hybrid": ("function(w) c(fx$sdq(w), fx$sdq6(w), geodiv::sdr(w), geodiv::sds(w), fx$ssc(w), fx$s10z(w))",
+               ("sdq", "sdq6", "sdr", "sds", "ssc", "s10z")),
+    "bearing": ("function(w) { b <- fx$bearing(w); c(b$sbi, b$sci, b$svi, b$sk, b$spk, b$svk) }",
+                ("sbi", "sci", "svi", "sk", "spk", "svk")),
+    "spatial": ("function(w) { l <- fx$scl(w); c(l[1], l[1] / l[3], fx$std(w), fx$srw(w), fx$sfd(w)) }",
+                ("sal", "str", "std", "stdi", "srw", "srwi", "shw", "sfd")),
+}
+
+
+def _window(name: str, which: str, size: int, shape: str) -> Callable[[dict], dict]:
+    def run(rasters):
+        spec = rasters[name]
+        names = WINDOW_SETS[which][1]
+        t = surface().window_metrics(spec.values, list(names), size, shape, extent=spec.extent, crs=spec.crs)
+        return {n: t[n].values.ravel() for n in names}
+
+    return run
+
+
+def _window_cases() -> dict[str, Case]:
+    specs = [("rand", "amplitude", 5, "square"), ("rand_na", "amplitude", 5, "circle"),
+             ("rand", "hybrid", 7, "square"), ("rect", "hybrid", 7, "circle"),
+             ("positive", "bearing", 5, "square"), ("positive", "spatial", 5, "square"),
+             ("nf_small", "spatial", 7, "circle"), ("ties", "amplitude", 3, "square")]
+    cases = {}
+    for name, which, size, shape in specs:
+        f, names = WINDOW_SETS[which]
+        code = (f"fx$window(r, {size}, {'TRUE' if shape == 'circle' else 'FALSE'}, {f}, "
+                f"c({', '.join(repr(n) for n in names)}))").replace("'", '"')
+        cases[f"window_{which}_{name}_{size}_{shape}"] = Case(name, code, _window(name, which, size, shape), "window")
+    return cases
 
 
 def _cases() -> dict[str, Case]:
@@ -269,6 +312,7 @@ def _cases() -> dict[str, Case]:
     cases.update(_bearing_cases())
     cases.update(_spatial_cases())
     cases.update(_fractal_cases())
+    cases.update(_window_cases())
     return cases
 
 

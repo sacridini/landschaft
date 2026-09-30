@@ -6,6 +6,37 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.85.0] - 2026-09-30
+
+### Added
+- Surface metrics, part 5: texture images. `ls.surface.window_metrics` gives every surface
+  metric in a moving square or circular window around each cell (missing cells beyond the
+  edges), each window computed as a raster of its own, rows of cells in parallel; `sv`,
+  `sph` and `sds` on square windows by running extremes and a summed-area table of the
+  peaks. Checked against R on 8 setups (square and circular windows, projected and
+  longitude/latitude, every metric). geodiv's own `texture_image` does not work with
+  current terra (it reads the raster as one column), its `focal_metrics` transposes every
+  window and its circular windows mask nothing.
+
+### Changed
+- `ls.surface` no longer reproduces geodiv's errors: `convention` is gone, and where geodiv
+  errs the method's intent is computed. Sq is ISO 25178's root mean square (over N, not
+  N - 1), also inside `ssk` and `sku`; `sdq` averages over the pairs with both values;
+  `sdq6` has the right seven-point stencil (`+ 9 z[-2]`) and takes the mean; valleys are
+  compared with their own neighbours (also in `s10z`); `ssc` is ISO's -1/(2n) sum of second
+  derivatives; the bearing area curve works on the heights themselves, `svi` / `sci` are the
+  areas between the curve and its top (geodiv's could turn negative) by a complete
+  Simpson's rule, and the core line's end slopes are one-sided differences over h;
+  `scl`, `stxr`, `std` and `srw` measure from zero lag / frequency (geodiv's images leave
+  its row out) with exact distances in map units, `std` counts orientations 0-179.5
+  degrees without zero frequency; `sfd` has its prism typo, extremes and indices fixed (it
+  now works on any raster); `best_fit_plane` / `remove_plane` choose the order by BIC
+  (geodiv's criterion, the mean residual, is 0 for every fit). Everything is checked bit
+  for bit against geodiv, or against geodiv with these errors corrected in R
+  (`tools/surface_fixed.R`).
+- The core line of the bearing area curve picks its window from prefix sums and R's mean
+  only for the candidates (the same window; 1000 windows: 19.6 s to 0.2 s).
+
 ## [0.84.0] - 2026-09-30
 
 ### Added

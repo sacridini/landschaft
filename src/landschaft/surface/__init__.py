@@ -25,6 +25,7 @@ from ._hybrid import flat_area, sdq, sdq6, sdr, surface_area
 from ._metrics import list_metrics, metrics
 from ._plane import best_fit_plane, fit_plane, remove_plane
 from ._spatial import aacf, scl, sfd, srw, std, stxr
+from ._window import window_metrics
 
 __all__ = [
     "aacf",
@@ -65,4 +66,5 @@ __all__ = [
     "sv",
     "svi",
     "svk",
+    "window_metrics",
 ]

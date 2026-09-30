@@ -6,7 +6,8 @@ Usage::
     python tools/make_reference_surface.py [group ...] [--case NAME ...]
 
 Runs the cases of ``tests/surface_cases.py`` (all groups by default) through
-``tools/surface_reference.R`` and stores, per group, the results in
+``tools/surface_reference.R`` (geodiv, and ``tools/surface_fixed.R``: geodiv
+with its errors corrected, for the functions where it errs) and stores, per group, the results in
 ``tests/data/reference/surface/<group>.npz`` (``<case>/<key>`` arrays) and
 their kinds and shapes in ``<group>.json`` (with the package versions).
 ``--case`` regenerates only the named cases of the group (the others are kept).
@@ -38,6 +39,7 @@ import surface_cases  # noqa: E402
 
 OUT = ROOT / "tests" / "data" / "reference" / "surface"
 R_SCRIPT = ROOT / "tools" / "surface_reference.R"
+FIXED = ROOT / "tools" / "surface_fixed.R"  # geodiv with its errors corrected
 DEFAULT_LIBS = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "R" / "landschaft-surf-lib"
 # The user library (terra, sf, jsonlite), as R_LIBS replaces it.
 USER_LIBS = sorted(DEFAULT_LIBS.parent.glob("win-library/*"))
@@ -73,7 +75,7 @@ def run_group(group: str, only: list[str] | None = None) -> None:
         (tmp / "job.json").write_text(json.dumps(job), encoding="utf-8")
         out = tmp / "out"
         out.mkdir()
-        subprocess.run([str(rscript), str(R_SCRIPT), str(tmp / "job.json"), str(out)], check=True,
+        subprocess.run([str(rscript), str(R_SCRIPT), str(tmp / "job.json"), str(out), str(FIXED)], check=True,
                        env=r_environment())
         result = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         arrays: dict[str, np.ndarray] = {}

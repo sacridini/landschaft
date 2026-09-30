@@ -36,9 +36,8 @@ def spatial_parameters(s: Surface) -> dict:
     lengths = _core.surf_scl(z, e, ll, list(THRESHOLDS))
     d = _core.surf_std(z, e, ll)
     w = _core.surf_srw(z, e, ll)
-    fd, outside = _core.surf_sfd(z, e)
     return {"sal": lengths[0], "str": _ratio(lengths[0], lengths[2]), "std": d[0], "stdi": d[1],
-            "srw": w[0], "srwi": w[1], "shw": w[2], "sfd": math.nan if outside else fd}
+            "srw": w[0], "srwi": w[1], "shw": w[2], "sfd": _core.surf_sfd(z, e)}
 
 
 def _ratio(a: float, b: float) -> float:
@@ -92,10 +91,10 @@ def aacf(x, *, extent=None, crs=None, band=None, nodata=None) -> xr.DataArray:
 def scl(x, threshold=THRESHOLDS, *, extent=None, crs=None, band=None, nodata=None) -> np.ndarray:
     """Correlation lengths: how far the autocorrelation takes to decay.
 
-    On the upper half of :func:`aacf`, the distances (map units; metres on
-    longitude/latitude rasters) from zero lag to the cells whose
-    autocorrelation is at or below each threshold: the shortest (fastest
-    decay, Sal for 0.2) and the longest (slowest decay).
+    On the upper half of :func:`aacf` (with the zero-lag row), the distances
+    (map units; metres on longitude/latitude rasters) from zero lag to the
+    cells whose autocorrelation is at or below each threshold: the shortest
+    (fastest decay, Sal for 0.2) and the longest (slowest decay).
 
     Parameters
     ----------
@@ -113,17 +112,17 @@ def scl(x, threshold=THRESHOLDS, *, extent=None, crs=None, band=None, nodata=Non
 
     Notes
     -----
-    Distances as terra computes them for geodiv: on projected rasters GDAL's
-    proximity (whole cells, in single precision, times the cell width), on
-    longitude/latitude ones the haversine distance. With missing cells geodiv
-    fails (it looks for the centre of the cropped image with the size of the
-    whole raster); here the centre of the cropped image is used.
+    Distances are exact in map units on projected rasters and haversine
+    distances (terra's, radius 6378137 m) on longitude/latitude ones. geodiv
+    measures from one row above zero lag (its upper half leaves that row out),
+    with GDAL's proximity in single precision and the cell width in both
+    directions, and fails with missing cells.
 
     Examples
     --------
     >>> import landschaft as ls
     >>> ls.surface.scl(ls.surface.example_data("orelevation")).round(1).tolist()
-    [4642.1, 3308.2, 6848.8, 6848.8]
+    [4662.9, 3317.3, 6873.0, 6873.0]
     """
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
     z, e, ll = _args(s)
@@ -155,7 +154,7 @@ def stxr(x, threshold=THRESHOLDS, *, extent=None, crs=None, band=None, nodata=No
     --------
     >>> import landschaft as ls
     >>> ls.surface.stxr(ls.surface.example_data("orelevation")).round(4).tolist()
-    [0.6778, 0.483]
+    [0.6784, 0.4827]
     """
     t = _thresholds(threshold)
     lengths = scl(x, t, extent=extent, crs=crs, band=band, nodata=nodata)
@@ -169,9 +168,12 @@ def std(x, *, extent=None, crs=None, band=None, nodata=None) -> np.ndarray:
     """Texture direction (Std) and texture direction index (Stdi).
 
     From the amplitude of the surface's Fourier spectrum (upper half, within
-    the largest circle around zero frequency that fits), summed over angles 0
-    to 180 degrees in steps of 0.5 (+-0.25): Std is the angle with the largest
-    sum, Stdi the mean sum over the largest (near 1: no dominant direction).
+    the largest circle around zero frequency that fits), summed over
+    orientations 0 to 179.5 degrees in steps of 0.5 (+-0.25): Std is
+    the angle with the largest sum, Stdi the mean sum over the largest (near
+    1: no dominant direction). Angles are those of the frequency vector: 0 for
+    a texture that varies along x (stripes running north-south), 90 for one
+    that varies along y.
 
     Parameters
     ----------
@@ -185,11 +187,17 @@ def std(x, *, extent=None, crs=None, band=None, nodata=None) -> np.ndarray:
     numpy.ndarray
         ``[std, stdi]`` (degrees, ratio).
 
+    Notes
+    -----
+    geodiv takes the angles from one row above and, on even widths, one column
+    left of zero frequency, and includes zero frequency (the sum of the
+    heights) in the 0 degree bin.
+
     Examples
     --------
     >>> import landschaft as ls
     >>> ls.surface.std(ls.surface.example_data("normforest")).round(4).tolist()
-    [90.0, 0.1962]
+    [90.0, 0.1937]
     """
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
     return np.asarray(_core.surf_std(*_args(s)))
@@ -203,8 +211,8 @@ def srw(x, *, extent=None, crs=None, band=None, nodata=None) -> np.ndarray:
     The amplitude of the surface's Fourier spectrum (upper half) summed over
     circles around zero frequency (up to 100, evenly spaced): Srw is the
     radius with the largest sum, Srwi the mean sum over the largest, Shw the
-    radius that splits the summed amplitude in half. NaN where geodiv returns
-    NA (ties).
+    radius that splits the summed amplitude in half (NaN on ties), measured
+    from zero frequency (geodiv: from one row above it).
 
     Parameters
     ----------
@@ -222,7 +230,7 @@ def srw(x, *, extent=None, crs=None, band=None, nodata=None) -> np.ndarray:
     --------
     >>> import landschaft as ls
     >>> ls.surface.srw(ls.surface.example_data("normforest")).round(4).tolist()
-    [409.6657, 0.5874, 1638.6626]
+    [409.6675, 0.5731, 1638.6698]
     """
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
     return np.asarray(_core.surf_srw(*_args(s)))
@@ -235,7 +243,9 @@ def sfd(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     Clarke's (1986) method as geodiv implements it: heights rescaled to 0-1,
     the area of triangular prisms over the central square of a power-of-two
     side at cell sizes 1, 2, 4...; 2 minus the slope of log(area) against
-    log(cell area).
+    log(cell area). geodiv's code has a typo in one prism side, rescales
+    against 99999 / -99999 when the heights exceed them and reads past the
+    raster (1-based indices): corrected here.
 
     Parameters
     ----------
@@ -247,12 +257,7 @@ def sfd(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     Returns
     -------
     float
-
-    Raises
-    ------
-    ValueError
-        Where geodiv reads past the raster (when the central square reaches
-        its last row or column, as on small or elongated rasters).
+        NaN with missing cells.
 
     Examples
     --------
@@ -261,8 +266,4 @@ def sfd(x, *, extent=None, crs=None, band=None, nodata=None) -> float:
     2.000007
     """
     s = read_surface(x, extent=extent, crs=crs, band=band, nodata=nodata)
-    fd, outside = _core.surf_sfd(s.values, tuple(map(float, s.extent)))
-    if outside:
-        raise ValueError("sfd: the central square reaches the edge of the raster (geodiv reads past it); "
-                         "use a larger or squarer raster")
-    return fd
+    return _core.surf_sfd(s.values, tuple(map(float, s.extent)))
