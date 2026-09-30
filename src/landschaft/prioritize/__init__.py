@@ -17,8 +17,12 @@ Typical use::
     res.rank                      # 0 = lowest priority, ~1 = highest
     res.feature_curves            # fraction of every feature kept
     res.write("zonation_output")  # Zonation's files
+
+    # or an existing Zonation 5 project, with z5's switches
+    res = ls.prioritize.run_project("settings.z5", "-w -X", mode="CAZ2")
 """
 
+from ._project import read_project, run_project
 from ._zonation import RULES, ZonationResult, zonation
 
-__all__ = ["RULES", "ZonationResult", "zonation"]
+__all__ = ["RULES", "ZonationResult", "read_project", "run_project", "zonation"]

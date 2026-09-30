@@ -1020,7 +1020,12 @@ planejamento e corredores não existem no Z5).
    referência). Próximos ganhos (fase 6): formato compacto das linhas (máscara de bits + 1 byte por valor)
    para cortar o tráfego da reorganização (~36 ms/iteração no benchmark) e da varredura.
 2. Condição e retenção; saídas de pré-processamento e camadas transformadas; projetos `.z5` (ler os arquivos do
-   Zonation para rodar projetos existentes).
+   Zonation para rodar projetos existentes). **Feito na 0.90.0**: 9 casos (grupo `transform`) bit a bit (rank,
+   tabelas, mapas `richness`/`rsr`, camadas transformadas) e os 50 casos também via `run_project`. Detalhes: a
+   condição multiplica o valor quantizado e trunca (`StorageType *= float`), o nível inicial vira a fração
+   condicionada (renormalize: escala / nível); a retenção subtrai do valor quantizado e trunca, sem renormalizar
+   (a curva termina na fração retida); mapas de pré-processamento = soma float do Eigen (AVX) sobre todas as
+   camadas com multiplicador 0/1.
 3. Conectividade: kernels, FFT, feição única, interações 1/2, matriz.
 4. Pós-processamento: estatísticas de área, comparação de soluções, histograma, mapa de flexibilidade, ranks da
    máscara hierárquica.

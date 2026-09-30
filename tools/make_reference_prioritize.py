@@ -141,6 +141,12 @@ def collect(out: Path, prefix: str, arrays: dict, meta: dict) -> None:
             if prefix:  # the curves of the final ranking, as the CSV text (its rounding is compared)
                 text = (out / fname).read_bytes().replace(b"\r\n", b"\n")
                 arrays[f"{prefix}{key}"] = np.frombuffer(lzma.compress(text), dtype=np.uint8)
+    for sub, key in (("pre_processing", "pre"), ("transformed_layers", "tr")):
+        for tif in sorted((out / sub).glob("*.tif")) if (out / sub).exists() and not prefix else ():
+            with rasterio.open(tif) as src:
+                v = src.read(1)
+            name = tif.stem if key == "pre" else tif.name.split(".layer", 1)[1].split(".", 1)[0]
+            arrays[f"{prefix}{key}/{name}"] = np.where(np.isfinite(v), v, np.nan).astype(np.float32)
     names, values, text = read_table(out / "features_info.csv")
     arrays[f"{prefix}features_info"] = values
     meta[f"{prefix}features_info"] = names
@@ -149,33 +155,41 @@ def collect(out: Path, prefix: str, arrays: dict, meta: dict) -> None:
     meta[f"{prefix}warnings"] = [ln.split("] ", 2)[-1] for ln in issues if "[warning]" in ln or "[error]" in ln]
 
 
+def settings_text(settings: dict, files: dict) -> str:
+    """A settings file (``.z5``): raster names become their files, "file:NAME" the link file NAME."""
+    lines = ["feature list file = features.txt"]
+    for k, v in settings.items():
+        if isinstance(v, str) and v in files:
+            v = files[v].name
+        elif isinstance(v, str) and v.startswith("file:"):
+            v = v[5:]
+        lines.append(f"{k} = {v}")
+    return "\n".join(lines) + "\n"
+
+
+def write_project(case: prioritize_cases.Case, tmp: Path) -> dict:
+    """Write the rasters, link files, feature list and settings.z5 of a case into tmp."""
+    rasters = set(case.layers) | set(case.extra) | {v for v in case.settings.values() if isinstance(v, str) and v in
+                                                    prioritize_cases.RASTERS}
+    files = {}
+    for r in sorted(rasters):
+        files[r] = tmp / f"{r}.tif"
+        if not files[r].exists():
+            write_raster(files[r], prioritize_cases.RASTERS[r])
+    for fname, text in case.files.items():
+        (tmp / fname).write_text(text, encoding="utf-8")
+    (tmp / "features.txt").write_text(feature_list(case, files), encoding="utf-8")
+    (tmp / "settings.z5").write_text(settings_text(case.settings, files), encoding="utf-8")
+    return files
+
+
 def run_case(name: str, case: prioritize_cases.Case, threads: int) -> tuple[dict, dict]:
     exe = Z5_DIR / ("z5_16bit.exe" if case.bits == 16 else "z5.exe")
-    rasters = set(case.layers) | {v for v in case.settings.values() if isinstance(v, str) and v in
-                                  prioritize_cases.RASTERS}
     arrays: dict[str, np.ndarray] = {}
     meta: dict[str, object] = {}
     with tempfile.TemporaryDirectory(prefix="z5_ref_") as tmp:
         tmp = Path(tmp)
-        files = {}
-        for r in sorted(rasters):
-            files[r] = tmp / f"{r}.tif"
-            write_raster(files[r], prioritize_cases.RASTERS[r])
-        for fname, text in case.files.items():
-            (tmp / fname).write_text(text, encoding="utf-8")
-        (tmp / "features.txt").write_text(feature_list(case, files), encoding="utf-8")
-
-        def settings_text(settings: dict) -> str:
-            lines = ["feature list file = features.txt"]
-            for k, v in settings.items():
-                if isinstance(v, str) and v in files:
-                    v = files[v].name
-                elif isinstance(v, str) and v.startswith("file:"):
-                    v = v[5:]
-                lines.append(f"{k} = {v}")
-            return "\n".join(lines) + "\n"
-
-        (tmp / "settings.z5").write_text(settings_text(case.settings), encoding="utf-8")
+        files = write_project(case, tmp)
         args = [f"--mode={case.mode}", *case.flags, "settings.z5", "out"]
         run_z5(exe, args, tmp, threads)
         meta["command"] = " ".join([exe.name, *args])
@@ -186,7 +200,7 @@ def run_case(name: str, case: prioritize_cases.Case, threads: int) -> tuple[dict
         if case.load:
             load_settings = {k: v for k, v in case.settings.items() if k not in ("external solution",)}
             load_settings["external solution"] = str(out / "rankmap.tif")
-            (tmp / "load.z5").write_text(settings_text(load_settings), encoding="utf-8")
+            (tmp / "load.z5").write_text(settings_text(load_settings, files), encoding="utf-8")
             flags = tuple("-x" if f == "-X" else f for f in case.flags)
             args = ["--mode=LOAD", *flags, "load.z5", "load"]
             run_z5(exe, args, tmp, threads)

@@ -61,10 +61,19 @@ def run_case(name: str, tmp: Path, **overrides):
                 write_raster(paths[r], prioritize_cases.RASTERS[r])
         return paths[r]
 
+    def raster(v):
+        if isinstance(v, str):
+            return path(v)
+        if isinstance(v, tuple):
+            return (v[0], path(v[1]))
+        return v
+
     kwargs = {}
     for k, v in case.params.items():
-        if k in ("cost", "hierarchic_mask", "analysis_area", "solution") and isinstance(v, str):
-            v = path(v)
+        if k in ("cost", "hierarchic_mask", "analysis_area", "solution"):
+            v = raster(v)
+        elif k in ("condition", "retention"):
+            v = [raster(x) for x in v]
         kwargs[k] = v
     kwargs.update(overrides)
     return ls.prioritize.zonation([path(r) for r in case.layers], **kwargs)

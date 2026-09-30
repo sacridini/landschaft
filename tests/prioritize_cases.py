@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-GROUPS = ["core"]
+GROUPS = ["core", "transform"]
 
 EPSG = 32633
 
@@ -43,6 +43,7 @@ class Case:
     extract: dict[int, float] = field(default_factory=dict)  # layer index -> value extracted ("f.tif/3")
     load: bool = True  # also evaluate Zonation's final rank map in LOAD mode (curves of the final ranking)
     params: dict = field(default_factory=dict)  # ls.prioritize.zonation arguments (besides features)
+    extra: tuple[str, ...] = ()  # other rasters the link files name ("<raster>.tif")
 
 
 # ---------------------------------------------------------------------------- rasters
@@ -108,6 +109,14 @@ def _rasters() -> dict[str, RasterSpec]:
     areas[:, 35:] = 3
     areas[:4] = 0
     r["areas"] = RasterSpec(areas, "int32", None)
+    # conditions (0-1, NoData outside the land), retention fractions and amounts
+    for k, seed in (("cond1", 50), ("cond2", 51), ("retrel", 52)):
+        v = 0.15 + 0.85 * _blobs(shape, seed, n=5)
+        v[sea] = np.nan
+        r[k] = RasterSpec(v)
+    ra = 0.4 * _blobs(shape, 53, n=4)
+    ra[sea] = np.nan
+    r["retabs"] = RasterSpec(ra)
     # a larger stack for realistic numbers of cells and iterations
     big = (120, 160)
     bsea = _outline(big, 2)
@@ -197,4 +206,65 @@ def _core() -> dict[str, Case]:
     return c
 
 
-CASES: dict[str, Case] = {**_core()}
+def _transform() -> dict[str, Case]:
+    c: dict[str, Case] = {}
+    g = "transform"
+    cond_links = "1 0 cond1.tif\n2 0 cond2.tif\n3 1 cond1.tif\n"
+    cond_ids = [1, -1, 2, 1, 3, -1, 2, 3]
+    cond_rasters = ["cond1", None, "cond2", "cond1", "cond1", None, "cond2", "cond1"]
+    renorm = [False, False, False, False, True, False, False, True]
+    c["caz2_condition"] = Case(g, SP, "CAZ2", {"condition": cond_ids},
+                               settings={"condition link file": "file:conditions.txt"},
+                               files={"conditions.txt": cond_links}, flags=("-c",), extra=("cond1", "cond2"),
+                               params={"condition": cond_rasters, "renormalize": renorm})
+    c["abf_condition_16bit"] = Case(g, SP, "ABF 0.25", {"condition": cond_ids},
+                                    settings={"condition link file": "file:conditions.txt"},
+                                    files={"conditions.txt": cond_links}, flags=("-c",), bits=16,
+                                    extra=("cond1", "cond2"),
+                                    params={"rule": "ABF", "bits": 16, "condition": cond_rasters,
+                                            "renormalize": renorm})
+    ret_links = "1 2 0.3\n2 1 retrel.tif\n3 0 retabs.tif\n4 2 0.75\n"
+    ret_ids = [1, -1, 2, 3, 4, 2, -1, 3]
+    ret = [0.3, None, "retrel", ("absolute", "retabs"), 0.75, "retrel", None, ("absolute", "retabs")]
+    c["caz2_retention"] = Case(g, SP, "CAZ2", {"retention": ret_ids},
+                               settings={"retention link file": "file:retention.txt"},
+                               files={"retention.txt": ret_links}, flags=("-r",), extra=("retrel", "retabs"),
+                               params={"retention": ret})
+    c["abf_retention_weights"] = Case(g, SP, "ABF 0.25", {"weight": W8, "retention": ret_ids},
+                                      settings={"retention link file": "file:retention.txt"},
+                                      files={"retention.txt": ret_links}, flags=("-w", "-r"),
+                                      extra=("retrel", "retabs"),
+                                      params={"rule": "ABF", "weights": W8, "retention": ret})
+    c["caz1_condition_retention_cost"] = Case(
+        g, SP, "CAZ1", {"weight": W8, "condition": cond_ids, "retention": ret_ids},
+        settings={"condition link file": "file:conditions.txt", "retention link file": "file:retention.txt",
+                  "cost layer": "cost"},
+        files={"conditions.txt": cond_links, "retention.txt": ret_links}, flags=("-w", "-c", "-r", "-X"),
+        extra=("cond1", "cond2", "retrel", "retabs"),
+        params={"rule": "CAZ1", "weights": W8, "condition": cond_rasters, "renormalize": renorm, "retention": ret,
+                "cost": "cost"})
+    wneg = [2.0, 1.0, -1.0, 3.0, 0.0, 1.0, -0.5, 1.0]
+    grp = [1, 1, 2, 2, 2, 3, 3, 3]
+    tr = [1, 0, 1, 1, 0, 0, 1, 0]
+    c["caz2_preprocessing"] = Case(g, SP, "CAZ2", {"weight": wneg, "group": grp, "tr_out": tr},
+                                   flags=("-w", "-g", "-b", "-f"),
+                                   params={"weights": wneg, "groups": grp, "preprocessing": True,
+                                           "transformed": [bool(x) for x in tr]})
+    c["caz2_preprocessing_plain"] = Case(g, SP, "CAZ2", {"tr_out": [1] * 8}, flags=("-b", "-f"),
+                                         params={"preprocessing": True, "transformed": True})
+    c["caz2_preprocessing_all"] = Case(
+        g, SP, "CAZ2", {"weight": wneg, "group": grp, "tr_out": tr, "condition": cond_ids, "retention": ret_ids},
+        settings={"condition link file": "file:conditions.txt", "retention link file": "file:retention.txt"},
+        files={"conditions.txt": cond_links, "retention.txt": ret_links},
+        flags=("-w", "-g", "-b", "-f", "-c", "-r"), extra=("cond1", "cond2", "retrel", "retabs"),
+        params={"weights": wneg, "groups": grp, "preprocessing": True, "transformed": [bool(x) for x in tr],
+                "condition": cond_rasters, "renormalize": renorm, "retention": ret})
+    c["big_abf_retention"] = Case(g, BIG, "ABF 0.25", {"retention": [1, -1, 1, -1, 4, -1, 1, -1, 4, -1, -1, 1]},
+                                  settings={"retention link file": "file:retention.txt"},
+                                  files={"retention.txt": "1 2 0.2\n4 2 0.5\n"}, flags=("-r",),
+                                  params={"rule": "ABF", "retention": [0.2, None, 0.2, None, 0.5, None, 0.2, None,
+                                                                       0.5, None, None, 0.2]})
+    return c
+
+
+CASES: dict[str, Case] = {**_core(), **_transform()}

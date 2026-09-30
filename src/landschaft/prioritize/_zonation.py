@@ -50,6 +50,12 @@ class ZonationResult:
         per iteration.
     order : numpy.ndarray
         Indices (row-major) of the cells in removal order.
+    preprocessing : dict
+        With ``preprocessing=True``: Zonation's pre-processing maps
+        (``richness.pos``, ``rsr.pos``, ... ``.weighted``; see :func:`zonation`).
+    transformed : dict
+        With ``transformed``: the feature layers as ranked (after quantization,
+        condition and retention), normalized to sum 1, by feature name.
     """
 
     rank: object
@@ -64,6 +70,8 @@ class ZonationResult:
     history: pd.DataFrame
     order: np.ndarray
     info: dict = field(default_factory=dict, repr=False)
+    preprocessing: dict = field(default_factory=dict, repr=False)
+    transformed: dict = field(default_factory=dict, repr=False)
 
     def __repr__(self) -> str:
         n = int(np.isfinite(np.asarray(self.rank)).sum())
@@ -192,6 +200,11 @@ def zonation(
     stop_on_plateau: bool = False,
     curves_interval: float = 0.0001,
     seed: int | None = None,
+    condition=None,
+    renormalize=False,
+    retention=None,
+    preprocessing: bool = False,
+    transformed=False,
     nodata=None,
     n_threads: int | None = None,
 ) -> ZonationResult:
@@ -264,6 +277,25 @@ def zonation(
         Fraction of the cells between two rows of the curves (0.0001: 10 000 rows).
     seed
         Seed of ``RAND``.
+    condition
+        Per feature, a raster of the condition of its habitat, 0-1 (``None``: none;
+        Zonation's ``-c``): the quantized values are multiplied by it (truncated),
+        and the feature's initial level becomes the conditioned fraction.
+    renormalize
+        Per feature (or for all), rescale a conditioned feature to level 1.
+    retention
+        Per feature (Zonation's ``-r``): ``None``; a number, the fraction of the
+        feature retained everywhere; a raster of fractions retained per cell; or
+        ``("absolute", raster)``, the amounts retained per cell. What is retained
+        is taken out of the feature (it stays whatever the ranking), so its curve
+        ends at the retained fraction.
+    preprocessing
+        Also compute Zonation's pre-processing maps (``-b``): per cell, the sum of
+        the features' original values (``richness``) and of their normalized values
+        (range-size rarity, ``rsr``), for the positive, negative and zero weights and
+        each output group, and weighted with weights.
+    transformed
+        Per feature (or ``True`` for all), return the feature as ranked (``-f``).
     nodata
         NoData value of inputs without one (NaN is always NoData).
     n_threads
@@ -327,6 +359,23 @@ def _run(src, name, param, a) -> ZonationResult:
 
     area_layer = _inputs.open_aux(a["analysis_area"], src.grid, "analysis area", src)
     which = int(a["area"])
+    # conditions: one plane per distinct raster
+    cond_index = np.full(L0, -1, np.int32)
+    cond_layers = []
+    if a["condition"] is not None:
+        conds = list(a["condition"])
+        if len(conds) != L0:
+            raise ValueError(f"condition: {len(conds)} for {L0} features")
+        seen = {}
+        for i, c in enumerate(conds):
+            if c is None:
+                continue
+            key = os.fspath(c) if _inputs._is_path(c) else id(c)
+            if key not in seen:
+                seen[key] = len(cond_layers)
+                cond_layers.append(_inputs.open_aux(c, src.grid, "condition", src))
+            cond_index[i] = seen[key]
+    renorm = _per_layer(a["renormalize"], L0, False, "renormalize", np.uint8)
 
     # statistics: maxima, empty layers
     stats = _core.PrioStats(nodata.tolist(), extract.tolist(), thresholds.tolist())
@@ -358,13 +407,31 @@ def _run(src, name, param, a) -> ZonationResult:
             if g in gw and sums.get(g, 0) > 0:
                 w[i] = np.float32(w[i] * np.float32(gw[g] / sums[g]))
     L = len(kept)
+    for what, gs in (("weight", wgroups[kept] if a["weight_groups"] is not None else None),
+                     ("output", ogroups[kept] if ogroups is not None else None)):
+        if gs is None:
+            continue
+        for g in sorted({int(x) for x in gs if x >= 0}):
+            gw = w[gs == g]
+            if (gw > 0).any() and (gw < 0).any():
+                warnings.warn(f"{what} group {g} contains both positive and negative weights", stacklevel=3)
 
     # the quantized data
     data = _core.PrioData(nodata[kept].tolist(), extract[kept].tolist(), thresholds[kept].tolist(),
                           maxv[kept].tolist(), keep[kept].tolist(), int(a["bits"]))
     kl = [src.layers[i] for i in kept]
-    for y0, y1, end in _inputs.blocks(H, W, L, src.block_rows):
-        data.add_block(_inputs.read_rows(kl, y0, y1, W), _inputs.area_rows(area_layer, y0, y1, which))
+    if cond_layers:
+        data.set_conditions(cond_index[kept].tolist(), renorm[kept].tolist())
+    for y0, y1, end in _inputs.blocks(H, W, L + len(cond_layers), src.block_rows):
+        conds = None
+        if cond_layers:
+            conds = _inputs.read_rows(cond_layers, y0, y1, W)
+            for k, cl in enumerate(cond_layers):
+                c = conds[k]
+                c[np.isnan(c) | (c == cl.nodata)] = 0.0
+            if (conds < 0).any() or (conds > 1).any():
+                raise ValueError("condition rasters must have values in [0, 1]")
+        data.add_block(_inputs.read_rows(kl, y0, y1, W), _inputs.area_rows(area_layer, y0, y1, which), conds)
         if end:
             data.flush()
     data.finish()
@@ -376,6 +443,7 @@ def _run(src, name, param, a) -> ZonationResult:
     hmask = _inputs.gather(_inputs.open_aux(a["hierarchic_mask"], src.grid, "hierarchic mask", src), cells,
                            src.grid, lo=0, hi=255, round_int=True)
     solution = _inputs.gather(_inputs.open_aux(a["solution"], src.grid, "solution", src), cells, src.grid)
+    _retention(data, a["retention"], kept, L0, cells, src)
     seed = a["seed"]
     if seed is None:
         seed = int(np.random.SeedSequence().generate_state(1)[0])
@@ -418,8 +486,89 @@ def _run(src, name, param, a) -> ZonationResult:
             "cells": int(data.cells), "curve_headers": headers, "total_cost": r["total_cost"],
             "ranking_errors": int(r["ranking_errors"]), "rank_change": float(r["rank_change"]) * 100.0,
             "quantization_error": float(np.mean(np.asarray(data.quantization_errors)))}
-    return ZonationResult(rank, fc, sc, dc, gc, features, int(r["iterations"]), float(r["ranking_error"]) * 100.0,
-                          float(r["auc"]), history, cells[np.asarray(r["order"])], info)
+    res = ZonationResult(rank, fc, sc, dc, gc, features, int(r["iterations"]), float(r["ranking_error"]) * 100.0,
+                         float(r["auc"]), history, cells[np.asarray(r["order"])], info)
+    if a["preprocessing"]:
+        res.preprocessing = _preprocessing(data, w, classes, weights_on, ogroups[kept] if ogroups is not None
+                                           else None, cells, src.grid)
+    tr = a["transformed"]
+    if tr is not None and tr is not False:
+        flags = [True] * L0 if tr is True else list(tr)
+        if len(flags) != L0:
+            raise ValueError(f"transformed: {len(flags)} for {L0} features")
+        scale = np.asarray(data.layer_scale)
+        for k, i in enumerate(kept):
+            if flags[i]:
+                q = np.asarray(data.layer(k, False, -1.0))
+                v = np.where(q >= 0, (q.astype(np.float32).astype(np.float64) * scale[k]).astype(np.float32), np.nan)
+                res.transformed[lnames[k]] = _raster(_unpack(v.astype(np.float32), cells, H, W), src.grid)
+    return res
+
+
+def _unpack(values: np.ndarray, cells: np.ndarray, H: int, W: int) -> np.ndarray:
+    out = np.full(H * W, np.nan, dtype=np.float32)
+    out[cells] = values
+    return out.reshape(H, W)
+
+
+def _retention(data, retention, kept, L0, cells, src) -> None:
+    """Zonation's retention transforms (-r), after the other transforms."""
+    if retention is None:
+        return
+    ret = list(retention)
+    if len(ret) != L0:
+        raise ValueError(f"retention: {len(ret)} for {L0} features")
+    for k, i in enumerate(kept):
+        r = ret[i]
+        if r is None:
+            continue
+        if isinstance(r, (int, float, np.floating, np.integer)) and not isinstance(r, bool):
+            data.retain(k, 2, None, float(np.float32(r)))
+            continue
+        kind = 1
+        if isinstance(r, (tuple, list)):
+            what, r = r
+            if what not in ("absolute", "fraction"):
+                raise ValueError("retention: ('absolute' | 'fraction', raster)")
+            kind = 0 if what == "absolute" else 1
+        v = _inputs.gather(_inputs.open_aux(r, src.grid, "retention", src), cells, src.grid).astype(np.float32)
+        if (v < 0).any():
+            raise ValueError("retention rasters must not have negative values")
+        if kind == 1 and (v > 1).any():
+            raise ValueError("fractional retention rasters must have values in [0, 1]")
+        clipped = data.retain(k, kind, v, 0.0)
+        if clipped:
+            warnings.warn(f"feature {i}: {clipped} cells where the retention is higher than the value, clipped",
+                          stacklevel=4)
+
+
+def _preprocessing(data, w, classes, weights_on, groups, cells, grid) -> dict:
+    """Zonation's pre-processing maps (main.cpp outputPreprocessedMaps)."""
+    H, W = grid.shape
+    L = len(w)
+    sets = [("pos", classes["positive"]), ("neg", classes["negative"]), ("zero", classes["zero"])]
+    if groups is not None:
+        for g in sorted({int(x) for x in groups if x >= 0}):
+            sets.append((f"group{g}", [i for i, x in enumerate(groups) if x == g]))
+    out = {}
+
+    def one(idx, weights, unscaled):
+        mult = np.zeros(L, np.float32)
+        mult[idx] = 1
+        v = np.asarray(data.preprocessing(mult, weights, unscaled), dtype=np.float32)
+        return _raster(_unpack(v, cells, H, W), grid)
+
+    for name, idx in sets:
+        if idx:
+            out[f"richness.{name}"] = one(idx, None, True)
+            out[f"rsr.{name}"] = one(idx, None, False)
+    if weights_on:
+        wf = np.asarray(w, np.float32)
+        for name, idx in sets:
+            if idx and name != "zero":
+                out[f"richness.{name}.weighted"] = one(idx, wf, True)
+                out[f"rsr.{name}.weighted"] = one(idx, wf, False)
+    return out
 
 
 def _raster(values: np.ndarray, grid) -> object:

@@ -108,8 +108,9 @@ Data::Data(ReadRules r, std::vector<float> max_values, std::vector<std::uint8_t>
     block_cond_.assign(n, 0.0);
 }
 
-void Data::add_block(const float* values, i64 h, i64 w, const std::uint8_t* area) {
+void Data::add_block(const float* values, i64 h, i64 w, const std::uint8_t* area, const float* cond) {
     const int L = rules.layers;
+    const bool conditioned = cond && !condition.empty();
     const i64 plane = h * w;
     const float scale = static_cast<float>(storage_scale);
     const double scale_r = 1.0 / storage_scale;
@@ -135,6 +136,11 @@ void Data::add_block(const float* values, i64 h, i64 w, const std::uint8_t* area
         cell_index.push_back(index);
         for (int l = 0; l < L; ++l) {
             if (skip[l]) continue;
+            if (conditioned && condition[l] >= 0) {
+                // StorageType *= float: the product truncated
+                const float cv = cond[static_cast<i64>(condition[l]) * plane + c];
+                q[l] = static_cast<std::uint16_t>(static_cast<float>(q[l]) * cv);
+            }
             entry_layer.push_back(static_cast<std::uint16_t>(l));
             entry_value.push_back(q[l]);
             quantized_zeros[l] += q[l] == 0;
@@ -167,12 +173,66 @@ void Data::finish() {
         orig_abs_sums[l] = s * static_cast<double>(max_values[l]);
         initial_levels[l] = s > 0 ? condition_sums[l] / s : 0.0;
         layer_scale[l] = s > 0 ? 1.0 / (s * storage_scale) : 0.0;
+        if (l < renormalize.size() && renormalize[l] && condition[l] >= 0 && initial_levels[l] > 0) {
+            layer_scale[l] /= initial_levels[l];
+            initial_levels[l] = 1.0;
+        }
         quantization_errors[l] = nq_sums[l] > 0 ? std::fabs(nq_sums[l] - s) / nq_sums[l] * 100.0 : 0.0;
     }
     cell_index.shrink_to_fit();
     cell_ptr.shrink_to_fit();
     entry_layer.shrink_to_fit();
     entry_value.shrink_to_fit();
+}
+
+i64 Data::retain(int layer, int kind, const float* values, float fraction) {
+    if (layer < 0 || layer >= rules.layers) throw std::out_of_range("layer");
+    const float scale = static_cast<float>(storage_scale);
+    i64 clipped = 0;
+    for (i64 c = 0; c < cells(); ++c)
+        for (i64 e = cell_ptr[c]; e < cell_ptr[c + 1]; ++e) {
+            if (entry_layer[e] != layer) continue;
+            std::uint16_t& p = entry_value[e];
+            const float v = static_cast<float>(p);
+            float b;
+            if (kind == 0) {
+                // scaleToLayerStorage: the absolute value in the layer's quantized units
+                b = values[c] * inv_max[layer] * scale;
+                if (b > v) {
+                    b = v;
+                    ++clipped;
+                }
+            } else {
+                b = (kind == 1 ? values[c] : fraction) * v;
+            }
+            p = static_cast<std::uint16_t>(v - b);
+            break;
+        }
+    return clipped;
+}
+
+std::vector<float> Data::preprocessing(const float* mult, const float* weights, bool unscaled) const {
+    const int L = rules.layers;
+    std::vector<float> out(static_cast<size_t>(cells()));
+#pragma omp parallel
+    {
+        std::vector<float> f(static_cast<size_t>(L));
+#pragma omp for schedule(static)
+        for (i64 c = 0; c < cells(); ++c) {
+            std::fill(f.begin(), f.end(), 0.0f);
+            for (i64 e = cell_ptr[c]; e < cell_ptr[c + 1]; ++e) {
+                const int l = entry_layer[e];
+                f[l] = static_cast<float>(static_cast<double>(static_cast<float>(entry_value[e])) * layer_scale[l]);
+            }
+            for (int l = 0; l < L; ++l) {
+                float v = weights ? weights[l] * f[l] : f[l];
+                if (unscaled) v = static_cast<float>(static_cast<double>(v) * orig_abs_sums[l]);
+                f[l] = v * mult[l];
+            }
+            out[c] = eigen_avx_sum(f.data(), L, 0);
+        }
+    }
+    return out;
 }
 
 float eigen_avx_sum(const float* v, i64 n, i64 offset) {

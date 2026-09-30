@@ -444,3 +444,5 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 |---|---|
 | [`ls.zonation`](prioritization.md#landschaft.prioritize.zonation) | Rank the cells of a landscape for conservation, as Zonation 5 does |
 | [`ls.ZonationResult`](prioritization.md#landschaft.prioritize.ZonationResult) | The result of `zonation` |
+| [`ls.run_project`](prioritization.md#landschaft.prioritize.run_project) | Run a Zonation 5 project (see `read_project`) |
+| [`ls.read_project`](prioritization.md#landschaft.prioritize.read_project) | The `zonation` arguments of a Zonation 5 project |

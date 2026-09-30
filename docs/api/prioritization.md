@@ -32,3 +32,13 @@ res.write("zonation_output")  # rankmap.tif and Zonation's CSV files
 ::: landschaft.prioritize.zonation
 
 ::: landschaft.prioritize.ZonationResult
+
+## Zonation projects
+
+Existing Zonation 5 projects run as they are: the settings file, its feature
+list and link files (weight groups, conditions, retention), with the switches of
+the z5 command line.
+
+::: landschaft.prioritize.run_project
+
+::: landschaft.prioritize.read_project

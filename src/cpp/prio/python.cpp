@@ -176,14 +176,54 @@ void register_python(py::module_& m) {
              py::arg("keep_zeros"), py::arg("bits"))
         .def(
             "add_block",
-            [](Data& d, const Floats& values, const py::object& area) {
+            [](Data& d, const Floats& values, const py::object& area, const py::object& cond) {
                 check_block(d.rules.layers, values, area);
                 Bytes a = area.is_none() ? Bytes() : area.cast<Bytes>();
                 const std::uint8_t* ap = area.is_none() ? nullptr : a.data();
+                Floats cv = cond.is_none() ? Floats() : cond.cast<Floats>();
+                if (!cond.is_none() &&
+                    (cv.ndim() != 3 || cv.shape(1) != values.shape(1) || cv.shape(2) != values.shape(2)))
+                    throw std::invalid_argument("conditions: (conditions, rows, cols) of the block");
+                const float* cp = cond.is_none() ? nullptr : cv.data();
                 py::gil_scoped_release release;
-                d.add_block(values.data(), values.shape(1), values.shape(2), ap);
+                d.add_block(values.data(), values.shape(1), values.shape(2), ap, cp);
             },
-            py::arg("values"), py::arg("area") = py::none())
+            py::arg("values"), py::arg("area") = py::none(), py::arg("conditions") = py::none())
+        .def(
+            "set_conditions",
+            [](Data& d, std::vector<int> condition, std::vector<std::uint8_t> renormalize) {
+                if (static_cast<int>(condition.size()) != d.rules.layers ||
+                    static_cast<int>(renormalize.size()) != d.rules.layers)
+                    throw std::invalid_argument("one condition and renormalize flag per layer");
+                d.condition = std::move(condition);
+                d.renormalize = std::move(renormalize);
+            },
+            py::arg("condition"), py::arg("renormalize"))
+        .def(
+            "retain",
+            [](Data& d, int layer, int kind, const py::object& values, float fraction) {
+                Floats v = values.is_none() ? Floats() : values.cast<Floats>();
+                if (kind < 2 && (values.is_none() || v.size() != d.cells()))
+                    throw std::invalid_argument("retention: one value per data cell");
+                const float* vp = values.is_none() ? nullptr : v.data();
+                py::gil_scoped_release release;
+                return d.retain(layer, kind, vp, fraction);
+            },
+            py::arg("layer"), py::arg("kind"), py::arg("values") = py::none(), py::arg("fraction") = 0.0f)
+        .def(
+            "preprocessing",
+            [](const Data& d, const Floats& mult, const py::object& weights, bool unscaled) {
+                if (mult.size() != d.rules.layers) throw std::invalid_argument("one multiplier per layer");
+                Floats w = weights.is_none() ? Floats() : weights.cast<Floats>();
+                const float* wp = weights.is_none() ? nullptr : w.data();
+                std::vector<float> out;
+                {
+                    py::gil_scoped_release release;
+                    out = d.preprocessing(mult.data(), wp, unscaled);
+                }
+                return to_array(std::move(out));
+            },
+            py::arg("mult"), py::arg("weights") = py::none(), py::arg("unscaled") = false)
         .def("flush", &Data::flush)
         .def("finish", &Data::finish)
         .def_readonly("bits", &Data::bits)

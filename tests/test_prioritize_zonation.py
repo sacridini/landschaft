@@ -198,3 +198,92 @@ def test_cazp_small_exponent_runs():
     # CAZP with p < 1: 0^p is not zero in Zonation (fast_log(0) = -709.09)
     res = ls.prioritize.zonation(x, rule="CAZP 0.5")
     assert res.iterations > 0
+
+
+# ---------------------------------------------------------------- transforms (phase 2)
+
+
+@pytest.mark.reference
+@pytest.mark.parametrize("name", case_ids("transform"))
+def test_transforms_match_zonation(name, rasters, tmp_path):
+    """Conditions, retention, pre-processing maps and transformed layers, bit for bit."""
+    arrays, meta = load("transform")
+    res = _run(name, rasters)
+    ref = arrays[f"{name}/rank"]
+    ours = np.asarray(res.rank)
+    assert ((ours == ref) | (np.isnan(ours) & np.isnan(ref))).all()
+    assert res.iterations == int(meta[f"{name}/stats"]["Number of iterations"])
+    out = res.write(tmp_path)
+    for key, fname in TABLES.items():
+        k = f"{name}/load/{key}"
+        if k in arrays:
+            want = [ln.strip() for ln in table_text(arrays, k).splitlines()]
+            got = [ln.strip() for ln in (out / fname).read_text(encoding="utf-8").splitlines()]
+            assert got == want, key
+    pre = {k.split("/pre/")[1]: v for k, v in arrays.items() if k.startswith(f"{name}/pre/")}
+    assert set(res.preprocessing) == set(pre)
+    for k, v in pre.items():
+        a = np.asarray(res.preprocessing[k])
+        assert ((a == v) | (np.isnan(a) & np.isnan(v))).all(), k
+    number = list(res.features["number"])
+    tr = {int(k.split("/tr/")[1]): v for k, v in arrays.items() if k.startswith(f"{name}/tr/")}
+    assert len(res.transformed) == len(tr)
+    for i, v in tr.items():
+        a = np.asarray(res.transformed[res.features["name"][number.index(i)]])
+        assert ((a == v) | (np.isnan(a) & np.isnan(v))).all(), i
+
+
+@pytest.mark.reference
+@pytest.mark.parametrize("name", list(prioritize_cases.CASES))
+def test_run_project_matches_zonation(name, tmp_path):
+    """The Zonation project of every case (settings, feature list, link files), read and run."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    from make_reference_prioritize import write_project
+
+    case = prioritize_cases.CASES[name]
+    arrays, _ = load(case.group)
+    write_project(case, tmp_path)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = ls.prioritize.run_project(tmp_path / "settings.z5", case.flags, mode=case.mode, bits=case.bits)
+    ref = arrays[f"{name}/rank"]
+    ours = np.asarray(res.rank)
+    assert ((ours == ref) | (np.isnan(ours) & np.isnan(ref))).all()
+
+
+def test_retention_forms_and_errors():
+    rng = np.random.default_rng(9)
+    x = rng.random((3, 12, 14)).astype(np.float32)
+    frac = np.full((12, 14), 0.25, np.float32)
+    a = ls.prioritize.zonation(x, retention=[0.25, None, None])
+    b = ls.prioritize.zonation(x, retention=[frac, None, None])
+    np.testing.assert_array_equal(np.asarray(a.rank), np.asarray(b.rank))
+    # the retained part stays: the curve ends near the retained fraction
+    assert 0.2 < a.feature_curves.iloc[-1, 1] < 0.3
+    with pytest.raises(ValueError, match="negative"):
+        ls.prioritize.zonation(x, retention=[("absolute", -frac), None, None])
+    with pytest.raises(ValueError, match="0, 1"):
+        ls.prioritize.zonation(x, retention=[frac * 5, None, None])
+    with pytest.raises(ValueError, match="retention"):
+        ls.prioritize.zonation(x, retention=[0.1])
+
+
+def test_condition_checks_and_renormalize():
+    rng = np.random.default_rng(10)
+    x = rng.random((2, 10, 10)).astype(np.float32)
+    cond = np.full((10, 10), 0.5, np.float32)
+    r = ls.prioritize.zonation(x, condition=[cond, None])
+    assert r.feature_curves.iloc[0, 1] == pytest.approx(0.5, abs=0.01)  # initial level: the conditioned fraction
+    rn = ls.prioritize.zonation(x, condition=[cond, None], renormalize=True)
+    assert rn.feature_curves.iloc[0, 1] == 1.0
+    with pytest.raises(ValueError, match="0, 1"):
+        ls.prioritize.zonation(x, condition=[cond * 3, None])
+
+
+def test_mixed_sign_group_warns():
+    x = np.random.default_rng(11).random((3, 8, 8))
+    with pytest.warns(UserWarning, match="output group 1"):
+        ls.prioritize.zonation(x, weights=[1, -1, 1], groups=[1, 1, 2])

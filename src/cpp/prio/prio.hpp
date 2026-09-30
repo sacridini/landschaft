@@ -40,9 +40,20 @@ struct Stats {
 // from the layers that are not empty.
 struct Data {
     Data(ReadRules rules, std::vector<float> max_values, std::vector<std::uint8_t> keep_zeros, int bits);
-    void add_block(const float* values, i64 h, i64 w, const std::uint8_t* area);
+    // cond: (conditions, h, w) condition values in [0, 1] (Zonation's -c), or null
+    void add_block(const float* values, i64 h, i64 w, const std::uint8_t* area, const float* cond = nullptr);
     void flush();   // end of one of Zonation's blocks of rows: add its sums
     void finish();
+    // Zonation's retention transform of a layer (-r): kind 0 absolute values, 1
+    // fractions (per data cell), 2 a constant fraction; returns the cells where the
+    // absolute retention exceeded the value (clipped)
+    i64 retain(int layer, int kind, const float* values, float fraction);
+    // Zonation's pre-processing maps (-b): per data cell, the sum over the layers of
+    // mult * (weight *) value, as sum-normalized values or scaled back to the input sums
+    std::vector<float> preprocessing(const float* mult, const float* weights, bool unscaled) const;
+
+    std::vector<int> condition;             // condition of each layer (-1: none)
+    std::vector<std::uint8_t> renormalize;  // renormalize a conditioned layer to level 1
 
     ReadRules rules;
     int bits = 8;

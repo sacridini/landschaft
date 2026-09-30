@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.90.0] - 2026-09-30
+
+### Added
+- Spatial prioritization, part 2: in `ls.prioritize.zonation`, condition layers (`condition`,
+  `renormalize`; Zonation's `-c`), retention (`retention`: constant fractions, fraction rasters or
+  absolute amounts; `-r`), Zonation's pre-processing maps (`preprocessing`: richness and range-size
+  rarity per weight class and output group, weighted; `-b`) and the feature layers as ranked
+  (`transformed`; `-f`). `ls.prioritize.read_project` and `run_project` read and run Zonation 5
+  projects: the settings file, feature list (value extraction included) and link files, with z5's
+  command-line switches. Checked bit for bit against z5 on 9 more runs (rank maps, tables,
+  pre-processing maps, transformed layers), and every reference run through its project files.
+- Warnings for weight and output groups mixing positive and negative weights, as Zonation.
+
 ## [0.89.0] - 2026-09-30
 
 ### Added
