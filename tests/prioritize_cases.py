@@ -1,0 +1,200 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Cases shared by tools/make_reference_prioritize.py and the ls.prioritize tests.
+
+Every raster is a float64 array (NaN = NoData) written as a one-strip GeoTIFF of
+``dtype`` (NaN becomes ``nodata`` for integer types), so Zonation 5 reads it in
+one block of rows and sums the layers in row order. A case is a Zonation 5 run:
+the feature list (the ``filename`` column plus ``columns``), the settings file
+(values naming a raster become its path), extra link files, the command-line
+switches, the marginal loss rule (``--mode``) and the quantization (8 or 16
+bits, i.e. ``z5.exe`` or ``z5_16bit.exe``). ``params`` are the arguments of
+``ls.prioritize.zonation`` giving the same run.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import numpy as np
+
+GROUPS = ["core"]
+
+EPSG = 32633
+
+
+@dataclass
+class RasterSpec:
+    values: np.ndarray  # (ny, nx) float64, NaN = NoData
+    dtype: str = "float32"
+    nodata: float | None = float("nan")  # written for NaN cells (and declared as the band's NoData)
+    cellsize: float = 100.0
+
+
+@dataclass
+class Case:
+    group: str
+    layers: list[str]  # raster names, one feature per entry
+    mode: str = "CAZ2"
+    columns: dict[str, list] = field(default_factory=dict)  # feature-list columns besides filename
+    settings: dict[str, object] = field(default_factory=dict)  # settings file entries (raster names -> paths)
+    files: dict[str, str] = field(default_factory=dict)  # extra link files (setting value "file:NAME")
+    flags: tuple[str, ...] = ()
+    bits: int = 8
+    extract: dict[int, float] = field(default_factory=dict)  # layer index -> value extracted ("f.tif/3")
+    load: bool = True  # also evaluate Zonation's final rank map in LOAD mode (curves of the final ranking)
+    params: dict = field(default_factory=dict)  # ls.prioritize.zonation arguments (besides features)
+
+
+# ---------------------------------------------------------------------------- rasters
+
+def _blobs(shape, seed, n=6, zero_below=0.0, scale=1.0, na=None) -> np.ndarray:
+    """A species-like surface: a sum of Gaussian blobs, zero below a level, NaN where ``na``."""
+    rng = np.random.default_rng(seed)
+    ny, nx = shape
+    yy, xx = np.mgrid[0:ny, 0:nx].astype(float)
+    v = np.zeros(shape)
+    for _ in range(n):
+        cy, cx = rng.uniform(0, ny), rng.uniform(0, nx)
+        s = rng.uniform(0.06, 0.25) * max(ny, nx)
+        v += rng.uniform(0.3, 1.0) * np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * s * s))
+    v = v / v.max() * scale
+    v[v < zero_below] = 0.0
+    if na is not None:
+        v[na] = np.nan
+    return v
+
+
+def _outline(shape, seed) -> np.ndarray:
+    """NoData outside an irregular 'coastline' (True = NoData)."""
+    rng = np.random.default_rng(seed)
+    ny, nx = shape
+    yy, xx = np.mgrid[0:ny, 0:nx].astype(float)
+    r = np.hypot((yy - ny / 2) / (ny / 2), (xx - nx / 2) / (nx / 2))
+    wobble = 0.12 * np.sin(np.arctan2(yy - ny / 2, xx - nx / 2) * 5 + rng.uniform(0, 6))
+    return r > 0.95 + wobble
+
+
+def _rasters() -> dict[str, RasterSpec]:
+    r: dict[str, RasterSpec] = {}
+    shape = (40, 50)
+    sea = _outline(shape, 1)
+    for i in range(8):
+        r[f"sp{i}"] = RasterSpec(_blobs(shape, 10 + i, n=3 + i % 4, zero_below=0.05 * (i % 3), na=sea))
+    # presence/absence (many ties), integer counts with a numeric NoData, a layer with its own holes
+    r["pa0"] = RasterSpec(np.where(sea, np.nan, (_blobs(shape, 30) > 0.35).astype(float)), "uint8", 255)
+    r["pa1"] = RasterSpec(np.where(sea, np.nan, (_blobs(shape, 31) > 0.5).astype(float)), "uint8", 255)
+    counts = np.round(_blobs(shape, 32, scale=20.0))
+    counts[sea] = np.nan
+    r["count"] = RasterSpec(counts, "int16", -9999)
+    holes = _blobs(shape, 33, na=sea)
+    holes[np.random.default_rng(34).random(shape) < 0.1] = np.nan
+    r["holes"] = RasterSpec(holes)
+    # a land-cover map (classes 1-4) for value extraction
+    lc = np.floor(_blobs(shape, 35, n=8) * 3.999) + 1
+    lc[sea] = np.nan
+    r["landcover"] = RasterSpec(lc, "uint8", 0)
+    # cost (positive, with some zero-cost cells), hierarchic mask (0/1/2), analysis areas (0 outside, 1-3)
+    cost = 1.0 + 9.0 * _blobs(shape, 40, n=5)
+    cost[_blobs(shape, 41) > 0.8] = 0.0
+    cost[sea] = np.nan
+    r["cost"] = RasterSpec(cost)
+    hm = np.zeros(shape)
+    hm[_blobs(shape, 42) > 0.55] = 1
+    hm[_blobs(shape, 43) > 0.75] = 2
+    r["hmask"] = RasterSpec(hm, "int32", None)
+    areas = np.zeros(shape)
+    areas[:, :18] = 1
+    areas[:, 18:35] = 2
+    areas[:, 35:] = 3
+    areas[:4] = 0
+    r["areas"] = RasterSpec(areas, "int32", None)
+    # a larger stack for realistic numbers of cells and iterations
+    big = (120, 160)
+    bsea = _outline(big, 2)
+    for i in range(12):
+        r[f"big{i}"] = RasterSpec(_blobs(big, 100 + i, n=4 + i % 5, zero_below=0.1 * (i % 2), na=bsea))
+    return r
+
+
+RASTERS = _rasters()
+
+SP = [f"sp{i}" for i in range(8)]
+BIG = [f"big{i}" for i in range(12)]
+W8 = [2.0, 1.0, 1.0, 3.0, 0.5, 1.0, 1.5, 1.0]
+
+
+def _core() -> dict[str, Case]:
+    c: dict[str, Case] = {}
+    g = "core"
+    for mode in ["CAZ1", "CAZ2", "CAZMAX", "ABF 0.25", "ABF 0.6", "CAZP 2", "CAZP 0.5", "CAZPW 3"]:
+        name = mode.lower().replace(" ", "_").replace(".", "")
+        rule, *p = mode.split()
+        c[name] = Case(g, SP, mode, params={"rule": rule, **({"rule_param": float(p[0])} if p else {})})
+    c["caz2_16bit"] = Case(g, SP, "CAZ2", bits=16, params={"rule": "CAZ2", "bits": 16})
+    c["abf_16bit"] = Case(g, SP, "ABF 0.25", bits=16, params={"rule": "ABF", "bits": 16})
+    c["caz2_weights"] = Case(g, SP, "CAZ2", {"weight": W8}, flags=("-w",), params={"weights": W8})
+    wneg = [2.0, 1.0, -1.0, 3.0, 0.0, 1.0, -0.5, 1.0]
+    for mode in ["CAZ1", "CAZ2", "CAZMAX", "ABF 0.25", "CAZPW 2"]:
+        name = mode.lower().replace(" ", "_").replace(".", "")
+        rule, *p = mode.split()
+        c[f"{name}_negweights"] = Case(g, SP, mode, {"weight": wneg}, flags=("-w",),
+                                       params={"rule": rule, "weights": wneg,
+                                               **({"rule_param": float(p[0])} if p else {})})
+    wgrp = [1, 1, 2, 2, 2, 3, -1, 3]
+    c["caz2_weightgroups"] = Case(g, SP, "CAZ2", {"weight": W8, "wgrp": wgrp},
+                                  settings={"weight groups file": "file:wgroups.txt"},
+                                  files={"wgroups.txt": "1 4.0\n2 1.0\n3 2.5\n"}, flags=("-W",),
+                                  params={"weights": W8, "weight_groups": wgrp,
+                                          "group_weights": {1: 4.0, 2: 1.0, 3: 2.5}})
+    grp = [1, 1, 2, 2, 2, 3, 3, 3]
+    c["caz2_groups"] = Case(g, SP, "CAZ2", {"weight": W8, "group": grp}, flags=("-w", "-g"),
+                            params={"weights": W8, "groups": grp})
+    thr = [0.0, 0.2, 0.0, 0.5, 0.1, 0.0, 0.3, 0.0]
+    c["caz2_threshold"] = Case(g, SP, "CAZ2", {"threshold": thr}, flags=("-t",), params={"thresholds": thr})
+    abfz = [0.25, 0.5, 0.35, 0.1, 0.25, 0.8, 0.15, 0.3]
+    c["abf_layer_z"] = Case(g, SP, "ABF 0.35", {"abfz": abfz},
+                            params={"rule": "ABF", "rule_param": 0.35, "abf_z": abfz})
+    c["caz2_zero_none"] = Case(g, SP, "CAZ2", settings={"zero mode": "none"}, params={"zero_mode": "none"})
+    keep = [1, 0, 0, 1, 0, 0, 1, 0]
+    c["caz2_zero_dynamic"] = Case(g, SP, "CAZ2", {"keep_zeros": keep}, settings={"zero mode": "dynamic"},
+                                  params={"zero_mode": "dynamic", "keep_zeros": keep})
+    mixed = ["sp0", "pa0", "count", "holes", "sp3", "pa1"]
+    c["caz2_mixed"] = Case(g, mixed, "CAZ2")
+    c["abf_mixed"] = Case(g, mixed, "ABF 0.25", params={"rule": "ABF"})
+    c["caz1_presence"] = Case(g, ["pa0", "pa1"], "CAZ1", params={"rule": "CAZ1"})
+    c["caz2_extract"] = Case(g, ["landcover", "landcover", "landcover", "sp1"], "CAZ2",
+                             extract={0: 1.0, 1: 2.0, 2: 4.0}, params={"extract": [1.0, 2.0, 4.0, None]})
+    c["caz2_cost_tracked"] = Case(g, SP, "CAZ2", settings={"cost layer": "cost"}, flags=("-x",),
+                                  params={"cost": "cost", "cost_in_ranking": False})
+    c["caz2_cost"] = Case(g, SP, "CAZ2", settings={"cost layer": "cost"}, flags=("-X",),
+                          params={"cost": "cost"})
+    c["abf_cost_negweights"] = Case(g, SP, "ABF 0.25", {"weight": wneg}, settings={"cost layer": "cost"},
+                                    flags=("-w", "-X"),
+                                    params={"rule": "ABF", "weights": wneg, "cost": "cost"})
+    c["caz2_hmask"] = Case(g, SP, "CAZ2", settings={"hierarchic mask layer": "hmask"}, flags=("-h",),
+                           params={"hierarchic_mask": "hmask"})
+    c["caz2_hmask_cost"] = Case(g, SP, "CAZ2", {"weight": W8},
+                                settings={"hierarchic mask layer": "hmask", "cost layer": "cost"},
+                                flags=("-w", "-h", "-X"),
+                                params={"weights": W8, "hierarchic_mask": "hmask", "cost": "cost"})
+    c["caz2_area_all"] = Case(g, SP, "CAZ2", settings={"analysis area mask layer": "areas"}, flags=("-a",),
+                              params={"analysis_area": "areas"})
+    c["caz2_area_2"] = Case(g, SP, "CAZ2", settings={"analysis area mask layer": "areas"},
+                            flags=("-a", "--area=2"), params={"analysis_area": "areas", "area": 2})
+    c["caz2_smoothing"] = Case(g, SP, "CAZ2", settings={"smoothing factor": 0.5},
+                               params={"smoothing_factor": 0.5})
+    c["caz2_maxiter"] = Case(g, SP, "CAZ2", settings={"max iterations": 3}, params={"max_iterations": 3})
+    c["caz2_error"] = Case(g, SP, "CAZ2", settings={"mean ranking error threshold": 0.2, "stop on plateau": 1},
+                           params={"ranking_error": 0.2, "stop_on_plateau": True})
+    c["caz2_curves"] = Case(g, SP, "CAZ2", settings={"curves output interval": 0.01},
+                            params={"curves_interval": 0.01})
+    c["load"] = Case(g, SP, "LOAD", settings={"external solution": "sp7"}, load=False,
+                     params={"rule": "LOAD", "solution": "sp7"})
+    c["big_caz2"] = Case(g, BIG, "CAZ2")
+    c["big_abf"] = Case(g, BIG, "ABF 0.25", params={"rule": "ABF"})
+    c["big_caz1_weights"] = Case(g, BIG, "CAZ1", {"weight": [1.0 + (i % 4) for i in range(12)]}, flags=("-w",),
+                                 params={"rule": "CAZ1", "weights": [1.0 + (i % 4) for i in range(12)]})
+    return c
+
+
+CASES: dict[str, Case] = {**_core()}

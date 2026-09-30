@@ -919,7 +919,7 @@ Todos os módulos planejados são plenamente viáveis e compatíveis com a licen
 
 | Módulo / Ferramenta de Referência | Status / Licença Original | Compatibilidade e Estratégia |
 |---|---|---|
-| **Zonation 5** (CAZ / ABF / BLP) | **GPL-3.0** (C++ Core aberto) | **100% compatível**. Reimplementação nativa em C++17 dos algoritmos de remoção iterativa. |
+| **Zonation 5** (CAZ / ABF, v2.4) | **GPL-3.0** (código em github.com/zonationteam/Zonation5; vdt LGPL-3) | **100% compatível**. Reimplementação em C++17 das ordenações iterativas. |
 | **PLUS Model** (CARS / Inércia) | **GPL-3.0 / Open Source** | **100% compatível**. Absorção do sorteio estocástico de roleta multiclasse e inércia dinâmica. |
 | **TerraME** (Vizinhanças Híbridas) | **LGPL / GPL** (C++/Lua aberto) | **100% compatível**. Inspiração para acoplamento de grade raster com redes e zonas. |
 | **lulcc** / **MOLUSCE** (WoE + CA) | **GPL-3 / GPL-2** (R e Python) | **100% compatível**. Referência aberta para equações bayesianas de Pesos de Evidência. |
@@ -930,63 +930,107 @@ Todos os módulos planejados são plenamente viáveis e compatíveis com a licen
 
 ## Priorização espacial sistemática (Zonation 5)
 
-Análise de 2026-09-30. A priorização espacial sistemática define áreas prioritárias para conservação
-e restauração balanceando biodiversidade, conectividade e custos de oportunidade.
+Plano acordado em 2026-09-30 (substitui a análise inicial do mesmo dia, que partia do Zonation 4). Porte do
+**Zonation 5 v2.4** (Pauli Lehtinen, Atte Moilanen et al., Univ. Helsinki; GPL-3.0, código em
+`github.com/zonationteam/Zonation5`, release `z5src-v2.4.zip`) para `src/cpp/prio/` + `landschaft.prioritize`
+(`ls.prioritize`). Fonte local: `C:\Users\eduar\Documents\dev\zonation5\src\z5-v2.4`; binários oficiais (Windows,
+instalados sem GUI) em `C:\Users\eduar\Documents\dev\zonation5\install` (`z5.exe` = 8 bits, `z5_16bit.exe`).
+O Zonation 4 (`zonation-core`, zig4, 2015) fica só como consulta histórica (BLP, BQP, ADMU, unidades de
+planejamento e corredores não existem no Z5).
 
-### O problema e a vantagem arquitetural
-Enquanto pacotes baseados em Programação Linear Inteira Mista (MILP), como o *prioritizr*, exigem solvers
-comerciais proprietários (Gurobi) ou dependências externas complexas (Cbc, HiGHS), o **Zonation**
-(Atte Moilanen et al., GPL-3.0) opera sob o paradigma de **ranqueamento hierárquico determinístico por
-remoção iterativa de células** (*iterative cell-removal*):
-* **Zero dependência externa:** Código algorítmico C++ puro, sem necessidade de solvers de programação linear;
-* **Nativamente matricial:** Opera célula a célula sobre rasters de feições de biodiversidade e custos, gerando
-  um mapa de prioridade contínuo de 0.0 (primeira célula removida / menor prioridade) a 1.0 (última célula
-  retida / prioridade máxima).
+### Por que o Z5 e não o Z4
+* É a versão mantida, com o mesmo GPL-3 e ~6 mil linhas de núcleo (contra ~15 mil do zig4, com GUI misturada).
+* O algoritmo é outro e **paraleliza**: o zig4 remove célula a célula e reavalia a borda inteira a cada remoção
+  (O(N²/warp)); o Z5 faz **ordenações iterativas**: dada a ordem atual de remoção, calcula para cada célula o que
+  resta de cada feição no momento da sua remoção (varredura prefixada), a perda marginal da célula nesse ponto,
+  e reordena, até o erro médio de ordenação ficar abaixo do limite (0,01 % por padrão; máx. 500 iterações).
+* **Determinístico**: o binário dá o mesmo rankmap com 1 ou 7 threads (testado); desempates pela posição da
+  célula (sort estável sobre `iota`). Paridade bit a bit é viável.
 
-### Algoritmos de remoção propostos (`ls.prioritize`)
-A cada iteração, calcula-se o valor de perda marginal ($\delta_i$) de cada célula ativa $i$ considerando o
-valor residual de conservação das espécies/feições $j$:
+### Como o Z5 calcula (o que precisa ser reproduzido)
+* **Carga e quantização** (`layerdata.cpp`): valores < `threshold` viram 0; `v / max(camada)` em float,
+  `* 255` (ou 65535), `round` (meio para longe do zero) → uint8/uint16 esparso por célula. Célula com dado =
+  alguma feição não-NoData (e não zero, se `zero mode = none`). Soma por camada `Σ q·(1/255)` em double na
+  ordem das linhas (por bloco de linhas GDAL); `layerScale = 1/(soma·255)`; feição `f_ij = q_ij·layerScale_j`
+  (soma 1 por camada). Camadas sem dado são descartadas. Pesos (-w), grupos de peso (-W: peso·W_g/Σ|w| do
+  grupo), grupos de saída (-g), `keep_zeros`, extração de valor (`arquivo.tif/3`).
+* **Regras de perda marginal** (`balancingmethod.h`), por célula, com R = o que resta antes (`R0`) e depois
+  (`R1 = R0 - f`) da remoção, somadas separadamente para pesos ≥ 0 (pos) e < 0 (neg), `valor = pos - neg`:
+  * `CAZ1`: Σ |w|·f/R0; `CAZ2` (padrão): √Σ (|w|·f/R0)²; `CAZMAX`: max |w|·f/R0; `CAZP p`: (Σ (|w| f/R0)^p)^(1/p);
+    `CAZPW p`: Σ|w|·(f/R0)^p, raiz p; pesos negativos usam `(R0-R1)/(inicial - R1)`.
+  * `ABF z` (0,25): Σ w·(R0^z - R1^z) (z por camada, coluna `abfz`); potência por `vdt::fast_log/fast_exp`
+    (Cephes, LGPL-3, portar exatamente).
+  * `RAND` (mt19937 com semente aleatória), `LOAD` (ranking externo: só avalia curvas). `SBF` existe mas o
+    próprio Z5 o nomeia `SBF_not_used`: fica de fora.
+  * Custo (-X): na comparação `pos /= c`, `neg *= c` com `c = custo·N/Σcusto`; custo 0 sempre por último.
+    Máscara hierárquica (-h): nível menor sai antes. Só -x: custo só acompanhado nas curvas.
+* **Iteração**: soma inicial Σ|w|f; sort estável; a cada iteração nova soma a partir da ordem anterior; erro
+  = média de `(s_i - s_{i+1})/s_i` nos pares fora de ordem (sem cruzar descontinuidades); `smoothing factor`
+  mistura somas; para em `erro <= anterior e <= limite`, ou platô (`stop on plateau`), ou máx. iterações.
+  Rank = posição/N (float32; 0 = primeira removida).
+* **Saídas**: `rankmap.tif`; `feature_curves.csv` (fração restante de cada feição por rank, amostrada a cada
+  `curves output interval` = 0,0001), `summary_curves.csv` (média/máx/mín, pos/neg/zero, ponderada, área e custo
+  restantes), `feature_density_curves.csv`, `group_curves.csv`, `features_info.csv`, `stats.txt` (iterações,
+  erro, AUC).
+* Transformações: condição (-c: q·cond, trunca em uint8; `renormalize`), retenção (-r: absoluta, relativa,
+  constante), conectividade (-d kernels uniform/triangular/negexp/gaussian por FFT (fftss, double) com corte;
+  interação 1/2 (-i/-I); matriz (-m)), saídas de pré-processamento (-b: richness, rsr) e camadas transformadas (-f).
+* Pós-processamento (-p, arquivo de chamadas): `area_statistics_*`, `solution_comparison`, `histogram`,
+  `flexibility_map`. Avaliação de impactos (-s, -e): cenários de fonte de impacto, zonas, impactos cumulativos.
 
-* **Core-Area Zonation (CAZ):**
-  $$\delta_i = \max_j \left( \frac{q_{ij}}{R_j} \cdot \frac{w_j}{c_i} \right)$$
-  *Onde $q_{ij}$ é a ocorrência/probabilidade da espécie $j$ na célula $i$, $R_j$ é a distribuição restante
-  da espécie na paisagem, $w_j$ o peso da espécie e $c_i$ o custo da célula.*
-  * **Comportamento:** Retém áreas-núcleo de alta qualidade para todas as espécies, sendo especialmente eficaz
-    para espécies raras ou de distribuição restrita.
+### Estratégia de desempenho (nossa, com o mesmo resultado)
+* **Varredura por feição**: subtrair 0 não muda R, então o R de cada feição no momento de cada célula depende só
+  das ocorrências dela na ordem atual. Cada feição é varrida de forma independente (paralelo por camada, O(nnz)
+  em vez de O(N·L) do Z5, que avalia todas as camadas em toda célula) e as contribuições voltam para as células
+  somadas na ordem das camadas (somar zeros não muda o valor): bit a bit igual ao Z5.
+* **Sort estável por chave** (hmask, custo zero, valor) com radix sort paralelo (resultado único por ser estável;
+  -0 normalizado para +0).
+* Erro de ordenação somado na ordem sequencial (o critério de parada compara com o limite).
+* Carga direta de rasters/`xarray`/**dask** por blocos de linhas, quantizando para o armazenamento esparso sem
+  materializar a pilha em float; o armazenamento de 1-2 bytes por valor é o que permite rodar mapas continentais
+  ou globais. Fase de escala: ranking out-of-core (varreduras sobre armazenamento mapeado em disco).
 
-* **Additive Benefit Function (ABF):**
-  $$\delta_i = \frac{1}{c_i} \sum_j w_j \cdot f\left( \frac{q_{ij}}{R_j} \right)$$
-  *Onde $f(\cdot)$ é uma função de benefício côncava (ex: lei de potência da relação espécie-área $S = cA^z$).*
-  * **Comportamento:** Maximiza a representação média acumulada e a complementaridade, favorecendo áreas com alta
-    riqueza de espécies.
+### Correções do Z5 (implementamos só a forma correta)
+* As curvas, a AUC e o `features_info` de alvos são calculados com a ordem da **penúltima** ordenação, mas o
+  `rankmap` sai da ordenação seguinte; as nossas curvas descrevem o ranking devolvido. Teste: contra o próprio
+  Z5 em modo `LOAD` com o nosso rankmap final como solução externa.
+* (lista a completar durante o porte)
 
-### Mecanismos integrados de conectividade
-* **Penalidade de Borda (*Boundary Length Penalty - BLP*):** Modifica a perda marginal $\delta_i$ com base no
-  perímetro compartilhado com células já eliminadas, desfavorecendo pixels isolados e forçando a seleção de
-  áreas contíguas e compactas.
-* **Suavização da Distribuição (Metapopulações):** Antes da remoção, aplica convoluções com kernel gaussiano 2D
-  ($e^{-d/\alpha_j}$), onde $\alpha_j$ representa o raio de dispersão da espécie. No landschaft, isso é executado
-  via **convoluções separáveis 2D vetorizadas em AVX2/OpenMP**.
+### Paridade e testes
+* Referência: `z5.exe --maxthreads=1` (e `z5_16bit.exe`), GeoTIFFs escritos com um único bloco de linhas.
+  Harness `tools/make_reference_prioritize.py` roda os casos de `tests/prioritize_cases.py` e guarda em
+  `tests/data/reference/prioritize/<grupo>.npz/json` (rankmap, curvas, info, estatísticas).
+* Bit a bit: rankmap, curvas (comparadas com a mesma formatação `{:.4f}`/`{:.5f}` dos CSVs), iterações.
+* Tolerância: transformações de conectividade (FFT fftss vs a nossa); AUC (redução paralela no Z5).
 
-### Desempenho e engenharia em C++
-* Remoção em lotes fracionários (*warp factors* adaptativos) e uso de **Radix Heaps / Priority Queues** para
-  gerenciar as células candidatas a remoção sem ordenação global a cada passo;
-* Atualização seletiva dos totais $R_j$ apenas para as espécies presentes nas células removidas no lote atual;
-* Suporte nativo ao processamento out-of-core por blocos de linhas (`block_rows`).
+### Fases
+0. Harness: binários, casos, determinismo (threads, 8/16 bits), formato dos arquivos. **Feito** (1 thread: só o caso
+   de extração de valor muda com 7 threads, pela soma das camadas por thread).
+1. Núcleo: carga/quantização (8/16 bits, limiar, zero mode, máscara de área, extração de valor), pesos e grupos,
+   regras CAZ1/CAZ2/CAZMAX/CAZP/CAZPW/ABF/RAND/LOAD, custo (-x/-X), máscara hierárquica, iteração e parada,
+   curvas, `features_info`, rankmap; entrada numpy/xarray/dask/arquivos; API `ls.prioritize.zonation`.
+2. Condição e retenção; saídas de pré-processamento e camadas transformadas; projetos `.z5` (ler os arquivos do
+   Zonation para rodar projetos existentes).
+3. Conectividade: kernels, FFT, feição única, interações 1/2, matriz.
+4. Pós-processamento: estatísticas de área, comparação de soluções, histograma, mapa de flexibilidade, ranks da
+   máscara hierárquica.
+5. Avaliação de impactos (cenários, zonas, cumulativos, transformada de distância).
+6. Escala: carga por blocos/dask, ranking out-of-core, benchmarks continentais.
+7. Tutorial, benchmarks contra o Z5, capítulo do Learn.
 
 ```python
 import landschaft as ls
 
-prio = ls.prioritize.zonation(
-    features="species_stack.tif",  # ou lista de rasters de adequabilidade / presença
-    costs="land_cost.tif",
-    weights={"species_1": 2.0, "species_2": 1.0},
-    method="caz",                  # "caz" ou "abf"
-    blp=0.001,                     # penalidade de borda (conectividade estrutural)
-    smoothing={"species_1": 2500}, # raio de dispersão alpha_j em metros (kernel AVX2)
+res = ls.prioritize.zonation(
+    ["sp1.tif", "sp2.tif", "sp3.tif"],   # ou pilha (L, y, x) numpy / xarray / dask
+    weights=[2.0, 1.0, 1.0],
+    rule="CAZ2",                          # CAZ1, CAZ2, CAZMAX, CAZP, CAZPW, ABF, RAND, LOAD
+    cost="custo.tif", cost_in_ranking=True,
+    hierarchic_mask="areas_protegidas.tif",
 )
-prio.rank_raster.rio.to_raster("priority_rank.tif")
-prio.performance_curves.to_csv("curves.csv")
+res.rank                  # xarray.DataArray 0-1 (1 = maior prioridade)
+res.feature_curves        # pandas.DataFrame
+ls.write_raster(res.rank, "rankmap.tif")
 ```
 
 ---
