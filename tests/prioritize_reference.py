@@ -40,3 +40,31 @@ def parse_table(text: str) -> tuple[list[str], list[list[str]]]:
     """Header names and rows (as strings) of a Zonation table."""
     lines = [ln for ln in text.splitlines() if ln.strip()]
     return shlex.split(lines[0]), [ln.split() for ln in lines[1:]]
+
+
+def run_case(name: str, tmp: Path, **overrides):
+    """Run a case with ls.prioritize.zonation on the rasters written as the harness writes them."""
+    import sys
+
+    import landschaft as ls
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    from make_reference_prioritize import write_raster
+
+    case = prioritize_cases.CASES[name]
+    paths = {}
+
+    def path(r):
+        if r not in paths:
+            paths[r] = tmp / f"{r}.tif"
+            if not paths[r].exists():
+                write_raster(paths[r], prioritize_cases.RASTERS[r])
+        return paths[r]
+
+    kwargs = {}
+    for k, v in case.params.items():
+        if k in ("cost", "hierarchic_mask", "analysis_area", "solution") and isinstance(v, str):
+            v = path(v)
+        kwargs[k] = v
+    kwargs.update(overrides)
+    return ls.prioritize.zonation([path(r) for r in case.layers], **kwargs)

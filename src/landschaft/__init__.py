@@ -81,6 +81,7 @@ from .io import (
 )
 from .morphology import ParcellationResult, contortion, parcellation
 from . import nlm
+from . import prioritize
 from . import surface
 from .lsm import (
     Landscape,
@@ -189,6 +190,7 @@ __all__ = [
     "circuit",
     "cost",
     "nlm",
+    "prioritize",
     "surface",
     "batch",
     "clustering_fac",

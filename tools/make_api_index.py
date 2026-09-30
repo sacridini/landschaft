@@ -40,7 +40,9 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("nlm.md", "Neutral landscape models", ":material-dice-multiple-outline:",
           "Simulated landscapes as null models: random, gradients, clusters, fractals."),
          ("biodiversity.md", "Biodiversity analysis", ":material-paw:",
-          "Species counts per cell, phylogenies and dissimilarity matrices (Biodiverse).")]
+          "Species counts per cell, phylogenies and dissimilarity matrices (Biodiverse)."),
+         ("prioritization.md", "Spatial prioritization", ":material-star-circle-outline:",
+          "Zonation's ranking of the cells for conservation: rules, weights, costs, curves.")]
 
 INTRO = '''# API reference
 
@@ -57,6 +59,7 @@ ls.cost.transition(r, "mean", 8)    # distances and routes on grids
 ls.surface.metrics(z)               # surface texture of continuous rasters
 ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 ls.bio.BaseData.from_table(...)     # biodiversity analysis
+ls.prioritize.zonation(features)    # spatial conservation prioritization
 ```
 
 !!! example "Every example runs"

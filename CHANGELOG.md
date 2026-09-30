@@ -6,6 +6,35 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.89.0] - 2026-09-30
+
+### Added
+- Spatial prioritization, part 1: `ls.prioritize.zonation`, a port of Zonation 5 v2.4
+  (Lehtinen, Moilanen et al., University of Helsinki; GPL-3). Feature layers (files,
+  NumPy, xarray or dask stacks) quantized to 8 or 16 bits; the marginal loss rules CAZ1,
+  CAZ2, CAZMAX, CAZP, CAZPW, ABF (per-feature exponents), RAND and LOAD; weights, weight
+  groups, output groups, thresholds, zero modes, value extraction from categorical rasters,
+  cost (tracked or in the ranking), hierarchic masks, analysis areas; the iteration
+  settings (maximum iterations, ranking error, smoothing, plateau). The result holds the
+  rank map, the feature, summary, density and group curves, the feature information and
+  the iteration history, and writes Zonation's files (`ZonationResult.write`). Same rank
+  maps as the z5 program on one thread, bit for bit, and the same tables digit for digit,
+  checked on 41 runs (`tools/make_reference_prioritize.py`, `tests/prioritize_cases.py`);
+  vdt's fast_log/fast_exp reproduced as Zonation's `-Ofast` build computes them.
+- API page *Spatial prioritization*.
+
+### Changed
+- Zonation 5 reports the curves and the area under the curve of the order before its last
+  sort, and the rank map of the sort after it; `zonation` gives the curves of the ranking
+  it returns (checked against Zonation's LOAD mode on its own rank map).
+
+### Performance
+- The ranking walks the feature occurrences in the current order, kept in that order
+  between iterations, with the losses and their sums per cell in one parallel pass from
+  the levels of every feature at the start of each block of cells, and a parallel sample
+  sort. On 3.1 million cells with 30 features (75 iterations): 13 s against 54 s for z5 on
+  one thread and 33 s on 12 threads (6 performance cores).
+
 ## [0.88.0] - 2026-09-30
 
 ### Added

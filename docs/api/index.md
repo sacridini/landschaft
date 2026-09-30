@@ -13,6 +13,7 @@ ls.cost.transition(r, "mean", 8)    # distances and routes on grids
 ls.surface.metrics(z)               # surface texture of continuous rasters
 ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 ls.bio.BaseData.from_table(...)     # biodiversity analysis
+ls.prioritize.zonation(features)    # spatial conservation prioritization
 ```
 
 !!! example "Every example runs"
@@ -99,6 +100,12 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
     ---
 
     Species counts per cell, phylogenies and dissimilarity matrices (Biodiverse).
+
+-   :material-star-circle-outline:{ .lg .middle } **[Spatial prioritization](prioritization.md)**
+
+    ---
+
+    Zonation's ranking of the cells for conservation: rules, weights, costs, curves.
 
 </div>
 
@@ -430,3 +437,10 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.bio.save_session`](biodiversity.md#landschaft.bio.save_session) | Save basedatas, trees, matrices and analysis results in one file |
 | [`ls.bio.load_session`](biodiversity.md#landschaft.bio.load_session) | Load the objects saved with `save_session` (a dict by name) |
 | [`ls.bio.read_properties`](biodiversity.md#landschaft.bio.read_properties) | Read a Biodiverse element properties file (label or group properties) |
+
+### Spatial prioritization
+
+| Name | Summary |
+|---|---|
+| [`ls.zonation`](prioritization.md#landschaft.prioritize.zonation) | Rank the cells of a landscape for conservation, as Zonation 5 does |
+| [`ls.ZonationResult`](prioritization.md#landschaft.prioritize.ZonationResult) | The result of `zonation` |
