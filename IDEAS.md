@@ -871,7 +871,8 @@ Fases:
    defeito: o `sdq6` divide por `length(x)`, que é 1 num SpatRaster; o `findvalleys` acha
    33041 "vales" no `normforest`, onde há 5167; `convention="iso"` corrige);
 3. curva de Abbott-Firestone: `bearing_area`, `height_ba`, `sdc`, `sbi`, `svi`, `sci`,
-   `sk`, `spk`, `svk`;
+   `sk`, `spk`, `svk`. **Feita** (0.83.0: bit a bit em 9 casos; `ecdf`, `quantile` tipo 7,
+   `seq` e o `lm()` do R reproduzidos; o `rlm.cpp` passou a devolver o intercepto);
 4. espaciais e fractal: `aacf`, `scl`, `stxr`, `std` (Std/Stdi), `srw` (Srw/Srwi/Shw),
    `sfd`;
 5. motor de janela móvel (`window_metrics`, quadrada e circular, `pad_edges`) com os

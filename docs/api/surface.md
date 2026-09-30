@@ -66,6 +66,26 @@ ls.surface.metrics(z)                   # every metric in one table
 
 ::: landschaft.surface.s10z
 
+## Bearing area curve
+
+::: landschaft.surface.bearing_area
+
+::: landschaft.surface.height_ba
+
+::: landschaft.surface.sdc
+
+::: landschaft.surface.sbi
+
+::: landschaft.surface.svi
+
+::: landschaft.surface.sci
+
+::: landschaft.surface.sk
+
+::: landschaft.surface.spk
+
+::: landschaft.surface.svk
+
 ## Trend surfaces
 
 ::: landschaft.surface.fit_plane

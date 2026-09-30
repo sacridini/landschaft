@@ -128,6 +128,8 @@ std::vector<double> r_statistics(const std::vector<double>& x);
 // Slope of R's lm(y ~ x) over n points, computed as R does (LINPACK dqrls
 // and R's reference BLAS); NaN where R gives NA (rlm.cpp).
 double r_lm_slope(const double* x, const double* y, int n);
+// Intercept and slope of R's lm(y ~ x) (rlm.cpp); the slope NaN where R gives NA.
+void r_lm_coef(const double* x, const double* y, int n, double* b0, double* b1);
 
 // FRAGSTATS' am (weights w), md or ra of x[0..n) (metrics.cpp).
 double reduce_statistic(const std::string& stat, const double* x, i64 n, const double* w);

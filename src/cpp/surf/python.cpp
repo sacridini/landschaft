@@ -131,6 +131,34 @@ py::array_t<std::int64_t> py_find_valleys(const Array& z, const Extent& extent, 
     return cells_array(std::move(cells));
 }
 
+py::dict py_bearing(const Array& z, py::object probs, double sq, bool parameters) {
+    std::vector<double> ps = probs.is_none() ? std::vector<double>() : probs.cast<std::vector<double>>();
+    surf::Bearing b;
+    std::vector<double> heights(ps.size());
+    surf::BearingParameters p{};
+    {
+        py::gil_scoped_release release;
+        b = surf::bearing_curve(z.data(), static_cast<surf::i64>(z.size()));
+        for (std::size_t k = 0; k < ps.size(); ++k) heights[k] = b.height(ps[k]);
+        if (parameters) p = surf::bearing_parameters(b, sq);
+    }
+    py::dict d;
+    d["bearing"] = py::array_t<double>(static_cast<py::ssize_t>(b.cum.size()), b.cum.data());
+    std::vector<double> height(b.vals.size());
+    for (std::size_t k = 0; k < height.size(); ++k) height[k] = 1 - b.vals[k];
+    d["height"] = py::array_t<double>(static_cast<py::ssize_t>(height.size()), height.data());
+    d["heights"] = py::array_t<double>(static_cast<py::ssize_t>(heights.size()), heights.data());
+    if (parameters) {
+        d["sbi"] = p.sbi;
+        d["svi"] = p.svi;
+        d["sci"] = p.sci;
+        d["sk"] = p.sk;
+        d["spk"] = p.spk;
+        d["svk"] = p.svk;
+    }
+    return d;
+}
+
 }  // namespace
 
 namespace surf {
@@ -151,6 +179,10 @@ void register_python(py::module_& m) {
           py::arg("z"), py::arg("extent"), "geodiv's sds.");
     m.def("surf_ssc", [](const Array& z, const Extent& e) { return grid_metric(z, e, surf::ssc); },
           py::arg("z"), py::arg("extent"), "geodiv's ssc.");
+    m.def("surf_bearing", &py_bearing, py::arg("z"), py::arg("probs") = py::none(), py::arg("sq") = 0.0,
+          py::arg("parameters") = false,
+          "geodiv's bearing area curve (bearing, height), height_ba at probs and, with parameters, "
+          "sbi (from sq), svi, sci, sk, spk, svk.");
     m.def("surf_s10z", [](const Array& z, const Extent& e, bool transposed) {
         return grid_metric(z, e, [transposed](const surf::Grid& g) { return surf::s10z(g, transposed); });
     }, py::arg("z"), py::arg("extent"), py::arg("transposed_valleys"), "geodiv's s10z.");

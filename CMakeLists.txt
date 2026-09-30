@@ -133,6 +133,7 @@ set_target_properties(biocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Surface metrics (geodiv's ISO 25178 parameters, spatialEco's terrain indices).
 add_library(surfcore STATIC
     src/cpp/surf/amplitude.cpp
+    src/cpp/surf/bearing.cpp
     src/cpp/surf/features.cpp
     src/cpp/surf/hybrid.cpp
     src/cpp/surf/plane.cpp

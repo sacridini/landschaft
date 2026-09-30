@@ -10,6 +10,7 @@ import pandas as pd
 
 from .. import _core
 from .._threads import threaded
+from ._bearing import bearing_parameters
 from ._grid import Surface, read_surface
 from ._hybrid import iso
 
@@ -34,6 +35,10 @@ def _hybrid(s: Surface, iso: bool) -> dict:
     return _core.surf_hybrid(s.values, tuple(map(float, s.extent)), iso)
 
 
+def _bearing(s: Surface, iso: bool) -> dict:
+    return bearing_parameters(s)
+
+
 def _features(s: Surface, iso: bool) -> dict:
     e = tuple(map(float, s.extent))
     return {"sds": _core.surf_sds(s.values, e), "ssc": _core.surf_ssc(s.values, e),
@@ -54,6 +59,12 @@ METRICS: dict[str, Metric] = {m.name: m for m in [
     Metric("sds", "features", "density of summits", _features),
     Metric("ssc", "features", "mean summit curvature", _features),
     Metric("s10z", "features", "ten-point height", _features),
+    Metric("sbi", "bearing", "surface bearing index", _bearing),
+    Metric("sci", "bearing", "core fluid retention index", _bearing),
+    Metric("svi", "bearing", "valley fluid retention index", _bearing),
+    Metric("sk", "bearing", "core roughness depth", _bearing),
+    Metric("spk", "bearing", "reduced peak height", _bearing),
+    Metric("svk", "bearing", "reduced valley depth", _bearing),
 ]}
 
 

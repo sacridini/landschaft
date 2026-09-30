@@ -1,0 +1,280 @@
+{
+ "arrays": {
+  "bearing_normforest/curve_x": {
+   "kind": "vector"
+  },
+  "bearing_normforest/curve_y": {
+   "kind": "vector"
+  },
+  "bearing_normforest/height": {
+   "kind": "vector"
+  },
+  "bearing_normforest/sbi": {
+   "kind": "vector"
+  },
+  "bearing_normforest/sci": {
+   "kind": "vector"
+  },
+  "bearing_normforest/sdc": {
+   "kind": "vector"
+  },
+  "bearing_normforest/sk": {
+   "kind": "vector"
+  },
+  "bearing_normforest/spk": {
+   "kind": "vector"
+  },
+  "bearing_normforest/svi": {
+   "kind": "vector"
+  },
+  "bearing_normforest/svk": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/curve_x": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/curve_y": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/height": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/sbi": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/sci": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/sdc": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/sk": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/spk": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/svi": {
+   "kind": "vector"
+  },
+  "bearing_orelevation/svk": {
+   "kind": "vector"
+  },
+  "bearing_positive/curve_x": {
+   "kind": "vector"
+  },
+  "bearing_positive/curve_y": {
+   "kind": "vector"
+  },
+  "bearing_positive/height": {
+   "kind": "vector"
+  },
+  "bearing_positive/sbi": {
+   "kind": "vector"
+  },
+  "bearing_positive/sci": {
+   "kind": "vector"
+  },
+  "bearing_positive/sdc": {
+   "kind": "vector"
+  },
+  "bearing_positive/sk": {
+   "kind": "vector"
+  },
+  "bearing_positive/spk": {
+   "kind": "vector"
+  },
+  "bearing_positive/svi": {
+   "kind": "vector"
+  },
+  "bearing_positive/svk": {
+   "kind": "vector"
+  },
+  "bearing_rand/curve_x": {
+   "kind": "vector"
+  },
+  "bearing_rand/curve_y": {
+   "kind": "vector"
+  },
+  "bearing_rand/height": {
+   "kind": "vector"
+  },
+  "bearing_rand/sbi": {
+   "kind": "vector"
+  },
+  "bearing_rand/sci": {
+   "kind": "vector"
+  },
+  "bearing_rand/sdc": {
+   "kind": "vector"
+  },
+  "bearing_rand/sk": {
+   "kind": "vector"
+  },
+  "bearing_rand/spk": {
+   "kind": "vector"
+  },
+  "bearing_rand/svi": {
+   "kind": "vector"
+  },
+  "bearing_rand/svk": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/curve_x": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/curve_y": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/height": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/sbi": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/sci": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/sdc": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/sk": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/spk": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/svi": {
+   "kind": "vector"
+  },
+  "bearing_rand_na/svk": {
+   "kind": "vector"
+  },
+  "bearing_rect/curve_x": {
+   "kind": "vector"
+  },
+  "bearing_rect/curve_y": {
+   "kind": "vector"
+  },
+  "bearing_rect/height": {
+   "kind": "vector"
+  },
+  "bearing_rect/sbi": {
+   "kind": "vector"
+  },
+  "bearing_rect/sci": {
+   "kind": "vector"
+  },
+  "bearing_rect/sdc": {
+   "kind": "vector"
+  },
+  "bearing_rect/sk": {
+   "kind": "vector"
+  },
+  "bearing_rect/spk": {
+   "kind": "vector"
+  },
+  "bearing_rect/svi": {
+   "kind": "vector"
+  },
+  "bearing_rect/svk": {
+   "kind": "vector"
+  },
+  "bearing_square/curve_x": {
+   "kind": "vector"
+  },
+  "bearing_square/curve_y": {
+   "kind": "vector"
+  },
+  "bearing_square/height": {
+   "kind": "vector"
+  },
+  "bearing_square/sbi": {
+   "kind": "vector"
+  },
+  "bearing_square/sci": {
+   "kind": "vector"
+  },
+  "bearing_square/sdc": {
+   "kind": "vector"
+  },
+  "bearing_square/sk": {
+   "kind": "vector"
+  },
+  "bearing_square/spk": {
+   "kind": "vector"
+  },
+  "bearing_square/svi": {
+   "kind": "vector"
+  },
+  "bearing_square/svk": {
+   "kind": "vector"
+  },
+  "bearing_ties/curve_x": {
+   "kind": "vector"
+  },
+  "bearing_ties/curve_y": {
+   "kind": "vector"
+  },
+  "bearing_ties/height": {
+   "kind": "vector"
+  },
+  "bearing_ties/sbi": {
+   "kind": "vector"
+  },
+  "bearing_ties/sci": {
+   "kind": "vector"
+  },
+  "bearing_ties/sdc": {
+   "kind": "vector"
+  },
+  "bearing_ties/sk": {
+   "kind": "vector"
+  },
+  "bearing_ties/spk": {
+   "kind": "vector"
+  },
+  "bearing_ties/svi": {
+   "kind": "vector"
+  },
+  "bearing_ties/svk": {
+   "kind": "vector"
+  },
+  "bearing_tiny/curve_x": {
+   "kind": "vector"
+  },
+  "bearing_tiny/curve_y": {
+   "kind": "vector"
+  },
+  "bearing_tiny/height": {
+   "kind": "vector"
+  },
+  "bearing_tiny/sbi": {
+   "kind": "vector"
+  },
+  "bearing_tiny/sci": {
+   "kind": "vector"
+  },
+  "bearing_tiny/sdc": {
+   "kind": "vector"
+  },
+  "bearing_tiny/sk": {
+   "kind": "vector"
+  },
+  "bearing_tiny/spk": {
+   "kind": "vector"
+  },
+  "bearing_tiny/svi": {
+   "kind": "vector"
+  },
+  "bearing_tiny/svk": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "geodiv": "1.1.1",
+  "spatialEco": "2.0.5",
+  "terra": "1.9.50"
+ }
+}

@@ -104,9 +104,11 @@ double dnrm2(int n, const double* x) {
 
 }  // namespace
 
-// Slope of R's lm(y ~ x) for n points: NaN when x is (numerically) constant
-// (rank 1, R's NA).
-double r_lm_slope(const double* xv, const double* yv, int n) {
+// Coefficients of R's lm(y ~ x) for n points: b0 (intercept) and b1 (slope);
+// b1 is NaN when x is (numerically) constant (rank 1, R's NA), and b0 is then
+// the intercept of the rank-1 fit (as lm's coefficients).
+void r_lm_coef(const double* xv, const double* yv, int n, double* b0, double* b1) {
+    constexpr double NaN = std::numeric_limits<double>::quiet_NaN();
     constexpr int p = 2;
     const double tol = 1e-7;
     // model matrix (column-major, ldx = n): intercept, x
@@ -175,7 +177,8 @@ double r_lm_slope(const double* xv, const double* yv, int n) {
         X(l - 1, l - 1) = -nrmxl;
     }
     k = std::min(k - 1, n);
-    if (k < p) return std::numeric_limits<double>::quiet_NaN();  // rank deficient: R gives NA
+    *b0 = *b1 = NaN;
+    if (k < 1) return;
     // dqrsl, job 1110: qty, b
     std::vector<double> qty(yv, yv + n);
     const int ju = std::min(k, n - 1);
@@ -187,16 +190,29 @@ double r_lm_slope(const double* xv, const double* yv, int n) {
         daxpy(n - j + 1, t, &X(j - 1, j - 1), &qty[j - 1]);
         X(j - 1, j - 1) = temp;
     }
-    double b[p] = {qty[0], qty[1]};
+    double b[p] = {qty[0], n > 1 ? qty[1] : 0.0};
     for (int jj = 1; jj <= k; ++jj) {
         const int j = k - jj + 1;
-        if (X(j - 1, j - 1) == 0.0) return std::numeric_limits<double>::quiet_NaN();
+        if (X(j - 1, j - 1) == 0.0) return;
         b[j - 1] = b[j - 1] / X(j - 1, j - 1);
         if (j == 1) continue;
         daxpy(j - 1, -b[j - 1], &X(0, j - 1), b);
     }
-    // unpivot: jpvt is the identity at full rank
-    return jpvt[1] == 2 ? b[1] : b[0];
+    // unpivot (the intercept column is never moved: its norm is sqrt(n))
+    if (k < p) {
+        *b0 = b[0];
+        return;
+    }
+    *b0 = jpvt[0] == 1 ? b[0] : b[1];
+    *b1 = jpvt[1] == 2 ? b[1] : b[0];
+}
+
+// Slope of R's lm(y ~ x) for n points: NaN when x is (numerically) constant
+// (rank 1, R's NA).
+double r_lm_slope(const double* xv, const double* yv, int n) {
+    double b0, b1;
+    r_lm_coef(xv, yv, n, &b0, &b1);
+    return b1;
 }
 
 }  // namespace lsm

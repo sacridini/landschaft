@@ -188,12 +188,44 @@ def _features_cases() -> dict[str, Case]:
             for name in ("rand", "rand_na", "rect", "square", "ties", "tiny", "normforest", "orelevation")}
 
 
+BEARING_PROBS = (0.0, 0.05, 0.2, 0.5, 0.8, 0.95, 1.0)
+
+
+def _bearing(name: str) -> Callable[[dict], dict]:
+    def run(rasters):
+        s, spec = surface(), rasters[name]
+        z, g = spec.values, _grid(spec)
+        curve = s.bearing_area(z, **g)
+        return {"curve_x": curve["bearing"].to_numpy(), "curve_y": curve["height"].to_numpy(),
+                "height": s.height_ba(z, list(BEARING_PROBS), **g), "sdc": s.sdc(z, 0.1, 0.8, **g),
+                "sbi": s.sbi(z, **g), "svi": s.svi(z, **g), "sci": s.sci(z, **g), "sk": s.sk(z, **g),
+                "spk": s.spk(z, **g), "svk": s.svk(z, **g)}
+
+    return run
+
+
+BEARING_R = f"""{{
+  f <- geodiv::bearing_area(r)
+  list(curve_x = environment(f)$y, curve_y = 1 - environment(f)$x,
+       height = sapply(c({", ".join(map(str, BEARING_PROBS))}), function(p) geodiv::height_ba(r, p)),
+       sdc = geodiv::sdc(r, 0.1, 0.8), sbi = geodiv::sbi(r), svi = geodiv::svi(r), sci = geodiv::sci(r),
+       sk = geodiv::sk(r), spk = geodiv::spk(r), svk = geodiv::svk(r))
+}}"""
+
+
+def _bearing_cases() -> dict[str, Case]:
+    return {f"bearing_{name}": Case(name, BEARING_R, _bearing(name), "bearing")
+            for name in ("rand", "rand_na", "rect", "square", "ties", "positive", "tiny", "normforest",
+                         "orelevation")}
+
+
 def _cases() -> dict[str, Case]:
     cases = {}
     cases.update(_amplitude_cases())
     cases.update(_plane_cases())
     cases.update(_hybrid_cases())
     cases.update(_features_cases())
+    cases.update(_bearing_cases())
     return cases
 
 

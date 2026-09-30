@@ -6,6 +6,21 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.83.0] - 2026-09-30
+
+### Added
+- Surface metrics, part 3: the bearing area (Abbott-Firestone) curve, as geodiv.
+  `ls.surface.bearing_area` (the curve's points), `height_ba` (heights at bearing
+  fractions), `sdc`, `sbi`, `svi`, `sci`, `sk`, `spk`, `svk`, also in `ls.surface.metrics`
+  (one sorted sample for all). Identical to geodiv, bit for bit, on 9 reference setups:
+  R's `ecdf`, type-7 `quantile`, `seq`, geodiv's Simpson's rule, and its core line
+  (`find_flat`: central-difference slopes at 10000 points, the mean of each 40 % window,
+  `lm()` through the flattest one).
+
+### Changed
+- The port of R's `lm()` (`src/cpp/lsm/rlm.cpp`) also returns the intercept, and that of a
+  rank-deficient fit, as R's coefficients.
+
 ## [0.82.0] - 2026-09-30
 
 ### Added

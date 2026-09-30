@@ -274,6 +274,15 @@ ls.bio.BaseData.from_table(...)     # biodiversity analysis
 | [`ls.surface.sds`](surface.md#landschaft.surface.sds) | Density of summits (Sds): peaks per cell |
 | [`ls.surface.ssc`](surface.md#landschaft.surface.ssc) | Mean summit curvature (Ssc) |
 | [`ls.surface.s10z`](surface.md#landschaft.surface.s10z) | Ten-point height (S10z) |
+| [`ls.surface.bearing_area`](surface.md#landschaft.surface.bearing_area) | The bearing area (Abbott-Firestone) curve: the share of the surface at or above each height |
+| [`ls.surface.height_ba`](surface.md#landschaft.surface.height_ba) | Height of the bearing area curve at a bearing fraction |
+| [`ls.surface.sdc`](surface.md#landschaft.surface.sdc) | Areal material ratio height difference (Sdc) |
+| [`ls.surface.sbi`](surface.md#landschaft.surface.sbi) | Surface bearing index (Sbi): Sq divided by the height at 5 % bearing |
+| [`ls.surface.svi`](surface.md#landschaft.surface.svi) | Valley fluid retention index (Svi): the void volume of the valley zone |
+| [`ls.surface.sci`](surface.md#landschaft.surface.sci) | Core fluid retention index (Sci): the void volume of the core zone |
+| [`ls.surface.sk`](surface.md#landschaft.surface.sk) | Core roughness depth (Sk): the height range of the core line |
+| [`ls.surface.spk`](surface.md#landschaft.surface.spk) | Reduced peak height (Spk): the peaks above the core |
+| [`ls.surface.svk`](surface.md#landschaft.surface.svk) | Reduced valley depth (Svk): the valleys below the core |
 | [`ls.surface.fit_plane`](surface.md#landschaft.surface.fit_plane) | The least-squares polynomial surface of a given order |
 | [`ls.surface.best_fit_plane`](surface.md#landschaft.surface.best_fit_plane) | The polynomial surface of order 0 to 3 that fits a surface best |
 | [`ls.surface.remove_plane`](surface.md#landschaft.surface.remove_plane) | A surface minus its best-fitting polynomial surface (geodiv's ``remove_plane``) |

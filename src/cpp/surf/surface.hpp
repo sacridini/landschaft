@@ -73,4 +73,32 @@ double sds(const Grid& g);
 double ssc(const Grid& g);
 double s10z(const Grid& g, bool transposed_valleys);
 
+// -- bearing area curve (geodiv's bearingarea.R, bestfit.R, simpsons.R) ------
+
+// The Abbott-Firestone curve of the values: R's ecdf(1 - z).
+struct Bearing {
+    std::vector<double> s;          // 1 - z sorted (no NA)
+    std::vector<double> vals, cum;  // the distinct values and the ecdf there
+    double quantile(double p) const;  // R's quantile(type = 7)
+    double ecdf(double v) const;
+    double height(double p) const { return 1 - quantile(p); }  // geodiv's height_ba
+};
+Bearing bearing_curve(const double* z, i64 n);
+
+// geodiv's area_above(f, a, b, n) (Simpson's rule).
+double area_above(const Bearing& b, double a, double bb, int n);
+
+// geodiv's find_flat: the core line's heights at 0 and 1 and the bearing
+// ratios Smr1, Smr2 where it crosses the curve (NaN where geodiv gives NA).
+struct CoreLine {
+    double high, low, smr1, smr2;
+};
+CoreLine find_flat(const Bearing& b, double perc);
+
+struct BearingParameters {
+    double sbi, svi, sci, sk, spk, svk;
+};
+// sbi needs sq (the standard deviation of the values).
+BearingParameters bearing_parameters(const Bearing& b, double sq);
+
 }  // namespace surf

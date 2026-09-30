@@ -18,6 +18,7 @@ Typical use::
 """
 
 from ._amplitude import sa, sku, sph, sq, ssk, smean, sv
+from ._bearing import bearing_area, height_ba, sbi, sci, sdc, sk, spk, svi, svk
 from ._examples import example_data
 from ._features import find_peaks, find_valleys, s10z, sds, ssc
 from ._hybrid import flat_area, sdq, sdq6, sdr, surface_area
@@ -25,27 +26,36 @@ from ._metrics import list_metrics, metrics
 from ._plane import best_fit_plane, fit_plane, remove_plane
 
 __all__ = [
+    "bearing_area",
     "best_fit_plane",
     "example_data",
     "find_peaks",
     "find_valleys",
     "fit_plane",
     "flat_area",
+    "height_ba",
     "list_metrics",
     "metrics",
     "remove_plane",
     "s10z",
     "sa",
+    "sbi",
+    "sci",
+    "sdc",
     "sdq",
     "sdq6",
     "sdr",
     "sds",
+    "sk",
     "sku",
     "smean",
     "sph",
+    "spk",
     "sq",
     "ssc",
     "ssk",
     "surface_area",
     "sv",
+    "svi",
+    "svk",
 ]
