@@ -450,3 +450,7 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 | [`ls.Interaction`](prioritization.md#landschaft.prioritize.Interaction) | An interaction connectivity transform (Zonation's ``-i``/``-I``): a feature weighted by the connectivity of a resource (``positive``) or reduced by it |
 | [`ls.convolve`](prioritization.md#landschaft.prioritize.convolve) | Convolve a raster with a kernel normalized to sum 1, as Zonation 5 does |
 | [`ls.AreaStatistics`](prioritization.md#landschaft.prioritize.AreaStatistics) | Statistics of areas of a ranking (`area_statistics`) |
+| [`ls.ImpactScenario`](prioritization.md#landschaft.prioritize.ImpactScenario) | An impact assessment scenario (Zonation's ``-s``): land-use change at sources |
+| [`ls.ImpactSource`](prioritization.md#landschaft.prioritize.ImpactSource) | An impact source of an impact group (a line of Zonation's impact buffers file) |
+| [`ls.CumulativeScenario`](prioritization.md#landschaft.prioritize.CumulativeScenario) | A cumulative impact assessment scenario (Zonation's ``-e``) |
+| [`ls.Pressure`](prioritization.md#landschaft.prioritize.Pressure) | A pressure raster of a cumulative impact scenario |

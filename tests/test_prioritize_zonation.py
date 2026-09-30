@@ -466,3 +466,65 @@ def test_postprocessing_errors():
         res.histogram(0.5, 1.0, 0)
     with pytest.raises(ValueError, match="max error"):
         res.flexibility_map(0.0)
+
+
+# ---------------------------------------------------------------- impact assessment (phase 5)
+
+
+@pytest.mark.reference
+@pytest.mark.parametrize("name", case_ids("impact"))
+def test_impacts_match_zonation(name, tmp_path):
+    """Impact scenarios run from Zonation projects: every output file and the ranking."""
+    import sys
+    from pathlib import Path
+
+    import rasterio
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    from make_reference_prioritize import write_project
+
+    arrays, meta = load("impact")
+    case = prioritize_cases.CASES[name]
+    write_project(case, tmp_path)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        res = ls.prioritize.run_project(tmp_path / "settings.z5", case.flags, mode=case.mode, output=tmp_path / "out")
+    ref = arrays[f"{name}/rank"]
+    ours = np.asarray(res.rank)
+    assert ((ours == ref) | (np.isnan(ours) & np.isnan(ref))).all()
+    assert res.iterations == int(meta[f"{name}/stats"]["Number of iterations"])
+    want = sorted(k.split("/impacts/", 1)[1] for k in arrays if k.startswith(f"{name}/impacts/"))
+    root = tmp_path / "out" / "impacts"
+    got = sorted(p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file())
+    assert got == want
+    for k in want:
+        if k.endswith(".tif"):
+            a = rasterio.open(root / k).read(1)
+            assert np.array_equal(a, arrays[f"{name}/impacts/{k}"], equal_nan=True), k
+        else:
+            w = [ln.strip() for ln in table_text(arrays, f"{name}/impacts/{k}").splitlines()]
+            g = [ln.strip() for ln in (root / k).read_text(encoding="utf-8").splitlines()]
+            assert g == w, k
+
+
+def test_impact_api():
+    rng = np.random.default_rng(15)
+    x = (rng.random((2, 30, 40)) ** 2).astype(np.float32)
+    src = np.zeros((30, 40), np.uint16)
+    src[15, :] = 1
+    P = ls.prioritize
+    sc = P.ImpactScenario(src, [P.ImpactSource(1, 1, 100, ((3, 50),))], name="road")
+    res = P.zonation(x, impact_groups=[1, -1], impact=sc)
+    z = res.impacts["zones"]
+    whole = z[(z["area"] == 0) & (z["bin"] == -1)]
+    assert set(whole["zone"]) == {0, 1}
+    foot = whole[whole["zone"] == 0].iloc[0]
+    # the road's cells with a value above 0 (some quantize to 0), all lost
+    assert 30 < foot["cells"] <= 40 and foot["loss"] == pytest.approx(foot["distribution"], rel=1e-6)
+    assert res.feature_curves.iloc[0, 1] < 1.0  # the impacted feature starts below 1
+    assert res.feature_curves.iloc[0, 2] == 1.0
+    assert "ig1_zones" in res.impacts["rasters"]
+    cum = P.CumulativeScenario(direct="sum", direct_rasters=[np.full((30, 40), 0.5, np.float32)],
+                               direct_matrix=np.array([[1.0]]))
+    res2 = P.zonation(x, impact_groups=[1, -1], cumulative_impact=cum)
+    assert res2.feature_curves.iloc[0, 1] == pytest.approx(0.5, abs=0.01)

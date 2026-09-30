@@ -262,6 +262,28 @@ void register_python(py::module_& m) {
                 return d.replace_layer(layer, std::move(v), level);
             },
             py::arg("layer"), py::arg("values"), py::arg("level"))
+        .def(
+            "scale_level",
+            [](Data& d, int layer, double factor) {
+                if (layer < 0 || layer >= d.rules.layers) throw std::out_of_range("layer");
+                d.initial_levels[layer] *= factor;
+            },
+            py::arg("layer"), py::arg("factor"))
+        .def(
+            "set_layer_values",
+            [](Data& d, int layer, const Floats& values) {
+                // the quantized values of a layer where it has data (float truncated to the storage type)
+                if (layer < 0 || layer >= d.rules.layers) throw std::out_of_range("layer");
+                if (values.size() != d.cells()) throw std::invalid_argument("one value per data cell");
+                const float* v = values.data();
+                for (i64 c = 0; c < d.cells(); ++c)
+                    for (i64 e = d.cell_ptr[c]; e < d.cell_ptr[c + 1]; ++e)
+                        if (d.entry_layer[e] == layer) {
+                            d.entry_value[e] = static_cast<std::uint16_t>(v[c]);
+                            break;
+                        }
+            },
+            py::arg("layer"), py::arg("values"))
         .def("flush", &Data::flush)
         .def("finish", &Data::finish)
         .def_readonly("bits", &Data::bits)

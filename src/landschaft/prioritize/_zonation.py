@@ -58,6 +58,11 @@ class ZonationResult:
         condition and retention), normalized to sum 1, by feature name.
     hierarchic_mask_ranks : dict
         With a hierarchic mask: the lowest rank of each of its levels.
+    impacts : dict
+        With impact scenarios: ``zones`` (per area, group, source, zone, feature and
+        bin: the features' distribution in the zone, its loss and cells),
+        ``cumulative`` (per area, group, phase and feature) and ``rasters`` (the
+        impact of each group).
     """
 
     rank: object
@@ -75,6 +80,7 @@ class ZonationResult:
     preprocessing: dict = field(default_factory=dict, repr=False)
     transformed: dict = field(default_factory=dict, repr=False)
     hierarchic_mask_ranks: dict = field(default_factory=dict, repr=False)
+    impacts: dict = field(default_factory=dict, repr=False)
     _ctx: dict = field(default_factory=dict, repr=False)
 
     # ------------------------------------------------------------ post-processing
@@ -340,6 +346,22 @@ class ZonationResult:
             return self._write(d)
 
     def _write(self, d: Path) -> Path:
+        imp = self._ctx.get("impacts")
+        if imp is not None:
+            from . import _impacts
+            from ._postprocess import _write_tif
+
+            root = d / "impacts"
+            for key, state, writer in (("source", imp["source"], _impacts.write_source),
+                                       ("cumulative", imp["cumulative"], _impacts.write_cumulative)):
+                if state is None:
+                    continue
+                writer(imp, self._ctx, root)
+                sc = state["scenario"]
+                for name, r in self.impacts.get("rasters", {}).items():
+                    if (key == "source" and name.endswith("_zones")) or (key == "cumulative" and not name.endswith(
+                            "_zones")):
+                        _write_tif(root / sc.name / f"{name}.tif", r, "float32")
         headers = self.info["curve_headers"]
         (d / "feature_curves.csv").write_text(_tables.format_feature_curves(self.feature_curves, headers),
                                               encoding="utf-8")
@@ -441,6 +463,10 @@ def zonation(
     retention=None,
     preprocessing: bool = False,
     transformed=False,
+    impact_groups=None,
+    impact_bins=None,
+    impact=None,
+    cumulative_impact=None,
     nodata=None,
     n_threads: int | None = None,
 ) -> ZonationResult:
@@ -547,6 +573,17 @@ def zonation(
         each output group, and weighted with weights.
     transformed
         Per feature (or ``True`` for all), return the feature as ranked (``-f``).
+    impact_groups
+        Per feature, its impact group (-1: none), for the impact scenarios.
+    impact_bins
+        Per feature, the value classes its impacts are reported in: ``None`` (none),
+        ``0`` (ten equal classes up to its maximum) or a list of class limits in the
+        feature's units.
+    impact, cumulative_impact
+        An :class:`ImpactScenario` (``-s``: land-use change around impact sources)
+        and/or a :class:`CumulativeScenario` (``-e``: direct habitat loss and
+        cumulative pressures). The features of the impact groups lose what the
+        scenarios take before the ranking; the impacts are in ``impacts``.
     nodata
         NoData value of inputs without one (NaN is always NoData).
     n_threads
@@ -715,6 +752,37 @@ def _run(src, name, param, a) -> ZonationResult:
                  gather=lambda layer, c: _inputs.gather(layer, c, src.grid),
                  workers=_threads.current())
     _retention(data, a["retention"], kept, L0, cells, src)
+    imp_out = None
+    if a["impact"] is not None or a["cumulative_impact"] is not None:
+        from . import _impacts
+
+        groups = _per_layer(a["impact_groups"], L0, -1, "impact_groups", np.int64)
+        ib = a["impact_bins"]
+        if ib is not None:
+            ib = list(ib)
+            if len(ib) != L0:
+                raise ValueError(f"impact_bins: {len(ib)} for {L0} features")
+
+        def read_full(r):
+            layer = _inputs.open_aux(r, src.grid, "impact raster", src)
+            v = layer.read(0, H).astype(np.float32)
+            v[np.isnan(v) | (v == layer.nodata)] = 0
+            return v
+
+        def read_sources(r):
+            layer = _inputs.open_aux(r, src.grid, "impact source raster", src)
+            return layer.read(0, H).astype(np.float64)
+
+        def read_packed(r):
+            return _inputs.gather(_inputs.open_aux(r, src.grid, "subareas raster", src), cells, src.grid)
+
+        imp = a["impact"]
+        if imp is not None:
+            import dataclasses
+
+            imp = dataclasses.replace(imp, sources=read_sources(imp.sources))
+        imp_out = _impacts.run(data, kept, cells, src.grid, groups, ib, imp, a["cumulative_impact"],
+                               read_full, read_packed)
     seed = a["seed"]
     if seed is None:
         seed = int(np.random.SeedSequence().generate_state(1)[0])
@@ -763,6 +831,11 @@ def _run(src, name, param, a) -> ZonationResult:
     if hmask is not None:
         hm = hmask.astype(np.uint8)
         res.hierarchic_mask_ranks = {int(lv): float(rank_packed[hm == lv].min()) for lv in np.unique(hm)}
+    if imp_out is not None:
+        from . import _impacts
+
+        res.impacts = {**_impacts.tables(imp_out, {"numbers": kept}),
+                       "rasters": {k: _raster(v, src.grid) for k, v in imp_out["rasters"].items()}}
     res._ctx = {
         "data": data, "grid": src.grid, "cells": cells, "rank_packed": rank_packed,
         "order_packed": np.asarray(r["order"], dtype=np.uint32), "weights": w, "classes": classes,
@@ -774,6 +847,9 @@ def _run(src, name, param, a) -> ZonationResult:
         "hmask": None if hmask is None else hmask.astype(np.uint8), "rule": name, "param": param,
         "abf_z": abf_z[kept], "curve_interval": int(r["curve_interval"]),
         "curve_scalar": data.cells / int(r["curve_interval"]),
+        "impacts": imp_out, "orig_abs_sums": np.asarray(data.orig_abs_sums),
+        "plain_names": [names[i] if names else "" for i in kept],
+        "unique_names": _unique_names(src, kept, a, names),
     }
     if a["preprocessing"]:
         res.preprocessing = _preprocessing(data, w, classes, weights_on, ogroups[kept] if ogroups is not None
@@ -790,6 +866,42 @@ def _run(src, name, param, a) -> ZonationResult:
                 v = np.where(q >= 0, (q.astype(np.float32).astype(np.float64) * scale[k]).astype(np.float32), np.nan)
                 res.transformed[lnames[k]] = _raster(_unpack(v.astype(np.float32), cells, H, W), src.grid)
     return res
+
+
+def _unique_names(src, kept, a, names) -> list[str]:
+    """Zonation's unique layer names: the file name with ".layer<N>" and the transforms applied."""
+    out = []
+    for i in kept:
+        ly = src.layers[i]
+        base = Path(os.fspath(ly.source)).stem if _inputs._is_path(ly.source) else (names[i] if names else ly.name)
+        ext = ""
+
+        def on(key):
+            v = a[key]
+            return v is not None and v is not False and (v is True or (isinstance(v, (list, tuple)) and
+                                                                        v[i] is not None and v[i] is not False))
+
+        if a["thresholds"] is not None and float(np.asarray(a["thresholds"], dtype=float)[i]) > 0:
+            ext += "t"
+        if on("condition"):
+            ext += "c"
+        if on("retention"):
+            ext += "r"
+        if on("connectivity"):
+            ext += "d"
+        if on("interaction"):
+            ext += "i"
+        if on("interaction2"):
+            ext += "I"
+        if on("matrix_connectivity"):
+            ext += "m"
+        g = -1 if a["impact_groups"] is None else int(a["impact_groups"][i])
+        if a["impact"] is not None and g >= 0 and any(s.group == g for s in a["impact"].impacts):
+            ext += "s"
+        if a["cumulative_impact"] is not None and g >= 0:
+            ext += "e"
+        out.append(f"{base}.layer{i}" + (f".{ext}" if ext else ""))
+    return out
 
 
 def _unpack(values: np.ndarray, cells: np.ndarray, H: int, W: int) -> np.ndarray:

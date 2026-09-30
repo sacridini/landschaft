@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-GROUPS = ["core", "transform", "connectivity", "post"]
+GROUPS = ["core", "transform", "connectivity", "post", "impact"]
 
 EPSG = 32633
 
@@ -126,6 +126,24 @@ def _rasters() -> dict[str, RasterSpec]:
         v = _blobs(cshape, seed, n=6)
         v[csea] = np.nan
         r[k] = RasterSpec(v)
+    # impact assessment: sources (roads, a mine, a town), subareas, loss rasters and pressures
+    src = np.zeros(shape)
+    src[20, 5:45] = 1          # a road
+    src[5:30, 33] = 1
+    src[10:14, 10:15] = 2      # a mine
+    src[28:32, 20:26] = 3      # a town
+    r["isrc"] = RasterSpec(src, "uint16", None)
+    sub = np.zeros(shape)
+    sub[:, :25] = 1
+    sub[:22, 25:] = 2
+    sub[30:, 25:] = 3
+    r["subareas"] = RasterSpec(sub, "uint16", None)
+    for k, seed in (("dloss1", 60), ("dloss2", 61)):
+        v = _blobs(shape, seed, n=3)
+        v[v < 0.4] = 0
+        r[k] = RasterSpec(v)
+    for k, seed, sc in (("press1", 62, 5.0), ("press2", 63, 1.0)):
+        r[k] = RasterSpec(_blobs(shape, seed, n=4, scale=sc))
     # a larger stack for realistic numbers of cells and iterations
     big = (120, 160)
     bsea = _outline(big, 2)
@@ -376,4 +394,57 @@ def _post() -> dict[str, Case]:
     return c
 
 
-CASES: dict[str, Case] = {**_core(), **_transform(), **_connectivity(), **_post()}
+def _impact() -> dict[str, Case]:
+    c: dict[str, Case] = {}
+    g = "impact"
+    nl = chr(10)
+    buffers = nl.join(["1 1 100 2 50 5 20", "1 2 80 3 30", "2 1 60 4 25", "2 3 90", ""])
+    bins = nl.join(["1 0.1 0.5 1.0", "2 0.3", ""])
+    scenario = nl.join(["project id = scen1", "area unit name = ha", "impact unit name = ind",
+                        "area conversion factor = 0.25", "subareas raster file = subareas.tif",
+                        "output intermediate raster maps = 1", "impact source raster file = isrc.tif", ""])
+    cols = {"impact_grp": [1, 1, 2, -1, 2, 1, -1, 2], "impact_bins": [0, -1, 1, -1, 2, 0, -1, -1]}
+    files = {"buffers.txt": buffers, "bins.txt": bins, "scenario.txt": scenario}
+    settings = {"impact assessment scenario file": "file:scenario.txt", "impact buffers file": "file:buffers.txt",
+                "binning link file": "file:bins.txt"}
+    extra = ("isrc", "subareas")
+    c["imp_source"] = Case(g, SP, "CAZ2", cols, settings=settings, files=files, flags=("-s",), extra=extra)
+    c["imp_source_weights_abf"] = Case(g, SP, "ABF 0.25", {**cols, "weight": W8}, settings=settings, files=files,
+                                       flags=("-w", "-s"), extra=extra)
+
+    def cum_files(direct, cumul, agg):
+        f = {
+            "direct.txt": nl.join(["filename", "dloss1.tif", "dloss2.tif", ""]),
+            "dmatrix.txt": nl.join(["1 0.5", "0 1", ""]),
+            "pressures.txt": nl.join(["normalize offset divisor filename", "1 0 1 press1.tif", "0 0.1 2 press2.tif",
+                                      ""]),
+            "cmatrix.txt": nl.join(["1 0.5", "0.3 1", ""]),
+            "pf1.txt": nl.join(["0 0", "0.5 0.2", "1 0.6", ""]),
+            "pf2.txt": nl.join(["0.1 0", "0.4 0.5", "0.9 0.9", ""]),
+        }
+        lines = ["project id = cum1", "area unit name = sqkm", "impact unit name = kg", "area conversion factor = 2",
+                 "subareas raster file = subareas.tif", "output intermediate raster maps = 1",
+                 f"analyze direct habitat loss = {direct}", "direct habitat loss raster list = direct.txt",
+                 "direct habitat loss link matrix = dmatrix.txt", f"analyze cumulative pressures = {cumul}",
+                 "cumulative pressures raster list = pressures.txt", f"individual pressure aggregation = {agg}",
+                 "cumulative pressures link matrix = cmatrix.txt", "", "[cumulative pressure functions]"]
+        if cumul == 1:
+            lines += ["group 1 = pf1.txt", "group 2 = pf2.txt"]
+        else:
+            lines += ["group 1 = pf1.txt", "group 1 pressure 2 = pf2.txt", "group 2 = pf2.txt"]
+        f["cumulative.txt"] = nl.join(lines + [""])
+        return f
+
+    cset = {"cumulative impact assessment scenario file": "file:cumulative.txt"}
+    cextra = ("subareas", "dloss1", "dloss2", "press1", "press2")
+    c["imp_cumulative_v1_sum"] = Case(g, SP, "CAZ2", cols, settings=cset, files=cum_files(1, 1, 0), flags=("-e",),
+                                      extra=cextra)
+    c["imp_cumulative_v2_product_multiply"] = Case(g, SP, "ABF 0.25", cols, settings=cset,
+                                                   files=cum_files(2, 2, 1), flags=("-e",), extra=cextra)
+    c["imp_both_v2_max"] = Case(g, SP, "CAZ1", {**cols, "weight": W8}, settings={**settings, **cset},
+                                files={**files, **cum_files(1, 2, 2)}, flags=("-w", "-s", "-e"),
+                                extra=extra + cextra)
+    return c
+
+
+CASES: dict[str, Case] = {**_core(), **_transform(), **_connectivity(), **_post(), **_impact()}

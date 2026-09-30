@@ -64,3 +64,19 @@ another solution, histograms of the features' coverage and the flexibility map;
 `ZonationResult.postprocess` runs Zonation's post-processing files.
 
 ::: landschaft.prioritize.AreaStatistics
+
+## Impact assessment
+
+Scenarios of land-use change and pressures, evaluated for the features and
+applied to them before the ranking (the ``impact``, ``cumulative_impact``,
+``impact_groups`` and ``impact_bins`` arguments of `zonation`): the loss around
+impact sources, per footprint and buffer zone, and the direct habitat loss and
+cumulative pressures of every impact group.
+
+::: landschaft.prioritize.ImpactScenario
+
+::: landschaft.prioritize.ImpactSource
+
+::: landschaft.prioritize.CumulativeScenario
+
+::: landschaft.prioritize.Pressure

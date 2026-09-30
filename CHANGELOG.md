@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.93.0] - 2026-09-30
+
+### Added
+- Spatial prioritization, part 5: Zonation 5's impact assessment in `ls.prioritize.zonation`
+  (`impact_groups`, `impact_bins`, `impact`, `cumulative_impact`): impact sources with footprint
+  and buffer zones by Euclidean distance (`ImpactScenario`, `ImpactSource`), and direct habitat
+  loss and cumulative pressures with response functions, both variants and aggregations
+  (`CumulativeScenario`, `Pressure`); the losses per area, impact group, source, zone and value
+  class (`ZonationResult.impacts`), the impact rasters, and the features reduced before the
+  ranking. `read_project` reads the scenario, impact buffer, binning, raster list, matrix and
+  response function files; `write` writes Zonation's impact files. Bit for bit with z5 on 5 more
+  runs: every one of their 742 impact files and the rank maps.
+
 ## [0.92.0] - 2026-09-30
 
 ### Added

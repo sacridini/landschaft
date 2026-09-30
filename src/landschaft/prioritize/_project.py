@@ -99,6 +99,95 @@ def _kernel_links(path: Path, kind: str) -> dict:
     return out
 
 
+def _ini(path: Path) -> dict[str, str]:
+    """An INI file as Zonation reads it: keys of a [section] as "[section] key"."""
+    out = {}
+    section = ""
+    for line in Path(path).read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line[0] in "#;":
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            continue
+        if "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        v = v.strip()
+        m = re.fullmatch(r"['\"]?(.*?)['\"]?", v)
+        key = (f"[{section}] " if section else "") + k.strip()
+        out[key.lower()] = m.group(1) if m else v
+    return out
+
+
+def _matrix(path: Path, rows: int, cols: int) -> np.ndarray:
+    m = np.zeros((rows, cols), np.float32)
+    for r, vals in enumerate(_rows(path)[:rows]):
+        for c, v in enumerate(vals[:cols]):
+            m[r, c] = float(v)
+    return m
+
+
+def _impact_scenarios(st: dict, base: Path, on: set, groups: set):
+    from ._impacts import CumulativeScenario, ImpactScenario, ImpactSource, Pressure
+
+    def common(ini, where):
+        return dict(name=ini.get("project id", "scenario"), area_unit=ini.get("area unit name", ""),
+                    impact_unit=ini.get("impact unit name", ""),
+                    area_factor=float(ini.get("area conversion factor", 1) or 1),
+                    subareas=str(_resolve(ini["subareas raster file"], where)) if ini.get("subareas raster file")
+                    else None,
+                    rasters=bool(int(float(ini.get("output intermediate raster maps", 1) or 1))))
+
+    impact = cumulative = None
+    if "s" in on and st.get("impact assessment scenario file"):
+        f = _resolve(st["impact assessment scenario file"], base)
+        ini = _ini(f)
+        impacts = []
+        if st.get("impact buffers file"):
+            for r in _rows(_resolve(st["impact buffers file"], base)):
+                vals = [float(x) for x in r]
+                bufs = tuple((int(vals[i]), vals[i + 1]) for i in range(3, len(vals) - 1, 2))
+                impacts.append(ImpactSource(int(vals[0]), int(vals[1]), vals[2], bufs))
+        impact = ImpactScenario(str(_resolve(ini["impact source raster file"], f.parent)), impacts,
+                                **common(ini, f.parent))
+    if "e" in on and st.get("cumulative impact assessment scenario file"):
+        f = _resolve(st["cumulative impact assessment scenario file"], base)
+        ini = _ini(f)
+        ng = len(groups)
+        cs = CumulativeScenario(**common(ini, f.parent))
+        dmode = int(float(ini.get("analyze direct habitat loss", 0) or 0))
+        if dmode:
+            cs.direct = ("sum", "product")[dmode - 1]
+            lst = _resolve(ini["direct habitat loss raster list"], f.parent)
+            rows = _rows(lst)
+            cs.direct_rasters = [str(_resolve(r[0], lst.parent)) for r in rows[1:]]
+            cs.direct_matrix = _matrix(_resolve(ini["direct habitat loss link matrix"], f.parent), ng,
+                                       len(cs.direct_rasters))
+        cmode = int(float(ini.get("analyze cumulative pressures", 0) or 0))
+        if cmode:
+            cs.cumulative = ("variant1", "variant2")[cmode - 1]
+            lst = _resolve(ini["cumulative pressures raster list"], f.parent)
+            rows = _rows(lst)
+            head = [h.lower() for h in rows[0]]
+            for r in rows[1:]:
+                d = dict(zip(head, r))
+                cs.pressures.append(Pressure(str(_resolve(d["filename"], lst.parent)),
+                                             bool(int(float(d.get("normalize", 0)))), float(d.get("offset", 0)),
+                                             float(d.get("divisor", 1))))
+            cs.aggregation = ("add", "multiply", "max")[int(float(ini.get("individual pressure aggregation", 0) or 0))]
+            if cmode == 1:
+                cs.cumulative_matrix = _matrix(_resolve(ini["cumulative pressures link matrix"], f.parent), ng,
+                                               len(cs.pressures))
+            for key, val in ini.items():
+                m = re.fullmatch(r"\[cumulative pressure functions\] group (\d+)( pressure (\d+))?", key)
+                if m:
+                    pts = [(float(a), float(b)) for a, b, *_ in _rows(_resolve(val, f.parent))]
+                    cs.functions[(int(m.group(1)), int(m.group(3)) if m.group(3) else None)] = pts
+        cumulative = cs
+    return impact, cumulative
+
+
 def read_project(settings, flags="", *, mode: str | None = None) -> dict:
     """The :func:`zonation` arguments of a Zonation 5 project.
 
@@ -112,8 +201,8 @@ def read_project(settings, flags="", *, mode: str | None = None) -> dict:
         thresholds, ``-c`` conditions, ``-r`` retention, ``-x``/``-X`` cost
         (tracked / in the ranking), ``-h`` hierarchic mask, ``-a`` analysis area
         (``--area=N``), ``-b`` pre-processing maps, ``-f`` transformed layers,
-        ``-d``/``-i``/``-I``/``-m`` connectivity, ``-p`` post-processing (run by
-        :func:`run_project` with an ``output``).
+        ``-d``/``-i``/``-I``/``-m`` connectivity, ``-s``/``-e`` impact scenarios,
+        ``-p`` post-processing (run by :func:`run_project` with an ``output``).
     mode
         The marginal loss rule (z5's ``--mode``), e.g. ``"CAZ2"`` or ``"ABF 0.25"``.
 
@@ -234,6 +323,20 @@ def read_project(settings, flags="", *, mode: str | None = None) -> dict:
                 f = links[i][1]
                 n = sum(1 for j in ids if j in links and links[j][1] == f)
                 kw["matrices"][f] = np.array([[float(v) for v in r] for r in _rows(Path(f))][:n], dtype=np.float32)
+    if ("s" in on or "e" in on) and "impact_grp" in cols:
+        groups = num("impact_grp", int)
+        kw["impact_groups"] = groups
+        if "impact_bins" in cols:
+            binfile = {}
+            if st.get("binning link file"):
+                for r in _rows(_resolve(st["binning link file"], base)):
+                    binfile[int(float(r[0]))] = [float(x) for x in r[1:]]
+            kw["impact_bins"] = [None if b < 0 else 0 if b == 0 else binfile.get(b) for b in num("impact_bins", int)]
+        impact, cumulative = _impact_scenarios(st, base, on, {g for g in groups if g >= 0})
+        if impact is not None:
+            kw["impact"] = impact
+        if cumulative is not None:
+            kw["cumulative_impact"] = cumulative
     if "x" in on and st.get("cost layer"):
         kw["cost"] = _resolve(st["cost layer"], base)
         kw["cost_in_ranking"] = "X" in on

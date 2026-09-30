@@ -147,6 +147,17 @@ def collect(out: Path, prefix: str, arrays: dict, meta: dict) -> None:
                 v = src.read(1)
             name = tif.stem if key == "pre" else tif.name.split(".layer", 1)[1].split(".", 1)[0]
             arrays[f"{prefix}{key}/{name}"] = np.where(np.isfinite(v), v, np.nan).astype(np.float32)
+    imp = out / "impacts"
+    for f in sorted(imp.rglob("*")) if imp.exists() and not prefix else ():
+        if not f.is_file():
+            continue
+        key = "impacts/" + f.relative_to(imp).as_posix()
+        if f.suffix == ".tif":
+            with rasterio.open(f) as src:
+                arrays[key] = src.read(1)
+        else:
+            text = f.read_bytes().replace(b"\r\n", b"\n")
+            arrays[key] = np.frombuffer(lzma.compress(text), dtype=np.uint8)
     post = out / "post_processing"
     for f in sorted(post.iterdir()) if post.exists() else ():
         key = f"{prefix}post/{f.name}"
