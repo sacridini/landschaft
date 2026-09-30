@@ -33,6 +33,11 @@ py::array_t<T> copy_array(const std::vector<T>& v) {
     return to_array(std::vector<T>(v));
 }
 
+template <class T>
+py::array_t<T> copy_array(const prio::Buffer<T>& v) {
+    return to_array(std::vector<T>(v.begin(), v.end()));
+}
+
 prio::ReadRules rules_of(const std::vector<float>& nodata, const std::vector<float>& extract,
                          const std::vector<float>& thresholds) {
     prio::ReadRules r;
@@ -91,8 +96,11 @@ prio::RankSettings settings_of(const std::string& rule, double param, const std:
 py::dict py_rank(const prio::Data& data, const std::string& rule, double param, const std::vector<float>& weights,
                  const std::vector<float>& abf_z, const py::object& cost, bool cost_in_ranking,
                  const py::object& hmask, const py::object& solution, int max_iterations, float ranking_error,
-                 bool stop_on_plateau, float smoothing, float curves_interval, std::uint64_t seed) {
+                 bool stop_on_plateau, float smoothing, float curves_interval, std::uint64_t seed, int row_format,
+                 const std::string& storage) {
     prio::RankSettings s = settings_of(rule, param, weights, abf_z, cost, cost_in_ranking, hmask, solution);
+    s.row_format = row_format;
+    s.storage = storage;
     s.max_iterations = max_iterations;
     s.ranking_error = ranking_error;
     s.stop_on_plateau = stop_on_plateau;
@@ -198,12 +206,13 @@ void register_python(py::module_& m) {
     py::class_<Data>(m, "PrioData")
         .def(py::init([](const std::vector<float>& nodata, const std::vector<float>& extract,
                          const std::vector<float>& thresholds, std::vector<float> max_values,
-                         std::vector<std::uint8_t> keep_zeros, int bits) {
-                 return Data(rules_of(nodata, extract, thresholds), std::move(max_values), std::move(keep_zeros),
-                             bits);
+                         std::vector<std::uint8_t> keep_zeros, int bits, const std::string& storage) {
+                 Data d(rules_of(nodata, extract, thresholds), std::move(max_values), std::move(keep_zeros), bits);
+                 if (!storage.empty()) d.set_storage(storage);
+                 return d;
              }),
              py::arg("nodata"), py::arg("extract"), py::arg("thresholds"), py::arg("max_values"),
-             py::arg("keep_zeros"), py::arg("bits"))
+             py::arg("keep_zeros"), py::arg("bits"), py::arg("storage") = "")
         .def(
             "add_block",
             [](Data& d, const Floats& values, const py::object& area, const py::object& cond) {
@@ -276,12 +285,9 @@ void register_python(py::module_& m) {
                 if (layer < 0 || layer >= d.rules.layers) throw std::out_of_range("layer");
                 if (values.size() != d.cells()) throw std::invalid_argument("one value per data cell");
                 const float* v = values.data();
-                for (i64 c = 0; c < d.cells(); ++c)
-                    for (i64 e = d.cell_ptr[c]; e < d.cell_ptr[c + 1]; ++e)
-                        if (d.entry_layer[e] == layer) {
-                            d.entry_value[e] = static_cast<std::uint16_t>(v[c]);
-                            break;
-                        }
+                d.update_layer(layer, [v](i64 c, unsigned) {
+                    return static_cast<unsigned>(static_cast<std::uint16_t>(v[c]));
+                });
             },
             py::arg("layer"), py::arg("values"))
         .def("flush", &Data::flush)
@@ -290,7 +296,12 @@ void register_python(py::module_& m) {
         .def_readonly("pixels", &Data::pixels)
         .def_property_readonly("layers", [](const Data& d) { return d.rules.layers; })
         .def_property_readonly("cells", &Data::cells)
-        .def_property_readonly("entries", [](const Data& d) { return static_cast<i64>(d.entry_layer.size()); })
+        .def_property_readonly("entries", [](const Data& d) { return d.entries(); })
+        .def_property_readonly("nbytes",
+                               [](const Data& d) {
+                                   return static_cast<i64>((d.cell_index.size() + d.cell_ptr.size()) * sizeof(i64) +
+                                                           d.runs.size());
+                               })
         .def_property_readonly("cell_index", [](const Data& d) { return copy_array(d.cell_index); })
         .def_property_readonly("max_norm_sums", [](const Data& d) { return copy_array(d.max_norm_sums); })
         .def_property_readonly("orig_abs_sums", [](const Data& d) { return copy_array(d.orig_abs_sums); })
@@ -304,13 +315,12 @@ void register_python(py::module_& m) {
                 // one layer's values per data cell (sum-normalized or quantized), `missing` where it has none
                 if (layer < 0 || layer >= d.rules.layers) throw std::out_of_range("layer");
                 std::vector<double> out(static_cast<size_t>(d.cells()), static_cast<double>(missing));
-                for (i64 c = 0; c < d.cells(); ++c)
-                    for (i64 e = d.cell_ptr[c]; e < d.cell_ptr[c + 1]; ++e)
-                        if (d.entry_layer[e] == layer) {
-                            const double q = d.entry_value[e];
-                            out[c] = scaled ? q * d.layer_scale[layer] : q;
-                            break;
-                        }
+                const double sc = d.layer_scale[layer];
+#pragma omp parallel for schedule(static)
+                for (i64 c = 0; c < d.cells(); ++c) {
+                    const long q = d.value_at(c, layer);
+                    if (q >= 0) out[c] = scaled ? static_cast<double>(q) * sc : static_cast<double>(q);
+                }
                 return to_array(std::move(out));
             },
             py::arg("layer"), py::arg("scaled") = true, py::arg("missing") = 0.0f);
@@ -318,7 +328,7 @@ void register_python(py::module_& m) {
     m.def("prio_rank", &py_rank, py::arg("data"), py::arg("rule"), py::arg("param"), py::arg("weights"),
           py::arg("abf_z"), py::arg("cost"), py::arg("cost_in_ranking"), py::arg("hmask"), py::arg("solution"),
           py::arg("max_iterations"), py::arg("ranking_error"), py::arg("stop_on_plateau"), py::arg("smoothing"),
-          py::arg("curves_interval"), py::arg("seed"),
+          py::arg("curves_interval"), py::arg("seed"), py::arg("row_format") = 0, py::arg("storage") = "",
           "Zonation 5's priority ranking of the cells of a PrioData.");
     m.def("prio_flexibility", &py_flexibility, py::arg("data"), py::arg("rule"), py::arg("param"),
           py::arg("weights"), py::arg("abf_z"), py::arg("cost"), py::arg("cost_in_ranking"), py::arg("hmask"),

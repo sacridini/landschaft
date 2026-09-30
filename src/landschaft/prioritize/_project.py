@@ -374,7 +374,7 @@ def run_project(settings, flags="", *, mode: str | None = None, output=None, **o
     output
         Directory to write Zonation's output files into (optional).
     **overrides
-        Other :func:`zonation` arguments (``bits=16`` for ``z5_16bit``, ``n_threads``...).
+        Other :func:`zonation` arguments (``bits=16`` for ``z5_16bit``, ``n_threads``, ``storage``...).
 
     Returns
     -------

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -48,40 +49,57 @@ Stats::Stats(ReadRules r) : rules(std::move(r)) {
     orig_max_values.assign(n, std::numeric_limits<float>::lowest());
 }
 
+// In parallel over the layers (counts, minima and maxima do not depend on the order).
 void Stats::add_block(const float* values, i64 h, i64 w, const std::uint8_t* area) {
     const int L = rules.layers;
     const i64 plane = h * w;
-    std::vector<float> f(static_cast<size_t>(L));
-    std::vector<std::uint8_t> nd(static_cast<size_t>(L));
+    // cells with data: in the area and not NoData in every layer
+    std::vector<std::uint8_t> valid(static_cast<size_t>(plane), 0);
+    i64 valid_cells = 0;
+#pragma omp parallel for schedule(static) reduction(+ : valid_cells)
     for (i64 c = 0; c < plane; ++c) {
-        ++pixels;
-        for (int l = 0; l < L; ++l) {
-            bool isnd;
-            f[l] = read_value(rules, l, values[l * plane + c], isnd);
-            nd[l] = isnd;
-            // origMaxValues = features.max(0).max(origMaxValues)
-            const float v0 = std::max(f[l], 0.0f);
-            if (orig_max_values[l] < v0) orig_max_values[l] = v0;
-        }
-        if (area && !area[c]) {
-            for (int l = 0; l < L; ++l) ++nodata[l];
-            continue;
-        }
+        if (area && !area[c]) continue;
         int nnd = 0;
         for (int l = 0; l < L; ++l) {
-            nodata[l] += nd[l];
-            nnd += nd[l];
+            bool isnd;
+            read_value(rules, l, values[l * plane + c], isnd);
+            nnd += isnd;
         }
-        if (nnd == L) continue;
-        ++data_cells;
-        for (int l = 0; l < L; ++l) {
-            negative[l] += f[l] < 0.0f;
-            const float clipped = static_cast<float>(f[l] >= rules.thresholds[l]) * f[l];
-            zeros[l] += !nd[l] && std::fabs(clipped) == 0.0f;
-            if (f[l] < min_values[l]) min_values[l] = f[l];
-            if (max_values[l] < clipped) max_values[l] = clipped;
-        }
+        valid[c] = nnd < L;
+        valid_cells += nnd < L;
     }
+#pragma omp parallel for schedule(dynamic, 1)
+    for (int l = 0; l < L; ++l) {
+        const float* v = values + l * plane;
+        i64 nd_count = 0, neg = 0, zero = 0;
+        float mn = min_values[l], mx = max_values[l], omx = orig_max_values[l];
+        for (i64 c = 0; c < plane; ++c) {
+            bool isnd;
+            const float f = read_value(rules, l, v[c], isnd);
+            // origMaxValues = features.max(0).max(origMaxValues)
+            const float v0 = std::max(f, 0.0f);
+            if (omx < v0) omx = v0;
+            if (area && !area[c]) {
+                ++nd_count;
+                continue;
+            }
+            nd_count += isnd;
+            if (!valid[c]) continue;
+            neg += f < 0.0f;
+            const float clipped = static_cast<float>(f >= rules.thresholds[l]) * f;
+            zero += !isnd && std::fabs(clipped) == 0.0f;
+            if (f < mn) mn = f;
+            if (mx < clipped) mx = clipped;
+        }
+        nodata[l] += nd_count;
+        negative[l] += neg;
+        zeros[l] += zero;
+        min_values[l] = mn;
+        max_values[l] = mx;
+        orig_max_values[l] = omx;
+    }
+    pixels += plane;
+    data_cells += valid_cells;
 }
 
 Data::Data(ReadRules r, std::vector<float> max_values, std::vector<std::uint8_t> keep, int b)
@@ -108,47 +126,215 @@ Data::Data(ReadRules r, std::vector<float> max_values, std::vector<std::uint8_t>
     block_cond_.assign(n, 0.0);
 }
 
+// The layers are quantized in parallel, each summed in cell order as Zonation
+// does; the runs of the cells are written in parallel chunks, then joined.
 void Data::add_block(const float* values, i64 h, i64 w, const std::uint8_t* area, const float* cond) {
     const int L = rules.layers;
     const bool conditioned = cond && !condition.empty();
     const i64 plane = h * w;
     const float scale = static_cast<float>(storage_scale);
     const double scale_r = 1.0 / storage_scale;
-    std::vector<std::uint16_t> q(static_cast<size_t>(L));
-    std::vector<std::uint8_t> skip(static_cast<size_t>(L));
-    for (i64 c = 0; c < plane; ++c) {
-        const i64 index = pixels++;
-        if (area && !area[c]) continue;
-        bool has_data = false;
-        for (int l = 0; l < L; ++l) {
+    std::vector<std::uint16_t> q(static_cast<size_t>(L) * static_cast<size_t>(plane));
+    std::vector<std::uint8_t> skip(static_cast<size_t>(L) * static_cast<size_t>(plane), 1);
+#pragma omp parallel for schedule(dynamic, 1)
+    for (int l = 0; l < L; ++l) {
+        const float* v = values + l * plane;
+        std::uint16_t* ql = q.data() + l * plane;
+        std::uint8_t* sl = skip.data() + l * plane;
+        double nq = block_nq_[l], sum = block_sums_[l];
+        for (i64 c = 0; c < plane; ++c) {
+            if (area && !area[c]) continue;
             bool nd;
-            const float f = read_value(rules, l, values[l * plane + c], nd);
+            const float f = read_value(rules, l, v[c], nd);
             const float clipped = static_cast<float>(f >= rules.thresholds[l]) * f;
             const float normalized = clipped * inv_max[l];
             const float scaled_nq = normalized * scale;
-            q[l] = static_cast<std::uint16_t>(std::round(scaled_nq));
-            skip[l] = nd || (!keep_zeros[l] && scaled_nq == 0.0f);
-            has_data |= !skip[l];
-            block_nq_[l] += static_cast<double>(normalized);
-            block_sums_[l] += static_cast<double>(q[l]) * scale_r;
+            ql[c] = static_cast<std::uint16_t>(std::round(scaled_nq));
+            sl[c] = nd || (!keep_zeros[l] && scaled_nq == 0.0f);
+            nq += static_cast<double>(normalized);
+            sum += static_cast<double>(ql[c]) * scale_r;
         }
-        if (!has_data) continue;
-        cell_index.push_back(index);
-        for (int l = 0; l < L; ++l) {
-            if (skip[l]) continue;
-            if (conditioned && condition[l] >= 0) {
-                // StorageType *= float: the product truncated
-                const float cv = cond[static_cast<i64>(condition[l]) * plane + c];
-                q[l] = static_cast<std::uint16_t>(static_cast<float>(q[l]) * cv);
-            }
-            entry_layer.push_back(static_cast<std::uint16_t>(l));
-            entry_value.push_back(q[l]);
-            quantized_zeros[l] += q[l] == 0;
-            block_cond_[l] += static_cast<double>(q[l]) * scale_r;
-        }
-        cell_ptr.push_back(static_cast<i64>(entry_layer.size()));
+        block_nq_[l] = nq;
+        block_sums_[l] = sum;
     }
+    // the cells with data: conditions, runs
+    std::vector<std::uint8_t> has(static_cast<size_t>(plane), 0);
+    const int T = std::max(1, std::min(64, static_cast<int>(plane / 4096) + 1));
+    std::vector<std::vector<std::uint8_t>> bytes(static_cast<size_t>(T));
+    std::vector<std::vector<i64>> index(static_cast<size_t>(T)), ends(static_cast<size_t>(T));
+    std::vector<std::vector<i64>> qzeros(static_cast<size_t>(T), std::vector<i64>(static_cast<size_t>(L), 0));
+    const int vb = value_bytes();
+#pragma omp parallel for schedule(dynamic, 1)
+    for (int t = 0; t < T; ++t) {
+        runs::Writer writer(vb);
+        auto& out = bytes[t];
+        i64* qz = qzeros[t].data();
+        for (i64 c = plane * t / T; c < plane * (t + 1) / T; ++c) {
+            if (area && !area[c]) continue;
+            bool any = false;
+            for (int l = 0; l < L && !any; ++l) any = !skip[static_cast<size_t>(l) * plane + c];
+            if (!any) continue;
+            has[c] = 1;
+            for (int l = 0; l < L; ++l) {
+                const size_t k = static_cast<size_t>(l) * plane + c;
+                if (skip[k]) continue;
+                if (conditioned && condition[l] >= 0) {
+                    // StorageType *= float: the product truncated
+                    const float cv = cond[static_cast<i64>(condition[l]) * plane + c];
+                    q[k] = static_cast<std::uint16_t>(static_cast<float>(q[k]) * cv);
+                }
+                writer.add(l, q[k] ? runs::VALUE : runs::ZERO, q[k]);
+                qz[l] += q[k] == 0;
+            }
+            writer.finish(out);
+            index[t].push_back(pixels + c);
+            ends[t].push_back(static_cast<i64>(out.size()));
+        }
+    }
+    for (int t = 0; t < T; ++t) {
+        const i64 base = static_cast<i64>(runs.size());
+        runs.append(bytes[t].data(), bytes[t].size());
+        cell_index.append(index[t].data(), index[t].size());
+        for (i64 e : ends[t]) cell_ptr.push_back(base + e);
+        for (int l = 0; l < L; ++l) quantized_zeros[l] += qzeros[t][l];
+    }
+    // the sums of the (conditioned) values, per layer in cell order
+#pragma omp parallel for schedule(dynamic, 1)
+    for (int l = 0; l < L; ++l) {
+        const std::uint16_t* ql = q.data() + l * plane;
+        const std::uint8_t* sl = skip.data() + l * plane;
+        double sum = block_cond_[l];
+        for (i64 c = 0; c < plane; ++c)
+            if (has[c] && !sl[c]) sum += static_cast<double>(ql[c]) * scale_r;
+        block_cond_[l] = sum;
+    }
+    pixels += plane;
 }
+
+void Data::set_storage(const std::string& dir) {
+    if (cells() || pixels) throw std::logic_error("the storage is set before the data");
+    cell_index.set_storage(dir);
+    cell_ptr.set_storage(dir);
+    cell_ptr.push_back(0);
+    runs.set_storage(dir);
+}
+
+long Data::value_at(i64 c, int layer) const {
+    const std::uint8_t* p = row(c);
+    const std::uint8_t* end = row_end(c);
+    const int vb = value_bytes();
+    i64 l = 0;
+    while (p < end) {
+        unsigned kind;
+        i64 len;
+        p = runs::read_run(p, kind, len);
+        if (layer < l + len) {
+            if (kind == runs::VALUE) return static_cast<long>(runs::read_value(p + (layer - l) * vb, vb));
+            return kind == runs::ZERO ? 0 : -1;
+        }
+        if (kind == runs::VALUE) p += len * vb;
+        l += len;
+    }
+    return -1;
+}
+
+i64 Data::entries() const {
+    i64 n = 0;
+    const int vb = value_bytes();
+#pragma omp parallel for schedule(static) reduction(+ : n)
+    for (i64 c = 0; c < cells(); ++c) {
+        const std::uint8_t* p = row(c);
+        const std::uint8_t* end = row_end(c);
+        while (p < end) {
+            unsigned kind;
+            i64 len;
+            p = runs::read_run(p, kind, len);
+            if (kind != runs::NODATA) n += len;
+            if (kind == runs::VALUE) p += len * vb;
+        }
+    }
+    return n;
+}
+
+void Data::update_layer(int layer, const std::function<unsigned(i64, unsigned)>& f) {
+    if (layer < 0 || layer >= rules.layers) throw std::out_of_range("layer");
+    const i64 N = cells();
+    const int vb = value_bytes();
+    // the runs of zeros that get a value: their header (offset in the runs), first
+    // layer and length, the value, and the bytes the runs replacing them add
+    struct Split {
+        i64 at = -1;
+        i64 start = 0, len = 0;
+        unsigned q = 0;
+        i64 extra = 0;
+    };
+    std::vector<Split> split(static_cast<size_t>(N));
+    int any = 0;
+#pragma omp parallel for schedule(static) reduction(| : any)
+    for (i64 c = 0; c < N; ++c) {
+        std::uint8_t* base = runs.data();
+        const std::uint8_t* p = base + cell_ptr[c];
+        const std::uint8_t* end = base + cell_ptr[c + 1];
+        i64 l = 0;
+        while (p < end) {
+            const std::uint8_t* h = p;
+            unsigned kind;
+            i64 len;
+            p = runs::read_run(p, kind, len);
+            if (layer < l + len) {
+                if (kind == runs::VALUE) {
+                    std::uint8_t* v = base + (p - base) + (layer - l) * vb;
+                    runs::write_value(v, f(c, runs::read_value(v, vb)), vb);
+                } else if (kind == runs::ZERO) {
+                    const unsigned q = f(c, 0u);
+                    if (q) {
+                        const i64 left = layer - l, right = l + len - 1 - layer;
+                        const i64 bytes = (left ? runs::header_bytes(left) : 0) + runs::header_bytes(1) + vb +
+                                          (right ? runs::header_bytes(right) : 0);
+                        split[c] = {h - base, l, len, q, bytes - (p - h)};
+                        any = 1;
+                    }
+                }
+                break;
+            }
+            if (kind == runs::VALUE) p += len * vb;
+            l += len;
+        }
+    }
+    if (!any) return;
+    // rewrite the runs: the split runs replaced, the rest copied
+    Buffer<i64> ptr;
+    ptr.set_storage(cell_ptr.storage());
+    ptr.resize(static_cast<size_t>(N) + 1);
+    for (i64 c = 0; c < N; ++c) ptr[c + 1] = ptr[c] + (cell_ptr[c + 1] - cell_ptr[c]) + split[c].extra;
+    Buffer<std::uint8_t> out;
+    out.set_storage(runs.storage());
+    out.resize(static_cast<size_t>(ptr[N]));
+#pragma omp parallel for schedule(static)
+    for (i64 c = 0; c < N; ++c) {
+        const std::uint8_t* src = runs.data() + cell_ptr[c];
+        std::uint8_t* dst = out.data() + ptr[c];
+        const i64 n = cell_ptr[c + 1] - cell_ptr[c];
+        const Split& s = split[c];
+        if (s.at < 0) {
+            std::memcpy(dst, src, static_cast<size_t>(n));
+            continue;
+        }
+        const i64 head = s.at - cell_ptr[c];  // bytes before the run
+        std::memcpy(dst, src, static_cast<size_t>(head));
+        std::uint8_t* d = dst + head;
+        const i64 left = layer - s.start, right = s.start + s.len - 1 - layer;
+        if (left) d = runs::write_run(d, runs::ZERO, left);
+        d = runs::write_run(d, runs::VALUE, 1);
+        d = runs::write_value(d, s.q, vb);
+        if (right) d = runs::write_run(d, runs::ZERO, right);
+        const i64 old = runs::header_bytes(s.len);
+        std::memcpy(d, src + head + old, static_cast<size_t>(n - head - old));
+    }
+    runs.swap(out);
+    cell_ptr.swap(ptr);
+}
+
 
 void Data::flush() {
     for (int l = 0; l < rules.layers; ++l) {
@@ -181,33 +367,30 @@ void Data::finish() {
     }
     cell_index.shrink_to_fit();
     cell_ptr.shrink_to_fit();
-    entry_layer.shrink_to_fit();
-    entry_value.shrink_to_fit();
+    runs.shrink_to_fit();
 }
 
 i64 Data::retain(int layer, int kind, const float* values, float fraction) {
     if (layer < 0 || layer >= rules.layers) throw std::out_of_range("layer");
     const float scale = static_cast<float>(storage_scale);
-    i64 clipped = 0;
-    for (i64 c = 0; c < cells(); ++c)
-        for (i64 e = cell_ptr[c]; e < cell_ptr[c + 1]; ++e) {
-            if (entry_layer[e] != layer) continue;
-            std::uint16_t& p = entry_value[e];
-            const float v = static_cast<float>(p);
-            float b;
-            if (kind == 0) {
-                // scaleToLayerStorage: the absolute value in the layer's quantized units
-                b = values[c] * inv_max[layer] * scale;
-                if (b > v) {
-                    b = v;
-                    ++clipped;
-                }
-            } else {
-                b = (kind == 1 ? values[c] : fraction) * v;
+    std::vector<std::uint8_t> clip(static_cast<size_t>(cells()), 0);
+    update_layer(layer, [&](i64 c, unsigned q) {
+        const float v = static_cast<float>(q);
+        float b;
+        if (kind == 0) {
+            // scaleToLayerStorage: the absolute value in the layer's quantized units
+            b = values[c] * inv_max[layer] * scale;
+            if (b > v) {
+                b = v;
+                clip[c] = 1;
             }
-            p = static_cast<std::uint16_t>(v - b);
-            break;
+        } else {
+            b = (kind == 1 ? values[c] : fraction) * v;
         }
+        return static_cast<unsigned>(static_cast<std::uint16_t>(v - b));
+    });
+    i64 clipped = 0;
+    for (std::uint8_t k : clip) clipped += k;
     return clipped;
 }
 
@@ -220,10 +403,9 @@ std::vector<float> Data::preprocessing(const float* mult, const float* weights, 
 #pragma omp for schedule(static)
         for (i64 c = 0; c < cells(); ++c) {
             std::fill(f.begin(), f.end(), 0.0f);
-            for (i64 e = cell_ptr[c]; e < cell_ptr[c + 1]; ++e) {
-                const int l = entry_layer[e];
-                f[l] = static_cast<float>(static_cast<double>(static_cast<float>(entry_value[e])) * layer_scale[l]);
-            }
+            each<false>(c, [&](int l, unsigned q) {
+                f[l] = static_cast<float>(static_cast<double>(static_cast<float>(q)) * layer_scale[l]);
+            });
             for (int l = 0; l < L; ++l) {
                 float v = weights ? weights[l] * f[l] : f[l];
                 if (unscaled) v = static_cast<float>(static_cast<double>(v) * orig_abs_sums[l]);
@@ -252,12 +434,8 @@ double Data::replace_layer(int layer, std::vector<float> packed, double level) {
     }
     layer_scale[layer] = sum > 0 ? level / (sum * storage_scale) : 0.0;
     initial_levels[layer] = level;
-    for (i64 c = 0; c < cells(); ++c)
-        for (i64 e = cell_ptr[c]; e < cell_ptr[c + 1]; ++e)
-            if (entry_layer[e] == layer) {
-                entry_value[e] = static_cast<std::uint16_t>(packed[c]);
-                break;
-            }
+    update_layer(layer,
+                 [&](i64 c, unsigned) { return static_cast<unsigned>(static_cast<std::uint16_t>(packed[c])); });
     return nqsum > 0 ? std::fabs(nqsum - sum) / nqsum * 100.0 : 0.0;
 }
 

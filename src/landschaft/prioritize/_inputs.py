@@ -39,6 +39,7 @@ class Layer:
     nodata: float = float("nan")  # the band's NoData as float32 (NaN: none)
     block_rows: int | None = None  # the file's block height
     source: object = None
+    lazy: Callable[[int, int], object] | None = None  # rows [y0, y1) as a dask array (dask inputs)
 
 
 @dataclass
@@ -159,14 +160,18 @@ def _array_layers(x, name: str, default_nodata) -> tuple[list[Layer], Grid]:
     layers = []
     for arr, nm in stack:
         def read(y0, y1, arr=arr):
-            v = arr[y0:y1]
-            if _is_dask(v):
-                v = v.compute()
-            v = np.ma.filled(np.ma.asarray(v), np.nan) if np.ma.isMaskedArray(v) else np.asarray(v)
-            return np.asarray(v, dtype=np.float32)
+            return _as_f32(arr[y0:y1])
 
-        layers.append(Layer(str(nm), read, _f32(nd), None, x))
+        lazy = (lambda y0, y1, arr=arr: arr[y0:y1]) if _is_dask(arr) else None
+        layers.append(Layer(str(nm), read, _f32(nd), None, x, lazy))
     return layers, grid
+
+
+def _as_f32(v) -> np.ndarray:
+    if _is_dask(v):
+        v = v.compute()
+    v = np.ma.filled(np.ma.asarray(v), np.nan) if np.ma.isMaskedArray(v) else np.asarray(v)
+    return np.asarray(v, dtype=np.float32)
 
 
 def open_features(features, nodata=None) -> Sources:
@@ -228,9 +233,37 @@ def blocks(height: int, width: int, layers: int, block_rows: int | None) -> Iter
 
 
 def read_rows(layers: list[Layer], y0: int, y1: int, width: int) -> np.ndarray:
+    """Rows [y0, y1) of the layers: dask layers computed together (one graph), the
+    files read in parallel threads (one per file; GDAL releases the GIL)."""
+    from .. import _threads
+
     out = np.empty((len(layers), y1 - y0, width), dtype=np.float32)
+    lazy = [i for i, ly in enumerate(layers) if ly.lazy is not None]
+    if lazy:
+        import dask
+
+        for i, v in zip(lazy, dask.compute(*[layers[i].lazy(y0, y1) for i in lazy])):
+            out[i] = _as_f32(v)
+    by_source: dict = {}
     for i, ly in enumerate(layers):
-        out[i] = ly.read(y0, y1)
+        if ly.lazy is None:
+            key = id(ly.source) if not _is_path(ly.source) else os.fspath(ly.source)
+            by_source.setdefault(key, []).append(i)
+
+    def read_group(idx):
+        for i in idx:
+            out[i] = layers[i].read(y0, y1)
+
+    groups = list(by_source.values())
+    n = min(len(groups), _threads.current())
+    if n > 1 and any(_is_path(layers[g[0]].source) for g in groups):
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(n) as ex:
+            list(ex.map(read_group, groups))
+    else:
+        for g in groups:
+            read_group(g)
     return out
 
 

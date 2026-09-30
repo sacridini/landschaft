@@ -1045,7 +1045,17 @@ planejamento e corredores não existem no Z5).
    conta células cujo valor zerou na fase cumulativa; o arredondamento de volta ao armazenamento é o do Eigen
    (metade para longe do zero, não o `np.round`); o Z5 exige rasters de fontes e subáreas sem sinal e nomes de
    unidade só com letras.
-6. Escala: carga por blocos/dask, ranking out-of-core, benchmarks continentais.
+6. Escala: carga por blocos/dask, ranking out-of-core, benchmarks continentais. **Feito na 0.94.0**: dados
+   quantizados em corridas por célula (NoData, zeros, valores; 1-2 bytes por valor: uma feição custa as suas
+   ocorrências, não uma entrada por célula com dado, como no Z5); ranking sobre linhas compactas (bitmap das
+   camadas ou lacunas entre elas, o que for menor; contagem por chunk com contadores de bytes SWAR), itens de
+   16 bytes com passo radix dentro dos baldes do sample sort, perdas especializadas por regra, soma do erro só
+   dos termos não nulos; leitura e quantização paralelas (por camada, na ordem das células para as somas do
+   Z5), arquivos lidos em threads e blocos dask num só grafo; `storage=dir`: arrays grandes em arquivos
+   temporários mapeados em memória (Windows/POSIX), paginados pelo sistema. Benchmark (2000 x 2000, 30
+   feições, 75 iterações, 12 threads): 13,1 s -> 6,9 s (z5: 31,9 s em 12 threads, 52,8 s em uma), mesmo
+   rankmap do z5 de 1 thread; ~130 bytes por célula na ordenação; 9 M células x 16 feições (dask sintético,
+   188 iterações): 71 s, 1,7 GB. Limites: 2^32 - 1 células com dado, 65 535 feições.
 7. Tutorial, benchmarks contra o Z5, capítulo do Learn.
 
 ```python

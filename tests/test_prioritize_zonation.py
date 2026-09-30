@@ -528,3 +528,74 @@ def test_impact_api():
                                direct_matrix=np.array([[1.0]]))
     res2 = P.zonation(x, impact_groups=[1, -1], cumulative_impact=cum)
     assert res2.feature_curves.iloc[0, 1] == pytest.approx(0.5, abs=0.01)
+
+
+@pytest.mark.parametrize("bits", [8, 16])
+def test_row_formats_and_storage_agree(monkeypatch, bits, tmp_path):
+    """Delta rows (gaps over 255 layers), bitmap rows (several mask words) and
+    memory-mapped storage give the same ranking."""
+    rng = np.random.default_rng(21)
+    x = rng.random((300, 30, 40)).astype(np.float32)
+    x[x < 0.97] = 0
+    x[:, 0, :3] = 0
+    x[299, 0, 0] = 0.5  # a row with a gap of 299 layers
+    x[[0, 280], 0, 1] = 0.7
+    got = {}
+    for fmt in ("delta", "bitmap", ""):
+        monkeypatch.setenv("LANDSCHAFT_PRIO_ROWS", fmt)
+        res = ls.prioritize.zonation(x, bits=bits, rule="CAZ2", storage=tmp_path / "tmp" if not fmt else None)
+        got[fmt] = (np.asarray(res.rank), res.iterations, res.feature_curves.to_numpy())
+        del res
+    for fmt in ("bitmap", ""):
+        assert np.array_equal(got[fmt][0], got["delta"][0], equal_nan=True), fmt
+        assert got[fmt][1] == got["delta"][1]
+        assert np.array_equal(got[fmt][2], got["delta"][2])
+    import gc
+
+    gc.collect()
+    assert not any((tmp_path / "tmp").iterdir())  # the temporary files are gone
+
+
+@pytest.mark.reference
+@pytest.mark.parametrize("name", ["caz2_16bit", "caz2_hmask_cost", "caz2_smoothing", "abf_cost_negweights"])
+def test_storage_matches_zonation(name, rasters, tmp_path):
+    """Out-of-core storage: the same bits as Zonation."""
+    arrays, _ = load("core")
+    res = _run(name, rasters, storage=tmp_path)
+    assert np.array_equal(np.asarray(res.rank), arrays[f"{name}/rank"], equal_nan=True)
+    assert np.isfinite(np.asarray(res.flexibility_map()["up"])).any()
+
+
+@pytest.mark.parametrize("bits", [8, 16])
+def test_data_runs_roundtrip(bits, tmp_path):
+    """The runs of NoData, zeros and values (long runs, LEB128 lengths) keep every
+    layer's values, and rewriting a layer splits the runs of zeros."""
+    from landschaft import _core
+
+    rng = np.random.default_rng(3)
+    L, h, w = 300, 6, 7
+    top = 255 if bits == 8 else 65535
+    shape = (L, h, w)
+    v = np.where(rng.random(shape) < 0.05, rng.integers(1, top + 1, size=shape), 0).astype(np.float32)
+    v[rng.random(v.shape) < 0.3] = np.nan  # NoData
+    v[:200, 0, 0] = np.nan  # a long run of NoData, then zeros
+    v[200:, 0, 0] = 0
+    v[:, 0, 1] = 0  # all zeros
+    v[5, 0, 1] = 7
+    for storage in ("", str(tmp_path)):
+        d = _core.PrioData([np.nan] * L, [np.nan] * L, [0.0] * L, [float(top)] * L, [1] * L, bits, storage)
+        d.add_block(v, None, None)
+        d.finish()
+        cells = np.asarray(d.cell_index)
+        flat = v.reshape(L, -1)[:, cells]
+        want = np.where(np.isnan(flat), -1, flat)
+        got = np.stack([np.asarray(d.layer(i, scaled=False, missing=-1)) for i in range(L)])
+        assert np.array_equal(got, want)
+        assert d.entries == int((~np.isnan(flat)).sum())
+        # values into a long run of zeros (the middle, both ends) and into NoData (ignored)
+        new = np.arange(1, cells.size + 1, dtype=np.float32)
+        for layer in (250, 200, 299, 0):
+            d.set_layer_values(layer, new)
+            want[layer] = np.where(want[layer] >= 0, new, -1)
+        got = np.stack([np.asarray(d.layer(i, scaled=False, missing=-1)) for i in range(L)])
+        assert np.array_equal(got, want)

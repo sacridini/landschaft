@@ -33,6 +33,32 @@ res.write("zonation_output")  # rankmap.tif and Zonation's CSV files
 
 ::: landschaft.prioritize.ZonationResult
 
+## Large maps
+
+The features are read in blocks of rows (files, NumPy, xarray or dask arrays;
+dask stacks are computed block by block, never whole) and quantized to one or two
+bytes per value, kept as runs of NoData, zeros and values: a feature costs about
+its occurrences, however many cells it is zero in, so thousands of species ranges
+fit where Zonation stores every feature in every cell. During the ranking every
+cell's occurrences are a compact row (a bitmap or layer gaps, whichever is
+smaller) and the work arrays take about 130 bytes per cell with data.
+
+For maps larger than the memory, `storage` puts the large arrays in memory-mapped
+temporary files in a directory (on a fast disk), which the operating system pages
+as needed; the reads and writes of the ranking are in sequence or nearly so. The
+result is the same bit for bit; the files are deleted when no longer needed.
+
+<!-- no-run -->
+```python
+import dask.array as da
+
+stack = da.stack([da.from_zarr(f"ranges.zarr/{s}") for s in species])  # (features, y, x)
+res = ls.prioritize.zonation(stack, storage="D:/scratch", n_threads=16)
+res.write("global_ranking")
+```
+
+The ranking is limited to 2^32 - 1 cells with data and 65 535 features.
+
 ## Zonation projects
 
 Existing Zonation 5 projects run as they are: the settings file, its feature

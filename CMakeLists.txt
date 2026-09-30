@@ -147,6 +147,7 @@ target_link_libraries(surfcore PUBLIC lsmcore nlmcore costcore)
 set_target_properties(surfcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Spatial prioritization (Zonation 5): quantized feature data and the iterative ranking.
 add_library(priocore STATIC
+    src/cpp/prio/buffer.cpp
     src/cpp/prio/data.cpp
     src/cpp/prio/rank.cpp
 )

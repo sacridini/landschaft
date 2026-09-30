@@ -468,6 +468,7 @@ def zonation(
     impact=None,
     cumulative_impact=None,
     nodata=None,
+    storage=None,
     n_threads: int | None = None,
 ) -> ZonationResult:
     """Rank the cells of a landscape for conservation, as Zonation 5 does.
@@ -586,6 +587,12 @@ def zonation(
         scenarios take before the ranking; the impacts are in ``impacts``.
     nodata
         NoData value of inputs without one (NaN is always NoData).
+    storage
+        A directory for temporary files: the large arrays (the quantized
+        features, the rows of the ranking and its work arrays) are then
+        memory-mapped files that the operating system pages to disk when they
+        do not fit in memory, for maps larger than the RAM (out-of-core). The
+        files are deleted when no longer needed. ``None``: in memory.
     n_threads
         Threads (default: all cores but one).
 
@@ -620,6 +627,15 @@ def zonation(
             return _run(src, name, param, locals())
         finally:
             src.close()
+
+
+def _storage(path) -> str:
+    """The directory for the temporary files ("": in memory)."""
+    if path is None:
+        return ""
+    p = Path(path)
+    p.mkdir(parents=True, exist_ok=True)
+    return str(p.resolve())
 
 
 def _run(src, name, param, a) -> ZonationResult:
@@ -705,8 +721,9 @@ def _run(src, name, param, a) -> ZonationResult:
                 warnings.warn(f"{what} group {g} contains both positive and negative weights", stacklevel=3)
 
     # the quantized data
+    storage = _storage(a["storage"])
     data = _core.PrioData(nodata[kept].tolist(), extract[kept].tolist(), thresholds[kept].tolist(),
-                          maxv[kept].tolist(), keep[kept].tolist(), int(a["bits"]))
+                          maxv[kept].tolist(), keep[kept].tolist(), int(a["bits"]), storage)
     kl = [src.layers[i] for i in kept]
     if cond_layers:
         data.set_conditions(cond_index[kept].tolist(), renorm[kept].tolist())
@@ -792,7 +809,9 @@ def _run(src, name, param, a) -> ZonationResult:
         None if hmask is None else hmask.astype(np.uint8),
         None if solution is None else solution.astype(np.float32),
         int(a["max_iterations"]), float(a["ranking_error"]), bool(a["stop_on_plateau"]),
-        float(a["smoothing_factor"]), float(a["curves_interval"]), int(seed))
+        float(a["smoothing_factor"]), float(a["curves_interval"]), int(seed),
+        # the storage of the rows (the smaller by default; forced in the tests of both)
+        {"delta": 1, "bitmap": 2}.get(os.environ.get("LANDSCHAFT_PRIO_ROWS", ""), 0), storage)
 
     # rank map on the grid
     flat = np.full(H * W, np.nan, dtype=np.float32)

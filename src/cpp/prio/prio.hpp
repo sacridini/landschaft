@@ -8,8 +8,12 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
+
+#include "prio/buffer.hpp"
+#include "prio/runs.hpp"
 
 namespace prio {
 
@@ -66,11 +70,30 @@ struct Data {
     std::vector<std::uint8_t> keep_zeros;
     i64 pixels = 0;  // cells seen so far (row-major index of the next one)
 
-    // cells with data, in row-major order: their index in the map and their entries
-    std::vector<i64> cell_index;
-    std::vector<i64> cell_ptr{0};
-    std::vector<std::uint16_t> entry_layer;
-    std::vector<std::uint16_t> entry_value;  // quantized value (0 .. 2^bits - 1)
+    // cells with data, in row-major order: their index in the map and the runs of
+    // their layers (NoData, zeros, quantized values 0 .. 2^bits - 1; prio/runs.hpp)
+    Buffer<i64> cell_index;
+    Buffer<i64> cell_ptr{0};  // byte offset of the runs of each cell
+    Buffer<std::uint8_t> runs;
+    // keep the cells and runs in temporary files in `dir` (before any block)
+    void set_storage(const std::string& dir);
+
+    int value_bytes() const { return bits > 8 ? 2 : 1; }
+    const std::uint8_t* row(i64 c) const { return runs.data() + cell_ptr[c]; }
+    const std::uint8_t* row_end(i64 c) const { return runs.data() + cell_ptr[c + 1]; }
+    // f(layer, value) for the layers with data in cell c, in order (Zeros: with
+    // the runs of zeros; the runs of values may hold zeros too)
+    template <bool Zeros, class F>
+    void each(i64 c, F&& f) const {
+        runs::each<Zeros>(row(c), row_end(c), value_bytes(), f);
+    }
+    // the value of a layer in cell c, -1 where it has no data
+    long value_at(i64 c, int layer) const;
+    // the layers with data in all cells (zeros included)
+    i64 entries() const;
+    // set the values of a layer where it has data: f(cell, value) -> new value
+    // (called in parallel); the runs are rewritten where zeros become values
+    void update_layer(int layer, const std::function<unsigned(i64, unsigned)>& f);
 
     // per layer (after finish)
     std::vector<double> max_norm_sums, nq_sums, condition_sums, orig_abs_sums;
@@ -100,6 +123,8 @@ struct RankSettings {
     float smoothing = 0.0f;
     float curves_interval = 0.0001f;
     std::uint64_t seed = 0;          // RAND
+    int row_format = 0;              // rows of the ranking: 0 the smaller, 1 delta, 2 bitmap
+    std::string storage;             // directory for the temporary files of the large arrays ("": memory)
 };
 
 struct RankResult {

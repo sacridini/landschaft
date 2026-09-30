@@ -6,6 +6,26 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.94.0] - 2026-09-30
+
+### Added
+- Spatial prioritization, part 6 (large maps): `ls.prioritize.zonation(..., storage=dir)` keeps the
+  large arrays (quantized features, ranking rows and work arrays) in memory-mapped temporary files
+  that the operating system pages to disk, for maps larger than the memory; same results bit for
+  bit, the files deleted when no longer needed.
+
+### Changed
+- The quantized features are stored as runs of NoData, zeros and values (one or two bytes per
+  value): a feature costs about its occurrences, not one entry per cell with data (4 bytes before).
+- The ranking works on compact rows (a bitmap of the layers or their gaps, whichever is smaller,
+  and one byte per 8-bit value), sorts 16-byte items with a radix pass inside the sample-sort
+  buckets, specializes the marginal-loss pass per rule and sums only the nonzero ranking-error
+  terms; the reading and quantization run in parallel (per layer, in cell order for Zonation's
+  sums), files are read in parallel threads and dask blocks computed in one graph. Benchmark
+  (2000 x 2000 cells, 30 features, 75 iterations, 12 threads): 13.1 s to 6.9 s (z5 v2.4: 31.9 s
+  on 12 threads, 52.8 s on one), with the same rank map as z5 on one thread; about 130 bytes of
+  memory per cell with data during the ranking.
+
 ## [0.93.0] - 2026-09-30
 
 ### Added

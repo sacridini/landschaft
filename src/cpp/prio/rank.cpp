@@ -41,9 +41,13 @@ EIGEN_STRONG_INLINE Packet2d pround<Packet2d>(const Packet2d& a) {
 #include <numeric>
 #include <random>
 #include <stdexcept>
+#include <type_traits>
 
 #ifdef _OPENMP
 #include <omp.h>
+#endif
+#if defined(_MSC_VER)
+#include <intrin.h>
 #endif
 
 namespace prio {
@@ -75,15 +79,16 @@ class Profile {
     void mark() { last_ = Clock::now(); }
     ~Profile() {
         if (!on_) return;
-        static const char* names[] = {"initial", "scatter", "levels", "losses", "change", "error", "sort", "relayout", "curves"};
-        for (int i = 0; i < 9; ++i) std::fprintf(stderr, "[prio] %-10s %10.1f ms\n", names[i], ms_[i]);
+        static const char* names[] = {"initial", "scatter", "levels", "losses", "change",
+                                      "error",   "sort",    "relayout", "curves", "build"};
+        for (int i = 0; i < 10; ++i) std::fprintf(stderr, "[prio] %-10s %10.1f ms\n", names[i], ms_[i]);
     }
 
   private:
     using Clock = std::chrono::steady_clock;
     bool on_;
     Clock::time_point last_;
-    double ms_[9] = {};
+    double ms_[10] = {};
 };
 
 struct Sum {
@@ -117,24 +122,102 @@ struct Item {
     u32 cls;
     u32 cell;
     u32 from;  // its position in the input (the previous order)
+    static bool less(const Item& a, const Item& b) {
+        if (a.cls != b.cls) return a.cls < b.cls;
+        if (a.key != b.key) return a.key < b.key;
+        return a.cell < b.cell;
+    }
 };
 
-inline bool item_less(const Item& a, const Item& b) {
-    if (a.cls != b.cls) return a.cls < b.cls;
-    if (a.key != b.key) return a.key < b.key;
-    return a.cell < b.cell;
-}
+// The same without classes (no hierarchic mask or cost classes): 16 bytes.
+struct PlainItem {
+    u64 key;
+    u32 cell;
+    u32 from;
+    static bool less(const PlainItem& a, const PlainItem& b) {
+        if (a.key != b.key) return a.key < b.key;
+        return a.cell < b.cell;
+    }
+};
 
+template <class It>
 struct SortBuffers {
-    std::vector<Item> a, b;
+    Buffer<It> a, b;
     std::vector<std::uint16_t> bucket;
     std::vector<i64> counts;
 };
 
+template <class It>
+void insertion_sort(It* a, i64 n) {
+    for (i64 i = 1; i < n; ++i) {
+        const It v = a[i];
+        i64 j = i;
+        for (; j > 0 && It::less(v, a[j - 1]); --j) a[j] = a[j - 1];
+        a[j] = v;
+    }
+}
+
+inline int clz64(u64 m) {
+#if defined(_MSC_VER)
+    unsigned long i;
+    _BitScanReverse64(&i, m);
+    return 63 - static_cast<int>(i);
+#else
+    return __builtin_clzll(m);
+#endif
+}
+
+// Sort a bucket of the sample sort (in cache): with classes, std::sort; else the
+// items are distributed by the key bits below the prefix common to the bucket,
+// and each small group is sorted by (key, cell).
+inline void sort_bucket(Item* a, i64 n) { std::sort(a, a + n, Item::less); }
+
+inline void sort_bucket(PlainItem* a, i64 n) {
+    if (n <= 32) {
+        insertion_sort(a, n);
+        return;
+    }
+    u64 lo = a[0].key, hi = a[0].key;
+    for (i64 i = 1; i < n; ++i) {
+        lo = std::min(lo, a[i].key);
+        hi = std::max(hi, a[i].key);
+    }
+    if (lo == hi) {
+        std::sort(a, a + n, PlainItem::less);
+        return;
+    }
+    const int top = 64 - clz64(lo ^ hi);  // bits below the common prefix
+    int bits = 1;
+    while (bits < 12 && (i64{1} << bits) * 4 < n) ++bits;
+    bits = std::min(bits, top);
+    const int shift = top - bits;
+    const u64 mask = (u64{1} << bits) - 1;
+    thread_local std::vector<PlainItem> tmp;
+    thread_local std::vector<i64> cnt;
+    tmp.resize(static_cast<size_t>(n));
+    cnt.assign((size_t{1} << bits) + 1, 0);
+    for (i64 i = 0; i < n; ++i) ++cnt[((a[i].key >> shift) & mask) + 1];
+    for (size_t g = 1; g < cnt.size(); ++g) cnt[g] += cnt[g - 1];
+    for (i64 i = 0; i < n; ++i) tmp[cnt[(a[i].key >> shift) & mask]++] = a[i];
+    // cnt[g] is now the end of group g
+    i64 b = 0;
+    for (size_t g = 0; g + 1 < cnt.size(); ++g) {
+        const i64 e = cnt[g];
+        if (e - b <= 32)
+            insertion_sort(tmp.data() + b, e - b);
+        else
+            std::sort(tmp.data() + b, tmp.data() + e, PlainItem::less);
+        b = e;
+    }
+    std::memcpy(a, tmp.data(), static_cast<size_t>(n) * sizeof(PlainItem));
+}
+
 // Parallel sample sort of buf.a into `out` (the cells): splitters from a sample,
 // the items distributed to their buckets, each bucket sorted. Given the items in
 // the previous order, the buckets are nearly sorted already.
-void sort_items(SortBuffers& buf, std::vector<u32>& out, std::vector<u32>& from) {
+template <class It>
+void sort_items(SortBuffers<It>& buf, std::vector<u32>& out, std::vector<u32>& from) {
+    const auto item_less = It::less;
     auto& a = buf.a;
     const i64 n = static_cast<i64>(a.size());
     out.resize(static_cast<size_t>(n));
@@ -150,11 +233,11 @@ void sort_items(SortBuffers& buf, std::vector<u32>& out, std::vector<u32>& from)
     }
     const int NB = std::min(4096, T * 8);  // buckets
     const int per = 32;
-    std::vector<Item> sample(static_cast<size_t>(NB) * per);
+    std::vector<It> sample(static_cast<size_t>(NB) * per);
     const i64 S = static_cast<i64>(sample.size());
     for (i64 k = 0; k < S; ++k) sample[k] = a[static_cast<size_t>((2 * k + 1) * n / (2 * S))];
     std::sort(sample.begin(), sample.end(), item_less);
-    std::vector<Item> split(static_cast<size_t>(NB) - 1);
+    std::vector<It> split(static_cast<size_t>(NB) - 1);
     for (int b = 1; b < NB; ++b) split[b - 1] = sample[static_cast<size_t>(b) * per];
     auto& bucket = buf.bucket;
     bucket.resize(static_cast<size_t>(n));
@@ -193,7 +276,7 @@ void sort_items(SortBuffers& buf, std::vector<u32>& out, std::vector<u32>& from)
     }
 #pragma omp parallel for schedule(dynamic, 1)
     for (int b = 0; b < NB; ++b) {
-        std::sort(d.begin() + bstart[b], d.begin() + bstart[b + 1], item_less);
+        sort_bucket(d.data() + bstart[b], bstart[b + 1] - bstart[b]);
         for (i64 i = bstart[b]; i < bstart[b + 1]; ++i) {
             out[i] = d[i].cell;
             from[i] = d[i].from;
@@ -202,7 +285,8 @@ void sort_items(SortBuffers& buf, std::vector<u32>& out, std::vector<u32>& from)
 }
 
 // Exclusive prefix sums of v into out (out[n] = total), in parallel blocks.
-void prefix_sums(const std::vector<i64>& v, std::vector<i64>& out) {
+template <class Out>
+void prefix_sums(const std::vector<i64>& v, Out& out) {
     const i64 n = static_cast<i64>(v.size());
     out.resize(static_cast<size_t>(n + 1));
     const int T = std::max(1, std::min(max_threads(), static_cast<int>(n / 65536) + 1));
@@ -225,11 +309,125 @@ void prefix_sums(const std::vector<i64>& v, std::vector<i64>& out) {
     out[n] = part[T];
 }
 
+// The same in place: v[0..n) the values, v[n] set to the total.
+template <class V>
+void prefix_sums_inplace(V& v) {
+    const i64 n = static_cast<i64>(v.size()) - 1;
+    const int T = std::max(1, std::min(max_threads(), static_cast<int>(n / 65536) + 1));
+    std::vector<i64> part(static_cast<size_t>(T) + 1, 0);
+#pragma omp parallel for num_threads(T) schedule(static, 1)
+    for (int t = 0; t < T; ++t) {
+        i64 s = 0;
+        for (i64 i = n * t / T; i < n * (t + 1) / T; ++i) s += v[i];
+        part[t + 1] = s;
+    }
+    for (int t = 0; t < T; ++t) part[t + 1] += part[t];
+#pragma omp parallel for num_threads(T) schedule(static, 1)
+    for (int t = 0; t < T; ++t) {
+        i64 s = part[t];
+        for (i64 i = n * t / T; i < n * (t + 1) / T; ++i) {
+            const i64 k = v[i];
+            v[i] = s;
+            s += k;
+        }
+    }
+    v[n] = part[T];
+}
+
+// ---------------------------------------------------------------- compact rows
+
+// The occurrences of a cell (its layers with a value > 0, in layer order) are a
+// row of bytes, whichever of two formats is smaller for the data: delta rows
+// (per occurrence the gap from the previous layer, one byte or 255 and two more,
+// then the value) for many sparse layers, bitmap rows (a bit per layer, then the
+// values) for few or dense ones. Values take one byte with 8-bit data. The rows
+// are moved every iteration; their size is what that costs.
+
+inline int ctz64(u64 m) {
+#if defined(_MSC_VER)
+    unsigned long i;
+    _BitScanForward64(&i, m);
+    return static_cast<int>(i);
+#else
+    return __builtin_ctzll(m);
+#endif
+}
+
+constexpr i64 kPad = 8;  // spare bytes after the rows
+
+template <int VB>
+inline unsigned read_value(const std::uint8_t* p) {
+    if constexpr (VB == 1)
+        return p[0];
+    else
+        return static_cast<unsigned>(p[0]) | (static_cast<unsigned>(p[1]) << 8);
+}
+
+template <int VB>
+struct DeltaRows {
+    static constexpr bool bitmap = false;
+    static constexpr int vb = VB;
+    static i64 occurrence_bytes(int gap) { return (gap >= 255 ? 3 : 1) + VB; }
+    // f(layer, value) for the occurrences of the row [p, end)
+    template <class F>
+    void each(const std::uint8_t* p, const std::uint8_t* end, F&& f) const {
+        int l = -1;
+        while (p < end) {
+            int g = *p++;
+            if (g == 255) {
+                g += p[0] | (p[1] << 8);
+                p += 2;
+            }
+            l += g + 1;
+            f(l, read_value<VB>(p));
+            p += VB;
+        }
+    }
+    std::uint8_t* put(std::uint8_t* p, int& prev, int l, unsigned q) const {
+        const int g = l - prev - 1;
+        prev = l;
+        if (g >= 255) {
+            *p++ = 255;
+            *p++ = static_cast<std::uint8_t>((g - 255) & 0xff);
+            *p++ = static_cast<std::uint8_t>((g - 255) >> 8);
+        } else {
+            *p++ = static_cast<std::uint8_t>(g);
+        }
+        *p++ = static_cast<std::uint8_t>(q & 0xff);
+        if constexpr (VB == 2) *p++ = static_cast<std::uint8_t>(q >> 8);
+        return p;
+    }
+};
+
+template <int VB>
+struct BitmapRows {
+    static constexpr bool bitmap = true;
+    static constexpr int vb = VB;
+    int mask_bytes = 0;
+    template <class F>
+    void each(const std::uint8_t* p, const std::uint8_t*, F&& f) const {
+        const std::uint8_t* v = p + mask_bytes;
+        for (int k = 0; k < mask_bytes; k += 8) {
+            // the row buffers end in kPad spare bytes: read 8 and drop what is past the mask
+            u64 m;
+            std::memcpy(&m, p + k, 8);
+            if (mask_bytes - k < 8) m &= (u64{1} << (8 * (mask_bytes - k))) - 1;
+            while (m) {
+                const int b = ctz64(m);
+                m &= m - 1;
+                f(k * 8 + b, read_value<VB>(v));
+                v += VB;
+            }
+        }
+    }
+};
+
 // ---------------------------------------------------------------- the ranking
 
 class Ranker {
   public:
-    Ranker(const Data& d, const RankSettings& s) : data_(d), set_(s) {
+    // rows: build the rows for the ranking (not needed for the flexibility map)
+    Ranker(const Data& d, const RankSettings& s, bool rows = true) : data_(d), set_(s) {
         N_ = d.cells();
         L_ = d.rules.layers;
         if (N_ <= 0) throw std::invalid_argument("no cells with data");
@@ -276,7 +474,22 @@ class Ranker {
             for (int l = 0; l < L_; ++l) absent_[l] = s.rule == Rule::CAZPW ? c0 * wabs_[l] : c0;
             dense_ = c0 != 0.0;
         }
-        build_occurrences();
+        if (!s.storage.empty()) {
+            for (auto* b : {&lptr_, &nptr_}) b->set_storage(s.storage);
+            for (auto* b : {&lrow_, &nrow_, &occ8_}) b->set_storage(s.storage);
+            occ16_.set_storage(s.storage);
+            ord_sums_.set_storage(s.storage);
+            work_.set_storage(s.storage);
+            sortbuf_.a.set_storage(s.storage);
+            sortbuf_.b.set_storage(s.storage);
+            plainbuf_.a.set_storage(s.storage);
+            plainbuf_.b.set_storage(s.storage);
+        }
+        if (rows) {
+            prof_.mark();
+            build_occurrences();
+            prof_(9);
+        }
     }
 
     RankResult run();
@@ -296,22 +509,26 @@ class Ranker {
     double total_cost_ = 0.0, cost_mean_r_ = 0.0;
     std::vector<u32> cls_;
 
-    // the occurrences (entries with a value > 0) of the cells in the current order
-    std::vector<i64> lptr_, nptr_;
-    std::vector<u32> lent_, nent_;  // entries: layer << 16 | value
+    // the rows of the cells in the current order (byte offsets)
+    Buffer<i64> lptr_, nptr_;
+    Buffer<std::uint8_t> lrow_, nrow_;
+    bool bitmap_ = false;
+    int vb_ = 1, mask_bytes_ = 0;
     std::vector<u32> lcls_, ncls_;      // class (hierarchic mask, zero cost) of the cells in that order
     std::vector<float> lcost_, ncost_;  // cost of the cells in that order (cost in the ranking)
     int chunks_ = 0;                    // chunks of positions
     std::vector<i64> chunk_off_;  // (chunks, layers): first occurrence of the layer in the chunk
 
     // work arrays (reused: fresh allocations of this size cost page faults every iteration)
-    std::vector<std::uint16_t> occ_q_;  // the occurrences of every layer in the current order
+    // the values of the occurrences of every layer in the current order (8 or 16 bits)
+    Buffer<std::uint8_t> occ8_;
+    Buffer<std::uint16_t> occ16_;
+    unsigned occ_value(i64 o) const { return vb_ == 1 ? occ8_[o] : occ16_[o]; }
     std::vector<double> snap_;          // (chunks, layers): level of the layer at the chunk's start
-    std::vector<Sum> ord_sums_;         // sums (as compared) in the current order
-    std::vector<i64> len_;
-    std::vector<u32> to_;
-    std::vector<double> terms_;
-    SortBuffers sortbuf_;
+    Buffer<Sum> ord_sums_;              // sums (as compared) in the current order
+    Buffer<double> work_;  // terms of the ranking error, then rank moves
+    SortBuffers<Item> sortbuf_;
+    SortBuffers<PlainItem> plainbuf_;
     Profile prof_;
 
     double f_of(int l, std::uint16_t q) const { return static_cast<double>(q) * data_.layer_scale[l]; }
@@ -323,86 +540,136 @@ class Ranker {
         return {s.pos / cc, s.neg * cc};
     }
     float cost_at(i64 p) const { return cost_prio_ ? lcost_[p] : 0.0f; }
-    u32 cls_at(i64 p) const { return lcls_.empty() ? 0u : lcls_[p]; }
     i64 chunk_lo(int c) const { return N_ * c / chunks_; }
 
+    // fn(rows) with the row format of the data
+    template <class Fn>
+    void with_rows(Fn&& fn) const {
+        if (bitmap_) {
+            if (vb_ == 1)
+                fn(BitmapRows<1>{mask_bytes_});
+            else
+                fn(BitmapRows<2>{mask_bytes_});
+        } else {
+            if (vb_ == 1)
+                fn(DeltaRows<1>{});
+            else
+                fn(DeltaRows<2>{});
+        }
+    }
+    const std::uint8_t* row(i64 p) const { return lrow_.data() + lptr_[p]; }
+    const std::uint8_t* row_end(i64 p) const { return lrow_.data() + lptr_[p + 1]; }
+
     void build_occurrences();
+    template <class R>
+    void encode(const R& rows);
     void relayout(const std::vector<u32>& from);
+    template <class R>
+    void relayout_rows(const R& rows, const std::vector<u32>& from);
     void initial_sums(std::vector<Sum>& sums) const;
+    template <class R>
+    void initial_sums_rows(const R& rows, std::vector<Sum>& sums) const;
+    template <class Make>
+    void sort_by(Make&& item, std::vector<u32>& out, std::vector<u32>& from);
     void sort_cells_by(const std::vector<Sum>& sums, std::vector<u32>& out, std::vector<u32>& from);
     void sort_positions(const std::vector<u32>& order, const std::vector<Sum>* by_cell, std::vector<u32>& out,
                         std::vector<u32>& from);
     void scatter();
+    template <class R>
+    void scatter_rows(const R& rows);
     void iteration_sums(const std::vector<u32>& order, std::vector<Sum>* sums);
+    template <class R>
+    void losses_rows(const R& rows, const std::vector<u32>& order, std::vector<Sum>* sums);
+    template <Rule RULE, class Rows>
+    void losses_rule(const Rows& rows, const std::vector<u32>& order, std::vector<Sum>* sums);
+    template <class R>
+    void positions_rows(const R& rows, Buffer<u32>& occ_pos) const;
     void ranking_error(double& err, i64& n_err);
     void curves(const std::vector<u32>& order, RankResult& res);
 };
 
-// The occurrences in the cell order (the first layout).
+// The rows in the cell order (the first layout), in the smaller format.
 void Ranker::build_occurrences() {
-    const auto& ptr = data_.cell_ptr;
-    const auto& val = data_.entry_value;
-    std::vector<i64> len(static_cast<size_t>(N_));
-#pragma omp parallel for schedule(static)
-    for (i64 c = 0; c < N_; ++c) {
-        i64 k = 0;
-        for (i64 e = ptr[c]; e < ptr[c + 1]; ++e) k += val[e] != 0;
-        len[c] = k;
-    }
-    prefix_sums(len, lptr_);
-    const i64 total = lptr_[N_];
-    lent_.resize(static_cast<size_t>(total));
-#pragma omp parallel for schedule(static)
-    for (i64 c = 0; c < N_; ++c) {
-        i64 o = lptr_[c];
-        for (i64 e = ptr[c]; e < ptr[c + 1]; ++e)
-            if (val[e]) lent_[o++] = (static_cast<u32>(data_.entry_layer[e]) << 16) | val[e];
-    }
-    lcls_ = cls_;
-    if (cost_prio_) lcost_ = set_.cost;
+    vb_ = data_.value_bytes();
+    mask_bytes_ = (L_ + 7) / 8;
+    // occurrences (values > 0) per layer, and the size of the delta rows
     nnz_.assign(L_, 0);
-    for (i64 o = 0; o < total; ++o) ++nnz_[lent_[o] >> 16];
+    i64 delta = 0;
+    {
+        const int T = std::max(1, std::min(max_threads(), static_cast<int>(N_ / 16384) + 1));
+        std::vector<i64> part(static_cast<size_t>(T) * L_, 0);
+#pragma omp parallel for num_threads(T) schedule(static, 1) reduction(+ : delta)
+        for (int t = 0; t < T; ++t) {
+            i64* cnt = &part[static_cast<size_t>(t) * L_];
+            for (i64 c = N_ * t / T; c < N_ * (t + 1) / T; ++c) {
+                int prev = -1;
+                data_.each<false>(c, [&](int l, unsigned q) {
+                    if (!q) return;
+                    ++cnt[l];
+                    delta += (l - prev - 1 >= 255 ? 3 : 1) + vb_;
+                    prev = l;
+                });
+            }
+        }
+        for (int t = 0; t < T; ++t)
+            for (int l = 0; l < L_; ++l) nnz_[l] += part[static_cast<size_t>(t) * L_ + l];
+    }
     start_.assign(L_ + 1, 0);
     for (int l = 0; l < L_; ++l) start_[l + 1] = start_[l] + nnz_[l];
+    const i64 bitmap = N_ * mask_bytes_ + start_[L_] * vb_;
+    bitmap_ = set_.row_format == 2 || (set_.row_format == 0 && bitmap < delta);
+    with_rows([&](const auto& rows) { encode(rows); });
+    lcls_ = cls_;
+    if (cost_prio_) lcost_ = set_.cost;
     chunks_ = static_cast<int>(std::min<i64>(N_, std::max(1, max_threads()) * 4));
 }
 
-// Move the occurrences, classes and costs to the new order (from: the previous
-// position of each), and count the occurrences of every layer in every chunk of
+template <class R>
+void Ranker::encode(const R& rows) {
+    std::vector<i64> len(static_cast<size_t>(N_));
+#pragma omp parallel for schedule(static)
+    for (i64 c = 0; c < N_; ++c) {
+        i64 k = R::bitmap ? mask_bytes_ : 0;
+        int prev = -1;
+        data_.each<false>(c, [&](int l, unsigned q) {
+            if (!q) return;
+            if constexpr (R::bitmap)
+                k += R::vb;
+            else
+                k += R::occurrence_bytes(l - prev - 1);
+            prev = l;
+        });
+        len[c] = k;
+    }
+    prefix_sums(len, lptr_);
+    lrow_.assign(static_cast<size_t>(lptr_[N_] + kPad), 0);
+#pragma omp parallel for schedule(static)
+    for (i64 c = 0; c < N_; ++c) {
+        std::uint8_t* p = lrow_.data() + lptr_[c];
+        if constexpr (R::bitmap) {
+            std::uint8_t* v = p + mask_bytes_;
+            std::memset(p, 0, static_cast<size_t>(mask_bytes_));
+            data_.each<false>(c, [&](int l, unsigned q) {
+                if (!q) return;
+                p[l >> 3] = static_cast<std::uint8_t>(p[l >> 3] | (1u << (l & 7)));
+                *v++ = static_cast<std::uint8_t>(q & 0xff);
+                if constexpr (R::vb == 2) *v++ = static_cast<std::uint8_t>(q >> 8);
+            });
+        } else {
+            int prev = -1;
+            data_.each<false>(c, [&](int l, unsigned q) {
+                if (q) p = rows.put(p, prev, l, q);
+            });
+        }
+    }
+}
+
+// Move the rows, classes and costs to the new order (from: the previous position
+// of each), and count the occurrences of every layer in every chunk of
 // positions. The order changes little between iterations: the reads are nearly
 // in sequence.
 void Ranker::relayout(const std::vector<u32>& from) {
-    auto& len = len_;
-    len.resize(static_cast<size_t>(N_));
-#pragma omp parallel for schedule(static)
-    for (i64 p = 0; p < N_; ++p) {
-        const u32 q = from[p];
-        len[p] = lptr_[q + 1] - lptr_[q];
-    }
-    prefix_sums(len, nptr_);
-    nent_.resize(lent_.size());
-    chunk_off_.assign(static_cast<size_t>(chunks_) * L_, 0);
-#pragma omp parallel for schedule(dynamic, 1)
-    for (int c = 0; c < chunks_; ++c) {
-        for (i64 p = chunk_lo(c); p < chunk_lo(c + 1); ++p) {
-            const u32 q = from[p];
-            const i64 a = lptr_[q], k = lptr_[q + 1] - a;
-            if (k) std::memcpy(&nent_[nptr_[p]], &lent_[a], static_cast<size_t>(k) * sizeof(u32));
-        }
-        i64* cnt = &chunk_off_[static_cast<size_t>(c) * L_];
-        for (i64 o = nptr_[chunk_lo(c)]; o < nptr_[chunk_lo(c + 1)]; ++o) ++cnt[nent_[o] >> 16];
-    }
-    for (int l = 0; l < L_; ++l) {
-        i64 run = start_[l];
-        for (int c = 0; c < chunks_; ++c) {
-            i64& v = chunk_off_[static_cast<size_t>(c) * L_ + l];
-            const i64 k = v;
-            v = run;
-            run += k;
-        }
-    }
-    lptr_.swap(nptr_);
-    lent_.swap(nent_);
+    with_rows([&](const auto& rows) { relayout_rows(rows, from); });
     if (!lcls_.empty()) {
         ncls_.resize(lcls_.size());
 #pragma omp parallel for schedule(static)
@@ -417,6 +684,73 @@ void Ranker::relayout(const std::vector<u32>& from) {
     }
 }
 
+// spread[x]: byte b is bit b of x
+struct Spread {
+    u64 v[256];
+    Spread() {
+        for (int x = 0; x < 256; ++x) {
+            v[x] = 0;
+            for (int b = 0; b < 8; ++b)
+                if (x >> b & 1) v[x] |= u64{1} << (8 * b);
+        }
+    }
+};
+
+template <class R>
+void Ranker::relayout_rows(const R& rows, const std::vector<u32>& from) {
+    static const Spread spread_table;
+    const u64* spread = spread_table.v;
+    nptr_.resize(static_cast<size_t>(N_) + 1);
+#pragma omp parallel for schedule(static)
+    for (i64 p = 0; p < N_; ++p) {
+        const u32 q = from[p];
+        nptr_[p] = lptr_[q + 1] - lptr_[q];
+    }
+    prefix_sums_inplace(nptr_);
+    if (nrow_.size() != lrow_.size()) nrow_.assign(lrow_.size(), 0);
+    chunk_off_.assign(static_cast<size_t>(chunks_) * L_, 0);
+#pragma omp parallel for schedule(dynamic, 1)
+    for (int c = 0; c < chunks_; ++c) {
+        i64* cnt = &chunk_off_[static_cast<size_t>(c) * L_];
+        // bitmap rows: the counts of layers 8j .. 8j+7 in the bytes of acc[j], added
+        // to cnt every 255 rows
+        std::vector<u64> acc(R::bitmap ? static_cast<size_t>(mask_bytes_) : 0, 0);
+        int in_acc = 0;
+        auto flush = [&]() {
+            for (int j = 0; j < static_cast<int>(acc.size()); ++j) {
+                for (int b = 0; b < 8 && 8 * j + b < L_; ++b)
+                    cnt[8 * j + b] += static_cast<i64>((acc[j] >> (8 * b)) & 0xff);
+                acc[j] = 0;
+            }
+            in_acc = 0;
+        };
+        for (i64 p = chunk_lo(c); p < chunk_lo(c + 1); ++p) {
+            const u32 q = from[p];
+            const i64 a = lptr_[q], k = lptr_[q + 1] - a;
+            std::uint8_t* d = nrow_.data() + nptr_[p];
+            if (k) std::memcpy(d, lrow_.data() + a, static_cast<size_t>(k));
+            if constexpr (R::bitmap) {
+                for (int j = 0; j < mask_bytes_; ++j) acc[j] += spread[d[j]];
+                if (++in_acc == 255) flush();
+            } else {
+                rows.each(d, d + k, [cnt](int l, unsigned) { ++cnt[l]; });
+            }
+        }
+        if constexpr (R::bitmap) flush();
+    }
+    for (int l = 0; l < L_; ++l) {
+        i64 run = start_[l];
+        for (int c = 0; c < chunks_; ++c) {
+            i64& v = chunk_off_[static_cast<size_t>(c) * L_ + l];
+            const i64 k = v;
+            v = run;
+            run += k;
+        }
+    }
+    lptr_.swap(nptr_);
+    lrow_.swap(nrow_);
+}
+
 void Ranker::initial_sums(std::vector<Sum>& sums) const {
     sums.assign(static_cast<size_t>(N_), Sum{});
     if (set_.rule == Rule::LOAD) {
@@ -429,55 +763,96 @@ void Ranker::initial_sums(std::vector<Sum>& sums) const {
         for (i64 i = 0; i < N_; ++i) sums[i].pos = dist(gen);
         return;
     }
+    with_rows([&](const auto& rows) { initial_sums_rows(rows, sums); });
+}
+
+template <class R>
+void Ranker::initial_sums_rows(const R& rows, std::vector<Sum>& sums) const {
     // the first layout is the cell order
 #pragma omp parallel for schedule(static)
     for (i64 i = 0; i < N_; ++i) {
         Sum s;
-        for (i64 o = lptr_[i]; o < lptr_[i + 1]; ++o) {
-            const int l = static_cast<int>(lent_[o] >> 16);
-            const double v = f_of(l, static_cast<std::uint16_t>(lent_[o])) * wabs_[l];
+        rows.each(row(i), row_end(i), [&](int l, unsigned q) {
+            const double v = f_of(l, static_cast<std::uint16_t>(q)) * wabs_[l];
             (w_[l] >= 0 ? s.pos : s.neg) += v;
-        }
+        });
         sums[i] = s;
+    }
+}
+
+// Sort the cells of the current layout by (class, key, cell): item(p, key, cell)
+// gives the key and cell at position p.
+template <class Make>
+void Ranker::sort_by(Make&& item, std::vector<u32>& out, std::vector<u32>& from) {
+    if (lcls_.empty()) {
+        auto& a = plainbuf_.a;
+        a.resize(static_cast<size_t>(N_));
+#pragma omp parallel for schedule(static)
+        for (i64 p = 0; p < N_; ++p) {
+            u64 key;
+            u32 cell;
+            item(p, key, cell);
+            a[p] = {key, cell, static_cast<u32>(p)};
+        }
+        sort_items(plainbuf_, out, from);
+    } else {
+        auto& a = sortbuf_.a;
+        a.resize(static_cast<size_t>(N_));
+#pragma omp parallel for schedule(static)
+        for (i64 p = 0; p < N_; ++p) {
+            u64 key;
+            u32 cell;
+            item(p, key, cell);
+            a[p] = {key, lcls_[p], cell, static_cast<u32>(p)};
+        }
+        sort_items(sortbuf_, out, from);
     }
 }
 
 // Sort the cells, in the cell order (the layout then), by their sums.
 void Ranker::sort_cells_by(const std::vector<Sum>& sums, std::vector<u32>& out, std::vector<u32>& from) {
-    auto& a = sortbuf_.a;
-    a.resize(static_cast<size_t>(N_));
-#pragma omp parallel for schedule(static)
-    for (i64 i = 0; i < N_; ++i)
-        a[i] = {sort_key(modified(sums[i], cost_at(i)).value()), cls_at(i), static_cast<u32>(i), static_cast<u32>(i)};
-    sort_items(sortbuf_, out, from);
+    sort_by(
+        [&](i64 i, u64& key, u32& cell) {
+            key = sort_key(modified(sums[i], cost_at(i)).value());
+            cell = static_cast<u32>(i);
+        },
+        out, from);
 }
 
 // Sort the cells, given in the current order, by their sums: `by_cell` (sums per
 // cell), or the sums of the last iteration (ord_sums_, in the current order).
 void Ranker::sort_positions(const std::vector<u32>& order, const std::vector<Sum>* by_cell, std::vector<u32>& out,
                             std::vector<u32>& from) {
-    auto& a = sortbuf_.a;
-    a.resize(static_cast<size_t>(N_));
-#pragma omp parallel for schedule(static)
-    for (i64 p = 0; p < N_; ++p) {
-        const u32 cell = order[p];
-        const double v = by_cell ? modified((*by_cell)[cell], cost_at(p)).value() : ord_sums_[p].value();
-        a[p] = {sort_key(v), cls_at(p), cell, static_cast<u32>(p)};
-    }
-    sort_items(sortbuf_, out, from);
+    sort_by(
+        [&](i64 p, u64& key, u32& cell) {
+            cell = order[p];
+            key = sort_key(by_cell ? modified((*by_cell)[cell], cost_at(p)).value() : ord_sums_[p].value());
+        },
+        out, from);
 }
 
-// The occurrences of every layer in the current order (occ_q_).
+// The occurrences of every layer in the current order (occ8_ or occ16_).
 void Ranker::scatter() {
-    occ_q_.resize(static_cast<size_t>(start_[L_]));
+    with_rows([&](const auto& rows) { scatter_rows(rows); });
+}
+
+template <class R>
+void Ranker::scatter_rows(const R& rows) {
+    auto& occ = [this]() -> auto& {
+        if constexpr (R::vb == 1)
+            return occ8_;
+        else
+            return occ16_;
+    }();
+    using V = typename std::remove_reference_t<decltype(occ)>::value_type;
+    occ.resize(static_cast<size_t>(start_[L_]));
 #pragma omp parallel for schedule(dynamic, 1)
     for (int c = 0; c < chunks_; ++c) {
         std::vector<i64> cur(chunk_off_.begin() + static_cast<i64>(c) * L_,
                              chunk_off_.begin() + static_cast<i64>(c + 1) * L_);
-        for (i64 o = lptr_[chunk_lo(c)]; o < lptr_[chunk_lo(c + 1)]; ++o) {
-            const u32 e = lent_[o];
-            occ_q_[cur[e >> 16]++] = static_cast<std::uint16_t>(e);
-        }
+        for (i64 p = chunk_lo(c); p < chunk_lo(c + 1); ++p)
+            rows.each(row(p), row_end(p),
+                      [&](int l, unsigned q) { occ[cur[l]++] = static_cast<V>(q); });
     }
 }
 
@@ -494,14 +869,38 @@ void Ranker::iteration_sums(const std::vector<u32>& order, std::vector<Sum>* sum
         for (int c = 0; c < chunks_; ++c) {
             snap_[static_cast<size_t>(c) * L_ + l] = R;
             const i64 end = c + 1 < chunks_ ? chunk_off_[static_cast<size_t>(c + 1) * L_ + l] : start_[l + 1];
-            for (i64 o = chunk_off_[static_cast<size_t>(c) * L_ + l]; o < end; ++o)
-                R = R - static_cast<double>(occ_q_[o]) * sc;
+            const i64 o0 = chunk_off_[static_cast<size_t>(c) * L_ + l];
+            if (vb_ == 1)
+                for (i64 o = o0; o < end; ++o) R = R - static_cast<double>(occ8_[o]) * sc;
+            else
+                for (i64 o = o0; o < end; ++o) R = R - static_cast<double>(occ16_[o]) * sc;
         }
     }
     prof_(2);
+    with_rows([&](const auto& rows) { losses_rows(rows, order, sums); });
+    prof_(3);
+}
+
+// the losses of each cell along the current order (after the levels)
+template <class R>
+void Ranker::losses_rows(const R& rows, const std::vector<u32>& order, std::vector<Sum>* sums) {
+    switch (set_.rule) {
+        case Rule::ABF: losses_rule<Rule::ABF>(rows, order, sums); break;
+        case Rule::CAZ1: losses_rule<Rule::CAZ1>(rows, order, sums); break;
+        case Rule::CAZ2: losses_rule<Rule::CAZ2>(rows, order, sums); break;
+        case Rule::CAZMAX: losses_rule<Rule::CAZMAX>(rows, order, sums); break;
+        case Rule::CAZP: losses_rule<Rule::CAZP>(rows, order, sums); break;
+        case Rule::CAZPW: losses_rule<Rule::CAZPW>(rows, order, sums); break;
+        default: break;  // RAND and LOAD do not iterate
+    }
+}
+
+// the same for one rule (known when compiled)
+template <Rule RULE, class Rows>
+void Ranker::losses_rule(const Rows& rows, const std::vector<u32>& order, std::vector<Sum>* sums) {
     // walk every chunk of positions: the losses of each cell, from the levels
     // before and after it, summed in layer order
-    const Rule rule = set_.rule;
+    constexpr Rule rule = RULE;
     const bool maxrule = rule == Rule::CAZMAX;
     const double root = (rule == Rule::CAZP || rule == Rule::CAZPW) && p_ > 0 ? 1.0 / p_ : 0.0;
     const double* scale = data_.layer_scale.data();
@@ -556,18 +955,15 @@ void Ranker::iteration_sums(const std::vector<u32>& order, std::vector<Sum>* sum
             Sum s;
             if (dense_) {
                 int l = 0;
-                for (i64 o = lptr_[p]; o < lptr_[p + 1]; ++o) {
-                    const int le = static_cast<int>(lent_[o] >> 16);
+                rows.each(row(p), row_end(p), [&](int le, unsigned q) {
                     for (; l < le; ++l) add(s, l, absent_[l]);
-                    add(s, le, loss(le, static_cast<std::uint16_t>(lent_[o])));
+                    add(s, le, loss(le, static_cast<std::uint16_t>(q)));
                     l = le + 1;
-                }
+                });
                 for (; l < L_; ++l) add(s, l, absent_[l]);
             } else {
-                for (i64 o = lptr_[p]; o < lptr_[p + 1]; ++o) {
-                    const int le = static_cast<int>(lent_[o] >> 16);
-                    add(s, le, loss(le, static_cast<std::uint16_t>(lent_[o])));
-                }
+                rows.each(row(p), row_end(p),
+                          [&](int le, unsigned q) { add(s, le, loss(le, static_cast<std::uint16_t>(q))); });
             }
             if (rule == Rule::CAZ2) {
                 s.pos = std::sqrt(s.pos);
@@ -579,33 +975,54 @@ void Ranker::iteration_sums(const std::vector<u32>& order, std::vector<Sum>* sum
             ord_sums_[p] = modified(s, cost_at(p));
         }
     }
-    prof_(3);
 }
 
 // Zonation's mean ranking error of the current order: the terms in parallel,
 // their sum in sequence (adding the zeros of the pairs in order changes nothing).
 void Ranker::ranking_error(double& err, i64& n_err) {
-    terms_.resize(static_cast<size_t>(N_));
+    // the nonzero terms of each segment, in order, at its start (adding the zeros
+    // of the pairs in order would not change the sum)
+    auto& terms = work_;
+    terms.resize(static_cast<size_t>(N_));
+    const int T = std::max(1, std::min(max_threads() * 4, static_cast<int>(N_ / 16384) + 1));
+    std::vector<i64> kept(static_cast<size_t>(T), 0);
     i64 tests = 0, errors = 0;
-#pragma omp parallel for schedule(static) reduction(+ : tests, errors)
-    for (i64 i = 1; i < N_; ++i) {
-        double t = 0.0;
-        if (lcls_.empty() || lcls_[i - 1] == lcls_[i]) {
+#pragma omp parallel for schedule(static, 1) reduction(+ : tests, errors)
+    for (int t = 0; t < T; ++t) {
+        const i64 lo = std::max<i64>(1, N_ * t / T), hi = N_ * (t + 1) / T;
+        i64 k = lo;
+        for (i64 i = lo; i < hi; ++i) {
+            if (!lcls_.empty() && lcls_[i - 1] != lcls_[i]) continue;
             const Sum& s1 = ord_sums_[i - 1];
             const Sum& s2 = ord_sums_[i];
             ++tests;
             const double div = s1.pos + s1.neg;
             if (s1.value() > s2.value() && div > 0) {
                 ++errors;
-                t = (s1.value() - s2.value()) / div;
+                terms[k++] = (s1.value() - s2.value()) / div;
             }
         }
-        terms_[i] = t;
+        kept[t] = k - lo;
     }
     double e = 0.0;
-    for (i64 i = 1; i < N_; ++i) e += terms_[i];
+    for (int t = 0; t < T; ++t) {
+        const i64 lo = std::max<i64>(1, N_ * t / T);
+        for (i64 i = lo; i < lo + kept[t]; ++i) e += terms[i];
+    }
     n_err = errors;
     err = errors == 0 ? 0.0 : e / static_cast<double>(tests);
+}
+
+// the position of every occurrence of every layer (in the order of occ8_/occ16_)
+template <class R>
+void Ranker::positions_rows(const R& rows, Buffer<u32>& occ_pos) const {
+#pragma omp parallel for schedule(dynamic, 1)
+    for (int c = 0; c < chunks_; ++c) {
+        std::vector<i64> cur(chunk_off_.begin() + static_cast<i64>(c) * L_,
+                             chunk_off_.begin() + static_cast<i64>(c + 1) * L_);
+        for (i64 p = chunk_lo(c); p < chunk_lo(c + 1); ++p)
+            rows.each(row(p), row_end(p), [&](int l, unsigned) { occ_pos[cur[l]++] = static_cast<u32>(p); });
+    }
 }
 
 // Zonation's curves (FeatureOccurrenceSampler) of the order: the remaining level
@@ -631,14 +1048,17 @@ void Ranker::curves(const std::vector<u32>& order, RankResult& res) {
         res.curve_rank[s] = static_cast<float>(static_cast<double>(at[s]) / static_cast<double>(N));
     // the occurrences of each layer in the order, and their positions
     scatter();
-    std::vector<i64> occ_pos(static_cast<size_t>(start_[L_]));
-#pragma omp parallel for schedule(dynamic, 1)
-    for (int c = 0; c < chunks_; ++c) {
-        std::vector<i64> cur(chunk_off_.begin() + static_cast<i64>(c) * L_,
-                             chunk_off_.begin() + static_cast<i64>(c + 1) * L_);
-        for (i64 p = chunk_lo(c); p < chunk_lo(c + 1); ++p)
-            for (i64 o = lptr_[p]; o < lptr_[p + 1]; ++o) occ_pos[cur[lent_[o] >> 16]++] = p;
-    }
+    // the work arrays of the iterations are no longer needed
+    for (auto* b : {&sortbuf_.a, &sortbuf_.b}) b->release();
+    for (auto* b : {&plainbuf_.a, &plainbuf_.b}) b->release();
+    nrow_.release();
+    nptr_.release();
+    ord_sums_.release();
+    work_.release();
+    Buffer<u32> occ_pos;
+    occ_pos.set_storage(set_.storage);
+    occ_pos.resize(static_cast<size_t>(start_[L_]));
+    with_rows([&](const auto& rows) { positions_rows(rows, occ_pos); });
     res.curve_levels.assign(static_cast<size_t>(S) * L_, 0.0f);
     std::vector<double> area(L_, 0.0);
 #pragma omp parallel for schedule(dynamic, 1)
@@ -650,11 +1070,11 @@ void Ranker::curves(const std::vector<u32>& order, RankResult& res) {
         double a = 0.0;
         for (i64 s = 0; s < S; ++s) {
             const i64 p = at[s];
-            while (o < end && occ_pos[o] < p) {
-                const i64 q = occ_pos[o];
+            while (o < end && static_cast<i64>(occ_pos[o]) < p) {
+                const i64 q = static_cast<i64>(occ_pos[o]);
                 a += R * static_cast<double>(q + 1 - prev);
                 prev = q + 1;
-                R = R - f_of(l, occ_q_[o]);
+                R = R - f_of(l, static_cast<std::uint16_t>(occ_value(o)));
                 ++o;
             }
             const float v = static_cast<float>(R);
@@ -694,14 +1114,15 @@ RankResult Ranker::run() {
     relayout(from);
     prof_(0);
     const bool iterative = set_.rule != Rule::RAND && set_.rule != Rule::LOAD;
+    const bool smooth = iterative && set_.smoothing > 0;
+    if (smooth)
+        weighted = sums;
+    else
+        std::vector<Sum>().swap(sums);
     if (iterative) {
-        const bool smooth = set_.smoothing > 0;
-        if (smooth) weighted = sums;
         double prev = 0.0;
         const double sf = static_cast<double>(set_.smoothing);
         const double sf1 = static_cast<double>(1.0f - set_.smoothing);
-        std::vector<double> moves(static_cast<size_t>(N_));
-        to_.resize(static_cast<size_t>(N_));
         for (int it = 0; it < set_.max_iterations; ++it) {
             iteration_sums(order, smooth ? &sums : nullptr);
             double err;
@@ -718,10 +1139,10 @@ RankResult Ranker::run() {
             sort_positions(order, smooth ? &weighted : nullptr, next, from);
             prof_(6);
             // Zonation's mean rank change: |old position - new position| in the old order
+            auto& moves = work_;
 #pragma omp parallel for schedule(static)
-            for (i64 j = 0; j < N_; ++j) to_[from[j]] = static_cast<u32>(j);
-#pragma omp parallel for schedule(static)
-            for (i64 i = 0; i < N_; ++i) moves[i] = std::fabs(static_cast<double>(i - static_cast<i64>(to_[i])) * ndr);
+            for (i64 j = 0; j < N_; ++j)
+                moves[from[j]] = std::fabs(static_cast<double>(static_cast<i64>(from[j]) - j) * ndr);
             double change = 0.0;
             for (i64 i = 0; i < N_; ++i) change += moves[i];
             change /= static_cast<double>(N_);
@@ -765,9 +1186,6 @@ void Ranker::flexibility(const RankResult& rr, double max_error, bool up, bool d
     const double root = (rule == Rule::CAZP || rule == Rule::CAZPW) && p_ > 0 ? 1.0 / p_ : 0.0;
     const double* scale = data_.layer_scale.data();
     const double* init = data_.initial_levels.data();
-    const auto& ptr = data_.cell_ptr;
-    const auto& lay = data_.entry_layer;
-    const auto& val = data_.entry_value;
     const bool calc_pos = up, calc_neg = down;
     if (calc_pos) fpos.assign(static_cast<size_t>(N), 0.0f);
     if (calc_neg) fneg.assign(static_cast<size_t>(N), 0.0f);
@@ -814,14 +1232,13 @@ void Ranker::flexibility(const RankResult& rr, double max_error, bool up, bool d
                 acc += v;
         };
         int l = 0;
-        for (i64 e = ptr[cell]; e < ptr[cell + 1]; ++e) {
-            if (!val[e]) continue;
-            const int le = lay[e];
+        data_.each<false>(cell, [&](int le, unsigned q) {
+            if (!q) return;
             if (dense_)
                 for (; l < le; ++l) add(l, absent_[l]);
-            add(le, loss(le, val[e]));
+            add(le, loss(le, static_cast<std::uint16_t>(q)));
             l = le + 1;
-        }
+        });
         if (dense_)
             for (; l < L_; ++l) add(l, absent_[l]);
         if (rule == Rule::CAZ2) {
@@ -891,7 +1308,7 @@ namespace prio {
 
 void flexibility(const Data& data, const RankSettings& settings, const RankResult& ranking, double max_error,
                  bool up, bool down, std::vector<float>& pos, std::vector<float>& neg) {
-    Ranker r(data, settings);
+    Ranker r(data, settings, false);
     r.flexibility(ranking, max_error, up, down, pos, neg);
 }
 
