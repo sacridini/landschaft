@@ -903,7 +903,10 @@ Fases:
    `fx$`): curvatura (r e t / L^2, bordas NA, sem arredondar, dy, McNab / 8, Bolstad),
    `hsp` (z-score), `trasp` (pi), `hli` (hemisfério sul e radianos), círculos exatos;
    `zero.correct` do `tpi` não é oferecido);
-7. tutorial, API, benchmarks contra geodiv e spatialEco.
+7. tutorial, API, benchmarks contra geodiv e spatialEco. **Feita** (0.87.0: tutorial
+   *Surface texture*; `tools/benchmark_surface.py`: 2 a 1100x nas métricas globais, 6000x
+   nas imagens de textura do `sk`; TPI e HSP só 2x, porque o terra faz somas deslizantes em
+   C++ e aqui cada janela é somada direto para ficar exata). Plano concluído.
 
 Fora: `plot_ba_curve` e os gráficos de `scl`/`std`/`srw` (`create_plot`), `rotate`,
 `raster.moments`/`raster.deviation`/`raster.entropy`/`sobel` do spatialEco (estatística

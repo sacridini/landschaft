@@ -175,6 +175,39 @@ The same landscapes as NLMR (same seeds, identical values), one model call each
 | `nlm_mosaictess`, 500 × 500, 1000 germs | 0.25 s | 0.010 s | 0.59 |
 | `nlm_mosaicgibbs`, 500 × 500, 500 germs | 0.50 s | 0.007 s | 0.59 |
 
+### Surface metrics
+
+Against geodiv 1.1.1 and spatialEco 2.0-5 (R 4.4.2, terra 1.9-50) on geodiv's
+example rasters (371 × 371 cells: `normforest`, `orforest` for the trend,
+`orelevation` for terrain), measured with `tools/benchmark_surface.py`: the
+best of 3 runs in R (fast tasks repeated to 0.5 s), of 5 in Landschaft with the
+default threads. Where Landschaft corrects geodiv or spatialEco the work is the
+same.
+
+| Task | R | Landschaft | Since |
+|---|---|---|---|
+| Amplitude (sa, sq, ssk, sku) | 29 ms | 3.9 ms | 0.85 |
+| Best trend surface of order 0-3 | 0.15 s | 25 ms | 0.85 |
+| Slopes and developed area (sdq, sdq6, sdr) | 2.16 s | 4.8 ms | 0.85 |
+| Peaks and valleys (sds, ssc, s10z) | 1.84 s | 1.7 ms | 0.85 |
+| Bearing area parameters (sbi, sci, svi, sk, spk, svk) | 0.88 s | 11 ms | 0.85 |
+| Correlation lengths and aspect ratio (scl, stxr) | 0.13 s | 28 ms | 0.85 |
+| Texture direction and wavelength (std, srw) | 0.61 s | 28 ms | 0.85 |
+| Fractal dimension (sfd) | 6.3 ms | 2.2 ms | 0.85 |
+| Texture image, Sa in 5 × 5 windows, 100 × 100 (`focal_metrics`) | 0.17 s | 3.7 ms | 0.85 |
+| Texture image, Sk in 5 × 5 windows, 30 × 30 (`focal_metrics`) | 134 s | 22 ms | 0.85 |
+| TPI, 5 × 5 | 8.5 ms | 4.3 ms | 0.86 |
+| TRI | 0.97 s | 4.1 ms | 0.86 |
+| VRM | 80 ms | 15 ms | 0.86 |
+| Curvature (total) | 1.58 s | 4.0 ms | 0.86 |
+| Hierarchical slope position, scales 3-27 | 0.11 s | 63 ms | 0.86 |
+| Spherical standard deviation | 73 ms | 12 ms | 0.86 |
+
+The gains are largest where the R packages compute cell by cell in R (texture
+images, peaks, curvature, TRI) and smallest where terra's focal functions do
+the work in C++ with running sums (TPI, HSP); Landschaft sums each window
+directly, which keeps its results exact.
+
 ## Accuracy
 
 ### How results are compared

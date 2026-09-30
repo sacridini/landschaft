@@ -161,6 +161,7 @@ nav:
       - Change detection: tutorials/change-detection.md
       - Large data & batch: tutorials/large-data.md
       - Neutral landscapes: tutorials/neutral-landscapes.md
+      - Surface texture: tutorials/surface-texture.md
       - Biodiversity analysis: tutorials/biodiversity.md
   - API reference:
       - api/index.md

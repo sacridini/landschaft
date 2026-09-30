@@ -375,6 +375,10 @@ BENCHMARKS = [
     ("Transition + correction, 300×300", "gdistance", 2.0, 0.0049),
     ("Randomised shortest paths, 300×300", "gdistance", 5.98, 0.078),
     ("Route overlap, 10 locations, 300×300", "gdistance", 5.97, 0.157),
+    ("Peaks and valleys (sds, ssc, s10z)", "geodiv", 1.84, 0.0017),
+    ("Slopes and area (sdq, sdq6, sdr)", "geodiv", 2.16, 0.0048),
+    ("Texture image of Sk, 30×30", "geodiv", 134, 0.0219),
+    ("Curvature, 371×371", "spatialEco", 1.58, 0.004),
 ]
 
 
@@ -825,6 +829,81 @@ def cost_europe():
         ax.set_title(f"r = {r:.2f}")
     fig.tight_layout()
     save(fig, "cost_europe")
+
+
+def _surface(name: str):
+    return ls.load_raster(ls.surface.example_data(name), validate=None)
+
+
+@figure
+def surf_texture():
+    ndvi = _surface("orforest")
+    z = ls.surface.remove_plane(ndvi)
+    tex = ls.surface.window_metrics(z, ["sa", "sku"], window=9)
+    fig, axes = plt.subplots(1, 4, figsize=(13, 3.6))
+    panels = [(ndvi.values, "NDVI", "YlGn", None), (z.values, "residuals from the trend", "RdBu", "sym"),
+              (tex["sa"].values, "Sa, 9 x 9 windows", "magma", None),
+              (tex["sku"].values, "Sku, 9 x 9 windows", "viridis", None)]
+    for ax, (v, title, cmap, sym) in zip(axes, panels):
+        if sym:
+            m = np.nanpercentile(np.abs(v), 99)
+            im = ax.imshow(v, cmap=cmap, vmin=-m, vmax=m)
+        else:
+            lo, hi = np.nanpercentile(v, [1, 99])
+            im = ax.imshow(v, cmap=cmap, vmin=lo, vmax=hi)
+        ax.set_title(title)
+        ax.set_axis_off()
+        fig.colorbar(im, ax=ax, shrink=0.75)
+    fig.tight_layout()
+    save(fig, "surf_texture")
+
+
+@figure
+def surf_bearing():
+    z = ls.surface.remove_plane(_surface("orforest"))
+    curve = ls.surface.bearing_area(z)
+    fig, axes = plt.subplots(1, 2, figsize=(10, 3.8))
+    v = z.values[~np.isnan(z.values)]
+    axes[0].hist(v, bins=80, color="#15803d")
+    axes[0].set_title("height distribution")
+    axes[0].set_xlabel("NDVI residual")
+    axes[0].spines[["top", "right"]].set_visible(False)
+    ax = axes[1]
+    ax.plot(curve["bearing"] * 100, curve["height"], color="#0f172a", lw=1.5)
+    h = ls.surface.height_ba(z, [0, 0.05, 0.8, 1])
+    sk, spk, svk = (ls.surface.metrics(z, ["sk", "spk", "svk"])[k] for k in ("sk", "spk", "svk"))
+    ax.axvspan(80, 100, color="#bfdbfe", alpha=0.6, label="valley zone (Svi)")
+    ax.axhline(h[1], color="#f97316", ls="--", lw=1, label="height at 5 % (Sbi)")
+    ax.set_xlabel("bearing: share of the surface at or above (%)")
+    ax.set_ylabel("height")
+    ax.set_title(f"bearing area curve  (Sk {sk:.3f}, Spk {spk:.3f}, Svk {svk:.3f})")
+    ax.legend(frameon=False, fontsize=8)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    save(fig, "surf_bearing")
+
+
+@figure
+def surf_terrain():
+    dem = _surface("orelevation")
+    slope = ls.surface.terrain(dem, "slope")
+    tpi = ls.surface.tpi(dem, 15)
+    hli = ls.surface.hli(ls.surface.terrain(dem, "aspect"), slope, scaled=True)
+    fig, axes = plt.subplots(1, 4, figsize=(13, 3.6))
+    panels = [(dem.values, "elevation (m)", "terrain", None), (slope.values, "slope (degrees)", "YlOrBr", None),
+              (tpi.values, "TPI, 15 x 15 (m)", "RdBu_r", "sym"), (hli.values, "heat load index", "inferno", None)]
+    for ax, (v, title, cmap, sym) in zip(axes, panels):
+        if sym:
+            m = np.nanpercentile(np.abs(v), 99)
+            im = ax.imshow(v, cmap=cmap, vmin=-m, vmax=m)
+        else:
+            lo, hi = np.nanpercentile(v, [1, 99])
+            im = ax.imshow(v, cmap=cmap, vmin=lo, vmax=hi)
+        ax.set_title(title)
+        ax.set_axis_off()
+        fig.colorbar(im, ax=ax, shrink=0.75)
+    fig.tight_layout()
+    save(fig, "surf_terrain")
 
 
 def main() -> None:

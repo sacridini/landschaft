@@ -6,6 +6,16 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.87.0] - 2026-09-30
+
+### Added
+- Tutorial *Surface texture*: trend removal, whole-surface metrics, the bearing area curve,
+  texture images in moving windows, spatial structure and terrain indices, on the Oregon
+  NDVI and elevation rasters (figures `surf_texture`, `surf_bearing`, `surf_terrain`).
+- Surface-metric benchmarks against geodiv and spatialEco (`tools/benchmark_surface.py`,
+  `tools/surface_benchmark.R`): 2 to 1100 times faster for whole-raster metrics, 6000 times
+  for texture images of the bearing-area metrics; on the benchmarks page and its chart.
+
 ## [0.86.0] - 2026-09-30
 
 ### Added

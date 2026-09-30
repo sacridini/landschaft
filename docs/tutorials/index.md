@@ -88,6 +88,13 @@ and follow along.
     Simulated landscapes as null models: random, gradients, fractals,
     clusters and mosaics; habitat maps and null-model tests.
 
+-   :material-terrain:{ .lg .middle } **[Surface texture](surface-texture.md)**
+
+    ---
+
+    Continuous rasters without classes: roughness, height distribution,
+    texture images, spatial structure, and terrain indices of DEMs.
+
 -   :material-leaf:{ .lg .middle } **[Biodiversity analysis](biodiversity.md)**
 
     ---
