@@ -151,7 +151,7 @@ def landscape_mosaic(
 
     >>> import xarray as xr
     >>> import landschaft as ls
-    >>> clc = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> clc = ls.load_raster(ls.example_data("clc"))
     >>> three = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
     >>> mosaic = ls.landscape_mosaic(three, window_size=27)
     >>> ls.LM19_CLASSES[17]
@@ -209,7 +209,7 @@ def landscape_mosaic_stats(
     --------
     >>> import xarray as xr
     >>> import landschaft as ls
-    >>> clc = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> clc = ls.load_raster(ls.example_data("clc"))
     >>> three = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
     >>> table = ls.landscape_mosaic_stats(three, window_size=27)
     >>> list(table.columns)

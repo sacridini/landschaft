@@ -22,12 +22,33 @@ easiest with DataArrays, which is what `ls.load_raster` returns:
 ```python
 import landschaft as ls
 
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 print(landcover.rio.crs, landcover.rio.resolution())   # EPSG:3035, (25.0, -25.0)
 ```
 
-`validate=None` tells `load_raster` not to check the map for the habitat
-coding below (a land-cover map has classes 1 to 44, not 0/1/2).
+`load_raster` reads any raster the same way and keeps what the file says
+about itself:
+
+- **several bands** give a `(band, y, x)` array whose `band` coordinate holds
+  the band names stored in the file (e.g. one species per band:
+  `stack.sel(band="jaguar")`); `band=2` or `band=[1, 3]` read only some;
+- **NoData** of floating-point rasters becomes NaN; class maps (integers) keep
+  their codes, with the NoData value in `.rio.nodata`, so they stay small
+  (`masked=True` turns every NoData into NaN, `masked=False` keeps the stored
+  values);
+- `chunks="auto"` reads lazily with dask, for rasters larger than memory.
+
+`ls.write_raster` stores a result back so that GIS software, and
+`load_raster`, read it as it was: georeferencing, NoData (NaN of floats
+included), band names, the colours of class maps. A numpy array takes its
+georeferencing from a raster on the same grid with `like=`:
+
+```python
+import numpy as np
+
+towns = np.isin(landcover.values, [1, 2])                  # a plain numpy array
+ls.write_raster(towns, "output/towns.tif", like=landcover)  # creates the folder; bool is saved as uint8
+```
 
 ## Habitat maps
 
@@ -45,7 +66,7 @@ rasters coded
 habitat:
 
 ```python
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 
 # CORINE classes 23, 24 and 25 are the forests
 forest = ls.reclassify(landcover, foreground=[23, 24, 25])
@@ -55,9 +76,10 @@ forest = ls.reclassify(landcover, foreground=[23, 24, 25])
 ```
 
 Values that are NaN or equal to the raster's NoData become 0 (missing); other
-classes can be sent there with `missing=[...]`. By default `load_raster`
-checks habitat maps on reading and explains what is wrong (wrong data type,
-values above 2, no habitat at all...).
+classes can be sent there with `missing=[...]`. The habitat tools check
+their input and explain what is wrong (wrong data type, values above 2, no
+habitat at all...); `ls.load_raster(path, validate="mspa")` runs the same
+checks on reading.
 
 Other tools take other kinds of maps: **categorical maps** (any integer
 classes: landscape metrics), **continuous maps** (percentages for

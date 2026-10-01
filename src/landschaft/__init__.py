@@ -5,7 +5,7 @@ Typical use::
 
     import landschaft as ls
 
-    data = ls.load_raster("forest.tif")      # checks the 0/1/2 coding
+    data = ls.load_raster("forest.tif")      # any raster: georeferenced xarray.DataArray
     result = ls.mspa(data, edge_width=2)      # xarray.DataArray of MSPA classes
     ls.write_raster(result, "forest_mspa.tif")
 """

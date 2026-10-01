@@ -177,7 +177,7 @@ European map with 44 classes, at 25 m resolution:
 import numpy as np
 import landschaft as ls
 
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 landcover.shape, landcover.rio.resolution(), landcover.rio.crs
 ```
 

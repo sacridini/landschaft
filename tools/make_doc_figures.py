@@ -140,7 +140,7 @@ def landcover3():
     """The CORINE example as 1 agriculture, 2 natural, 3 developed (0: water, wetlands)."""
     import xarray as xr
 
-    clc = ls.load_raster(ls.example_data("clc"), validate=None)
+    clc = ls.load_raster(ls.example_data("clc"))
     return xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
 
 
@@ -179,7 +179,7 @@ def frag_mosaic():
 
 
 def clc_crop():
-    return ls.load_raster(ls.example_data("clc"), validate=None)[:600, :600]
+    return ls.load_raster(ls.example_data("clc"))[:600, :600]
 
 
 @figure
@@ -192,7 +192,7 @@ def lsm_patches():
 
 @figure
 def lsm_window():
-    landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:800, :800]
+    landcover = ls.load_raster(ls.example_data("clc"))[:800, :800]
     maps = ls.window_metrics(landcover, window=41, what=["lsm_l_shdi"])
     fig, ax = plt.subplots(figsize=(5.8, 4.6))
     im = ax.imshow(maps["shdi"].values, cmap="viridis", interpolation="nearest")
@@ -204,7 +204,7 @@ def lsm_window():
 
 @figure
 def lsm_zonal():
-    landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    landcover = ls.load_raster(ls.example_data("clc"))
     zones = ls.grid_zones(landcover, 5000)
     table = ls.zonal_metrics(landcover, zones, level="landscape", metric=["shdi"])
     fig, ax = plt.subplots(figsize=(5.8, 4.6))
@@ -217,7 +217,7 @@ def lsm_zonal():
 
 @figure
 def net_importance():
-    landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    landcover = ls.load_raster(ls.example_data("clc"))
     g = ls.HabitatGraph.from_raster(landcover, habitat=[23, 24, 25], area_unit="ha", distance="edge",
                                     max_distance=5000, landscape_area=landcover.size * 25 * 25 / 1e4)
     comp = g.components(distance=1000).rename("component").reset_index()
@@ -496,7 +496,7 @@ def learn_cost_distance():
     from matplotlib.colors import LogNorm
     from scipy import ndimage
 
-    landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:800, :800]
+    landcover = ls.load_raster(ls.example_data("clc"))[:800, :800]
     table = {}
     table.update({c: 50.0 for c in range(1, 12)})
     table.update({c: 10.0 for c in range(12, 23)})
@@ -732,7 +732,7 @@ _COST: dict = {}
 def cost_hiking_run():
     """The tutorial's hiking example on the Maungawhau volcano."""
     if not _COST:
-        dem = ls.load_raster(ls.cost.example_data("maungawhau"), validate=None)
+        dem = ls.load_raster(ls.cost.example_data("maungawhau"))
         slope = ls.cost.geo_correction(ls.cost.transition(dem, "diff", 8, symmetric=False))
         speed = slope.map(lambda s: 6 * np.exp(-3.5 * np.abs(s + 0.05)) / 3.6, pairs="all")
         conductance = ls.cost.geo_correction(speed)
@@ -800,7 +800,7 @@ def cost_theta():
 def cost_europe():
     import pandas as pd
 
-    europe = ls.load_raster(ls.cost.example_data("europe"), validate=None)
+    europe = ls.load_raster(ls.cost.example_data("europe"))
     pops = pd.read_csv(ls.cost.example_data("pop_coord"))
     genetic = pd.read_csv(ls.cost.example_data("gen_dist"), index_col="population")
     walk = ls.cost.geo_correction(ls.cost.transition(europe, "mean", 16), "r", scale=True)
@@ -834,7 +834,7 @@ def cost_europe():
 
 
 def _surface(name: str):
-    return ls.load_raster(ls.surface.example_data(name), validate=None)
+    return ls.load_raster(ls.surface.example_data(name))
 
 
 @figure
@@ -965,7 +965,7 @@ def prio_share(*codes):
     import xarray as xr  # noqa: F401
 
     if "clc" not in _PRIO:
-        _PRIO["clc"] = ls.load_raster(ls.example_data("clc"), validate=None)
+        _PRIO["clc"] = ls.load_raster(ls.example_data("clc"))
     clc = _PRIO["clc"]
     return clc.isin(codes).coarsen(x=5, y=5).mean().astype("float32")
 

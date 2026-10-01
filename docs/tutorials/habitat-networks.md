@@ -62,7 +62,7 @@ the total habitat (250 ha).
 and the distances between them:
 
 ```python
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 forest_net = ls.HabitatGraph.from_raster(
     landcover,
     habitat=[23, 24, 25],            # broad-leaved, coniferous and mixed forest

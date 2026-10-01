@@ -75,7 +75,7 @@ def test_planes_recover_polynomials():
 def test_plane_keeps_the_grid():
     xr = pytest.importorskip("xarray")
     path = ls.surface.example_data("orforest")
-    da = ls.load_raster(path, validate=None)
+    da = ls.load_raster(path)
     fit = ls.surface.fit_plane(da, 1)
     assert isinstance(fit, xr.DataArray)
     np.testing.assert_array_equal(fit.x.values, da.x.values)

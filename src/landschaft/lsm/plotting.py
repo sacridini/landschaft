@@ -99,7 +99,7 @@ def show_patches(landscape, classes="global", *, labels: bool = False, cmap="tab
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:400, :400]
+    >>> landcover = ls.load_raster(ls.example_data("clc"))[:400, :400]
     >>> fig = ls.show_patches(landcover)
     >>> fig = ls.show_patches(landcover, classes=[12, 23], labels=True)
     """
@@ -151,7 +151,7 @@ def show_cores(landscape, classes="all", *, edge_depth: int = 1, consider_bounda
         Examples
         --------
         >>> import landschaft as ls
-        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:400, :400]
+        >>> landcover = ls.load_raster(ls.example_data("clc"))[:400, :400]
         >>> fig = ls.show_cores(landcover, classes=[23], edge_depth=2)
     """
     plt = _plt()
@@ -206,7 +206,7 @@ def show_lsm(landscape, metric: str, classes="global", *, labels: bool = False, 
         Examples
         --------
         >>> import landschaft as ls
-        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:400, :400]
+        >>> landcover = ls.load_raster(ls.example_data("clc"))[:400, :400]
         >>> fig = ls.show_lsm(landcover, "shape")
     """
     _plt()

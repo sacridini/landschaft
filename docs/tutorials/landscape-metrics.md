@@ -37,7 +37,7 @@ how evenly spread) and **complexity** (information-theory measures).
 ```python
 import landschaft as ls
 
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)   # CORINE, 25 m
+landcover = ls.load_raster(ls.example_data("clc"))   # CORINE, 25 m
 lc = ls.Landscape(landcover)
 lc
 ```

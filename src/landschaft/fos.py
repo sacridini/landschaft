@@ -29,7 +29,7 @@ import scipy.ndimage as ndi
 import xarray as xr
 
 from . import _core
-from .io import load_raster
+from .io import _load_map
 from .validation import InvalidInputError, validate_fad_input
 
 __all__ = ["FOSResult", "fos"]
@@ -193,7 +193,7 @@ def fos(
 
         A percentage map (grayscale): pixels of at least 30% are habitat.
 
-        >>> cover = ls.load_raster(ls.example_data("gscinput"), validate=None)
+        >>> cover = ls.load_raster(ls.example_data("gscinput"))
         >>> gray = ls.fos(cover, window_size=27, gray_threshold=30)
         >>> gray.grayscale
         True
@@ -208,7 +208,7 @@ def fos(
     if window_size < 3 or window_size % 2 == 0:
         raise ValueError(f"window_size must be an odd integer >= 3, got {window_size}")
     if isinstance(data, (str, Path)):
-        data = load_raster(data, validate=None)
+        data = _load_map(data)
     template = data if isinstance(data, xr.DataArray) else None
     arr = np.ascontiguousarray(data.values if template is not None else data)
     if arr.ndim != 2 or arr.dtype != np.uint8:

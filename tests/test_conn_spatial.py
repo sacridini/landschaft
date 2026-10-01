@@ -179,7 +179,7 @@ def test_to_raster_and_geodataframe():
     g = ls.HabitatGraph.from_raster(RASTER, distance="centroid")
     imp = g.node_importance("PC", distance=8000)
     r = g.to_raster(imp, "dPC")
-    values = ls.load_raster(RASTER, validate=None).squeeze().values
+    values = ls.load_raster(RASTER).squeeze().values
     node = imp.set_index("id")["dPC"]
     inside = np.isfinite(r.values)
     np.testing.assert_array_equal(r.values[inside], node.loc[values[inside]].to_numpy())

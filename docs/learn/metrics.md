@@ -229,7 +229,7 @@ et al., 2008).
 We can see it on the example map, cut into a grid of 100 zones of 5 km:
 
 ```python
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 zones = ls.grid_zones(landcover, 5000)
 names = ["np", "pd", "te", "ed", "lsi", "lpi", "ai", "contag",
          "division", "mesh", "shdi", "sidi", "pr"]

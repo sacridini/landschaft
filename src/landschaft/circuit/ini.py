@@ -91,14 +91,14 @@ def _resolve(name: str, base: Path) -> Path:
 
 def _read(path: Path, dtype):
     """A raster as Omniscape's ``read_raster``: band 1, nodata (in the band's type) and NaN missing."""
-    import rasterio
+    from ..io import load_raster
 
     if not path.exists():
         raise FileNotFoundError(f'the file "{path}" does not exist')
-    with rasterio.open(path) as ds:
-        a = ds.read(1)
-        nodata = ds.nodata
-        profile = {"transform": ds.transform, "crs": ds.crs}
+    da = load_raster(path, band=1, masked=False)
+    a = da.values
+    nodata = da.rio.nodata
+    profile = {"transform": da.rio.transform(), "crs": da.rio.crs}
     band = a.dtype
     a = a.astype(dtype).astype(np.float64)
     if nodata is not None:
@@ -132,19 +132,11 @@ def _project_dir(name: str) -> Path:
 
 
 def _write(path: Path, values: np.ndarray, profile: dict, tif: bool, dtype) -> None:
-    import rasterio
+    from ..io import write_raster
 
     out = np.where(np.isnan(values), -9999, values).astype(dtype)
-    ny, nx = out.shape
-    if tif:
-        opts = {"driver": "GTiff", "compress": "lzw", "BIGTIFF": "YES"}
-        target = path.with_suffix(".tif")
-    else:
-        opts = {"driver": "AAIGrid"}
-        target = path.with_suffix(".asc")
-    with rasterio.open(target, "w", width=nx, height=ny, count=1, dtype=out.dtype, nodata=-9999,
-                       transform=profile["transform"], crs=profile["crs"], **opts) as ds:
-        ds.write(out, 1)
+    write_raster(out, path.with_suffix(".tif" if tif else ".asc"), nodata=-9999, transform=profile["transform"],
+                 crs=profile["crs"], colormap=None)
 
 
 def omniscape_ini(path, *, write_outputs: bool = True, n_threads: int = 0):

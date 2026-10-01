@@ -99,7 +99,7 @@ def test_file_mode_workers_and_naming(tmp_path):
         np.testing.assert_array_equal(f.read(1), ls.mspa_tiled(da.values, connectivity=4, internal=False,
                                                               tile_size=250, overlap=40))
     ls.mspa_tiled(da, tmp_path / "mem.tif", tile_size=300, overlap=60)
-    assert ls.load_raster(tmp_path / "mem.tif", validate=None).shape == da.shape
+    assert ls.load_raster(tmp_path / "mem.tif").shape == da.shape
 
 
 # --- agreement with GTB ------------------------------------------------------------

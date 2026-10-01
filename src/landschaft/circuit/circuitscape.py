@@ -105,14 +105,14 @@ def read_raster(path) -> tuple[np.ndarray, RasterMeta]:
         raise FileNotFoundError(f'the file "{p}" does not exist')
     if p.lower().removesuffix(".gz").endswith(".asc"):
         return _read_asc(p)
-    import rasterio
+    from ..io import load_raster
 
-    with rasterio.open(("/vsigzip/" + p) if p.endswith(".gz") else p) as ds:
-        band = ds.read(1)
-        nodata = ds.nodata
-        t = ds.transform
-        wkt = ds.crs.to_wkt() if ds.crs else ""
-        crs = ds.crs
+    da = load_raster(("/vsigzip/" + p) if p.endswith(".gz") else p, band=1, masked=False)
+    band = da.values
+    nodata = da.rio.nodata
+    t = da.rio.transform()
+    crs = da.rio.crs
+    wkt = crs.to_wkt() if crs else ""
     a = band.astype(np.float64)
     if nodata is not None:
         kind = np.int64 if np.issubdtype(band.dtype, np.integer) else band.dtype
@@ -1010,15 +1010,14 @@ def _resolve(name: str, base: Path) -> Path:
 def _write_grid(prefix: str, values: np.ndarray, meta: RasterMeta, tif: bool) -> None:
     out = np.where(np.isnan(values), NODATA, values)
     if tif:
-        import rasterio
         from rasterio.transform import Affine
+
+        from ..io import write_raster
 
         t = Affine(meta.transform[1], meta.transform[2], meta.transform[0], meta.transform[4], meta.transform[5],
                    meta.transform[3])
-        with rasterio.open(prefix + ".tif", "w", driver="GTiff", width=out.shape[1], height=out.shape[0], count=1,
-                           dtype="float64", nodata=NODATA, transform=t, crs=meta.crs or (meta.wkt or None),
-                           compress="lzw") as ds:
-            ds.write(out, 1)
+        write_raster(out.astype(np.float64), prefix + ".tif", nodata=NODATA, transform=t,
+                     crs=meta.crs or (meta.wkt or None), colormap=None)
         return
     with open(prefix + ".asc", "wb") as f:
         f.write(f"ncols         {meta.ncols}\nnrows         {meta.nrows}\n".encode())

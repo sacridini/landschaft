@@ -163,7 +163,7 @@ and patch 113 (52 ha), a patch of similar size with almost no role in the
 network:
 
 ```python
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 landscape_area = landcover.size * 25 * 25 / 1e4          # hectares
 
 

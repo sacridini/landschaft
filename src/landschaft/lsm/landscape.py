@@ -30,9 +30,9 @@ _INT32 = np.iinfo(np.int32)
 
 
 def _read(source, band: int | None) -> xr.DataArray:
-    from ..io import load_raster
+    from ..io import _load_map
 
-    return load_raster(source, band=band, validate=None)
+    return _load_map(source, band=band)
 
 
 def _prepare(data, res, nodata, band) -> tuple[np.ndarray, np.ndarray | None, tuple[float, float], Any]:
@@ -300,7 +300,7 @@ class Landscape:
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> lc = ls.Landscape(landcover)
     >>> lc.n_patches
     967
@@ -392,7 +392,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> lc.classes[:5].tolist()
         [1, 2, 3, 4, 5]
         """
@@ -405,7 +405,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None)).n_patches
+        >>> ls.Landscape(ls.load_raster(ls.example_data("clc"))).n_patches
         967
         """
         return self._core.n_patches()
@@ -417,7 +417,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> lc.patch_classes[:3].tolist()
         [1, 1, 2]
         """
@@ -447,7 +447,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> ids = lc.labels()
         >>> int(ids.max()) == lc.n_patches
         True
@@ -489,7 +489,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> area = lc.to_raster("area")                  # every patch painted with its area (ha)
         >>> pland = lc.to_raster("pland", level="class")
         >>> path = lc.to_raster("shape", path="shape.tif")
@@ -520,7 +520,7 @@ class Landscape:
         raster = self._wrap(out, metric)
         if path is None:
             return raster
-        from ..io import write_raster
+        from ..io import _load_map, write_raster
 
         if isinstance(raster, np.ndarray):
             xmin, _, _, ymax = self._extent
@@ -536,7 +536,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> xmin, xmax, ymin, ymax = lc.extent
         >>> xmax - xmin
         50000.0
@@ -559,7 +559,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> forests = lc.patches(classes=[23, 24])
         >>> sorted(forests)
         [23, 24]
@@ -594,7 +594,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> lc.centroids().columns.tolist()
         ['class', 'id', 'x', 'y']
         """
@@ -620,7 +620,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> nn = lc.nearest_neighbours(return_id=True)
         >>> nn.columns.tolist()
         ['class', 'id', 'dist', 'id_neighbour']
@@ -650,7 +650,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> circles = lc.circumscribing_circles()
         >>> "diameter" in circles.columns
         True
@@ -693,7 +693,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> table = lc.adjacencies(4)
         >>> table.shape == (len(lc.classes), len(lc.classes))
         True
@@ -731,7 +731,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> edges = lc.boundaries(edge_depth=2)
         >>> sorted(int(v) for v in set(edges.values[~edges.isnull().values].ravel()))
         [0, 1]
@@ -752,7 +752,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> fig = lc.show_patches()
         """
         from .plotting import show_patches
@@ -766,7 +766,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None)[:300, :300])
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"))[:300, :300])
         >>> fig = lc.show_cores(classes=[12, 23])
         """
         from .plotting import show_cores
@@ -779,7 +779,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> fig = lc.show_lsm("area")
         """
         from .plotting import show_lsm
@@ -793,7 +793,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> xmin, xmax, ymin, ymax = lc.extent
         >>> points = [[xmin + 1000, ymin + 1000], [xmax - 1000, ymax - 1000]]
         >>> table = lc.extract_metrics(points, what=["lsm_p_area"])
@@ -846,7 +846,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> table = lc.patch_metrics(["area", "shape"])
         >>> table.columns.tolist()
         ['class', 'id', 'area', 'shape']
@@ -885,7 +885,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> lc.write_patch_metrics("patches.csv", ["area", "perim"]).name
         'patches.csv'
         """
@@ -932,7 +932,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> path = lc.write_metrics("metrics.csv.gz", level=["class", "landscape"])
         """
         from .export import TableSink
@@ -989,7 +989,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> lc.class_metrics(["ca", "pland", "np"]).columns.tolist()
         ['class', 'ca', 'pland', 'np']
         >>> lc.class_metrics(["CA", "area_am"]).columns.tolist()
@@ -1019,7 +1019,7 @@ class Landscape:
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> lc.landscape_metrics(["ta", "np", "shdi"]).columns.tolist()
         ['ta', 'np', 'shdi']
         """
@@ -1049,7 +1049,7 @@ class Landscape:
             Examples
             --------
             >>> import landschaft as ls
-            >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+            >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
             >>> table = lc.metrics(level="landscape", type="diversity metric")
             >>> table.columns.tolist()
             ['level', 'class', 'id', 'metric', 'value']
@@ -1159,7 +1159,7 @@ def landscape_metrics(
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> table = ls.landscape_metrics(landcover, level="landscape", metric=["shdi", "contag"])
     >>> table[["metric", "value"]].round(2)
        metric  value

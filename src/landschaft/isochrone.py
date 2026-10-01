@@ -27,7 +27,7 @@ import scipy.ndimage as ndi
 import xarray as xr
 
 from . import _core
-from .io import load_raster
+from .io import _load_map
 
 __all__ = [
     "ISOCHRONE_CLASSES",
@@ -51,7 +51,7 @@ _LONG_MIN = -(2**31)
 
 def _load(data):
     if isinstance(data, (str, Path)):
-        data = load_raster(data, validate=None)
+        data = _load_map(data)
     template = data if isinstance(data, xr.DataArray) else None
     arr = np.asarray(data.values if template is not None else data)
     if arr.ndim != 2:

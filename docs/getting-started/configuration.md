@@ -47,12 +47,16 @@ share the same cores (all but one).
 
 ## Output files
 
-`ls.write_raster(data, "out.tif")` writes a compressed GeoTIFF with the
-georeferencing of `data` and, for class maps, their colour table
-(`colormap="auto"`); pass `colormap=None` to leave it out or a
-`{value: (r, g, b, a)}` dictionary for your own colours. Tables are pandas
-DataFrames; large metric tables can be streamed to Parquet or CSV (see the
-landscape metrics tutorial).
+`ls.write_raster(data, "out.tif")` writes a compressed, tiled GeoTIFF with
+the georeferencing, NoData and band names of `data` and, for class maps, their
+colour table (`colormap="auto"`); pass `colormap=None` to leave it out or a
+`{value: (r, g, b, a)}` dictionary for your own colours. It chooses what the
+data need: NaN as the NoData of floats (or `nodata=-9999`), `uint8` for
+`True`/`False` maps, the smallest integer type for labels, the format from the
+extension (`.tif`, `.asc`, `.img`...; `driver="COG"` for a Cloud-Optimised
+GeoTIFF). Dask arrays are written block by block, and missing folders are
+created. Tables are pandas DataFrames; large metric tables can be streamed to
+Parquet or CSV (see the landscape metrics tutorial).
 
 ## Environment variables
 

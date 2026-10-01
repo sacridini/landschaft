@@ -124,7 +124,7 @@ wetlands, water):
 ```python
 import xarray as xr
 
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 level1 = xr.where(landcover <= 11, 1,              # artificial surfaces
          xr.where(landcover <= 22, 2,              # agricultural areas
          xr.where(landcover <= 34, 3,              # forest and semi-natural areas

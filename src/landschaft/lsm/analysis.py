@@ -101,7 +101,7 @@ class SpatioTemporalAnalysis:
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> import numpy as np
     >>> later = landcover.copy()
     >>> later.values[:500, :500] = np.where(later.values[:500, :500] == 12, 1, later.values[:500, :500])
@@ -150,7 +150,7 @@ class SpatioTemporalAnalysis:
         Examples
         --------
         >>> import landschaft as ls
-        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> landcover = ls.load_raster(ls.example_data("clc"))
         >>> series = ls.SpatioTemporalAnalysis([landcover, landcover[:1000]], dates=["full", "north"])
         >>> series.metrics(what=["lsm_l_ta"])["date"].tolist()
         ['full', 'north']
@@ -187,7 +187,7 @@ class SpatioTemporalAnalysis:
         Examples
         --------
         >>> import landschaft as ls
-        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> landcover = ls.load_raster(ls.example_data("clc"))
         >>> series = ls.SpatioTemporalAnalysis([landcover, landcover[:1000]], dates=[1, 2])
         >>> series.landscape_metrics(["ta"])["ta"].tolist()
         [250000.0, 125000.0]
@@ -221,7 +221,7 @@ class SpatioTemporalAnalysis:
         Examples
         --------
         >>> import landschaft as ls
-        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> landcover = ls.load_raster(ls.example_data("clc"))
         >>> series = ls.SpatioTemporalAnalysis([landcover, landcover[:1000]], dates=[1, 2])
         >>> table = series.class_metrics(["pland"], classes=[23, 24])
         >>> table.index.names
@@ -268,7 +268,7 @@ class SpatioTemporalAnalysis:
         Examples
         --------
         >>> import landschaft as ls
-        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> landcover = ls.load_raster(ls.example_data("clc"))
         >>> series = ls.SpatioTemporalAnalysis([landcover, landcover[:1000]], dates=[2000, 2020])
         >>> fig = series.plot_metric("pland", classes=[12, 23])
         """
@@ -368,7 +368,7 @@ class SpatialSignatureAnalysis:
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> signatures = ls.SpatialSignatureAnalysis(landcover, grid=5000, landscape_metrics=["shdi", "ed", "np"],
     ...                                          class_metrics=["pland"])
     >>> signatures.table.shape

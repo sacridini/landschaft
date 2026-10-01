@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from .io import load_raster
+from .io import _load_map
 from .mosaic import RECODE_103_TO_19, landscape_mosaic
 
 __all__ = [
@@ -206,13 +206,13 @@ def landscape_mosaic_heatmap(
         --------
         >>> import xarray as xr
         >>> import landschaft as ls
-        >>> clc = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> clc = ls.load_raster(ls.example_data("clc"))
         >>> three = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
         >>> heat = ls.landscape_mosaic_heatmap(three, window_size=27)
         >>> _ = heat.to_csv("heatmap.csv")
     """
     if isinstance(data, (str, Path)):
-        data = load_raster(data, validate=None)
+        data = _load_map(data)
     if is_lm103:
         im103 = np.asarray(data.values if isinstance(data, xr.DataArray) else data)
     else:
@@ -256,7 +256,7 @@ def landscape_mosaic_change(a, b, window_size: int = 27, *, is_lm103: bool = Fal
 
     >>> import xarray as xr
     >>> import landschaft as ls
-    >>> clc = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> clc = ls.load_raster(ls.example_data("clc"))
     >>> before = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
     >>> after = before.copy()
     >>> corner = after.values[:600, :600]

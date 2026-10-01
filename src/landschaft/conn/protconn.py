@@ -630,7 +630,7 @@ def protconn_raster(protected_areas, region, *, distance, probability: float | N
     with its own id):
 
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> import geopandas as gpd
     >>> import shapely
     >>> labels = ls.Landscape(landcover.where(landcover == 23)).labels()

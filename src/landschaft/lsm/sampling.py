@@ -408,7 +408,7 @@ def sample_metrics(
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> import numpy as np
     >>> xmin, xmax, ymin, ymax = ls.Landscape(landcover).extent
     >>> points = np.array([[xmin + 5000, ymin + 5000], [xmax - 5000, ymax - 5000]])
@@ -509,7 +509,7 @@ def scale_sample(
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> import numpy as np
     >>> xmin, xmax, ymin, ymax = ls.Landscape(landcover).extent
     >>> points = np.array([[xmin + 5000, ymin + 5000], [xmax - 5000, ymax - 5000]])
@@ -663,7 +663,7 @@ def window_metrics(
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> maps = ls.window_metrics(landcover[:300, :300], window=21, what=["lsm_l_shdi", "lsm_l_ed"])
     >>> sorted(maps)
     ['ed', 'shdi']

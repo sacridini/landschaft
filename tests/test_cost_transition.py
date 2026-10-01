@@ -90,7 +90,7 @@ def test_map_pairs_all_includes_missing_cells():
 
 
 def test_dataarray_input_and_raster_output():
-    dem = ls.load_raster(ls.cost.example_data("maungawhau"), validate=None)
+    dem = ls.load_raster(ls.cost.example_data("maungawhau"))
     tr = ls.cost.transition(dem, "mean", 8)
     assert tr.shape == (87, 61) and not tr.lonlat
     out = tr.to_raster()

@@ -184,7 +184,7 @@ lie at the ends of the chain and connect nobody.
 Build the forest network of the example map, with edge-to-edge distances:
 
 ```python
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 forest_net = ls.HabitatGraph.from_raster(
     landcover, habitat=[23, 24, 25], area_unit="ha",
     distance="edge", max_distance=10_000,

@@ -16,7 +16,7 @@ the last bit. Tutorial: [routes on grids](../tutorials/grid-routes.md).
 import numpy as np
 import landschaft as ls
 
-dem = ls.load_raster(ls.cost.example_data("maungawhau"), validate=None)
+dem = ls.load_raster(ls.cost.example_data("maungawhau"))
 slope = ls.cost.geo_correction(ls.cost.transition(dem, "diff", 8, symmetric=False))
 speed = slope.map(lambda s: 6 * np.exp(-3.5 * np.abs(s + 0.05)), pairs="all")  # Tobler, m/s
 conductance = ls.cost.geo_correction(speed)                                    # 1 / seconds per step

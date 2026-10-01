@@ -33,7 +33,7 @@ def example_data(name: str = "normforest") -> Path:
     Examples
     --------
     >>> import landschaft as ls
-    >>> ndvi = ls.load_raster(ls.surface.example_data("orforest"), validate=None)
+    >>> ndvi = ls.load_raster(ls.surface.example_data("orforest"))
     >>> ndvi.shape, round(float(ndvi.mean()), 3)
     ((371, 371), 0.682)
     """

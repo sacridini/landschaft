@@ -24,7 +24,7 @@ def _graphs(kind: str) -> list:
         poly = gpd.read_file(REF / "polygons.gpkg")
         return [ls.HabitatGraph.from_vector(poly[poly["id"].isin(ids)].reset_index(drop=True), id="id",
                                             area_unit="km2") for ids in keep]
-    r = ls.load_raster(REF / "habitat_nodes_raster.tif", validate=None).squeeze()
+    r = ls.load_raster(REF / "habitat_nodes_raster.tif").squeeze()
     return [ls.HabitatGraph.from_raster(r.where(r.isin(ids)).rio.write_nodata(np.nan), area_unit="ha")
             for ids in keep]
 

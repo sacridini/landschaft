@@ -115,7 +115,7 @@ distance to the nearest forest in both ways:
 from scipy import ndimage
 import landschaft as ls
 
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:800, :800]   # 20 x 20 km
+landcover = ls.load_raster(ls.example_data("clc"))[:800, :800]   # 20 x 20 km
 
 table = {}
 table.update({c: 50.0 for c in range(1, 12)})     # artificial surfaces

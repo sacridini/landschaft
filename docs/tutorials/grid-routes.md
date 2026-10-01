@@ -58,7 +58,7 @@ cells). Tobler's hiking function gives the walking speed from the slope:
 about 6 km/h on a gentle descent, slower uphill and on steep descents.
 
 ```python
-dem = ls.load_raster(ls.cost.example_data("maungawhau"), validate=None)
+dem = ls.load_raster(ls.cost.example_data("maungawhau"))
 rise = ls.cost.transition(dem, "diff", 8, symmetric=False)    # elevation to - elevation from
 slope = ls.cost.geo_correction(rise)                          # rise / distance
 speed = slope.map(lambda s: 6 * np.exp(-3.5 * np.abs(s + 0.05)) / 3.6, pairs="all")   # m/s
@@ -158,7 +158,7 @@ locations, and a map of Europe (land = 1, 1/3 degree cells).
 ```python
 import pandas as pd
 
-europe = ls.load_raster(ls.cost.example_data("europe"), validate=None)
+europe = ls.load_raster(ls.cost.example_data("europe"))
 pops = pd.read_csv(ls.cost.example_data("pop_coord"))
 genetic = pd.read_csv(ls.cost.example_data("gen_dist"), index_col="population")
 walk = ls.cost.geo_correction(ls.cost.transition(europe, "mean", 16), "r", scale=True)

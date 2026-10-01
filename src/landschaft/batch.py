@@ -30,7 +30,7 @@ import xarray as xr
 
 from ._threads import default_threads
 from .collection import RasterCollection, RasterInfo, expand_sources
-from .io import PathLike, load_raster, write_raster
+from .io import PathLike, _load_map, write_raster
 from .mspa import mspa
 
 __all__ = ["BATCH_TOOLS", "BatchResult", "batch", "mspa_batch"]
@@ -227,7 +227,7 @@ def mspa_batch(
         try:
             if dst.exists() and not overwrite:
                 return BatchResult(src, dst, 0.0)
-            data = load_raster(src, band=band)
+            data = _load_map(src, band=band)
             result = mspa(
                 data,
                 connectivity=connectivity,
@@ -529,7 +529,7 @@ def batch(
             if name == "landscape_metrics" and call_params.get("block_rows") is not None:
                 data = src  # read by blocks, not into memory
             else:
-                data = load_raster(src, band=band, validate=None)
+                data = _load_map(src, band=band)
             if name == "landscape_metrics":
                 # written metric by metric, never as one table in memory
                 outputs, values = [_stream_landscape_metrics(data, call_params, base, table_format)], {}

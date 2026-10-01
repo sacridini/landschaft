@@ -376,23 +376,10 @@ class ZonationResult:
             lines.append(f'{r.number} {_tables._g(r.dsum)} {r.count} {r.missing} {_tables._g(r.quant_error)} '
                          f'"{r.name}"')
         (d / "features_info.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
-        rank = self.rank
-        try:
-            from rasterio.errors import NotGeoreferencedWarning
+        from ..io import write_raster
 
-            warnings.simplefilter("ignore", NotGeoreferencedWarning)
-            out = rank.fillna(-np.inf) if hasattr(rank, "fillna") else np.where(np.isnan(rank), -np.inf, rank)
-            if hasattr(out, "rio"):
-                out = out.rio.write_nodata(-np.inf, encoded=False)
-                out.rio.to_raster(d / "rankmap.tif")
-            else:
-                import rasterio
-
-                with rasterio.open(d / "rankmap.tif", "w", driver="GTiff", height=out.shape[0], width=out.shape[1],
-                                   count=1, dtype="float32", nodata=-np.inf) as dst:
-                    dst.write(np.asarray(out, dtype=np.float32), 1)
-        except Exception as e:  # pragma: no cover
-            warnings.warn(f"could not write rankmap.tif: {e}")
+        # Zonation's NoData: -inf
+        write_raster(self.rank, d / "rankmap.tif", nodata=-np.inf, dtype="float32", colormap=None)
         return d
 
 

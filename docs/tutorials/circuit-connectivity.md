@@ -27,7 +27,7 @@ import numpy as np
 import landschaft as ls
 from landschaft import circuit
 
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:600, :600]   # 15 x 15 km
+landcover = ls.load_raster(ls.example_data("clc"))[:600, :600]   # 15 x 15 km
 
 table = {}
 table.update({c: 100.0 for c in range(1, 12)})    # urban, industry, roads: hard to cross

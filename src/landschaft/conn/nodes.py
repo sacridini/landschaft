@@ -174,7 +174,7 @@ def node_table(nodes, *, attribute=None, weighted: bool = False, area_unit: str 
     Forest patches (classes 23-25) of the example map, areas in hectares:
 
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> nodes = ls.conn.node_table(landcover, habitat=[23, 24, 25], area_unit="ha")
     >>> len(nodes)
     158
@@ -236,9 +236,9 @@ def read_resistance(resistance, *, band=None, nodata=None, positive: bool = True
     if isinstance(resistance, Resistance):
         return resistance
     if isinstance(resistance, (str, bytes)) or hasattr(resistance, "__fspath__"):
-        from ..io import load_raster
+        from ..io import _load_map
 
-        resistance = load_raster(resistance, band=band, validate=None)
+        resistance = _load_map(resistance, band=band)
     if isinstance(resistance, xr.DataArray):
         da = resistance.squeeze(drop=True) if "band" in resistance.dims else resistance
         if nodata is None:
@@ -331,7 +331,7 @@ def distance_table(nodes, *, distance: str = "centroid", id: str | None = None, 
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> pairs = ls.conn.distance_table(landcover, habitat=[23, 24, 25], distance="edge",
     ...                                max_distance=1000)
     >>> len(pairs)

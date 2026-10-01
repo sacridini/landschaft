@@ -211,7 +211,7 @@ These are easy to compute by hand from the patch areas, which is a good way
 to check that you understand them:
 
 ```python
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 forest_lc = ls.Landscape(ls.reclassify(landcover, foreground=[23, 24, 25]))
 
 patches = forest_lc.patch_metrics(["area"])

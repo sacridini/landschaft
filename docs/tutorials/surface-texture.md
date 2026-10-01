@@ -34,7 +34,7 @@ Surface metrics describe variation around a reference plane, so a broad trend
 ```python
 import landschaft as ls
 
-ndvi = ls.load_raster(ls.surface.example_data("orforest"), validate=None)
+ndvi = ls.load_raster(ls.surface.example_data("orforest"))
 z = ls.surface.remove_plane(ndvi)
 print(z.attrs["order"], round(float(z.mean()), 12))
 ```
@@ -173,7 +173,7 @@ direction.
 A DEM is a surface too, with indices of its own:
 
 ```python
-dem = ls.load_raster(ls.surface.example_data("orelevation"), validate=None)
+dem = ls.load_raster(ls.surface.example_data("orelevation"))
 slope = ls.surface.terrain(dem, "slope")               # degrees, Horn's method
 aspect = ls.surface.terrain(dem, "aspect")
 tpi = ls.surface.tpi(dem, 15)                          # elevation minus the 15 x 15 mean

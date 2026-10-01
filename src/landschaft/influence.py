@@ -20,7 +20,7 @@ import pandas as pd
 import xarray as xr
 
 from . import _core
-from .io import load_raster
+from .io import _load_map
 from .validation import InvalidInputError, validate_mspa_input
 
 __all__ = [
@@ -52,7 +52,7 @@ def _prepare(data, min_area: int, core_buffer: int) -> tuple[np.ndarray, xr.Data
     name = ""
     if isinstance(data, (str, Path)):
         name = str(data)
-        data = load_raster(data, validate=None)
+        data = _load_map(data)
     template = data if isinstance(data, xr.DataArray) else None
     try:
         validate_mspa_input(data)

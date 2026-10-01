@@ -115,8 +115,8 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 
 | Name | Summary |
 |---|---|
-| [`ls.load_raster`](data.md#landschaft.load_raster) | Read one raster, or collect many, checking them for MSPA |
-| [`ls.write_raster`](data.md#landschaft.write_raster) | Write a 2-D raster to a GeoTIFF |
+| [`ls.load_raster`](data.md#landschaft.load_raster) | Read one raster, or collect many |
+| [`ls.write_raster`](data.md#landschaft.write_raster) | Write a raster: one band or several, any format GDAL writes |
 | [`ls.reclassify`](data.md#landschaft.reclassify) | Build a habitat map (0 = missing, 1 = background, 2 = habitat) from any raster |
 | [`ls.example_data`](data.md#landschaft.example_data) | Path of an example raster shipped with the package |
 | [`ls.RasterCollection`](data.md#landschaft.RasterCollection) | Many rasters handled as one object; pixels are read only when processed |

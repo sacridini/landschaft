@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import rasterio
-import rioxarray
+import rioxarray  # noqa: F401  (registers the .rio accessor)
 import xarray as xr
 
 from .validation import InvalidInputError
@@ -147,12 +147,14 @@ class RasterCollection(Sequence):
         infos: Iterable[RasterInfo],
         *,
         band: int | None = None,
-        validate: str | None = "mspa",
+        validate: str | None = None,
+        masked: bool | str = "auto",
         skipped: dict[Path, str] | None = None,
     ):
         self._infos = list(infos)
         self.band = band
         self.validate = validate
+        self.masked = masked
         #: Files left out by ``errors="skip"`` with the reason.
         self.skipped: dict[Path, str] = dict(skipped or {})
 
@@ -162,9 +164,10 @@ class RasterCollection(Sequence):
         source,
         *,
         band: int | None = None,
-        validate: str | None = "mspa",
+        validate: str | None = None,
         errors: str = "raise",
         recursive: bool = False,
+        masked: bool | str = "auto",
     ) -> RasterCollection:
         """Collect rasters and check their headers (band count, data type)."""
         if errors not in ("raise", "skip"):
@@ -197,7 +200,7 @@ class RasterCollection(Sequence):
             warnings.warn(f"skipping {len(bad)} of {len(paths)} rasters; see .skipped", stacklevel=3)
         if not good:
             raise InvalidInputError(f"none of the {len(paths)} rasters can be used")
-        return cls(good, band=band, validate=validate, skipped=bad)
+        return cls(good, band=band, validate=validate, masked=masked, skipped=bad)
 
     # --- sequence protocol ---------------------------------------------------
     def __len__(self) -> int:
@@ -205,7 +208,7 @@ class RasterCollection(Sequence):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            return RasterCollection(self._infos[index], band=self.band, validate=self.validate)
+            return RasterCollection(self._infos[index], band=self.band, validate=self.validate, masked=self.masked)
         return self._infos[index]
 
     def __repr__(self) -> str:
@@ -248,7 +251,7 @@ class RasterCollection(Sequence):
         """
         from .io import load_raster
 
-        return load_raster(self._infos[index].path, band=self.band, validate=self.validate)
+        return load_raster(self._infos[index].path, band=self.band, validate=self.validate, masked=self.masked)
 
     def to_stack(self) -> xr.DataArray:
         """Lazy ``(file, y, x)`` DataArray, one dask chunk per raster.
@@ -274,14 +277,15 @@ class RasterCollection(Sequence):
         names = [p.stem for p in self.paths]
         if len(set(names)) != len(names):
             names = [str(p) for p in self.paths]
+        from .io import load_raster
+
         layers = []
         for info in self._infos:
-            da = rioxarray.open_rasterio(info.path, chunks={"band": 1, "y": -1, "x": -1}, masked=False)
-            layers.append(da.sel(band=self.band or 1, drop=True))
+            layers.append(load_raster(info.path, band=self.band or 1, masked=self.masked, chunks={"y": -1, "x": -1}))
         stack = xr.concat(
             layers, dim=pd.Index(names, name="file"), coords="minimal", compat="override", join="override"
         )
         stack.name = "stack"
-        stack.attrs = {k: v for k, v in layers[0].attrs.items() if k not in ("_FillValue", "scale_factor", "add_offset")}
+        stack.attrs = {k: v for k, v in layers[0].attrs.items() if k not in ("_FillValue", "scale_factor", "add_offset", "source")}
         stack = stack.assign_coords(path=("file", np.array([str(p) for p in self.paths])))
         return stack

@@ -6,6 +6,30 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.96.0] - 2026-10-01
+
+### Changed
+- `ls.load_raster` reads any raster without extra arguments: no habitat checks by default
+  (`validate="mspa"` runs them; the habitat tools check their input anyway); every band of a
+  multi-band file as a `(band, y, x)` array whose `band` coordinate holds the band descriptions
+  (`band=N` one band, `band=[...]` several); NoData of floating-point rasters as NaN while integer
+  class maps keep their codes (`masked=True` / `masked=False` to always / never mask). Collections
+  mask the same way.
+- `ls.write_raster` writes what the data say about themselves: several bands with their names,
+  NaN as the NoData of floats (or `nodata=`, which replaces the NaN), integers with their
+  `.rio.nodata`, `bool` as `uint8`, 64-bit integers as the smallest type that holds them, `dtype=`
+  to cast; `like=` georeferences a numpy array from a raster on the same grid; the format follows
+  the extension (`.tif`, `.asc`, `.img`, `.nc`...; `driver="COG"`); compression with the predictor
+  that suits the type; dask arrays written block by block; missing folders created.
+- Every tool reads and writes rasters through these two functions: Zonation's rank and
+  post-processing maps, Circuitscape's and Omniscape's grids, the grid-distance inputs.
+
+### Fixed
+- Reading inputs from files no longer checks them as MSPA habitat maps where they are not:
+  `fos_change` (FOS maps), `parcellation` and `gray_spatial_convolution` (class and grey-scale
+  maps), the resistance of `cost_distance`, `least_cost_path` and `restoration_corridor` and the
+  source mask of `cost_distance` were rejected when given as paths.
+
 ## [0.95.0] - 2026-09-30
 
 ### Added

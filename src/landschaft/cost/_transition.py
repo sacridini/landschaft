@@ -132,9 +132,9 @@ def read_grid_values(x, *, extent=None, crs=None, band=None, nodata=None, layers
 
 
 def _open(path):
-    import rioxarray
+    from ..io import load_raster
 
-    return rioxarray.open_rasterio(path, masked=False)
+    return load_raster(path, masked=False)
 
 
 def _layout_offsets(directions: int, symmetric: bool) -> list[tuple[int, int]]:

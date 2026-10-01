@@ -30,7 +30,7 @@ import pandas as pd
 import xarray as xr
 
 from . import _core
-from .io import load_raster
+from .io import _load_map
 
 __all__ = [
     "simple_change",
@@ -286,9 +286,9 @@ def _prepare_inputs(
     xr_template = None
 
     if isinstance(t1, (str, Path)):
-        t1 = load_raster(t1)
+        t1 = _load_map(t1)
     if isinstance(t2, (str, Path)):
-        t2 = load_raster(t2)
+        t2 = _load_map(t2)
 
     if isinstance(t1, xr.DataArray):
         is_xr = True

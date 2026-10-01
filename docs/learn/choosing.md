@@ -114,7 +114,7 @@ import numpy as np
 import pandas as pd
 import landschaft as ls
 
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 forest = ls.reclassify(landcover, foreground=[23, 24, 25])
 
 structure = ls.Landscape(forest).class_metrics(["pland", "np", "area_mn", "lpi", "ed", "enn_mn"])

@@ -28,7 +28,7 @@ import pandas as pd
 import xarray as xr
 
 from . import _core
-from .io import load_raster
+from .io import _load_map
 
 __all__ = [
     "parcellation",
@@ -132,7 +132,7 @@ def parcellation(
     xr_template = data if is_xr else None
 
     if isinstance(data, (str, Path)):
-        data = load_raster(data)
+        data = _load_map(data)
         is_xr = True
         xr_template = data
 
@@ -221,7 +221,7 @@ def contortion(
     xr_template = data if is_xr else None
 
     if isinstance(data, (str, Path)):
-        data = load_raster(data)
+        data = _load_map(data, validate="mspa")
         is_xr = True
         xr_template = data
 

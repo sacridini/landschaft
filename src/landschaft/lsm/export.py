@@ -192,7 +192,7 @@ def zonal_metrics(
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> zones = ls.grid_zones(landcover, 10000)          # 10 km squares
     >>> table = ls.zonal_metrics(landcover, zones, level="landscape", metric=["shdi"])
     >>> len(table)

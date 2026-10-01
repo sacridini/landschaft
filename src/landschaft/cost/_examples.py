@@ -37,7 +37,7 @@ def example_data(name: str = "maungawhau") -> Path:
     Examples
     --------
     >>> import landschaft as ls
-    >>> dem = ls.load_raster(ls.cost.example_data("maungawhau"), validate=None)
+    >>> dem = ls.load_raster(ls.cost.example_data("maungawhau"))
     >>> dem.shape, int(dem.max())
     ((87, 61), 195)
     """

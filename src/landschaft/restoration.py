@@ -31,7 +31,7 @@ import pandas as pd
 import xarray as xr
 
 from . import _core
-from .io import load_raster
+from .io import _load_map
 
 __all__ = [
     "restoration_status",
@@ -192,7 +192,7 @@ def restoration_status(
     (2850, 51.6, 48.4)
     """
     if isinstance(data, (str, Path)):
-        data = load_raster(data)
+        data = _load_map(data, validate="mspa")
 
     arr = np.asarray(data)
     if arr.ndim != 2:
@@ -257,12 +257,12 @@ def cost_distance(
     xr_template = resistance if is_xr else None
 
     if isinstance(resistance, (str, Path)):
-        resistance = load_raster(resistance)
+        resistance = _load_map(resistance)
         is_xr = True
         xr_template = resistance
 
     if isinstance(source_mask, (str, Path)):
-        source_mask = load_raster(source_mask)
+        source_mask = _load_map(source_mask)
 
     res_arr = np.ascontiguousarray(np.asarray(resistance), dtype=np.uint8)
     src_arr = np.ascontiguousarray((np.asarray(source_mask) > 0).astype(np.uint8))
@@ -352,7 +352,7 @@ def least_cost_path(
     xr_template = resistance if is_xr else None
 
     if isinstance(resistance, (str, Path)):
-        resistance = load_raster(resistance)
+        resistance = _load_map(resistance)
         is_xr = True
         xr_template = resistance
 

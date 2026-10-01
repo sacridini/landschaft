@@ -189,7 +189,7 @@ def test_pad_unpad_arrays():
     assert (ls.pad_raster(data, -1, 1, global_=True)[2, 2]) == -1
     np.testing.assert_array_equal(ls.unpad_raster(p, 1), np.ma.filled(data.astype(float), np.nan))
     # non-square cells (landscapemetrics fails there): each axis grows by its cell size
-    da = ls.load_raster(tif("synthetic_na"), validate=None)
+    da = ls.load_raster(tif("synthetic_na"))
     pd_ = ls.pad_raster(da, 0, 2)
     t0, t1 = da.rio.transform(), pd_.rio.transform()
     assert (t1.c, t1.f) == (t0.c - 2 * t0.a, t0.f - 2 * t0.e)

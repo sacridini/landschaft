@@ -45,7 +45,7 @@ def main() -> None:
     maps = {
         "input.tif 1000x1000": ls.load_raster(ls.example_data("input")).values,
         "CORINE 2000x2000": ls.reclassify(
-            ls.load_raster(ls.example_data("clc"), validate=None).values, foreground=[23, 24, 25]
+            ls.load_raster(ls.example_data("clc")).values, foreground=[23, 24, 25]
         ),
     }
     print(f"threads: {ls.default_threads()} by default, {ls.max_threads()} available")

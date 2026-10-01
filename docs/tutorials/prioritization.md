@@ -31,7 +31,7 @@ import xarray as xr
 import landschaft as ls
 
 P = ls.prioritize
-clc = ls.load_raster(ls.example_data("clc"), validate=None)
+clc = ls.load_raster(ls.example_data("clc"))
 
 def share(*codes):
     """The fraction of every 125 m cell (5 x 5 CORINE cells) in the classes."""

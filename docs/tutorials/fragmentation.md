@@ -112,7 +112,7 @@ patch statistics of the whole map: `fos.n_patches`, `fos.average_patch_size`,
 percent count as habitat; the density is the mean percentage in the window:
 
 ```python
-cover = ls.load_raster(ls.example_data("gscinput"), validate=None)   # 0-100, 255 missing
+cover = ls.load_raster(ls.example_data("gscinput"))   # 0-100, 255 missing
 gray = ls.fos(cover, window_size=27, gray_threshold=30)
 gray.grayscale, gray.stats
 ```
@@ -132,7 +132,7 @@ artificial surfaces, 12–22 agriculture, 23–34 forest and semi-natural areas,
 ```python
 import xarray as xr
 
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 three = xr.where(landcover <= 11, 3,
          xr.where(landcover <= 22, 1,
          xr.where(landcover <= 34, 2, 0))).astype("uint8")

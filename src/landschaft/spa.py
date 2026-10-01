@@ -23,7 +23,7 @@ import pandas as pd
 import xarray as xr
 
 from . import _core
-from .io import load_raster
+from .io import _load_map
 from .validation import validate_mspa_input
 
 __all__ = ["SPA_CLASSES", "SPAResult", "spa"]
@@ -149,7 +149,7 @@ def spa(data, variant: int = 5, *, n_threads: int = 0) -> SPAResult:
     if variant not in (2, 3, 5, 6):
         raise ValueError(f"variant must be 2, 3, 5 or 6, got {variant}")
     if isinstance(data, (str, Path)):
-        data = load_raster(data, validate=None)
+        data = _load_map(data)
     validate_mspa_input(data)
     template = data if isinstance(data, xr.DataArray) else None
     arr = np.ascontiguousarray(data.values if template is not None else data, dtype=np.uint8)

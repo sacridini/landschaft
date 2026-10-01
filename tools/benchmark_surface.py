@@ -33,9 +33,9 @@ DATA = ROOT / "src" / "landschaft" / "surface" / "data"
 
 def tasks() -> dict:
     s = ls.surface
-    nf = ls.load_raster(DATA / "normforest.tif", validate=None)
-    ndvi = ls.load_raster(DATA / "orforest.tif", validate=None)
-    dem = ls.load_raster(DATA / "orelevation.tif", validate=None)
+    nf = ls.load_raster(DATA / "normforest.tif")
+    ndvi = ls.load_raster(DATA / "orforest.tif")
+    dem = ls.load_raster(DATA / "orelevation.tif")
     small, tiny = nf[100:200, 100:200], nf[100:130, 100:130]
     return {
         "amplitude (sa, sq, ssk, sku)": lambda: s.metrics(nf, ["sa", "sq", "ssk", "sku"]),

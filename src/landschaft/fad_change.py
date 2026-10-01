@@ -19,7 +19,7 @@ import pandas as pd
 
 from . import _core
 from .fad import FADMultiscaleResult, fad_multiscale
-from .io import load_raster
+from .io import _load_map
 
 __all__ = ["FADChangeScale", "FADMultiscaleChangeResult", "fad_multiscale_change"]
 
@@ -128,16 +128,16 @@ def _fad_ms_maps(source, window_sizes: list[int], n_threads: int) -> dict[int | 
         # GTB FAD-MS output: <name>_fad_mscale.tif next to <name>_fad_<window>.tif
         prefix = str(source)[: -len("mscale.tif")]
         maps: dict[int | str, np.ndarray] = {
-            w: load_raster(f"{prefix}{w}.tif", validate=None).values for w in window_sizes
+            w: _load_map(f"{prefix}{w}.tif").values for w in window_sizes
         }
-        maps["mscale"] = load_raster(source, validate=None).values
+        maps["mscale"] = _load_map(source).values
         return maps
     if isinstance(source, FADMultiscaleResult):
         if [int(w) for w in source.window_sizes] != window_sizes:
             raise ValueError(f"FAD-MS result has window sizes {source.window_sizes}, expected {window_sizes}")
     else:
         if isinstance(source, (str, Path)):
-            source = load_raster(source, validate=None)
+            source = _load_map(source)
         source = fad_multiscale(source, window_sizes, threads=n_threads)
     maps = {int(w): np.asarray(source.single_scales[w]) for w in source.window_sizes}
     maps["mscale"] = np.asarray(source.multiscale_map)

@@ -180,7 +180,7 @@ def raster_boundaries(
         Examples
         --------
         >>> import landschaft as ls
-        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc"), validate=None))
+        >>> lc = ls.Landscape(ls.load_raster(ls.example_data("clc")))
         >>> edges = ls.raster_boundaries(lc.labels(), edge_depth=1)
     """
     from .landscape import _prepare
@@ -289,7 +289,7 @@ def extract_metrics(
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> import numpy as np
     >>> xmin, xmax, ymin, ymax = ls.Landscape(landcover).extent
     >>> points = np.array([[xmin + 5000, ymin + 5000], [xmax - 5000, ymax - 5000]])
@@ -527,7 +527,7 @@ def calculate_correlation(metrics: pd.DataFrame, method: str = "pearson", diag: 
     Examples
     --------
     >>> import landschaft as ls
-    >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
     >>> table = ls.landscape_metrics(landcover, what=["lsm_p_area", "lsm_p_perim", "lsm_p_shape"])
     >>> corr = ls.calculate_correlation(table, method="spearman")
     >>> sorted(corr)

@@ -262,7 +262,7 @@ class HabitatGraph:
             Examples
             --------
             >>> import landschaft as ls
-            >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+            >>> landcover = ls.load_raster(ls.example_data("clc"))
             >>> graph = ls.HabitatGraph.from_raster(landcover, habitat=[23, 24, 25], area_unit="ha",
             ...                                     distance="edge", max_distance=5000,
             ...                                     landscape_area=landcover.size * 25 * 25 / 1e4)
@@ -424,7 +424,7 @@ class HabitatGraph:
         Examples
         --------
         >>> import landschaft as ls
-        >>> landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+        >>> landcover = ls.load_raster(ls.example_data("clc"))
         >>> graph = ls.HabitatGraph.from_raster(landcover, habitat=[23, 24, 25], area_unit="ha",
         ...                                     distance="edge", max_distance=5000,
         ...                                     landscape_area=landcover.size * 25 * 25 / 1e4)

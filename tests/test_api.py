@@ -78,7 +78,7 @@ def test_mspa_batch_processes_files_in_parallel(tmp_path):
     results = ls.mspa_batch(inputs, tmp_path / "out", edge_width=2, n_workers=3)
     assert [r.input for r in results] == inputs
     assert all(r.ok for r in results[:5]) and not results[5].ok
-    assert "larger than 2" in results[5].error
+    assert "must be 0 (missing), 1 (background) or 2" in results[5].error
     assert results[0].output.name == "tile_0_8_2_1_1.tif"  # GTB naming
     with rasterio.open(results[2].output) as src:
         np.testing.assert_array_equal(src.read(1), ls.mspa(scenes.blobs(2, shape=(60, 70)), edge_width=2))

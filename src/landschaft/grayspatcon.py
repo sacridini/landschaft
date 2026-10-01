@@ -33,7 +33,7 @@ import numpy as np
 import xarray as xr
 
 from . import _core
-from .io import load_raster
+from .io import _load_map
 
 __all__ = [
     "gray_spatial_convolution",
@@ -100,7 +100,7 @@ def gray_spatial_convolution(
     Examples
     --------
     >>> import landschaft as ls
-    >>> cover = ls.load_raster(ls.example_data("gscinput"), validate=None)   # 0-100 %, 255 missing
+    >>> cover = ls.load_raster(ls.example_data("gscinput"))   # 0-100 %, 255 missing
     >>> mean = ls.gray_spatial_convolution(cover, metric="mean", window_size=7)
     >>> spread = ls.gray_spatial_convolution(cover, metric="stddev", window_size=9)
     >>> str(mean.dtype)
@@ -119,7 +119,7 @@ def gray_spatial_convolution(
     xr_template = None
 
     if isinstance(data, (str, Path)):
-        data = load_raster(data)
+        data = _load_map(data)
         is_xr = True
         xr_template = data
     elif isinstance(data, xr.DataArray):

@@ -271,23 +271,9 @@ def _fmt(x) -> str:
 
 
 def _write_tif(path: Path, arr, dtype, nodata=None) -> None:
-    import warnings
+    from ..io import write_raster
 
-    from rasterio.errors import NotGeoreferencedWarning
-
-    a = np.asarray(arr)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", NotGeoreferencedWarning)
-        da = arr if hasattr(arr, "rio") else None
-        if da is not None:
-            out = da.astype(dtype)
-            out.rio.to_raster(path)
-        else:
-            import rasterio
-
-            with rasterio.open(path, "w", driver="GTiff", height=a.shape[0], width=a.shape[1], count=1,
-                               dtype=dtype) as dst:
-                dst.write(a.astype(dtype), 1)
+    write_raster(arr, path, dtype=dtype, nodata=nodata, colormap=None)
 
 
 def run_calls(result, calls, directory: Path, base: Path) -> list[Path]:

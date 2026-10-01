@@ -40,7 +40,7 @@ it more than on the landscape:
 import numpy as np
 import landschaft as ls
 
-ndvi = ls.load_raster(ls.surface.example_data("orforest"), validate=None)
+ndvi = ls.load_raster(ls.surface.example_data("orforest"))
 for t in (0.60, 0.65, 0.70, 0.75):
     habitat = np.where(ndvi.values >= t, 2, 1).astype("uint8")
     m = ls.Landscape(habitat).class_metrics(["pland", "np"]).set_index("class").loc[2]
@@ -241,7 +241,7 @@ terrain has indices of its own, many of them designed with ecology in mind:
 The TPI of a cell is easy to check by hand:
 
 ```python
-dem = ls.load_raster(ls.surface.example_data("orelevation"), validate=None)
+dem = ls.load_raster(ls.surface.example_data("orelevation"))
 tpi = ls.surface.tpi(dem, 3)
 window = dem.values[99:102, 199:202]
 print(dem.values[100, 200] - window.mean(), float(tpi.values[100, 200]))

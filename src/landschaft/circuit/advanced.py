@@ -35,9 +35,9 @@ def _grid(values, name: str, *, band=None):
     import xarray as xr
 
     if isinstance(values, (str, bytes)) or hasattr(values, "__fspath__"):
-        from ..io import load_raster
+        from ..io import _load_map
 
-        values = load_raster(values, band=band, validate=None)
+        values = _load_map(values, band=band)
     if isinstance(values, xr.DataArray):
         da = values.squeeze(drop=True) if "band" in values.dims else values
         v = np.array(da.values, dtype=np.float64)

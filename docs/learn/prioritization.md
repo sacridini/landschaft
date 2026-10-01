@@ -163,7 +163,7 @@ kernel of about 500 m, so that a cell's value is the habitat around it (see
 import pandas as pd
 import xarray as xr
 
-clc = ls.load_raster(ls.example_data("clc"), validate=None)
+clc = ls.load_raster(ls.example_data("clc"))
 
 def share(*codes):
     """The fraction of every 125 m cell covered by the land-cover classes."""

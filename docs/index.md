@@ -158,7 +158,7 @@ from a single raster on a laptop to continental maps larger than memory.
     ```python
     import landschaft as ls
 
-    landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    landcover = ls.load_raster(ls.example_data("clc"))
     ls.landscape_metrics(landcover, level="landscape", metric=["shdi", "contag", "ed"])
     ```
 
@@ -167,7 +167,7 @@ from a single raster on a laptop to continental maps larger than memory.
     ```python
     import landschaft as ls
 
-    landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+    landcover = ls.load_raster(ls.example_data("clc"))
     graph = ls.HabitatGraph.from_raster(
         landcover, habitat=[23, 24, 25],          # forest classes
         distance="edge", max_distance=2000,       # edge-to-edge distances, metres
@@ -182,7 +182,7 @@ from a single raster on a laptop to continental maps larger than memory.
     import xarray as xr
     import landschaft as ls
 
-    landcover = ls.load_raster(ls.example_data("clc"), validate=None)[:600, :600]
+    landcover = ls.load_raster(ls.example_data("clc"))[:600, :600]
     resistance = xr.where(landcover.isin([23, 24, 25]), 1.0, 25.0)  # forest is easy to cross
     flow = ls.omniscape(resistance, radius=30, block_size=5)
     flow["cum_currmap"].plot()

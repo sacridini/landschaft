@@ -84,7 +84,7 @@ morph = ls.mspa(forest, edge_width=2)                # cores, edges, bridges, lo
 ls.write_raster(morph, "forest_mspa.tif")            # GeoTIFF with its colour table
 print(ls.mspa_stats(morph))
 
-landcover = ls.load_raster(ls.example_data("clc"), validate=None)
+landcover = ls.load_raster(ls.example_data("clc"))
 ls.landscape_metrics(landcover, level="landscape", metric=["shdi", "contag", "ed"])
 ```
 

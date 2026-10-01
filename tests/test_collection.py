@@ -66,10 +66,12 @@ def test_bad_headers_raise_or_are_skipped(tiles):
     write(folder / "multiband.tif", np.stack([scenes.blobs(9, shape=(60, 70))] * 2))
     write(folder / "float.tif", scenes.blobs(9, shape=(60, 70)).astype("float32"))
     with pytest.raises(InvalidInputError, match="2 of 6 rasters"):
-        ls.load_raster(folder)
+        ls.load_raster(folder, validate="mspa")
     with pytest.warns(UserWarning, match="skipping 2"):
-        coll = ls.load_raster(folder, errors="skip")
+        coll = ls.load_raster(folder, errors="skip", validate="mspa")
     assert len(coll) == 4 and {p.name for p in coll.skipped} == {"multiband.tif", "float.tif"}
+    with pytest.raises(InvalidInputError, match="1 of 6 rasters"):  # without checks only the stack is out
+        ls.load_raster(folder)
 
 
 def test_mspa_on_collection_in_memory(tiles):
@@ -98,7 +100,7 @@ def test_invalid_values_are_reported_when_processed(tiles, tmp_path):
     coll = ls.load_raster(tiles[0].parent)
     results = ls.mspa(coll, output_dir=tmp_path / "out")
     bad = [r for r in results if not r.ok]
-    assert len(bad) == 1 and "larger than 2" in bad[0].error
+    assert len(bad) == 1 and "must be 0 (missing), 1 (background) or 2" in bad[0].error
 
 
 def test_stack_of_shared_grid(tiles):

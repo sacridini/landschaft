@@ -51,7 +51,7 @@ def test_outputs_match_direct_calls(rasters, tmp_path, tool, params):
         meta = json.loads((out / f"{src.stem}_{tool}.json").read_text())
         assert meta["tool"] == tool and meta["params"] == params
         assert set(map(Path, meta["outputs"])) | {out / f"{src.stem}_{tool}.json"} == set(res.outputs)
-        direct = getattr(ls, tool)(ls.load_raster(src, validate=None), **params)
+        direct = getattr(ls, tool)(ls.load_raster(src), **params)
         tifs = [p for p in res.outputs if p.suffix == ".tif"]
         assert tifs
         for tif in tifs:
@@ -69,7 +69,7 @@ def test_reports_tables_and_values(rasters, tmp_path):
     txt = (out / f"{name}_accounting.txt").read_text()
     assert "Accounting size classes result" in txt
     stats = pd.read_csv(out / f"{name}_accounting_stats.csv")
-    assert list(stats["objects"]) == list(ls.accounting(ls.load_raster(rasters[0], validate=None)).stats["objects"])
+    assert list(stats["objects"]) == list(ls.accounting(ls.load_raster(rasters[0])).stats["objects"])
     values = json.loads((out / f"{name}_accounting.json").read_text())["values"]
     assert values["connectivity"] == 8 and values["thresholds"] == [50, 250, 1000, 5000, 20000]
     rss = ls.batch("restoration_status", rasters[:1], out)[0]

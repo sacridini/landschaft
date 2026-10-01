@@ -24,7 +24,7 @@ import pandas as pd
 import xarray as xr
 
 from . import _core
-from .io import load_raster
+from .io import _load_map
 from .validation import validate_fad_input
 
 __all__ = ["ACCOUNTING_CLASSES", "AccountingResult", "accounting"]
@@ -247,7 +247,7 @@ def accounting(
     if connectivity not in (4, 8):
         raise ValueError(f"connectivity must be 4 or 8, got {connectivity}")
     if isinstance(data, (str, Path)):
-        data = load_raster(data, validate=None)
+        data = _load_map(data)
     validate_fad_input(data)
 
     if isinstance(thresholds, str):
