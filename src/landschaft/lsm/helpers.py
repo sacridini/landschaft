@@ -34,7 +34,7 @@ def construct_buffer(coords, shape: str, size: float, *, return_vec: bool = True
         Buffer size, in map units.
     return_vec
         True: a ``geopandas.GeoDataFrame`` of polygons with ``plot_id``
-        1..n (needs geopandas, the ``vector`` extra). False: landscapemetrics'
+        1..n. False: landscapemetrics'
         vertex matrix, an ``(n * k, 3)`` array of ``x``, ``y`` and the plot
         number in the same row order (circles plot by plot, squares corner by
         corner), open rings.
@@ -70,7 +70,7 @@ def construct_buffer(coords, shape: str, size: float, *, return_vec: bool = True
             import geopandas as gpd
             import shapely
         except ImportError as exc:  # pragma: no cover - depends on the environment
-            raise ImportError("construct_buffer(return_vec=True) needs geopandas (pip install landschaft[vector]); "
+            raise ImportError("construct_buffer(return_vec=True) needs geopandas (pip install geopandas); "
                               "use return_vec=False for the vertex matrix") from exc
         if crs is None:
             crs = getattr(coords, "crs", None)

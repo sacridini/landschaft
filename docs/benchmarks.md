@@ -385,7 +385,7 @@ its code:
 The comparisons are part of the test suite:
 
 ```bash
-pip install -e ".[all,test]"
+pip install -e ".[test]"
 pytest                              # every test, stored references included
 pytest -m live_reference            # also run the originals that are installed
 ```

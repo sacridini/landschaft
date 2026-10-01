@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
 # Landschaft in a container: the package built from this source tree, with
-# every optional feature (dask, matplotlib, geopandas, pyarrow).
+# everything it uses.
 #
 #   docker build -t landschaft .
 #   docker run --rm -it -v "$PWD:/data" landschaft               # Python shell
@@ -9,7 +9,6 @@
 #
 # Build arguments:
 #   PYTHON_VERSION  Python of the image (default 3.12)
-#   EXTRAS          optional dependencies to install (default "all"; "" for the core only)
 #
 # `docker build --target test -t landschaft:test .` builds an image that runs
 # the test suite instead.
@@ -32,14 +31,12 @@ RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels .
 # ---- base: the installed package -------------------------------------------
 FROM python:${PYTHON_VERSION}-slim AS base
 
-ARG EXTRAS=all
-
 # libgomp1: the OpenMP runtime of the compiled core; libexpat1: needed by the
 # GDAL bundled in the rasterio wheel.
 RUN apt-get update  && apt-get install -y --no-install-recommends libgomp1 libexpat1  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /wheels /wheels
-RUN pip install --no-cache-dir --find-links /wheels "landschaft${EXTRAS:+[$EXTRAS]}"  && rm -rf /wheels
+RUN pip install --no-cache-dir --find-links /wheels landschaft  && rm -rf /wheels
 
 ENV PYTHONUNBUFFERED=1     MPLBACKEND=Agg
 

@@ -17,7 +17,7 @@ def _plt():
     try:
         import matplotlib.pyplot as plt
     except ImportError as err:  # pragma: no cover - depends on the environment
-        raise ImportError("static plots need matplotlib (pip install landschaft[plot])") from err
+        raise ImportError("static plots need matplotlib (pip install matplotlib)") from err
     return plt
 
 

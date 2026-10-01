@@ -63,7 +63,7 @@ def new_map(basemap: str | None = "satellite"):
         import xyzservices.providers as xyz
         from folium import plugins
     except ImportError as err:  # pragma: no cover - depends on the environment
-        raise ImportError("interactive maps need folium (pip install landschaft[plot])") from err
+        raise ImportError("interactive maps need folium (pip install folium)") from err
     m = folium.Map(tiles=None, prefer_canvas=True, control_scale=True, zoom_snap=0.25, width="100%", height="100%")
     order = [basemap] + [b for b in BASEMAPS if b != basemap] if basemap in BASEMAPS else []
     for i, key in enumerate(order):

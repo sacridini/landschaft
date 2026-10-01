@@ -47,15 +47,16 @@ Clang 10+). The simplest route is a [conda](https://conda-forge.org/download/)
 environment:
 
 ```bash
-conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray \
-      xarray dask matplotlib geopandas scikit-build-core pybind11 cmake ninja
+conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray xarray \
+      dask geopandas pyarrow openpyxl matplotlib folium plotly xyzservices pillow contextily pywebview h3-py dendropy \
+      scikit-build-core pybind11 cmake ninja
 conda activate landschaft
 git clone https://github.com/sacridini/landschaft.git
 cd landschaft
 pip install --no-build-isolation -e .
 ```
 
-Or with pip only: `pip install "landschaft[all] @ git+https://github.com/sacridini/landschaft.git"`.
+Or with pip only: `pip install "landschaft @ git+https://github.com/sacridini/landschaft.git"`.
 Platform notes (Windows Build Tools, OpenMP on macOS) and troubleshooting are in the
 [installation guide](docs/getting-started/installation.md).
 

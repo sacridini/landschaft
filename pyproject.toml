@@ -10,6 +10,7 @@ readme = "README.md"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.10"
 authors = [{ name = "Eduardo Lacerda" }]
+# Everything every tool uses is installed with the package: no optional features.
 dependencies = [
     "numpy>=1.24",
     "pandas>=1.5",
@@ -17,17 +18,24 @@ dependencies = [
     "rioxarray>=0.15",
     "scipy>=1.10",
     "xarray>=2023.1",
+    "dask[array]>=2023.1",
+    "geopandas>=0.12",
+    "pyarrow>=10",
+    "openpyxl>=3",
+    "matplotlib>=3.5",
+    "folium>=0.15",
+    "plotly>=5",
+    "xyzservices",
+    "Pillow",
+    "contextily>=1.3",
+    "pywebview>=5",
+    "h3>=4",
+    "dendropy>=4",
 ]
 
+# for development only
 [project.optional-dependencies]
-dask = ["dask[array]>=2023.1"]
-plot = ["matplotlib>=3.5", "folium>=0.15", "plotly>=5", "xyzservices", "Pillow"]
-window = ["pywebview>=5"]
-vector = ["geopandas>=0.12", "pyarrow>=10"]
-bio = ["h3>=4", "dendropy>=4", "pyarrow>=10"]
-test = ["pytest>=7", "scipy>=1.10", "dask[array]>=2023.1"]
-all = ["dask[array]>=2023.1", "matplotlib>=3.5", "folium>=0.15", "plotly>=5", "xyzservices", "Pillow",
-       "geopandas>=0.12", "pyarrow>=10"]
+test = ["pytest>=7"]
 docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.26", "ruff", "matplotlib>=3.5"]
 
 [tool.scikit-build]
@@ -58,7 +66,7 @@ markers = [
 [tool.cibuildwheel]
 build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
 skip = "*-musllinux_* *-manylinux_i686 *-win32 *-win_arm64"
-test-extras = ["test", "vector"]
+test-extras = ["test"]
 test-requires = ["threadpoolctl"]
 test-command = [
     "python -c \"import landschaft._core as c; assert c.openmp, 'built without OpenMP'\"",

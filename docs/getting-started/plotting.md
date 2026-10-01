@@ -14,9 +14,8 @@ p.save("mspa.html").name                     # 'mspa.html'
 ```
 
 In a notebook (Jupyter, JupyterLab, VS Code, Colab) the plot shows inline. In a
-script it opens in a window of its own: a native window when
-[pywebview](https://pywebview.flowrl.com/) is installed
-(`pip install "landschaft[window]"`), else the web browser.
+script it opens in a window of its own ([pywebview](https://pywebview.flowrl.com/),
+installed with Landschaft), or in the web browser where no window can open.
 
 ## What is drawn, and how
 
@@ -63,7 +62,7 @@ p = ls.plot(landcover == 23, cmap={0: "#f4f1de", 1: "#2d6a4f"},
 ## Static figures
 
 `static=True` draws a matplotlib figure instead, for papers and reports; the
-satellite imagery under it needs [contextily](https://contextily.readthedocs.io/).
+satellite imagery under it comes from [contextily](https://contextily.readthedocs.io/).
 An interactive plot saved as `.png`, `.pdf` or `.svg` is drawn the same way:
 
 ```python

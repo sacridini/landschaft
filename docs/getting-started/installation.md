@@ -32,8 +32,9 @@ platform, which avoids most installation problems.
     3. Open the *Miniforge Prompt* and run:
 
     ```bat
-    conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray ^
-          xarray dask matplotlib geopandas scikit-build-core pybind11 "cmake>=4.2"
+    conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray xarray ^
+          dask geopandas pyarrow openpyxl matplotlib folium plotly xyzservices pillow contextily pywebview h3-py dendropy ^
+          scikit-build-core pybind11 "cmake>=4.2"
     conda activate landschaft
     git clone https://github.com/sacridini/landschaft.git
     cd landschaft
@@ -53,8 +54,9 @@ platform, which avoids most installation problems.
     3. In a terminal:
 
     ```bash
-    conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray \
-          xarray dask matplotlib geopandas scikit-build-core pybind11 cmake ninja llvm-openmp
+    conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray xarray \
+          dask geopandas pyarrow openpyxl matplotlib folium plotly xyzservices pillow contextily pywebview h3-py dendropy \
+          scikit-build-core pybind11 cmake ninja llvm-openmp
     conda activate landschaft
     git clone https://github.com/sacridini/landschaft.git
     cd landschaft
@@ -74,8 +76,9 @@ platform, which avoids most installation problems.
     3. In a terminal:
 
     ```bash
-    conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray \
-          xarray dask matplotlib geopandas scikit-build-core pybind11 cmake ninja
+    conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray xarray \
+          dask geopandas pyarrow openpyxl matplotlib folium plotly xyzservices pillow contextily pywebview h3-py dendropy \
+          scikit-build-core pybind11 cmake ninja
     conda activate landschaft
     git clone https://github.com/sacridini/landschaft.git
     cd landschaft
@@ -93,13 +96,13 @@ is enough (rasterio then comes as a binary wheel that bundles GDAL):
 ```bash
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install "landschaft[all] @ git+https://github.com/sacridini/landschaft.git"
+pip install "landschaft @ git+https://github.com/sacridini/landschaft.git"
 ```
 
 ## Run with Docker
 
-The repository has a `Dockerfile` that builds Landschaft with every optional
-feature in a Linux image, so the host needs neither a compiler nor Python, only
+The repository has a `Dockerfile` that builds Landschaft and everything it
+uses in a Linux image, so the host needs neither a compiler nor Python, only
 [Docker](https://docs.docker.com/get-docker/):
 
 ```bash
@@ -122,24 +125,22 @@ paths land in the mounted folder. Other options:
 | Command | Effect |
 |---|---|
 | `docker build --build-arg PYTHON_VERSION=3.11 -t landschaft .` | another Python version |
-| `docker build --build-arg EXTRAS= -t landschaft .` | the core only, without dask, matplotlib and geopandas (smaller image) |
 | `docker build --target test -t landschaft:test .` then `docker run --rm landschaft:test` | run the test suite in the container |
 | `docker run --cpuset-cpus 0-7 ...` | limit the cores; Landschaft then uses all of them but one |
 
-## Optional features
+## What is installed
 
-Some features need extra packages. Install them with conda, or as *extras*
-with pip (`pip install -e ".[plot,vector]"`):
+`pip install` installs everything every tool uses: dask (lazy and parallel
+processing), geopandas and pyarrow (vectors, Parquet), openpyxl (Excel),
+matplotlib, folium, plotly, Pillow and contextily (`ls.plot` and the figures),
+pywebview (`ls.plot` in a window of its own), h3 and dendropy (biodiversity
+analysis). There are no optional features to choose. Two extras are for
+developing Landschaft:
 
 | Extra | Packages | Needed for |
 |---|---|---|
-| `plot` | matplotlib, folium, plotly, Pillow | `ls.plot` (interactive maps and charts), the `show_*` plotting functions and the figures in the tutorials |
-| `window` | pywebview | `ls.plot` in a window of its own outside notebooks (else the web browser) |
-| `vector` | geopandas, pyarrow | vector inputs and outputs (sample plots, zones, habitat networks from polygons), Parquet tables |
-| `dask` | dask | lazy and parallel processing of stacks and very large arrays |
-| `all` | all of the above | |
 | `docs` | mkdocs-material, mkdocstrings | building this website |
-| `test` | pytest, scipy, dask | running the test suite |
+| `test` | pytest | running the test suite |
 
 ## Check the installation
 

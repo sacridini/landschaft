@@ -11,6 +11,11 @@ between minor versions.
   (`"forestgreen"`) or `(r, g, b[, a])`, as `ls.plot` does.
 
 ### Changed
+- `pip install landschaft` (and `pip install -e .`) installs everything every tool uses: dask,
+  geopandas, pyarrow, openpyxl, matplotlib, folium, plotly, Pillow, xyzservices, contextily,
+  pywebview, h3 and dendropy are now dependencies. The extras `dask`, `plot`, `window`, `vector`,
+  `bio` and `all` are gone (only `test` and `docs`, for development, remain), and so is the
+  Docker image's `EXTRAS` build argument.
 - `ls.plot` draws a floating-point raster of a few whole numbers (at most 12) as classes: a class
   map read with `load_raster(..., masked=True)`, its NoData as NaN. Legend labels of such classes are
   `1`, not `1.0`.

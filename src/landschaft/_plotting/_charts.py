@@ -16,7 +16,7 @@ def _go():
     try:
         import plotly.graph_objects as go
     except ImportError as err:  # pragma: no cover - depends on the environment
-        raise ImportError("charts need plotly (pip install landschaft[plot])") from err
+        raise ImportError("charts need plotly (pip install plotly)") from err
     return go
 
 

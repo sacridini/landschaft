@@ -1037,7 +1037,7 @@ same way. All agree with scikit-learn / clustergram, which are not needed.
 
 ### Plots
 
-With matplotlib (`pip install landschaft[plot]`), like landscapemetrics' `show_*` (they
+With matplotlib, like landscapemetrics' `show_*` (they
 return a `matplotlib.figure.Figure`; the maps use the raster's coordinates):
 
 ```python
