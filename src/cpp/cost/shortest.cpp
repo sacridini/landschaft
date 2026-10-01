@@ -247,7 +247,10 @@ void fast_dijkstra(const Steps& steps, Workspace& w, const std::vector<i64>& sou
         }
     }
     while (!w.q.empty()) {
-        const auto [du, u] = w.q.pop();
+        // not a structured binding: the lambda below captures du (C++20 only; Xcode < 16 refuses it)
+        const std::pair<double, i64> top = w.q.pop();
+        const double du = top.first;
+        const i64 u = top.second;
         if (w.done[u] || du != w.dist[u]) continue;  // stale entry
         w.done[u] = 1;
         if (!settle(u, du)) break;

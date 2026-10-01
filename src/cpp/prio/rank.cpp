@@ -31,6 +31,14 @@ EIGEN_STRONG_INLINE Packet2d pround<Packet2d>(const Packet2d& a) {
     return _mm_set_pd(std::round(v[1]), std::round(v[0]));
 }
 }  // namespace Eigen::internal
+#elif defined(EIGEN_VECTORIZE_NEON) && EIGEN_ARCH_ARM64
+// Nor with NEON (Apple silicon, aarch64 Linux): frinta rounds half away from zero.
+namespace Eigen::internal {
+template <>
+EIGEN_STRONG_INLINE Packet2d pround<Packet2d>(const Packet2d& a) {
+    return vrndaq_f64(a);
+}
+}  // namespace Eigen::internal
 #endif
 
 #include <chrono>

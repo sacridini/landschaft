@@ -60,6 +60,11 @@ between minor versions.
   non-MSVC compiler on Windows stops the build with a message.
 - `ls.plot`: the NoData of a raster on an interactive map is transparent again; reprojected to
   Web Mercator, it was drawn in the first colour of the legend.
+- Apple silicon (and aarch64 Linux): `pip install -e .` builds again; the prioritization module
+  failed to compile ("no matching function for call to 'round'"), Eigen having no rounding of
+  NEON double packets. With older Xcode (before 16) a C++20 lambda capture in the least-cost
+  search stopped the build too.
+- `pip install -e ".[test]"` installs threadpoolctl, which the thread tests need.
 
 ## [0.99.0] - 2026-10-01
 
