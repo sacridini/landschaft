@@ -17,6 +17,8 @@ them together.
 
 ::: landschaft.match_grid
 
+::: landschaft.reproject
+
 ::: landschaft.clip
 
 ::: landschaft.reclassify

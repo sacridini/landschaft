@@ -52,6 +52,7 @@ from .gtn import (
     gtn_components,
     gtn_importance,
 )
+from ._reproject import reproject
 from ._zonal import extract, zonal_stats
 from ._plotting import Plot, plot
 from .io import (
@@ -252,6 +253,7 @@ __all__ = [
     "load_vector",
     "match_grid",
     "rasterize",
+    "reproject",
     "save",
     "zonal_stats",
     "write_vector",

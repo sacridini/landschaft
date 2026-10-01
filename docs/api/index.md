@@ -118,6 +118,7 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 | [`ls.load_raster`](data.md#landschaft.load_raster) | Read one raster, or collect many |
 | [`ls.write_raster`](data.md#landschaft.write_raster) | Write a raster: one band or several, any format GDAL writes |
 | [`ls.match_grid`](data.md#landschaft.match_grid) | Put a raster on the grid of another: same CRS, cells and coordinates |
+| [`ls.reproject`](data.md#landschaft.reproject) | Reproject a raster or vector to another CRS, or onto the grid of another raster |
 | [`ls.clip`](data.md#landschaft.clip) | Cut a raster to a region: the study area, a biome, a municipality |
 | [`ls.reclassify`](data.md#landschaft.reclassify) | Give the values of a raster new values: from a table, or into a habitat map |
 | [`ls.load_vector`](data.md#landschaft.load_vector) | Read a vector layer (polygons, lines, points) as a GeoDataFrame |

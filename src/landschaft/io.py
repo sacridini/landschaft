@@ -317,7 +317,9 @@ def match_grid(data: xr.DataArray, like, *, resampling: str = "auto") -> xr.Data
     land-cover map) rarely share their grid; most tools need them cell by
     cell. ``match_grid`` reprojects and resamples ``data`` onto the grid of
     ``like`` with GDAL (in parallel), and gives it the coordinates of ``like``.
-    :func:`load_raster` does the same on reading with ``like=``.
+    :func:`load_raster` does the same on reading with ``like=``, and
+    :func:`reproject` with ``like=`` (which also reprojects to a CRS, and
+    vectors).
 
     Parameters
     ----------
@@ -334,7 +336,7 @@ def match_grid(data: xr.DataArray, like, *, resampling: str = "auto") -> xr.Data
     -------
     xarray.DataArray
         ``data`` on the grid of ``like``; cells outside ``data`` are NoData
-        (NaN for floats).
+        (NaN for floats). A lazy (dask) raster stays lazy.
 
     Examples
     --------
@@ -345,26 +347,18 @@ def match_grid(data: xr.DataArray, like, *, resampling: str = "auto") -> xr.Data
     >>> back.shape == landcover.shape, bool((back.x == landcover.x).all())
     (True, True)
     """
-    from rasterio.enums import Resampling
+    from rasterio.crs import CRS
 
-    from ._threads import default_threads
+    from ._reproject import _reproject_raster
 
     if not isinstance(data, xr.DataArray) or data.rio.crs is None:
         raise ValueError("match_grid needs a georeferenced DataArray (see load_raster)")
     template = _grid_template(like)
     data = _with_georef(data, transform=_transform(data))
     if not _same_grid(data, template):
-        if resampling == "auto":
-            method = "bilinear" if np.issubdtype(data.dtype, np.floating) else "nearest"
-        elif resampling in _RESAMPLING_NAMES:
-            method = resampling
-        else:
-            raise ValueError(f"unknown resampling {resampling!r}; use 'auto' or one of {', '.join(_RESAMPLING_NAMES)}")
-        attrs = dict(data.attrs)
-        if hasattr(data.data, "dask"):
-            data = data.compute()
-        data = data.rio.reproject_match(template, resampling=Resampling[method], num_threads=default_threads())
-        data.attrs.update({k: v for k, v in attrs.items() if k not in ("_FillValue",)})
+        data = _reproject_raster(data, _transform(template), (template.sizes["y"], template.sizes["x"]),
+                                 CRS.from_user_input(template.rio.crs), (template["x"].values, template["y"].values),
+                                 resampling, None)
     return data.assign_coords(x=template["x"].values, y=template["y"].values)
 
 

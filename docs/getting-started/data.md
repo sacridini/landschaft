@@ -13,8 +13,9 @@ coordinate systems, grids that do not match, data types and formats.
 | tables | `ls.load_table` | `ls.write_table` |
 | anything, results included | | `ls.save`, `result.save(folder)` |
 
-Two more put data together: `ls.match_grid` (a raster on the grid of
-another) and `ls.rasterize` (vector features on the grid of a raster).
+A few more put data together: `ls.reproject` (rasters and vectors to another
+CRS, or onto the grid of a reference), `ls.match_grid` (a raster on the grid
+of another) and `ls.rasterize` (vector features on the grid of a raster).
 
 ## Rasters
 
@@ -52,6 +53,31 @@ hfi.shape == landcover.shape                             # True
 ```
 
 `ls.match_grid(data, like)` does the same for a raster already in memory.
+
+`ls.reproject` takes a raster or a vector to another CRS, as terra's
+`project()`: on the grid GDAL suggests, with a cell size (`res=`), or onto
+the grid of a reference raster (`like=`). With `res=` alone it resamples in
+the same CRS. The reference can also be a vector, or a raster whose CRS only
+is wanted (`crs=other`):
+
+```python
+lonlat = ls.reproject(landcover, "EPSG:4326")
+lonlat.shape                                              # (1481, 2422)
+
+utm = ls.reproject(landcover, 32632, res=100, resampling="mode")   # 100 m, the main class
+coarse = ls.reproject(landcover, res=100, resampling="mode")       # 100 m in EPSG:3035
+
+back = ls.reproject(lonlat, like=landcover)               # cell by cell with landcover
+back.shape                                                # (2000, 2000)
+```
+
+The warp is GDAL's, always in the same blocks of the result: the values do
+not depend on the number of threads, and a raster too large for memory, read
+lazily (`chunks="auto"`) or given as a path, gets the values it would get in
+memory. `tolerance=0` transforms every cell exactly instead of GDAL's 1/8-cell
+approximation (slower).
+Vectors keep their attributes; `densify=` adds vertices first, so that long
+straight edges follow the curvature of the new CRS.
 
 A list of files (or a folder, or a pattern such as `"sdm/*.tif"`) with
 `like=` gives one `(band, y, x)` stack named by the files, whatever their

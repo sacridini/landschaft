@@ -7,10 +7,22 @@ between minor versions.
 ## [Unreleased]
 
 ### Added
+- `ls.reproject`: rasters and vectors to another CRS, as terra's `project()`. A raster goes on
+  the grid GDAL suggests, with a cell size (`res=`), or onto the grid of a reference raster
+  (`like=`); `res=` alone resamples in the same CRS; a vector, or a raster passed as `crs=`,
+  gives its CRS only. Every GDAL resampling method; vectors keep their attributes and can be
+  densified first (`densify=`). The warp is GDAL's, always in the same blocks of the result,
+  each with the kernel scale of the whole grid: in memory, lazy (dask) or from a file (read
+  window by window), with any number of threads, the values are the same bits (GDAL's own warp
+  depends on how its memory limit splits the raster). `tolerance=0` transforms every cell
+  exactly instead of GDAL's 1/8-cell approximation.
 - `ls.write_raster(..., colormap={value: colour})` takes colours as `"#rrggbb"`, names
   (`"forestgreen"`) or `(r, g, b[, a])`, as `ls.plot` does.
 
 ### Changed
+- `ls.match_grid` and `load_raster(..., like=)` warp as `ls.reproject` does, in fixed blocks:
+  their values can differ slightly from before, and no longer depend on GDAL's memory limit. A
+  lazy raster stays lazy instead of being loaded whole.
 - The tutorials, the quickstart, the concepts and the home page look at results with `ls.plot`,
   save them with `ls.write_raster`, `ls.write_vector` and `ls.save`, read tables with
   `ls.load_table` and recode classes with `ls.reclassify`.

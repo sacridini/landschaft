@@ -47,6 +47,55 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   Blocos processados em paralelo (hoje um bloco por vez, paralelo por faixas) ajudariam
   em rasters estreitos.
 
+## Reprojeção (`ls.reproject`, como o `project()` do terra)
+
+**Feito (fase 1):** `ls.reproject` para rasters e vetores (CRS, `res=`, referência
+`like=` raster ou vetor, `crs=` de um objeto, `densify=` nos vetores). O warp é o do
+GDAL, mas sempre nos mesmos blocos de 1024 células ancorados na origem do destino,
+cada um com a janela de origem que vê e o XSCALE/YSCALE da grade inteira. O que
+motivou isso (medido num 8000×8000 float32, UTM 23S → EPSG:4326, Apple M, 9 threads):
+
+- O warp do GDAL depende de como ele divide o trabalho: só mudar o `warp_mem_limit`
+  (64 MB vs 2 GB) muda 48 M células no bilinear e 11 mil no nearest. O transformador
+  aproximado (erro de 1/8 de célula) interpola ao longo das linhas de cada chunk, e o
+  XSCALE/YSCALE dos kernels é calculado por chunk. Threads não mudam nada.
+- Com blocos fixos, em memória, lazy (dask) e a partir de arquivo (lido por janelas)
+  fazem as mesmas chamadas ao GDAL: os mesmos bits, floats inclusive. Com um bloco
+  só, o resultado é o da chamada padrão do GDAL; com `tolerance=0` (transformação
+  exata), o do GDAL com o destino inteiro num chunk (até 1 ulp nos contínuos).
+- Tempos: nearest 0,14 s, bilinear 0,36 s, average 0,37 s (GDAL padrão: 0,09 / 0,14 /
+  0,33 s; rioxarray: 0,13 / 0,32 / 0,35 s); `tolerance=0`: 0,9 / 1,1 / 2,0 s (o custo é o
+  PROJ transformando cada pixel). De arquivo: 1,3 s. O `match_grid` e o
+  `load_raster(like=)` passaram a usar o mesmo warp.
+- As janelas de origem dos blocos saem de uma grade 11×11 de pontos por bloco
+  transformada de uma vez com um `Transformer` do pyproj: o `transform_bounds` do
+  rasterio reconstrói a transformação a cada chamada (12 ms por bloco entre
+  EPSG:3035 e UTM).
+
+**Fase 2 (quando houver tempo): kernel C++ próprio**, para tirar o custo restante
+(bilinear ainda 2,5× o GDAL padrão; o GDAL gasta ~0,5–5 ms de preparação por chamada,
+uma por bloco) sem perder o determinismo:
+
+- Coordenadas numa grade fixa ancorada na origem do destino inteiro (p. ex. pontos
+  exatos a cada 16 células, calculados pelo PROJ/pyproj de uma vez, interpolados
+  dentro de cada célula da grade com erro controlado, como o transformador aproximado
+  do GDAL mas independente dos blocos). O erro máximo pode ser verificado contra a
+  transformação exata e refinado onde passar da tolerância.
+- Kernels com OpenMP sobre linhas do destino, com os mesmos pesos do
+  `gdalwarpkernel.cpp` (nearest, bilinear, cubic, cubic_spline, lanczos com o
+  XSCALE/YSCALE da grade; average com pesos por área de sobreposição; mode, min, max,
+  med, q1, q3, sum, rms) e o mesmo tratamento de NoData (`UNIFIED_SRC_NODATA`).
+- Validação: com a grade de coordenadas no passo 1 (exata), os mesmos bits do GDAL com
+  `tolerance=0` e o destino num chunk (nearest e estatísticas de classes) ou até 1 ulp
+  (contínuos); com o passo padrão, diferença limitada pela tolerância e resultado
+  idêntico entre memória, lazy e threads (os testes de `tests/test_reproject.py`).
+- Operações fundidas numa passada (reprojetar + recortar + reclassificar) e blocos
+  dask pequenos, onde o custo fixo por chamada do GDAL mais pesa.
+- Outras ideias: o `partial` do terra para vetores que saem do domínio da projeção
+  (hoje viram coordenadas infinitas), referências do `terra::project` em R para a
+  escolha da grade (hoje é a do GDAL, `calculate_default_transform`), e alinhar a
+  origem à resolução (`-tap` do gdalwarp) como opção.
+
 ## Conectividade em grafos (Conefor Sensinode / Makurhini)
 
 Análise de 2026-09-26. O Conefor Sensinode 2.2 (`C:\Users\eduar\Documents\dev\Conefor
