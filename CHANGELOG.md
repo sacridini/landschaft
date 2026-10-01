@@ -6,6 +6,30 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.98.0] - 2026-10-01
+
+### Added
+- `ls.zonal_stats(raster, zones, stats)`: statistics of a raster in every zone, polygons (overlaps
+  allowed; reprojected to the raster) or the labels of a raster, on every band of a stack: count,
+  nodata, sum, mean, min, max, range, std, var, median, percentiles (`"p90"`), majority, minority,
+  unique. C++ with OpenMP (`src/cpp/io`): the polygons' cells are those GDAL burns (centre rule or
+  `all_touched`, from the GDAL port of `lsm`, now able to burn into a window), percentiles by
+  linear-time selection with NumPy's interpolation; the result does not depend on the threads.
+  13-15 times faster than rasterstats and 22-46 times than exactextract on 25 million cells
+  (`tools/benchmark_zonal.py`, benchmarks page).
+- `ls.extract(raster, points)`: the values of every band at points (nearest cell or bilinear),
+  or the statistics of the cells around them (`buffer=`); points reprojected to the raster; a
+  dask-backed raster is read only in the blocks of rows that hold points. A million points in
+  0.014 s.
+- `ls.clip(raster, region)` crops and masks to polygons or bounds (class maps keep their type and
+  NoData), and `ls.load_raster(path, clip=region)` reads only the region's window.
+- `ls.load_raster([files], like=raster)` (or a folder or pattern) stacks rasters of any grids as one
+  `(band, y, x)` array named by the files.
+- `ls.reclassify(raster, table)` gives new values from a table: a dict, pairs `(old, new)`, ranges
+  `(low, high, new)` or a DataFrame, with `others=` for the values it does not hold; lookup tables
+  for small integer types, lazy on dask. With `foreground=` (or a list of classes) it still builds
+  habitat maps.
+
 ## [0.97.0] - 2026-10-01
 
 ### Added

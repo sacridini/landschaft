@@ -118,10 +118,13 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 | [`ls.load_raster`](data.md#landschaft.load_raster) | Read one raster, or collect many |
 | [`ls.write_raster`](data.md#landschaft.write_raster) | Write a raster: one band or several, any format GDAL writes |
 | [`ls.match_grid`](data.md#landschaft.match_grid) | Put a raster on the grid of another: same CRS, cells and coordinates |
-| [`ls.reclassify`](data.md#landschaft.reclassify) | Build a habitat map (0 = missing, 1 = background, 2 = habitat) from any raster |
+| [`ls.clip`](data.md#landschaft.clip) | Cut a raster to a region: the study area, a biome, a municipality |
+| [`ls.reclassify`](data.md#landschaft.reclassify) | Give the values of a raster new values: from a table, or into a habitat map |
 | [`ls.load_vector`](data.md#landschaft.load_vector) | Read a vector layer (polygons, lines, points) as a GeoDataFrame |
 | [`ls.write_vector`](data.md#landschaft.write_vector) | Write a vector layer, the format given by the file extension |
 | [`ls.rasterize`](data.md#landschaft.rasterize) | Burn vector features into a raster on the grid of another raster |
+| [`ls.zonal_stats`](data.md#landschaft.zonal_stats) | Statistics of a raster in every zone: polygons, or the labels of a raster |
+| [`ls.extract`](data.md#landschaft.extract) | The values of a raster at points |
 | [`ls.load_table`](data.md#landschaft.load_table) | Read a table, the format given by the file extension |
 | [`ls.write_table`](data.md#landschaft.write_table) | Write a table, the format given by the file extension |
 | [`ls.save`](data.md#landschaft.save) | Save data or a result, each part in the format that suits it |

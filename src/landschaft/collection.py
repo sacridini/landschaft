@@ -271,8 +271,8 @@ class RasterCollection(Sequence):
         """
         if not self.same_grid:
             raise InvalidInputError(
-                "rasters do not share the same grid (shape, CRS and transform); "
-                "process them as a collection instead of a stack"
+                "rasters do not share the same grid (shape, CRS and transform): put them on one grid with "
+                "load_raster(..., like=raster), or process them as a collection"
             )
         names = [p.stem for p in self.paths]
         if len(set(names)) != len(names):

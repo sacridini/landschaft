@@ -310,6 +310,13 @@ std::vector<std::int32_t> unique_values(const std::int32_t* values, const std::u
 std::vector<std::uint8_t> rasterize_all_touched(const std::vector<std::vector<std::pair<double, double>>>& rings,
                                                 const double* gt, int nx, int ny);
 
+// The cells of one polygon (rings in pixel coordinates px, py of an nx x ny
+// grid; part_size: points per ring, even-odd over all rings) as GDAL's
+// rasterizer burns them, centre rule or ALL_TOUCHED, written as 1 into the
+// window [ox, ox + wx) x [oy, oy + wy) of the grid (out: wy x wx, zeroed).
+void burn_polygon(const std::vector<int>& part_size, const std::vector<double>& px, const std::vector<double>& py,
+                  int nx, int ny, bool all_touched, int ox, int oy, int wx, int wy, std::uint8_t* out);
+
 // R's cor(x, method = "pearson" | "kendall" | "spearman") of the columns of
 // the n x m column-major matrix x; returns m x m.
 std::vector<double> r_cor(const std::vector<double>& x, i64 n, i64 m, const std::string& method);

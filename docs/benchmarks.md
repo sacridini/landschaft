@@ -236,6 +236,30 @@ times: z5 gains 1.7 to 3 times from its 12 threads, Landschaft 4.7 to 6.3. Memor
 cell with data during the ranking, plus 1 to 2 bytes per value that is not
 zero; `storage=` puts the large arrays in memory-mapped files.
 
+### Zonal statistics and extraction
+
+Not a reproduction of another tool: the functions that read a raster in zones
+and at points (`zonal_stats`, `extract`), against the Python packages commonly
+used for it, rasterstats 0.21 and exactextract 0.3 (both single-threaded). A
+5000 × 5000 float32 raster in memory; the statistics mean, min, max, standard
+deviation and median; random polygons of 16 vertices. Measured with
+`tools/benchmark_zonal.py` (version 0.98) on the performance cores, the
+fastest of 3 alternating runs.
+
+| Case | rasterstats | exactextract | Landschaft, 1 thread | Landschaft, 12 threads | Since |
+|---|---|---|---|---|---|
+| zonal statistics, 2000 small polygons (16 million cells) | 2.34 s | 3.59 s | 0.37 s | 0.16 s | 0.98 |
+| zonal statistics, 20 large polygons (22 million cells) | 1.14 s | 8.37 s | 0.37 s | 0.18 s | 0.98 |
+| values at 1 million points | ~119 s | – | 0.028 s | 0.014 s | 0.98 |
+
+The cells of every polygon are those GDAL burns (the centre rule, or
+`all_touched`), as rasterstats takes them: the statistics agree with its own,
+which adds up in single precision, to 1e-7, and with NumPy in double precision
+to 1e-15. exactextract weights every cell by the share of it the polygon
+covers, so its means differ slightly. The median and the percentiles take a
+linear-time selection, not a sort; the result does not depend on the number of
+threads.
+
 ## Accuracy
 
 ### How results are compared
@@ -300,6 +324,7 @@ its code:
 | Spatial entropy | an independent reproduction of GuidosToolbox's `entropy_mspainp.pro` |
 | Restoration status, parcellation | GuidosToolbox's values for its sample map |
 | Cost distance, least-cost path, restoration corridor, contortion, simple and morphological change, FOS change, GraySpatCon metrics other than those of FOS | unit tests on constructed cases |
+| Zonal statistics, extraction at points, clip, rasterize | cells against GDAL's rasterizer, statistics against NumPy and rasterstats |
 
 !!! warning "Known differences"
     - **Euclidean distance, distance to resistance, influence zones and

@@ -17,6 +17,8 @@ them together.
 
 ::: landschaft.match_grid
 
+::: landschaft.clip
+
 ::: landschaft.reclassify
 
 ## Vectors
@@ -26,6 +28,12 @@ them together.
 ::: landschaft.write_vector
 
 ::: landschaft.rasterize
+
+## Values by zone and at points
+
+::: landschaft.zonal_stats
+
+::: landschaft.extract
 
 ## Tables
 

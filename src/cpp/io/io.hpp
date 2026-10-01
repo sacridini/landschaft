@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Raster values by zone and at points: the kernels of ls.zonal_stats and
+// ls.extract.
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+namespace lsio {
+
+using i64 = std::int64_t;
+
+// The cells of every zone as runs of one row, [x0, x1) in row y, grouped by
+// zone: zone z owns runs offsets[z] .. offsets[z + 1].
+struct Runs {
+    std::vector<i64> offsets{0};
+    std::vector<std::int32_t> y, x0, x1;
+    i64 zones() const { return static_cast<i64>(offsets.size()) - 1; }
+};
+
+// The cells of polygons on an nx x ny grid (GDAL geotransform gt, no
+// rotation), as GDAL's rasterizer burns them (centre rule or all-touched).
+// Geometry g has the rings ring_offsets[geom_rings[g]] .. ring_offsets[geom_rings[g + 1]]
+// (even-odd over all of them), ring r the points ring_offsets[r] .. ring_offsets[r + 1]
+// of xy (x, y pairs). Polygons may overlap.
+Runs polygon_runs(const double* xy, const i64* ring_offsets, const i64* geom_rings, i64 ngeoms, const double* gt,
+                  int nx, int ny, bool all_touched);
+
+// The cells of every distinct label of a raster of zones (NaN and nodata
+// left out); labels: the zones' labels, sorted.
+template <class L>
+Runs label_runs(const L* labels, int ny, int nx, bool has_nodata, double nodata, std::vector<double>* zone_labels);
+
+// Statistics.
+enum Stat : int {
+    COUNT = 0,     // cells with data
+    NODATA = 1,    // cells without data
+    SUM = 2,
+    MEAN = 3,
+    MIN = 4,
+    MAX = 5,
+    RANGE = 6,
+    STD = 7,       // population standard deviation
+    VAR = 8,       // population variance
+    MEDIAN = 9,
+    MAJORITY = 10, // the most frequent value (ties: the smallest)
+    MINORITY = 11, // the least frequent value (ties: the smallest)
+    UNIQUE = 12,   // the number of distinct values
+    PERCENTILE = 13,
+};
+
+// stats[k] for every zone and band: (zones, bands, stats) values, row-major;
+// percentiles[k] is the percentile (0-100, linear interpolation) of a
+// PERCENTILE stat. Values: (bands, ny, nx), row-major; NaN and nodata are
+// no data. Zones without data: NaN (count 0).
+template <class T>
+std::vector<double> zonal_stats(const T* values, int bands, int ny, int nx, bool has_nodata, double nodata,
+                                const Runs& runs, const std::vector<int>& stats,
+                                const std::vector<double>& percentiles);
+
+// The values of every band at points (x, y in map units): (n, bands)
+// row-major; NaN outside the grid or on no data. Bilinear: the four cell
+// centres around the point, weights renormalised over those with data.
+// values holds the rows [row0, row0 + ny) of a grid of ny_total rows (gt is the
+// grid's): the points must fall in rows the block holds (with one row around
+// for bilinear); positions are computed on the whole grid, so a block gives
+// the same values as the whole raster.
+template <class T>
+std::vector<double> extract(const T* values, int bands, int ny, int nx, bool has_nodata, double nodata,
+                            const double* gt, const double* x, const double* y, i64 n, bool bilinear, int row0,
+                            int ny_total);
+
+}  // namespace lsio

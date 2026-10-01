@@ -52,6 +52,7 @@ from .gtn import (
     gtn_components,
     gtn_importance,
 )
+from ._zonal import extract, zonal_stats
 from .io import (
     ACCOUNTING_COLORMAP,
     CHANGE_COLORMAP,
@@ -63,6 +64,7 @@ from .io import (
     GTN_IMPORTANCE_COLORMAP,
     LM_COLORMAP,
     accounting_colormap,
+    clip,
     change_colormap,
     contortion_colormap,
     dist_colormap,
@@ -240,12 +242,15 @@ __all__ = [
     "least_cost_path",
     "list_metrics",
     "lm_colormap",
+    "clip",
+    "extract",
     "load_raster",
     "load_table",
     "load_vector",
     "match_grid",
     "rasterize",
     "save",
+    "zonal_stats",
     "write_vector",
     "max_threads",
     "default_threads",

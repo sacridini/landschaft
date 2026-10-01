@@ -203,7 +203,7 @@ def _as_geodataframe(vector):
     if isinstance(vector, gpd.GeoDataFrame):
         return vector
     if isinstance(vector, gpd.GeoSeries):
-        return vector.to_frame()
+        return gpd.GeoDataFrame(geometry=vector)
     if isinstance(vector, (str, os.PathLike)):
         return load_vector(vector)
     geoms = [vector] if hasattr(vector, "geom_type") else list(vector)

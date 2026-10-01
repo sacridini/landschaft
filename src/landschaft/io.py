@@ -37,6 +37,7 @@ __all__ = [
     "load_raster",
     "write_raster",
     "match_grid",
+    "clip",
     "load_vector",
     "write_vector",
     "rasterize",
@@ -82,6 +83,7 @@ def load_raster(
     validate: str | None = None,
     like=None,
     resampling: str = "auto",
+    clip=None,
     stack: bool = False,
     errors: str = "raise",
     recursive: bool = False,
@@ -121,15 +123,23 @@ def load_raster(
         some background. ``None`` (default) reads any raster; the
         habitat-pattern tools check their input themselves.
     like
-        Single raster only: a raster (DataArray or path) whose grid the result
-        is put on, reprojected and resampled when the CRS, resolution or extent
-        differ, with the coordinates of ``like`` (so that arithmetic between the
-        two aligns cell by cell). Cells outside the source are NoData.
+        A raster (DataArray or path) whose grid the result is put on,
+        reprojected and resampled when the CRS, resolution or extent differ,
+        with the coordinates of ``like`` (so that arithmetic between the two
+        aligns cell by cell). Cells outside the source are NoData. Several
+        rasters (a list, a folder or a pattern) with ``like`` give one
+        ``(band, y, x)`` stack named by the files, whatever their grids.
     resampling
         With ``like``: ``"auto"`` (default) takes the nearest cell for integer
         rasters (classes) and interpolates floats bilinearly; or any GDAL
         method: ``"nearest"``, ``"bilinear"``, ``"cubic"``, ``"average"``,
         ``"mode"``, ``"sum"``, ``"min"``, ``"max"``...
+    clip
+        A region (polygons as a GeoDataFrame, GeoSeries or shapely geometries,
+        or bounds ``(xmin, ymin, xmax, ymax)`` in the raster's CRS): only the
+        window of the region is read, the cells outside the polygons are NoData
+        (see :func:`clip`). For a small area of a large raster, reading is
+        much faster.
     stack
         Several rasters only: return a lazy ``(file, y, x)`` DataArray (one
         dask chunk per file) instead of a :class:`RasterCollection`. All
@@ -171,6 +181,12 @@ def load_raster(
     >>> ls.load_raster(coarse, like=landcover).rio.crs == landcover.rio.crs
     True
 
+    Only a study area, read from a large raster:
+
+    >>> x0, y0, x1, y1 = landcover.rio.bounds()
+    >>> ls.load_raster(ls.example_data("clc"), clip=(x0, y0, x0 + 10000, y0 + 5000)).shape
+    (200, 400)
+
     Checked as an MSPA input on reading:
 
     >>> forest = ls.load_raster(ls.example_data("input"), validate="mspa")
@@ -206,12 +222,15 @@ def load_raster(
         if band is not None and not isinstance(band, (int, np.integer)):
             raise ValueError("several rasters: band must be one band number")
         if like is not None:
-            raise ValueError("like= reads one raster; load the rasters one by one to put them on a grid")
+            return _stack_on_grid(source, like, band=band, masked=masked, resampling=resampling, clip=clip,
+                                  recursive=recursive)
+        if clip is not None:
+            raise ValueError("clip= with several rasters needs like= (a stack on one grid)")
         collection = RasterCollection.from_sources(
             source, band=band, validate=validate, errors=errors, recursive=recursive, masked=masked
         )
         return collection.to_stack() if stack else collection
-    da = _load_single(source, band=band, masked=masked, chunks=chunks, validate=None)
+    da = _load_single(source, band=band, masked=masked, chunks=chunks, validate=None, clip=clip)
     if like is not None:
         da = match_grid(da, like, resampling=resampling)
     if validate == "mspa":
@@ -318,6 +337,149 @@ def match_grid(data: xr.DataArray, like, *, resampling: str = "auto") -> xr.Data
     return data.assign_coords(x=template["x"].values, y=template["y"].values)
 
 
+def _stack_on_grid(source, like, *, band, masked, resampling, clip, recursive) -> xr.DataArray:
+    """Several rasters, each on the grid of ``like``, as one (band, y, x) stack named by the files."""
+    from .collection import expand_sources
+
+    paths = expand_sources(source, recursive=recursive)
+    if not paths:
+        raise InvalidInputError(f"no raster found in {source!r}")
+    names = [p.stem for p in paths]
+    if len(set(names)) != len(names):
+        names = [str(p) for p in paths]
+    if clip is not None and _region(clip, None)[0] is None:  # bounds: in the CRS of like, for every file
+        import geopandas as gpd
+        from shapely.geometry import box
+
+        clip = gpd.GeoDataFrame(geometry=[box(*_region(clip, None)[1])], crs=_grid_template(like).rio.crs)
+    layers = []
+    for path in paths:
+        da = _load_single(path, band=band, masked=masked, chunks=None, clip=clip)
+        if da.ndim != 2:
+            raise InvalidInputError(f"{path}: {da.sizes['band']} bands; one band per file in a stack (band=N)")
+        layers.append(match_grid(da, like, resampling=resampling))
+    stack = xr.concat(layers, dim="band", coords="minimal", compat="override", join="override")
+    stack = stack.assign_coords(band=names)
+    stack.name = "stack"
+    stack.attrs = {k: v for k, v in layers[0].attrs.items() if k not in ("source", "long_name", "_FillValue")}
+    return stack
+
+
+def _region(region, crs):
+    """(geometries in the CRS of the raster, or None for plain bounds, and their bounds)."""
+    if isinstance(region, (tuple, list)) and len(region) == 4 and all(
+            isinstance(v, (int, float, np.integer, np.floating)) for v in region):
+        return None, tuple(float(v) for v in region)
+    from ._vector import _as_geodataframe
+
+    if isinstance(region, (str, os.PathLike)):
+        raise TypeError("clip takes a region (a GeoDataFrame, geometries or bounds); read a file with load_vector")
+    gdf = _as_geodataframe(region)
+    if gdf.crs is not None and crs is not None and gdf.crs != crs:
+        gdf = gdf.to_crs(crs)
+    geoms = [g for g in gdf.geometry.values if g is not None and not g.is_empty]
+    if not geoms:
+        raise ValueError("the region is empty")
+    return geoms, tuple(float(v) for v in gdf.total_bounds)
+
+
+def _clip(data: xr.DataArray, region, *, crop: bool = True, all_touched: bool = False,
+          invert: bool = False) -> xr.DataArray:
+    import math
+
+    from rasterio.features import geometry_mask
+
+    if data.rio.crs is None:
+        raise ValueError("clip needs a georeferenced raster")
+    geoms, (xmin, ymin, xmax, ymax) = _region(region, data.rio.crs)
+    t = _transform(data)
+    if t.b or t.d:
+        raise ValueError("rotated grids are not supported")
+    ny, nx = data.sizes["y"], data.sizes["x"]
+    c0, r0 = 0, 0
+    if crop and not invert:
+        cols = sorted(((xmin - t.c) / t.a, (xmax - t.c) / t.a))
+        rows = sorted(((ymax - t.f) / t.e, (ymin - t.f) / t.e))
+        c0, c1 = max(0, math.floor(cols[0])), min(nx, math.ceil(cols[1]))
+        r0, r1 = max(0, math.floor(rows[0])), min(ny, math.ceil(rows[1]))
+        if c1 <= c0 or r1 <= r0:
+            raise ValueError("the region does not overlap the raster")
+        data = data.isel(x=slice(c0, c1), y=slice(r0, r1))
+    window = t * rasterio.Affine.translation(c0, r0)
+    data = data.rio.write_transform(window)
+    if geoms is None and not invert:
+        return data
+    if geoms is None:
+        from shapely.geometry import box
+
+        geoms = [box(xmin, ymin, xmax, ymax)]
+    inside = geometry_mask(geoms, out_shape=(data.sizes["y"], data.sizes["x"]), transform=window,
+                           all_touched=all_touched, invert=True)
+    keep = xr.DataArray(~inside if invert else inside, coords={"y": data["y"], "x": data["x"]}, dims=("y", "x"))
+    attrs = dict(data.attrs)
+    if np.issubdtype(data.dtype, np.floating):
+        out = data.where(keep)
+        out.attrs = attrs
+        return out.rio.write_nodata(data.rio.nodata if data.rio.nodata is not None else np.nan, encoded=False)
+    nodata = data.rio.nodata
+    if nodata is None:
+        info = np.iinfo(data.dtype) if np.issubdtype(data.dtype, np.integer) else None
+        nodata = (info.max if info.min == 0 else info.min) if info is not None else 0
+    out = data.where(keep, nodata).astype(data.dtype)
+    out.attrs = attrs
+    return out.rio.write_nodata(nodata, encoded=False)
+
+
+def clip(raster, region, *, crop: bool = True, all_touched: bool = False, invert: bool = False) -> xr.DataArray:
+    """Cut a raster to a region: the study area, a biome, a municipality.
+
+    The raster is cropped to the region's bounding box and the cells outside
+    its polygons become NoData (NaN for floats, the NoData value for integer
+    maps, which keep their type). The polygons are reprojected to the
+    raster's CRS; the cells kept are those :func:`rasterize` burns. On a lazy
+    raster (``load_raster(..., chunks=...)``) the crop is lazy too; to read
+    only the region from a file, use ``load_raster(path, clip=region)``.
+
+    Parameters
+    ----------
+    raster
+        Georeferenced ``(y, x)`` or ``(band, y, x)`` DataArray.
+    region
+        Polygons (GeoDataFrame, GeoSeries, shapely geometries), or bounds
+        ``(xmin, ymin, xmax, ymax)`` in the raster's CRS (a crop only).
+    crop
+        Crop to the region's bounding box (default); ``False`` keeps the extent
+        and only masks.
+    all_touched
+        Keep every cell the polygons touch (default: the cells whose centre is
+        inside).
+    invert
+        Mask the inside of the region instead (e.g. to leave urban areas out);
+        the extent is kept.
+
+    Returns
+    -------
+    xarray.DataArray
+
+    Examples
+    --------
+    >>> import geopandas as gpd
+    >>> from shapely.geometry import Point
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
+    >>> x0, y0, x1, y1 = landcover.rio.bounds()
+    >>> area = gpd.GeoDataFrame(geometry=[Point(x0 + 10000, y0 + 10000).buffer(5000)], crs=landcover.rio.crs)
+    >>> study = ls.clip(landcover, area)
+    >>> study.shape, int(study.rio.nodata), str(study.dtype)              # 10 km box, classes kept
+    ((400, 400), 255, 'uint8')
+    >>> round(int((study != 255).sum()) * 25 * 25 / 1e6, 1)              # km2 inside the circle
+    78.4
+    """
+    if not isinstance(raster, xr.DataArray):
+        raise TypeError("clip needs a georeferenced DataArray (see load_raster)")
+    return _clip(raster, region, crop=crop, all_touched=all_touched, invert=invert)
+
+
 def _band_names(raw: xr.DataArray, n: int) -> list | None:
     """The band descriptions when every band has a distinct, non-empty one."""
     names = raw.attrs.get("long_name")
@@ -331,7 +493,8 @@ def _band_names(raw: xr.DataArray, n: int) -> list | None:
     return names
 
 
-def _load_single(source: PathLike, *, band, masked, chunks: Any, validate: str | None) -> xr.DataArray:
+def _load_single(source: PathLike, *, band, masked, chunks: Any, validate: str | None = None,
+                 clip=None) -> xr.DataArray:
     raw = rioxarray.open_rasterio(source, chunks=chunks, masked=False)
     if isinstance(raw, (list, xr.Dataset)):
         raise InvalidInputError(f"{source}: file contains several sub-datasets; open one of them explicitly.")
@@ -356,6 +519,8 @@ def _load_single(source: PathLike, *, band, masked, chunks: Any, validate: str |
             da = da.assign_coords(band=labels)
             if names:
                 da.attrs["long_name"] = tuple(labels)
+        if clip is not None:
+            da = _clip(da, clip)  # only the window of the region is read
         if chunks is None:
             da = da.load()
     finally:
@@ -400,41 +565,81 @@ def _load_map(source, *, band: int | None = None, validate: str | None = None, *
 
 def reclassify(
     data,
-    foreground: Iterable[int] | int | Callable[[np.ndarray], np.ndarray],
+    table=None,
     *,
+    foreground: Iterable[int] | int | Callable[[np.ndarray], np.ndarray] | None = None,
     missing: Iterable[int] | int | None = None,
     background: Iterable[int] | int | None = None,
+    others="keep",
+    dtype=None,
 ):
-    """Build a habitat map (0 = missing, 1 = background, 2 = habitat) from any raster.
+    """Give the values of a raster new values: from a table, or into a habitat map.
+
+    **With a table**, every value (or range of values) becomes the value the
+    table gives it: land-cover classes into resistances or costs, classes
+    grouped, a continuous map cut into classes. The table is
+
+    - a ``dict`` ``{old: new}``; a key may be a range ``(low, high)``;
+    - a list of pairs ``(old, new)`` or of ranges ``(low, high, new)``, which
+      hold the values ``low <= v < high`` (``-np.inf`` / ``np.inf`` for open
+      ends); where ranges overlap, the first one wins;
+    - a DataFrame (e.g. from :func:`load_table`) of two columns (old, new) or
+      three (low, high, new), or a 2-D array of the same.
+
+    **With** ``foreground`` (or a value, a list of values or a function in place
+    of the table), the result is a habitat map (0 = missing, 1 = background,
+    2 = habitat), the input of :func:`mspa`, :func:`fad` and the other
+    habitat-pattern tools.
 
     Parameters
     ----------
     data
-        Categorical or continuous map: numpy array or DataArray, any integer or
-        float type.
+        Raster: numpy array, DataArray (dask-backed ones stay lazy), any type.
+    table
+        The new values (see above).
     foreground
-        Value(s) that become habitat (2), or a function of the values returning
-        a boolean mask (e.g. ``lambda a: a >= 30`` on a tree-cover percentage).
+        Habitat map: value(s) that become habitat (2), or a function of the
+        values returning a boolean mask (e.g. ``lambda a: a >= 30`` on a
+        tree-cover percentage).
     missing
-        Value(s) that become missing (0). NaN and the raster's NoData value
-        (``data.rio.nodata``) are always missing.
+        Habitat map: value(s) that become missing (0). NaN and the raster's
+        NoData value are always missing.
     background
-        Value(s) that become background (1). By default every value that is
-        neither habitat nor missing; when given, the remaining values become
-        missing.
+        Habitat map: value(s) that become background (1). By default every value
+        that is neither habitat nor missing; when given, the remaining values
+        become missing.
+    others
+        Table: what values the table does not hold become: ``"keep"`` (default,
+        their own value), ``"nodata"``, or a number. NoData stays NoData.
+    dtype
+        Table: output type (default: the smallest that holds the new values, and
+        the kept ones).
 
     Returns
     -------
     xarray.DataArray or numpy.ndarray
-        Same type and georeferencing as ``data``, ``uint8`` coded 0/1/2, ready
-        for :func:`mspa`, :func:`fad` and the other habitat-pattern tools.
+        Same type and georeferencing as ``data``.
 
     Examples
     --------
-    Forests of a CORINE land-cover map (classes 23, 24 and 25):
+    Land-cover classes into resistance to movement (the other classes: 50):
 
     >>> import landschaft as ls
     >>> landcover = ls.load_raster(ls.example_data("clc"))
+    >>> resistance = ls.reclassify(landcover, {23: 1, 24: 1, 25: 1, 18: 10, 1: 1000}, others=50)
+    >>> str(resistance.dtype), sorted(int(v) for v in set(resistance.values.ravel()))
+    ('uint16', [1, 10, 50, 1000])
+
+    Ranges of a continuous map into classes, ``[low, high)``:
+
+    >>> import numpy as np
+    >>> footprint = np.array([[0.0, 3.5], [12.0, np.nan]])
+    >>> ls.reclassify(footprint, [(0, 4, 1), (4, 10, 2), (10, np.inf, 3)])
+    array([[ 1.,  1.],
+           [ 3., nan]])
+
+    Forests of a CORINE land-cover map (classes 23, 24 and 25) as a habitat map:
+
     >>> forest = ls.reclassify(landcover, foreground=[23, 24, 25])
     >>> sorted(int(v) for v in set(forest.values.ravel()))
     [1, 2]
@@ -444,6 +649,32 @@ def reclassify(
 
     >>> tall = ls.reclassify(landcover, foreground=lambda a: (a >= 23) & (a <= 25), missing=[41])
     """
+    if foreground is None and table is not None and _is_habitat_spec(table):
+        foreground, table = table, None
+    if foreground is not None:
+        if table is not None:
+            raise ValueError("give either a table or foreground=, not both")
+        return _habitat_map(data, foreground, missing, background)
+    if table is None:
+        raise TypeError("reclassify needs a table of new values or foreground= (a habitat map)")
+    if missing is not None or background is not None:
+        raise ValueError("missing= and background= make habitat maps: use them with foreground=")
+    return _reclassify_table(data, table, others, dtype)
+
+
+def _is_habitat_spec(spec) -> bool:
+    """A value, a list of values or a function: the habitat of a habitat map."""
+    if callable(spec) and not isinstance(spec, dict):
+        return True
+    if isinstance(spec, (int, np.integer)):
+        return True
+    if isinstance(spec, (dict, str)) or hasattr(spec, "columns"):
+        return False
+    arr = np.asarray(spec, dtype=object) if isinstance(spec, (list, tuple, set, np.ndarray)) else None
+    return arr is not None and arr.ndim == 1 and all(isinstance(v, (int, np.integer)) for v in arr.tolist())
+
+
+def _habitat_map(data, foreground, missing, background):
     values = np.asarray(data)
 
     def isin(spec) -> np.ndarray:
@@ -471,6 +702,122 @@ def reclassify(
         result.encoding = {}
         return result.rio.write_nodata(None)
     return out
+
+
+def _table_rules(table) -> tuple[np.ndarray, np.ndarray, list[tuple[float, float, float]]]:
+    """(old values, their new values) and the ranges (low, high, new) of a table."""
+    rows: list[tuple] = []
+    if isinstance(table, dict):
+        for k, v in table.items():
+            rows.append((*k, v) if isinstance(k, tuple) else (k, v))
+    elif hasattr(table, "columns"):
+        frame = table
+        if frame.shape[1] not in (2, 3):
+            raise ValueError(f"a table of new values has 2 columns (old, new) or 3 (low, high, new), got "
+                             f"{frame.shape[1]}: {', '.join(map(str, frame.columns))}")
+        rows = [tuple(r) for r in frame.itertuples(index=False, name=None)]
+    else:
+        arr = np.asarray(table, dtype=object)
+        if arr.ndim != 2 or arr.shape[1] not in (2, 3):
+            raise ValueError("a table of new values is a dict, pairs (old, new) or ranges (low, high, new)")
+        rows = [tuple(r) for r in arr.tolist()]
+    pairs = [r for r in rows if len(r) == 2]
+    ranges = [(float(r[0]), float(r[1]), float(r[2])) for r in rows if len(r) == 3]
+    if any(len(r) not in (2, 3) for r in rows):
+        raise ValueError("every rule is (old, new) or (low, high, new)")
+    old = np.array([p[0] for p in pairs], dtype=np.float64)
+    new = np.array([p[1] for p in pairs], dtype=np.float64)
+    if len(np.unique(old)) != len(old):
+        raise ValueError("a value appears twice in the table")
+    return old, new, ranges
+
+
+def _smallest_type(values: np.ndarray, keep_dtype) -> np.dtype:
+    finite = values[np.isfinite(values)]
+    if finite.size and np.all(finite == np.round(finite)) and (keep_dtype is None or np.issubdtype(keep_dtype, np.integer)):
+        lo, hi = float(finite.min()), float(finite.max())
+        for dt in (np.uint8, np.uint16, np.int16, np.uint32, np.int32, np.int64):
+            info = np.iinfo(dt)
+            if info.min <= lo and hi <= info.max:
+                return np.result_type(dt, keep_dtype) if keep_dtype is not None else np.dtype(dt)
+    if keep_dtype is not None and np.dtype(keep_dtype) == np.float64:
+        return np.dtype(np.float64)
+    return np.dtype(np.float32)
+
+
+def _reclassify_table(data, table, others, dtype):
+    old, new, ranges = _table_rules(table)
+    is_da = isinstance(data, xr.DataArray)
+    raw = data.data if is_da else (data if hasattr(data, "dask") else np.asarray(data))
+    in_dtype = np.dtype(raw.dtype)
+    in_nodata = data.rio.nodata if is_da else None
+    if in_nodata is not None and np.issubdtype(in_dtype, np.floating) and np.isnan(in_nodata):
+        in_nodata = None
+    keep = isinstance(others, str) and others == "keep"
+    to_nodata = isinstance(others, str) and others == "nodata"
+    if isinstance(others, str) and not (keep or to_nodata):
+        raise ValueError("others must be 'keep', 'nodata' or a number")
+    candidates = np.concatenate([new, [r[2] for r in ranges], [] if isinstance(others, str) else [float(others)]])
+    out_dtype = np.dtype(dtype) if dtype is not None else _smallest_type(candidates, in_dtype if keep else None)
+    out_float = np.issubdtype(out_dtype, np.floating)
+    # the NoData of the result
+    if out_float:
+        out_nodata = np.nan
+    elif in_nodata is not None and float(in_nodata).is_integer() and (
+            np.iinfo(out_dtype).min <= in_nodata <= np.iinfo(out_dtype).max) and in_nodata not in candidates:
+        out_nodata = out_dtype.type(in_nodata)
+    else:
+        info = np.iinfo(out_dtype)
+        out_nodata = info.max if info.min == 0 else info.min
+    needs_nodata = to_nodata or in_nodata is not None or np.issubdtype(in_dtype, np.floating)
+
+    order = np.argsort(old)
+    old_sorted, new_sorted = old[order], new[order]
+    lut = None
+    if np.issubdtype(in_dtype, np.integer) and not ranges and in_dtype.itemsize <= 2:
+        info = np.iinfo(in_dtype)  # a lookup table over every value of the type: one pass
+        codes = np.arange(info.min, info.max + 1, dtype=np.int64)
+        base = codes.astype(np.float64) if keep else np.full(codes.size, np.nan if to_nodata else float(others))
+        idx = np.searchsorted(old_sorted, codes)
+        hit = (idx < old_sorted.size) & (old_sorted[np.minimum(idx, old_sorted.size - 1)] == codes)
+        base[hit] = new_sorted[idx[hit]]
+        if in_nodata is not None:
+            base[int(in_nodata) - info.min] = np.nan
+        lut = (base, int(info.min))
+
+    def block(v: np.ndarray) -> np.ndarray:
+        v = np.asarray(v)
+        if lut is not None:
+            res = lut[0][v.astype(np.int64) - lut[1]]
+        else:
+            x = v.astype(np.float64)
+            missing_in = np.isnan(x) | ((x == in_nodata) if in_nodata is not None else False)
+            res = x.copy() if keep else np.full(x.shape, np.nan if to_nodata else float(others))
+            if old_sorted.size:
+                idx = np.searchsorted(old_sorted, x)
+                ok = idx < old_sorted.size
+                ok[ok] = old_sorted[idx[ok]] == x[ok]
+                res[ok] = new_sorted[idx[ok]]
+            for lo, hi, val in reversed(ranges):  # the first range wins
+                res[(x >= lo) & (x < hi)] = val
+            res[missing_in] = np.nan
+        if out_float:
+            return res.astype(out_dtype)
+        return np.where(np.isnan(res), out_nodata, res).astype(out_dtype)
+
+    if hasattr(raw, "dask"):
+        out = raw.map_blocks(block, dtype=out_dtype)
+    else:
+        out = block(raw)
+    if not is_da:
+        return out
+    result = data.copy(data=out)
+    result.attrs = {k: v for k, v in data.attrs.items()
+                    if k not in ("_FillValue", "scale_factor", "add_offset", "landschaft_product")}
+    result.encoding = {}
+    if out_float:
+        return result.rio.write_nodata(np.nan, encoded=False)
+    return result.rio.write_nodata(out_nodata if needs_nodata else None, encoded=False)
 
 
 # --- colour tables ----------------------------------------------------------

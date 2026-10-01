@@ -53,6 +53,36 @@ hfi.shape == landcover.shape                             # True
 
 `ls.match_grid(data, like)` does the same for a raster already in memory.
 
+A list of files (or a folder, or a pattern such as `"sdm/*.tif"`) with
+`like=` gives one `(band, y, x)` stack named by the files, whatever their
+grids: species distribution models saved one per file, for example.
+
+Only a study area is often needed from a large raster. `clip=` reads only the
+window of a region (polygons, or bounds in the raster's CRS) and makes the
+cells outside its polygons NoData; `ls.clip` does the same in memory:
+
+```python
+from shapely.geometry import Point
+import geopandas as gpd
+
+x0, y0, x1, y1 = landcover.rio.bounds()
+area = gpd.GeoDataFrame(geometry=[Point(x0 + 20000, y0 + 20000).buffer(8000)], crs=landcover.rio.crs)
+study = ls.load_raster(ls.example_data("clc"), clip=area)   # 640 x 640 cells read, not 2000 x 2000
+study.shape                                                 # (640, 640)
+```
+
+`ls.reclassify` gives the values of a raster new values from a table: a
+dict, a DataFrame read with `load_table`, pairs `(old, new)` or ranges
+`(low, high, new)`. It is how land cover becomes a resistance or a cost:
+
+```python
+resistance = ls.reclassify(landcover, {23: 1, 24: 1, 25: 1, 18: 10, 1: 1000}, others=50)
+cost_class = ls.reclassify(hfi, [(0, 0.2, 1), (0.2, 0.5, 2), (0.5, 1.01, 3)])
+```
+
+With `foreground=` (or just a list of classes) it builds the habitat map
+(0 missing, 1 background, 2 habitat) of the habitat-pattern tools.
+
 `write_raster` stores a raster so that GIS software, and `load_raster`, read
 it back as it was: georeferencing, NoData (NaN of floats included), band
 names, the colour table of landschaft's class maps. It picks what the data
@@ -102,6 +132,25 @@ ls.write_vector(reserves, "reserves.gpkg")
 
 mask = ls.rasterize(ls.load_vector("reserves.gpkg"), like=landcover)
 int(mask.sum()) * 25 * 25 / 1e6                          # 40.0 km2 protected
+```
+
+## Values by zone and at points
+
+`ls.zonal_stats` summarises a raster in every zone: polygons (which may
+overlap) or the labels of a raster, with any of count, sum, mean, min, max,
+range, std, var, median, percentiles (`"p90"`), majority, minority and
+unique. `ls.extract` reads the raster at points (nearest cell, or `bilinear`),
+or summarises the cells around them with `buffer=`. Both run in C++ on all
+cores and take every band of a stack at once:
+
+```python
+zones = gpd.GeoDataFrame({"name": ["bog", "heath"]}, crs=landcover.rio.crs, geometry=reserves.geometry)
+ls.zonal_stats(hfi, zones, ["mean", "max", "p90"])          # one row per reserve
+
+ls.zonal_stats(hfi, landcover, ["count", "mean"])           # per land-cover class
+
+ls.extract(hfi, points)                                     # the value at every record
+ls.extract(hfi, points, buffer=500, stats=["mean"])         # the mean within 500 m
 ```
 
 ## Tables

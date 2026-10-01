@@ -21,17 +21,23 @@ namespace lsm {
 
 namespace {
 
+// The cells of an nx x ny grid burnt into the window [ox, ox + wx) x [oy, oy + wy)
+// of it: the decisions are the grid's (nx, ny), only the window is stored.
 struct Mask {
     int nx, ny;
     std::uint8_t* data;
+    int ox = 0, oy = 0, wx = nx, wy = ny;
     void point(int y, int x) const {
-        if (x >= 0 && x < nx && y >= 0 && y < ny) data[static_cast<std::size_t>(y) * nx + x] = 1;
+        if (x >= 0 && x < nx && y >= 0 && y < ny && x >= ox && x < ox + wx && y >= oy && y < oy + wy) {
+            data[static_cast<std::size_t>(y - oy) * wx + (x - ox)] = 1;
+        }
     }
     void scanline(int y, int x0, int x1) const {
-        if (y < 0 || y >= ny) return;
-        x0 = std::max(x0, 0);
-        x1 = std::min(x1, nx - 1);
-        for (int x = x0; x <= x1; ++x) data[static_cast<std::size_t>(y) * nx + x] = 1;
+        if (y < 0 || y >= ny || y < oy || y >= oy + wy) return;
+        x0 = std::max({x0, 0, ox});
+        x1 = std::min({x1, nx - 1, ox + wx - 1});
+        std::uint8_t* row = data + static_cast<std::size_t>(y - oy) * wx - ox;
+        for (int x = x0; x <= x1; ++x) row[x] = 1;
     }
 };
 
@@ -241,10 +247,19 @@ std::vector<std::uint8_t> rasterize_all_touched(const std::vector<std::vector<st
         }
     }
     std::vector<std::uint8_t> out(static_cast<std::size_t>(nx) * ny, 0);
-    const Mask m{nx, ny, out.data()};
-    line_all_touched(m, part_size, px, py);
-    filled_polygon(m, part_size, px, py);
+    burn_polygon(part_size, px, py, nx, ny, true, 0, 0, nx, ny, out.data());
     return out;
+}
+
+void burn_polygon(const std::vector<int>& part_size, const std::vector<double>& px, const std::vector<double>& py,
+                  int nx, int ny, bool all_touched, int ox, int oy, int wx, int wy, std::uint8_t* out) {
+    Mask m{nx, ny, out};
+    m.ox = ox;
+    m.oy = oy;
+    m.wx = wx;
+    m.wy = wy;
+    if (all_touched) line_all_touched(m, part_size, px, py);
+    filled_polygon(m, part_size, px, py);
 }
 
 }  // namespace lsm

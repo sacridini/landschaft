@@ -91,8 +91,6 @@ def test_match_grid_in_memory_and_errors(ref):
     assert back.shape == ref.shape and (back.x.values == ref.x.values).all()
     with pytest.raises(ValueError, match="georeferenced DataArray"):
         ls.match_grid(np.zeros((3, 3)), ref)
-    with pytest.raises(ValueError, match="one raster"):
-        ls.load_raster(["a.tif", "b.tif"], like=ref)
 
 
 # --- vectors -------------------------------------------------------------------
