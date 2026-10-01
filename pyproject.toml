@@ -38,6 +38,14 @@ cmake.build-type = "Release"
 sdist.exclude = [".github", ".dockerignore", "Dockerfile", "IDEAS.md", "assets", "docs", "mkdocs.yml", "site",
                  "tests", "tools"]
 
+# Windows: build with MSVC, whatever else is on PATH. A CMake that knows the installed Visual Studio
+# (4.2 knows 2017 to 2026) makes it the default generator; an older one on PATH (e.g. Strawberry
+# Perl's) would pick MinGW's gcc instead, whose modules need its runtime DLLs and lack the UCRT
+# maths the results are checked against. pip fetches a recent CMake when the one found is older.
+[[tool.scikit-build.overrides]]
+if.platform-system = "^win32"
+cmake.version = ">=4.2"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

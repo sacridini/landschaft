@@ -33,16 +33,18 @@ platform, which avoids most installation problems.
 
     ```bat
     conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray ^
-          xarray dask matplotlib geopandas scikit-build-core pybind11 cmake ninja
+          xarray dask matplotlib geopandas scikit-build-core pybind11 "cmake>=4.2"
     conda activate landschaft
     git clone https://github.com/sacridini/landschaft.git
     cd landschaft
     pip install --no-build-isolation -e .
     ```
 
-    !!! tip "Only the Build Tools installed?"
-        If CMake does not find the compiler, name the Visual Studio generator
-        before `pip install`: `set CMAKE_GENERATOR=Visual Studio 17 2022`.
+    On Windows the core is always built with Visual Studio's compiler (MSVC),
+    whatever else is on `PATH`: CMake 4.2 or newer finds the installed Visual
+    Studio by itself (a plain `pip install -e .`, without
+    `--no-build-isolation`, fetches it). Another compiler, such as a MinGW gcc,
+    stops the build with a message.
 
 === "macOS"
 
@@ -165,8 +167,7 @@ pytest
 ??? question "`pip install` fails with *no C++ compiler found* / *CMAKE_CXX_COMPILER not set*"
     The build needs a C++17 compiler: the *Desktop development with C++*
     workload of the Visual Studio Build Tools on Windows, `xcode-select
-    --install` on macOS, `build-essential` or `gcc-c++` on Linux. On Windows,
-    also try `set CMAKE_GENERATOR=Visual Studio 17 2022`.
+    --install` on macOS, `build-essential` or `gcc-c++` on Linux.
 
 ??? question "`ls.max_threads()` returns 1"
     The core was built without OpenMP. On macOS install `llvm-openmp` (conda)

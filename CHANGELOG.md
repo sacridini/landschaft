@@ -19,6 +19,11 @@ between minor versions.
   any class given a transparent colour.
 
 ### Fixed
+- Windows: a plain `pip install -e .` builds with Visual Studio's compiler (MSVC) whatever else is
+  on `PATH`. A CMake found first that did not know the installed Visual Studio (Strawberry Perl's,
+  for example) made the build pick a MinGW gcc, whose module failed with "DLL load failed while
+  importing _core". CMake 4.2 or newer is now required on Windows (pip fetches it), and a
+  non-MSVC compiler on Windows stops the build with a message.
 - `ls.plot`: the NoData of a raster on an interactive map is transparent again; reprojected to
   Web Mercator, it was drawn in the first colour of the legend.
 

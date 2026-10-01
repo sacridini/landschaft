@@ -7,6 +7,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(LANDSCHAFT_OPENMP "Build with OpenMP" ON)
 
+# On Windows the modules are built with MSVC (the results are checked against the UCRT's maths);
+# a MinGW gcc found on PATH would make modules that need its runtime DLLs and fail to import.
+if(WIN32 AND NOT MSVC)
+    message(FATAL_ERROR "landschaft is built with MSVC on Windows: install Visual Studio (or its Build Tools) "
+                        "with the C++ workload. The compiler found was ${CMAKE_CXX_COMPILER}.")
+endif()
+
 find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 CONFIG REQUIRED)
 
