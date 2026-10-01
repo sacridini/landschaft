@@ -28,6 +28,7 @@ import xarray as xr
 from . import _core
 from .io import FAD_COLORMAP
 from .validation import validate_fad_input, validate_mspa_input
+from ._save import Saveable
 
 __all__ = [
     "fad",
@@ -67,7 +68,7 @@ def _wrap_as_dataarray(
 
 
 @dataclass
-class FADResult:
+class FADResult(Saveable):
     """Result of single-scale FAD analysis (:func:`fad`).
 
     Examples
@@ -90,7 +91,7 @@ class FADResult:
 
 
 @dataclass
-class FADMultiscaleResult:
+class FADMultiscaleResult(Saveable):
     """Result of multiscale FAD analysis (:func:`fad_multiscale`).
 
     Examples

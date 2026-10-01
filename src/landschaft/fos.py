@@ -31,6 +31,7 @@ import xarray as xr
 from . import _core
 from .io import _load_map
 from .validation import InvalidInputError, validate_fad_input
+from ._save import Saveable
 
 __all__ = ["FOSResult", "fos"]
 
@@ -39,7 +40,7 @@ FOS_CLASSES_5 = FOS_CLASSES_6[:5]
 
 
 @dataclass(frozen=True)
-class FOSResult:
+class FOSResult(Saveable):
     """Result of :func:`fos`.
 
     Attributes

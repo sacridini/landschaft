@@ -1291,12 +1291,9 @@ class BaseData:
         import geopandas as gpd
         import shapely
 
-        if isinstance(source, gpd.GeoDataFrame):
-            gdf = source
-        elif str(source).lower().endswith((".parquet", ".geoparquet")):
-            gdf = gpd.read_parquet(source)
-        else:
-            gdf = gpd.read_file(source, layer=layer)
+        from .._vector import load_vector
+
+        gdf = source if isinstance(source, gpd.GeoDataFrame) else load_vector(source, layer=layer)
         if to_crs is not None:
             gdf = gdf.to_crs(to_crs)
         if len(cell_sizes) != 2:

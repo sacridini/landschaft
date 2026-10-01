@@ -8,10 +8,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from ._backend import core
+from .._save import Saveable
 
 
 @dataclass
-class AdvancedResult:
+class AdvancedResult(Saveable):
     """Node currents and voltages of :func:`advanced`.
 
     DataArrays when the conductance was one, arrays otherwise.

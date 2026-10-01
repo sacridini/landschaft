@@ -117,8 +117,15 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 |---|---|
 | [`ls.load_raster`](data.md#landschaft.load_raster) | Read one raster, or collect many |
 | [`ls.write_raster`](data.md#landschaft.write_raster) | Write a raster: one band or several, any format GDAL writes |
+| [`ls.match_grid`](data.md#landschaft.match_grid) | Put a raster on the grid of another: same CRS, cells and coordinates |
 | [`ls.reclassify`](data.md#landschaft.reclassify) | Build a habitat map (0 = missing, 1 = background, 2 = habitat) from any raster |
-| [`ls.example_data`](data.md#landschaft.example_data) | Path of an example raster shipped with the package |
+| [`ls.load_vector`](data.md#landschaft.load_vector) | Read a vector layer (polygons, lines, points) as a GeoDataFrame |
+| [`ls.write_vector`](data.md#landschaft.write_vector) | Write a vector layer, the format given by the file extension |
+| [`ls.rasterize`](data.md#landschaft.rasterize) | Burn vector features into a raster on the grid of another raster |
+| [`ls.load_table`](data.md#landschaft.load_table) | Read a table, the format given by the file extension |
+| [`ls.write_table`](data.md#landschaft.write_table) | Write a table, the format given by the file extension |
+| [`ls.save`](data.md#landschaft.save) | Save data or a result, each part in the format that suits it |
+| [`ls.example_data`](data.md#landschaft.example_data) | Path of an example data set shipped with the package |
 | [`ls.RasterCollection`](data.md#landschaft.RasterCollection) | Many rasters handled as one object; pixels are read only when processed |
 | [`ls.RasterInfo`](data.md#landschaft.RasterInfo) | Header of one raster of a collection (the pixels are not read) |
 | [`ls.validate_mspa_input`](data.md#landschaft.validate_mspa_input) | Check that ``data`` is a habitat map MSPA can process |
@@ -189,7 +196,6 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 | [`ls.window_metrics`](landscape-metrics.md#landschaft.window_metrics) | Landscape-level metrics in a moving window, like landscapemetrics' ``window_lsm`` |
 | [`ls.zonal_metrics`](landscape-metrics.md#landschaft.zonal_metrics) | Landscape and class metrics of every zone, as a GeoDataFrame |
 | [`ls.grid_zones`](landscape-metrics.md#landschaft.grid_zones) | Square zones tiling a raster, for zonal analyses |
-| [`ls.write_table`](landscape-metrics.md#landschaft.write_table) | Write a metric table, the format given by the file extension |
 | [`ls.SpatioTemporalAnalysis`](landscape-metrics.md#landschaft.SpatioTemporalAnalysis) | Landscape metrics along a time series of rasters (pylandstats' ``SpatioTemporalAnalysis`` and its zonal, buffer and grid variants) |
 | [`ls.SpatialSignatureAnalysis`](landscape-metrics.md#landschaft.SpatialSignatureAnalysis) | Landscapes (or zones) described by their metrics: the "spatial signature" matrix, its principal components and clusters (pylandstats' ``SpatialSignatureAnalysis``) |
 | [`ls.lsm.PCAResult`](landscape-metrics.md#landschaft.lsm.PCAResult) | Principal components of the spatial signatures |

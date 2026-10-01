@@ -32,6 +32,7 @@ import xarray as xr
 from . import _core
 from .io import DIST_COLORMAP
 from .validation import validate_mspa_input
+from ._save import Saveable
 
 __all__ = [
     "euclidean_distance",
@@ -71,7 +72,7 @@ def _wrap_as_dataarray(
 
 
 @dataclass
-class EuclideanDistanceResult:
+class EuclideanDistanceResult(Saveable):
     """Result of :func:`euclidean_distance`.
 
     Attributes

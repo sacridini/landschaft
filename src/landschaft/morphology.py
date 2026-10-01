@@ -29,6 +29,7 @@ import xarray as xr
 
 from . import _core
 from .io import _load_map
+from ._save import Saveable
 
 __all__ = [
     "parcellation",
@@ -38,7 +39,7 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class ParcellationResult:
+class ParcellationResult(Saveable):
     """Results from landscape parcellation analysis.
 
     Attributes

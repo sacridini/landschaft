@@ -20,6 +20,7 @@ import pandas as pd
 from . import _core
 from .fad import FADMultiscaleResult, fad_multiscale
 from .io import _load_map
+from ._save import Saveable
 
 __all__ = ["FADChangeScale", "FADMultiscaleChangeResult", "fad_multiscale_change"]
 
@@ -27,7 +28,7 @@ FAD_CHANGE_CLASSES = ("Background", "Rare", "Patchy", "Transitional", "Dominant"
 
 
 @dataclass(frozen=True)
-class FADChangeScale:
+class FADChangeScale(Saveable):
     """FAD change A -> B at one observation scale (one GTB ``FAD_change_<scale>`` table).
 
     Attributes
@@ -65,7 +66,7 @@ class FADChangeScale:
 
 
 @dataclass(frozen=True)
-class FADMultiscaleChangeResult:
+class FADMultiscaleChangeResult(Saveable):
     """Result of :func:`fad_multiscale_change`.
 
     ``scales`` maps every window size and ``"mscale"`` (the multiscale map) to

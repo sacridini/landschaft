@@ -32,6 +32,7 @@ from ._threads import default_threads
 from .collection import RasterCollection, RasterInfo, expand_sources
 from .io import PathLike, _load_map, write_raster
 from .mspa import mspa
+from ._save import Saveable
 
 __all__ = ["BATCH_TOOLS", "BatchResult", "batch", "mspa_batch"]
 
@@ -42,7 +43,7 @@ BYTES_PER_PIXEL = 32
 
 
 @dataclass
-class BatchResult:
+class BatchResult(Saveable):
     """Outcome of one input of :func:`batch` / :func:`mspa_batch`.
 
     Attributes

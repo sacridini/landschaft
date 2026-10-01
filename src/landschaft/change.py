@@ -31,6 +31,7 @@ import xarray as xr
 
 from . import _core
 from .io import _load_map
+from ._save import Saveable
 
 __all__ = [
     "simple_change",
@@ -52,7 +53,7 @@ _FOS_CLASSES = [
 
 
 @dataclass(frozen=True)
-class SimpleChangeResult:
+class SimpleChangeResult(Saveable):
     """Result of :func:`simple_change`.
 
     Attributes
@@ -132,7 +133,7 @@ class SimpleChangeResult:
 
 
 @dataclass(frozen=True)
-class MorphologicalChangeResult:
+class MorphologicalChangeResult(Saveable):
     """Result of :func:`morphological_change`.
 
     Attributes
@@ -208,7 +209,7 @@ class MorphologicalChangeResult:
 
 
 @dataclass(frozen=True)
-class FOSChangeResult:
+class FOSChangeResult(Saveable):
     """Result of :func:`fos_change`.
 
     Attributes

@@ -38,6 +38,7 @@ import xarray as xr
 
 from . import _core
 from .io import GTN_COMPONENTS_COLORMAP, GTN_IMPORTANCE_COLORMAP
+from ._save import Saveable
 
 __all__ = [
     "gtn_components",
@@ -123,7 +124,7 @@ def _wrap_as_dataarray(
 
 
 @dataclass
-class GTNComponentsResult:
+class GTNComponentsResult(Saveable):
     """Result of :func:`gtn_components`.
 
     Attributes
@@ -377,7 +378,7 @@ def gtn_components(
 
 
 @dataclass
-class GTNImportanceResult:
+class GTNImportanceResult(Saveable):
     """Result of :func:`gtn_importance`.
 
     Attributes

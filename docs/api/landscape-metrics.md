@@ -51,7 +51,8 @@ utilities. Tutorial: [landscape metrics](../tutorials/landscape-metrics.md).
 
 ::: landschaft.grid_zones
 
-::: landschaft.write_table
+Metric tables (and zonal metrics as GeoDataFrames) are written with
+[`ls.write_table`](data.md#landschaft.write_table) or [`ls.save`](data.md#landschaft.save).
 
 ## Time series and spatial signatures
 

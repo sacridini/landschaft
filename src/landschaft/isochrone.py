@@ -28,6 +28,7 @@ import xarray as xr
 
 from . import _core
 from .io import _load_map
+from ._save import Saveable
 
 __all__ = [
     "ISOCHRONE_CLASSES",
@@ -129,7 +130,7 @@ def _check_marker(marker: np.ndarray, resist: np.ndarray, values: tuple[int, ...
 
 
 @dataclass(frozen=True)
-class IsochroneResult:
+class IsochroneResult(Saveable):
     """Result of :func:`isochrone_map` / :func:`isochrone_map_ab`.
 
     Attributes

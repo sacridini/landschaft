@@ -50,6 +50,9 @@ towns = np.isin(landcover.values, [1, 2])                  # a plain numpy array
 ls.write_raster(towns, "output/towns.tif", like=landcover)  # creates the folder; bool is saved as uint8
 ```
 
+Vectors, tables and whole results have functions of the same kind: see
+[Loading and saving data](data.md).
+
 ## Habitat maps
 
 Pattern, fragmentation and change tools (MSPA, density, fragmentation classes,

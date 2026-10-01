@@ -18,6 +18,7 @@ import pandas as pd
 
 from .. import _core
 from ._spatial import _KEY_GROUP_ARRAY, _KEY_NUMBER_ARRAY, SpatialResult, _evaluate
+from .._save import Saveable
 
 _EPS = 1e-10  # Biodiverse's DEFAULT_PRECISION_SMALL
 _COUNTERS = ("C", "Q", "T", "SUMX", "SUMXX")
@@ -442,7 +443,7 @@ class _Counts:
         return np.where(np.isnan(n) | (n == 0), np.nan, z)
 
 
-class Randomisation:
+class Randomisation(Saveable):
     """Randomisations of a :class:`SpatialResult` (see :func:`randomise`).
 
     Attributes
@@ -468,6 +469,7 @@ class Randomisation:
         self.iterations = 0
         self._rng = _core.BioRandom(int(seed) % (1 << 64))
         self._state: dict = {}  # caches a randomisation keeps across iterations
+
         self._scalars = _Counts(result.table.to_numpy(dtype=np.float64))
         self._lists: dict[str, tuple[pd.Index, _Counts]] = {}
         for lname in result.lists:
@@ -480,6 +482,10 @@ class Randomisation:
 
     def __repr__(self) -> str:
         return f"Randomisation({self.name!r}, {self.function}, {self.iterations} iterations)"
+
+    def _save_items(self) -> dict:
+        return {"function": self.function, "name": self.name, "seed": self.seed, "iterations": self.iterations,
+                "args": self.args, "result": self.result}
 
     def run(self, iterations: int = 1, n_threads: int | None = None) -> Randomisation:
         """Run more iterations (the random stream continues)."""

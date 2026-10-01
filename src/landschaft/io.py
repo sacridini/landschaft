@@ -29,10 +29,20 @@ from ._palettes import (
     RESISTANCE_PALETTE,
 )
 from .validation import BACKGROUND, FOREGROUND, MISSING, InvalidInputError, validate_mspa_input
+from ._save import save
+from ._table import load_table, write_table
+from ._vector import load_vector, rasterize, write_vector
 
 __all__ = [
     "load_raster",
     "write_raster",
+    "match_grid",
+    "load_vector",
+    "write_vector",
+    "rasterize",
+    "load_table",
+    "write_table",
+    "save",
     "reclassify",
     "mspa_colormap",
     "gtn_components_colormap",
@@ -70,6 +80,8 @@ def load_raster(
     masked: bool | str = "auto",
     chunks: Any = None,
     validate: str | None = None,
+    like=None,
+    resampling: str = "auto",
     stack: bool = False,
     errors: str = "raise",
     recursive: bool = False,
@@ -108,6 +120,16 @@ def load_raster(
         0 = missing, 1 = background, 2 = foreground, with some foreground and
         some background. ``None`` (default) reads any raster; the
         habitat-pattern tools check their input themselves.
+    like
+        Single raster only: a raster (DataArray or path) whose grid the result
+        is put on, reprojected and resampled when the CRS, resolution or extent
+        differ, with the coordinates of ``like`` (so that arithmetic between the
+        two aligns cell by cell). Cells outside the source are NoData.
+    resampling
+        With ``like``: ``"auto"`` (default) takes the nearest cell for integer
+        rasters (classes) and interpolates floats bilinearly; or any GDAL
+        method: ``"nearest"``, ``"bilinear"``, ``"cubic"``, ``"average"``,
+        ``"mode"``, ``"sum"``, ``"min"``, ``"max"``...
     stack
         Several rasters only: return a lazy ``(file, y, x)`` DataArray (one
         dask chunk per file) instead of a :class:`RasterCollection`. All
@@ -143,6 +165,12 @@ def load_raster(
     >>> landcover.rio.crs.to_epsg()
     3035
 
+    On the grid of another raster (here a coarser one in another CRS):
+
+    >>> coarse = ls.write_raster(landcover.rio.reproject("EPSG:4326")[::4, ::4], "coarse.tif")
+    >>> ls.load_raster(coarse, like=landcover).rio.crs == landcover.rio.crs
+    True
+
     Checked as an MSPA input on reading:
 
     >>> forest = ls.load_raster(ls.example_data("input"), validate="mspa")
@@ -177,11 +205,117 @@ def load_raster(
     if not is_single_source(source):
         if band is not None and not isinstance(band, (int, np.integer)):
             raise ValueError("several rasters: band must be one band number")
+        if like is not None:
+            raise ValueError("like= reads one raster; load the rasters one by one to put them on a grid")
         collection = RasterCollection.from_sources(
             source, band=band, validate=validate, errors=errors, recursive=recursive, masked=masked
         )
         return collection.to_stack() if stack else collection
-    return _load_single(source, band=band, masked=masked, chunks=chunks, validate=validate)
+    da = _load_single(source, band=band, masked=masked, chunks=chunks, validate=None)
+    if like is not None:
+        da = match_grid(da, like, resampling=resampling)
+    if validate == "mspa":
+        try:
+            validate_mspa_input(da)
+        except InvalidInputError as err:
+            raise InvalidInputError(f"{source}: {err}") from None
+    return da
+
+
+def _transform(da: xr.DataArray):
+    """The affine transform of a DataArray, from its coordinates: rioxarray's cached
+    transform keeps the old resolution after a strided slice such as ``da[::2, ::2]``."""
+    cached = da.rio.transform()
+    if da.sizes.get("x", 0) > 1 and da.sizes.get("y", 0) > 1:
+        fresh = da.rio.transform(recalc=True)
+        tol = 1e-6 * max(abs(fresh.a), abs(fresh.e))
+        if any(abs(p - q) > tol for p, q in zip(cached[:6], fresh[:6])):
+            return fresh  # stale: keep the cached one otherwise, it is exact
+    return cached
+
+
+_RESAMPLING_NAMES = ("nearest", "bilinear", "cubic", "cubic_spline", "lanczos", "average", "mode", "max", "min",
+                     "med", "q1", "q3", "sum", "rms")
+
+
+def _grid_template(like) -> xr.DataArray:
+    """A (y, x) DataArray with the grid of ``like`` (a DataArray or a raster path), costing no memory."""
+    if isinstance(like, xr.DataArray):
+        t = like.isel({d: 0 for d in like.dims if d not in ("y", "x")}) if like.ndim > 2 else like
+        if t.rio.crs is None:
+            raise ValueError("like has no CRS")
+        return t.rio.write_transform(_transform(t))
+    with rasterio.open(like) as src:
+        h, w, tr, crs = src.height, src.width, src.transform, src.crs
+    if tr.b or tr.d:
+        raise ValueError("rotated grids are not supported")
+    x = tr.c + tr.a * (np.arange(w) + 0.5)
+    y = tr.f + tr.e * (np.arange(h) + 0.5)
+    t = xr.DataArray(np.broadcast_to(np.uint8(0), (h, w)), coords={"y": y, "x": x}, dims=("y", "x"))
+    return t.rio.write_crs(crs).rio.write_transform(tr)
+
+
+def _same_grid(a: xr.DataArray, b: xr.DataArray) -> bool:
+    return (a.sizes["y"] == b.sizes["y"] and a.sizes["x"] == b.sizes["x"] and a.rio.crs == b.rio.crs
+            and _transform(a).almost_equals(_transform(b)))
+
+
+def match_grid(data: xr.DataArray, like, *, resampling: str = "auto") -> xr.DataArray:
+    """Put a raster on the grid of another: same CRS, cells and coordinates.
+
+    Rasters from different sources (a species model, a cost layer, a
+    land-cover map) rarely share their grid; most tools need them cell by
+    cell. ``match_grid`` reprojects and resamples ``data`` onto the grid of
+    ``like`` with GDAL (in parallel), and gives it the coordinates of ``like``.
+    :func:`load_raster` does the same on reading with ``like=``.
+
+    Parameters
+    ----------
+    data
+        Georeferenced ``(y, x)`` or ``(band, y, x)`` DataArray.
+    like
+        The target grid: a DataArray or a raster path.
+    resampling
+        ``"auto"`` (default): nearest cell for integer rasters, bilinear for
+        floats; or a GDAL method (``"nearest"``, ``"bilinear"``, ``"cubic"``,
+        ``"average"``, ``"mode"``, ``"sum"``...).
+
+    Returns
+    -------
+    xarray.DataArray
+        ``data`` on the grid of ``like``; cells outside ``data`` are NoData
+        (NaN for floats).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> landcover = ls.load_raster(ls.example_data("clc"))
+    >>> coarse = landcover.coarsen(x=4, y=4).mean()          # 100 m instead of 25 m
+    >>> back = ls.match_grid(coarse, landcover)
+    >>> back.shape == landcover.shape, bool((back.x == landcover.x).all())
+    (True, True)
+    """
+    from rasterio.enums import Resampling
+
+    from ._threads import default_threads
+
+    if not isinstance(data, xr.DataArray) or data.rio.crs is None:
+        raise ValueError("match_grid needs a georeferenced DataArray (see load_raster)")
+    template = _grid_template(like)
+    data = data.rio.write_transform(_transform(data))
+    if not _same_grid(data, template):
+        if resampling == "auto":
+            method = "bilinear" if np.issubdtype(data.dtype, np.floating) else "nearest"
+        elif resampling in _RESAMPLING_NAMES:
+            method = resampling
+        else:
+            raise ValueError(f"unknown resampling {resampling!r}; use 'auto' or one of {', '.join(_RESAMPLING_NAMES)}")
+        attrs = dict(data.attrs)
+        if hasattr(data.data, "dask"):
+            data = data.compute()
+        data = data.rio.reproject_match(template, resampling=Resampling[method], num_threads=default_threads())
+        data.attrs.update({k: v for k, v in attrs.items() if k not in ("_FillValue",)})
+    return data.assign_coords(x=template["x"].values, y=template["y"].values)
 
 
 def _band_names(raw: xr.DataArray, n: int) -> list | None:
@@ -230,12 +364,6 @@ def _load_single(source: PathLike, *, band, masked, chunks: Any, validate: str |
     da = _mask_nodata(da, masked)
     da.name = Path(str(source)).stem
     da.attrs["source"] = str(source)
-
-    if validate == "mspa":
-        try:
-            validate_mspa_input(da)
-        except InvalidInputError as err:
-            raise InvalidInputError(f"{source}: {err}") from None
     return da
 
 
@@ -973,7 +1101,7 @@ def write_raster(
             with rasterio.open(like) as src:
                 like_crs, like_transform, shape = src.crs, src.transform, (src.height, src.width)
         else:
-            like_crs, like_transform, shape = ref.rio.crs, ref.rio.transform(), ref.shape[-2:]
+            like_crs, like_transform, shape = ref.rio.crs, _transform(ref), ref.shape[-2:]
         if tuple(shape) != (height, width):
             raise ValueError(f"data has {height} x {width} cells, like has {shape[0]} x {shape[1]}")
     tags: dict[str, str] = {}
@@ -981,7 +1109,7 @@ def write_raster(
     if is_da:
         data_crs = data.rio.crs
         if "x" in data.dims and "y" in data.dims and data.sizes["x"] > 1 and data.sizes["y"] > 1:
-            data_transform = data.rio.transform()
+            data_transform = _transform(data)
         data_nodata = data.rio.nodata
         tags = {k: str(v) for k, v in data.attrs.items() if k.startswith(("mspa_", "landschaft_"))}
         if description is None:
@@ -1053,7 +1181,7 @@ def write_raster(
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with warnings.catch_warnings():
-        if crs is None and transform is None:
+        if crs is None:  # a plain array: no georeferencing to write
             warnings.simplefilter("ignore", rasterio.errors.NotGeoreferencedWarning)
         with rasterio.Env(GDAL_TIFF_INTERNAL_MASK=True), rasterio.open(path, "w", **profile) as dst:
             if hasattr(values, "dask"):

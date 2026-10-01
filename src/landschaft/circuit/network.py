@@ -13,6 +13,7 @@ import numpy as np
 from ._backend import core
 from .circuitscape import (POLICIES, IncludedPairs, _flag, _open, _prefix, _resolve, _unset, _write_matrix,
                            read_included_pairs)
+from .._save import Saveable
 
 __all__ = ["NetworkResult", "circuitscape_network_advanced", "circuitscape_network_pairwise", "read_graph"]
 
@@ -112,7 +113,7 @@ def _read_strengths(value, starts_from_zero: bool) -> np.ndarray:
 
 
 @dataclass
-class NetworkResult:
+class NetworkResult(Saveable):
     """Circuitscape's network outputs, with the node numbers it writes (from 1).
 
     Attributes

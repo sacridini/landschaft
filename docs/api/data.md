@@ -1,26 +1,53 @@
 # Data & configuration
 
-Reading, preparing and writing rasters, colour tables, collections of files
-and the thread settings shared by every tool.
+Reading, preparing and writing rasters, vectors and tables, saving results,
+colour tables, collections of files and the thread settings shared by every
+tool. The page [Loading and saving data](../getting-started/data.md) shows
+them together.
 
 !!! example "Every example runs"
     The examples on these pages use the maps that ship with Landschaft
     (`ls.example_data`) and are run as tests, outputs included.
 
-## Reading and writing
+## Rasters
 
 ::: landschaft.load_raster
 
 ::: landschaft.write_raster
 
+::: landschaft.match_grid
+
 ::: landschaft.reclassify
+
+## Vectors
+
+::: landschaft.load_vector
+
+::: landschaft.write_vector
+
+::: landschaft.rasterize
+
+## Tables
+
+::: landschaft.load_table
+
+::: landschaft.write_table
+
+## Saving results
+
+::: landschaft.save
+
+Every result object (of `fos`, `restoration_status`, `zonation`...) also has
+a `save(folder)` method that calls `save`.
+
+## Example data
 
 ::: landschaft.example_data
 
 ## Example data
 
-`ls.EXAMPLE_DATA` maps the names accepted by `example_data` to a
-description:
+`ls.EXAMPLE_DATA` describes the habitat and land-cover rasters; the
+examples of the other modules are listed under `example_data` above:
 
 | Name | Content |
 |---|---|

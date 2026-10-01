@@ -14,10 +14,11 @@ import numpy as np
 import pandas as pd
 
 from .. import _core
+from .._save import Saveable
 
 
 @dataclass
-class AreaStatistics:
+class AreaStatistics(Saveable):
     """Statistics of areas of a ranking (:meth:`ZonationResult.area_statistics`).
 
     Attributes

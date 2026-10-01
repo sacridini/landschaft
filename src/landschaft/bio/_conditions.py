@@ -787,11 +787,12 @@ class _Context:
 
 def _points_in_shapes(xy: np.ndarray, file: str, field_name, field_val) -> np.ndarray:
     """Points inside (or on) any feature of a vector file (optionally one attribute value)."""
-    import geopandas as gpd
     import shapely
 
+    from .._vector import load_vector
+
     path, layer = _dataset_layer(file)
-    gdf = gpd.read_file(path, layer=layer)
+    gdf = load_vector(path, layer=layer)
     if field_name is not None:
         # SQLite: WHERE "field" = "value", with the column's numeric affinity
         col = gdf[field_name]
@@ -818,11 +819,12 @@ def _points_in_shapes(xy: np.ndarray, file: str, field_name, field_val) -> np.nd
 
 def _features_per_point(xy: np.ndarray, file: str) -> tuple[np.ndarray, np.ndarray]:
     """CSR of the features (by identical geometry) each point falls in."""
-    import geopandas as gpd
     import shapely
 
+    from .._vector import load_vector
+
     path, layer = _dataset_layer(file)
-    gdf = gpd.read_file(path, layer=layer)
+    gdf = load_vector(path, layer=layer)
     geoms = gdf.geometry.to_numpy()
     # identical geometries are one feature (Biodiverse hashes the WKT)
     wkts = shapely.to_wkt(geoms, rounding_precision=-1)

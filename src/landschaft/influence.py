@@ -22,6 +22,7 @@ import xarray as xr
 from . import _core
 from .io import _load_map
 from .validation import InvalidInputError, validate_mspa_input
+from ._save import Saveable
 
 __all__ = [
     "INFLUENCE_CLASSES",
@@ -78,7 +79,7 @@ def _wrap(values: np.ndarray, template, name: str, attrs: dict):
 
 
 @dataclass(frozen=True)
-class InfluenceZonesResult:
+class InfluenceZonesResult(Saveable):
     """Result of :func:`influence_zones`.
 
     Attributes
@@ -111,7 +112,7 @@ class InfluenceZonesResult:
 
 
 @dataclass(frozen=True)
-class ProximityResult:
+class ProximityResult(Saveable):
     """Result of :func:`proximity`.
 
     Attributes

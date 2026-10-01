@@ -16,6 +16,7 @@ import pandas as pd
 
 from .. import _core
 from .._threads import resolve
+from .._save import Saveable
 
 _DIRECT = {"SORENSON", "JACCARD", "S2"}
 _LINKAGES = ("link_average", "link_average_unweighted", "link_minimum", "link_maximum", "link_recalculate")
@@ -188,7 +189,7 @@ def _hierarchical_labels(bd, nodes: dict, order: list[str]):
             np.asarray(cnts, dtype=np.float64), np.asarray(smps, dtype=np.float64))
 
 
-class ClusterResult:
+class ClusterResult(Saveable):
     """Results of :func:`cluster`.
 
     Attributes
@@ -211,6 +212,9 @@ class ClusterResult:
         self.nodes = nodes
         self.table = table
         self.lists = lists
+
+    def _save_items(self) -> dict:
+        return {"tree": self.tree, "nodes": self.nodes, "table": self.table, "lists": {k: self.lists[k] for k in self.lists}}
 
     def __repr__(self) -> str:
         return f"ClusterResult({(self.nodes['children'].str.len() == 0).sum()} groups, {len(self.nodes)} nodes)"

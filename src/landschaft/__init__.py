@@ -74,10 +74,17 @@ from .io import (
     gtn_importance_colormap,
     lm_colormap,
     load_raster,
+    load_table,
+    load_vector,
+    match_grid,
     mspa_colormap,
+    rasterize,
     reclassify,
     resistance_colormap,
+    save,
     write_raster,
+    write_table,
+    write_vector,
 )
 from .morphology import ParcellationResult, contortion, parcellation
 from . import nlm
@@ -106,7 +113,6 @@ from .lsm import (
     show_patches,
     unpad_raster,
     window_metrics,
-    write_table,
     zonal_metrics,
 )
 from .lm_heatmap import LMHeatmap, LMHeatmapChange, landscape_mosaic_change, landscape_mosaic_heatmap
@@ -235,6 +241,12 @@ __all__ = [
     "list_metrics",
     "lm_colormap",
     "load_raster",
+    "load_table",
+    "load_vector",
+    "match_grid",
+    "rasterize",
+    "save",
+    "write_vector",
     "max_threads",
     "default_threads",
     "set_default_threads",

@@ -134,6 +134,7 @@ nav:
       - Quickstart: getting-started/quickstart.md
       - Configuration: getting-started/configuration.md
       - Core concepts: getting-started/concepts.md
+      - Loading and saving data: getting-started/data.md
   - Learn:
       - learn/index.md
       - 1 · What is a landscape?: learn/landscape-ecology.md

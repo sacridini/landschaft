@@ -21,6 +21,7 @@ import xarray as xr
 
 from .io import _load_map
 from .mosaic import RECODE_103_TO_19, landscape_mosaic
+from ._save import Saveable
 
 __all__ = [
     "LM_TRIANGLE",
@@ -89,7 +90,7 @@ def _class_table(values: np.ndarray, name: str) -> pd.DataFrame:
 
 
 @dataclass(frozen=True)
-class LMHeatmap:
+class LMHeatmap(Saveable):
     """Landscape Mosaic heatmap of one map (GTB ``*_heatmap.sav`` / ``.csv``).
 
     Attributes
@@ -130,7 +131,7 @@ class LMHeatmap:
 
 
 @dataclass(frozen=True)
-class LMHeatmapChange:
+class LMHeatmapChange(Saveable):
     """Result of :func:`landscape_mosaic_change`: the heatmap difference B - A (GTB's ``delta_heatmap.csv``).
 
     Attributes

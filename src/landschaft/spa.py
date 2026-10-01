@@ -25,6 +25,7 @@ import xarray as xr
 from . import _core
 from .io import _load_map
 from .validation import validate_mspa_input
+from ._save import Saveable
 
 __all__ = ["SPA_CLASSES", "SPAResult", "spa"]
 
@@ -48,7 +49,7 @@ _ROWS = {
 
 
 @dataclass(frozen=True)
-class SPAResult:
+class SPAResult(Saveable):
     """Result of :func:`spa`.
 
     Attributes

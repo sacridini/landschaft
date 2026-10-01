@@ -13,6 +13,7 @@ from .. import _core
 from .._threads import resolve
 from ._conditions import SpatialCondition, neighbours
 from ._names import perl_number
+from .._save import Saveable
 
 __all__ = ["SpatialResult", "list_calculations", "spatial_analysis"]
 
@@ -292,7 +293,7 @@ class ListIndices(dict):
         return pd.DataFrame({"group": self._groups[rows], "key": key_col, "value": values.astype(np.float64)})
 
 
-class SpatialResult:
+class SpatialResult(Saveable):
     """Results of :func:`spatial_analysis`.
 
     Attributes
@@ -320,6 +321,9 @@ class SpatialResult:
 
     def __getitem__(self, index: str) -> pd.Series:
         return self.table[index]
+
+    def _save_items(self) -> dict:
+        return {"table": self.table, "lists": {k: self.lists[k] for k in self.lists}, "calculations": list(self.calculations)}
 
     def list(self, index: str, group: str) -> dict:
         """One group's entries of a list index (``{key: value}``)."""

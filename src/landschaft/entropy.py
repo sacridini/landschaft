@@ -27,6 +27,7 @@ import xarray as xr
 from . import _core
 from .io import ENTROPY_COLORMAP
 from .validation import validate_mspa_input
+from ._save import Saveable
 
 __all__ = [
     "spatial_entropy",
@@ -51,7 +52,7 @@ def _wrap_as_dataarray(
 
 
 @dataclass
-class SpatialEntropyResult:
+class SpatialEntropyResult(Saveable):
     """Result of global spatial entropy analysis (:func:`spatial_entropy`)."""
 
     entropy_index: float

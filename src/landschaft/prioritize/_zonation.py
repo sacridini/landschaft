@@ -314,6 +314,20 @@ class ZonationResult:
         return (f"ZonationResult(rule={self.info.get('rule')}, features={len(self.features)}, cells={n}, "
                 f"iterations={self.iterations}, ranking_error={self.ranking_error:.4g}%, auc={self.auc:.4f})")
 
+    def save(self, directory) -> Path:
+        """Save the result as Zonation 5 does (the same as :meth:`write`).
+
+        Examples
+        --------
+        >>> import tempfile
+        >>> import numpy as np
+        >>> import landschaft as ls
+        >>> res = ls.prioritize.zonation(np.random.default_rng(0).random((2, 10, 12)))
+        >>> (res.save(tempfile.mkdtemp()) / "rankmap.tif").exists()
+        True
+        """
+        return self.write(directory)
+
     def write(self, directory) -> Path:
         """Write the rank map and the tables as Zonation 5 does.
 

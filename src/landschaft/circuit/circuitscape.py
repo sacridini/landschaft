@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from ._backend import core
+from .._save import Saveable
 
 POLICIES = ("keepall", "rmvsrc", "rmvgnd", "rmvall")
 SCENARIOS = {"pairwise": "pairwise", "Pairwise": "pairwise", "advanced": "advanced", "Advanced": "advanced",
@@ -362,7 +363,7 @@ def _cells_from_map(values, name, shape) -> np.ndarray:
 
 
 @dataclass
-class CircuitscapeResult:
+class CircuitscapeResult(Saveable):
     """Circuitscape's outputs of a raster run.
 
     Attributes

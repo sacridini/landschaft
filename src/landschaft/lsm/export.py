@@ -10,6 +10,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .._table import write_table
+
 __all__ = ["write_table", "zonal_metrics"]
 
 _TABLE_SUFFIXES = {".csv": "csv", ".gz": "csv", ".parquet": "parquet", ".pq": "parquet", ".gpkg": "vector",
@@ -79,54 +81,6 @@ def _pyarrow():
     except ImportError as err:  # pragma: no cover - depends on the environment
         raise ImportError("writing Parquet needs pyarrow (pip install pyarrow)") from err
     return pa, pq
-
-
-def write_table(table: pd.DataFrame, path: str | os.PathLike, **kwargs) -> Path:
-    """Write a metric table, the format given by the file extension.
-
-        ``.csv`` (``.csv.gz`` compressed), ``.parquet`` (needs pyarrow; keeps the
-        categorical and nullable integer columns, and is compact and fast for
-        patch tables of millions of rows), or, for a GeoDataFrame (e.g. from
-        :func:`zonal_metrics`), a vector format: ``.gpkg``, ``.geojson``,
-        ``.shp``, ``.fgb``. Extra keyword arguments go to the pandas / geopandas
-        writer.
-
-        Parameters
-        ----------
-        table
-            A DataFrame or GeoDataFrame.
-        path
-            Output file; its extension selects the format.
-        **kwargs
-            Passed to the pandas / geopandas writer.
-
-        Returns
-        -------
-        pathlib.Path
-            The file written.
-
-        Examples
-        --------
-        >>> import landschaft as ls
-        >>> table = ls.landscape_metrics(ls.example_data("clc"), level="class", metric="ca")
-        >>> ls.write_table(table, "class_area.csv").name
-        'class_area.csv'
-    """
-    path = Path(path)
-    kind = _TABLE_SUFFIXES.get(path.suffix.lower())
-    if kind is None:
-        raise ValueError(f"unknown table format {path.suffix!r}; use .csv, .csv.gz, .parquet, .gpkg, .geojson...")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if kind == "csv":
-        table.to_csv(path, index=False, **kwargs)
-    elif kind == "parquet":
-        _pyarrow()
-        table.to_parquet(path, index=False, **kwargs)
-    else:
-        if not hasattr(table, "to_file"):
-            raise TypeError(f"{path.suffix} needs a GeoDataFrame (see zonal_metrics)")
-        table.to_file(path, **kwargs)
-    return path
 
 
 def _zones(zones):

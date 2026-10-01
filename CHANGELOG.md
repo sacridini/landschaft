@@ -6,6 +6,40 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.97.0] - 2026-10-01
+
+### Added
+- Loading and saving everything in one call each, so that analyses need no rasterio, xarray or
+  geopandas code around them (new page *Getting started > Loading and saving data*):
+  - `ls.load_raster(path, like=raster)` puts a raster on the grid of another as it is read
+    (reprojected and resampled with GDAL in parallel: nearest cell for classes, bilinear for floats,
+    or `resampling=`), with the coordinates of `like` so that the two combine cell by cell;
+    `ls.match_grid(data, like)` does it in memory.
+  - `ls.load_vector` reads any vector format, GeoParquet and tables of point coordinates (columns
+    found by name: `lon`/`lat`, `decimalLongitude`...), reprojected to a raster's CRS with `like=`;
+    `ls.write_vector` writes GeoPackage, Shapefile, GeoJSON, FlatGeobuf, GeoParquet or CSV (WKT).
+  - `ls.rasterize(vector, like=raster)` burns features on the grid of a raster: a mask, the values
+    of an attribute, or counts of overlapping features (`merge="add"`).
+  - `ls.load_table` reads CSV and text files (separator and decimal comma detected), Excel,
+    Parquet, Feather, JSON and vector attribute tables; `ls.write_table` is now general (it was a
+    metric-table writer) and adds `.tsv`, `.xlsx`, `.feather`, `.json`, keeping a named index.
+  - `ls.save(obj, path)` writes anything in the format that suits it: rasters as GeoTIFF, tables as
+    CSV (or `table_format=`), GeoDataFrames as GeoPackage, trees as Newick, and results of the tools
+    as a folder with one GeoTIFF per map, one table per table and `summary.json` with the numbers
+    and settings. Every result class has a `save(folder)` method; Zonation's and Biodiverse's
+    results keep their own formats.
+- `ls.example_data(name)` returns the example data of every module (surfaces, grid distances,
+  biodiversity), not only the habitat and land-cover maps.
+
+### Changed
+- Biodiverse's vector inputs (`BaseData.from_vector`, shape-file spatial conditions) are read with
+  `load_vector`.
+
+### Fixed
+- `write_raster` (and every writer built on it) took the affine transform rioxarray caches, which
+  keeps the old cell size after a strided slice such as `data[::2, ::2]`: such rasters were written
+  with the wrong cell size. The transform is now computed from the coordinates.
+
 ## [0.96.0] - 2026-10-01
 
 ### Changed

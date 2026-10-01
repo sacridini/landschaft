@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from .._save import Saveable
+
 
 __all__ = ["ClustergramResult", "NMFResult", "PCAResult", "SpatialSignatureAnalysis", "SpatioTemporalAnalysis",
            "grid_zones"]
@@ -312,7 +314,7 @@ def _as_list(value) -> list[str]:
 
 
 @dataclass
-class PCAResult:
+class PCAResult(Saveable):
     """Principal components of the spatial signatures."""
 
     scores: pd.DataFrame  #: one row per landscape / zone, one column per component
@@ -322,7 +324,7 @@ class PCAResult:
 
 
 @dataclass
-class NMFResult:
+class NMFResult(Saveable):
     """Non-negative factors of the spatial signatures (min-max scaled
     metrics ~ scores @ components.T)."""
 
@@ -334,7 +336,7 @@ class NMFResult:
 
 
 @dataclass
-class ClustergramResult:
+class ClustergramResult(Saveable):
     """Clusters for a range of k (Schonlau's clustergram, as the clustergram
     package that pylandstats' ``get_cgram`` uses)."""
 

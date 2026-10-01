@@ -26,6 +26,7 @@ import xarray as xr
 from . import _core
 from .io import _load_map
 from .validation import validate_fad_input
+from ._save import Saveable
 
 __all__ = ["ACCOUNTING_CLASSES", "AccountingResult", "accounting"]
 
@@ -50,7 +51,7 @@ _COLOR_NAMES = ("black", "red", "yellow", "orange", "brown", "green")
 
 
 @dataclass(frozen=True)
-class AccountingResult:
+class AccountingResult(Saveable):
     """Result of :func:`accounting`.
 
     Attributes

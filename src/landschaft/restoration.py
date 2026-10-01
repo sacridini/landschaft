@@ -32,6 +32,7 @@ import xarray as xr
 
 from . import _core
 from .io import _load_map
+from ._save import Saveable
 
 __all__ = [
     "restoration_status",
@@ -45,7 +46,7 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class RestorationStatusResult:
+class RestorationStatusResult(Saveable):
     """Result of :func:`restoration_status`.
 
     Attributes
@@ -280,7 +281,7 @@ def cost_distance(
 
 
 @dataclass(frozen=True)
-class LeastCostPathResult:
+class LeastCostPathResult(Saveable):
     """Result of :func:`least_cost_path`.
 
     Attributes
@@ -397,7 +398,7 @@ def least_cost_path(
 
 
 @dataclass(frozen=True)
-class RestorationCorridorResult:
+class RestorationCorridorResult(Saveable):
     """Result of :func:`restoration_corridor`.
 
     Attributes
