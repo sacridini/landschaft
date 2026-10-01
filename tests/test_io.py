@@ -308,3 +308,16 @@ def test_write_raster_dask_by_blocks(tmp_path):
 def test_write_raster_colormap_only_where_it_fits(tmp_path):
     with pytest.raises(ValueError, match="one-band uint8 or uint16"):
         ls.write_raster(np.zeros((2, 2), np.float32), tmp_path / "x.tif", colormap="mspa")
+
+
+def test_write_raster_colour_tables_take_hex_names_and_tuples(tmp_path):
+    pytest.importorskip("matplotlib")
+    out = ls.write_raster(np.array([[0, 1], [2, 3]], np.uint8), tmp_path / "c.tif",
+                          colormap={0: "#d9d9d9", 1: "forestgreen", 2: (1, 2, 3), 3: "#11223380"})
+    with rasterio.open(out) as src:
+        cmap = src.colormap(1)
+    # GeoTIFF colour tables keep red, green and blue (GDAL writes no alpha)
+    assert [cmap[i][:3] for i in range(4)] == [(217, 217, 217), (34, 139, 34), (1, 2, 3), (17, 34, 51)]
+    assert ls.io._rgba("#11223380") == (17, 34, 51, 128)
+    with pytest.raises(ValueError, match="r, g, b"):
+        ls.write_raster(np.zeros((2, 2), np.uint8), tmp_path / "x.tif", colormap={0: (1, 2)})

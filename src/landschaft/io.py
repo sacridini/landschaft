@@ -1227,7 +1227,26 @@ def _resolve_colormap(colormap, data) -> dict | None:
         return lm_colormap()
     if colormap == "accounting":
         return accounting_colormap()
-    return dict(colormap)
+    return {int(k): _rgba(c) for k, c in dict(colormap).items()}
+
+
+def _rgba(colour) -> tuple[int, int, int, int]:
+    """A colour as (r, g, b, a), 0-255: ``"#rrggbb"``, ``"#rrggbbaa"``, a name (``"forestgreen"``,
+    with matplotlib) or (r, g, b[, a])."""
+    if isinstance(colour, str):
+        h = colour.lstrip("#")
+        if not (colour.startswith("#") and len(h) in (6, 8)):
+            try:
+                import matplotlib.colors as mcolors
+            except ImportError as err:  # pragma: no cover - depends on the environment
+                raise ValueError(f"colour {colour!r}: give it as '#rrggbb' (names need matplotlib)") from err
+            h = mcolors.to_hex(colour, keep_alpha=True).lstrip("#")
+        rgba = tuple(int(h[i:i + 2], 16) for i in range(0, len(h), 2))
+        return (*rgba, 255) if len(rgba) == 3 else rgba
+    rgba = tuple(int(v) for v in colour)
+    if len(rgba) not in (3, 4):
+        raise ValueError(f"colour {colour!r}: expected (r, g, b) or (r, g, b, a)")
+    return (*rgba, 255) if len(rgba) == 3 else rgba
 
 
 def _product_description(attrs: dict) -> str | None:
@@ -1402,8 +1421,9 @@ def write_raster(
     colormap
         ``"auto"`` (default) embeds the colour table of the product when ``data``
         is a class map made by landschaft (MSPA, fragmentation, change...),
-        ``"mspa"`` forces the MSPA colours, a ``{value: (r, g, b[, a])}`` mapping
-        embeds your own and ``None`` none. One-band ``uint8``/``uint16`` only.
+        ``"mspa"`` forces the MSPA colours, a ``{value: colour}`` mapping (colours
+        as ``"#rrggbb"``, names or ``(r, g, b[, a])``) embeds your own and ``None``
+        none. One-band ``uint8``/``uint16`` only.
     compress
         GeoTIFF compression: ``"lzw"`` (default), ``"deflate"``, ``"zstd"``,
         ``None``...

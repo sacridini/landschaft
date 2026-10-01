@@ -6,6 +6,22 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- `ls.write_raster(..., colormap={value: colour})` takes colours as `"#rrggbb"`, names
+  (`"forestgreen"`) or `(r, g, b[, a])`, as `ls.plot` does.
+
+### Changed
+- `ls.plot` draws a floating-point raster of a few whole numbers (at most 12) as classes: a class
+  map read with `load_raster(..., masked=True)`, its NoData as NaN. Legend labels of such classes are
+  `1`, not `1.0`.
+- `ls.plot` lists MSPA's classes in GuidosToolbox's order (Core, Islet, Perforation, Edge...) and
+  leaves the products' missing class out of the map (the imagery shows through) and the legend, as
+  any class given a transparent colour.
+
+### Fixed
+- `ls.plot`: the NoData of a raster on an interactive map is transparent again; reprojected to
+  Web Mercator, it was drawn in the first colour of the legend.
+
 ## [0.99.0] - 2026-10-01
 
 ### Added

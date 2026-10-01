@@ -17,6 +17,8 @@ from . import _palettes
 
 #: Integer rasters with at most this many distinct values are drawn as classes.
 MAX_CLASSES = 64
+#: Floating-point rasters with at most this many whole values are drawn as classes.
+MAX_FLOAT_CLASSES = 12
 
 
 @dataclass
@@ -186,20 +188,22 @@ def _valid(v: np.ndarray, nodata) -> np.ndarray:
     return ok
 
 
-def is_categorical(da: xr.DataArray, sample: np.ndarray | None = None) -> bool:
-    if da.attrs.get("landschaft_product") and _palettes.product_style(da.attrs)[0] is not None:
-        return True
-    if da.dtype == bool:
-        return True
-    if not np.issubdtype(da.dtype, np.integer):
+def float_classes(da: xr.DataArray) -> bool:
+    """A floating-point raster holding a few whole numbers: a class map read with NaN for its
+    NoData (``load_raster(..., masked=True)``), judged on a sample of about a million cells."""
+    if not np.issubdtype(da.dtype, np.floating) or da.ndim != 2 or hasattr(da.data, "dask"):
         return False
-    if sample is None:
-        return True
-    return np.unique(sample).size <= MAX_CLASSES
+    step = max(1, math.ceil(math.sqrt(da.size / 1_000_000)))
+    sample = np.asarray(da.data[::step, ::step]).ravel()
+    sample = sample[_valid(sample, da.rio.nodata)]
+    if sample.size == 0:
+        return False
+    values = np.unique(sample)
+    return values.size <= MAX_FLOAT_CLASSES and bool(np.all(values == np.round(values)))
 
 
 def colour_classes(v: np.ndarray, ok: np.ndarray, table: dict | None, names: dict | None, title: str,
-                   opacity: float):
+                   opacity: float, order: list | None = None):
     """Palette indices of class values (0: no data) from a colour table (or distinct colours),
     their palette and the legend; None for the indices when there are over 255 classes."""
     values = np.unique(v[ok]) if ok.any() else np.array([], dtype=v.dtype)
@@ -210,7 +214,7 @@ def colour_classes(v: np.ndarray, ok: np.ndarray, table: dict | None, names: dic
         colours = _palettes.distinct(len(values))
         table = {int(k): (*_palettes.hex_to_rgb(c), 255) for k, c in zip(values.tolist(), colours)}
     alpha = round(255 * opacity)
-    legend = Legend(title, classes=_legend_classes(values, table, names or {}))
+    legend = Legend(title, classes=_legend_classes(values, table, names or {}, order))
     drawn = [int(k) for k in values.tolist() if int(k) in table]
     if len(drawn) > 255:
         return None, None, legend
@@ -233,15 +237,17 @@ def colour_classes(v: np.ndarray, ok: np.ndarray, table: dict | None, names: dic
     return index, palette, legend
 
 
-def _legend_classes(values, table: dict, names: dict) -> list[tuple[str, str]]:
+def _legend_classes(values, table: dict, names: dict, order: list | None = None) -> list[tuple[str, str]]:
     """(colour, label) of the classes present; classes of the same colour (MSPA's bridges in
-    edges, internal ones...) merged under their common name, as GuidosToolbox's legends do."""
+    edges, internal ones...) merged under their common name, as GuidosToolbox's legends do, in
+    ``order`` (labels) when given. Transparent classes are left out."""
     groups: dict[str, list[str]] = {}
     for k in values.tolist():
-        if int(k) not in table:
+        if int(k) not in table or (len(table[int(k)]) > 3 and table[int(k)][3] == 0):
             continue
         colour = _palettes.rgb_to_hex(table[int(k)])
-        groups.setdefault(colour, []).append(str(names.get(int(k), k)))
+        default = str(int(k)) if float(k).is_integer() else str(k)  # 1, not 1.0, for float classes
+        groups.setdefault(colour, []).append(str(names.get(int(k), default)))
     out = []
     for colour, labels in groups.items():
         base = list(dict.fromkeys(lab.replace(" (internal)", "").strip() for lab in labels))
@@ -249,6 +255,8 @@ def _legend_classes(values, table: dict, names: dict) -> list[tuple[str, str]]:
         label = short if all(b.startswith(short) for b in base) else " / ".join(base[:2]) + (" ..." if len(base) > 2
                                                                                               else "")
         out.append((colour, label))
+    if order:
+        out.sort(key=lambda item: order.index(item[1]) if item[1] in order else len(order))
     return out
 
 
@@ -332,7 +340,7 @@ def to_web_mercator(rgba: np.ndarray, transform, crs, n_threads: int):
     bands = rgba[None] if rgba.ndim == 2 else np.moveaxis(rgba, -1, 0)
     out = np.zeros((bands.shape[0], dh, dw), np.uint8)
     reproject(np.ascontiguousarray(bands), out, src_transform=transform, src_crs=src_crs, dst_transform=dt,
-              dst_crs=dst, resampling=Resampling.nearest, num_threads=n_threads, src_nodata=None, dst_nodata=0)
+              dst_crs=dst, resampling=Resampling.nearest, num_threads=n_threads, src_nodata=0, dst_nodata=0)  # 0: transparent
     l, t = dt.c, dt.f
     r, b = l + dt.a * dw, t + dt.e * dh
     w_, s_, e_, n_ = transform_bounds(dst, "EPSG:4326", l, b, r, t)
@@ -345,17 +353,9 @@ def to_web_mercator(rgba: np.ndarray, transform, crs, n_threads: int):
 
 def _user_table(cmap: dict) -> dict:
     """{value: colour} with colours as names, hex or (r, g, b[, a]) -> {value: (r, g, b, a)}."""
-    out = {}
-    for k, c in cmap.items():
-        if isinstance(c, str):
-            if not c.startswith("#"):
-                import matplotlib.colors as mcolors
+    from ..io import _rgba
 
-                c = mcolors.to_hex(c)
-            out[k] = (*_palettes.hex_to_rgb(c), 255)
-        else:
-            out[k] = tuple(int(x) for x in c) + (255,) * (4 - len(c))
-    return out
+    return {k: _rgba(c) for k, c in cmap.items()}
 
 
 def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax=None, log=None,
@@ -370,6 +370,7 @@ def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax
 
     title = title or (str(da.name) if da.name is not None else "value")
     table, names = _palettes.product_style(da.attrs)
+    product_names = names or {}
     if isinstance(cmap, dict):
         table, categorical = _user_table(cmap), True
     elif cmap is not None and categorical is not True:
@@ -377,18 +378,24 @@ def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax
     if labels:
         names = {**(names or {}), **{int(k): str(v) for k, v in labels.items()}}
     if categorical is None:
-        categorical = da.dtype == bool or table is not None or (np.issubdtype(da.dtype, np.integer) and cmap is None)
+        categorical = (da.dtype == bool or table is not None
+                       or (cmap is None and (np.issubdtype(da.dtype, np.integer) or float_classes(da))))
     v, t = reduce(da, max_size, categorical)
     nodata = da.rio.nodata
     ok = _valid(v, nodata)
     if categorical and table is None and np.issubdtype(v.dtype, np.integer) and np.unique(v[ok]).size > MAX_CLASSES:
         categorical = False  # many integer values (counts, ids, elevations): a colour ramp
+    if categorical and product_names:  # a product's missing class is no data: the imagery shows through
+        missing = [k for k, n in product_names.items() if str(n).lower().startswith("missing")]
+        if missing:
+            ok &= ~np.isin(v, missing)
     if categorical:
         if table is None and cmap is not None and not isinstance(cmap, dict):  # classes in the colours of a ramp
             values = np.unique(v[ok]) if ok.any() else np.array([])
             ramp = _palettes.lut(cmap, max(len(values), 2))
             table = {int(k): (*ramp[i], 255) for i, k in enumerate(values.tolist())}
-        pixels, palette, legend = colour_classes(v, ok, table, names, title, opacity)
+        pixels, palette, legend = colour_classes(v, ok, table, names, title, opacity,
+                                                 _palettes.LEGEND_ORDER.get(da.attrs.get("landschaft_product")))
         if pixels is None:  # over 255 classes: a ramp
             categorical = False
     if not categorical:

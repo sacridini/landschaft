@@ -71,6 +71,10 @@ def test_products_take_their_colours_and_class_names(forest):
     assert img.mode == "P"  # 8-bit with a palette
     palette = np.array(img.getpalette()[:768]).reshape(-1, 3)
     assert [0, 200, 0] in palette.tolist()  # MSPA's core green
+    img = _raster.render(ls.mspa(forest), mercator=False)
+    labels = [label for _, label in img.legend.classes]
+    assert labels[:4] == ["Core", "Islet", "Perforation", "Edge"] and "Missing" not in labels  # GTB's order
+    assert (img.pixels[np.asarray(ls.mspa(forest)) == 129] == 0).all()  # missing: the imagery shows through
 
 
 def test_integers_are_classes_and_floats_a_ramp():
@@ -80,6 +84,10 @@ def test_integers_are_classes_and_floats_a_ramp():
     ramp = _raster.render(grid(np.linspace(0, 1, 60 * 80).reshape(60, 80).astype("float32"))).legend
     assert ramp.ramp and ramp.classes == [] and 0 <= ramp.vmin < ramp.vmax <= 1
     many = _raster.render(grid(np.arange(60 * 80).reshape(60, 80))).legend  # 4800 values: a ramp
+    masked = np.where(np.arange(60 * 80).reshape(60, 80) % 4 == 0, np.nan, np.arange(60 * 80).reshape(60, 80) % 3)
+    read_masked = _raster.render(grid(masked.astype("float32"))).legend  # classes read with masked=True
+    assert [label for _, label in read_masked.classes] == ["0", "1", "2"]
+    assert _raster.render(grid(masked.astype("float32") + 0.5)).legend.ramp  # not whole numbers: a ramp
     assert many.ramp
 
 
@@ -88,6 +96,8 @@ def test_colours_can_be_chosen():
     leg = _raster.render(v, cmap={0: "red", 1: "#00ff00", 2: (0, 0, 255)}, labels={0: "urban", 2: "water"}).legend
     assert leg.classes == [("#ff0000", "urban"), ("#00ff00", "1"), ("#0000ff", "water")]
     assert _raster.render(v, categorical=False).legend.ramp  # integers on a ramp
+    hidden = _raster.render(v, cmap={0: "#00000000", 1: "red", 2: "blue"}, mercator=False)
+    assert [label for _, label in hidden.legend.classes] == ["1", "2"] and hidden.palette[1, 3] == 0
     f = grid(np.linspace(-1, 1, 60 * 80).reshape(60, 80).astype("float32"))
     centred = _raster.render(f).legend
     assert centred.vmin == -centred.vmax  # around zero: a diverging ramp, centred
@@ -106,6 +116,8 @@ def test_nodata_is_transparent():
     c = grid(np.where(np.arange(60 * 80).reshape(60, 80) % 2, 7, 255).astype("uint8"), nodata=255)
     ci = _raster.render(c, mercator=False)
     assert set(np.unique(ci.pixels)) == {0, 1} and [label for _, label in ci.legend.classes] == ["7"]
+    on_map = _raster.render(grid(v)).pixels  # reprojected to Web Mercator: NoData still transparent
+    assert (on_map == 0).mean() >= 10 / 60 - 0.02
 
 
 def test_large_and_lazy_rasters_are_reduced(tmp_path):

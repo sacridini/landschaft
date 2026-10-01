@@ -89,6 +89,13 @@ def distinct(n: int) -> list[str]:
     return CATEGORICAL + extra
 
 
+#: The order of a product's classes in its legend (GuidosToolbox's); others: by value.
+LEGEND_ORDER = {
+    "MSPA": ["Core", "Islet", "Perforation", "Edge", "Loop", "Bridge", "Branch", "Background", "Core-Opening",
+             "Border-Opening"],
+}
+
+
 def product_style(attrs: dict) -> tuple[dict | None, dict | None]:
     """The colour table {value: (r, g, b, a)} and the class names {value: name} of a
     landschaft product (from its ``landschaft_product`` attribute), or (None, None)."""
