@@ -355,11 +355,11 @@ Raster aacf_image(const Grid& g, bool lonlat) {
             zw[static_cast<Index>(r) * nx + c] = x.v[static_cast<Index>(r) * nx + c] * (wc[static_cast<Index>(c)] * wr[static_cast<Index>(r)]);
     const std::vector<double> ft = r_fft(zw, ny, nx, false, false);
     const double mn = static_cast<double>(nx) * ny;
-    // ps = abs(ft)^2 / (M N) (R's abs of a complex: hypot)
+    // ps = abs(ft)^2 / (M N) (R's abs of a complex: the UCRT's hypot)
     std::vector<double> ps(static_cast<Index>(ny) * nx);
     for (int r = 0; r < ny; ++r)
         for (int c = 0; c < nx; ++c) {
-            const double a = std::hypot(re(ft, ny, r, c), im(ft, ny, r, c));
+            const double a = lsm::ucrt_hypot(re(ft, ny, r, c), im(ft, ny, r, c));
             ps[static_cast<Index>(r) * nx + c] = (a * a) / mn;
         }
     // Re(fft(ps, inverse = TRUE) / (M N))

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import sys
 import warnings
 from pathlib import Path
 
@@ -19,6 +20,12 @@ DATA = Path(__file__).parent / "data"
 # functions from the system library, which can differ in the last bits: there the
 # comparisons allow a few units in the last place.
 BITWISE = bool(_core.x87_math)
+
+# The functions of the C library that the references take from the UCRT of Windows
+# (atan, atanh...) and that landschaft calls as they are: other C libraries (glibc)
+# give some of them other last bits, and the UCRT's code is not public, so off
+# Windows the comparisons that go through them allow one unit in the last place.
+UCRT_LIBM = sys.platform == "win32"
 
 
 def same_bits(a, b, *, scale=None, ulps: float = 4) -> np.ndarray:

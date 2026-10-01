@@ -136,6 +136,27 @@ inline double r_atan2(double y, double x) {
 #endif
 }
 
+// hypot(x, y) as the UCRT's _hypot computes it (R's on Windows: mingw-w64's
+// hypot calls it, and R's Mod() of a complex): sqrt(x * x + y * y) in double,
+// rescaled by a power of two (exactly) where the squares would overflow or
+// fall below the normal range. The same bits on every platform; glibc's
+// hypot is closer to correctly rounded, hence different in the last bit.
+inline double ucrt_hypot(double x, double y) {
+    if (std::isinf(x) || std::isinf(y)) return std::numeric_limits<double>::infinity();
+    if (std::isnan(x) || std::isnan(y)) return std::numeric_limits<double>::quiet_NaN();
+    x = std::fabs(x);
+    y = std::fabs(y);
+    const double m = x > y ? x : y;
+    const double s = x > y ? y : x;
+    if (m == 0.0) return 0.0;
+    constexpr double lo = 0x1p-500, hi = 0x1p+500;
+    if (m > lo && m < hi && (s > lo || s == 0.0)) return std::sqrt(x * x + y * y);
+    int e = 0;
+    std::frexp(m, &e);
+    const double xs = std::ldexp(x, -e), ys = std::ldexp(y, -e);
+    return std::ldexp(std::sqrt(xs * xs + ys * ys), e);
+}
+
 // -- R's sum(), mean() and sd() (80-bit accumulation) ------------------------
 
 using i64 = std::int64_t;

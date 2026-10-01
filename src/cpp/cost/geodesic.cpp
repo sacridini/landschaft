@@ -45,15 +45,9 @@ double mingw_cbrt(double x) {
 
 namespace {
 
-// mingw-w64's hypot calls the UCRT's _hypot, which MSVC programs share (and
-// which MinGW's own hypot calls too).
-inline double r_hypot(double x, double y) {
-#if defined(_MSC_VER)
-    return _hypot(x, y);
-#else
-    return std::hypot(x, y);
-#endif
-}
+// mingw-w64's hypot calls the UCRT's _hypot (lsm::ucrt_hypot gives its bits on
+// every platform).
+inline double r_hypot(double x, double y) { return lsm::ucrt_hypot(x, y); }
 
 }  // namespace
 

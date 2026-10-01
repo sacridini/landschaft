@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import numpy as np
 
@@ -134,9 +135,25 @@ def rmath_cases() -> dict[str, tuple[str, np.ndarray, float]]:
     }
 
 
+#: The fft inputs as drawn on x86-64 Windows, where the references were made:
+#: the draws take the platform's log() (math.log), which differs in the last bit
+#: between C libraries (glibc, the UCRT), so they are stored, not drawn again.
+FFT_INPUTS = Path(__file__).parent / "data" / "reference" / "nlm" / "fft_inputs.npz"
+
+
 def fft_cases() -> dict[str, tuple[np.ndarray, np.ndarray, int, int, bool]]:
     """key -> (real, imaginary, nrow, ncol, inverse): R's fft() on sizes with
-    factors 2, 3, 4, 5, odd primes and square factors."""
+    factors 2, 3, 4, 5, odd primes and square factors (the stored inputs)."""
+    cases = draw_fft_cases()
+    if FFT_INPUTS.exists():
+        with np.load(FFT_INPUTS) as stored:
+            cases = {k: (stored[f"{k}_re"], stored[f"{k}_im"], nrow, ncol, inverse)
+                     for k, (_, _, nrow, ncol, inverse) in cases.items()}
+    return cases
+
+
+def draw_fft_cases() -> dict[str, tuple[np.ndarray, np.ndarray, int, int, bool]]:
+    """fft_cases drawn on this platform (tools/make_reference_nlm.py stores them)."""
     rs = _RandomState(7)
     sizes = [(1, 7), (8, 8), (12, 10), (7, 13), (30, 45), (64, 100), (17, 1), (243, 5), (49, 18), (22, 121),
              (96, 60), (11, 1024)]

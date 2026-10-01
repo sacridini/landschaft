@@ -104,6 +104,9 @@ def main() -> None:
     parser.add_argument("groups", nargs="*", default=surface_cases.GROUPS)
     parser.add_argument("--case", action="append", default=None)
     args = parser.parse_args()
+    # the DEMs the references are made from, for platforms whose sin and cos differ
+    OUT.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(surface_cases.DEMS, **{k: surface_cases.RASTERS[k].values for k in surface_cases.draw_dems()})
     for group in args.groups:
         run_group(group, args.case)
 

@@ -36,6 +36,12 @@ def assert_values(ours, ref, tolerance, what: str, ulps: float = 0) -> None:
     if ours.shape != ref.shape and ours.size == ref.size and ours.ndim and ref.ndim:  # rasters as vectors
         ours, ref = ours.ravel(), ref.ravel()
     assert ours.shape == ref.shape, f"{what}: shape {ours.shape} != {ref.shape}"
+    if isinstance(tolerance, tuple) and tolerance and tolerance[0] == "ulps":  # ("ulps", n): n units in the last place
+        with np.errstate(invalid="ignore"):
+            ok = (ours == ref) | (np.isnan(ours) & np.isnan(ref)) | (np.abs(ours - ref) <= tolerance[1] * np.spacing(
+                np.abs(ref)))
+        assert ok.all(), f"{what}: {int((~ok).sum())} values differ by more than {tolerance[1]} ulp"
+        return
     if isinstance(tolerance, tuple) and len(tolerance) == 3:  # angles: (rtol, atol, period), compared around
         rtol, atol, period = tolerance
         d = np.abs(ours - ref)

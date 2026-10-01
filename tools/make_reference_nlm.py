@@ -183,7 +183,10 @@ def make_rmath() -> dict[str, np.ndarray]:
 
 
 def make_fft() -> dict[str, np.ndarray]:
-    """R's fft() of the complex matrices in nlm_cases.fft_cases()."""
+    """R's fft() of the complex matrices drawn here, stored (nlm_cases.FFT_INPUTS) for other platforms."""
+    cases = nlm_cases.draw_fft_cases()
+    np.savez_compressed(nlm_cases.FFT_INPUTS, **{f"{k}_re": c[0] for k, c in cases.items()},
+                        **{f"{k}_im": c[1] for k, c in cases.items()})
     out: dict[str, np.ndarray] = {}
     with tempfile.TemporaryDirectory(prefix="nlm_fft_") as tmp:
         tmp = Path(tmp)

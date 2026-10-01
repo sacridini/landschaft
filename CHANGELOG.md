@@ -6,6 +6,19 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.98.1] - 2026-10-01
+
+### Fixed
+- Linux (and any build whose C library is not Windows' UCRT) gives the same results as Windows,
+  and as R for Windows, for grid distances on longitude/latitude, the geodesic cell sizes and the
+  surfaces' autocorrelation: `hypot` is now computed as the UCRT computes it (`sqrt(x*x + y*y)`,
+  rescaled by a power of two near overflow and underflow) on every platform; glibc's differed in
+  the last bit. Off Windows, only the slopes of `surface.terrain` can still differ from R's, by one
+  unit in the last place of the arctangent (the UCRT's code is not public); see the benchmarks
+  page.
+- Test inputs drawn with platform functions are stored with the references: the fft draws (which
+  take `log`) and the test DEMs (`sin`, `cos`) differed in the last bit on Linux.
+
 ## [0.98.0] - 2026-10-01
 
 ### Added

@@ -348,6 +348,14 @@ its code:
     - **Zonation 5 on several threads** adds up the layers per thread, and its
       results can differ from its run on one thread; Landschaft's do not
       depend on the threads and equal z5's on one thread.
+    - **Off Windows**, the arctangent of the slopes of `surface.terrain` is
+      the C library's, as terra's is on Windows: R takes it from Windows'
+      UCRT, whose code is not public, and other C libraries (glibc) differ
+      from it in the last bit. The slopes then differ from R's by one unit in
+      the last place (two in degrees). Everything else gives the same bits
+      on Windows and Linux: Landschaft carries its own versions of the
+      functions whose bits matter (log, sqrt, sin, cos, atan2, exp and powers
+      as mingw-w64 computes them on the x87 unit, and the UCRT's hypot).
 
 ## Reproduce
 

@@ -12,6 +12,7 @@ ls.surface corrects them.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -64,8 +65,23 @@ def _dem(shape, seed, na=0.0) -> np.ndarray:
     return v
 
 
+#: The DEMs as drawn on x86-64 Windows, where the references were made: numpy's
+#: sin and cos differ in the last bit between platforms, so they are stored, not
+#: drawn again (tools/make_reference_surface.py writes them).
+DEMS = Path(__file__).parent / "data" / "reference" / "surface" / "dems.npz"
+
+
+def draw_dems() -> dict[str, np.ndarray]:
+    """The test DEMs drawn on this platform."""
+    return {"dem": _dem((40, 50), 9), "dem_rect": _dem((30, 36), 10, na=0.01)}
+
+
 def _rasters() -> dict[str, RasterSpec]:
     r = {}
+    dems = draw_dems()
+    if DEMS.exists():
+        with np.load(DEMS) as stored:
+            dems = {k: stored[k] for k in dems}
     r["rand"] = RasterSpec(_normal((20, 30), 1), (500_000.0, 500_300.0, 4_000_000.0, 4_000_200.0), UTM)
     r["rand_na"] = RasterSpec(_normal((24, 24), 2, na=0.08), (0.0, 240.0, 0.0, 240.0), UTM)
     # Cells 30 x 20 m, a trend to remove, some NA.
@@ -85,8 +101,8 @@ def _rasters() -> dict[str, RasterSpec]:
     xmin, xmax, ymin, ymax = nf.extent
     ny, nx = nf.values.shape
     xr, yr = (xmax - xmin) / nx, (ymax - ymin) / ny
-    r["dem"] = RasterSpec(_dem((40, 50), 9), (400_000.0, 401_500.0, 5_000_000.0, 5_001_200.0), UTM)
-    r["dem_rect"] = RasterSpec(_dem((30, 36), 10, na=0.01), (0.0, 36 * 25.0, 0.0, 30 * 40.0), UTM)
+    r["dem"] = RasterSpec(dems["dem"], (400_000.0, 401_500.0, 5_000_000.0, 5_001_200.0), UTM)
+    r["dem_rect"] = RasterSpec(dems["dem_rect"], (0.0, 36 * 25.0, 0.0, 30 * 40.0), UTM)
     el = r["orelevation"]
     exmin, exmax, eymin, eymax = el.extent
     eny, enx = el.values.shape
@@ -337,6 +353,9 @@ TERRAIN_R = """{
        trasp = fx$trasp(r), hli = fx$hli(asp, slp, 45), hli_direct = fx$hli(asp, slp, 45, direct = TRUE),
        hli_south = fx$hli(asp, slp, -30, hemisphere = "southern", equation = 2))
 }"""
+# the C library is the UCRT, as for the references (see conftest.UCRT_LIBM)
+UCRT_LIBM = sys.platform == "win32"
+
 # vs spatialEco / terra's running sums, numpy's trigonometry: tolerances
 TERRAIN_TOL = {k: (1e-11, 1e-12) for k in ("vrm", "vrm5", "srr", "spherical", "spherical_var", "trasp", "hli",
                                              "hli_direct", "hli_south")}
@@ -382,6 +401,10 @@ def _terrain_cases() -> dict[str, Case]:
             # UCRT's sin/cos (ls.cost's GeographicLib uses the x87 ones of the raster package): last bits
             tol.update({"slope": (1e-12, 1e-14), "slope4": (1e-12, 1e-14), "aspect": (1e-12, 1e-14, 360.0),
                         "aspect4": (1e-12, 1e-14, 2 * np.pi)})
+        if not UCRT_LIBM and "slope" not in tol:  # the slope's atan is the C library's (terra's on Windows: the
+            # UCRT's, whose code is not public): other libraries differ from it in the last bit, one unit in
+            # radians, up to two once multiplied by 180 / pi
+            tol.update({"slope": ("ulps", 2), "slope4": ("ulps", 1)})
         cases[f"terrain_{name}"] = Case(name, code, _terrain(name, circle), "terrain", tol)
     return cases
 
