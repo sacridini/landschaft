@@ -30,6 +30,10 @@ between minor versions.
   for small integer types, lazy on dask. With `foreground=` (or a list of classes) it still builds
   habitat maps.
 
+### Fixed
+- The Docker test image (`docker build --target test`) copies the example data of every module
+  (`bio`, `cost`, `surface`), whose tests failed to load it.
+
 ## [0.97.0] - 2026-10-01
 
 ### Added

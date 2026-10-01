@@ -53,6 +53,9 @@ RUN pip install --no-cache-dir "pytest>=7" threadpoolctl
 # path in the source tree.
 COPY --chown=landschaft pyproject.toml /tests/pyproject.toml
 COPY --chown=landschaft src/landschaft/data /tests/src/landschaft/data
+COPY --chown=landschaft src/landschaft/bio/data /tests/src/landschaft/bio/data
+COPY --chown=landschaft src/landschaft/cost/data /tests/src/landschaft/cost/data
+COPY --chown=landschaft src/landschaft/surface/data /tests/src/landschaft/surface/data
 COPY --chown=landschaft tools /tests/tools
 COPY --chown=landschaft tests /tests/tests
 USER landschaft
