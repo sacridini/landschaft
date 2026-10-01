@@ -121,6 +121,54 @@ void register_python(py::module_& m) {
         py::arg("percentiles"), "Statistics of every zone and band: (zones, bands, stats).");
 
     m.def(
+        "io_burn_runs",
+        [](py::array& out, const Runs& runs, const py::array_t<double, py::array::c_style | py::array::forcecast>& value,
+           bool add) {
+            if (out.ndim() != 2) throw py::value_error("out must be 2-D");
+            if (!(out.flags() & py::array::c_style) || !out.writeable()) {
+                throw py::value_error("out must be C-contiguous and writeable");
+            }
+            if (value.size() != runs.zones()) throw py::value_error("one value per zone");
+            const int ny = static_cast<int>(out.shape(0)), nx = static_cast<int>(out.shape(1));
+            const py::dtype dt = out.dtype();
+            auto run = [&](auto* p) {
+                py::gil_scoped_release release;
+                burn_runs(p, ny, nx, runs, value.data(), add);
+            };
+            void* d = out.mutable_data();
+            if (dt.is(py::dtype::of<std::uint8_t>())) run(static_cast<std::uint8_t*>(d));
+            else if (dt.is(py::dtype::of<std::int8_t>())) run(static_cast<std::int8_t*>(d));
+            else if (dt.is(py::dtype::of<std::uint16_t>())) run(static_cast<std::uint16_t*>(d));
+            else if (dt.is(py::dtype::of<std::int16_t>())) run(static_cast<std::int16_t*>(d));
+            else if (dt.is(py::dtype::of<std::uint32_t>())) run(static_cast<std::uint32_t*>(d));
+            else if (dt.is(py::dtype::of<std::int32_t>())) run(static_cast<std::int32_t*>(d));
+            else if (dt.is(py::dtype::of<std::int64_t>())) run(static_cast<std::int64_t*>(d));
+            else if (dt.is(py::dtype::of<float>())) run(static_cast<float*>(d));
+            else if (dt.is(py::dtype::of<double>())) run(static_cast<double*>(d));
+            else throw py::type_error("unsupported raster type");
+        },
+        py::arg("out"), py::arg("runs"), py::arg("value"), py::arg("add"),
+        "Burns one value per zone into out, zone after zone (or adds them up).");
+
+    m.def(
+        "io_block_mean",
+        [](const py::array& values, int factor, bool has_nodata, double nodata) {
+            if (values.ndim() != 2) throw py::value_error("expected a 2-D raster");
+            if (factor < 1) throw py::value_error("factor must be at least 1");
+            const int ny = static_cast<int>(values.shape(0)), nx = static_cast<int>(values.shape(1));
+            std::vector<float> out = with_typed(values, [&](const auto* p) {
+                py::gil_scoped_release release;
+                return block_mean(p, ny, nx, factor, has_nodata, nodata);
+            });
+            auto* holder = new std::vector<float>(std::move(out));
+            py::capsule owner(holder, [](void* q) { delete static_cast<std::vector<float>*>(q); });
+            return py::array_t<float>({static_cast<py::ssize_t>(ny / factor), static_cast<py::ssize_t>(nx / factor)},
+                                      holder->data(), owner);
+        },
+        py::arg("values"), py::arg("factor"), py::arg("has_nodata"), py::arg("nodata"),
+        "Mean of every factor x factor block (cells with data), float32.");
+
+    m.def(
         "io_extract",
         [](const py::array& values, bool has_nodata, double nodata, const std::array<double, 6>& gt,
            const py::array_t<double, py::array::c_style | py::array::forcecast>& x,

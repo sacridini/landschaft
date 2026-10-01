@@ -349,3 +349,51 @@ def test_reclassify_lazy_and_habitat_mode(classes):
         ls.reclassify(classes, {1: 2}, missing=[3])
     with pytest.raises(TypeError, match="needs a table"):
         ls.reclassify(classes)
+
+
+def test_rasterize_matches_gdal_on_edges_through_cell_centres():
+    # polygons with vertices on cell centres and edges, in both orientations, with holes: GDAL's
+    # rasterizer takes every ring clockwise, which decides the cells of horizontal edges on centres
+    import shapely
+
+    rng = np.random.default_rng(1)
+    like = grid(np.zeros((10, 10)), transform=from_origin(0, 100, 10, 10))
+    t = from_origin(0, 100, 10, 10)
+    for _ in range(400):
+        if rng.random() < 0.5:
+            g = Polygon(rng.integers(0, 21, (rng.integers(3, 7), 2)) * 5.0).buffer(0)
+        else:
+            x0, y0 = rng.integers(0, 10, 2) * 5.0
+            g = box(x0, y0, x0 + 5 + rng.integers(0, 12) * 5.0, y0 + 5 + rng.integers(0, 12) * 5.0)
+        if rng.random() < 0.5:
+            g = shapely.reverse(g)
+        if rng.random() < 0.2:
+            g = g.difference(box(40, 40, 60, 60))
+        if g.is_empty or g.geom_type not in ("Polygon", "MultiPolygon"):
+            continue
+        for touched in (False, True):
+            ours = ls.rasterize(gpd.GeoSeries([g], crs=CRS), like, all_touched=touched).values
+            ref = rasterio.features.rasterize([(g, 1)], out_shape=(10, 10), transform=t, dtype="uint8",
+                                              all_touched=touched)
+            np.testing.assert_array_equal(ours, ref, err_msg=f"{g.wkt} all_touched={touched}")
+
+
+def test_rasterize_points_lines_and_order_match_gdal():
+    from shapely.geometry import LineString
+
+    rng = np.random.default_rng(2)
+    t = from_origin(500000, 4500000, 30, 30)
+    like = grid(np.zeros((60, 80)), transform=t)
+    pts = gpd.GeoDataFrame({"v": np.arange(1, 3001)}, crs=CRS,
+                           geometry=gpd.points_from_xy(rng.uniform(499900, 502500, 3000),
+                                                       rng.uniform(4498100, 4500100, 3000)))
+    for merge, alg in (("replace", rasterio.enums.MergeAlg.replace), ("add", rasterio.enums.MergeAlg.add)):
+        ours = ls.rasterize(pts, like, field="v", merge=merge, dtype="int32").values
+        ref = rasterio.features.rasterize(zip(pts.geometry, pts.v), out_shape=(60, 80), transform=t, merge_alg=alg,
+                                          dtype="int32")
+        np.testing.assert_array_equal(ours, ref)
+    mixed = gpd.GeoDataFrame({"v": [1, 2, 3]}, crs=CRS, geometry=[
+        box(500300, 4498500, 501500, 4499700), LineString([(500000, 4498200), (502400, 4500000)]),
+        Point(500900, 4499100)])
+    ref = rasterio.features.rasterize(zip(mixed.geometry, mixed.v), out_shape=(60, 80), transform=t, dtype="uint8")
+    np.testing.assert_array_equal(ls.rasterize(mixed, like, field="v").values, ref)

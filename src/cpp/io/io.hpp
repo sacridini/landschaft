@@ -71,4 +71,14 @@ std::vector<double> extract(const T* values, int bands, int ny, int nx, bool has
                             const double* gt, const double* x, const double* y, i64 n, bool bilinear, int row0,
                             int ny_total);
 
+// Burns value[z] into the cells of zone z of out (ny x nx), zone after zone (the
+// later zones win where they overlap), or adds them up (add).
+template <class T>
+void burn_runs(T* out, int ny, int nx, const Runs& runs, const double* value, bool add);
+
+// The mean of every f x f block of a raster (the cells with data; NaN for a block
+// without), as float32: (ny / f) x (nx / f), the incomplete blocks left out.
+template <class T>
+std::vector<float> block_mean(const T* values, int ny, int nx, int f, bool has_nodata, double nodata);
+
 }  // namespace lsio

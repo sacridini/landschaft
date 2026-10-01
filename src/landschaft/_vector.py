@@ -226,6 +226,45 @@ def _rasterize_dtype(values: np.ndarray, fill) -> np.dtype:
     return np.dtype(np.float64)
 
 
+def _burn(arr, geoms, values, tr, all_touched: bool, add: bool, gdal) -> None:
+    """Burns geometries into arr: polygons by the C++ port of GDAL's rasterizer (the same
+    cells, in parallel), points by their cell, lines by GDAL. Polygons first, then lines,
+    then points; within each, the later features win (or every value adds up)."""
+    import shapely
+
+    from . import _core
+
+    kinds = shapely.get_type_id(geoms)  # 0 point, 1 line, 2 ring, 3 polygon, 4 multipoint, 5 multiline, 6 multipolygon
+    polys = np.isin(kinds, (3, 6))
+    if polys.any() and not (tr.b or tr.d):
+        from ._zonal import _polygon_arrays
+
+        xy, ring_off, geom_rings = _polygon_arrays(geoms[polys])
+        runs = _core.io_polygon_runs(xy, ring_off, geom_rings, (tr.c, tr.a, tr.b, tr.f, tr.d, tr.e), arr.shape[1],
+                                     arr.shape[0], all_touched)
+        _core.io_burn_runs(arr, runs, values[polys], add)
+        done = polys
+    else:
+        done = np.zeros(len(geoms), bool)
+    lines = ~done & ~np.isin(kinds, (0, 4))
+    if lines.any():
+        gdal(geoms[lines], values[lines])
+    points = np.isin(kinds, (0, 4))
+    if points.any():
+        parts, index = shapely.get_parts(geoms[points], return_index=True)
+        xy = shapely.get_coordinates(parts)
+        vals = values[points][index]
+        col = np.floor((xy[:, 0] - tr.c) / tr.a).astype(np.int64)
+        row = np.floor((xy[:, 1] - tr.f) / tr.e).astype(np.int64)
+        ok = (col >= 0) & (col < arr.shape[1]) & (row >= 0) & (row < arr.shape[0])
+        flat = row[ok] * arr.shape[1] + col[ok]
+        if add:
+            np.add.at(arr.reshape(-1), flat, vals[ok].astype(arr.dtype))
+        else:  # the last point of every cell wins
+            last = len(flat) - 1 - np.unique(flat[::-1], return_index=True)[1]
+            arr.reshape(-1)[flat[last]] = vals[ok][last].astype(arr.dtype)
+
+
 def rasterize(vector, like, *, field: str | None = None, value=1, fill=0, all_touched: bool = False,
               merge: str = "replace", dtype=None, name: str | None = None) -> xr.DataArray:
     """Burn vector features into a raster on the grid of another raster.
@@ -279,6 +318,7 @@ def rasterize(vector, like, *, field: str | None = None, value=1, fill=0, all_to
     >>> ls.rasterize(reserves, like=landcover, field="id").max().item()
     2
     """
+    import shapely
     from rasterio.enums import MergeAlg
     from rasterio.features import rasterize as burn
 
@@ -290,8 +330,8 @@ def rasterize(vector, like, *, field: str | None = None, value=1, fill=0, all_to
     template = _grid_template(like)
     target = template.rio.crs
     if gdf.crs is not None and target is not None and gdf.crs != target:
-        gdf = gdf.to_crs(target)
-    gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty]
+        gdf = to_crs(gdf, target)
+    gdf = gdf[~shapely.is_missing(gdf.geometry.values) & ~shapely.is_empty(gdf.geometry.values)]
     if field is not None:
         if field not in gdf.columns:
             raise ValueError(f"no column {field!r}; columns: {', '.join(map(str, gdf.columns))}")
@@ -303,15 +343,57 @@ def rasterize(vector, like, *, field: str | None = None, value=1, fill=0, all_to
         values = np.full(len(gdf), value)
     out_dtype = np.dtype(dtype) if dtype is not None else _rasterize_dtype(np.asarray(values), fill)
     shape = (template.sizes["y"], template.sizes["x"])
+    tr = _transform(template)
+    arr = np.full(shape, fill, dtype=out_dtype)
     if len(gdf):
-        arr = burn(zip(gdf.geometry.values, values.astype(out_dtype)), out_shape=shape,
-                   transform=_transform(template), fill=fill, all_touched=all_touched,
-                   merge_alg=MergeAlg.add if merge == "add" else MergeAlg.replace, dtype=out_dtype)
-    else:
-        arr = np.full(shape, fill, dtype=out_dtype)
+        _burn(arr, gdf.geometry.values, np.asarray(values, dtype=np.float64), tr, all_touched, merge == "add",
+              lambda geoms, vals: burn(zip(geoms, vals.astype(out_dtype)), out_shape=shape, transform=tr, fill=fill,
+                                       all_touched=all_touched, out=arr,
+                                       merge_alg=MergeAlg.add if merge == "add" else MergeAlg.replace,
+                                       dtype=out_dtype))
     da = xr.DataArray(arr, coords={"y": template["y"].values, "x": template["x"].values}, dims=("y", "x"),
                       name=name or field or "rasterized")
     da = da.rio.write_crs(target).rio.write_transform(_transform(template))
     if isinstance(fill, float) and np.isnan(fill):
         da = da.rio.write_nodata(np.nan, encoded=False)
     return da
+
+
+def transform_xy(x: np.ndarray, y: np.ndarray, src, dst="EPSG:3857"):
+    """Coordinates reprojected by pyproj in blocks over threads (it releases the GIL; one
+    Transformer per block, as they are not thread-safe)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from pyproj import Transformer
+
+    from ._threads import default_threads
+
+    n = len(x)
+    blocks = max(1, min(default_threads(), n // 100_000))
+    if blocks == 1:
+        return Transformer.from_crs(src, dst, always_xy=True).transform(x, y)
+    edges = np.linspace(0, n, blocks + 1).astype(np.int64)
+    ox, oy = np.empty(n), np.empty(n)
+
+    def run(k):
+        a, b = edges[k], edges[k + 1]
+        ox[a:b], oy[a:b] = Transformer.from_crs(src, dst, always_xy=True).transform(x[a:b], y[a:b])
+
+    with ThreadPoolExecutor(blocks) as pool:
+        list(pool.map(run, range(blocks)))
+    return ox, oy
+
+
+def to_crs(gdf, crs):
+    """gdf.to_crs(crs), its coordinates reprojected in parallel (the same coordinates)."""
+    import shapely
+
+    if gdf.crs is None or gdf.crs == crs or len(gdf) < 20_000:
+        return gdf.to_crs(crs) if gdf.crs is not None and gdf.crs != crs else gdf
+    geoms = gdf.geometry.values
+    xy = shapely.get_coordinates(geoms)
+    x, y = transform_xy(xy[:, 0], xy[:, 1], gdf.crs, crs)
+    out = shapely.set_coordinates(np.array(geoms, dtype=object).copy(), np.column_stack([x, y]))
+    import geopandas as gpd
+
+    return gpd.GeoDataFrame(gdf.drop(columns=gdf.geometry.name), geometry=out, crs=crs)

@@ -131,7 +131,8 @@ with pip (`pip install -e ".[plot,vector]"`):
 
 | Extra | Packages | Needed for |
 |---|---|---|
-| `plot` | matplotlib | the `show_*` plotting functions and the figures in the tutorials |
+| `plot` | matplotlib, folium, plotly, Pillow | `ls.plot` (interactive maps and charts), the `show_*` plotting functions and the figures in the tutorials |
+| `window` | pywebview | `ls.plot` in a window of its own outside notebooks (else the web browser) |
 | `vector` | geopandas, pyarrow | vector inputs and outputs (sample plots, zones, habitat networks from polygons), Parquet tables |
 | `dask` | dask | lazy and parallel processing of stacks and very large arrays |
 | `all` | all of the above | |

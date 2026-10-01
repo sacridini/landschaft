@@ -53,6 +53,7 @@ from .gtn import (
     gtn_importance,
 )
 from ._zonal import extract, zonal_stats
+from ._plotting import Plot, plot
 from .io import (
     ACCOUNTING_COLORMAP,
     CHANGE_COLORMAP,
@@ -244,6 +245,8 @@ __all__ = [
     "lm_colormap",
     "clip",
     "extract",
+    "Plot",
+    "plot",
     "load_raster",
     "load_table",
     "load_vector",

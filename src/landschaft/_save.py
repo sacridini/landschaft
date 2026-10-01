@@ -84,6 +84,8 @@ def _items(obj) -> dict:
         return dict(hook())
     if isinstance(obj, dict):
         return {str(k): v for k, v in obj.items()}
+    if isinstance(obj, xr.Dataset):  # every variable, then the attributes
+        return {**{str(k): obj[k] for k in obj.data_vars}, **{str(k): v for k, v in obj.attrs.items()}}
     if dataclasses.is_dataclass(obj):
         return {f.name: getattr(obj, f.name) for f in dataclasses.fields(obj) if not f.name.startswith("_")}
     return {k: v for k, v in vars(obj).items() if not k.startswith("_")}
@@ -231,7 +233,7 @@ def save(obj, path, *, like=None, table_format: str = "csv", **kwargs) -> Path:
     from .io import write_raster
 
     path = Path(path)
-    if isinstance(obj, (Saveable, dict)):
+    if isinstance(obj, (Saveable, dict, xr.Dataset)):
         return _save_folder(obj, path, like, table_format)
     if _is_geo(obj):
         return write_vector(obj, _with_suffix(path, ".gpkg"), **kwargs)

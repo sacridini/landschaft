@@ -128,6 +128,8 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 | [`ls.load_table`](data.md#landschaft.load_table) | Read a table, the format given by the file extension |
 | [`ls.write_table`](data.md#landschaft.write_table) | Write a table, the format given by the file extension |
 | [`ls.save`](data.md#landschaft.save) | Save data or a result, each part in the format that suits it |
+| [`ls.plot`](data.md#landschaft.plot) | Plot anything: a raster, a vector layer, a table or the result of a tool, as it calls for |
+| [`ls.Plot`](data.md#landschaft.Plot) | A plot made by `plot`: interactive maps and charts (or a static figure) |
 | [`ls.example_data`](data.md#landschaft.example_data) | Path of an example data set shipped with the package |
 | [`ls.RasterCollection`](data.md#landschaft.RasterCollection) | Many rasters handled as one object; pixels are read only when processed |
 | [`ls.RasterInfo`](data.md#landschaft.RasterInfo) | Header of one raster of a collection (the pixels are not read) |

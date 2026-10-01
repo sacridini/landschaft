@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import atexit
 import os
 import warnings
 from collections.abc import Callable, Iterable
@@ -72,6 +73,20 @@ __all__ = [
 ]
 
 PathLike = str | os.PathLike
+
+
+def _close_files() -> None:
+    """Close the files xarray keeps open for lazy rasters (load_raster(..., chunks=)) before the
+    interpreter's shutdown, which otherwise ends with an "Error in sys.excepthook" message."""
+    try:
+        from xarray.backends.file_manager import FILE_CACHE
+
+        FILE_CACHE.clear()
+    except Exception:  # noqa: BLE001 - at exit, nothing to report
+        pass
+
+
+atexit.register(_close_files)
 
 
 def load_raster(

@@ -89,7 +89,9 @@ def _geodataframe(obj, crs):
         obj = gpd.GeoDataFrame(geometry=obj)
     if isinstance(obj, gpd.GeoDataFrame):
         if obj.crs is not None and crs is not None and obj.crs != crs:
-            obj = obj.to_crs(crs)
+            from ._vector import to_crs
+
+            obj = to_crs(obj, crs)
         return obj
     if hasattr(obj, "geom_type"):
         return gpd.GeoDataFrame(geometry=[obj], crs=crs)
@@ -99,7 +101,7 @@ def _geodataframe(obj, crs):
 
 
 def _polygon_arrays(geoms):
-    """Coordinates, ring offsets and the rings of every geometry (polygons and multipolygons)."""
+    """Coordinates, ring offsets and the rings of every geometry (polygons and multipolygons), vectorised."""
     import shapely
 
     geoms = np.asarray(geoms, dtype=object)
@@ -109,13 +111,41 @@ def _polygon_arrays(geoms):
         kind = shapely.get_type_id(geoms[bad][0])
         raise ValueError(f"zones must be polygons, got {shapely.GeometryType(kind).name.lower()}s: buffer points "
                          "or lines first (or use extract for points)")
-    multi = np.array([shapely.MultiPolygon() if (g is None or g.is_empty) else
-                      (shapely.MultiPolygon([g]) if g.geom_type == "Polygon" else g) for g in geoms], dtype=object)
-    if len(multi) == 0:
-        return np.zeros((0, 2)), np.zeros(1, np.int64), np.zeros(1, np.int64)
-    _, coords, (ring_off, poly_off, geom_off) = shapely.to_ragged_array(multi)
-    geom_rings = np.asarray(poly_off, dtype=np.int64)[np.asarray(geom_off, dtype=np.int64)]
-    return np.ascontiguousarray(coords[:, :2], dtype=np.float64), np.asarray(ring_off, dtype=np.int64), geom_rings
+    parts, owner = shapely.get_parts(geoms, return_index=True)  # every polygon, in the geometries' order
+    keep = ~shapely.is_empty(parts)
+    parts, owner = parts[keep], owner[keep]
+    if len(parts) == 0:
+        return np.zeros((0, 2)), np.zeros(1, np.int64), np.zeros(len(geoms) + 1, np.int64)
+    _, coords, (ring_off, poly_off) = shapely.to_ragged_array(parts)
+    poly_off = np.asarray(poly_off, dtype=np.int64)
+    ring_off = np.asarray(ring_off, dtype=np.int64)
+    first_part = np.searchsorted(owner, np.arange(len(geoms) + 1))  # the parts of geometry g: first_part[g]..[g+1]
+    geom_rings = poly_off[first_part]
+    xy = np.ascontiguousarray(coords[:, :2], dtype=np.float64)
+    return _clockwise(xy, ring_off), ring_off, geom_rings
+
+
+def _clockwise(xy: np.ndarray, ring_off: np.ndarray) -> np.ndarray:
+    """Every ring clockwise, as GDAL's rasterizer takes them (GDALCollectRingsFromGeometry reverses the
+    others): the orientation decides the cells whose centres lie on a horizontal edge."""
+    n = len(xy)
+    if n == 0:
+        return xy
+    lengths = np.diff(ring_off)
+    ring = np.repeat(np.arange(len(lengths)), lengths)
+    nxt = np.arange(1, n + 1)
+    last = ring_off[1:] - 1
+    nxt[last] = ring_off[:-1]  # wrap around within each ring
+    cross = xy[:, 0] * xy[nxt, 1] - xy[nxt, 0] * xy[:, 1]
+    area2 = np.bincount(ring, weights=cross, minlength=len(lengths))  # > 0: counter-clockwise
+    flip = area2 > 0
+    if not flip.any():
+        return xy
+    pos = np.arange(n)
+    start = ring_off[:-1][ring]
+    end = ring_off[1:][ring]
+    idx = np.where(flip[ring], start + end - 1 - pos, pos)
+    return np.ascontiguousarray(xy[idx])
 
 
 def _columns(stat_names, labels, multi):

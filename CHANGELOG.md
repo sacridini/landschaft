@@ -6,6 +6,41 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.99.0] - 2026-10-01
+
+### Added
+- `ls.plot(obj)`: the plot a piece of data calls for, in one call. A raster or a vector layer goes
+  on an interactive map (folium) over satellite imagery: the products of the tools in GuidosToolbox's
+  colours with their class names, other class maps (integers with at most 64 values, booleans) in
+  distinct colours, continuous values on a ramp chosen by the raster's name and values (priority
+  ranks, currents on a log scale, elevation, NDVI, diverging around zero), stacks band by band or as
+  true colour, vector layers coloured by a column. Tables become charts (plotly); the results of
+  Zonation, habitat graphs, Biodiverse, PCA and the tools that return several rasters show their
+  maps, charts and numbers together. `cmap`, `labels`, `categorical`, `vmin`, `vmax`, `log`,
+  `column` and `basemap` change the defaults. It shows inline in notebooks and in a window of its
+  own elsewhere (pywebview, else the web browser); `static=True` draws a matplotlib figure (the
+  imagery with contextily). `Plot.save` writes a self-contained HTML page, or PNG, PDF, SVG.
+- Fast at any size: rasters are reduced to the screen's resolution before anything else (block
+  means in C++ with OpenMP, `io_block_mean`; lazy rasters read reduced, in strips or through their
+  overviews), reprojected once and written as 8-bit PNGs with a palette; the images and GeoJSON go
+  into the page after folium's templates. A 10 000 × 10 000 raster draws in 0.2 s, 2 million points
+  in 0.8 s; see the benchmarks page.
+- Extras `plot` (now matplotlib, folium, plotly, Pillow) and `window` (pywebview); the environment
+  variable `LANDSCHAFT_PLOT_SHOW=0` keeps windows from opening.
+- `ls.save` and `ls.plot` take an `xarray.Dataset` (the result of `circuit.omniscape`, for example):
+  one file per variable, its attributes as a table.
+
+### Changed
+- `ls.rasterize` burns polygons in C++ (`io_burn_runs`, from the GDAL port) and points with NumPy:
+  50 000 polygons in 0.07 s instead of 2.1 s, 200 000 points in 0.1 s instead of 3.5 s. Large
+  layers are reprojected in parallel.
+
+### Fixed
+- `ls.rasterize` and `ls.zonal_stats` orient every polygon ring clockwise as GDAL does, so that the
+  cells whose centre lies exactly on a horizontal edge are those GDAL burns.
+- The files of lazy rasters are closed before the interpreter exits, which ended with an "Error in
+  sys.excepthook" message.
+
 ## [0.98.1] - 2026-10-01
 
 ### Fixed

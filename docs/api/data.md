@@ -1,7 +1,7 @@
 # Data & configuration
 
-Reading, preparing and writing rasters, vectors and tables, saving results,
-colour tables, collections of files and the thread settings shared by every
+Reading, preparing and writing rasters, vectors and tables, saving and
+plotting results, colour tables, collections of files and the thread settings shared by every
 tool. The page [Loading and saving data](../getting-started/data.md) shows
 them together.
 
@@ -47,6 +47,17 @@ them together.
 
 Every result object (of `fos`, `restoration_status`, `zonation`...) also has
 a `save(folder)` method that calls `save`.
+
+## Plotting
+
+::: landschaft.plot
+
+::: landschaft.Plot
+    options:
+      members: [maps, charts, figure, show, save, to_html]
+
+The page [Plotting](../getting-started/plotting.md) shows the plots of every
+kind of data, and how to choose their colours.
 
 ## Example data
 

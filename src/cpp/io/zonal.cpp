@@ -423,10 +423,71 @@ std::vector<double> extract(const T* values, int bands, int ny, int nx, bool has
     return out;
 }
 
+template <class T>
+void burn_runs(T* out, int ny, int nx, const Runs& runs, const double* value, bool add) {
+    const i64 nz = runs.zones();
+    for (i64 zi = 0; zi < nz; ++zi) {  // in the zones' order: the later ones win
+        const T v = static_cast<T>(value[zi]);
+        for (i64 r = runs.offsets[zi]; r < runs.offsets[zi + 1]; ++r) {
+            if (runs.y[r] < 0 || runs.y[r] >= ny) continue;
+            T* row = out + static_cast<std::size_t>(runs.y[r]) * nx;
+            const int x0 = std::max(0, static_cast<int>(runs.x0[r]));
+            const int x1 = std::min(nx, static_cast<int>(runs.x1[r]));
+            if (add) {
+                for (int x = x0; x < x1; ++x) row[x] = static_cast<T>(row[x] + v);
+            } else {
+                std::fill(row + x0, row + x1, v);
+            }
+        }
+    }
+}
+
+template <class T>
+std::vector<float> block_mean(const T* values, int ny, int nx, int f, bool has_nodata, double nodata) {
+    const int oy = ny / f, ox = nx / f;
+    std::vector<float> out(static_cast<std::size_t>(oy) * ox, std::numeric_limits<float>::quiet_NaN());
+#pragma omp parallel
+    {
+        std::vector<double> sum(static_cast<std::size_t>(ox));
+        std::vector<i64> count(static_cast<std::size_t>(ox));
+#pragma omp for schedule(static)
+        for (int r = 0; r < oy; ++r) {
+            std::fill(sum.begin(), sum.end(), 0.0);
+            std::fill(count.begin(), count.end(), 0);
+            for (int k = 0; k < f; ++k) {
+                const T* row = values + static_cast<std::size_t>(r * f + k) * nx;
+                for (int c = 0; c < ox; ++c) {
+                    const T* cell = row + static_cast<std::size_t>(c) * f;
+                    double s = 0.0;
+                    i64 n = 0;
+                    for (int j = 0; j < f; ++j) {
+                        const T v = cell[j];
+                        if (no_data(v, has_nodata, nodata)) continue;
+                        s += static_cast<double>(v);
+                        ++n;
+                    }
+                    sum[static_cast<std::size_t>(c)] += s;
+                    count[static_cast<std::size_t>(c)] += n;
+                }
+            }
+            float* o = &out[static_cast<std::size_t>(r) * ox];
+            for (int c = 0; c < ox; ++c) {
+                if (count[static_cast<std::size_t>(c)]) {
+                    o[c] = static_cast<float>(sum[static_cast<std::size_t>(c)] /
+                                              static_cast<double>(count[static_cast<std::size_t>(c)]));
+                }
+            }
+        }
+    }
+    return out;
+}
+
 #define LSIO_INSTANTIATE(T)                                                                                          \
     template Runs label_runs<T>(const T*, int, int, bool, double, std::vector<double>*);                            \
     template std::vector<double> zonal_stats<T>(const T*, int, int, int, bool, double, const Runs&,                \
                                                 const std::vector<int>&, const std::vector<double>&);              \
+    template void burn_runs<T>(T*, int, int, const Runs&, const double*, bool);                                    \
+    template std::vector<float> block_mean<T>(const T*, int, int, int, bool, double);                              \
     template std::vector<double> extract<T>(const T*, int, int, int, bool, double, const double*, const double*,   \
                                             const double*, i64, bool, int, int);
 
