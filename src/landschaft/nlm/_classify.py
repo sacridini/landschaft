@@ -134,5 +134,7 @@ def classify(x, n: int | None = None, weighting: Sequence[float] | None = None,
     if isinstance(x, xr.DataArray):
         da = x.copy(data=out)
         da.attrs = {**{k: v for k, v in x.attrs.items() if k not in ("_FillValue",)}, **attrs}
-        return da.rio.write_nodata(0, encoded=False)
+        from ..io import _with_georef
+
+        return _with_georef(da, nodata=0)
     return out

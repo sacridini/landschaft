@@ -816,11 +816,9 @@ class Landscape:
         da.name = name
         da.attrs = {}
         da.encoding = {}
-        if np.issubdtype(arr.dtype, np.floating):
-            da = da.rio.write_nodata(np.nan, encoded=False)
-        else:
-            da = da.rio.write_nodata(0, encoded=False)
-        return da
+        from ..io import _with_georef
+
+        return _with_georef(da, nodata=np.nan if np.issubdtype(arr.dtype, np.floating) else 0)
 
     # -- metrics ------------------------------------------------------------
 

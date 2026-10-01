@@ -200,7 +200,9 @@ def raster_boundaries(
     da.name = "boundaries"
     da.attrs = {}
     da.encoding = {}
-    return da.rio.write_nodata(np.nan, encoded=False)
+    from ..io import _with_georef
+
+    return _with_georef(da, nodata=np.nan)
 
 
 # -- extract_lsm --------------------------------------------------------------------------

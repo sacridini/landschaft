@@ -1008,9 +1008,11 @@ def _raster(values: np.ndarray, grid) -> object:
         y = tr.f + (np.arange(ny) + 0.5) * tr.e
         da = xr.DataArray(values, dims=("y", "x"), coords={"y": y, "x": x}, name="rank")
         try:
-            da = da.rio.write_transform(tr)
+            from ..io import _with_georef
+
+            da = _with_georef(da, transform=tr)
             if grid.crs is not None:
-                da = da.rio.write_crs(grid.crs)
+                da = _with_georef(da, crs=grid.crs)
         except Exception:
             pass
         return da

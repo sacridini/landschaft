@@ -39,6 +39,14 @@ between minor versions.
   0.09 s, and `clip` to a circle 0.08 s instead of 0.14 s. A crop with bounds only, and
   `match_grid` onto the grid a raster already has, return views of the raster's values, as
   xarray's selections do.
+- The rasters every other tool returns (`reclassify`, habitat maps, `ls.nlm`, `ls.lsm` maps,
+  `ls.surface`, `ls.cost`, `ls.circuit`, `ls.conn`, `ls.prioritize`, `ls.bio`) get their CRS,
+  transform and NoData without a copy of their values.
+- `zonal_stats`: the median and the percentiles of a zone of a million cells or more are selected
+  in parallel from the raster (a histogram of the values' top bits, then only the values of the
+  bins that hold the ranks asked for) instead of gathering and partitioning all its values on one
+  thread; the results are the same bits. A zone of 40 million cells: the median adds 0.02-0.05 s
+  instead of 0.45-0.55 s, five percentiles take 0.2-0.4 s instead of 0.8-1.1 s.
 
 ### Fixed
 - The rasters of `ls.cost` (`acc_cost`, `passage`, the transition summaries...) keep the CRS and

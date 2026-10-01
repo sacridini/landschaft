@@ -446,7 +446,10 @@ class HabitatGraph:
             da = template.squeeze(drop=True) if "band" in template.dims else template
             result = xr.DataArray(out, coords=da.coords, dims=da.dims, name=name or "value")
             try:
-                result = result.rio.write_crs(da.rio.crs).rio.write_nodata(np.nan)
+                from ..io import _with_georef
+
+                if da.rio.crs is not None:  # without a CRS, the result was left bare
+                    result = _with_georef(result, crs=da.rio.crs, nodata=np.nan)
             except Exception:
                 pass
             return result

@@ -228,10 +228,9 @@ def grid_array(data: np.ndarray, transform: Affine, crs=None, name: str | None =
     x = transform.c + (np.arange(nx) + 0.5) * transform.a
     y = transform.f + (np.arange(ny) + 0.5) * transform.e
     da = xr.DataArray(data, dims=("y", "x"), coords={"y": y, "x": x}, name=name)
-    da = da.rio.write_transform(transform)
-    if crs is not None:
-        da = da.rio.write_crs(crs)
-    return da.rio.write_nodata(np.nan, encoded=False)
+    from ..io import _with_georef
+
+    return _with_georef(da, crs=crs, transform=transform, nodata=np.nan)
 
 
 def c_round(v: float) -> float:
@@ -680,6 +679,8 @@ def window_metrics(
         raise ValueError("window_metrics computes landscape-level metrics only")
     names = list(chosen["metric"])
     w = _window(window).astype(np.uint8)
+    from ..io import _with_georef
+
     layers = as_layers(data)
     results = []
     for layer in [data] if layers is None else layers:
@@ -694,6 +695,6 @@ def window_metrics(
                 da.name = m
                 da.attrs = {}
                 da.encoding = {}
-                maps[m] = da.rio.write_nodata(np.nan, encoded=False)
+                maps[m] = _with_georef(da, nodata=np.nan)
         results.append(maps)
     return results[0] if layers is None else results

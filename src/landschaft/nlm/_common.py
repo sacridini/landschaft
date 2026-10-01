@@ -49,10 +49,9 @@ def grid(values: np.ndarray, resolution: float, name: str, attrs: dict | None = 
     x = (np.arange(nx) + 0.5) * resolution
     y = ny * resolution - (np.arange(ny) + 0.5) * resolution
     da = xr.DataArray(values, dims=("y", "x"), coords={"y": y, "x": x}, name=name, attrs=dict(attrs or {}))
-    da = da.rio.write_transform(transform)
-    if nodata is not None:
-        da = da.rio.write_nodata(nodata, encoded=False)
-    return da
+    from ..io import _KEEP, _with_georef
+
+    return _with_georef(da, transform=transform, nodata=_KEEP if nodata is None else nodata)
 
 
 def as_values(x) -> np.ndarray:

@@ -383,9 +383,9 @@ class BaseData:
         if self.crs is not None:
             da.attrs["crs"] = str(self.crs)
             try:
-                import rioxarray  # noqa: F401
+                from ..io import _with_georef
 
-                da = da.rio.write_crs(self.crs)
+                da = _with_georef(da, crs=self.crs)
             except Exception:  # pragma: no cover - rioxarray is a dependency
                 pass
         return da

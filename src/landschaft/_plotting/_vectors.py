@@ -161,6 +161,7 @@ def _as_image(gdf, codes, palette, color, opacity, name, max_size, legend) -> Im
     from rasterio.warp import transform_bounds
 
     from .._vector import rasterize
+    from ..io import _with_georef
 
     if set(np.unique(shapely.get_type_id(gdf.geometry.values))) == {0}:  # points: their coordinates only
         return _points_image(gdf, codes, palette, color, opacity, name, max_size, legend)
@@ -172,7 +173,7 @@ def _as_image(gdf, codes, palette, color, opacity, name, max_size, legend) -> Im
     x = x0 + size * (np.arange(w) + 0.5)
     y = y1 - size * (np.arange(h) + 0.5)
     like = xr.DataArray(np.zeros((h, w), np.uint8), coords={"y": y, "x": x}, dims=("y", "x"))
-    like = like.rio.write_crs("EPSG:3857").rio.write_transform(t)
+    like = _with_georef(like, crs="EPSG:3857", transform=t)
     if codes is None:
         colours, values = [color], np.ones(len(merc), np.int64)
     else:

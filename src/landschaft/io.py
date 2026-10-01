@@ -737,7 +737,7 @@ def _habitat_map(data, foreground, missing, background):
         result = data.copy(data=out)
         result.attrs = {k: v for k, v in data.attrs.items() if k not in ("_FillValue", "scale_factor", "add_offset")}
         result.encoding = {}
-        return result.rio.write_nodata(None)
+        return _with_georef(result, nodata=None)
     return out
 
 
@@ -852,9 +852,7 @@ def _reclassify_table(data, table, others, dtype):
     result.attrs = {k: v for k, v in data.attrs.items()
                     if k not in ("_FillValue", "scale_factor", "add_offset", "landschaft_product")}
     result.encoding = {}
-    if out_float:
-        return result.rio.write_nodata(np.nan, encoded=False)
-    return result.rio.write_nodata(out_nodata if needs_nodata else None, encoded=False)
+    return _with_georef(result, nodata=np.nan if out_float else out_nodata if needs_nodata else None)
 
 
 # --- colour tables ----------------------------------------------------------

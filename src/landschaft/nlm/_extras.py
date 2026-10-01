@@ -69,7 +69,9 @@ def merge(primary, secondary, scaling: float = 1.0, rescale: bool = True, *, n_t
         da = primary.copy(data=out)
         da.attrs = {k: v for k, v in primary.attrs.items() if k not in ("_FillValue",)}
         da.attrs["model"] = "merge"
-        return da.rio.write_nodata(np.nan, encoded=False)
+        from ..io import _with_georef
+
+        return _with_georef(da, nodata=np.nan)
     return out
 
 

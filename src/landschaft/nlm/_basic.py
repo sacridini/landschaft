@@ -43,7 +43,9 @@ def rescale(x, *, n_threads: int | None = None):
         out = _core.nlm_rescale(values)
     if isinstance(x, xr.DataArray):
         da = x.copy(data=out)
-        return da.rio.write_nodata(np.nan, encoded=False) if hasattr(da, "rio") else da
+        from ..io import _with_georef
+
+        return _with_georef(da, nodata=np.nan)
     return out
 
 

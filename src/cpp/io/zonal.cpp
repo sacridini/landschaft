@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <functional>
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
@@ -129,10 +131,143 @@ double percentile(std::vector<double>& vals, double q, bool sorted) {
     return lerp(a, b, t);
 }
 
+// Unsigned integers in the order of the values they come from (NaN aside).
+inline std::uint64_t order_key(double d) {
+    std::uint64_t b;
+    std::memcpy(&b, &d, sizeof b);
+    return (b >> 63) ? ~b : (b | (std::uint64_t{1} << 63));
+}
+
+// f(value) for every value with data of the runs [r0, r1) of one band.
+template <class T, class F>
+void for_values(const T* band, int nx, const Runs& runs, i64 r0, i64 r1, bool has_nodata, double nodata, F&& f) {
+    for (i64 r = r0; r < r1; ++r) {
+        const T* row = band + static_cast<std::size_t>(runs.y[r]) * nx;
+        for (int x = runs.x0[r]; x < runs.x1[r]; ++x) {
+            const T v = row[x];
+            if (!no_data(v, has_nodata, nodata)) f(static_cast<double>(v));
+        }
+    }
+}
+
+// The percentiles of a large zone (its blocks [k0, k1) of runs), read from the
+// raster in parallel over the blocks instead of gathering all its values: a
+// histogram of the top 16 bits of their order keys gives the bin of every rank
+// needed, a second pass gathers the values of those bins only (block by block, in
+// order), and the ranks are selected among them. Only counts are added up, so the
+// result does not depend on the number of threads.
+template <class T>
+class ZoneSelect {
+public:
+    ZoneSelect(const T* band, int nx, const Runs& runs, const std::vector<i64>& block_start, i64 k0, i64 k1,
+               bool has_nodata, double nodata, i64 n)
+        : band_(band), nx_(nx), runs_(runs), block_start_(block_start), k0_(k0), k1_(k1), has_nodata_(has_nodata),
+          nodata_(nodata), n_(n) {}
+
+    // NumPy's linear percentiles qs, as percentile() over the gathered values
+    std::vector<double> percentiles(const std::vector<double>& qs) const {
+        std::vector<double> out(qs.size(), kNaN);
+        if (n_ == 0 || qs.empty()) return out;
+        std::vector<i64> ranks;
+        for (double q : qs) {
+            const auto lo = static_cast<i64>(std::floor(q / 100.0 * static_cast<double>(n_ - 1)));
+            ranks.push_back(lo);
+            if (lo + 1 < n_) ranks.push_back(lo + 1);
+        }
+        std::sort(ranks.begin(), ranks.end());
+        ranks.erase(std::unique(ranks.begin(), ranks.end()), ranks.end());
+        // pass 1: the histogram
+        constexpr std::size_t kBins = std::size_t{1} << 16;
+        std::vector<i64> hist(kBins, 0);
+#pragma omp parallel
+        {
+            std::vector<i64> local(kBins, 0);
+#pragma omp for schedule(dynamic, 1)
+            for (i64 b = k0_; b < k1_; ++b) values(b, [&](double v) { ++local[order_key(v) >> 48]; });
+#pragma omp critical
+            for (std::size_t i = 0; i < kBins; ++i) hist[i] += local[i];
+        }
+        // the bin of every rank, and its rank within the bin
+        std::vector<std::size_t> bins;
+        std::vector<int> rank_slot(ranks.size());
+        std::vector<i64> rank_within(ranks.size());
+        std::vector<int> slot(kBins, -1);
+        {
+            std::size_t bin = 0;
+            i64 before = 0;  // values in the bins below `bin`
+            for (std::size_t j = 0; j < ranks.size(); ++j) {
+                while (ranks[j] >= before + hist[bin]) before += hist[bin++];
+                if (slot[bin] < 0) {
+                    slot[bin] = static_cast<int>(bins.size());
+                    bins.push_back(bin);
+                }
+                rank_slot[j] = slot[bin];
+                rank_within[j] = ranks[j] - before;
+            }
+        }
+        // pass 2: the values of those bins
+        const auto nb = static_cast<std::size_t>(k1_ - k0_);
+        std::vector<std::vector<std::vector<double>>> got(nb, std::vector<std::vector<double>>(bins.size()));
+#pragma omp parallel for schedule(dynamic, 1)
+        for (i64 b = k0_; b < k1_; ++b) {
+            auto& mine = got[static_cast<std::size_t>(b - k0_)];
+            values(b, [&](double v) {
+                const int s = slot[order_key(v) >> 48];
+                if (s >= 0) mine[static_cast<std::size_t>(s)].push_back(v);
+            });
+        }
+        std::vector<double> at_rank(ranks.size());
+        for (std::size_t s = 0; s < bins.size(); ++s) {
+            std::vector<double> cand;
+            cand.reserve(static_cast<std::size_t>(hist[bins[s]]));
+            for (auto& g : got) {
+                cand.insert(cand.end(), g[s].begin(), g[s].end());
+                std::vector<double>().swap(g[s]);
+            }
+            for (std::size_t j = 0; j < ranks.size(); ++j) {
+                if (rank_slot[j] != static_cast<int>(s)) continue;
+                const auto at = cand.begin() + static_cast<std::ptrdiff_t>(rank_within[j]);
+                std::nth_element(cand.begin(), at, cand.end());
+                at_rank[j] = *at;
+            }
+        }
+        auto value = [&](i64 r) {
+            return at_rank[static_cast<std::size_t>(std::lower_bound(ranks.begin(), ranks.end(), r) - ranks.begin())];
+        };
+        for (std::size_t i = 0; i < qs.size(); ++i) {
+            const double pos = qs[i] / 100.0 * static_cast<double>(n_ - 1);
+            const auto lo = static_cast<i64>(std::floor(pos));
+            const double t = pos - static_cast<double>(lo);
+            const double a = value(lo);
+            out[i] = lo + 1 >= n_ ? a : lerp(a, value(lo + 1), t);
+        }
+        return out;
+    }
+
+private:
+    template <class F>
+    void values(i64 b, F&& f) const {
+        for_values(band_, nx_, runs_, block_start_[static_cast<std::size_t>(b)],
+                   block_start_[static_cast<std::size_t>(b) + 1], has_nodata_, nodata_, f);
+    }
+
+    const T* band_;
+    int nx_;
+    const Runs& runs_;
+    const std::vector<i64>& block_start_;
+    i64 k0_, k1_;
+    bool has_nodata_;
+    double nodata_;
+    i64 n_;
+};
+
+// select(q): the q-th percentile of a large zone, read from the raster (empty: of vals)
 void finish(const Acc& a, std::vector<double>& vals, const std::vector<int>& stats,
-            const std::vector<double>& percentiles, double* out) {
+            const std::vector<double>& percentiles, double* out,
+            const std::function<double(double)>& select = {}) {
     bool counts = false;  // the frequency statistics need the values in order
     for (int s : stats) counts |= s == MAJORITY || s == MINORITY || s == UNIQUE;
+    auto pct = [&](double q) { return select ? select(q) : percentile(vals, q, counts); };
     double majority = kNaN, minority = kNaN, unique = 0.0;
     if (counts && !vals.empty()) {
         std::sort(vals.begin(), vals.end());
@@ -166,11 +301,11 @@ void finish(const Acc& a, std::vector<double>& vals, const std::vector<int>& sta
             case RANGE: v = empty ? kNaN : a.hi - a.lo; break;
             case VAR: v = empty ? kNaN : a.m2 / static_cast<double>(a.n); break;
             case STD: v = empty ? kNaN : std::sqrt(a.m2 / static_cast<double>(a.n)); break;
-            case MEDIAN: v = percentile(vals, 50.0, counts); break;
+            case MEDIAN: v = pct(50.0); break;
             case MAJORITY: v = majority; break;
             case MINORITY: v = minority; break;
             case UNIQUE: v = unique; break;
-            case PERCENTILE: v = percentile(vals, percentiles[k], counts); break;
+            case PERCENTILE: v = pct(percentiles[k]); break;
             default: throw std::invalid_argument("unknown statistic");
         }
         out[k] = v;
@@ -304,9 +439,17 @@ std::vector<double> zonal_stats(const T* values, int bands, int ny, int nx, bool
                                 const std::vector<double>& percentiles) {
     const i64 nz = runs.zones();
     const auto ns = static_cast<i64>(stats.size());
-    bool keep = false;
-    for (int s : stats) keep |= s >= MEDIAN;
+    bool keep = false, counts = false;
+    for (int s : stats) {
+        keep |= s >= MEDIAN;
+        counts |= s == MAJORITY || s == MINORITY || s == UNIQUE;
+    }
     std::vector<double> out(static_cast<std::size_t>(nz * bands * ns), kNaN);
+    // Zones of at least kLargeZone cells select their percentiles from the raster
+    // in parallel (ZoneSelect) instead of gathering their values (with the frequency
+    // statistics they are gathered and sorted as the others).
+    constexpr i64 kLargeZone = i64{1} << 20;
+    std::vector<char> large(static_cast<std::size_t>(nz), 0);
     const std::size_t plane = static_cast<std::size_t>(ny) * nx;
     // Every zone in blocks of runs of about kBlockCells cells: the blocks depend on
     // the zones only, so the result does not depend on the number of threads.
@@ -314,10 +457,11 @@ std::vector<double> zonal_stats(const T* values, int bands, int ny, int nx, bool
     std::vector<i64> block_start{0}, block_zone, zone_first(static_cast<std::size_t>(nz) + 1, 0);
     for (i64 z = 0; z < nz; ++z) {
         zone_first[static_cast<std::size_t>(z)] = static_cast<i64>(block_zone.size());
-        i64 cells = 0;
+        i64 cells = 0, zone_cells = 0;
         const i64 r1 = runs.offsets[z + 1];
         for (i64 r = runs.offsets[z]; r < r1; ++r) {
             cells += runs.x1[r] - runs.x0[r];
+            zone_cells += runs.x1[r] - runs.x0[r];
             if (cells >= kBlockCells || r + 1 == r1) {
                 block_start.push_back(r + 1);
                 block_zone.push_back(z);
@@ -328,6 +472,7 @@ std::vector<double> zonal_stats(const T* values, int bands, int ny, int nx, bool
             block_start.push_back(r1);
             block_zone.push_back(z);
         }
+        large[static_cast<std::size_t>(z)] = keep && !counts && zone_cells >= kLargeZone;
     }
     zone_first[static_cast<std::size_t>(nz)] = static_cast<i64>(block_zone.size());
     // block_start[k] .. block_start[k + 1] are the runs of block k; the first block of a zone starts at its offset
@@ -344,15 +489,17 @@ std::vector<double> zonal_stats(const T* values, int bands, int ny, int nx, bool
             const auto ki = static_cast<std::size_t>(k);
             accs[ki] = Acc{};
             static thread_local std::vector<double> none;
-            std::vector<double>& vals = keep ? parts[ki] : none;
+            const bool gather = keep && !large[static_cast<std::size_t>(block_zone[ki])];
+            std::vector<double>& vals = gather ? parts[ki] : none;
             vals.clear();
-            scan(band, nx, runs, block_start[ki], block_start[ki + 1], has_nodata, nodata, keep, accs[ki], vals);
+            scan(band, nx, runs, block_start[ki], block_start[ki + 1], has_nodata, nodata, gather, accs[ki], vals);
         }
 #pragma omp parallel
         {
             std::vector<double> vals;
 #pragma omp for schedule(dynamic, 1)
             for (i64 z = 0; z < nz; ++z) {
+                if (large[static_cast<std::size_t>(z)]) continue;
                 const i64 k0 = zone_first[static_cast<std::size_t>(z)], k1 = zone_first[static_cast<std::size_t>(z) + 1];
                 Acc acc;
                 vals.clear();
@@ -366,6 +513,22 @@ std::vector<double> zonal_stats(const T* values, int bands, int ny, int nx, bool
                 }
                 finish(acc, vals, stats, percentiles, &out[static_cast<std::size_t>((z * bands + b) * ns)]);
             }
+        }
+        for (i64 z = 0; z < nz; ++z) {  // the large zones, one after the other, each in parallel
+            if (!large[static_cast<std::size_t>(z)]) continue;
+            const i64 k0 = zone_first[static_cast<std::size_t>(z)], k1 = zone_first[static_cast<std::size_t>(z) + 1];
+            Acc acc;
+            for (i64 k = k0; k < k1; ++k) acc.merge(accs[static_cast<std::size_t>(k)]);
+            std::vector<double> qs;
+            for (std::size_t k = 0; k < stats.size(); ++k) {
+                if (stats[k] == MEDIAN) qs.push_back(50.0);
+                if (stats[k] == PERCENTILE) qs.push_back(percentiles[k]);
+            }
+            const std::vector<double> at =
+                ZoneSelect<T>(band, nx, runs, block_start, k0, k1, has_nodata, nodata, acc.n).percentiles(qs);
+            std::vector<double> none;
+            finish(acc, none, stats, percentiles, &out[static_cast<std::size_t>((z * bands + b) * ns)],
+                   [&](double q) { return at[static_cast<std::size_t>(std::find(qs.begin(), qs.end(), q) - qs.begin())]; });
         }
     }
     return out;

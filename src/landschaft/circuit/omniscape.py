@@ -397,6 +397,8 @@ def omniscape(resistance, radius, *, source=None, block_size=1, buffer=0, source
         return xr.Dataset({k: (("y", "x"), data[k]) for k in order if k in data}, attrs=attrs)
     ds = xr.Dataset({k: like.copy(data=data[k]).rename(k) for k in order if k in data}, attrs=attrs)
     if hasattr(ds, "rio"):
+        from ..io import _with_georef
+
         for k in ds.data_vars:
-            ds[k] = ds[k].rio.write_nodata(np.nan, encoded=False)
+            ds[k] = _with_georef(ds[k], nodata=np.nan)
     return ds

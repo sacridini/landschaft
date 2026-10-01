@@ -149,6 +149,33 @@ def test_zonal_stats_types_and_threads():
     assert one["mean"].iloc[0] == pytest.approx(float(big.values.astype(np.float64).mean()), rel=1e-12)
 
 
+@pytest.mark.parametrize("dtype", ["float32", "int16", "uint8"])
+def test_percentiles_of_zones_over_a_million_cells_match_numpy(dtype):
+    # zones of 2^20 cells or more select their percentiles from the raster in parallel
+    rng = np.random.default_rng(8)
+    t = from_origin(500000.0, 4536000.0, 30.0, 30.0)
+    if dtype == "float32":
+        v = rng.normal(0, 1, (1200, 1200)).astype(np.float32)
+        v[rng.random(v.shape) < 0.02] = np.nan
+        raster, nodata = grid(v, transform=t), None
+    else:
+        v = rng.integers(1, 6 if dtype == "uint8" else 400, (1200, 1200)).astype(dtype)
+        raster, nodata = grid(v, transform=t, nodata=1), 1
+    whole = box(500000, 4500000, 536000, 4536000)  # 1.44 million cells
+    small = box(500000, 4530000, 503000, 4536000)  # 20 000 cells: values gathered
+    stats = ["count", "median", "p0", "p2.5", "p50", "p90", "p99.99", "p100", "mean"]
+    one = ls.zonal_stats(raster, [whole, small], stats, n_threads=1).drop(columns="geometry")
+    many = ls.zonal_stats(raster, [whole, small], stats, n_threads=8).drop(columns="geometry")
+    assert one.equals(many)  # bit for bit
+    for z, g in enumerate((whole, small)):
+        mask = rasterio.features.geometry_mask([g], out_shape=v.shape, transform=t, invert=True)
+        w, _ = reference(v, mask, nodata)
+        assert one["count"].iloc[z] == w.size
+        expected = np.percentile(w, [50, 0, 2.5, 50, 90, 99.99, 100])
+        got = one[["median", "p0", "p2.5", "p50", "p90", "p99.99", "p100"]].iloc[z].to_numpy()
+        np.testing.assert_array_equal(got, expected)
+
+
 def test_zonal_stats_errors(raster):
     with pytest.raises(ValueError, match="unknown statistic"):
         ls.zonal_stats(raster, box(500000, 4499000, 500300, 4500000), "average")
@@ -286,6 +313,16 @@ def test_clip_regions(raster):
         ls.clip(raster, box(0, 0, 10, 10))
     with pytest.raises(TypeError, match="load_vector"):
         ls.clip(raster, "area.gpkg")
+
+
+def test_georeferencing_results_does_not_copy_or_touch_the_input(raster):
+    before = (raster.rio.transform(), raster.rio.nodata, dict(raster.attrs))
+    crop = ls.clip(raster, (500300, 4497000, 501200, 4499100))
+    assert np.shares_memory(crop.values, raster.values) and crop.rio.transform().c == 500300
+    assert np.shares_memory(ls.match_grid(raster, raster).values, raster.values)
+    masked = ls.clip(raster, Point(501500, 4498500).buffer(600))
+    assert np.isnan(masked.rio.nodata) and not np.shares_memory(masked.values, raster.values)
+    assert (raster.rio.transform(), raster.rio.nodata, dict(raster.attrs)) == before
 
 
 def test_clip_is_lazy_on_dask(raster):

@@ -45,9 +45,11 @@ class Surface:
             da = xr.DataArray(values, coords={k: t.coords[k] for k in t.dims}, dims=t.dims, name=name,
                               attrs=dict(attrs or {}))
             try:
-                da = da.rio.write_transform(t.rio.transform())
+                from ..io import _with_georef
+
+                da = _with_georef(da, transform=t.rio.transform())
                 if t.rio.crs is not None:
-                    da = da.rio.write_crs(t.rio.crs)
+                    da = _with_georef(da, crs=t.rio.crs)
             except Exception:
                 pass
             return da
@@ -57,10 +59,12 @@ class Surface:
         x = xmin + (np.arange(nx) + 0.5) * xr_
         y = ymax - (np.arange(ny) + 0.5) * yr_
         da = xr.DataArray(values, dims=("y", "x"), coords={"y": y, "x": x}, name=name, attrs=dict(attrs or {}))
-        da = da.rio.write_transform(Affine(xr_, 0.0, xmin, 0.0, -yr_, ymax))
+        from ..io import _with_georef
+
+        da = _with_georef(da, transform=Affine(xr_, 0.0, xmin, 0.0, -yr_, ymax))
         if self.crs is not None:
             try:
-                da = da.rio.write_crs(self.crs)
+                da = _with_georef(da, crs=self.crs)
             except Exception:
                 pass
         return da

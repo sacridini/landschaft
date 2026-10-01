@@ -60,7 +60,9 @@ def _like(values: np.ndarray, like, name: str):
     out = like.copy(data=values)
     out.name = name
     if hasattr(out, "rio"):
-        out = out.rio.write_nodata(np.nan, encoded=False)
+        from ..io import _with_georef
+
+        out = _with_georef(out, nodata=np.nan)
     return out
 
 

@@ -297,7 +297,9 @@ class Transition:
                            attrs={"long_name": name})
         crs = t.rio.crs if hasattr(t, "rio") else None
         if crs is not None:  # the georeferencing of the raster the transition came from
-            out = out.rio.write_crs(crs).rio.write_transform(t.rio.transform())
+            from ..io import _with_georef
+
+            out = _with_georef(out, crs=crs, transform=t.rio.transform())
         return out
 
     # -- layouts -----------------------------------------------------------------
