@@ -173,11 +173,23 @@ void filled_polygon(const Mask& m, const std::vector<int>& part_size, const std:
     const int maxy = static_cast<int>(std::min<double>(dmaxy, m.ny - 1));
     constexpr int minx = 0;
     const int maxx = m.nx - 1;
-    for (int y = miny; y <= maxy; y++) {
+    // the rows of the window only: the others store nothing
+    const int ylo = std::max(miny, m.oy);
+    const int yhi = std::min(maxy, m.oy + m.wy - 1);
+    if (ylo > yhi) return;
+    // Every edge as GDAL walks them, with the rows it may cross (a row of margin
+    // on each side; an edge with a NaN on all of them, as GDAL takes it). A row
+    // tests only its active edges, with GDAL's tests; the intersections are
+    // sorted, so the cells are the same, in time proportional to the crossings
+    // instead of rows x vertices.
+    struct Edge {
+        int ind1, ind2, first, last;
+    };
+    std::vector<Edge> edges;
+    edges.reserve(static_cast<std::size_t>(n));
+    {
         int partoffset = 0;
-        const double dy = y + 0.5;
         std::size_t part = 0;
-        int ints = 0;
         for (int i = 0; i < n; i++) {
             if (i == partoffset + part_size[part]) {
                 partoffset += part_size[part];
@@ -191,6 +203,29 @@ void filled_polygon(const Mask& m, const std::vector<int>& part_size, const std:
                 ind1 = i - 1;
                 ind2 = i;
             }
+            const double a = padfY[ind1], b = padfY[ind2];
+            int first = ylo, last = yhi;
+            if (!std::isnan(a) && !std::isnan(b)) {
+                const double lo = std::floor(std::min(a, b) - 0.5) - 1.0;
+                const double hi = std::ceil(std::max(a, b) - 0.5) + 1.0;
+                if (hi < ylo || lo > yhi) continue;
+                first = static_cast<int>(std::max<double>(lo, ylo));
+                last = static_cast<int>(std::min<double>(hi, yhi));
+            }
+            edges.push_back({ind1, ind2, first, last});
+        }
+    }
+    std::sort(edges.begin(), edges.end(), [](const Edge& p, const Edge& q) { return p.first < q.first; });
+    std::vector<Edge> active;
+    std::size_t next = 0;
+    for (int y = ylo; y <= yhi; y++) {
+        active.erase(std::remove_if(active.begin(), active.end(), [y](const Edge& e) { return e.last < y; }),
+                     active.end());
+        while (next < edges.size() && edges[next].first <= y) active.push_back(edges[next++]);
+        const double dy = y + 0.5;
+        int ints = 0;
+        for (const Edge& e : active) {
+            const int ind1 = e.ind1, ind2 = e.ind2;
             double dy1 = padfY[ind1];
             double dy2 = padfY[ind2];
             if ((dy1 < dy && dy2 < dy) || (dy1 > dy && dy2 > dy)) continue;

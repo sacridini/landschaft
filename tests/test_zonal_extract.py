@@ -239,6 +239,34 @@ def test_clip_crops_and_masks(raster):
         raster.notnull().sum())
 
 
+def jagged_polygon(rng, n, cx, cy, radius):
+    """A polygon of n vertices with a hole, its edges spanning many rows, some vertices on cell
+    centres and edges (horizontal edges through centres)."""
+    a = np.linspace(0, 2 * np.pi, n, endpoint=False)
+    r = radius * (1 + 0.1 * np.sin(23 * a) + 0.05 * rng.standard_normal(n))
+    x, y = cx + r * np.cos(a), cy + r * np.sin(a)
+    x[::7], y[::7] = np.round(x[::7] / 15) * 15, np.round(y[::7] / 15) * 15
+    hole = Point(cx + radius / 3, cy).buffer(radius / 5, 16)
+    return Polygon(zip(x, y), [hole.exterior.coords])
+
+
+@pytest.mark.parametrize("all_touched", [False, True])
+def test_clip_and_rasterize_match_gdal_on_polygons_with_many_vertices(raster, all_touched):
+    rng = np.random.default_rng(4)
+    region = jagged_polygon(rng, 5000, 501800, 4498500, 1900)  # beyond the raster on every side
+    gdal = rasterio.features.rasterize([(region, 1)], out_shape=raster.shape, transform=T, dtype="uint8",
+                                       all_touched=all_touched).astype(bool)
+    burnt = ls.rasterize(gpd.GeoSeries([region], crs=CRS), raster, all_touched=all_touched).values
+    np.testing.assert_array_equal(burnt, gdal)
+    kept = ls.clip(raster, region, crop=False, all_touched=all_touched)
+    np.testing.assert_array_equal(kept.notnull().values, gdal & raster.notnull().values)
+    hole = ls.clip(raster, region, invert=True, all_touched=all_touched)
+    np.testing.assert_array_equal(hole.notnull().values, ~gdal & raster.notnull().values)
+    stats = ls.zonal_stats(raster, [region], ["count", "sum"], all_touched=all_touched)
+    v, _ = reference(raster.values, gdal)
+    assert stats["count"].iloc[0] == v.size and np.isclose(stats["sum"].iloc[0], v.sum(), rtol=1e-12)
+
+
 def test_clip_class_maps_keep_their_type(tmp_path):
     classes = grid(np.full((50, 50), 7, np.uint8))
     out = ls.clip(classes, box(500300, 4498800, 500900, 4499700))

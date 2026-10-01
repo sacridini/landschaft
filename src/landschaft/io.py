@@ -268,6 +268,22 @@ def _transform(da: xr.DataArray):
     return cached
 
 
+_KEEP = object()
+
+
+def _with_georef(da: xr.DataArray, *, crs=None, transform=None, nodata=_KEEP) -> xr.DataArray:
+    """``da`` with a CRS, transform or NoData (not encoded) written, sharing its values:
+    rioxarray's ``write_*`` copy the whole array unless asked to work in place."""
+    out = da.copy(deep=False)
+    if crs is not None:
+        out.rio.write_crs(crs, inplace=True)
+    if transform is not None:
+        out.rio.write_transform(transform, inplace=True)
+    if nodata is not _KEEP:
+        out.rio.write_nodata(nodata, encoded=False, inplace=True)
+    return out
+
+
 _RESAMPLING_NAMES = ("nearest", "bilinear", "cubic", "cubic_spline", "lanczos", "average", "mode", "max", "min",
                      "med", "q1", "q3", "sum", "rms")
 
@@ -278,7 +294,7 @@ def _grid_template(like) -> xr.DataArray:
         t = like.isel({d: 0 for d in like.dims if d not in ("y", "x")}) if like.ndim > 2 else like
         if t.rio.crs is None:
             raise ValueError("like has no CRS")
-        return t.rio.write_transform(_transform(t))
+        return _with_georef(t, transform=_transform(t))
     with rasterio.open(like) as src:
         h, w, tr, crs = src.height, src.width, src.transform, src.crs
     if tr.b or tr.d:
@@ -286,7 +302,7 @@ def _grid_template(like) -> xr.DataArray:
     x = tr.c + tr.a * (np.arange(w) + 0.5)
     y = tr.f + tr.e * (np.arange(h) + 0.5)
     t = xr.DataArray(np.broadcast_to(np.uint8(0), (h, w)), coords={"y": y, "x": x}, dims=("y", "x"))
-    return t.rio.write_crs(crs).rio.write_transform(tr)
+    return _with_georef(t, crs=crs, transform=tr)
 
 
 def _same_grid(a: xr.DataArray, b: xr.DataArray) -> bool:
@@ -336,7 +352,7 @@ def match_grid(data: xr.DataArray, like, *, resampling: str = "auto") -> xr.Data
     if not isinstance(data, xr.DataArray) or data.rio.crs is None:
         raise ValueError("match_grid needs a georeferenced DataArray (see load_raster)")
     template = _grid_template(like)
-    data = data.rio.write_transform(_transform(data))
+    data = _with_georef(data, transform=_transform(data))
     if not _same_grid(data, template):
         if resampling == "auto":
             method = "bilinear" if np.issubdtype(data.dtype, np.floating) else "nearest"
@@ -402,7 +418,7 @@ def _clip(data: xr.DataArray, region, *, crop: bool = True, all_touched: bool = 
           invert: bool = False) -> xr.DataArray:
     import math
 
-    from rasterio.features import geometry_mask
+    from ._vector import _mask
 
     if data.rio.crs is None:
         raise ValueError("clip needs a georeferenced raster")
@@ -421,28 +437,34 @@ def _clip(data: xr.DataArray, region, *, crop: bool = True, all_touched: bool = 
             raise ValueError("the region does not overlap the raster")
         data = data.isel(x=slice(c0, c1), y=slice(r0, r1))
     window = t * rasterio.Affine.translation(c0, r0)
-    data = data.rio.write_transform(window)
+    data = _with_georef(data, transform=window)
     if geoms is None and not invert:
         return data
     if geoms is None:
         from shapely.geometry import box
 
         geoms = [box(xmin, ymin, xmax, ymax)]
-    inside = geometry_mask(geoms, out_shape=(data.sizes["y"], data.sizes["x"]), transform=window,
-                           all_touched=all_touched, invert=True)
-    keep = xr.DataArray(~inside if invert else inside, coords={"y": data["y"], "x": data["x"]}, dims=("y", "x"))
+    inside = _mask(geoms, (data.sizes["y"], data.sizes["x"]), window, all_touched)
+    keep = ~inside if invert else inside
     attrs = dict(data.attrs)
-    if np.issubdtype(data.dtype, np.floating):
-        out = data.where(keep)
-        out.attrs = attrs
-        return out.rio.write_nodata(data.rio.nodata if data.rio.nodata is not None else np.nan, encoded=False)
+    is_float = np.issubdtype(data.dtype, np.floating)
     nodata = data.rio.nodata
-    if nodata is None:
-        info = np.iinfo(data.dtype) if np.issubdtype(data.dtype, np.integer) else None
-        nodata = (info.max if info.min == 0 else info.min) if info is not None else 0
-    out = data.where(keep, nodata).astype(data.dtype)
+    if is_float:  # NaN outside, whatever the NoData
+        fill, nodata = np.nan, np.nan if nodata is None else nodata
+    else:
+        if nodata is None:
+            info = np.iinfo(data.dtype) if np.issubdtype(data.dtype, np.integer) else None
+            nodata = (info.max if info.min == 0 else info.min) if info is not None else 0
+        fill = nodata
+    if data.chunks is None and data.dims[-2:] == ("y", "x"):  # in memory: one pass of NumPy
+        out = data.copy(deep=False, data=np.where(keep, data.values, np.array(fill).astype(data.dtype)))
+        out.encoding = {}
+    else:
+        out = data.where(xr.DataArray(keep, coords={"y": data["y"], "x": data["x"]}, dims=("y", "x")), fill)
+        if not is_float:
+            out = out.astype(data.dtype)
     out.attrs = attrs
-    return out.rio.write_nodata(nodata, encoded=False)
+    return _with_georef(out, nodata=nodata)
 
 
 def clip(raster, region, *, crop: bool = True, all_touched: bool = False, invert: bool = False) -> xr.DataArray:
@@ -564,7 +586,7 @@ def _mask_nodata(da: xr.DataArray, masked) -> xr.DataArray:
         out = out.where(da != stored)
     out.attrs = {k: v for k, v in attrs.items() if k not in ("_FillValue", "nodata")}
     out.encoding = {k: v for k, v in da.encoding.items() if k not in ("_FillValue", "dtype")}
-    return out.rio.write_nodata(np.nan, encoded=False)
+    return _with_georef(out, nodata=np.nan)
 
 
 def _load_map(source, *, band: int | None = None, validate: str | None = None, **kwargs) -> xr.DataArray:

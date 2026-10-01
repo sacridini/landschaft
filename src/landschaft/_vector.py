@@ -265,6 +265,18 @@ def _burn(arr, geoms, values, tr, all_touched: bool, add: bool, gdal) -> None:
             arr.reshape(-1)[flat[last]] = vals[ok][last].astype(arr.dtype)
 
 
+def _mask(geoms, shape, tr, all_touched: bool) -> np.ndarray:
+    """The cells geometries cover on a grid, as :func:`rasterize` burns them (booleans)."""
+    from rasterio.features import rasterize as burn
+
+    geoms = np.asarray(geoms, dtype=object)
+    arr = np.zeros(shape, dtype=np.uint8)
+    _burn(arr, geoms, np.ones(len(geoms)), tr, all_touched, False,
+          lambda g, v: burn(zip(g, v.astype(np.uint8)), out_shape=shape, transform=tr, fill=0,
+                            all_touched=all_touched, out=arr, dtype=np.uint8))
+    return arr.view(bool)
+
+
 def rasterize(vector, like, *, field: str | None = None, value=1, fill=0, all_touched: bool = False,
               merge: str = "replace", dtype=None, name: str | None = None) -> xr.DataArray:
     """Burn vector features into a raster on the grid of another raster.
@@ -322,7 +334,7 @@ def rasterize(vector, like, *, field: str | None = None, value=1, fill=0, all_to
     from rasterio.enums import MergeAlg
     from rasterio.features import rasterize as burn
 
-    from .io import _grid_template, _transform
+    from .io import _KEEP, _grid_template, _transform, _with_georef
 
     if merge not in ("replace", "add"):
         raise ValueError("merge must be 'replace' or 'add'")
@@ -353,10 +365,8 @@ def rasterize(vector, like, *, field: str | None = None, value=1, fill=0, all_to
                                        dtype=out_dtype))
     da = xr.DataArray(arr, coords={"y": template["y"].values, "x": template["x"].values}, dims=("y", "x"),
                       name=name or field or "rasterized")
-    da = da.rio.write_crs(target).rio.write_transform(_transform(template))
-    if isinstance(fill, float) and np.isnan(fill):
-        da = da.rio.write_nodata(np.nan, encoded=False)
-    return da
+    nodata = np.nan if isinstance(fill, float) and np.isnan(fill) else _KEEP
+    return _with_georef(da, crs=target, transform=tr, nodata=nodata)
 
 
 def transform_xy(x: np.ndarray, y: np.ndarray, src, dst="EPSG:3857"):

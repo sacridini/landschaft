@@ -26,6 +26,20 @@ between minor versions.
   leaves the products' missing class out of the map (the imagery shows through) and the legend, as
   any class given a transparent colour.
 
+### Performance
+- Polygons are burnt in time proportional to the edges each row crosses, not rows times
+  vertices (GDAL's rasterizer, and Landschaft's port of it, test every edge on every row); the
+  cells are the same. `rasterize`, `clip`, `zonal_stats` and `extract(buffer=)` on a border of
+  200 000 vertices over 8000 x 8000 cells: 0.07-0.12 s, against 2.7-4 s for rasterio,
+  rioxarray and rasterstats.
+- `ls.clip` masks with Landschaft's rasterizer instead of rasterio's `geometry_mask` (the same
+  cells) and in one NumPy pass; `clip`, `rasterize`, `match_grid` and `load_raster` no longer copy
+  whole rasters to write their CRS, transform or NoData (rioxarray's `write_*` do unless asked to
+  work in place). On 8000 x 8000 cells, `rasterize` of 2000 polygons takes 0.03 s instead of
+  0.09 s, and `clip` to a circle 0.08 s instead of 0.14 s. A crop with bounds only, and
+  `match_grid` onto the grid a raster already has, return views of the raster's values, as
+  xarray's selections do.
+
 ### Fixed
 - The rasters of `ls.cost` (`acc_cost`, `passage`, the transition summaries...) keep the CRS and
   transform of the raster the transition came from; they had the coordinates only.
