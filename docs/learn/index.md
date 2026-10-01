@@ -17,8 +17,8 @@ any thread further.
     - **Read in order the first time.** Later chapters rely on the vocabulary
       of the earlier ones (patch, matrix, grain, extent, edge...).
     - **Run the code.** Every code block runs as it is, in order within a
-      chapter: open a notebook next to the page. Install Landschaft with the
-      `plot` extra ([installation](../getting-started/installation.md)).
+      chapter: open a notebook next to the page, with Landschaft
+      [installed](../getting-started/installation.md).
     - **Answer the questions** at the end of each chapter before opening the
       answers.
     - **Come back to [chapter 13](choosing.md)** when you start a project: it

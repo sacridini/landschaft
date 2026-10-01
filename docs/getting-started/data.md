@@ -85,7 +85,8 @@ With `foreground=` (or just a list of classes) it builds the habitat map
 
 `write_raster` stores a raster so that GIS software, and `load_raster`, read
 it back as it was: georeferencing, NoData (NaN of floats included), band
-names, the colour table of landschaft's class maps. It picks what the data
+names, the colour table of landschaft's class maps (or your own,
+`colormap={0: "#d9d9d9", 1: "forestgreen"}`). It picks what the data
 need (`uint8` for `True`/`False` maps, the smallest integer type for labels),
 the format from the extension (`.tif`, `.asc`, `.img`...; `driver="COG"` for a
 Cloud-Optimised GeoTIFF), writes dask arrays block by block and creates

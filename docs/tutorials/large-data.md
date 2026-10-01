@@ -138,8 +138,7 @@ morph_stack = ls.mspa(stack)                       # still lazy
 morph_stack.shape
 ```
 
-`morph_stack.compute()` (or `.to_netcdf(...)`) runs it. The `dask` extra is
-needed.
+`morph_stack.compute()` (or `.to_netcdf(...)`) runs it.
 
 ## Threads and memory
 

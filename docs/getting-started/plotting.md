@@ -21,8 +21,9 @@ installed with Landschaft), or in the web browser where no window can open.
 
 | Input | Plot |
 |---|---|
-| a product of a tool (MSPA, FAD, FOS, landscape mosaic, accounting, distances...) | its classes in GuidosToolbox's colours, with their names in the legend |
+| a product of a tool (MSPA, FAD, FOS, landscape mosaic, accounting, distances...) | its classes in GuidosToolbox's colours, with their names in the legend, in GuidosToolbox's order |
 | a raster of integers with at most 64 values, or booleans | classes, each in a distinct colour |
+| a floating-point raster of at most 12 whole numbers (a class map read with `masked=True`, NaN for its NoData) | classes, each in a distinct colour |
 | any other raster | a colour ramp from the 2nd to the 98th percentile |
 | a stack `(band, y, x)` | one layer per band, on one scale; red, green and blue bands as true colour |
 | a GeoDataFrame, GeoSeries or geometry | polygons, lines or points, coloured by `column=` |
@@ -34,7 +35,8 @@ The ramp follows the name and the values of a raster: priority ranks (`rank`,
 `priority`) on Zonation's rank colours, currents (`current`, `cum_currmap`,
 `flow_potential`) on a log scale, elevations (`dem`, `elevation`) on a terrain
 ramp, NDVI from red to green, values on both sides of zero on a diverging ramp
-centred on zero. NoData is transparent.
+centred on zero. NoData is transparent, and so is the *Missing* class of a
+product (the area outside the map): the imagery shows through.
 
 ## Choosing the colours
 
@@ -52,7 +54,8 @@ p = ls.plot(landcover == 23, cmap={0: "#f4f1de", 1: "#2d6a4f"},
   `"rdbu"`, `"blues"`, `"greens"`, `"ylorrd"`, `"rank"`, `"current"`, or any
   matplotlib colormap; `"_r"` reverses it), a list of colours, or a
   `{value: colour}` dictionary for classes;
-- `labels`: `{value: name}`, the names of the classes;
+- `labels`: `{value: name}`, the names of the classes; a class given a
+  transparent colour (`"#00000000"`) is left out of the map and the legend;
 - `categorical`: `True` draws the values as classes, `False` on a ramp;
 - `vmin`, `vmax`, `log`: the range of the ramp and a log scale;
 - `column`: the column of a vector layer that colours it;

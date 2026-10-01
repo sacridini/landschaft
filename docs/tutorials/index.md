@@ -7,8 +7,7 @@ the advanced options. Every code block runs as it is: copy it into a notebook
 and follow along.
 
 !!! tip "Before you start"
-    Install Landschaft with the `plot` extra ([installation](../getting-started/installation.md))
-    and read [core concepts](../getting-started/concepts.md): it explains how
+    [Install Landschaft](../getting-started/installation.md) and read [core concepts](../getting-started/concepts.md): it explains how
     habitat maps are coded, which all tutorials rely on.
 
 !!! info "New to landscape ecology?"

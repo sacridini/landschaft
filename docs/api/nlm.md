@@ -52,8 +52,7 @@ habitat = ls.nlm.classify(r, weighting=[0.7, 0.3])
 !!! note "Voronoi mosaics and shapely"
     NLMR gives the tile values in the order in which GEOS returns the Voronoi
     cells. Landschaft asks GEOS for that order through shapely (installed with
-    the `vector` extra); without shapely the models warn and give each germ its
-    own value. GEOS 3.11 or later is needed for NLMR's order (older versions
+    it); without shapely the models warn and give each germ its own value. GEOS 3.11 or later is needed for NLMR's order (older versions
     return the cells in another order, with a warning).
 
 ## Clusters

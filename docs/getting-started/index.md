@@ -41,6 +41,15 @@ analysis, and explain the few ideas that every tool shares.
 
     [:octicons-arrow-right-24: Learn the basics](concepts.md)
 
+-   :material-map-outline:{ .lg .middle } **Plotting**
+
+    ---
+
+    `ls.plot` draws any map, vector layer, table or result on an interactive
+    map over satellite imagery, or as a chart, in one call.
+
+    [:octicons-arrow-right-24: Plot your data](plotting.md)
+
 </div>
 
 ## Suggested path

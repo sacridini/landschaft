@@ -1,8 +1,7 @@
 # Quickstart
 
 This walkthrough analyses the example map that ships with Landschaft. It needs
-nothing but a working [installation](installation.md) with the `plot` extra
-(matplotlib). Run the code in a Jupyter notebook, or save it in a `.py` file
+nothing but a working [installation](installation.md). Run the code in a Jupyter notebook, or save it in a `.py` file
 and run it with `python`.
 
 ## 1. Load a map
@@ -38,12 +37,13 @@ shows how to build such a map from a land-cover or tree-cover raster with
 ## 2. Look at it
 
 ```python
-forest.plot(cmap="Greens")
+ls.plot(forest)
 ```
 
-`.plot()` is xarray's quick plot (matplotlib). The
-[concepts page](concepts.md#plotting-maps) shows how to draw class maps with
-their proper colours.
+`ls.plot` draws the map on an interactive map over satellite imagery: inline
+in a notebook, in a window of its own from a script. The
+[plotting page](plotting.md) shows how it draws every kind of data and how to
+choose the colours.
 
 ## 3. Analyse the habitat pattern
 
@@ -55,6 +55,7 @@ role: **core** (interior habitat), **edge** (the outer boundary),
 
 ```python
 morph = ls.mspa(forest, edge_width=2)
+ls.plot(morph)                       # GuidosToolbox's colours and class names
 ```
 
 `edge_width=2` makes edges two pixels wide; everything further inside a patch

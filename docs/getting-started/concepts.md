@@ -125,8 +125,10 @@ Tables are pandas DataFrames, easy to save (`.to_csv`, `.to_parquet`) or plot.
 
 ## Plotting maps
 
-A DataArray plots itself with `data.plot()`. Class maps look best with the
-colours of their classes; every tool that returns class codes has a colour
+`ls.plot(data)` draws any raster, vector layer, table or result as it calls
+for, class maps in the colours of their classes (see [plotting](plotting.md)).
+For figures of your own, a DataArray also plots itself with `data.plot()`
+(matplotlib). Class maps look best with the colours of their classes; every tool that returns class codes has a colour
 table (`ls.mspa_colormap()`, `ls.fad_colormap()`...) as a
 `{value: (red, green, blue, alpha)}` dictionary, embedded automatically by
 `ls.write_raster`. To draw one in matplotlib:
