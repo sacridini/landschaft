@@ -72,7 +72,7 @@ print(stats)
 
 Each row is a class, with its number of pixels, its share of the data area
 and its share of the habitat. The table is a pandas `DataFrame`: save it with
-`stats.to_csv("mspa_classes.csv")` or keep working with it in pandas.
+`ls.save(stats, "mspa_classes.csv")` (or `.xlsx`) or keep working with it in pandas.
 
 ## 5. Save the map
 

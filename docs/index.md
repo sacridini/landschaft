@@ -179,13 +179,13 @@ from a single raster on a laptop to continental maps larger than memory.
 === "Circuit connectivity"
 
     ```python
-    import xarray as xr
     import landschaft as ls
 
     landcover = ls.load_raster(ls.example_data("clc"))[:600, :600]
-    resistance = xr.where(landcover.isin([23, 24, 25]), 1.0, 25.0)  # forest is easy to cross
+    resistance = ls.reclassify(landcover, {23: 1.0, 24: 1.0, 25: 1.0},   # forest is easy to cross
+                               others=25.0, dtype="float64")
     flow = ls.omniscape(resistance, radius=30, block_size=5)
-    flow["cum_currmap"].plot()
+    ls.plot(flow)                     # on an interactive map over satellite imagery
     ```
 
 ## Why Landschaft

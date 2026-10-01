@@ -205,10 +205,9 @@ def landscape_mosaic_heatmap(
 
         Examples
         --------
-        >>> import xarray as xr
         >>> import landschaft as ls
         >>> clc = ls.load_raster(ls.example_data("clc"))
-        >>> three = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
+        >>> three = ls.reclassify(clc, [(1, 12, 3), (12, 23, 1), (23, 35, 2)], others=0)   # developed, agriculture, natural
         >>> heat = ls.landscape_mosaic_heatmap(three, window_size=27)
         >>> _ = heat.to_csv("heatmap.csv")
     """
@@ -255,10 +254,9 @@ def landscape_mosaic_change(a, b, window_size: int = 27, *, is_lm103: bool = Fal
     --------
     Agriculture (1) around the north-west corner becomes developed (3):
 
-    >>> import xarray as xr
     >>> import landschaft as ls
     >>> clc = ls.load_raster(ls.example_data("clc"))
-    >>> before = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
+    >>> before = ls.reclassify(clc, [(1, 12, 3), (12, 23, 1), (23, 35, 2)], others=0)   # developed, agriculture, natural
     >>> after = before.copy()
     >>> corner = after.values[:600, :600]
     >>> corner[corner == 1] = 3

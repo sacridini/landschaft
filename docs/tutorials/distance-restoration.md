@@ -93,6 +93,8 @@ every pixel and draws the cheapest route:
 
 ```python
 route = ls.isochrone_map_ab(resistance, marker)
+ls.plot(route)        # the cost map, the corridor and the path
+ls.save(route, "route_ab")
 route.min_cost, int(np.asarray(route.lcp).sum())
 ```
 

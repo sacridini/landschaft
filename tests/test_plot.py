@@ -167,6 +167,12 @@ def test_vectors_as_geojson_or_image():
     assert '"FeatureCollection"' not in html and images(html)  # too many: an image
 
 
+def test_lists_of_anything():
+    table = pd.Series([3, 1, 2], index=["a", "b", "c"], name="n")
+    p = ls.plot([table, np.arange(5.0)])  # not maps: each part as it calls for
+    assert p.panels and all(x.kind == "chart" for x in p.panels)
+
+
 def test_rasters_and_vectors_share_a_map(forest):
     poly = gpd.GeoDataFrame(geometry=[Point(float(forest.x[150]), float(forest.y[150])).buffer(0.01)],
                             crs=forest.rio.crs)

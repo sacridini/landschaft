@@ -116,6 +116,7 @@ square or circular moving window around every cell:
 ```python
 tex = ls.surface.window_metrics(z, ["sa", "sku"], window=9)
 print(tex)
+ls.plot(tex)          # one layer per metric
 ```
 
 ```text
@@ -183,6 +184,8 @@ hli = ls.surface.hli(aspect, slope, scaled=True)       # heat load (latitude fro
 curv = ls.surface.curvature(dem, "profile")
 for name, v in [("slope", slope), ("tpi", tpi), ("tri", tri), ("vrm", vrm), ("hli", hli)]:
     print(name, round(float(v.mean()), 3), round(float(v.max()), 3))
+ls.plot([dem, slope, tpi])     # one map, a layer each
+ls.write_raster(slope, "slope.tif")
 ```
 
 ```text

@@ -293,8 +293,12 @@ class Transition:
         import xarray as xr
 
         t = self._template
-        return xr.DataArray(values, coords={k: t.coords[k] for k in t.dims}, dims=t.dims, name=name,
-                            attrs={"long_name": name})
+        out = xr.DataArray(values, coords={k: t.coords[k] for k in t.dims}, dims=t.dims, name=name,
+                           attrs={"long_name": name})
+        crs = t.rio.crs if hasattr(t, "rio") else None
+        if crs is not None:  # the georeferencing of the raster the transition came from
+            out = out.rio.write_crs(crs).rio.write_transform(t.rio.transform())
+        return out
 
     # -- layouts -----------------------------------------------------------------
 

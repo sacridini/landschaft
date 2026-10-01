@@ -117,12 +117,11 @@ import landschaft as ls
 
 landcover = ls.load_raster(ls.example_data("clc"))[:800, :800]   # 20 x 20 km
 
-table = {}
-table.update({c: 50.0 for c in range(1, 12)})     # artificial surfaces
-table.update({c: 10.0 for c in range(12, 23)})    # agricultural areas
-table.update({c: 1.0 for c in range(23, 35)})     # forest and semi-natural areas
-table.update({c: 100.0 for c in range(35, 45)})   # wetlands and water
-resistance = np.vectorize(table.get)(landcover.values).astype(float)
+resistance = ls.reclassify(landcover, [(1, 12, 50.0),     # artificial surfaces
+                                       (12, 23, 10.0),    # agricultural areas
+                                       (23, 35, 1.0),     # forest and semi-natural areas
+                                       (35, 45, 100.0)],  # wetlands and water
+                           dtype="float64")
 
 forest = np.isin(landcover.values, [23, 24, 25])
 euclidean_m = ndimage.distance_transform_edt(~forest) * 25          # metres

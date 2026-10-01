@@ -36,6 +36,7 @@ the grid (same size, cell size and extent).
 
 ```python
 simple = ls.simple_change(before, after)
+ls.plot(simple)       # the change map and its numbers
 simple.gain, simple.loss, simple.net_change
 ```
 
@@ -59,6 +60,7 @@ the rest *spurious*:
 
 ```python
 mcd = ls.morphological_change(before, after)
+ls.save(mcd, "forest_change")      # the change map (GeoTIFF with its colours), tables and numbers
 mcd.mcd_gain, mcd.mcd_loss, mcd.spurious, round(mcd.elasticity, 3)
 ```
 
@@ -102,7 +104,7 @@ the maps directly (it runs the multiscale density on both) or results of
 With two three-class land-cover maps (1 agriculture, 2 natural, 3 developed),
 `ls.landscape_mosaic_change(map_2000, map_2020, window_size=27)` compares
 their [landscape-mosaic heat maps](fragmentation.md#landscape-mosaic): which
-compositions became more or less frequent. `.to_csv(path)` writes the table.
+compositions became more or less frequent. `ls.write_table(table, path)` writes it.
 
 ## Next steps
 

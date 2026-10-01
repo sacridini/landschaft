@@ -64,6 +64,7 @@ as a widespread one.
 
 ```python
 res = P.zonation(species, names=names)
+ls.plot(res)          # the rank map, the performance curves and the summary
 res.iterations, res.ranking_error
 ```
 

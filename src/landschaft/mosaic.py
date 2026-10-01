@@ -149,10 +149,9 @@ def landscape_mosaic(
     Land cover in three classes (1 agriculture, 2 natural, 3 developed) from
     the CORINE example:
 
-    >>> import xarray as xr
     >>> import landschaft as ls
     >>> clc = ls.load_raster(ls.example_data("clc"))
-    >>> three = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
+    >>> three = ls.reclassify(clc, [(1, 12, 3), (12, 23, 1), (23, 35, 2)], others=0)   # developed, agriculture, natural
     >>> mosaic = ls.landscape_mosaic(three, window_size=27)
     >>> ls.LM19_CLASSES[17]
     'Pure Forest (100%)'
@@ -207,10 +206,9 @@ def landscape_mosaic_stats(
 
     Examples
     --------
-    >>> import xarray as xr
     >>> import landschaft as ls
     >>> clc = ls.load_raster(ls.example_data("clc"))
-    >>> three = xr.where(clc <= 11, 3, xr.where(clc <= 22, 1, xr.where(clc <= 34, 2, 0))).astype("uint8")
+    >>> three = ls.reclassify(clc, [(1, 12, 3), (12, 23, 1), (23, 35, 2)], others=0)   # developed, agriculture, natural
     >>> table = ls.landscape_mosaic_stats(three, window_size=27)
     >>> list(table.columns)
     ['class_code', 'pixel_count', 'percentage', 'recode_class_19', 'recode_name_19']

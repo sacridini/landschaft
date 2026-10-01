@@ -122,17 +122,16 @@ top-level groups (artificial, agricultural, forest and semi-natural,
 wetlands, water):
 
 ```python
-import xarray as xr
-
 landcover = ls.load_raster(ls.example_data("clc"))
-level1 = xr.where(landcover <= 11, 1,              # artificial surfaces
-         xr.where(landcover <= 22, 2,              # agricultural areas
-         xr.where(landcover <= 34, 3,              # forest and semi-natural areas
-         xr.where(landcover <= 39, 4, 5)))).astype("uint8")   # wetlands, water
+level1 = ls.reclassify(landcover, [(1, 12, 1),     # artificial surfaces
+                                   (12, 23, 2),    # agricultural areas
+                                   (23, 35, 3),    # forest and semi-natural areas
+                                   (35, 40, 4),    # wetlands
+                                   (40, 45, 5)])   # water
 
 compare = pd.concat({
     "26 classes": ls.Landscape(landcover).landscape_metrics(["pr", "np", "shdi", "ed"]),
-    "5 classes": ls.Landscape(level1, res=25).landscape_metrics(["pr", "np", "shdi", "ed"]),
+    "5 classes": ls.Landscape(level1).landscape_metrics(["pr", "np", "shdi", "ed"]),
 })
 compare.round(2)
 ```

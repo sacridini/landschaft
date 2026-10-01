@@ -121,38 +121,22 @@ result.classes        # fragmentation classes
 print(result.summary())
 ```
 
-Tables are pandas DataFrames, easy to save (`.to_csv`, `.to_parquet`) or plot.
+Tables are pandas DataFrames: `ls.save(table, "metrics.csv")` (or `.xlsx`,
+`.parquet`) writes one, `ls.plot(table)` draws it as a chart.
 
 ## Plotting maps
 
 `ls.plot(data)` draws any raster, vector layer, table or result as it calls
 for, class maps in the colours of their classes (see [plotting](plotting.md)).
-For figures of your own, a DataArray also plots itself with `data.plot()`
-(matplotlib). Class maps look best with the colours of their classes; every tool that returns class codes has a colour
-table (`ls.mspa_colormap()`, `ls.fad_colormap()`...) as a
-`{value: (red, green, blue, alpha)}` dictionary, embedded automatically by
-`ls.write_raster`. To draw one in matplotlib:
+Every tool that returns class codes has a colour table (`ls.mspa_colormap()`,
+`ls.fad_colormap()`...): `ls.plot` draws the map in it, and `ls.write_raster`
+embeds it in the GeoTIFF, so that QGIS opens it in the same colours.
 
 ```python
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-
-
-def show_classes(data, colours, ax=None):
-    """Draw a class map with a {value: (r, g, b, a)} colour table."""
-    lut = np.zeros((256, 4))
-    for value, rgba in colours.items():
-        lut[value] = np.array(rgba) / 255
-    ax = ax or plt.gca()
-    ax.imshow(lut[np.asarray(data)], interpolation="nearest")
-    ax.set_axis_off()
-    return ax
-
-
 morph = ls.mspa(ls.load_raster(ls.example_data("input")))
-show_classes(morph, ls.mspa_colormap())
-plt.show()
+ls.plot(morph)                                  # interactive, over satellite imagery
+figure = ls.plot(morph, static=True, basemap=None).figure   # a matplotlib figure, for papers
+ls.write_raster(morph, "mspa.tif")              # with the MSPA colour table
 ```
 
 ## Large maps and many maps

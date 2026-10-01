@@ -84,6 +84,13 @@ def _items(obj) -> dict:
         return dict(hook())
     if isinstance(obj, dict):
         return {str(k): v for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):  # each by its name, else by its position
+        out = {}
+        for i, v in enumerate(obj, 1):
+            name = getattr(v, "name", None)
+            key = name if isinstance(name, str) and name and name not in out else str(i)
+            out[key] = v
+        return out
     if isinstance(obj, xr.Dataset):  # every variable, then the attributes
         return {**{str(k): obj[k] for k in obj.data_vars}, **{str(k): v for k, v in obj.attrs.items()}}
     if dataclasses.is_dataclass(obj):

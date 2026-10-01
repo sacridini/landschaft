@@ -89,6 +89,8 @@ the routes:
 time_from_a = ls.cost.acc_cost(conductance, A)
 there = ls.cost.shortest_path(conductance, A, B, output="lines")
 back = ls.cost.shortest_path(conductance, B, A, output="lines")
+ls.plot([(time_from_a / 60).rename("minutes from A"), there, back])   # one map, three layers
+ls.write_vector(there, "path_a_to_b.gpkg")
 print(round(float(time_from_a.max()) / 60, 1), round(there.length.iloc[0]), round(back.length.iloc[0]))
 ```
 
@@ -156,11 +158,9 @@ European populations of the Y-chromosome haplogroup R1b1b2 and their
 locations, and a map of Europe (land = 1, 1/3 degree cells).
 
 ```python
-import pandas as pd
-
 europe = ls.load_raster(ls.cost.example_data("europe"))
-pops = pd.read_csv(ls.cost.example_data("pop_coord"))
-genetic = pd.read_csv(ls.cost.example_data("gen_dist"), index_col="population")
+pops = ls.load_table(ls.cost.example_data("pop_coord"))
+genetic = ls.load_table(ls.cost.example_data("gen_dist")).set_index("population")
 walk = ls.cost.geo_correction(ls.cost.transition(europe, "mean", 16), "r", scale=True)
 
 xy = pops[["x", "y"]].to_numpy()

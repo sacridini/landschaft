@@ -11,6 +11,9 @@ between minor versions.
   (`"forestgreen"`) or `(r, g, b[, a])`, as `ls.plot` does.
 
 ### Changed
+- The tutorials, the quickstart, the concepts and the home page look at results with `ls.plot`,
+  save them with `ls.write_raster`, `ls.write_vector` and `ls.save`, read tables with
+  `ls.load_table` and recode classes with `ls.reclassify`.
 - `pip install landschaft` (and `pip install -e .`) installs everything every tool uses: dask,
   geopandas, pyarrow, openpyxl, matplotlib, folium, plotly, Pillow, xyzservices, contextily,
   pywebview, h3 and dendropy are now dependencies. The extras `dask`, `plot`, `window`, `vector`,
@@ -24,6 +27,10 @@ between minor versions.
   any class given a transparent colour.
 
 ### Fixed
+- The rasters of `ls.cost` (`acc_cost`, `passage`, the transition summaries...) keep the CRS and
+  transform of the raster the transition came from; they had the coordinates only.
+- `ls.plot` of a list that is not only georeferenced rasters and vectors (tables, arrays) draws
+  each part as it calls for instead of failing.
 - Windows: a plain `pip install -e .` builds with Visual Studio's compiler (MSVC) whatever else is
   on `PATH`. A CMake found first that did not know the installed Visual Studio (Strawberry Perl's,
   for example) made the build pick a MinGW gcc, whose module failed with "DLL load failed while

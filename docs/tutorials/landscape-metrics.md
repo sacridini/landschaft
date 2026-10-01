@@ -149,6 +149,7 @@ lc4.class_metrics(["np", "tca"]).head()
 
 ```python
 area_map = lc.to_raster("area")   # every patch painted with its area
+ls.plot(area_map)
 ```
 
 With matplotlib, `show_*` draw the patches and metrics directly:
@@ -195,6 +196,8 @@ landscape structure changes across space:
 ```python
 maps = ls.window_metrics(landcover[:800, :800], window=41, what=["lsm_l_shdi"])
 diversity = maps["shdi"]
+ls.plot(diversity)
+ls.write_raster(diversity, "shdi_window41.tif")
 ```
 
 ![Shannon diversity in a 41 × 41 window](../assets/figures/lsm_window.png)

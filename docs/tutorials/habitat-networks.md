@@ -74,6 +74,10 @@ forest_net = ls.HabitatGraph.from_raster(
 forest_net
 ```
 
+```python
+ls.plot(forest_net, distance=1000)   # the patches and their links up to 1 km
+```
+
 | Argument | Options |
 |---|---|
 | `habitat` | classes that form patches (without it, every non-NoData value is a patch id) |
@@ -119,6 +123,8 @@ Put the values back on the map:
 ```python
 dpc_map = forest_net.to_raster(importance, "dPC")
 components = forest_net.components(distance=1000)
+ls.plot(dpc_map)
+ls.write_raster(dpc_map, "forest_dpc.tif")
 ```
 
 ![Components at 1 km and the importance of every patch](../assets/figures/net_importance.png)

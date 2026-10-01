@@ -29,13 +29,12 @@ from landschaft import circuit
 
 landcover = ls.load_raster(ls.example_data("clc"))[:600, :600]   # 15 x 15 km
 
-table = {}
-table.update({c: 100.0 for c in range(1, 12)})    # urban, industry, roads: hard to cross
-table.update({c: 20.0 for c in range(12, 23)})    # agriculture: moderate
-table.update({c: 1.0 for c in range(23, 35)})     # forest and natural vegetation: easy
-table.update({c: 200.0 for c in range(35, 45)})   # wetlands and water: very hard
-
-resistance = landcover.copy(data=np.vectorize(table.get)(landcover.values).astype(float))
+resistance = ls.reclassify(landcover, [
+    (1, 12, 100.0),    # urban, industry, roads: hard to cross
+    (12, 23, 20.0),    # agriculture: moderate
+    (23, 35, 1.0),     # forest and natural vegetation: easy
+    (35, 45, 200.0),   # wetlands and water: very hard
+], dtype="float64")
 ```
 
 The values are relative: what matters is the ratio between classes. They are
@@ -57,6 +56,11 @@ flow = ls.omniscape(
     normalized_current=True,   # current / flow potential
 )
 flow
+```
+
+```python
+ls.plot(flow)                  # every map on a log scale, over satellite imagery
+ls.save(flow, "omniscape_out")  # one GeoTIFF per map, the settings as a table
 ```
 
 ![Resistance, cumulative current and normalised current](../assets/figures/circ_omniscape.png)

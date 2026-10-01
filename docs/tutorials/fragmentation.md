@@ -35,6 +35,7 @@ habitat among the valid pixels of a square window centred on it. A window of
 
 ```python
 result = ls.fad(forest, window_size=27)
+ls.plot(result)       # the FAD map in GuidosToolbox's colours, its chart and numbers
 result.stats
 ```
 
@@ -62,6 +63,7 @@ Save the density map with its standard colours:
 
 ```python
 ls.write_raster(result.density, "fad27.tif")   # colour table of the six classes
+ls.save(result, "fad27")                       # or the whole result: maps, tables and numbers
 ```
 
 ## Several observation scales
@@ -130,14 +132,14 @@ artificial surfaces, 12–22 agriculture, 23–34 forest and semi-natural areas,
 35–44 wetlands and water):
 
 ```python
-import xarray as xr
-
 landcover = ls.load_raster(ls.example_data("clc"))
-three = xr.where(landcover <= 11, 3,
-         xr.where(landcover <= 22, 1,
-         xr.where(landcover <= 34, 2, 0))).astype("uint8")
+three = ls.reclassify(landcover, [(1, 12, 3),     # artificial surfaces: developed
+                                  (12, 23, 1),    # agriculture
+                                  (23, 35, 2)],   # forest and natural vegetation
+                      others=0)                   # wetlands and water: missing
 
 mosaic = ls.landscape_mosaic(three, window_size=27)
+ls.plot(mosaic)
 ```
 
 ![Land cover in three classes and its landscape mosaic](../assets/figures/frag_mosaic.png)

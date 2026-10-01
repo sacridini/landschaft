@@ -74,3 +74,10 @@ def test_asymmetric_costs_differ_by_direction():
     up = ls.cost.transition(r, lambda x: 1 / (1 + np.maximum(x[1] - x[0], 0)), 4, symmetric=False)
     d = ls.cost.cost_distance(up, [(0.5, 1.5), (9.5, 1.5)])
     assert d[0, 1] > d[1, 0] == 9.0
+
+
+def test_rasters_keep_the_georeferencing_of_the_input():
+    dem = ls.load_raster(ls.cost.example_data("maungawhau"))
+    tr = ls.cost.geo_correction(1 / ls.cost.transition(dem, "mean", 8))
+    cost = ls.cost.acc_cost(tr, (2667670, 6479000))
+    assert cost.rio.crs == dem.rio.crs and cost.rio.transform() == dem.rio.transform()

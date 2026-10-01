@@ -43,7 +43,11 @@ width, the **edge width**, and gives every habitat pixel one of seven roles:
 
 ```python
 morph = ls.mspa(forest, edge_width=2)
+ls.plot(morph)        # GuidosToolbox's colours and class names
 ```
+
+`ls.plot` draws a result on an interactive map over satellite imagery (in a
+notebook, or a window of its own from a script); see [plotting](../getting-started/plotting.md).
 
 The result has the same shape and georeferencing as the input, with a class
 code in every pixel (see the table of codes below). Background stays 0 and
@@ -103,6 +107,7 @@ ls.MSPA_CLASSES
 
 ```python
 ls.write_raster(morph, "forest_mspa.tif")   # GeoTIFF with the MSPA colour table
+ls.save(stats, "forest_mspa_stats.csv")      # the table
 ```
 
 To draw the classes with their colours in Python, use the `show_classes`
@@ -141,6 +146,7 @@ much of the forest is in large, intact blocks and how much in fragments?".
 
 ```python
 acc = ls.accounting(forest, thresholds=(50, 250, 1000, 5000, 20000))
+ls.plot(acc)          # the size classes, their chart and numbers
 acc.stats
 ```
 
