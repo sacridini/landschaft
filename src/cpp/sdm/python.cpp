@@ -8,10 +8,13 @@
 #include <pybind11/stl.h>
 
 #include <cstdint>
+#include <algorithm>
 #include <optional>
+#include <stdexcept>
 #include <vector>
 
 #include "nlm/rng.hpp"
+#include "sdm/thin.hpp"
 
 namespace py = pybind11;
 
@@ -30,7 +33,41 @@ py::array_t<T> to_array(std::vector<T>&& v) {
 
 namespace sdm {
 
+namespace {
+
+using Vec = py::array_t<double, py::array::c_style | py::array::forcecast>;
+
+py::tuple py_thin_spthin(const Vec& lon, const Vec& lat, double max_km, int reps, std::int32_t seed) {
+    if (lon.size() != lat.size()) throw std::invalid_argument("lon and lat differ in length");
+    if (reps < 0) throw std::invalid_argument("reps must be >= 0");
+    const i64 n = static_cast<i64>(lon.size());
+    ThinResult r;
+    {
+        py::gil_scoped_release release;
+        r = thin_spthin(lon.data(), lat.data(), n, max_km, reps, seed);
+    }
+    py::array_t<std::uint8_t> keep({static_cast<py::ssize_t>(reps), static_cast<py::ssize_t>(n)});
+    std::copy(r.keep.begin(), r.keep.end(), keep.mutable_data());
+    return py::make_tuple(keep, to_array(std::move(r.kept)));
+}
+
+py::tuple py_earth_neighbours(const Vec& lon, const Vec& lat, double max_km) {
+    if (lon.size() != lat.size()) throw std::invalid_argument("lon and lat differ in length");
+    Neighbours nb;
+    {
+        py::gil_scoped_release release;
+        nb = earth_neighbours(lon.data(), lat.data(), static_cast<i64>(lon.size()), max_km);
+    }
+    return py::make_tuple(to_array(std::move(nb.start)), to_array(std::move(nb.index)));
+}
+
+}  // namespace
+
 void register_python(py::module_& m) {
+    m.def("sdm_thin_spthin", &py_thin_spthin, py::arg("lon"), py::arg("lat"), py::arg("max_km"), py::arg("reps"),
+          py::arg("seed"), "spThin::thin.algorithm: (keep[reps, n], kept[reps])");
+    m.def("sdm_earth_neighbours", &py_earth_neighbours, py::arg("lon"), py::arg("lat"), py::arg("max_km"),
+          "Neighbours closer than max_km (fields::rdist.earth): CSR (start, index)");
     // R's generator after set.seed(seed) (Mersenne-Twister, Inversion,
     // Rejection), drawn from step by step: the same numbers as the same calls
     // in R.

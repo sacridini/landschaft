@@ -12,7 +12,9 @@ between minor versions.
   rasters of the R package predicts), `ls.sdm.one_per_cell` (one record per predictor cell, as
   `terra::cellFromXY` + `duplicated()`), `ls.sdm.download_gbif` (records from GBIF's occurrence search
   API, no account or extra package needed), `ls.sdm.accessible_area` (geodesic buffers, convex hulls
-  or the regions holding records, cut to a shape), and the reference harness
+  or the regions holding records, cut to a shape), `ls.sdm.thin` (spThin's heuristic, the same
+  records as `spThin::thin` for the same seed, in C++ without its n x n matrices: 100 000 clustered
+  records in 0.12 s), and the reference harness
   (`tools/make_reference_sdm.py`).
 - R data files (`.rda`, `.rds`) are read without R (`landschaft._rdata`), so the reference tables
   of R packages (CoordinateCleaner's centroids, capitals, institutions, land and sea) are used as

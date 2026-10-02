@@ -162,6 +162,14 @@ target_include_directories(priocore PUBLIC src/cpp)
 # Eigen's generic_pow on Packet2d (Zonation's Array2d::pow).
 target_link_libraries(priocore PRIVATE eigen_headers)
 set_target_properties(priocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Species distribution modelling: thinning, background sampling, partitions, evaluation, MaxNet.
+add_library(sdmcore STATIC
+    src/cpp/sdm/thin.cpp
+)
+target_include_directories(sdmcore PUBLIC src/cpp)
+# R's x87 maths (lsm/rmath.hpp) and R's generator (nlm/rng.hpp).
+target_link_libraries(sdmcore PUBLIC lsmcore nlmcore)
+set_target_properties(sdmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Raster values by zone and at points (ls.zonal_stats, ls.extract), ls.reclassify, GDAL's warp
 # kernel (ls.reproject); GDAL's polygon rasterizer (lsm/rasterize.cpp).
 add_library(iocore STATIC
@@ -222,6 +230,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(surfcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(priocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(iocore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(sdmcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
         if(APPLE)
@@ -245,6 +254,7 @@ if(MSVC)
     target_compile_options(surfcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(priocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(iocore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(sdmcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -256,6 +266,7 @@ else()
     target_compile_options(surfcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(priocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(iocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(sdmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
 pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
@@ -263,7 +274,7 @@ pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp
                     src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp)
 target_link_libraries(_core PRIVATE eigen_headers)
 target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
-                      iocore)
+                      iocore sdmcore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()

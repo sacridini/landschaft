@@ -21,6 +21,8 @@ m = ls.sdm.accessible_area(occ, distance=300_000)       # where the background c
 
 ::: landschaft.sdm.one_per_cell
 
+::: landschaft.sdm.thin
+
 ## Study area
 
 ::: landschaft.sdm.accessible_area

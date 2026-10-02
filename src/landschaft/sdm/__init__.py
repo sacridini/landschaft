@@ -22,10 +22,12 @@ from ._area import accessible_area
 from ._cells import one_per_cell
 from ._examples import example_data
 from ._gbif import download_gbif
+from ._thin import thin
 
 __all__ = [
     "accessible_area",
     "download_gbif",
     "example_data",
     "one_per_cell",
+    "thin",
 ]
