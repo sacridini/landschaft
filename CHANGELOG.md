@@ -6,6 +6,13 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-03
+
+### Fixed
+- `ls.plot` maps in notebooks: a map whose output loaded while hidden (JupyterLab opening a
+  notebook with saved outputs, an output not yet on screen) stayed on the whole world at zoom 0,
+  its data a speck and often no base map. The view is now fitted again once the map has a size.
+
 ## [1.4.1] - 2026-10-02
 
 ### Changed
