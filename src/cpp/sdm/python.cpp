@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <optional>
+#include <string>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -22,6 +23,8 @@
 #include "sdm/extrapolation.hpp"
 #include "sdm/geocircle/geocircle.hpp"
 #include "sdm/rstats.hpp"
+#include "sdm/kmeans.hpp"
+#include "sdm/rformat.hpp"
 #include "sdm/thin.hpp"
 
 namespace py = pybind11;
@@ -143,6 +146,67 @@ py::list py_circles(const Vec& lon, const Vec& lat, double d, const std::string&
     return out;
 }
 
+py::dict kmeans_dict(KmeansResult&& r, i64 p) {
+    const i64 k = static_cast<i64>(r.size.size());
+    py::array_t<double> centers({static_cast<py::ssize_t>(k), static_cast<py::ssize_t>(p)});
+    double* c = centers.mutable_data();
+    for (i64 l = 0; l < k; ++l)
+        for (i64 j = 0; j < p; ++j) c[l * p + j] = r.centers[static_cast<std::size_t>(j * k + l)];
+    py::dict out;
+    out["cluster"] = to_array(std::move(r.cluster));
+    out["centers"] = centers;
+    out["totss"] = r.totss;
+    out["withinss"] = to_array(std::move(r.withinss));
+    out["tot_withinss"] = r.tot_withinss;
+    out["betweenss"] = r.betweenss;
+    out["size"] = to_array(std::move(r.size));
+    out["iter"] = r.iter;
+    out["ifault"] = r.ifault < 0 ? py::object(py::none()) : py::object(py::int_(r.ifault));
+    out["warnings"] = r.warnings;
+    return out;
+}
+
+KmeansAlgorithm kmeans_algorithm(const std::string& name) {
+    if (name == "Hartigan-Wong") return KmeansAlgorithm::HartiganWong;
+    if (name == "Lloyd" || name == "Forgy") return KmeansAlgorithm::Lloyd;
+    if (name == "MacQueen") return KmeansAlgorithm::MacQueen;
+    throw std::invalid_argument("algorithm must be one of 'Hartigan-Wong', 'Lloyd', 'Forgy', 'MacQueen'");
+}
+
+// R's kmeans() of a table (observations x variables). The starts come from
+// `rng` when given (its state advances as R's does), else from set.seed(seed);
+// `centers` (k x p) replaces the random starts.
+py::dict py_kmeans(const py::array_t<double, py::array::c_style | py::array::forcecast>& x, std::optional<int> k,
+                   int iter_max, int nstart, std::optional<std::int32_t> seed, const std::string& algorithm,
+                   nlm::RRng* rng,
+                   std::optional<py::array_t<double, py::array::c_style | py::array::forcecast>> centers) {
+    if (x.ndim() != 2) throw std::invalid_argument("expected a 2-D table (observations x variables)");
+    const i64 m = static_cast<i64>(x.shape(0)), p = static_cast<i64>(x.shape(1));
+    const KmeansAlgorithm alg = kmeans_algorithm(algorithm);
+    std::vector<double> col(static_cast<std::size_t>(m * p));  // column-major, as R
+    for (i64 i = 0; i < m; ++i)
+        for (i64 j = 0; j < p; ++j) col[static_cast<std::size_t>(j * m + i)] = x.data()[i * p + j];
+    KmeansResult r;
+    if (centers) {
+        if (centers->ndim() != 2 || centers->shape(1) != p)
+            throw std::invalid_argument("must have same number of columns in 'x' and 'centers'");
+        const i64 kc = static_cast<i64>(centers->shape(0));
+        std::vector<double> ccol(static_cast<std::size_t>(kc * p));
+        for (i64 i = 0; i < kc; ++i)
+            for (i64 j = 0; j < p; ++j) ccol[static_cast<std::size_t>(j * kc + i)] = centers->data()[i * p + j];
+        py::gil_scoped_release release;
+        r = kmeans(col.data(), m, p, ccol.data(), static_cast<int>(kc), iter_max, alg);
+    } else {
+        if (!k) throw std::invalid_argument("'centers' must be a number or a matrix");
+        if (!rng && !seed) throw std::invalid_argument("give a seed or an RRandom generator");
+        nlm::RRng own(seed.value_or(0));
+        nlm::RRng& g = rng ? *rng : own;
+        py::gil_scoped_release release;
+        r = kmeans(col.data(), m, p, *k, iter_max, nstart, alg, g);
+    }
+    return kmeans_dict(std::move(r), p);
+}
+
 }  // namespace
 
 void register_python(py::module_& m) {
@@ -213,6 +277,30 @@ void register_python(py::module_& m) {
     m.def(
         "sdm_r_mean", [](const Vec& x) { return lsm::r_mean(x.data(), static_cast<i64>(x.size())); }, py::arg("x"),
         "R's mean() (80-bit accumulation)");
+    m.def("sdm_kmeans", &py_kmeans, py::arg("x"), py::arg("k") = py::none(), py::arg("iter_max") = 10,
+          py::arg("nstart") = 1, py::arg("seed") = py::none(), py::arg("algorithm") = "Hartigan-Wong",
+          py::arg("rng") = py::none(), py::arg("centers") = py::none(),
+          "R's stats::kmeans (Hartigan-Wong, Lloyd/Forgy, MacQueen): dict of cluster (1-based), centers, totss, "
+          "withinss, tot_withinss, betweenss, size, iter, ifault, warnings");
+    m.def(
+        "sdm_r_as_character",
+        [](const Vec& x) {
+            std::vector<std::string> out(static_cast<std::size_t>(x.size()));
+            for (py::ssize_t i = 0; i < x.size(); ++i) out[static_cast<std::size_t>(i)] = r_as_character(x.data()[i]);
+            return out;
+        },
+        py::arg("x"), "R's as.character() of doubles (R 4.4.2 on Windows: formatReal in long double, trio's printing)");
+    m.def(
+        "sdm_r_unique_rows",
+        [](const py::array_t<double, py::array::c_style | py::array::forcecast>& x) {
+            if (x.ndim() != 2) throw std::invalid_argument("expected a 2-D array");
+            const i64 m = static_cast<i64>(x.shape(0)), p = static_cast<i64>(x.shape(1));
+            std::vector<double> col(static_cast<std::size_t>(m * p));
+            for (i64 i = 0; i < m; ++i)
+                for (i64 j = 0; j < p; ++j) col[static_cast<std::size_t>(j * m + i)] = x.data()[i * p + j];
+            return to_array(r_unique_rows(col.data(), m, p));
+        },
+        py::arg("x"), "Rows (0-based) that R's unique.matrix() keeps (exact ==, 0 == -0)");
     m.def("sdm_thin_spthin", &py_thin_spthin, py::arg("lon"), py::arg("lat"), py::arg("max_km"), py::arg("reps"),
           py::arg("seed"), "spThin::thin.algorithm: (keep[reps, n], kept[reps])");
     m.def("sdm_earth_neighbours", &py_earth_neighbours, py::arg("lon"), py::arg("lat"), py::arg("max_km"),

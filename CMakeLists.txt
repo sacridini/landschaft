@@ -171,6 +171,8 @@ add_library(sdmcore STATIC
     src/cpp/sdm/geocircle/geocircle_geodesic.cpp
     src/cpp/sdm/geocircle/geos_lite.cpp
     src/cpp/sdm/rstats.cpp
+    src/cpp/sdm/kmeans.cpp
+    src/cpp/sdm/rformat.cpp
     src/cpp/sdm/thin.cpp
 )
 target_include_directories(sdmcore PUBLIC src/cpp)
