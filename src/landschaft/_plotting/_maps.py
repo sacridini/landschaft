@@ -415,7 +415,10 @@ def new_map(basemap: str | None = "satellite"):
         from branca.element import Element
     except ImportError as err:  # pragma: no cover - depends on the environment
         raise ImportError("interactive maps need folium (pip install folium)") from err
-    m = folium.Map(tiles=None, prefer_canvas=True, control_scale=True, zoom_snap=0.25, width="100%", height="100%")
+    # no fade-in of the tiles: it runs on animation frames, which a notebook's output frame may not
+    # get (VS Code), and the tiles stayed transparent, the map without its base map
+    m = folium.Map(tiles=None, prefer_canvas=True, control_scale=True, zoom_snap=0.25, fade_animation=False,
+                   width="100%", height="100%")
     m.default_js, m.default_css = [], []  # Leaflet only, in the page (folium's jQuery, Bootstrap... are not used)
     _install(m)
     token = f"LSASSET{id(m)}"

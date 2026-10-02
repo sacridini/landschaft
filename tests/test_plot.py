@@ -272,6 +272,8 @@ def test_maps_hidden_at_load_fit_when_shown(forest):
     html = page(ls.plot(forest))
     assert "new ResizeObserver" in html
     assert html.index("map.fitBounds = function") < html.rindex(".fitBounds(")  # in place before the fit
+    # the tiles' fade-in waits on animation frames a notebook's frame may not get (VS Code)
+    assert '"fadeAnimation": false' in html
 
 
 def test_true_colour_leaves_nodata_out():
