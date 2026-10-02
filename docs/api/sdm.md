@@ -68,6 +68,10 @@ suit = ls.sdm.predict(res, env)          # ensemble and its uncertainty
 
 ::: landschaft.sdm.jackknife_folds
 
+## Models
+
+::: landschaft.sdm.MaxNet
+
 ## Evaluation
 
 ::: landschaft.sdm.evaluate

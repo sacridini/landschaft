@@ -10,5 +10,6 @@
 namespace sdm {
 
 void register_python(pybind11::module_& m);
+void register_maxnet_python(pybind11::module_& m);  // sdm/maxnet_python.cpp
 
 }  // namespace sdm

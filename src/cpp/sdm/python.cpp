@@ -210,6 +210,7 @@ py::dict py_kmeans(const py::array_t<double, py::array::c_style | py::array::for
 }  // namespace
 
 void register_python(py::module_& m) {
+    register_maxnet_python(m);
     m.def("sdm_circles", &py_circles, py::arg("lon"), py::arg("lat"), py::arg("d"), py::arg("kind"),
           "Circles of radius d around points as CoordinateCleaner draws them: 'geosphere' (73 vertices, "
           "corrected at poles and the antimeridian), 'terra' (terra::buffer), 'planar' (GEOS buffer)");

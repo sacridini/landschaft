@@ -37,6 +37,7 @@ from ._folds import (
     spatial_clusters,
 )
 from ._gbif import download_gbif
+from ._maxnet import MaxNet
 from ._models import SDMResult, fit, importance, predict, response_curves
 from ._predictors import select_predictors, vif
 from ._prepare import prepare
@@ -45,6 +46,7 @@ from ._thin import thin
 
 __all__ = [
     "Evaluation",
+    "MaxNet",
     "SDMData",
     "SDMResult",
     "accessible_area",
