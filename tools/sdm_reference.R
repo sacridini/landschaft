@@ -100,6 +100,7 @@ inputs <- lapply(job$inputs, load_input)
 
 for (case in job$cases) {
   env <- new.env()
+  assign("TOOLS", job$tools, envir = env)  # tools/: the corrected reference functions
   for (name in names(inputs)) assign(name, inputs[[name]], envir = env)
   result <- tryCatch(withCallingHandlers(
     eval(parse(text = case$code), envir = env),

@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "nlm/rng.hpp"
+#include "lsm/rmath.hpp"
+#include "sdm/clean.hpp"
 #include "sdm/thin.hpp"
 
 namespace py = pybind11;
@@ -61,9 +63,42 @@ py::tuple py_earth_neighbours(const Vec& lon, const Vec& lat, double max_km) {
     return py::make_tuple(to_array(std::move(nb.start)), to_array(std::move(nb.index)));
 }
 
+py::array_t<double> py_outlier_statistic(const Vec& lon, const Vec& lat, bool use_min) {
+    if (lon.size() != lat.size()) throw std::invalid_argument("lon and lat differ in length");
+    std::vector<double> out;
+    {
+        py::gil_scoped_release release;
+        out = outlier_statistic(lon.data(), lat.data(), static_cast<i64>(lon.size()), use_min);
+    }
+    return to_array(std::move(out));
+}
+
+py::array_t<double> py_outlier_statistic_weighted(const Vec& lon, const Vec& lat, const Vec& count, double within,
+                                                  bool use_min) {
+    if (lon.size() != lat.size() || lon.size() != count.size()) throw std::invalid_argument("lengths differ");
+    std::vector<double> out;
+    {
+        py::gil_scoped_release release;
+        out = outlier_statistic_weighted(lon.data(), lat.data(), count.data(), static_cast<i64>(lon.size()), within,
+                                         use_min);
+    }
+    return to_array(std::move(out));
+}
+
 }  // namespace
 
 void register_python(py::module_& m) {
+    m.def("sdm_outlier_statistic", &py_outlier_statistic, py::arg("lon"), py::arg("lat"), py::arg("use_min"),
+          "cc_outl: mean (R's 80-bit mean) or minimum haversine km to the other records at other locations");
+    m.def("sdm_outlier_statistic_weighted", &py_outlier_statistic_weighted, py::arg("lon"), py::arg("lat"),
+          py::arg("count"), py::arg("within"), py::arg("use_min"), "cc_outl's raster variant with weights");
+    m.def(
+        "sdm_haversine_km",
+        [](double lon1, double lat1, double lon2, double lat2) { return haversine_km(lon1, lat1, lon2, lat2); },
+        py::arg("lon1"), py::arg("lat1"), py::arg("lon2"), py::arg("lat2"));
+    m.def(
+        "sdm_r_mean", [](const Vec& x) { return lsm::r_mean(x.data(), static_cast<i64>(x.size())); }, py::arg("x"),
+        "R's mean() (80-bit accumulation)");
     m.def("sdm_thin_spthin", &py_thin_spthin, py::arg("lon"), py::arg("lat"), py::arg("max_km"), py::arg("reps"),
           py::arg("seed"), "spThin::thin.algorithm: (keep[reps, n], kept[reps])");
     m.def("sdm_earth_neighbours", &py_earth_neighbours, py::arg("lon"), py::arg("lat"), py::arg("max_km"),

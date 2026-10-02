@@ -1,0 +1,99 @@
+{
+ "arrays": {
+  "clean_acaule/capitals": {
+   "kind": "vector"
+  },
+  "clean_acaule/centroids": {
+   "kind": "vector"
+  },
+  "clean_acaule/equal": {
+   "kind": "vector"
+  },
+  "clean_acaule/gbif": {
+   "kind": "vector"
+  },
+  "clean_acaule/institutions": {
+   "kind": "vector"
+  },
+  "clean_acaule/outliers": {
+   "kind": "vector"
+  },
+  "clean_acaule/outliers_distance": {
+   "kind": "vector"
+  },
+  "clean_acaule/outliers_mad": {
+   "kind": "vector"
+  },
+  "clean_acaule/outliers_thin": {
+   "kind": "vector"
+  },
+  "clean_acaule/seas": {
+   "kind": "vector"
+  },
+  "clean_acaule/zeros": {
+   "kind": "vector"
+  },
+  "clean_synthetic/aohi": {
+   "kind": "vector"
+  },
+  "clean_synthetic/capitals": {
+   "kind": "vector"
+  },
+  "clean_synthetic/centroids": {
+   "kind": "vector"
+  },
+  "clean_synthetic/countries": {
+   "kind": "vector"
+  },
+  "clean_synthetic/duplicates": {
+   "kind": "vector"
+  },
+  "clean_synthetic/equal": {
+   "kind": "vector"
+  },
+  "clean_synthetic/gbif": {
+   "kind": "vector"
+  },
+  "clean_synthetic/institutions": {
+   "kind": "vector"
+  },
+  "clean_synthetic/outliers": {
+   "kind": "vector"
+  },
+  "clean_synthetic/outliers_distance": {
+   "kind": "vector"
+  },
+  "clean_synthetic/outliers_mad": {
+   "kind": "vector"
+  },
+  "clean_synthetic/outliers_thin": {
+   "kind": "vector"
+  },
+  "clean_synthetic/seas": {
+   "kind": "vector"
+  },
+  "clean_synthetic/urban": {
+   "kind": "vector"
+  },
+  "clean_synthetic/zeros": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "CoordinateCleaner": "3.0.1",
+  "ENMeval": "2.0.5.2",
+  "biomod2": "4.3.4.5",
+  "blockCV": "3.2.0",
+  "dismo": "1.3.16",
+  "ecospat": "4.1.3",
+  "glmnet": "4.1.10",
+  "maxnet": "0.1.4",
+  "mop": "0.1.4",
+  "predicts": "0.1.19",
+  "sf": "1.0.19",
+  "spThin": "0.2.0",
+  "terra": "1.9.50",
+  "usdm": "2.1.7"
+ }
+}

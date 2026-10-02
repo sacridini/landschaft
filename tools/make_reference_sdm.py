@@ -99,7 +99,8 @@ def run_group(group: str, only: list[str] | None = None) -> None:
     with tempfile.TemporaryDirectory(prefix="sdm_ref_") as tmp:
         tmp = Path(tmp)
         inputs = {n: write_input(n, sdm_cases.build_input(n), tmp) for n in names}
-        job = {"inputs": inputs, "cases": [{"name": k, "code": c.r} for k, c in cases.items()]}
+        job = {"inputs": inputs, "tools": (ROOT / "tools").as_posix(),
+               "cases": [{"name": k, "code": c.r} for k, c in cases.items()]}
         (tmp / "job.json").write_text(json.dumps(job), encoding="utf-8")
         out = tmp / "out"
         out.mkdir()

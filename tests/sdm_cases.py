@@ -19,7 +19,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-GROUPS: list[str] = ["smoke", "cells", "thin"]
+GROUPS: list[str] = ["smoke", "cells", "thin", "clean"]
 
 
 @dataclass
@@ -99,7 +99,55 @@ def thin_global() -> pd.DataFrame:
     return _r_runif_points(11, 300, (-180.0, -90.0), (180.0, 90.0))
 
 
+def cc_synthetic() -> pd.DataFrame:
+    """Records near each kind of reference CoordinateCleaner tests against, and controls."""
+    from pyproj import Geod
+
+    from landschaft.sdm._refdata import reference_data
+
+    g = Geod(ellps="WGS84")
+    cref = reference_data("countryref")
+    cap = cref[cref["capital"] == "Brasilia"].iloc[0]
+    cen = cref[(cref["type"] == "country") & (cref["iso3"] == "PER")].iloc[0]
+    prov = cref[cref["type"] == "province"].iloc[100]
+    inst = reference_data("institutions").dropna(subset=["decimalLongitude"]).iloc[50]
+
+    def at(lon, lat, dist, az=37.0):
+        x, y, _ = g.fwd(lon, lat, az, dist)
+        return float(x), float(y)
+
+    rows = []  # lon, lat, species, iso3
+    for d in (500.0, 9_000.0, 11_000.0, 50_000.0):
+        rows.append((*at(cap["capital.lon"], cap["capital.lat"], d), "cap", "BRA"))
+    for d in (300.0, 1_500.0):
+        rows.append((*at(cen["centroid.lon"], cen["centroid.lat"], d), "cen", "PER"))
+        rows.append((*at(prov["centroid.lon"], prov["centroid.lat"], d), "cen", prov["iso3"]))
+    for d in (200.0, 2_000.0):
+        rows.append((*at(12.58, 55.67, d), "gbif", "DNK"))
+    for d in (50.0, 150.0):
+        rows.append((*at(inst["decimalLongitude"], inst["decimalLatitude"], d), "inst", "XXX"))
+    rows += [(10.0, 10.0, "equal", "NGA"), (-7.5, 7.5, "equal", "CIV"), (0.3, 0.2, "zero", "XXX"),
+             (0.0, 15.0, "zero", "MLI"), (-30.0, -20.0, "sea", "BRA"), (2.35, 48.85, "fra", "FRA"),
+             (10.75, 59.91, "nor", "NOR"), (-46.63, -23.55, "urban", "BRA"), (-43.2, -22.9, "urban", "DEU")]
+    rng = np.random.default_rng(42)
+    for i in range(20):  # a species around Manaus and one record far away
+        rows.append((-60.0 + rng.normal(0, 0.5), -3.1 + rng.normal(0, 0.5), "spA", "BRA"))
+    rows.append((-40.0, 5.0, "spA", "BRA"))
+    rows += [(-60.0 + rng.normal(0, 0.3), -10.0 + rng.normal(0, 0.3), "spB", "BRA") for _ in range(9)]
+    rows += [rows[-1], rows[-1]]  # duplicates
+    d = pd.DataFrame(rows, columns=["lon", "lat", "species", "iso3"])
+    return d
+
+
+def acaule_valid() -> pd.DataFrame:
+    """The acaule records with coordinates (CoordinateCleaner stops on invalid ones)."""
+    d = acaule()
+    return d[d["lon"].notna() & d["lat"].notna()].reset_index(drop=True)
+
+
 INPUTS: dict[str, Callable[[], object]] = {
+    "cc_synthetic": cc_synthetic,
+    "acaule_valid": acaule_valid,
     "thin_ties": thin_ties,
     "thin_edges": thin_edges,
     "thin_threshold": thin_threshold,
@@ -192,6 +240,57 @@ for _name, _p, _m, _reps, _seed in [
 ]:
     CASES[_name] = Case("thin", r=_THIN_R.format(p=_p, seed=_seed, km=_m / 1000.0, reps=_reps), inputs=(_p,),
                         py=_thin_py(_p, _m, _reps, _seed))
+
+
+# CoordinateCleaner, test by test: the original functions where they are right, tools/cc_fixed.R where
+# they err (cc_zero's radius, cc_coun's alignment and code column, cc_outl's empty and raster cases).
+_CC_R = """{{ suppressMessages(library(CoordinateCleaner)); source(file.path(TOOLS, "cc_fixed.R"))
+x <- {p}; x$decimalLongitude <- x$lon; x$decimalLatitude <- x$lat
+otl <- function(method = "quantile", mltpl = 5, tdi = 1000, thinning = FALSE, thinning_res = 0.5) {{
+  tab <- table(x$species); tab <- tab[tab > 7]
+  ot <- x[x$species %in% names(tab), c("species", "decimalLongitude", "decimalLatitude")]
+  ids <- if (nrow(ot)) cc_outl_fixed(ot, method = method, mltpl = mltpl, tdi = tdi, thinning = thinning,
+                                     thinning_res = thinning_res, value = "ids") else character(0)
+  rownames(x) %in% ids }}
+out <- list(
+  equal = !cc_equ(x, test = "absolute", value = "flagged", verbose = FALSE),
+  zeros = !cc_zero_fixed(x, buffer = 0.5, value = "flagged"),
+  capitals = !cc_cap(x, buffer = 10000, value = "flagged", verbose = FALSE),
+  centroids = !cc_cen(x, buffer = 1000, test = "both", value = "flagged", verbose = FALSE),
+  seas = !cc_sea(x, scale = 50, value = "flagged", verbose = FALSE),
+  outliers = otl(),
+  outliers_mad = otl("mad"), outliers_distance = otl("distance", tdi = 500), outliers_thin = otl(thinning = TRUE),
+  gbif = !cc_gbif(x, value = "flagged", verbose = FALSE),
+  institutions = !cc_inst(x, buffer = 100, value = "flagged", verbose = FALSE){extra})
+lapply(out, as.numeric) }}"""
+_CC_EXTRA_SYNTH = """,
+  urban = !cc_urb(x, value = "flagged", verbose = FALSE),
+  countries = !cc_coun_fixed(x, iso3 = "iso3", ref_col = "iso_a3_eh", value = "flagged"),
+  duplicates = !cc_dupl(x, species = "species", value = "flagged", verbose = FALSE),
+  aohi = !cc_aohi_fixed(x, buffer = 10000, value = "flagged")"""
+
+
+def _cc_py(points: str, synthetic: bool):
+    def run(**kw):
+        import landschaft as ls
+
+        occ = kw[points]
+        extra = dict(urban=True, countries="iso3", duplicates=True, aohi=True) if synthetic else {}
+        f = ls.sdm.clean_occurrences(occ, action="flag", **extra)
+        out = {k[5:]: f[k].to_numpy(float) for k in f.columns if k.startswith("flag_") and k != "flag_invalid"}
+        for name, opts in (("outliers_mad", {"method": "mad"}), ("outliers_distance", {"method": "distance", "tdi": 500}),
+                           ("outliers_thin", {"thinning": True})):
+            g = ls.sdm.clean_occurrences(occ, action="flag", equal=False, zeros=False, capitals=False, centroids=False,
+                                         seas=False, gbif=False, institutions=False, outliers=opts)
+            out[name] = g["flag_outliers"].to_numpy(float)
+        return out
+    return run
+
+
+CASES["clean_synthetic"] = Case("clean", r=_CC_R.format(p="cc_synthetic", extra=_CC_EXTRA_SYNTH),
+                                inputs=("cc_synthetic",), py=_cc_py("cc_synthetic", True))
+CASES["clean_acaule"] = Case("clean", r=_CC_R.format(p="acaule_valid", extra=""), inputs=("acaule_valid",),
+                             py=_cc_py("acaule_valid", False))
 
 
 def case_ids(group: str) -> list[str]:

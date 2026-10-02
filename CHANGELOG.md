@@ -14,7 +14,11 @@ between minor versions.
   API, no account or extra package needed), `ls.sdm.accessible_area` (geodesic buffers, convex hulls
   or the regions holding records, cut to a shape), `ls.sdm.thin` (spThin's heuristic, the same
   records as `spThin::thin` for the same seed, in C++ without its n x n matrices: 100 000 clustered
-  records in 0.12 s), and the reference harness
+  records in 0.12 s), `ls.sdm.clean_occurrences` (CoordinateCleaner's tests: capitals, centroids,
+  institutions, GBIF headquarters, zeros, equal coordinates, sea, towns, country mismatch,
+  outliers, duplicates, artificial hotspots; flag or drop, the same flags as CoordinateCleaner, with
+  its errors corrected: see the function's notes), `ls.sdm.reference_data` (its reference tables and
+  Natural Earth layers, downloaded on first use), and the reference harness
   (`tools/make_reference_sdm.py`).
 - R data files (`.rda`, `.rds`) are read without R (`landschaft._rdata`), so the reference tables
   of R packages (CoordinateCleaner's centroids, capitals, institutions, land and sea) are used as

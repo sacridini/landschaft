@@ -19,6 +19,10 @@ m = ls.sdm.accessible_area(occ, distance=300_000)       # where the background c
 
 ::: landschaft.sdm.download_gbif
 
+::: landschaft.sdm.clean_occurrences
+
+::: landschaft.sdm.reference_data
+
 ::: landschaft.sdm.one_per_cell
 
 ::: landschaft.sdm.thin

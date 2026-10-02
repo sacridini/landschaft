@@ -20,14 +20,18 @@ Typical use::
 
 from ._area import accessible_area
 from ._cells import one_per_cell
+from ._clean import clean_occurrences
 from ._examples import example_data
 from ._gbif import download_gbif
+from ._refdata import reference_data
 from ._thin import thin
 
 __all__ = [
     "accessible_area",
+    "clean_occurrences",
     "download_gbif",
     "example_data",
     "one_per_cell",
+    "reference_data",
     "thin",
 ]

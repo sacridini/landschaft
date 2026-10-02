@@ -164,6 +164,7 @@ target_link_libraries(priocore PRIVATE eigen_headers)
 set_target_properties(priocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Species distribution modelling: thinning, background sampling, partitions, evaluation, MaxNet.
 add_library(sdmcore STATIC
+    src/cpp/sdm/clean.cpp
     src/cpp/sdm/thin.cpp
 )
 target_include_directories(sdmcore PUBLIC src/cpp)
