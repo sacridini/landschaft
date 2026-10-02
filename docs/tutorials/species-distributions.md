@@ -562,12 +562,26 @@ open-source version in R: the same features (linear, quadratic, product,
 hinge, threshold) and the same regularised fit, behind scikit-learn's API.
 It is the default model of `fit`, and mixes with the others:
 
-<!-- no-run -->
 ```python
-res_maxent = ls.sdm.fit(careful)                                   # MaxNet, maxnet's defaults
 res_all = ls.sdm.fit(careful, {**models, "maxnet": ls.sdm.MaxNet()})
+print(res_all.summary.xs("mean", axis=1, level=1)[["auc_test", "tss", "boyce", "or_10p"]].round(2))
 suit_all = ls.sdm.predict(res_all, env)
+print([str(b) for b in suit_all.band.values])
 ```
+
+```text
+        auc_test   tss  boyce  or_10p
+model
+brt         0.69  0.35   0.46    0.42
+glm         0.67  0.36   0.40    0.18
+maxnet      0.69  0.35   0.52    0.14
+rf          0.69  0.37   0.57    0.10
+['ensemble', 'sd', 'glm', 'rf', 'brt', 'maxnet']
+```
+
+`ls.sdm.fit(careful)` without models fits MaxNet alone, with maxnet's
+defaults (the feature classes chosen by the number of presences,
+regularisation multiplier 1).
 
 Its default settings, like those of the trees, can overfit small samples:
 compare the omission rates of a few settings of its regularisation on the
