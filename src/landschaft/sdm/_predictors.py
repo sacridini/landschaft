@@ -60,12 +60,14 @@ def _sample_cells(env: xr.DataArray, complete: np.ndarray, size: int, rng) -> np
         nona = np.flatnonzero(complete)
         if nona.size == 0:
             return nona
-        take = min(2 * size, nona.size)  # only the first draws are used: they do not depend on the later ones
+        # terra draws min(esize, cells) candidates (all of them advance R's generator, which matters when more
+        # draws follow); only the first ones are used, and they do not depend on the later ones
+        take = min(esize, nona.size)
         prob = None
         if lonlat:
             prob = _row_weights(env)[nona // nx].tolist()
         i = rng.sample_int(nona.size, take, False, prob)
-        return nona[i - 1][:size]
+        return nona[i[: 2 * size] - 1][:size]
     # large rasters: rejection sampling, rounds of candidates until `size` complete cells
     found: list[int] = []
     for rnd in range(10):

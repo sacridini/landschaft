@@ -31,7 +31,10 @@ between minor versions.
   the same folds for the same seed; on longitude / latitude data with straight block edges, and
   offsets in the blocks' own units, where blockCV mixes metres and degrees), `ls.sdm.buffer_folds`
   (blockCV's `cv_buffer`), `ls.sdm.autocorrelation_range` (blockCV's `cv_spatial_autocor`: automap's
-  variogram classes and models with gstat's Gauss-Newton fit, ranges to 1e-6), and ENMeval's partitions `ls.sdm.quadrant_folds` ("block"),
+  variogram classes and models with gstat's Gauss-Newton fit, ranges to 1e-6),
+  `ls.sdm.spatial_clusters` (blockCV's `cv_cluster`: R's `kmeans` ported to C++, Hartigan-Wong,
+  Lloyd / Forgy and MacQueen, the same clusters as R for the same seed, starts in parallel: 100 000
+  points in 0.25 s against 1.9 s), and ENMeval's partitions `ls.sdm.quadrant_folds` ("block"),
   `ls.sdm.checkerboard_folds`, `ls.sdm.random_folds` and `ls.sdm.jackknife_folds`, evaluation:
   `ls.sdm.evaluate` (predicts' `pa_evaluate`: AUC, kappa, TSS and the rest per threshold, the usual
   thresholds, the same values), `ls.sdm.boyce` (ecospat's continuous Boyce index without its "+1

@@ -1,5 +1,20 @@
 {
  "arrays": {
+  "cluster_coords/folds": {
+   "kind": "vector"
+  },
+  "cluster_coords_7/folds": {
+   "kind": "vector"
+  },
+  "cluster_env/folds": {
+   "kind": "vector"
+  },
+  "cluster_env_raw/folds": {
+   "kind": "vector"
+  },
+  "cluster_raster/folds": {
+   "kind": "vector"
+  },
   "cv_hex_flat/folds": {
    "kind": "vector"
   },

@@ -961,6 +961,33 @@ CASES["autocor_field"] = Case("autocorrelation", r=_AUTOCOR_R.format(env="smooth
                               inputs=("smooth_field",), py=_autocor_py("smooth_field", None, 1500, 4))
 
 
+_CLUSTER_R = ("{{ suppressMessages({{ library(blockCV); library(sf); library(terra) }}); sf_use_s2(FALSE); "
+              "set.seed({seed}); f <- suppressWarnings(cv_cluster(brad_points, column = 'occ', k = {k}{args}, "
+              "report = FALSE, biomod2 = FALSE)$folds_ids); list(folds = f) }}")
+
+
+def _cluster_py(k: int, seed: int, env: bool = False, **opts):
+    def run(**kw):
+        import landschaft as ls
+
+        folds = ls.sdm.spatial_clusters(kw["brad_points"], k, env=kw["bioclim"] if env else None, seed=seed, **opts)
+        return {"folds": folds}
+    return run
+
+
+for _name, _k, _seed, _args, _env, _opts in [
+    ("cluster_coords", 4, 2, "", False, {}),
+    ("cluster_coords_7", 7, 5, "", False, {}),
+    ("cluster_env", 4, 3, ", r = bioclim", True, {}),
+    ("cluster_env_raw", 3, 4, ", r = bioclim, scale = FALSE", True, {"scale": False}),
+    ("cluster_raster", 4, 6, ", r = bioclim, raster_cluster = TRUE, num_sample = 2000", True,
+     {"raster_cluster": True, "num_sample": 2000}),
+]:
+    _inputs = ("brad_points", "bioclim") if _env else ("brad_points",)
+    CASES[_name] = Case("folds", r=_CLUSTER_R.format(seed=_seed, k=_k, args=_args), inputs=_inputs,
+                        py=_cluster_py(_k, _seed, _env, **_opts))
+
+
 def case_ids(group: str) -> list[str]:
     return [k for k, c in CASES.items() if c.group == group]
 

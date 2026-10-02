@@ -12,7 +12,7 @@ import pandas as pd
 from .. import _core
 from ._thin import _seed
 
-__all__ = ["spatial_blocks", "buffer_folds", "quadrant_folds", "checkerboard_folds", "random_folds",
+__all__ = ["spatial_blocks", "spatial_clusters", "buffer_folds", "quadrant_folds", "checkerboard_folds", "random_folds",
            "jackknife_folds"]
 
 _EPS = 2.220446049250313e-16
@@ -631,3 +631,104 @@ def jackknife_folds(data):
     folds = np.zeros(len(data.y), dtype=np.int64)
     folds[pres] = np.arange(1, pres.size + 1)
     return _result(data, folds, {"method": "jackknife_folds"})
+
+
+# ------------------------------------------------------------------------------------- clusters
+
+def _terra_scale(env):
+    """terra::scale of every band: (v - mean) / sqrt(sum((v - mean)^2) / (n - 1)), sequential double sums."""
+    data = np.asarray(env.values, dtype=float).reshape(env.shape[0], -1)
+    nodata = env.rio.nodata
+    if nodata is not None and not np.isnan(nodata):
+        data = np.where(data == nodata, np.nan, data)
+    out = np.empty_like(data)
+    for k, v in enumerate(data):
+        ok = v[~np.isnan(v)]
+        mean = np.cumsum(ok)[-1] / ok.size  # in order, as terra's sum_se_rm
+        c = v - mean
+        cok = c[~np.isnan(c)]
+        rms = math.sqrt(np.cumsum(cok * cok)[-1] / (cok.size - 1))
+        out[k] = c / rms
+    return out
+
+
+def spatial_clusters(data, k: int = 5, *, env=None, scale: bool = True, raster_cluster: bool = False,
+                     num_sample: int = 10_000, algorithm: str = "Hartigan-Wong", seed: int | None = None):
+    """Folds from k-means clusters of the records' coordinates (or of their environment).
+
+    ``blockCV::cv_cluster``: k-means (R's ``kmeans``, Hartigan-Wong, 25
+    random starts, up to 500 iterations, the same clusters for the same
+    seed) groups the records into ``k`` spatial clusters, each a fold. With
+    ``env``, the clusters are made in environmental space instead
+    (predictors standardised as ``terra::scale``; with ``raster_cluster``,
+    also on ``num_sample`` random cells, so that folds cover environmental
+    gradients): the test folds then hold conditions the training data lack.
+
+    Parameters
+    ----------
+    data
+        :class:`SDMData` or a GeoDataFrame of points.
+    k
+        Number of folds.
+    env
+        Predictors to cluster in environmental space (default: coordinates).
+    scale
+        Standardise the predictors.
+    raster_cluster
+        Cluster the records together with a sample of the raster's cells.
+    num_sample
+        Cells sampled for ``raster_cluster``.
+    algorithm : {"Hartigan-Wong", "Lloyd", "Forgy", "MacQueen"}
+        R's k-means algorithm.
+    seed
+        Seed of R's generator (default random).
+
+    Returns
+    -------
+    SDMData or numpy.ndarray
+        The data with ``folds`` (1..k), or the fold of each point.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> env = ls.load_raster(ls.sdm.example_data("bioclim"))
+    >>> occ = ls.load_table(ls.sdm.example_data("bradypus"))
+    >>> data = ls.sdm.dataset(occ, ls.sdm.background(env, 500, occ=occ, seed=1), env)
+    >>> np.bincount(ls.sdm.spatial_clusters(data, 4, seed=2).folds).tolist()
+    [0, 201, 127, 197, 91]
+    """
+    x, y, crs, _ = _xy_and_class(data, None)
+    s = _seed(seed)
+    rng = _core.RRandom(s)
+    if env is None:
+        table = np.column_stack([x, y])
+    else:
+        from ._points import grid_cells
+
+        if env.ndim == 2:
+            env = env.expand_dims(band=[env.name or "layer"])
+        values = _terra_scale(env) if scale else np.asarray(env.values, dtype=float).reshape(env.shape[0], -1)
+        cells = grid_cells(x, y, env)
+        if (cells < 0).any():
+            raise ValueError("some records are outside the predictors")
+        table = values[:, cells].T
+        if np.isnan(table).any():
+            raise ValueError("the predictors have no value at some records")
+        if raster_cluster:
+            from xarray import DataArray
+
+            from ._predictors import _sample_cells
+
+            complete = ~np.isnan(values).any(axis=0)
+            n = num_sample
+            if values.shape[1] < 5 * n:
+                n = min(n, int(complete.sum()))
+            scaled = DataArray(values.reshape(env.shape), dims=env.dims, coords=env.coords).rio.write_crs(env.rio.crs)
+            scaled = scaled.rio.write_transform(env.rio.transform())
+            pick = _sample_cells(scaled, complete, n, rng)
+            table = np.vstack([table, values[:, pick].T])
+    res = _core.sdm_kmeans(np.ascontiguousarray(table), k, 500, 25, None, algorithm, rng)
+    folds = np.asarray(res["cluster"], dtype=np.int64)[: x.size]
+    return _result(data, folds, {"method": "spatial_clusters", "k": k, "seed": s,
+                                 "space": "coordinates" if env is None else "environment"})

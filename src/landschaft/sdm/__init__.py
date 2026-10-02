@@ -34,6 +34,7 @@ from ._folds import (
     quadrant_folds,
     random_folds,
     spatial_blocks,
+    spatial_clusters,
 )
 from ._gbif import download_gbif
 from ._models import SDMResult, fit, importance, predict, response_curves
@@ -73,6 +74,7 @@ __all__ = [
     "response_curves",
     "select_predictors",
     "spatial_blocks",
+    "spatial_clusters",
     "thin",
     "threshold",
     "vif",
