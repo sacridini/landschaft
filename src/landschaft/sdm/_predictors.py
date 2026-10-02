@@ -101,7 +101,7 @@ def _values(env, size: int | None, seed, area) -> tuple[pd.DataFrame, dict]:
     if area is not None:
         from ..io import clip
 
-        env = clip(env, area)
+        env = clip(env, area, all_touched=True)  # as terra::mask(crop(x, v), v): touched cells
     names = [str(b) for b in env["band"].values] if "band" in env.coords else [f"band{i + 1}" for i in range(len(env))]
     data = np.asarray(env.values, dtype=float).reshape(env.shape[0], -1)
     nodata = env.rio.nodata

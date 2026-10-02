@@ -21,7 +21,12 @@ between minor versions.
   Natural Earth layers, downloaded on first use), `ls.sdm.select_predictors` and `ls.sdm.vif`
   (usdm's `vifstep` / `vifcor` and `vif`, the same values to the last bit: R's `lm` QR and
   `summary.lm` in C++, terra's cell sampling with R's generator; usdm's crashes with one variable
-  left or every variable kept are fixed), and the reference harness
+  left or every variable kept are fixed), `ls.sdm.background` (dismo's `randomPoints`, the same cells
+  for the same seed: area-weighted on longitude / latitude grids, within the accessible area, a
+  distance band around the records (biomod2's "disk") or outside their environmental envelope
+  (biomod2's "SRE"), or weighted by a bias surface for target-group background), `ls.sdm.dataset`
+  and `ls.sdm.SDMData` (presences, background and predictor values, ready for scikit-learn:
+  `X`, `y`, `sample_weight`, `cv`), and the reference harness
   (`tools/make_reference_sdm.py`).
 - R data files (`.rda`, `.rds`) are read without R (`landschaft._rdata`), so the reference tables
   of R packages (CoordinateCleaner's centroids, capitals, institutions, land and sea) are used as

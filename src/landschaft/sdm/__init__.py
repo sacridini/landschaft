@@ -19,8 +19,10 @@ Typical use::
 """
 
 from ._area import accessible_area
+from ._background import background
 from ._cells import one_per_cell
 from ._clean import clean_occurrences
+from ._data import SDMData, dataset
 from ._examples import example_data
 from ._gbif import download_gbif
 from ._predictors import select_predictors, vif
@@ -28,8 +30,11 @@ from ._refdata import reference_data
 from ._thin import thin
 
 __all__ = [
+    "SDMData",
     "accessible_area",
+    "background",
     "clean_occurrences",
+    "dataset",
     "download_gbif",
     "example_data",
     "one_per_cell",

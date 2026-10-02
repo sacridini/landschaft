@@ -19,7 +19,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors"]
+GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background"]
 
 
 @dataclass
@@ -198,7 +198,21 @@ def planar_stack(ny: int, nx: int, seed: int, na: int = 0):
     return da.rio.write_crs("EPSG:32723")
 
 
+def bradypus_area():
+    """The accessible area of the Bradypus records: 500 km around them."""
+    import landschaft as ls
+
+    return ls.sdm.accessible_area(bradypus(), distance=500_000)
+
+
+def bias_bio12():
+    """A bias surface: annual precipitation (positive) on the bioclim grid."""
+    return bioclim().sel(band="bio12").drop_vars("band")
+
+
 INPUTS: dict[str, Callable[[], object]] = {
+    "bradypus_area": bradypus_area,
+    "bias_bio12": bias_bio12,
     "vif_table": vif_table,
     "vif_collinear": vif_collinear,
     "vif_big": vif_big,
@@ -405,6 +419,73 @@ for _name, _fn, _data, _args, _seed, _opts in [
 ]:
     CASES[_name] = Case("predictors", r=_usdm_r_select(_fn, _data, _args, _seed), inputs=(_data,),
                         py=_usdm_select_py(_data, _seed, **_opts))
+
+
+# dismo::randomPoints on a mask with NA where some predictor is missing (and outside the area / the
+# distance band / inside the envelope): the cells ls.sdm.background draws for the same seed.
+_BG_MASK = "m <- ifel(any(is.na({env})), NA, 1); "
+
+
+def _bg_r(env: str, n: int, seed: int, p: bool = True, area: bool = False, prob: str | None = None,
+          distance=None, envelope=None) -> str:
+    code = "{ suppressMessages({ library(dismo); library(terra) }); " + _BG_MASK.format(env=env)
+    if area:
+        code += "m <- mask(m, vect(bradypus_area)); "
+    pts = "as.matrix(bradypus[, c('lon', 'lat')])"
+    if distance is not None:
+        lo, hi = distance
+        code += (f"o <- rast(m); values(o) <- NA; o[cellFromXY(o, {pts})] <- 1; d <- distance(o); "
+                 f"m[!(d > {lo} & d <= {hi})] <- NA; ")
+    if envelope is not None:
+        q = envelope
+        code += (f"cl <- unique(na.omit(cellFromXY({env}, {pts}))); inside <- rast(m); values(inside) <- TRUE; "
+                 f"for (k in 1:nlyr({env})) {{ v <- values({env}[[k]], mat = FALSE); "
+                 f"qs <- quantile(v[cl], c({q}, 1 - {q}), na.rm = TRUE); "
+                 f"inside <- inside & ({env}[[k]] >= qs[1] & {env}[[k]] <= qs[2]) }}; m[inside] <- NA; ")
+    if prob is not None:
+        code += f"m <- mask({prob}, m); "
+    args = f", p = {pts}" if p else ""
+    if prob is not None:
+        args += ", prob = TRUE"
+    code += (f"set.seed({seed}); cells <- suppressWarnings(randomPoints(raster::raster(m), {n}{args},"
+             " cellnumbers = TRUE)); list(cell = cells) }")
+    return code
+
+
+def _bg_py(env: str, n: int, seed: int, p: bool = True, area: bool = False, prob: str | None = None,
+           distance=None, envelope=None):
+    def run(**kw):
+        import warnings
+
+        import landschaft as ls
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            bg = ls.sdm.background(kw[env], n, occ=kw["bradypus"] if p or distance or envelope else None,
+                                   exclude_occurrences=p, area=kw["bradypus_area"] if area else None,
+                                   bias=kw[prob] if prob else None, distance=distance, envelope=envelope,
+                                   seed=seed)
+        return {"cell": bg["cell"].to_numpy() + 1}
+    return run
+
+
+for _name, _env, _n, _seed, _kw in [
+    ("bg_lonlat", "bioclim", 1000, 1, {}),
+    ("bg_no_presences", "bioclim", 500, 2, {"p": False}),
+    ("bg_area", "bioclim", 1000, 3, {"area": True}),
+    ("bg_shortfall", "bioclim", 1500, 6, {"area": True}),
+    ("bg_planar", "stack_200", 400, 4, {"p": False}),
+    ("bg_bias", "bioclim", 300, 5, {"prob": "bias_bio12"}),
+    ("bg_distance", "bioclim", 400, 7, {"distance": (100_000, 800_000)}),
+    ("bg_envelope", "bioclim", 400, 8, {"envelope": 0.025}),
+]:
+    _inputs = {_env, "bradypus"}
+    if _kw.get("area"):
+        _inputs.add("bradypus_area")
+    if _kw.get("prob"):
+        _inputs.add(_kw["prob"])
+    CASES[_name] = Case("background", r=_bg_r(_env, _n, _seed, **_kw), inputs=tuple(sorted(_inputs)),
+                        py=_bg_py(_env, _n, _seed, **_kw))
 
 
 def case_ids(group: str) -> list[str]:
