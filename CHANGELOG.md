@@ -1,13 +1,19 @@
 # Changelog
 
 All notable changes to Landschaft are documented here. The project follows
-[Semantic Versioning](https://semver.org/); before 1.0 the API may still change
-between minor versions.
+[Semantic Versioning](https://semver.org/): from 1.0 on, the public API changes incompatibly only
+in a new major version.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-02
+
+The first stable release. It adds species distribution modelling (`ls.sdm`): from occurrence
+records and predictor rasters to cross-validated, projected models, every step reproducing the R
+package the field relies on for it.
+
 ### Added
-- `ls.sdm`, species distribution modelling (in progress; plan in IDEAS.md): example data
+- `ls.sdm`, species distribution modelling: example data
   (`ls.sdm.example_data`: the *Bradypus* and *Solanum acaule* records and the bioclimatic and biome
   rasters of the R package predicts), `ls.sdm.one_per_cell` (one record per predictor cell, as
   `terra::cellFromXY` + `duplicated()`), `ls.sdm.download_gbif` (records from GBIF's occurrence search
