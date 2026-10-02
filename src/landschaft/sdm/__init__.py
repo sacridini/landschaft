@@ -24,6 +24,14 @@ from ._cells import one_per_cell
 from ._clean import clean_occurrences
 from ._data import SDMData, dataset
 from ._examples import example_data
+from ._folds import (
+    buffer_folds,
+    checkerboard_folds,
+    jackknife_folds,
+    quadrant_folds,
+    random_folds,
+    spatial_blocks,
+)
 from ._gbif import download_gbif
 from ._predictors import select_predictors, vif
 from ._refdata import reference_data
@@ -33,13 +41,19 @@ __all__ = [
     "SDMData",
     "accessible_area",
     "background",
+    "buffer_folds",
+    "checkerboard_folds",
     "clean_occurrences",
     "dataset",
     "download_gbif",
     "example_data",
+    "jackknife_folds",
     "one_per_cell",
+    "quadrant_folds",
+    "random_folds",
     "reference_data",
     "select_predictors",
+    "spatial_blocks",
     "thin",
     "vif",
 ]

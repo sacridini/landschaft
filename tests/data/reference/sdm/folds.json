@@ -1,0 +1,120 @@
+{
+ "arrays": {
+  "cv_hex_flat/folds": {
+   "kind": "vector"
+  },
+  "cv_hex_offset/folds": {
+   "kind": "vector"
+  },
+  "cv_hex_random/folds": {
+   "kind": "vector"
+  },
+  "cv_hex_rows/folds": {
+   "kind": "vector"
+  },
+  "cv_hex_systematic/folds": {
+   "kind": "vector"
+  },
+  "cv_lonlat_hex/folds": {
+   "kind": "vector"
+  },
+  "cv_lonlat_square/folds": {
+   "kind": "vector"
+  },
+  "cv_square_checkerboard/folds": {
+   "kind": "vector"
+  },
+  "cv_square_edges/folds": {
+   "kind": "vector"
+  },
+  "cv_square_extend/folds": {
+   "kind": "vector"
+  },
+  "cv_square_offset/folds": {
+   "kind": "vector"
+  },
+  "cv_square_random/folds": {
+   "kind": "vector"
+  },
+  "cv_square_systematic/folds": {
+   "kind": "vector"
+  },
+  "enm_block_lat_lat/bg": {
+   "kind": "vector"
+  },
+  "enm_block_lat_lat/occs": {
+   "kind": "vector"
+  },
+  "enm_block_lat_lon/bg": {
+   "kind": "vector"
+  },
+  "enm_block_lat_lon/occs": {
+   "kind": "vector"
+  },
+  "enm_block_lon_lat/bg": {
+   "kind": "vector"
+  },
+  "enm_block_lon_lat/occs": {
+   "kind": "vector"
+  },
+  "enm_block_lon_lon/bg": {
+   "kind": "vector"
+  },
+  "enm_block_lon_lon/occs": {
+   "kind": "vector"
+  },
+  "enm_checker_2/bg": {
+   "kind": "vector"
+  },
+  "enm_checker_2/occs": {
+   "kind": "vector"
+  },
+  "enm_checker_2_2/bg": {
+   "kind": "vector"
+  },
+  "enm_checker_2_2/occs": {
+   "kind": "vector"
+  },
+  "enm_checker_3_2/bg": {
+   "kind": "vector"
+  },
+  "enm_checker_3_2/occs": {
+   "kind": "vector"
+  },
+  "enm_checker_4/bg": {
+   "kind": "vector"
+  },
+  "enm_checker_4/occs": {
+   "kind": "vector"
+  },
+  "enm_randomkfold/bg": {
+   "kind": "vector"
+  },
+  "enm_randomkfold/occs": {
+   "kind": "vector"
+  },
+  "enm_randomkfold_7/bg": {
+   "kind": "vector"
+  },
+  "enm_randomkfold_7/occs": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "CoordinateCleaner": "3.0.1",
+  "ENMeval": "2.0.5.2",
+  "biomod2": "4.3.4.5",
+  "blockCV": "3.2.0",
+  "dismo": "1.3.16",
+  "ecospat": "4.1.3",
+  "glmnet": "4.1.10",
+  "maxnet": "0.1.4",
+  "mop": "0.1.4",
+  "predicts": "0.1.19",
+  "sf": "1.0.19",
+  "spThin": "0.2.0",
+  "terra": "1.9.50",
+  "usdm": "2.1.7"
+ }
+}

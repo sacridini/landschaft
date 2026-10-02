@@ -19,7 +19,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background"]
+GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background", "folds"]
 
 
 @dataclass
@@ -210,7 +210,66 @@ def bias_bio12():
     return bioclim().sel(band="bio12").drop_vars("band")
 
 
+def blk_points():
+    """150 points in 10 x 7 km (UTM 22S), 40 % presences: blockCV's typical input."""
+    import geopandas as gpd
+
+    from landschaft import _core
+
+    r = _core.RRandom(21)
+    n = 150
+    x = r.runif(n, 500_000.0, 510_000.0)
+    y = r.runif(n, 7_400_000.0, 7_407_000.0)
+    occ = (r.runif(n, 0.0, 1.0) < 0.4).astype(float)
+    return gpd.GeoDataFrame({"occ": occ}, geometry=gpd.points_from_xy(x, y), crs="EPSG:32722")
+
+
+def blk_grid():
+    """Points on a 1 km lattice (0..10 x 0..8 km): many lie on block edges."""
+    import geopandas as gpd
+
+    xs, ys = np.meshgrid(np.arange(11.0), np.arange(9.0))
+    x = 500_000.0 + 1000.0 * xs.ravel()
+    y = 7_400_000.0 + 1000.0 * ys.ravel()
+    occ = ((xs.ravel() + 2 * ys.ravel()) % 3 == 0).astype(float)
+    return gpd.GeoDataFrame({"occ": occ}, geometry=gpd.points_from_xy(x, y), crs="EPSG:32722")
+
+
+def _bradypus_data():
+    import landschaft as ls
+
+    env = bioclim()
+    occ = bradypus()
+    bg = ls.sdm.background(env, 600, occ=occ, seed=1)
+    return ls.sdm.dataset(occ, bg, env)
+
+
+def brad_occs() -> pd.DataFrame:
+    d = _bradypus_data()
+    g = d.coords[d.y == 1]
+    return pd.DataFrame({"lon": g.geometry.x.to_numpy(), "lat": g.geometry.y.to_numpy()})
+
+
+def brad_bg() -> pd.DataFrame:
+    d = _bradypus_data()
+    g = d.coords[d.y == 0]
+    return pd.DataFrame({"lon": g.geometry.x.to_numpy(), "lat": g.geometry.y.to_numpy()})
+
+
+def brad_points():
+    """The Bradypus presences and background as points with occ (longitude / latitude)."""
+    import geopandas as gpd
+
+    d = _bradypus_data()
+    return gpd.GeoDataFrame({"occ": d.y.astype(float)}, geometry=d.coords.geometry.to_numpy(), crs="EPSG:4326")
+
+
 INPUTS: dict[str, Callable[[], object]] = {
+    "blk_points": blk_points,
+    "blk_grid": blk_grid,
+    "brad_occs": brad_occs,
+    "brad_bg": brad_bg,
+    "brad_points": brad_points,
     "bradypus_area": bradypus_area,
     "bias_bio12": bias_bio12,
     "vif_table": vif_table,
@@ -486,6 +545,77 @@ for _name, _env, _n, _seed, _kw in [
         _inputs.add(_kw["prob"])
     CASES[_name] = Case("background", r=_bg_r(_env, _n, _seed, **_kw), inputs=tuple(sorted(_inputs)),
                         py=_bg_py(_env, _n, _seed, **_kw))
+
+
+_CV = ("{{ suppressMessages({{ library(blockCV); library(sf) }}); sf_use_s2(FALSE); "
+       "f <- suppressWarnings(cv_spatial({p}, column = 'occ'{args}, progress = FALSE, report = FALSE,"
+       " plot = FALSE, biomod2 = FALSE)$folds_ids); f[is.na(f)] <- 0; list(folds = f) }}")
+
+
+def _cv_py(points: str, **opts):
+    def run(**kw):
+        import landschaft as ls
+
+        return {"folds": ls.sdm.spatial_blocks(kw[points], column="occ", **opts)}
+    return run
+
+
+for _name, _p, _args, _opts in [
+    ("cv_square_random", "blk_points", ", size = 2000, k = 4, hexagon = FALSE, iteration = 20, seed = 3",
+     dict(size=2000, k=4, hexagon=False, iteration=20, seed=3)),
+    ("cv_square_edges", "blk_grid", ", rows_cols = c(4, 5), k = 3, hexagon = FALSE, iteration = 5, seed = 11",
+     dict(rows_cols=(4, 5), k=3, hexagon=False, iteration=5, seed=11)),
+    ("cv_square_systematic", "blk_points", ", size = 2000, k = 5, hexagon = FALSE, selection = 'systematic'",
+     dict(size=2000, k=5, hexagon=False, selection="systematic", seed=1)),
+    ("cv_square_checkerboard", "blk_points", ", size = 1500, hexagon = FALSE, selection = 'checkerboard'",
+     dict(size=1500, hexagon=False, selection="checkerboard", seed=1)),
+    ("cv_square_offset", "blk_points", ", size = 2000, k = 3, hexagon = FALSE, selection = 'systematic',"
+     " offset = c(0.3, 0.6)", dict(size=2000, k=3, hexagon=False, selection="systematic", offset=(0.3, 0.6), seed=1)),
+    ("cv_square_extend", "blk_points", ", size = 2000, k = 4, hexagon = FALSE, extend = 3, iteration = 10, seed = 8",
+     dict(size=2000, k=4, hexagon=False, extend=3, iteration=10, seed=8)),
+    ("cv_hex_random", "blk_points", ", size = 2500, k = 4, iteration = 10, seed = 5",
+     dict(size=2500, k=4, iteration=10, seed=5)),
+    ("cv_hex_systematic", "blk_points", ", size = 2500, k = 4, selection = 'systematic'",
+     dict(size=2500, k=4, selection="systematic", seed=1)),
+    ("cv_hex_flat", "blk_points", ", size = 2500, k = 3, flat_top = TRUE, iteration = 10, seed = 6",
+     dict(size=2500, k=3, flat_top=True, iteration=10, seed=6)),
+    ("cv_hex_rows", "blk_points", ", rows_cols = c(4, 9), k = 4, iteration = 10, seed = 7",
+     dict(rows_cols=(4, 9), k=4, iteration=10, seed=7)),
+    ("cv_hex_offset", "blk_points", ", size = 2500, k = 4, offset = c(0.3, 0.6), iteration = 5, seed = 9",
+     dict(size=2500, k=4, offset=(0.3, 0.6), iteration=5, seed=9)),
+    ("cv_lonlat_square", "brad_points", ", size = 500000, k = 5, hexagon = FALSE, iteration = 10, seed = 1",
+     dict(size=500_000, k=5, hexagon=False, iteration=10, seed=1)),
+    ("cv_lonlat_hex", "brad_points", ", size = 500000, k = 5, iteration = 10, seed = 2",
+     dict(size=500_000, k=5, iteration=10, seed=2)),
+]:
+    CASES[_name] = Case("folds", r=_CV.format(p=_p, args=_args), inputs=(_p,), py=_cv_py(_p, **_opts))
+
+_ENM = "{{ suppressMessages(library(ENMeval)); {seed}g <- {call}; list(occs = g$occs.grp, bg = g$bg.grp) }}"
+
+
+def _enm_py(fn: str, **opts):
+    def run(**kw):
+        import landschaft as ls
+
+        data = _bradypus_data()
+        f = getattr(ls.sdm, fn)(data, **opts) if fn != "checkerboard_folds" else \
+            ls.sdm.checkerboard_folds(data, kw["bioclim"], **opts)
+        return {"occs": f.folds[data.y == 1], "bg": f.folds[data.y == 0]}
+    return run
+
+
+for _o in ("lat_lon", "lon_lat", "lon_lon", "lat_lat"):
+    CASES[f"enm_block_{_o}"] = Case("folds", r=_ENM.format(seed="", call=f"get.block(brad_occs, brad_bg, '{_o}')"),
+                                    inputs=("brad_occs", "brad_bg"), py=_enm_py("quadrant_folds", orientation=_o))
+for _name, _af, _py in [("enm_checker_2", "2", 2), ("enm_checker_4", "4", 4), ("enm_checker_2_2", "c(2, 2)", (2, 2)),
+                        ("enm_checker_3_2", "c(3, 2)", (3, 2))]:
+    CASES[_name] = Case("folds", r=_ENM.format(seed="", call=f"get.checkerboard(brad_occs, bioclim, brad_bg, {_af})"),
+                        inputs=("brad_occs", "brad_bg", "bioclim"), py=_enm_py("checkerboard_folds", aggregation=_py))
+CASES["enm_randomkfold"] = Case("folds", r=_ENM.format(seed="set.seed(3); ", call="get.randomkfold(brad_occs, brad_bg, 4)"),
+                                inputs=("brad_occs", "brad_bg"), py=_enm_py("random_folds", k=4, seed=3))
+CASES["enm_randomkfold_7"] = Case("folds", r=_ENM.format(seed="set.seed(10); ",
+                                                         call="get.randomkfold(brad_occs, brad_bg, 7)"),
+                                  inputs=("brad_occs", "brad_bg"), py=_enm_py("random_folds", k=7, seed=10))
 
 
 def case_ids(group: str) -> list[str]:

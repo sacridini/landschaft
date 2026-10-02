@@ -26,7 +26,13 @@ between minor versions.
   distance band around the records (biomod2's "disk") or outside their environmental envelope
   (biomod2's "SRE"), or weighted by a bias surface for target-group background), `ls.sdm.dataset`
   and `ls.sdm.SDMData` (presences, background and predictor values, ready for scikit-learn:
-  `X`, `y`, `sample_weight`, `cv`), and the reference harness
+  `X`, `y`, `sample_weight`, `cv`), cross-validation folds: `ls.sdm.spatial_blocks`
+  (blockCV's `cv_spatial`: square or hexagonal blocks, random / systematic / checkerboard selection,
+  the same folds for the same seed; on longitude / latitude data with straight block edges, and
+  offsets in the blocks' own units, where blockCV mixes metres and degrees), `ls.sdm.buffer_folds`
+  (blockCV's `cv_buffer`), and ENMeval's partitions `ls.sdm.quadrant_folds` ("block"),
+  `ls.sdm.checkerboard_folds`, `ls.sdm.random_folds` and `ls.sdm.jackknife_folds`, and the reference
+  harness
   (`tools/make_reference_sdm.py`).
 - R data files (`.rda`, `.rds`) are read without R (`landschaft._rdata`), so the reference tables
   of R packages (CoordinateCleaner's centroids, capitals, institutions, land and sea) are used as

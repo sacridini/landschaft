@@ -45,6 +45,20 @@ m = ls.sdm.accessible_area(occ, distance=300_000)       # where the background c
 
 ::: landschaft.sdm.SDMData
 
+## Cross-validation folds
+
+::: landschaft.sdm.spatial_blocks
+
+::: landschaft.sdm.buffer_folds
+
+::: landschaft.sdm.quadrant_folds
+
+::: landschaft.sdm.checkerboard_folds
+
+::: landschaft.sdm.random_folds
+
+::: landschaft.sdm.jackknife_folds
+
 ## Example data
 
 ::: landschaft.sdm.example_data
