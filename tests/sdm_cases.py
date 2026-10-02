@@ -139,6 +139,23 @@ def cc_synthetic() -> pd.DataFrame:
     return d
 
 
+def cc_edges() -> pd.DataFrame:
+    """Records on the vertices of the circles, near the antimeridian and near the south pole."""
+    from landschaft import _core
+    from landschaft.sdm._refdata import reference_data
+
+    cref = reference_data("countryref")
+    cap = cref[cref["capital"] == "Brasilia"].iloc[0]
+    cx, cy = float(cap["capital.lon"]), float(cap["capital.lat"])
+    ring = _core.sdm_circles(np.array([cx]), np.array([cy]), 10_000.0, "geosphere")[0][0]
+    terra = _core.sdm_circles(np.array([cx]), np.array([cy]), 10_000.0, "terra")[0][0]
+    rows = [(cx, cy), tuple(ring[0]), tuple(ring[18]), tuple(ring[1]), tuple(terra[10]), tuple(terra[5]),
+            ((ring[0][0] + ring[1][0]) / 2, (ring[0][1] + ring[1][1]) / 2),
+            (179.99, -16.5), (-179.995, -16.5), (0.0, -16.5), (100.0, -16.52), (-100.0, -16.48),
+            (0.0, -89.995), (45.0, -89.9999), (120.0, -89.5)]
+    return pd.DataFrame(rows, columns=["lon", "lat"]).assign(species="sp")
+
+
 def acaule_valid() -> pd.DataFrame:
     """The acaule records with coordinates (CoordinateCleaner stops on invalid ones)."""
     d = acaule()
@@ -265,6 +282,7 @@ def brad_points():
 
 
 INPUTS: dict[str, Callable[[], object]] = {
+    "cc_edges": cc_edges,
     "blk_points": blk_points,
     "blk_grid": blk_grid,
     "brad_occs": brad_occs,
@@ -616,6 +634,42 @@ CASES["enm_randomkfold"] = Case("folds", r=_ENM.format(seed="set.seed(3); ", cal
 CASES["enm_randomkfold_7"] = Case("folds", r=_ENM.format(seed="set.seed(10); ",
                                                          call="get.randomkfold(brad_occs, brad_bg, 7)"),
                                   inputs=("brad_occs", "brad_bg"), py=_enm_py("random_folds", k=7, seed=10))
+
+
+_CC_EDGES_R = """{ suppressMessages(library(CoordinateCleaner)); source(file.path(TOOLS, "cc_fixed.R"))
+x <- cc_edges; x$decimalLongitude <- x$lon; x$decimalLatitude <- x$lat
+dateline <- data.frame(capital.lon = 179.995, capital.lat = -16.5, capital = "X")
+list(cap_geod = !cc_cap_fixed(x, buffer = 10000, value = "flagged"),
+     cap_terra = !cc_cap_fixed(x, buffer = 10000, geod = FALSE, value = "flagged"),
+     dateline_geod = !cc_cap_fixed(x, buffer = 10000, ref = dateline, value = "flagged"),
+     dateline_terra = !cc_cap_fixed(x, buffer = 10000, geod = FALSE, ref = dateline, value = "flagged"),
+     pole = !cc_cen_fixed(x, buffer = 1000, test = "country", value = "flagged"),
+     pole_big = !cc_cen_fixed(x, buffer = 60000, test = "country", value = "flagged"),
+     zeros = !cc_zero_fixed(x, buffer = 0, value = "flagged")) }"""
+
+
+def _cc_edges_py(**kw):
+    import landschaft as ls
+
+    occ = kw["cc_edges"]
+    off = dict(equal=False, zeros=False, capitals=False, centroids=False, seas=False, outliers=False, gbif=False,
+               institutions=False)
+    dateline = pd.DataFrame({"lon": [179.995], "lat": [-16.5]})
+
+    def flag(test, **opts):
+        f = ls.sdm.clean_occurrences(occ, action="flag", **{**off, **opts})
+        return f[f"flag_{test}"].to_numpy(float)
+
+    return {"cap_geod": flag("capitals", capitals=10_000),
+            "cap_terra": flag("capitals", capitals={"buffer": 10_000, "geod": False}),
+            "dateline_geod": flag("capitals", capitals={"ref": dateline}),
+            "dateline_terra": flag("capitals", capitals={"ref": dateline, "geod": False}),
+            "pole": flag("centroids", centroids={"buffer": 1000, "detail": "country"}),
+            "pole_big": flag("centroids", centroids={"buffer": 60_000, "detail": "country"}),
+            "zeros": flag("zeros", zeros=0)}
+
+
+CASES["clean_edges"] = Case("clean", r=_CC_EDGES_R, inputs=("cc_edges",), py=_cc_edges_py)
 
 
 def case_ids(group: str) -> list[str]:

@@ -166,11 +166,15 @@ set_target_properties(priocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(sdmcore STATIC
     src/cpp/sdm/clean.cpp
     src/cpp/sdm/collinear.cpp
+    src/cpp/sdm/geocircle/geocircle.cpp
+    src/cpp/sdm/geocircle/geocircle_geodesic.cpp
+    src/cpp/sdm/geocircle/geos_lite.cpp
+    src/cpp/sdm/rstats.cpp
     src/cpp/sdm/thin.cpp
 )
 target_include_directories(sdmcore PUBLIC src/cpp)
-# R's x87 maths (lsm/rmath.hpp) and R's generator (nlm/rng.hpp).
-target_link_libraries(sdmcore PUBLIC lsmcore nlmcore)
+# R's x87 maths (lsm/rmath.hpp), R's generator (nlm/rng.hpp), mingw's cbrt (cost/geodesic.hpp).
+target_link_libraries(sdmcore PUBLIC lsmcore nlmcore costcore)
 set_target_properties(sdmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Raster values by zone and at points (ls.zonal_stats, ls.extract), ls.reclassify, GDAL's warp
 # kernel (ls.reproject); GDAL's polygon rasterizer (lsm/rasterize.cpp).

@@ -33,6 +33,27 @@
   "clean_acaule/zeros": {
    "kind": "vector"
   },
+  "clean_edges/cap_geod": {
+   "kind": "vector"
+  },
+  "clean_edges/cap_terra": {
+   "kind": "vector"
+  },
+  "clean_edges/dateline_geod": {
+   "kind": "vector"
+  },
+  "clean_edges/dateline_terra": {
+   "kind": "vector"
+  },
+  "clean_edges/pole": {
+   "kind": "vector"
+  },
+  "clean_edges/pole_big": {
+   "kind": "vector"
+  },
+  "clean_edges/zeros": {
+   "kind": "vector"
+  },
   "clean_synthetic/aohi": {
    "kind": "vector"
   },

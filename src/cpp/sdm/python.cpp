@@ -11,12 +11,15 @@
 #include <algorithm>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "nlm/rng.hpp"
 #include "lsm/rmath.hpp"
 #include "sdm/clean.hpp"
 #include "sdm/collinear.hpp"
+#include "sdm/geocircle/geocircle.hpp"
+#include "sdm/rstats.hpp"
 #include "sdm/thin.hpp"
 
 namespace py = pybind11;
@@ -104,9 +107,46 @@ py::array_t<double> py_vif(const py::array_t<double, py::array::c_style | py::ar
     return to_array(std::move(out));
 }
 
+// The circles of radius d around each point: for each point a list of closed rings (n x 2 arrays).
+py::list py_circles(const Vec& lon, const Vec& lat, double d, const std::string& kind) {
+    if (lon.size() != lat.size()) throw std::invalid_argument("lon and lat differ in length");
+    const i64 n = static_cast<i64>(lon.size());
+    std::vector<GeoParts> parts(static_cast<std::size_t>(n));
+    {
+        py::gil_scoped_release release;
+        for (i64 i = 0; i < n; ++i) {
+            const double x = lon.data()[i], y = lat.data()[i];
+            GeoParts& p = parts[static_cast<std::size_t>(i)];
+            if (kind == "geosphere") {
+                p = geod_polys_fixed(x, y, d);
+            } else if (kind == "terra") {
+                p = terra_point_buffer(x, y, d);
+            } else if (kind == "planar") {
+                p = {geos_circle(x, y, d)};
+            } else {
+                throw std::invalid_argument("kind must be 'geosphere', 'terra' or 'planar'");
+            }
+        }
+    }
+    py::list out;
+    for (const GeoParts& p : parts) {
+        py::list rings;
+        for (const GeoRing& r : p) {
+            py::array_t<double> a({static_cast<py::ssize_t>(r.size() / 2), static_cast<py::ssize_t>(2)});
+            std::copy(r.begin(), r.end(), a.mutable_data());
+            rings.append(a);
+        }
+        out.append(rings);
+    }
+    return out;
+}
+
 }  // namespace
 
 void register_python(py::module_& m) {
+    m.def("sdm_circles", &py_circles, py::arg("lon"), py::arg("lat"), py::arg("d"), py::arg("kind"),
+          "Circles of radius d around points as CoordinateCleaner draws them: 'geosphere' (73 vertices, "
+          "corrected at poles and the antimeridian), 'terra' (terra::buffer), 'planar' (GEOS buffer)");
     m.def("sdm_vif", &py_vif, py::arg("table"), py::arg("which"),
           "usdm's VIF (1 / (1 - R^2), R's lm and summary.lm) of the columns `which`");
     m.def("sdm_outlier_statistic", &py_outlier_statistic, py::arg("lon"), py::arg("lat"), py::arg("use_min"),
@@ -125,6 +165,20 @@ void register_python(py::module_& m) {
             return to_array(std::move(out));
         },
         py::arg("x"), "R's cos() of a vector (x87 fcos on Windows)");
+    m.def(
+        "sdm_r_cor2",
+        [](const Vec& x, const Vec& y, bool kendall) {
+            if (x.size() != y.size()) throw std::invalid_argument("x and y differ in length");
+            return r_cor2(x.data(), y.data(), static_cast<i64>(x.size()), kendall);
+        },
+        py::arg("x"), py::arg("y"), py::arg("kendall") = false, "R's cor(x, y) of two vectors (cov_na_2)");
+    m.def(
+        "sdm_r_sd",
+        [](const Vec& x) {
+            const i64 n = static_cast<i64>(x.size());
+            return lsm::r_sd(x.data(), n, lsm::r_mean(x.data(), n));
+        },
+        py::arg("x"), "R's sd() (80-bit mean and sum of squares)");
     m.def(
         "sdm_r_mean", [](const Vec& x) { return lsm::r_mean(x.data(), static_cast<i64>(x.size())); }, py::arg("x"),
         "R's mean() (80-bit accumulation)");

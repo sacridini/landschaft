@@ -115,7 +115,7 @@ def _test_zeros(lon, lat, opts):
     import shapely
 
     r = opts["buffer"] if opts["buffer"] != 0 else 1e-14
-    circle = shapely.buffer(shapely.Point(0.0, 0.0), r, quad_segs=10)  # planar degrees (GEOS)
+    circle = _circles.planar_circle(0.0, 0.0, r)  # planar degrees (GEOS)
     with np.errstate(invalid="ignore"):
         axis = (lon == 0) | (lat == 0)
     return axis | _covered(lon, lat, [circle])
