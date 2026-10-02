@@ -30,9 +30,24 @@ def _polygon(rings):
 
 def circles(lon, lat, d: float, kind: str = "geosphere"):
     """One (multi)polygon per point: the circle of radius ``d`` metres around it."""
+    import shapely
+
     lon = np.ascontiguousarray(lon, dtype=float)
     lat = np.ascontiguousarray(lat, dtype=float)
-    return [_polygon(r) for r in _core.sdm_circles(lon, lat, float(d), kind)]
+    rings = _core.sdm_circles(lon, lat, float(d), kind)
+    out = [None] * len(rings)
+    # single-ring circles built in one call per vertex count (shapely's Polygon() is slow one by one)
+    groups: dict[int, list[int]] = {}
+    for i, r in enumerate(rings):
+        if len(r) == 1 and len(r[0]) >= 4:
+            groups.setdefault(len(r[0]), []).append(i)
+        else:
+            out[i] = _polygon(r)
+    for idx in groups.values():
+        polys = shapely.polygons(np.stack([rings[i][0] for i in idx]))
+        for i, poly in zip(idx, polys):
+            out[i] = poly
+    return out
 
 
 def planar_circle(cx: float, cy: float, r: float):

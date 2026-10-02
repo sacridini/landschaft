@@ -6,6 +6,13 @@ in a new major version.
 
 ## [Unreleased]
 
+### Changed
+- `ls.sdm.autocorrelation_range` computes gstat's sample variogram and fits the models in C++ (9 layers of
+  5 000 cells: 11.6 s -> 0.73 s, 24 times faster than blockCV); `ls.sdm.clean_occurrences` only draws the
+  circles of reference points that can reach a record, built in one call (5 000 records: 0.70 s -> 0.16 s).
+  The results are the same.
+- The benchmarks page has a section on species distributions (`tools/benchmark_sdm.py`).
+
 ## [1.0.0] - 2026-10-02
 
 The first stable release. It adds species distribution modelling (`ls.sdm`): from occurrence

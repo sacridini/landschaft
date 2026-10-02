@@ -26,6 +26,7 @@
 #include "sdm/kmeans.hpp"
 #include "sdm/rformat.hpp"
 #include "sdm/thin.hpp"
+#include "sdm/variogram.hpp"
 
 namespace py = pybind11;
 
@@ -261,6 +262,30 @@ void register_python(py::module_& m) {
             return to_array(std::move(out));
         },
         py::arg("x"), "R's colMeans()");
+    m.def(
+        "sdm_sample_variogram",
+        [](const Vec& x, const Vec& y, const Vec& z, const std::vector<double>& bounds, bool lonlat) {
+            if (x.size() != y.size() || x.size() != z.size()) throw std::invalid_argument("lengths differ");
+            SampleVariogram v;
+            {
+                py::gil_scoped_release release;
+                v = sample_variogram(x.data(), y.data(), z.data(), static_cast<i64>(x.size()), bounds, lonlat);
+            }
+            return py::make_tuple(to_array(std::move(v.np)), to_array(std::move(v.dist)), to_array(std::move(v.gamma)));
+        },
+        py::arg("x"), py::arg("y"), py::arg("z"), py::arg("bounds"), py::arg("lonlat"),
+        "gstat's sample variogram with given class bounds: (np, mean distance, semivariance) per class");
+    m.def(
+        "sdm_fit_variogram",
+        [](const std::string& model, double kappa, const Vec& dist, const Vec& gamma, const Vec& np, double nugget,
+           double psill, double range) -> py::object {
+            const VariogramFit f = fit_variogram(model.c_str(), kappa, dist.data(), gamma.data(), np.data(),
+                                                 static_cast<i64>(dist.size()), nugget, psill, range);
+            if (!f.ok) return py::none();
+            return py::make_tuple(f.nugget, f.psill, f.range, f.sserr);
+        },
+        py::arg("model"), py::arg("kappa"), py::arg("dist"), py::arg("gamma"), py::arg("np"), py::arg("nugget"),
+        py::arg("psill"), py::arg("range"), "gstat's fit.variogram (method 7) of a nugget plus one model");
     m.def(
         "sdm_r_cor2",
         [](const Vec& x, const Vec& y, bool kendall) {

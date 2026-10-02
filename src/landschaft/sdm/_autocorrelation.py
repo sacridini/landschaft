@@ -44,23 +44,13 @@ def _gcdist(lon1, lat1, lon2, lat2):
 
 
 def _sample_variogram(x, y, z, bounds, lonlat):
-    """gstat's sample variogram: per distance class (<= each bound), np, mean distance, semivariance."""
-    n = x.size
-    nb = bounds.size
-    np_ = np.zeros(nb)
-    dsum = np.zeros(nb)
-    gsum = np.zeros(nb)
-    for i in range(1, n):
-        j = slice(0, i)
-        d = _gcdist(x[i], y[i], x[j], y[j]) if lonlat else np.hypot(x[i] - x[j], y[i] - y[j])
-        k = np.searchsorted(bounds, d, side="left")  # first bound >= d
-        ok = k < nb
-        dz = z[i] - z[j]
-        np.add.at(np_, k[ok], 1)
-        np.add.at(dsum, k[ok], d[ok])
-        np.add.at(gsum, k[ok], 0.5 * dz[ok] * dz[ok])
+    """gstat's sample variogram: per distance class (<= each bound), np, mean distance, semivariance (C++)."""
+    np_, dist, gamma = _core.sdm_sample_variogram(np.ascontiguousarray(x, dtype=float),
+                                                  np.ascontiguousarray(y, dtype=float),
+                                                  np.ascontiguousarray(z, dtype=float),
+                                                  [float(b) for b in bounds], bool(lonlat))
     keep = np_ > 0
-    return np_[keep], dsum[keep] / np_[keep], gsum[keep] / np_[keep]
+    return np_[keep], dist[keep], gamma[keep]
 
 
 # ------------------------------------------------------------------------------------------- models
@@ -107,63 +97,14 @@ def _d_range(model, h, r, kappa, sill):
 
 def _fit(model, dist, gamma, nh, nugget, psill, rng_, kappa):
     """gstat's fit.variogram (fit.method 7: weights N_j / h_j^2): Gauss-Newton with bounded steps; a
-    negative nugget or partial sill is fixed at zero and the fit repeated from the initial range."""
-    free = np.array([True, True, True])
-    start = np.array([nugget, psill, rng_], dtype=float)
-    while True:
-        out = _gauss_newton(model, dist, gamma, nh, start, free, kappa)
-        if out is None:
-            return None
-        params, sse = out
-        neg = (params[:2] < 0) & free[:2]
-        if not neg.any():
-            return params, sse
-        start = params.copy()
-        start[:2][neg] = 0.0
-        start[2] = rng_
-        free[:2] = free[:2] & ~neg
-
-
-def _gauss_newton(model, dist, gamma, nh, start, free, kappa):
-    w = nh / (dist * dist)
-    params = start.copy()
-
-    def sserr(p):
-        res = gamma - (p[0] * (dist > 0) + p[1] * _unit(model, dist, p[2], kappa))
-        return float(np.sum(res * res * w))
-
-    old = np.inf
-    for it in range(200):
-        nug, ps, r = params
-        res = gamma - (nug * (dist > 0) + ps * _unit(model, dist, r, kappa))
-        X = np.column_stack([(dist > 0).astype(float), _unit(model, dist, r, kappa),
-                             _d_range(model, dist, r, kappa, ps)])[:, free]
-        # gstat's calc_lm: the weighted normal equations by Cholesky; a matrix that is not positive
-        # definite stops the fit ("singular model in variogram fit") with the current values
-        sw = np.sqrt(w)
-        Xw = X * sw[:, None]
-        try:
-            L = np.linalg.cholesky(Xw.T @ Xw)
-        except np.linalg.LinAlgError:
-            return params, (old if np.isfinite(old) else sserr(params))
-        beta = np.linalg.solve(L.T, np.linalg.solve(L, Xw.T @ (res * sw)))
-        if not np.all(np.isfinite(beta)):
-            return params, (old if np.isfinite(old) else sserr(params))
-        cur = params[free]
-        s = (beta @ beta) / (cur @ cur)  # gstat's v_norm2 is the sum of squares (no square root)
-        bounded = s > 0.2
-        if bounded:
-            beta = beta * (0.2 / s)
-        params = params.copy()
-        params[free] = cur + beta
-        sse = sserr(params)
-        step = old - sse
-        if sse > 0:
-            step /= sse
-        old = sse
-        if step < 1e-5 and step >= 0 and not bounded:
-            break
-    return params, old
+    negative nugget or partial sill is fixed at zero and the fit repeated from the initial range (C++)."""
+    out = _core.sdm_fit_variogram(model, float(kappa), np.ascontiguousarray(dist, dtype=float),
+                                  np.ascontiguousarray(gamma, dtype=float), np.ascontiguousarray(nh, dtype=float),
+                                  float(nugget), float(psill), float(rng_))
+    if out is None:
+        return None
+    nug, ps, r, sse = out
+    return np.array([nug, ps, r]), sse
 
 
 def _autofit(x, y, z, lonlat):

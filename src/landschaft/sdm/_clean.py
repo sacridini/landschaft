@@ -90,6 +90,18 @@ def _near_points(lon, lat, ref_lon, ref_lat, buffer: float, geod: bool, crop: bo
         ext = _circles.circle_extent(lon[ok], lat[ok], buffer)
         inside = (ref_lon >= ext[0]) & (ref_lon <= ext[1]) & (ref_lat >= ext[2]) & (ref_lat <= ext[3])
         ref_lon, ref_lat = ref_lon[inside], ref_lat[inside]
+    if ref_lon.size and ok.any():
+        # only reference points that can reach a record: the records' box widened by more than the circles'
+        # reach (a speed-up that changes nothing)
+        dlat = buffer / 110_574.0 * 1.01 + 1e-9
+        top = min(90.0, max(abs(lat[ok]).max(), abs(ref_lat).max()) + dlat)
+        if top < 89.0:
+            dlon = buffer / (111_319.0 * np.cos(np.radians(top))) * 1.01 + 1e-9
+            x0, x1 = lon[ok].min() - dlon, lon[ok].max() + dlon
+            near = (ref_lat >= lat[ok].min() - dlat) & (ref_lat <= lat[ok].max() + dlat)
+            if x0 > -180.0 and x1 < 180.0:
+                near &= (ref_lon >= x0) & (ref_lon <= x1)
+            ref_lon, ref_lat = ref_lon[near], ref_lat[near]
     if ref_lon.size == 0:
         return np.zeros(lon.size, dtype=bool)
     polys = _circles.circles(ref_lon, ref_lat, buffer, "geosphere" if geod else "terra")

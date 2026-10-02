@@ -176,6 +176,7 @@ add_library(sdmcore STATIC
     src/cpp/sdm/kmeans.cpp
     src/cpp/sdm/rformat.cpp
     src/cpp/sdm/thin.cpp
+    src/cpp/sdm/variogram.cpp
 )
 target_include_directories(sdmcore PUBLIC src/cpp)
 # R's x87 maths (lsm/rmath.hpp), R's generator (nlm/rng.hpp), mingw's cbrt (cost/geodesic.hpp).
