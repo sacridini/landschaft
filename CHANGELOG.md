@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.100.0] - 2026-10-02
+
 ### Added
 - `ls.reproject`: rasters and vectors to another CRS, as terra's `project()`. A raster goes on
   the grid GDAL suggests, with a cell size (`res=`), or onto the grid of a reference raster
