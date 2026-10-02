@@ -6,6 +6,13 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-10-03
+
+### Fixed
+- `ls.plot` maps in VS Code notebooks: the base map could stay invisible, its tiles loaded but
+  transparent, as Leaflet fades tiles in on animation frames that a notebook's output frame does
+  not always get. Tiles now show as soon as they load, without the fade.
+
 ## [1.4.2] - 2026-10-03
 
 ### Fixed
