@@ -1,0 +1,288 @@
+{
+ "arrays": {
+  "vif_big/names": {
+   "kind": "text",
+   "values": [
+    "x",
+    "y",
+    "z"
+   ]
+  },
+  "vif_big/vif": {
+   "kind": "vector"
+  },
+  "vif_bioclim/names": {
+   "kind": "text",
+   "values": [
+    "bio1",
+    "bio5",
+    "bio6",
+    "bio7",
+    "bio8",
+    "bio9",
+    "bio12",
+    "bio16",
+    "bio17"
+   ]
+  },
+  "vif_bioclim/vif": {
+   "kind": "vector"
+  },
+  "vif_collinear/names": {
+   "kind": "text",
+   "values": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  "vif_collinear/vif": {
+   "kind": "vector"
+  },
+  "vif_stack_200/names": {
+   "kind": "text",
+   "values": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  "vif_stack_200/vif": {
+   "kind": "vector"
+  },
+  "vif_stack_80/names": {
+   "kind": "text",
+   "values": [
+    "a",
+    "b",
+    "c"
+   ]
+  },
+  "vif_stack_80/vif": {
+   "kind": "vector"
+  },
+  "vif_table/names": {
+   "kind": "text",
+   "values": [
+    "a",
+    "b",
+    "c",
+    "d"
+   ]
+  },
+  "vif_table/vif": {
+   "kind": "vector"
+  },
+  "vifcor_bioclim/excluded": {
+   "kind": "text",
+   "values": [
+    "bio9",
+    "bio12",
+    "bio6",
+    "bio1",
+    "bio8"
+   ]
+  },
+  "vifcor_bioclim/kept": {
+   "kind": "text",
+   "values": [
+    "bio5",
+    "bio7",
+    "bio16",
+    "bio17"
+   ]
+  },
+  "vifcor_bioclim/vif": {
+   "kind": "vector"
+  },
+  "vifcor_collinear/excluded": {
+   "kind": "text",
+   "values": [
+    "b"
+   ]
+  },
+  "vifcor_collinear/kept": {
+   "kind": "text",
+   "values": [
+    "a",
+    "c"
+   ]
+  },
+  "vifcor_collinear/vif": {
+   "kind": "vector"
+  },
+  "vifcor_keep/excluded": {
+   "kind": "text",
+   "values": [
+    "b",
+    "d"
+   ]
+  },
+  "vifcor_keep/kept": {
+   "kind": "text",
+   "values": [
+    "a",
+    "c"
+   ]
+  },
+  "vifcor_keep/vif": {
+   "kind": "vector"
+  },
+  "vifcor_kendall/excluded": {
+   "kind": "text",
+   "values": [
+    "b"
+   ]
+  },
+  "vifcor_kendall/kept": {
+   "kind": "text",
+   "values": [
+    "a",
+    "c",
+    "d"
+   ]
+  },
+  "vifcor_kendall/vif": {
+   "kind": "vector"
+  },
+  "vifcor_pearson/excluded": {
+   "kind": "text",
+   "values": [
+    "b",
+    "d"
+   ]
+  },
+  "vifcor_pearson/kept": {
+   "kind": "text",
+   "values": [
+    "a",
+    "c"
+   ]
+  },
+  "vifcor_pearson/vif": {
+   "kind": "vector"
+  },
+  "vifcor_spearman/excluded": {
+   "kind": "text",
+   "values": [
+    "b",
+    "d"
+   ]
+  },
+  "vifcor_spearman/kept": {
+   "kind": "text",
+   "values": [
+    "a",
+    "c"
+   ]
+  },
+  "vifcor_spearman/vif": {
+   "kind": "vector"
+  },
+  "vifstep_bioclim/excluded": {
+   "kind": "text",
+   "values": [
+    "bio1",
+    "bio6",
+    "bio9",
+    "bio12"
+   ]
+  },
+  "vifstep_bioclim/kept": {
+   "kind": "text",
+   "values": [
+    "bio5",
+    "bio7",
+    "bio8",
+    "bio16",
+    "bio17"
+   ]
+  },
+  "vifstep_bioclim/vif": {
+   "kind": "vector"
+  },
+  "vifstep_collinear/excluded": {
+   "kind": "text",
+   "values": [
+    "a"
+   ]
+  },
+  "vifstep_collinear/kept": {
+   "kind": "text",
+   "values": [
+    "b",
+    "c"
+   ]
+  },
+  "vifstep_collinear/vif": {
+   "kind": "vector"
+  },
+  "vifstep_stack_200/excluded": {
+   "kind": "text",
+   "values": [
+    "b"
+   ]
+  },
+  "vifstep_stack_200/kept": {
+   "kind": "text",
+   "values": [
+    "a",
+    "c"
+   ]
+  },
+  "vifstep_stack_200/vif": {
+   "kind": "vector"
+  },
+  "vifstep_table/excluded": {
+   "kind": "text",
+   "values": [
+    "d",
+    "a"
+   ]
+  },
+  "vifstep_table/kept": {
+   "kind": "text",
+   "values": [
+    "b",
+    "c"
+   ]
+  },
+  "vifstep_table/vif": {
+   "kind": "vector"
+  },
+  "vifstep_table_keep/excluded": {
+   "kind": "text",
+   "values": [
+    "d",
+    "a"
+   ]
+  },
+  "vifstep_table_keep/kept": {
+   "kind": "text",
+   "values": [
+    "b",
+    "c"
+   ]
+  },
+  "vifstep_table_keep/vif": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "CoordinateCleaner": "3.0.1",
+  "ENMeval": "2.0.5.2",
+  "biomod2": "4.3.4.5",
+  "blockCV": "3.2.0",
+  "dismo": "1.3.16",
+  "ecospat": "4.1.3",
+  "glmnet": "4.1.10",
+  "maxnet": "0.1.4",
+  "mop": "0.1.4",
+  "predicts": "0.1.19",
+  "sf": "1.0.19",
+  "spThin": "0.2.0",
+  "terra": "1.9.50",
+  "usdm": "2.1.7"
+ }
+}

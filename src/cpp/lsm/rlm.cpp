@@ -207,6 +207,102 @@ void r_lm_coef(const double* xv, const double* yv, int n, double* b0, double* b1
     *b1 = jpvt[1] == 2 ? b[1] : b[0];
 }
 
+// R's lm.fit(x, y) for a general model matrix (column-major, n x p, the
+// intercept column included; overwritten by the QR decomposition): dqrdc2,
+// then dqrsl with job 1110 (qty, b and the residuals). Writes the residuals
+// to `rsd` and returns the rank (R's z$rank).
+int r_lm_residuals(double* x, const double* y, int n, int p, double* rsd) {
+    const double tol = 1e-7;
+    auto X = [&](int i, int j) -> double& { return x[static_cast<std::size_t>(j) * n + i]; };  // 0-based
+    std::vector<double> qraux(static_cast<std::size_t>(p)), work1(static_cast<std::size_t>(p)),
+        work2(static_cast<std::size_t>(p));
+    std::vector<int> jpvt(static_cast<std::size_t>(p));
+    for (int j = 0; j < p; ++j) jpvt[static_cast<std::size_t>(j)] = j + 1;
+    // dqrdc2
+    for (int j = 0; j < p; ++j) {
+        qraux[j] = dnrm2(n, &X(0, j));
+        work1[j] = qraux[j];
+        work2[j] = qraux[j];
+        if (work2[j] == 0.0) work2[j] = 1.0;
+    }
+    const int lup = std::min(n, p);
+    int k = p + 1;
+    std::vector<double> col(static_cast<std::size_t>(n));
+    for (int l = 1; l <= lup; ++l) {
+        while (!(l >= k || qraux[l - 1] >= work2[l - 1] * tol)) {
+            const int lp1 = l + 1;
+            for (int i = 0; i < n; ++i) {
+                const double t = X(i, l - 1);
+                for (int j = lp1; j <= p; ++j) X(i, j - 2) = X(i, j - 1);
+                X(i, p - 1) = t;
+            }
+            const int ii = jpvt[l - 1];
+            const double t = qraux[l - 1], tt = work1[l - 1], ttt = work2[l - 1];
+            for (int j = lp1; j <= p; ++j) {
+                jpvt[j - 2] = jpvt[j - 1];
+                qraux[j - 2] = qraux[j - 1];
+                work1[j - 2] = work1[j - 1];
+                work2[j - 2] = work2[j - 1];
+            }
+            jpvt[p - 1] = ii;
+            qraux[p - 1] = t;
+            work1[p - 1] = tt;
+            work2[p - 1] = ttt;
+            k = k - 1;
+        }
+        if (l == n) continue;
+        double nrmxl = dnrm2(n - l + 1, &X(l - 1, l - 1));
+        if (nrmxl == 0.0) continue;
+        if (X(l - 1, l - 1) != 0.0) nrmxl = std::copysign(std::fabs(nrmxl), X(l - 1, l - 1));
+        dscal(n - l + 1, 1.0 / nrmxl, &X(l - 1, l - 1));
+        X(l - 1, l - 1) = 1.0 + X(l - 1, l - 1);
+        const int lp1 = l + 1;
+        for (int j = lp1; j <= p; ++j) {
+            const double t = -ddot(n - l + 1, &X(l - 1, l - 1), &X(l - 1, j - 1)) / X(l - 1, l - 1);
+            daxpy(n - l + 1, t, &X(l - 1, l - 1), &X(l - 1, j - 1));
+            if (qraux[j - 1] == 0.0) continue;
+            const double r = std::fabs(X(l - 1, j - 1)) / qraux[j - 1];
+            double tt = 1.0 - r * r;
+            tt = std::max(tt, 0.0);
+            if (std::fabs(tt) < 1e-6) {
+                qraux[j - 1] = dnrm2(n - l, &X(l, j - 1));
+                work1[j - 1] = qraux[j - 1];
+            } else {
+                qraux[j - 1] = qraux[j - 1] * std::sqrt(tt);
+            }
+        }
+        qraux[l - 1] = X(l - 1, l - 1);
+        X(l - 1, l - 1) = -nrmxl;
+    }
+    k = std::min(k - 1, n);
+    if (k == 0) {  // dqrls: no columns, the residuals are y
+        std::copy(y, y + n, rsd);
+        return 0;
+    }
+    // dqrsl, job 1110: qty, then the residuals from it (b does not change them)
+    std::vector<double> qty(y, y + n);
+    const int ju = std::min(k, n - 1);
+    for (int j = 1; j <= ju; ++j) {
+        if (qraux[j - 1] == 0.0) continue;
+        const double temp = X(j - 1, j - 1);
+        X(j - 1, j - 1) = qraux[j - 1];
+        const double t = -ddot(n - j + 1, &X(j - 1, j - 1), &qty[j - 1]) / X(j - 1, j - 1);
+        daxpy(n - j + 1, t, &X(j - 1, j - 1), &qty[j - 1]);
+        X(j - 1, j - 1) = temp;
+    }
+    for (int i = 0; i < n; ++i) rsd[i] = i < k ? 0.0 : qty[i];
+    for (int jj = 1; jj <= ju; ++jj) {
+        const int j = ju - jj + 1;
+        if (qraux[j - 1] == 0.0) continue;
+        const double temp = X(j - 1, j - 1);
+        X(j - 1, j - 1) = qraux[j - 1];
+        const double t = -ddot(n - j + 1, &X(j - 1, j - 1), &rsd[j - 1]) / X(j - 1, j - 1);
+        daxpy(n - j + 1, t, &X(j - 1, j - 1), &rsd[j - 1]);
+        X(j - 1, j - 1) = temp;
+    }
+    return k;
+}
+
 // Slope of R's lm(y ~ x) for n points: NaN when x is (numerically) constant
 // (rank 1, R's NA).
 double r_lm_slope(const double* xv, const double* yv, int n) {

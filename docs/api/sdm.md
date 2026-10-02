@@ -31,6 +31,12 @@ m = ls.sdm.accessible_area(occ, distance=300_000)       # where the background c
 
 ::: landschaft.sdm.accessible_area
 
+## Predictors
+
+::: landschaft.sdm.select_predictors
+
+::: landschaft.sdm.vif
+
 ## Example data
 
 ::: landschaft.sdm.example_data

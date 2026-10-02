@@ -23,6 +23,7 @@ from ._cells import one_per_cell
 from ._clean import clean_occurrences
 from ._examples import example_data
 from ._gbif import download_gbif
+from ._predictors import select_predictors, vif
 from ._refdata import reference_data
 from ._thin import thin
 
@@ -33,5 +34,7 @@ __all__ = [
     "example_data",
     "one_per_cell",
     "reference_data",
+    "select_predictors",
     "thin",
+    "vif",
 ]

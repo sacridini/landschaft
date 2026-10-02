@@ -18,7 +18,10 @@ between minor versions.
   institutions, GBIF headquarters, zeros, equal coordinates, sea, towns, country mismatch,
   outliers, duplicates, artificial hotspots; flag or drop, the same flags as CoordinateCleaner, with
   its errors corrected: see the function's notes), `ls.sdm.reference_data` (its reference tables and
-  Natural Earth layers, downloaded on first use), and the reference harness
+  Natural Earth layers, downloaded on first use), `ls.sdm.select_predictors` and `ls.sdm.vif`
+  (usdm's `vifstep` / `vifcor` and `vif`, the same values to the last bit: R's `lm` QR and
+  `summary.lm` in C++, terra's cell sampling with R's generator; usdm's crashes with one variable
+  left or every variable kept are fixed), and the reference harness
   (`tools/make_reference_sdm.py`).
 - R data files (`.rda`, `.rds`) are read without R (`landschaft._rdata`), so the reference tables
   of R packages (CoordinateCleaner's centroids, capitals, institutions, land and sea) are used as

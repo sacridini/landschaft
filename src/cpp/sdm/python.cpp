@@ -16,6 +16,7 @@
 #include "nlm/rng.hpp"
 #include "lsm/rmath.hpp"
 #include "sdm/clean.hpp"
+#include "sdm/collinear.hpp"
 #include "sdm/thin.hpp"
 
 namespace py = pybind11;
@@ -85,9 +86,29 @@ py::array_t<double> py_outlier_statistic_weighted(const Vec& lon, const Vec& lat
     return to_array(std::move(out));
 }
 
+// VIF of some columns of a table (observations x variables).
+py::array_t<double> py_vif(const py::array_t<double, py::array::c_style | py::array::forcecast>& table,
+                           const std::vector<i64>& which) {
+    if (table.ndim() != 2) throw std::invalid_argument("expected a 2-D table (observations x variables)");
+    const i64 n = static_cast<i64>(table.shape(0)), m = static_cast<i64>(table.shape(1));
+    for (const i64 w : which)
+        if (w < 0 || w >= m) throw std::invalid_argument("column out of range");
+    std::vector<double> col(static_cast<std::size_t>(n * m));  // column-major, as R
+    for (i64 i = 0; i < n; ++i)
+        for (i64 j = 0; j < m; ++j) col[static_cast<std::size_t>(j * n + i)] = table.data()[i * m + j];
+    std::vector<double> out;
+    {
+        py::gil_scoped_release release;
+        out = vif(col.data(), n, m, which);
+    }
+    return to_array(std::move(out));
+}
+
 }  // namespace
 
 void register_python(py::module_& m) {
+    m.def("sdm_vif", &py_vif, py::arg("table"), py::arg("which"),
+          "usdm's VIF (1 / (1 - R^2), R's lm and summary.lm) of the columns `which`");
     m.def("sdm_outlier_statistic", &py_outlier_statistic, py::arg("lon"), py::arg("lat"), py::arg("use_min"),
           "cc_outl: mean (R's 80-bit mean) or minimum haversine km to the other records at other locations");
     m.def("sdm_outlier_statistic_weighted", &py_outlier_statistic_weighted, py::arg("lon"), py::arg("lat"),
@@ -96,6 +117,14 @@ void register_python(py::module_& m) {
         "sdm_haversine_km",
         [](double lon1, double lat1, double lon2, double lat2) { return haversine_km(lon1, lat1, lon2, lat2); },
         py::arg("lon1"), py::arg("lat1"), py::arg("lon2"), py::arg("lat2"));
+    m.def(
+        "sdm_r_cos",
+        [](const Vec& x) {
+            std::vector<double> out(static_cast<std::size_t>(x.size()));
+            for (py::ssize_t i = 0; i < x.size(); ++i) out[static_cast<std::size_t>(i)] = lsm::r_cos(x.data()[i]);
+            return to_array(std::move(out));
+        },
+        py::arg("x"), "R's cos() of a vector (x87 fcos on Windows)");
     m.def(
         "sdm_r_mean", [](const Vec& x) { return lsm::r_mean(x.data(), static_cast<i64>(x.size())); }, py::arg("x"),
         "R's mean() (80-bit accumulation)");

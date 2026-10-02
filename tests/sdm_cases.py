@@ -19,7 +19,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-GROUPS: list[str] = ["smoke", "cells", "thin", "clean"]
+GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors"]
 
 
 @dataclass
@@ -145,7 +145,65 @@ def acaule_valid() -> pd.DataFrame:
     return d[d["lon"].notna() & d["lat"].notna()].reset_index(drop=True)
 
 
+def vif_table() -> pd.DataFrame:
+    """usdm's test table: set.seed(1); a, b = a + noise, c, d = b + c + noise (n = 200)."""
+    from landschaft import _core
+
+    r = _core.RRandom(1)
+    n = 200
+    a = r.rnorm(n, 0, 1)
+    b = a + r.rnorm(n, 0, 0.3)
+    c = r.rnorm(n, 0, 1)
+    d = b + c + r.rnorm(n, 0, 0.1)
+    return pd.DataFrame({"a": a, "b": b, "c": c, "d": d})
+
+
+def vif_collinear() -> pd.DataFrame:
+    t = vif_table()
+    return pd.DataFrame({"a": t["a"], "b": t["a"], "c": t["c"]})
+
+
+def vif_big() -> pd.DataFrame:
+    """8000 rows (sampled: 5000) with a missing value."""
+    from landschaft import _core
+
+    r = _core.RRandom(5)
+    n = 8000
+    x = r.rnorm(n, 0, 1)
+    y = 0.5 * x + r.rnorm(n, 0, 1)
+    z = r.runif(n, 0, 1)
+    d = pd.DataFrame({"x": x, "y": y, "z": z})
+    d.loc[17, "z"] = np.nan
+    return d
+
+
+def planar_stack(ny: int, nx: int, seed: int, na: int = 0):
+    """Three correlated layers on a projected grid (UTM 23S), some cells missing."""
+    import xarray as xr
+
+    from landschaft import _core
+
+    r = _core.RRandom(seed)
+    n = ny * nx
+    a = r.rnorm(n, 0, 1)
+    b = a + r.rnorm(n, 0, 0.5)
+    c = r.runif(n, 0, 1) + 0.2 * b
+    v = np.stack([a, b, c]).reshape(3, ny, nx)
+    if na:
+        idx = r.sample_int(n, na, False, None) - 1
+        v[0].reshape(-1)[idx] = np.nan
+    da = xr.DataArray(v, dims=("band", "y", "x"),
+                      coords={"band": ["a", "b", "c"], "y": 7_500_000.0 - (np.arange(ny) + 0.5) * 1000.0,
+                              "x": 300_000.0 + (np.arange(nx) + 0.5) * 1000.0})
+    return da.rio.write_crs("EPSG:32723")
+
+
 INPUTS: dict[str, Callable[[], object]] = {
+    "vif_table": vif_table,
+    "vif_collinear": vif_collinear,
+    "vif_big": vif_big,
+    "stack_80": lambda: planar_stack(80, 80, 3),
+    "stack_200": lambda: planar_stack(200, 200, 4, na=3000),
     "cc_synthetic": cc_synthetic,
     "acaule_valid": acaule_valid,
     "thin_ties": thin_ties,
@@ -291,6 +349,62 @@ CASES["clean_synthetic"] = Case("clean", r=_CC_R.format(p="cc_synthetic", extra=
                                 inputs=("cc_synthetic",), py=_cc_py("cc_synthetic", True))
 CASES["clean_acaule"] = Case("clean", r=_CC_R.format(p="acaule_valid", extra=""), inputs=("acaule_valid",),
                              py=_cc_py("acaule_valid", False))
+
+
+_USDM_LIB = "suppressMessages(library(usdm)); "
+
+
+def _usdm_vif_py(name: str, seed=None, size=5000):
+    def run(**kw):
+        import landschaft as ls
+
+        v = ls.sdm.vif(kw[name], seed=seed, size=size)
+        return {"vif": v["vif"].to_numpy(), "names": v["variable"].tolist()}
+    return run
+
+
+def _usdm_select_py(name: str, seed=None, **opts):
+    def run(**kw):
+        import landschaft as ls
+
+        out = ls.sdm.select_predictors(kw[name], seed=seed, **opts)
+        sel = out.attrs["selection"]
+        return {"excluded": sel["excluded"], "kept": sel["kept"], "vif": list(sel["vif"].values())}
+    return run
+
+
+def _usdm_r_select(fn: str, data: str, args: str, seed=None) -> str:
+    s = f"set.seed({seed}); " if seed is not None else ""
+    return (f"{{ {_USDM_LIB}{s}v <- suppressWarnings({fn}({data}{args})); list(excluded = v@excluded,"
+            " kept = v@results$Variables, vif = v@results$VIF) }")
+
+
+for _name, _data, _seed in [("vif_table", "vif_table", None), ("vif_collinear", "vif_collinear", None),
+                            ("vif_big", "vif_big", 42), ("vif_bioclim", "bioclim", 1),
+                            ("vif_stack_80", "stack_80", None), ("vif_stack_200", "stack_200", 7)]:
+    _s = f"set.seed({_seed}); " if _seed is not None else ""
+    CASES[_name] = Case("predictors",
+                        r=f"{{ {_USDM_LIB}{_s}v <- suppressWarnings(vif({_data})); list(vif = v$VIF,"
+                          " names = v$Variables) }",
+                        inputs=(_data,), py=_usdm_vif_py(_data, _seed))
+
+for _name, _fn, _data, _args, _seed, _opts in [
+    ("vifstep_table", "vifstep", "vif_table", "", None, {"vif": 10}),
+    ("vifstep_table_keep", "vifstep", "vif_table", ", th = 3, keep = 'b'", None, {"vif": 3, "keep": "b"}),
+    ("vifcor_pearson", "vifcor", "vif_table", ", th = 0.7", None, {"vif": None, "cor": 0.7}),
+    ("vifcor_spearman", "vifcor", "vif_table", ", th = 0.7, method = 'spearman'", None,
+     {"vif": None, "cor": 0.7, "method": "spearman"}),
+    ("vifcor_kendall", "vifcor", "vif_table", ", th = 0.6, method = 'kendall'", None,
+     {"vif": None, "cor": 0.6, "method": "kendall"}),
+    ("vifcor_keep", "vifcor", "vif_table", ", th = 0.5, keep = 'a'", None, {"vif": None, "cor": 0.5, "keep": "a"}),
+    ("vifcor_collinear", "vifcor", "vif_collinear", ", th = 0.9", None, {"vif": None, "cor": 0.9}),
+    ("vifstep_collinear", "vifstep", "vif_collinear", ", th = 10", None, {"vif": 10}),
+    ("vifstep_bioclim", "vifstep", "bioclim", ", th = 10", 1, {"vif": 10}),
+    ("vifcor_bioclim", "vifcor", "bioclim", ", th = 0.7", 2, {"vif": None, "cor": 0.7}),
+    ("vifstep_stack_200", "vifstep", "stack_200", ", th = 2", 3, {"vif": 2}),
+]:
+    CASES[_name] = Case("predictors", r=_usdm_r_select(_fn, _data, _args, _seed), inputs=(_data,),
+                        py=_usdm_select_py(_data, _seed, **_opts))
 
 
 def case_ids(group: str) -> list[str]:
