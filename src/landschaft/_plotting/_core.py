@@ -13,8 +13,10 @@ import xarray as xr
 
 from . import _env
 
-#: Bands of a stack drawn as layers (the others are left out, with a note).
+#: Rasters and vectors of a result drawn on its map.
 MAX_LAYERS = 16
+#: Bands of a stack drawn as layers (the others are left out, with a note).
+MAX_BANDS = 128
 
 _RGB_NAMES = ({"r", "g", "b"}, {"red", "green", "blue"}, {"b4", "b3", "b2"})
 
@@ -56,13 +58,11 @@ class Plot:
         return next((p.obj for p in self.panels if p.kind == "figure"), None)
 
     # -- HTML -------------------------------------------------------------------------------------
-    def _panel_html(self, p: _Panel, height: int) -> str:
+    def _panel_html(self, p: _Panel, height: str) -> str:
         if p.kind == "map":
             from ._maps import render
 
-            page = render(p.obj)
-            return (f"<iframe class='ls-map' style='width:100%;height:{height}px;border:0;border-radius:6px' "
-                    f"srcdoc=\"{_html.escape(page, quote=True)}\"></iframe>")
+            return _maps_iframe(render(p.obj), height)
         if p.kind == "chart":
             return p.obj.to_html(full_html=False, include_plotlyjs="cdn", config={"responsive": True})
         if p.kind == "figure":
@@ -76,7 +76,7 @@ class Plot:
 
     def _repr_html_(self) -> str:
         maps = sum(p.kind == "map" for p in self.panels)
-        height = 560 if maps == 1 and len(self.panels) == 1 else 480
+        height = "560px" if maps == 1 and len(self.panels) == 1 else "480px"
         parts = [self._panel_html(p, height) for p in self.panels]
         return "<div class='ls-plot'>" + "".join(f"<div style='margin-bottom:12px'>{x}</div>" for x in parts) + "</div>"
 
@@ -87,7 +87,9 @@ class Plot:
             from ._maps import render
 
             return render(self.panels[0].obj)
-        body = "".join(f"<section>{self._panel_html(p, 640)}</section>" for p in self.panels)
+        # a map fills the window, whatever its size; the other panels follow below
+        body = "".join(f"<section>{self._panel_html(p, 'max(480px, calc(100vh - 64px))')}</section>"
+                       for p in self.panels)
         title = _html.escape(self.title or "landschaft")
         return ("<!doctype html><html><head><meta charset='utf-8'><title>" + title + "</title>"
                 "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -138,6 +140,14 @@ class Plot:
     def __repr__(self) -> str:
         kinds = ", ".join(p.kind for p in self.panels)
         return f"Plot({self.title!r}: {kinds})" if self.title else f"Plot({kinds})"
+
+
+def _maps_iframe(page: str, height: str) -> str:
+    """A map's page in a frame as wide as the cell or page, ``height`` high, its corner
+    dragged to make it taller or shorter (Leaflet follows the frame's size)."""
+    return (f"<div class='ls-map' style='width:100%;height:{height};resize:vertical;overflow:hidden;"
+            "border-radius:6px'><iframe style='width:100%;height:100%;border:0;display:block' "
+            f"srcdoc=\"{_html.escape(page, quote=True)}\"></iframe></div>")
 
 
 # --- what an object is ---------------------------------------------------------------------------------
@@ -202,10 +212,11 @@ def _map_layers(items, opts):
             sel = opts.get("bands")
             idx = list(range(n)) if sel is None else [list(da[dim].values).index(b) if not isinstance(b, int) or
                                                       b not in range(n) else b for b in sel]
-            if len(idx) > MAX_LAYERS:
-                notes.append(f"{name}: the first {MAX_LAYERS} of {len(idx)} bands are drawn (bands= to choose)")
-                idx = idx[:MAX_LAYERS]
-            size = opts["max_size"] if len(idx) <= 4 else max(512, opts["max_size"] // 2)
+            if len(idx) > MAX_BANDS:
+                notes.append(f"{name}: the first {MAX_BANDS} of {len(idx)} bands are drawn (bands= to choose)")
+                idx = idx[:MAX_BANDS]
+            # the more bands, the coarser each (the page holds them all)
+            size = opts["max_size"] if len(idx) <= 4 else max(512, opts["max_size"] // (2 if len(idx) <= 64 else 4))
             # one scale for every band of a stack, unless given
             vmin, vmax = opts.get("vmin"), opts.get("vmax")
             if vmin is None and vmax is None and np.issubdtype(da.dtype, np.floating):

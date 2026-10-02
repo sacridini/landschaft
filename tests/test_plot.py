@@ -138,9 +138,14 @@ def test_large_and_lazy_rasters_are_reduced(tmp_path):
 
 
 def test_stacks_and_true_colour():
-    stack = grid(np.random.default_rng(1).random((20, 40, 50)).astype("float32"))
+    stack = grid(np.random.default_rng(1).random((41, 40, 50)).astype("float32"))
     p = ls.plot(stack)
-    assert "the first 16 of 20 bands" in page(p)
+    assert repr(p) == "Plot(map)" and len(images(page(p))) == 41  # every band, a map alone filling the window
+    html = p.to_html()
+    assert "leaflet-control-layers-list { max-height" in html  # the long list of layers scrolls
+    assert "resize:vertical" in p._repr_html_()  # a notebook's map is made taller by its corner
+    p = ls.plot(grid(np.zeros((130, 4, 5), "float32")))
+    assert "the first 128 of 130 bands" in page(p)
     rgb = grid(np.random.default_rng(1).random((3, 40, 50)).astype("float32"))
     rgb = rgb.assign_coords(band=["red", "green", "blue"])
     img = images(page(ls.plot(rgb)))[0]

@@ -18,6 +18,8 @@ BASEMAPS = {
 _CSS = """
 <style>
 .leaflet-image-layer { image-rendering: pixelated; image-rendering: crisp-edges; }
+/* a long list of layers (a stack of many bands) scrolls within the map */
+.leaflet-control-layers-expanded .leaflet-control-layers-list { max-height: calc(100vh - 70px); overflow-y: auto; }
 .ls-legends { position: absolute; bottom: 24px; right: 10px; z-index: 1000; display: flex; flex-direction: column;
   gap: 6px; max-height: 70%; overflow-y: auto; font: 12px/1.35 Inter, "Segoe UI", Helvetica, Arial, sans-serif; }
 .ls-legend { background: rgba(255,255,255,0.92); color: #1d1d1b; border-radius: 6px; padding: 6px 9px;
@@ -109,12 +111,12 @@ def add_payload(m, layer):
 
 def _install(m):
     """folium's own save and display put the images and data in too."""
-    import html as _h
     from pathlib import Path
 
+    from ._core import _maps_iframe
+
     m.save = lambda path, **_: Path(path).write_text(render(m), encoding="utf-8")
-    m._repr_html_ = lambda **_: ("<iframe style='width:100%;height:560px;border:0' "
-                                 f"srcdoc=\"{_h.escape(render(m), quote=True)}\"></iframe>")
+    m._repr_html_ = lambda **_: _maps_iframe(render(m), "560px")
     m.__dict__["_ls_images"] = {}
 
 

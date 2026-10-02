@@ -6,6 +6,13 @@ between minor versions.
 
 ## [Unreleased]
 
+### Fixed
+- `ls.plot` of a stack draws up to 128 bands (was 16: the later years of a 41-year land-cover
+  series were left out), 1024 pixels on the long side up to 64 bands; the map's list of layers
+  scrolls when it is longer than the map.
+- A map fills the window it is shown in and follows its size (a stack with a note put it in a
+  frame 640 pixels high); in a notebook its bottom-right corner drags it taller or shorter.
+
 ## [0.100.0] - 2026-10-02
 
 ### Added
