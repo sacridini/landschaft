@@ -1353,6 +1353,61 @@ ls.sdm.mess(data, fut)
 7. MaxNet nativo em C++ (feições do maxnet e caminho do glmnet, otimizado ao máximo), conferido com tolerância.
 8. Tutorial, capítulo do Learn, benchmarks contra os pacotes R e o elapid.
 
+### Andamento (2026-10-02)
+0. **Feito**: harness (`tools/make_reference_sdm.py`, `tools/sdm_reference.R`, `tests/sdm_cases.py`; tabelas em
+   binário, rasters em GeoTIFF, vetores em GPKG; `TOOLS` dá ao R a pasta `tools/` com as versões corrigidas);
+   dados de exemplo do predicts; cache de downloads com SHA-256 (`landschaft/_download.py`); leitor de `.rda` /
+   `.rds` sem R (`landschaft/_rdata.py`: XDR v2/v3, gzip/bzip2/xz, ALTREP, S4, `PackedSpatVector`).
+1. **Feito**: `download_gbif` (API REST, sem pygbif), `one_per_cell` (bit a bit com `terra::cellFromXY`), `thin`
+   (spThin bit a bit, C++ sem a matriz n x n: 100 mil registros em 0,12 s), `clean_occurrences` (os 13 testes
+   do CoordinateCleaner, iguais ao R; círculos geodésicos bit a bit em `src/cpp/sdm/geocircle`: GeographicLib
+   C++ 2.7 do geosphere e C 1.52 do terra, GEOS 3.12.2 portado, seno/cosseno/atan2 x87; dados de referência do
+   tarball do CRAN e do Natural Earth, baixados sob demanda).
+2. **Feito**: `accessible_area` (buffers geodésicos, polígono convexo, regiões; antimeridiano), `select_predictors`
+   / `vif` (usdm bit a bit: `lm` do R para p colunas em `lsm::r_lm_residuals`, amostragem do `spatSample`).
+3. **Feito**: `background` (dismo `randomPoints` bit a bit; máscaras de área com células tocadas como
+   `terra::mask`; "disk" e "SRE" do biomod2; viés), `dataset`, `SDMData`.
+4. **Feito**: `spatial_blocks` (blockCV quadrados e hexágonos bit a bit), `spatial_clusters` (`kmeans` do R
+   portado bit a bit, Hartigan-Wong / Lloyd / MacQueen), `buffer_folds`, `autocorrelation_range` (variograma do
+   gstat igual; ajuste de Gauss-Newton do gstat passo a passo, 1e-6), `quadrant_folds`, `checkerboard_folds`,
+   `random_folds`, `jackknife_folds` (ENMeval bit a bit).
+5. **Feito**: `evaluate` (predicts `pa_evaluate` bit a bit; p-valor 1e-9), `boyce`, `threshold`,
+   `omission_rate` (ENMeval). `cor(x, y)` do R (`cov_na_2`, com `sqrtl` de 80 bits: `lsm::sqrt_ext`) e `round(x,
+   d)` do R portados.
+6. **Feito** (menos o MaxNet como modelo padrão): `prepare` (uma chamada; `report`, `settings`, `redo`), `fit`,
+   `predict` (em blocos, ensemble ponderado, desvio entre modelos, clamp), `response_curves`, `importance`,
+   `mess` (predicts bit a bit), `mop` (mop bit a bit; Mahalanobis 1e-9), `exdet` (dsmextra; NT2 1e-9).
+7. Em andamento: MaxNet em C++ (protótipo bit a bit com o R nos 11 casos da especificação).
+8. Em andamento: capítulo 13 do Learn e tutorial.
+Desempenho: o `sample.int(..., prob)` sem reposição do R ficou exato e rápido (sequências de pesos iguais em
+forma fechada + Fenwick: 1 milhão de células e 30 mil sorteios em 0,24 s contra 16-20 s).
+
+### Erros das referências (só a forma correta, testada contra a referência corrigida)
+* CoordinateCleaner (`tools/cc_fixed.R`): raio do `cc_zero` em graus (o terra >= 1.8 o tornou 0,5 m);
+  `cc_cen(test = "provinces")` = "both"; círculos que cruzam o antimeridiano ou contêm um polo; `cc_coun`
+  desalinhado em fronteiras; `cc_inst(verify)` quebrado; `cc_outl` marcando tudo quando nenhuma espécie tem
+  registros suficientes e não marcando nada no caminho por raster (espécies com 10 mil registros ou mais).
+* usdm: falhas com uma variável restante, com todas em `keep` e com nomes com espaço; o terra amostra as
+  primeiras células (não ao acaso) em rasters de 7 a 10 mil células.
+* blockCV: `offset` em metros somado a graus em dados lon/lat; bordas dos blocos em lon/lat pelo s2 (aqui
+  retas, como os blocos são desenhados); `predefined` ignorado com hexágonos.
+* ENMeval: `get.block` com uma ocorrência; `get.checkerboard` com coordenadas duplicadas e pontos fora da grade.
+* dismo: sem limite de candidatos com `prob = TRUE`; `threshold(sensitivity)` devolve o primeiro limiar abaixo da
+  sensibilidade pedida.
+* ecospat: o "+1 trick" do `ecospat.boyce` (a última janela some em predições 0-1 e fica em 0-1000: o índice
+  dependia da escala) e a última razão igual a 1 descartada; `nclass` em vetor falhava.
+* mop: Mahalanobis com a covariância das células testadas (aqui da referência); falhas com `g` em data.frame e
+  com blocos de uma linha. dsmextra: índice MIC combinatório invertido.
+* maxnet: comparação de presenças como texto com fatores; `response.plot` com o nível errado.
+
+### Decisões tomadas pela regra "só a forma correta" (confirmar com o usuário)
+* Boyce sem o "+1 trick": o CBI deixa de coincidir com ecospat / ENMeval / biomod2 em predições 0-1 (muda na
+  3ª casa em ~90 % dos casos).
+* `cc_coun` com `iso_a3_eh` / `iso_a2_eh` (com `iso_a3` França e Noruega são "-99"); `aohi` com 10 000 m (o
+  padrão do `cc_aohi`); limite de 7000 linhas também no `vifstep` de tabelas (usdm usa 6000 só ali).
+* Dependências: o `pyproject` instala tudo por padrão (sem extras); o `ls.sdm` não exige scikit-learn (o `fit`
+  aceita qualquer estimador com a API dele; o MaxNet é nativo) e o download do GBIF usa a API REST direto.
+
 ---
 
 ## Roteiro integrado dos novos módulos
