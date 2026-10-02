@@ -103,3 +103,12 @@ def test_curves_importance_and_save(inputs, tmp_path):
     assert len(imp) == len(res.predictors) and imp["importance"].iloc[0] >= imp["importance"].iloc[-1]
     folder = res.save(tmp_path / "res")
     assert (folder / "ranges.csv").exists()
+
+
+def test_blocks_of_the_autocorrelation_range(inputs):
+    occ, env = inputs
+    data = ls.sdm.prepare(occ, env, clean=False, background=800, folds={"size": "auto", "k": 4})
+    r = ls.sdm.autocorrelation_range(env.sel(band=data.predictors), seed=1)["range"]
+    manual = ls.sdm.spatial_blocks(ls.sdm.prepare(occ, env, clean=False, background=800, folds=False),
+                                   size=r, k=4, seed=1)
+    np.testing.assert_array_equal(data.folds, manual.folds)

@@ -70,8 +70,10 @@ def prepare(occ, env, *, species: str | None = None, clean=True, one_per_cell: b
     7. :func:`dataset` – predictor values at presences and background;
     8. ``folds`` – cross-validation folds: a number k of spatial blocks
        (:func:`spatial_blocks`, default 5) or a dict with ``method`` one of
-       ``"blocks"``, ``"quadrants"``, ``"checkerboard"``, ``"random"``,
-       ``"jackknife"`` and the method's arguments.
+       ``"blocks"``, ``"clusters"``, ``"quadrants"``, ``"checkerboard"``,
+       ``"random"``, ``"jackknife"`` and the method's arguments; blocks take
+       ``size="auto"`` for the predictors' range of autocorrelation
+       (:func:`autocorrelation_range`).
 
     Every random step uses ``seed``, so the same call gives the same data.
     ``data.report`` counts what each step removed, ``data.settings`` holds
@@ -244,7 +246,21 @@ def prepare(occ, env, *, species: str | None = None, clean=True, one_per_cell: b
                 raise ValueError(f"folds method must be one of {', '.join(_FOLD_METHODS)}")
             if method == "blocks":
                 s.setdefault("seed", seed)
-                data = spatial_blocks(data, **s)
+                if s.get("size") == "auto":  # the median range of autocorrelation of the predictors
+                    from ._autocorrelation import autocorrelation_range
+
+                    s["size"] = autocorrelation_range(env_used, seed=seed)["range"]
+                    try:
+                        data = spatial_blocks(data, **s)
+                    except ValueError:
+                        import warnings
+
+                        warnings.warn(f"blocks of the autocorrelation range ({s['size'] / 1000:.0f} km) are too large "
+                                      "for the folds: using the default grid of blocks", stacklevel=2)
+                        s.pop("size")
+                        data = spatial_blocks(data, **s)
+                else:
+                    data = spatial_blocks(data, **s)
             elif method == "quadrants":
                 data = quadrant_folds(data, **s)
             elif method == "checkerboard":
