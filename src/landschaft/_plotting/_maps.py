@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import functools
 import html
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -457,12 +458,15 @@ def _install(m):
     m.__dict__["_ls_images"] = {}
 
 
+_TOKENS = re.compile(r"data:image/png;base64,LSIMAGE\d+x\d+|LSPAYLOAD\d+x\d+|LSASSET\d+")
+
+
 def render(m) -> str:
-    """The page of a map, its images in place."""
+    """The page of a map, its images and data in place: in one pass over the page as folium
+    renders it (a replace per image went over the page as it grew, a second for 47 images)."""
     page = m.get_root().render()
-    for token, url in m.__dict__.get("_ls_images", {}).items():
-        page = page.replace(token, url)
-    return page
+    payloads = m.__dict__.get("_ls_images", {})
+    return _TOKENS.sub(lambda t: payloads.get(t.group(), t.group()), page) if payloads else page
 
 
 def _readable(groups: list[Group]) -> tuple[list, list]:

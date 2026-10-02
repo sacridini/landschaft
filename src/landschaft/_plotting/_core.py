@@ -205,6 +205,28 @@ def _band_index(da, dim, sel) -> list[int]:
 # --- the layers of a map -----------------------------------------------------------------------------------
 
 
+def _render_bands(da, dim, idx, titles, size, vmin, vmax, opacity, opts) -> list:
+    """The bands of a stack as images, their PNGs made: a band per thread (each reprojected in one),
+    or one after the other (a lazy stack, read by dask's own threads)."""
+    from .._threads import default_threads
+    from . import _raster
+
+    def band(k, title, n_threads):
+        img = _raster.render(da.isel({dim: k}), max_size=size, cmap=opts.get("cmap"), vmin=vmin, vmax=vmax,
+                             log=opts.get("log"), opacity=opacity, categorical=opts.get("categorical"),
+                             labels=opts.get("labels"), title=title, n_threads=n_threads)
+        img.data_url()
+        return img
+
+    threads = default_threads()
+    if len(idx) > 1 and threads > 1 and not hasattr(da.data, "dask"):
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(min(threads, len(idx))) as pool:
+            return list(pool.map(lambda kt: band(*kt, 1), zip(idx, titles)))
+    return [band(k, t, None) for k, t in zip(idx, titles)]
+
+
 def _map_layers(items, opts):
     """The layers of spatial items, in groups that share a legend card, and notes."""
     from . import _raster, _vectors
@@ -257,13 +279,10 @@ def _map_layers(items, opts):
                 if s.size:
                     vmin, vmax = (float(v) for v in np.percentile(s, (2, 98)))
             labels = [str(v) for v in da[dim].values.tolist()] if dim in da.coords else [str(i + 1) for i in range(n)]
-            images = []
-            for j, k in enumerate(idx):
-                img = _raster.render(da.isel({dim: k}), max_size=size, cmap=opts.get("cmap"), vmin=vmin, vmax=vmax,
-                                     log=opts.get("log"), opacity=opacity, categorical=opts.get("categorical"),
-                                     labels=opts.get("labels"), title=f"{name}: {labels[k]}")
+            images = _render_bands(da, dim, idx, [f"{name}: {labels[k]}" for k in idx], size, vmin, vmax,
+                                   opacity, opts)
+            for j, img in enumerate(images):
                 img.show = j == 0
-                images.append(img)
             legend = dataclasses.replace(images[-1].legend, title=name) if images[-1].legend else None
             groups.append(Group(name, legend, opacity, None, images, bands=[labels[k] for k in idx]))
             continue

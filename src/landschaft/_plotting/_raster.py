@@ -57,7 +57,7 @@ class Image:
     def rgba(self) -> np.ndarray:
         return self.palette[self.pixels] if self.palette is not None else self.pixels
 
-    def png(self, compress_level: int = 1) -> bytes:
+    def png(self, compress_level: int = 2) -> bytes:
         """PNG: 8-bit with a palette (and its transparency) when the image has one."""
         from PIL import Image as PILImage
 
@@ -73,7 +73,11 @@ class Image:
         return buf.getvalue()
 
     def data_url(self) -> str:
-        return "data:image/png;base64," + base64.b64encode(self.png()).decode("ascii")
+        """The PNG as a data URL (made once: the bands of a stack make theirs in parallel)."""
+        url = self.__dict__.get("_url")
+        if url is None:
+            url = self.__dict__["_url"] = "data:image/png;base64," + base64.b64encode(self.png()).decode("ascii")
+        return url
 
 
 # --- reading at the screen's resolution -----------------------------------------------------------
