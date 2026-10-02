@@ -4,8 +4,10 @@
 
 #include "nlm/rng.hpp"
 
+#include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <unordered_set>
@@ -332,7 +334,10 @@ std::vector<i64> RRng::sample2(i64 n, i64 size) {
 
 namespace {
 
-void prob_sample_replace(int n, double* p, int* perm, i64 nans, i64* ans, RRng& rng) {
+// ProbSampleReplace(): perm[j] for the first j < n - 1 with rU <= the
+// cumulative p[j], else perm[n - 1]. Rounding is monotone, so the cumulative
+// sums never decrease and bisection finds the j of R's linear scan.
+void prob_sample_replace(int n, double* p, int* perm, i64 nans, i64* ans, RRng& rng, bool reference) {
     const int nm1 = n - 1;
     for (int i = 0; i < n; ++i) perm[i] = i + 1;
     r_revsort(p, perm, n);
@@ -340,8 +345,12 @@ void prob_sample_replace(int n, double* p, int* perm, i64 nans, i64* ans, RRng& 
     for (i64 i = 0; i < nans; ++i) {
         const double rU = rng.unif_rand();
         int j;
-        for (j = 0; j < nm1; ++j) {
-            if (rU <= p[j]) break;
+        if (reference) {
+            for (j = 0; j < nm1; ++j) {
+                if (rU <= p[j]) break;
+            }
+        } else {
+            j = static_cast<int>(std::lower_bound(p, p + nm1, rU) - p);
         }
         ans[i] = perm[j];
     }
@@ -377,7 +386,11 @@ void walker_prob_sample_replace(int n, const double* p, i64 nans, i64* ans, RRng
     }
 }
 
-void prob_sample_no_replace(int n, double* p, int* perm, i64 nans, i64* ans, RRng& rng) {
+// R's ProbSampleNoReplace() as written: for every draw a scan of the
+// descending probabilities (mass += p[j] until rT <= mass) and a shift of the
+// arrays over the drawn element, O(n) per draw. Kept to test the fast
+// version below against.
+void prob_sample_no_replace_reference(int n, double* p, int* perm, i64 nans, i64* ans, RRng& rng) {
     for (int i = 0; i < n; ++i) perm[i] = i + 1;
     r_revsort(p, perm, n);
     double totalmass = 1;
@@ -399,7 +412,240 @@ void prob_sample_no_replace(int n, double* p, int* perm, i64 nans, i64* ans, RRn
     }
 }
 
+// The same draws in O(runs scanned + log n) per draw. Equal probabilities
+// are contiguous after the sort and form runs (value w, number of elements
+// not drawn yet); the scan adds w run by run, each run in closed form
+// (repeated_add()), so it computes every rounded mass R's scan computes and
+// stops at the same element. The masses at the ends of the runs are kept
+// between draws as far as the last draw left them unchanged, and drawn
+// elements are flagged off in a Fenwick tree over the sorted positions
+// instead of being shifted out.
+
+// Fenwick tree of 0/1 flags over positions 0 .. n-1, all set at first.
+class AliveTree {
+public:
+    explicit AliveTree(int n) : n_(n), t_(static_cast<std::size_t>(n) + 1, 0) {
+        for (int i = 1; i <= n; ++i) {
+            t_[i] += 1;
+            const int j = i + (i & -i);
+            if (j <= n) t_[j] += t_[i];
+        }
+        while (top_ * 2 <= n) top_ *= 2;
+    }
+    void clear(int pos) {
+        for (int i = pos + 1; i <= n_; i += i & -i) --t_[i];
+    }
+    // The number of set flags at positions < pos.
+    int count_before(int pos) const {
+        int k = 0;
+        for (int i = pos; i > 0; i -= i & -i) k += t_[i];
+        return k;
+    }
+    // The position of the set flag of 0-based rank k (k < number set).
+    int kth(int k) const {
+        int pos = 0;
+        for (int step = top_; step > 0; step >>= 1) {
+            if (pos + step <= n_ && t_[pos + step] <= k) {
+                pos += step;
+                k -= t_[pos];
+            }
+        }
+        return pos;
+    }
+
+private:
+    int n_;
+    int top_ = 1;
+    std::vector<int> t_;
+};
+
+constexpr i64 kTwo53 = i64(1) << 53;
+
 }  // namespace
+
+// Let u be the spacing of the doubles at mass (2^(e-52) for mass in
+// [2^e, 2^(e+1)); 2^-1074 for mass < 2^-1021, where the spacing is the same
+// from 0), mass = a*u with an integer a < 2^53, and w = (q + f)*u with an
+// integer q and 0 <= f < 1. While a + q < 2^53 the exact sum is below
+// 2^53*u, where the spacing is still u, so mass + w rounds to
+// (a + q + d)*u: d = 1 for f > 1/2, 0 for f < 1/2 and, for a tie f = 1/2,
+// 1 if a + q is odd (ties to even). For an even a a tie adds q rounded up to
+// even and a stays even, so (after one ordinary addition from an odd a) every
+// addition adds the same inc = q + d until the binade ends, mass after s of
+// them is (a + s*inc)*u, and the first s with rT <= mass follows from
+// integers. At the end of a binade, and where these do not apply (mass = 0,
+// w at least 2^53*u, mass of 2^53 or more), the additions are made one by one.
+i64 repeated_add(double& mass, double w, i64 c, double rT) {
+    i64 done = 0;
+    while (done < c) {
+        std::uint64_t bits;
+        std::memcpy(&bits, &mass, sizeof bits);
+        const std::uint64_t e = bits >> 52;  // the biased exponent (mass >= 0)
+        // rT > mass: no addition can stop the scan while mass does not grow
+        if (c - done >= 4 && mass > 0.0 && rT > mass && e <= 1075) {
+            // u = 2^(e-1075), a subnormal for e < 53; 1/u (>= 1 for
+            // e <= 1075) is a double only for e >= 52
+            const std::uint64_t ubits = e >= 53 ? (e - 52) << 52 : std::uint64_t(1) << (e > 0 ? e - 1 : 0);
+            const std::uint64_t ibits = (2098 - (e >= 53 ? e : 53)) << 52;
+            double u, inv;
+            std::memcpy(&u, &ubits, sizeof u);
+            std::memcpy(&inv, &ibits, sizeof inv);
+            const auto scale = [&](double x) { return e >= 53 ? x * inv : x / u; };
+            const double top = static_cast<double>(kTwo53) * u;
+            if (w < top) {
+                // all exact: scalings by powers of 2 within range, and the
+                // fractional part of a double
+                const double wu = scale(w);
+                const double qd = std::floor(wu);
+                const double f = wu - qd;
+                const i64 a = static_cast<i64>(scale(mass));
+                const i64 q = static_cast<i64>(qd);
+                const bool tie = f == 0.5;
+                if (a + q < kTwo53 && !(tie && (a & 1))) {
+                    const i64 inc = q + ((f > 0.5 || (tie && (q & 1))) ? 1 : 0);
+                    // additions from a + s*inc for s = 0 .. len-1 keep a + q < 2^53
+                    i64 len = c - done;
+                    if (inc > 0) len = std::min(len, (kTwo53 - 1 - q - a) / inc + 1);
+                    if (inc > 0 && rT <= top) {
+                        // rT/u in (a, 2^53]: a + s*inc >= ceil(rT/u) <=> mass >= rT
+                        const i64 at = static_cast<i64>(std::ceil(scale(rT)));
+                        const i64 s = (at - a + inc - 1) / inc;
+                        if (s <= len) {
+                            mass = static_cast<double>(a + s * inc) * u;
+                            return done + s;
+                        }
+                    }
+                    mass = static_cast<double>(a + len * inc) * u;
+                    done += len;
+                    continue;
+                }
+            }
+        }
+        mass += w;
+        ++done;
+        if (rT <= mass) return done;
+    }
+    return 0;
+}
+
+namespace {
+
+void prob_sample_no_replace(int n, double* p, int* perm, i64 nans, i64* ans, RRng& rng) {
+    for (int i = 0; i < n; ++i) perm[i] = i + 1;
+    r_revsort(p, perm, n);
+    // runs of equal probabilities: value, first sorted position, elements
+    // not drawn yet
+    std::vector<double> w;
+    std::vector<int> start, count;
+    for (int i = 0; i < n; ++i) {
+        if (i == 0 || p[i] != p[i - 1]) {
+            w.push_back(p[i]);
+            start.push_back(i);
+            count.push_back(0);
+        }
+        ++count.back();
+    }
+    const int nr = static_cast<int>(w.size());
+    // end[r]: the scan's mass after run r, known for r < valid. A draw from
+    // run h changes the masses from run h on only, so the next scan resumes
+    // from the known ones (by bisection: they never decrease). The last
+    // non-empty run (tail) is never cached: R's scan does not test the last
+    // element left, so its tested count changes with every draw.
+    std::vector<double> end(static_cast<std::size_t>(nr));
+    int valid = 0;
+    int tail = nr - 1;
+    AliveTree alive(n);
+    double totalmass = 1;
+    int m = n;  // elements not drawn
+    for (i64 i = 0; i < nans; ++i, --m) {
+        const double rT = totalmass * rng.unif_rand();
+        int r = valid;
+        if (valid > 0 && rT <= end[valid - 1])
+            r = static_cast<int>(std::lower_bound(end.data(), end.data() + valid, rT) - end.data());
+        double mass = r > 0 ? end[r - 1] : 0.0;
+        int hit = tail;
+        i64 s = 0;
+        for (; r <= tail; ++r) {
+            // R's scan tests the first m - 1 elements; the last one is drawn
+            // when none of them ends it
+            const i64 c = r < tail ? count[r] : count[r] - 1;
+            if (c < 4) {
+                for (i64 t = 1; t <= c; ++t) {
+                    mass += w[r];
+                    if (rT <= mass) {
+                        s = t;
+                        break;
+                    }
+                }
+            } else {
+                s = repeated_add(mass, w[r], c, rT);
+            }
+            if (s > 0) {
+                hit = r;
+                break;
+            }
+            if (r < tail) {
+                end[r] = mass;
+                if (r >= valid) valid = r + 1;
+            }
+        }
+        const int pos = s > 0 ? alive.kth(alive.count_before(start[hit]) + static_cast<int>(s) - 1) : alive.kth(m - 1);
+        ans[i] = perm[pos];
+        totalmass -= p[pos];
+        alive.clear(pos);
+        --count[hit];
+        while (tail > 0 && count[tail] == 0) --tail;
+        valid = std::min(valid, std::min(hit, tail));
+    }
+}
+
+// sample.int(n, size, replace, prob): FixupProb() and R's choice of sampler.
+std::vector<i64> prob_sample(RRng& rng, i64 n, i64 size, bool replace, const std::vector<double>& prob,
+                             bool reference) {
+    if (static_cast<i64>(prob.size()) != n) throw std::invalid_argument("incorrect number of probabilities");
+    if (n > INT_MAX) throw std::invalid_argument("sample_int: n too large with prob");
+    const int ni = static_cast<int>(n);
+    std::vector<double> p(prob);
+    // FixupProb()
+    double sum = 0.0;
+    int npos = 0;
+    for (int i = 0; i < ni; ++i) {
+        if (!std::isfinite(p[i])) throw std::invalid_argument("NA in probability vector");
+        if (p[i] < 0.0) throw std::invalid_argument("negative probability");
+        if (p[i] > 0.0) {
+            ++npos;
+            sum += p[i];
+        }
+    }
+    if (npos == 0 || (!replace && size > npos)) throw std::invalid_argument("too few positive probabilities");
+    for (int i = 0; i < ni; ++i) p[i] /= sum;
+    std::vector<i64> out(static_cast<std::size_t>(size));
+    std::vector<int> perm(static_cast<std::size_t>(ni));
+    if (replace) {
+        int nc = 0;
+        for (int i = 0; i < ni; ++i)
+            if (ni * p[i] > 0.1) ++nc;
+        if (nc > 200)
+            walker_prob_sample_replace(ni, p.data(), size, out.data(), rng);
+        else
+            prob_sample_replace(ni, p.data(), perm.data(), size, out.data(), rng, reference);
+    } else if (reference) {
+        prob_sample_no_replace_reference(ni, p.data(), perm.data(), size, out.data(), rng);
+    } else {
+        prob_sample_no_replace(ni, p.data(), perm.data(), size, out.data(), rng);
+    }
+    return out;
+}
+
+}  // namespace
+
+std::vector<i64> sample_int_reference(RRng& rng, i64 size, bool replace, const std::vector<double>& prob) {
+    if (size < 0) throw std::invalid_argument("sample_int: invalid n or size");
+    const i64 n = static_cast<i64>(prob.size());
+    if (!replace && size > n)
+        throw std::invalid_argument("cannot take a sample larger than the population when 'replace = FALSE'");
+    return prob_sample(rng, n, size, replace, prob, true);
+}
 
 std::vector<i64> RRng::sample_int(i64 n, i64 size, bool replace, const std::vector<double>* prob) {
     if (n < 0 || size < 0) throw std::invalid_argument("sample_int: invalid n or size");
@@ -408,39 +654,8 @@ std::vector<i64> RRng::sample_int(i64 n, i64 size, bool replace, const std::vect
     // sample.int()'s useHash.
     if (static_cast<double>(n) > 1e7 && !replace && prob == nullptr && static_cast<double>(size) <= n / 2.0)
         return sample2(n, size);
+    if (prob != nullptr) return prob_sample(*this, n, size, replace, *prob, false);
     std::vector<i64> out(static_cast<std::size_t>(size));
-    if (prob != nullptr) {
-        if (static_cast<i64>(prob->size()) != n) throw std::invalid_argument("incorrect number of probabilities");
-        if (n > INT_MAX) throw std::invalid_argument("sample_int: n too large with prob");
-        const int ni = static_cast<int>(n);
-        std::vector<double> p(*prob);
-        // FixupProb()
-        double sum = 0.0;
-        int npos = 0;
-        for (int i = 0; i < ni; ++i) {
-            if (!std::isfinite(p[i])) throw std::invalid_argument("NA in probability vector");
-            if (p[i] < 0.0) throw std::invalid_argument("negative probability");
-            if (p[i] > 0.0) {
-                ++npos;
-                sum += p[i];
-            }
-        }
-        if (npos == 0 || (!replace && size > npos)) throw std::invalid_argument("too few positive probabilities");
-        for (int i = 0; i < ni; ++i) p[i] /= sum;
-        std::vector<int> perm(static_cast<std::size_t>(ni));
-        if (replace) {
-            int nc = 0;
-            for (int i = 0; i < ni; ++i)
-                if (ni * p[i] > 0.1) ++nc;
-            if (nc > 200)
-                walker_prob_sample_replace(ni, p.data(), size, out.data(), *this);
-            else
-                prob_sample_replace(ni, p.data(), perm.data(), size, out.data(), *this);
-        } else {
-            prob_sample_no_replace(ni, p.data(), perm.data(), size, out.data(), *this);
-        }
-        return out;
-    }
     const double dn = static_cast<double>(n);
     if (replace || size < 2) {
         for (i64 i = 0; i < size; ++i) out[static_cast<std::size_t>(i)] = static_cast<i64>(unif_index(dn)) + 1;

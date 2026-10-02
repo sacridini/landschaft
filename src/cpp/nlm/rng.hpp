@@ -49,7 +49,8 @@ public:
 
     // sample.int(n, size, replace, prob) (1-based results), including the
     // hashed sample2() that sample.int() uses for n > 1e7 without
-    // replacement or prob and size <= n / 2.
+    // replacement or prob and size <= n / 2. With prob, R's linear scans are
+    // replaced by exact faster searches (same draws, same generator state).
     std::vector<i64> sample_int(i64 n, i64 size, bool replace, const std::vector<double>* prob = nullptr);
 
 private:
@@ -70,6 +71,17 @@ private:
     double rbits(int bits);
     std::vector<i64> sample2(i64 n, i64 size);
 };
+
+// sample.int(length(prob), size, replace, prob) with R's own linear scans,
+// O(n) per draw: the reference rng.sample_int() is tested against.
+std::vector<i64> sample_int_reference(RRng& rng, i64 size, bool replace, const std::vector<double>& prob);
+
+// R's `mass += w; if (rT <= mass) break;` repeated at most c times, without
+// making the c additions (mass and w finite and >= 0): returns the 1-based
+// addition that ends the loop (0 if none) and leaves `mass` as after the last
+// addition made. The scan of sample_int's weighted sampling without
+// replacement.
+i64 repeated_add(double& mass, double w, i64 c, double rT);
 
 // R's qnorm(p, 0, 1) for p in (0, 1) (lower tail, not log), as norm_rand()
 // calls it.

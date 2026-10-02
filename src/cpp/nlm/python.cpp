@@ -99,6 +99,41 @@ py::list r_sequence(std::int32_t seed, const py::list& ops, int n_threads) {
     return out;
 }
 
+// sample.int(length(p), size, replace, p) after set.seed(seed), with the
+// fast samplers or R's linear scans, and the unif_rand() drawn next (which
+// shows the generator state the sampling left).
+py::tuple prob_sample_test(const std::vector<double>& p, i64 size, bool replace, std::int32_t seed,
+                           bool use_reference) {
+    nlm::RRng rng(seed);
+    std::vector<i64> v;
+    double next = 0.0;
+    {
+        py::gil_scoped_release release;
+        v = use_reference ? nlm::sample_int_reference(rng, size, replace, p)
+                          : rng.sample_int(static_cast<i64>(p.size()), size, replace, &p);
+        next = rng.unif_rand();
+    }
+    return py::make_tuple(vector_to_array(std::move(v)), next);
+}
+
+// nlm::repeated_add(mass, w, c, rT), or the loop it replaces: (the addition
+// that ends the loop or 0, the final mass).
+py::tuple repeated_add_test(double mass, double w, i64 c, double rT, bool use_reference) {
+    i64 s = 0;
+    if (use_reference) {
+        for (i64 j = 1; j <= c; ++j) {
+            mass += w;
+            if (rT <= mass) {
+                s = j;
+                break;
+            }
+        }
+    } else {
+        s = nlm::repeated_add(mass, w, c, rT);
+    }
+    return py::make_tuple(s, mass);
+}
+
 // A sequence of draws from std::mt19937(seed) with libstdc++'s
 // distributions: ("canonical", n), ("uniform_int", n, a, b),
 // ("normal", n, mean, sd) (one distribution object), ("normal_fresh", n,
@@ -353,6 +388,14 @@ namespace nlm {
 void register_python(py::module_& m) {
     m.def("nlm_r_sequence", &r_sequence, py::arg("seed"), py::arg("ops"), py::arg("n_threads") = 0,
           "Draws from R's generator after set.seed(seed) (Mersenne-Twister, Inversion, Rejection).");
+    m.def("nlm_prob_sample_test", &prob_sample_test, py::arg("p"), py::arg("size"), py::arg("replace"), py::arg("seed"),
+          py::arg("use_reference") = false,
+          "sample.int(length(p), size, replace, p) after set.seed(seed) and the next unif_rand(); with "
+          "use_reference, R's linear scans (for tests).");
+    m.def("nlm_repeated_add_test", &repeated_add_test, py::arg("mass"), py::arg("w"), py::arg("c"), py::arg("rT"),
+          py::arg("use_reference") = false,
+          "R's `mass += w; if (rT <= mass) break;` repeated c times, in closed form or (use_reference) one by one: "
+          "(the addition that ends the loop or 0, the final mass).");
     m.def("nlm_std_sequence", &std_sequence, py::arg("seed"), py::arg("ops"),
           "Draws from std::mt19937(seed) with libstdc++'s distributions.");
     m.def("nlm_random", &py_random_field, py::arg("seed"), py::arg("nrow"), py::arg("ncol"), "nlm_random() before rescaling.");
