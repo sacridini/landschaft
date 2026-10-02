@@ -50,52 +50,48 @@ code, kbd, pre {
 }
 
 /* ---- home page -------------------------------------------------------- */
+/* Sober layout: the README's stacked logo, plain sections divided by rules. */
 
 .md-content__inner:has(.ls-hero) > h1:first-child {
   display: none;
 }
 
 .ls-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  gap: 2rem;
-  align-items: center;
-  margin: 0.5rem 0 2.5rem;
+  text-align: center;
+  margin: 1.5rem auto 3rem;
+  max-width: 40rem;
 }
 
-.ls-hero__title {
-  font-size: 2.6rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  margin: 0 0 0.6rem;
-  color: var(--md-default-fg-color);
+.md-typeset .ls-hero p {
+  margin: 0;
 }
 
-.ls-hero__title span {
-  background: linear-gradient(90deg, var(--ls-green), var(--ls-green-bright) 55%, var(--ls-lime));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.md-typeset .ls-hero__logo {
+  display: block;
+  width: 17rem;
+  max-width: 70%;
+  margin: 0 auto 1.6rem;
 }
 
 .ls-hero__tagline {
-  font-size: 1.05rem;
-  line-height: 1.6;
+  font-size: 1.02rem;
+  line-height: 1.65;
   color: var(--md-default-fg-color--light);
-  margin: 0 0 1.4rem;
 }
 
-.ls-hero__image img {
-  width: 100%;
-  max-width: 330px;
-  display: block;
-  margin: 0 auto;
-  filter: drop-shadow(0 18px 24px rgba(15, 23, 42, 0.18));
+.md-typeset .ls-hero__actions {
+  margin: 1.6rem 0 1.2rem;
 }
 
 .ls-hero .md-button {
-  margin: 0.2rem 0.4rem 0.2rem 0;
+  margin: 0.2rem 0.2rem;
+  border-radius: 0.3rem;
+}
+
+.ls-hero__meta {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--md-default-fg-color--light);
 }
 
 .md-typeset .md-button--primary {
@@ -109,61 +105,105 @@ code, kbd, pre {
   border-color: var(--ls-green-bright);
 }
 
-.ls-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 1rem;
-  font-size: 0.7rem;
+/* section titles of the home page: small caps over a hairline */
+.md-content__inner:has(.ls-hero) > h2 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  padding-bottom: 0.5rem;
+  margin: 3rem 0 0.4rem;
 }
 
-.ls-badges span {
-  border: 1px solid var(--md-default-fg-color--lightest);
-  border-radius: 999px;
-  padding: 0.15rem 0.7rem;
+/* what you can do: an index of areas in two columns */
+.md-typeset .ls-areas > ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 2.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.md-typeset .ls-areas > ul > li {
+  margin: 0;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset .ls-areas > ul > li > p {
+  margin: 0;
+}
+
+.md-typeset .ls-areas > ul > li > p:first-child {
+  margin-bottom: 0.2rem;
+}
+
+.md-typeset .ls-areas a {
+  color: var(--md-default-fg-color);
+}
+
+.md-typeset .ls-areas a:hover {
+  color: var(--md-typeset-a-color);
+}
+
+.md-typeset .ls-areas > ul > li > p + p {
+  font-size: 0.72rem;
+  line-height: 1.55;
   color: var(--md-default-fg-color--light);
 }
 
-.ls-stats {
+/* why: four columns, each under a short brand-coloured rule */
+.ls-principles {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1rem;
-  margin: 1.5rem 0 2rem;
-  text-align: center;
+  gap: 2rem;
+  margin-top: 1rem;
 }
 
-.ls-stats div {
-  border: 1px solid var(--md-default-fg-color--lightest);
-  border-radius: 0.6rem;
-  padding: 1rem 0.5rem;
+.ls-principles > div {
+  border-top: 2px solid var(--ls-green);
+  padding-top: 0.6rem;
 }
 
-.ls-stats strong {
-  display: block;
-  font-size: 1.6rem;
-  color: var(--ls-green);
+[data-md-color-scheme="slate"] .ls-principles > div {
+  border-top-color: var(--ls-lime);
 }
 
-[data-md-color-scheme="slate"] .ls-stats strong {
-  color: var(--ls-lime);
+.md-typeset .ls-principles h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
-.ls-stats small {
+.md-typeset .ls-principles .headerlink {
+  display: none;
+}
+
+.md-typeset .ls-principles p {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.6;
+  color: var(--md-default-fg-color--light);
+}
+
+.md-typeset .ls-validation {
+  max-width: 46rem;
   color: var(--md-default-fg-color--light);
 }
 
 @media screen and (max-width: 60em) {
-  .ls-hero {
-    grid-template-columns: 1fr;
-  }
-  .ls-hero__image {
-    order: -1;
-  }
-  .ls-hero__image img {
-    max-width: 200px;
-  }
-  .ls-stats {
+  .ls-principles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 40em) {
+  .md-typeset .ls-areas > ul,
+  .ls-principles {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -235,17 +275,6 @@ code, kbd, pre {
   background-color: var(--ls-green);
   border-color: var(--ls-green);
   color: #fff;
-}
-
-/* four cards per row where asked (the topic grid of the home page) */
-.md-typeset .grid.cards.ls-grid-4 {
-  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
-}
-
-@media screen and (min-width: 76.25em) {
-  .md-typeset .grid.cards.ls-grid-4 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 /* three cards per row on wide screens */

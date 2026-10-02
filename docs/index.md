@@ -10,9 +10,8 @@ hide:
 
 <div class="ls-hero" markdown>
 
-<div markdown>
-
-<p class="ls-hero__title"><span>Landschaft</span></p>
+![Landschaft](assets/images/logo-stacked.svg#only-light){ .ls-hero__logo }
+![Landschaft](assets/images/logo-stacked-dark.svg#only-dark){ .ls-hero__logo }
 
 <p class="ls-hero__tagline">
 Fast, exact landscape analysis for Python. Map habitat structure, measure
@@ -20,124 +19,92 @@ fragmentation, compute landscape metrics and model ecological connectivity,
 from a single raster on a laptop to continental maps larger than memory.
 </p>
 
+<div class="ls-hero__actions" markdown>
 [Get started](getting-started/index.md){ .md-button .md-button--primary }
 [Tutorials](tutorials/index.md){ .md-button }
 [Learn](learn/index.md){ .md-button }
 [GitHub :fontawesome-brands-github:](https://github.com/sacridini/landschaft){ .md-button }
-
-<div class="ls-badges">
-<span>Python 3.10+</span><span>C++17 · OpenMP</span><span>numpy · xarray · dask</span><span>GPL-3.0</span>
 </div>
 
-</div>
+<p class="ls-hero__meta">
+Python 3.10+ · C++17 / OpenMP core · numpy · xarray · dask · GPL-3.0-or-later
+</p>
 
-<div class="ls-hero__image" markdown>
-![Landschaft](assets/images/logo-icon-dark.svg)
-</div>
-
-</div>
-
-<div class="ls-stats">
-<div><strong>130+</strong><small>landscape metrics</small></div>
-<div><strong>9</strong><small>established tools reproduced and validated</small></div>
-<div><strong>up to 600×</strong><small>faster than the tools it reproduces</small></div>
-<div><strong>Out-of-core</strong><small>rasters larger than memory</small></div>
 </div>
 
 ## What you can do
 
-<div class="grid cards ls-grid-4" markdown>
+<div class="ls-areas" markdown>
 
--   :material-shape-outline:{ .lg .middle } **Habitat patterns**
-
-    ---
+-   [**Habitat patterns**](tutorials/patterns.md)
 
     Split habitat into cores, edges, bridges, loops and islets; classify
     objects by size; describe the shape and texture of every patch.
 
--   :material-chart-bell-curve-cumulative:{ .lg .middle } **Fragmentation**
-
-    ---
+-   [**Fragmentation**](tutorials/fragmentation.md)
 
     Habitat density at many observation scales, fragmentation classes,
     landscape mosaics, contagion and spatial entropy, as maps and statistics.
 
--   :material-table-large:{ .lg .middle } **Landscape metrics**
-
-    ---
+-   [**Landscape metrics**](tutorials/landscape-metrics.md)
 
     130+ patch, class and landscape metrics, sample plots, moving windows,
     time series, spatial signatures and rasters larger than memory.
 
--   :material-graph-outline:{ .lg .middle } **Habitat networks**
-
-    ---
+-   [**Habitat networks**](tutorials/habitat-networks.md)
 
     Patches and distances as a graph: equivalent connected area, probability
     of connectivity, node and link importance, protected-area connectivity.
 
--   :material-flash-outline:{ .lg .middle } **Circuit connectivity**
-
-    ---
+-   [**Circuit connectivity**](tutorials/circuit-connectivity.md)
 
     Current flow between habitat areas and omnidirectional connectivity
     across whole landscapes, on rasters and on networks.
 
--   :material-map-marker-path:{ .lg .middle } **Distance & restoration**
-
-    ---
+-   [**Distance & restoration**](tutorials/distance-restoration.md)
 
     Distance maps, cost surfaces, least-cost paths and corridors,
     restoration priorities and travel-time (isochrone) maps.
 
--   :material-compare-horizontal:{ .lg .middle } **Change detection**
-
-    ---
-
-    Compare two dates: simple and morphological change, shifts between
-    fragmentation classes and heat maps of landscape change.
-
--   :material-database-arrow-right-outline:{ .lg .middle } **Big data & batch**
-
-    ---
-
-    Folders of rasters in parallel, tiles for maps larger than memory,
-    streaming tables with millions of rows.
-
--   :material-routes:{ .lg .middle } **Routes on grids**
-
-    ---
+-   [**Routes on grids**](tutorials/grid-routes.md)
 
     Travel-time surfaces, least-cost and random-walk distances, randomised
     shortest paths and the overlap of dispersal routes.
 
--   :material-terrain:{ .lg .middle } **Surface texture**
+-   [**Change detection**](tutorials/change-detection.md)
 
-    ---
+    Compare two dates: simple and morphological change, shifts between
+    fragmentation classes and heat maps of landscape change.
+
+-   [**Surface texture**](tutorials/surface-texture.md)
 
     Roughness, height distribution and texture of continuous rasters
     (ISO 25178) such as NDVI or elevation, and terrain indices of DEMs.
 
--   :material-dice-multiple-outline:{ .lg .middle } **Neutral landscapes**
-
-    ---
+-   [**Neutral landscapes**](tutorials/neutral-landscapes.md)
 
     Simulated landscapes as null models: random maps, gradients, fractal
     surfaces, Gaussian fields, clusters and mosaics.
 
--   :material-leaf:{ .lg .middle } **Biodiversity analysis**
-
-    ---
+-   [**Biodiversity analysis**](tutorials/biodiversity.md)
 
     Species records in grid cells: richness, endemism, phylogenetic
-    diversity and endemism, randomisations and regions (Biodiverse).
+    diversity and endemism, randomisations and regions.
 
--   :material-map-marker-star-outline:{ .lg .middle } **Conservation priorities**
+-   [**Conservation priorities**](tutorials/prioritization.md)
 
-    ---
+    Rank whole landscapes for many species: performance curves, costs,
+    reserves, connectivity and impact assessment.
 
-    Rank whole landscapes for many species with Zonation 5: performance
-    curves, costs, reserves, connectivity and impact assessment.
+-   [**Species distributions**](tutorials/species-distributions.md)
+
+    Clean occurrence records, choose predictors and background points, fit
+    and evaluate models with spatial folds, and project them to new climates.
+
+-   [**Large data & batch**](tutorials/large-data.md)
+
+    Folders of rasters in parallel, tiles for maps larger than memory,
+    streaming tables with millions of rows.
 
 </div>
 
@@ -190,49 +157,64 @@ from a single raster on a laptop to continental maps larger than memory.
 
 ## Why Landschaft
 
-<div class="grid cards" markdown>
+<div class="ls-principles" markdown>
 
--   :material-lightning-bolt:{ .lg .middle } **Fast**
+<div markdown>
 
-    ---
+### Fast
 
-    A C++17 core with OpenMP, cache-friendly algorithms and exact sparse
-    solvers. Typical runs take seconds where the original tools take minutes
-    or hours. [See the benchmarks](benchmarks.md)
-
--   :material-check-decagram-outline:{ .lg .middle } **Exact**
-
-    ---
-
-    The tools are checked against the reference implementations of their
-    methods, to the last bit where the method allows it and to the solver's
-    precision where it does not. [How each tool is checked](benchmarks.md#accuracy)
-
--   :material-language-python:{ .lg .middle } **Pythonic**
-
-    ---
-
-    numpy arrays, georeferenced `xarray.DataArray`s, dask, GeoTIFFs,
-    GeoDataFrames and pandas tables in and out. No GUI, no temporary files,
-    no other language to install.
-
--   :material-arrow-expand-all:{ .lg .middle } **Scales**
-
-    ---
-
-    Rasters larger than memory by tiles or row blocks, collections of maps in
-    parallel within a memory budget, and all cores but one by default.
+A C++17 core with OpenMP, cache-friendly algorithms and exact sparse
+solvers. Typical runs take seconds where the original tools take minutes
+or hours. [See the benchmarks](benchmarks.md)
 
 </div>
 
-!!! success "Validated against established tools"
+<div markdown>
 
-    Landschaft reproduces the methods of GuidosToolbox (MSPA, fragmentation,
-    accounting, restoration planning), the R package landscapemetrics and
-    FRAGSTATS (landscape metrics), Conefor Sensinode and Makurhini (habitat
-    networks), Circuitscape and Omniscape (circuit connectivity), gdistance (routes on
-    grids), geodiv and spatialEco (surface metrics) and NLMR (neutral landscape models), and is
-    [tested against their outputs](benchmarks.md#accuracy). You do not need to know any of them to use
-    it: the [tutorials](tutorials/index.md) start from scratch, and the
-    [Learn](learn/index.md) course explains the landscape ecology behind every
-    tool.
+### Exact
+
+The tools are checked against the reference implementations of their
+methods, to the last bit where the method allows it and to the solver's
+precision where it does not. [How each tool is checked](benchmarks.md#accuracy)
+
+</div>
+
+<div markdown>
+
+### Pythonic
+
+numpy arrays, georeferenced `xarray.DataArray`s, dask, GeoTIFFs,
+GeoDataFrames and pandas tables in and out. No GUI, no temporary files,
+no other language to install.
+
+</div>
+
+<div markdown>
+
+### Scales
+
+Rasters larger than memory by tiles or row blocks, collections of maps in
+parallel within a memory budget, and all cores but one by default.
+
+</div>
+
+</div>
+
+## Validated against established tools
+
+<div class="ls-validation" markdown>
+
+Landschaft reproduces the methods of GuidosToolbox (MSPA, fragmentation,
+accounting, restoration planning), the R package landscapemetrics and
+FRAGSTATS (landscape metrics), Conefor Sensinode and Makurhini (habitat
+networks), Circuitscape and Omniscape (circuit connectivity), gdistance (routes on
+grids), geodiv and spatialEco (surface metrics), NLMR (neutral landscape models),
+Zonation 5 (spatial prioritization) and the R packages for species distributions
+(CoordinateCleaner, usdm, dismo, blockCV, ENMeval, predicts, ecospat, maxnet), and is
+[tested against their outputs](benchmarks.md#accuracy).
+
+You do not need to know any of them to use it: the [tutorials](tutorials/index.md)
+start from scratch, and the [Learn](learn/index.md) course explains the landscape
+ecology behind every tool.
+
+</div>
