@@ -184,6 +184,7 @@ nav:
       - Neutral landscape models: api/nlm.md
       - Biodiversity analysis: api/biodiversity.md
       - Spatial prioritization: api/prioritization.md
+      - Species distributions: api/sdm.md
   - Benchmarks: benchmarks.md
   - About:
       - Changelog: about/changelog.md

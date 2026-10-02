@@ -18,10 +18,14 @@ Typical use::
     env = ls.load_raster(ls.sdm.example_data("bioclim"))
 """
 
+from ._area import accessible_area
 from ._cells import one_per_cell
 from ._examples import example_data
+from ._gbif import download_gbif
 
 __all__ = [
+    "accessible_area",
+    "download_gbif",
     "example_data",
     "one_per_cell",
 ]

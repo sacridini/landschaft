@@ -10,7 +10,13 @@ between minor versions.
 - `ls.sdm`, species distribution modelling (in progress; plan in IDEAS.md): example data
   (`ls.sdm.example_data`: the *Bradypus* and *Solanum acaule* records and the bioclimatic and biome
   rasters of the R package predicts), `ls.sdm.one_per_cell` (one record per predictor cell, as
-  `terra::cellFromXY` + `duplicated()`), and the reference harness (`tools/make_reference_sdm.py`).
+  `terra::cellFromXY` + `duplicated()`), `ls.sdm.download_gbif` (records from GBIF's occurrence search
+  API, no account or extra package needed), `ls.sdm.accessible_area` (geodesic buffers, convex hulls
+  or the regions holding records, cut to a shape), and the reference harness
+  (`tools/make_reference_sdm.py`).
+- R data files (`.rda`, `.rds`) are read without R (`landschaft._rdata`), so the reference tables
+  of R packages (CoordinateCleaner's centroids, capitals, institutions, land and sea) are used as
+  published.
 - Reference data too large to ship are downloaded on first use into a cache folder, pinned by
   checksum (`LANDSCHAFT_CACHE`).
 
