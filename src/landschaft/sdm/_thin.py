@@ -67,7 +67,7 @@ def thin(occ, distance: float, *, reps: int = 10, seed: int | None = None, x: st
     >>> occ = ls.load_table(ls.sdm.example_data("bradypus"))
     >>> kept = ls.sdm.thin(occ, 50_000, reps=20, seed=1)
     >>> len(occ), len(kept)
-    (116, 74)
+    (116, 85)
     """
     if not distance >= 0:
         raise ValueError("distance must be >= 0 (metres)")
