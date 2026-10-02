@@ -21,7 +21,7 @@ any thread further.
       [installed](../getting-started/installation.md).
     - **Answer the questions** at the end of each chapter before opening the
       answers.
-    - **Come back to [chapter 13](choosing.md)** when you start a project: it
+    - **Come back to [chapter 14](choosing.md)** when you start a project: it
       goes from questions to tools.
 
 ## Chapters
@@ -113,7 +113,15 @@ any thread further.
     how Zonation ranks a landscape, performance curves, costs, reserves and
     connectivity.
 
--   **13 · [From question to tool](choosing.md)**
+-   **13 · [Species distributions](sdm.md)**
+
+    ---
+
+    Niches and distributions, cleaning and thinning records, background and
+    the accessible area, the main algorithms, spatial cross-validation,
+    thresholds and extrapolation.
+
+-   **14 · [From question to tool](choosing.md)**
 
     ---
 

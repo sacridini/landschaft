@@ -14,6 +14,7 @@ ls.surface.metrics(z)               # surface texture of continuous rasters
 ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 ls.bio.BaseData.from_table(...)     # biodiversity analysis
 ls.prioritize.zonation(features)    # spatial conservation prioritization
+ls.sdm.prepare(occ, env)            # species distribution models
 ```
 
 !!! example "Every example runs"
@@ -106,6 +107,12 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
     ---
 
     Zonation's ranking of the cells for conservation: rules, weights, costs, curves.
+
+-   :material-map-search-outline:{ .lg .middle } **[Species distributions](sdm.md)**
+
+    ---
+
+    Clean records, choose predictors and background, spatial folds, fit, evaluate, project.
 
 </div>
 
@@ -466,3 +473,42 @@ ls.prioritize.zonation(features)    # spatial conservation prioritization
 | [`ls.ImpactSource`](prioritization.md#landschaft.prioritize.ImpactSource) | An impact source of an impact group (a line of Zonation's impact buffers file) |
 | [`ls.CumulativeScenario`](prioritization.md#landschaft.prioritize.CumulativeScenario) | A cumulative impact assessment scenario (Zonation's ``-e``) |
 | [`ls.Pressure`](prioritization.md#landschaft.prioritize.Pressure) | A pressure raster of a cumulative impact scenario |
+
+### Species distributions
+
+| Name | Summary |
+|---|---|
+| [`ls.prepare`](sdm.md#landschaft.sdm.prepare) | Prepare occurrence records and predictors for a species distribution model, in one call |
+| [`ls.download_gbif`](sdm.md#landschaft.sdm.download_gbif) | Occurrence records of a species from GBIF, with coordinates |
+| [`ls.clean_occurrences`](sdm.md#landschaft.sdm.clean_occurrences) | Flag or drop occurrence records with suspicious coordinates |
+| [`ls.reference_data`](sdm.md#landschaft.sdm.reference_data) | A geographic reference data set for cleaning occurrence records |
+| [`ls.one_per_cell`](sdm.md#landschaft.sdm.one_per_cell) | Keep one occurrence record per cell of the predictor grid |
+| [`ls.thin`](sdm.md#landschaft.sdm.thin) | Thin occurrence records so that no two kept records are closer than ``distance`` |
+| [`ls.accessible_area`](sdm.md#landschaft.sdm.accessible_area) | The area the species could have reached: where its background is drawn |
+| [`ls.select_predictors`](sdm.md#landschaft.sdm.select_predictors) | Drop predictors that the others already explain (collinearity) |
+| [`ls.vif`](sdm.md#landschaft.sdm.vif) | Variance inflation factor of each predictor: how well the others predict it |
+| [`ls.background`](sdm.md#landschaft.sdm.background) | Background points: a sample of the conditions available to the species |
+| [`ls.dataset`](sdm.md#landschaft.sdm.dataset) | Put presences, background points and predictor values together |
+| [`ls.SDMData`](sdm.md#landschaft.sdm.SDMData) | Presences and background (or absences) with their predictor values, ready for a model |
+| [`ls.spatial_blocks`](sdm.md#landschaft.sdm.spatial_blocks) | Folds made of spatial blocks: no fold is a neighbour of the records it tests |
+| [`ls.autocorrelation_range`](sdm.md#landschaft.sdm.autocorrelation_range) | The range of spatial autocorrelation of each predictor (and their median), in metres |
+| [`ls.spatial_clusters`](sdm.md#landschaft.sdm.spatial_clusters) | Folds from k-means clusters of the records' coordinates (or of their environment) |
+| [`ls.buffer_folds`](sdm.md#landschaft.sdm.buffer_folds) | Leave-one-out folds with a buffer: each presence is a test, nothing within ``size`` trains |
+| [`ls.quadrant_folds`](sdm.md#landschaft.sdm.quadrant_folds) | Four folds from the occurrences split at their median latitude and longitude (ENMeval "block") |
+| [`ls.checkerboard_folds`](sdm.md#landschaft.sdm.checkerboard_folds) | Folds from a checkerboard of aggregated cells (ENMeval "checkerboard") |
+| [`ls.random_folds`](sdm.md#landschaft.sdm.random_folds) | Random k-fold of the presences, background always training (ENMeval "randomkfold") |
+| [`ls.jackknife_folds`](sdm.md#landschaft.sdm.jackknife_folds) | Leave-one-out: each presence its own fold, background always training (ENMeval "jackknife") |
+| [`ls.evaluate`](sdm.md#landschaft.sdm.evaluate) | Evaluate predictions at presences against background points (or absences) |
+| [`ls.Evaluation`](sdm.md#landschaft.sdm.Evaluation) | How well predictions separate presences from background (or absences) |
+| [`ls.boyce`](sdm.md#landschaft.sdm.boyce) | Continuous Boyce index: does predicted suitability rise with the frequency of presences? |
+| [`ls.threshold`](sdm.md#landschaft.sdm.threshold) | A threshold that turns continuous predictions into presence / absence |
+| [`ls.omission_rate`](sdm.md#landschaft.sdm.omission_rate) | Share of test presences predicted below a threshold set on the training presences |
+| [`ls.mess`](sdm.md#landschaft.sdm.mess) | Multivariate environmental similarity surface: how far conditions lie outside the reference |
+| [`ls.mop`](sdm.md#landschaft.sdm.mop) | Mobility-oriented parity: where new conditions are outside or far from the reference ones |
+| [`ls.exdet`](sdm.md#landschaft.sdm.exdet) | Extrapolation detection: univariate (NT1) and combinatorial (NT2) novelty |
+| [`ls.fit`](sdm.md#landschaft.sdm.fit) | Fit models to SDMData, cross-validate them on its folds, and fit them to all the data |
+| [`ls.SDMResult`](sdm.md#landschaft.sdm.SDMResult) | Fitted models, their cross-validated scores and what is needed to project them |
+| [`ls.predict`](sdm.md#landschaft.sdm.predict) | Project fitted models onto rasters of predictors (present or future conditions) |
+| [`ls.response_curves`](sdm.md#landschaft.sdm.response_curves) | How each model's suitability changes along one predictor, the others held at their mean (or median) |
+| [`ls.importance`](sdm.md#landschaft.sdm.importance) | Permutation importance: how much AUC drops when a predictor's values are shuffled |
+| [`ls.example_data`](sdm.md#landschaft.sdm.example_data) | Path of an example data set for species distribution modelling |

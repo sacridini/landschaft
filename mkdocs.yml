@@ -150,7 +150,8 @@ nav:
       - 10 · Landscape change: learn/change.md
       - 11 · Continuous surfaces: learn/surfaces.md
       - 12 · Conservation priorities: learn/prioritization.md
-      - 13 · From question to tool: learn/choosing.md
+      - 13 · Species distributions: learn/sdm.md
+      - 14 · From question to tool: learn/choosing.md
       - Glossary: learn/glossary.md
       - Further reading: learn/reading.md
   - Tutorials:
@@ -168,6 +169,7 @@ nav:
       - Surface texture: tutorials/surface-texture.md
       - Biodiversity analysis: tutorials/biodiversity.md
       - Conservation priorities: tutorials/prioritization.md
+      - Species distributions: tutorials/species-distributions.md
   - API reference:
       - api/index.md
       - Data & configuration: api/data.md

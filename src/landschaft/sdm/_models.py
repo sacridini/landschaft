@@ -34,10 +34,21 @@ def _accepts_weight(model) -> bool:
         return False
 
 
+def _weight_argument(model) -> str | None:
+    """How the model's fit takes sample weights: ``sample_weight``, ``<last step>__sample_weight`` for a
+    scikit-learn Pipeline (whose own fit only routes them), or None."""
+    steps = getattr(model, "steps", None)
+    if steps:
+        name, last = steps[-1]
+        return f"{name}__sample_weight" if last != "passthrough" and _accepts_weight(last) else None
+    return "sample_weight" if _accepts_weight(model) else None
+
+
 def _fit_one(model, X: pd.DataFrame, y: np.ndarray, w):
     m = _clone(model)
-    if w is not None and _accepts_weight(m):
-        m.fit(X, y, sample_weight=w)
+    arg = _weight_argument(m) if w is not None else None
+    if arg is not None:
+        m.fit(X, y, **{arg: w})
     else:
         m.fit(X, y)
     return m
@@ -142,7 +153,8 @@ def fit(data: SDMData, models=None, *, cv: bool = True) -> SDMResult:
         A dict of estimators (name -> estimator) with scikit-learn's API
         (``fit``; ``predict_proba`` or ``decision_function``), a list, or one
         estimator; default ``{"maxnet": ls.sdm.MaxNet()}``. Estimators whose
-        ``fit`` takes ``sample_weight`` get ``data.sample_weight``.
+        ``fit`` takes ``sample_weight`` get ``data.sample_weight`` (in a
+        scikit-learn Pipeline, its last step does).
     cv
         Cross-validate on ``data.folds`` (when there are folds).
 

@@ -67,6 +67,29 @@ at the end of each chapter give the primary sources of every method.
 
 </div>
 
+### Species distributions
+
+<div class="ls-refs" markdown>
+
+- Franklin, J. (2010). *Mapping Species Distributions: Spatial Inference and Prediction*. Cambridge University Press.
+  A textbook of the whole workflow, from data to evaluation, by an ecologist and geographer.
+- Peterson, A. T., Soberón, J., Pearson, R. G., Anderson, R. P., Martínez-Meyer, E., Nakamura, M., & Araújo, M. B. (2011). *Ecological Niches and Geographic Distributions*. Princeton University Press.
+  The niche-centred view: the BAM diagram, the accessible area, environmental and geographic space.
+- Guisan, A., Thuiller, W., & Zimmermann, N. E. (2017). *Habitat Suitability and Distribution Models: With Applications in R*. Cambridge University Press.
+  Concepts and practice, with worked examples of every step.
+- Elith, J., & Leathwick, J. R. (2009). Species distribution models: ecological explanation and prediction across space and time. *Annual Review of Ecology, Evolution, and Systematics*, 40, 677–697.
+  The review to start with.
+- Elith, J., Phillips, S. J., Hastie, T., Dudík, M., Chee, Y. E., & Yates, C. J. (2011). A statistical explanation of MaxEnt for ecologists. *Diversity and Distributions*, 17(1), 43–57.
+  What Maxent estimates and how its settings act, without the black box.
+- Roberts, D. R., et al. (2017). Cross-validation strategies for data with temporal, spatial, hierarchical, or phylogenetic structure. *Ecography*, 40(8), 913–929.
+  Why random cross-validation is optimistic, and what to do instead.
+- Valavi, R., Guillera-Arroita, G., Lahoz-Monfort, J. J., & Elith, J. (2022). Predictive performance of presence-only species distribution models: a benchmark study with reproducible code. *Ecological Monographs*, 92(1), e01486.
+  Which algorithms and settings work, compared on species from six regions of the world.
+- Zurell, D., et al. (2020). A standard protocol for reporting species distribution models. *Ecography*, 43(9), 1261–1277.
+  The ODMAP protocol: what a paper must say about data, model, assessment and prediction.
+
+</div>
+
 ### Landscape metrics
 
 <div class="ls-refs" markdown>
@@ -120,6 +143,7 @@ at the end of each chapter give the primary sources of every method.
 | FRAGSTATS, landscapemetrics | landscape metrics | McGarigal et al. (2012); Hesselbarth et al. (2019) |
 | Conefor, Makurhini | habitat networks, ProtConn | Saura & Torné (2009); Godínez-Gómez & Correa Ayram (2020) |
 | Circuitscape, Omniscape | circuit connectivity | Anantharaman et al. (2020); Landau et al. (2021) |
+| CoordinateCleaner, spThin, usdm, blockCV, ENMeval, ecospat, predicts | cleaning, thinning, predictors, folds and evaluation of species distribution models | Zizka et al. (2019); Aiello-Lammens et al. (2015); Valavi et al. (2019); Muscarella et al. (2014) |
 
 The [benchmarks page](../benchmarks.md#accuracy) describes how each
 reproduction is tested.

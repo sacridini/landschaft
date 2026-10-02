@@ -1158,6 +1158,300 @@ def learn_prio_curves():
     save(fig, "learn_prio_curves")
 
 
+# ----------------------------------------------------------------------- species distributions
+
+_SDM = {}
+SDM_FOLD_COLORS = ["#2563eb", "#f97316", "#16a34a", "#dc2626", "#9333ea"]
+SDM_TEMPS = ["bio1", "bio5", "bio6", "bio8", "bio9"]
+
+
+def sdm_inputs():
+    """The Bradypus records and the bioclimatic predictors."""
+    if "env" not in _SDM:
+        _SDM["occ"] = ls.load_table(ls.sdm.example_data("bradypus"))
+        _SDM["env"] = ls.load_raster(ls.sdm.example_data("bioclim"))
+    return _SDM["occ"], _SDM["env"]
+
+
+def sdm_warmer(env):
+    """The predictors 2 degrees warmer (temperatures in tenths of a degree)."""
+    warmer = env.copy()
+    warmer.loc[{"band": SDM_TEMPS}] = env.sel(band=SDM_TEMPS) + 20
+    return warmer
+
+
+def sdm_extent(da):
+    x, y = da["x"].values, da["y"].values
+    dx, dy = abs(x[1] - x[0]) / 2, abs(y[1] - y[0]) / 2
+    return (x.min() - dx, x.max() + dx, y.min() - dy, y.max() + dy)
+
+
+def sdm_base(ax, env, title="", window=(-95, -32, -36, 22)):
+    """The land of the predictor grid in light grey, cut to South and Central America."""
+    land = env.isel(band=0).notnull().values.astype(float)
+    land[land == 0] = np.nan
+    ax.imshow(land, extent=sdm_extent(env), cmap=ListedColormap(["#e2e8f0"]), vmin=0, vmax=1,
+              interpolation="nearest")
+    ax.set_xlim(window[0], window[1])
+    ax.set_ylim(window[2], window[3])
+    ax.set_title(title)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for s in ax.spines.values():
+        s.set_color("#cbd5e1")
+
+
+def sdm_raster(ax, da, env, title="", **kw):
+    sdm_base(ax, env, title)
+    return ax.imshow(np.asarray(da.values, dtype=float), extent=sdm_extent(da), interpolation="nearest", **kw)
+
+
+def sdm_glm():
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+
+    return make_pipeline(StandardScaler(), PolynomialFeatures(2),
+                         LogisticRegression(max_iter=5000))
+
+
+def sdm_tutorial():
+    """The tutorial's prepared data, models and projections (docs/tutorials/species-distributions.md)."""
+    if "res" not in _SDM:
+        from sklearn.ensemble import (
+            HistGradientBoostingClassifier,
+            RandomForestClassifier,
+        )
+
+        occ, env = sdm_inputs()
+        data = ls.sdm.prepare(occ, env, background=5000)
+        careful = data.redo(thin=50_000, area=500_000, predictors=5, background=2000,
+                            folds={"size": 500_000, "k": 5})
+        models = {
+            "glm": sdm_glm(),
+            "rf": RandomForestClassifier(n_estimators=500, max_samples=0.1, min_samples_leaf=5, random_state=1),
+            "brt": HistGradientBoostingClassifier(learning_rate=0.02, max_iter=200, max_depth=2,
+                                                  min_samples_leaf=20, random_state=1),
+        }
+        res = ls.sdm.fit(careful, models)
+        suit = ls.sdm.predict(res, env)
+        at = ls.extract(suit.sel(band="ensemble"), careful.coords)["suitability"].to_numpy()
+        t = ls.sdm.threshold(at[careful.y == 1], at[careful.y == 0])
+        _SDM.update(data=data, careful=careful, res=res, suit=suit, threshold=t)
+    return _SDM
+
+
+@figure
+def learn_sdm_bam():
+    from matplotlib.patches import Circle
+
+    fig, ax = plt.subplots(figsize=(6.4, 4.6))
+    circles = [((0.0, 0.35), "#f59e0b", "A  abiotic conditions\n(climate, soils)", (-1.55, 1.45)),
+               ((0.95, 0.35), "#16a34a", "B  biotic conditions\n(resources, competitors)", (1.75, 1.45)),
+               ((0.47, -0.45), "#2563eb", "M  accessible area\n(dispersal, history)", (0.47, -1.75))]
+    for (cx, cy), color, label, (tx, ty) in circles:
+        ax.add_patch(Circle((cx, cy), 0.95, facecolor=color, alpha=0.16, edgecolor=color, lw=2))
+        ax.text(tx, ty, label, ha="center", va="center", fontsize=9, color=color, fontweight="bold")
+    ax.text(0.47, 0.12, "occupied\narea", ha="center", va="center", fontsize=9, fontweight="bold")
+    ax.text(0.47, 0.95, "invadable:\nsuitable, not\nreached", ha="center", va="center", fontsize=8, color="#475569")
+    ax.text(-0.42, -0.3, "reached,\nexcluded by\nbiotic factors", ha="center", va="center", fontsize=7.5,
+            color="#475569")
+    ax.set_xlim(-2.5, 3.0)
+    ax.set_ylim(-2.1, 1.95)
+    ax.set_aspect("equal")
+    ax.set_axis_off()
+    save(fig, "learn_sdm_bam")
+
+
+def sdm_folds_map(ax, data, env, title, random=False):
+    sdm_base(ax, env, title)
+    xy = np.column_stack([data.coords.geometry.x, data.coords.geometry.y])
+    f, y = np.asarray(data.folds), data.y
+    if random:
+        ax.plot(xy[y == 0, 0], xy[y == 0, 1], ".", ms=2, color="#94a3b8", label="background (always training)")
+    else:
+        for k in range(1, 6):
+            sel = (y == 0) & (f == k)
+            ax.plot(xy[sel, 0], xy[sel, 1], ".", ms=2, color=SDM_FOLD_COLORS[k - 1], alpha=0.35)
+    for k in range(1, 6):
+        sel = (y == 1) & (f == k)
+        ax.plot(xy[sel, 0], xy[sel, 1], "o", ms=5, mfc=SDM_FOLD_COLORS[k - 1], mec="black", mew=0.5,
+                label=f"fold {k}")
+    ax.legend(loc="lower left", fontsize=7, frameon=True, framealpha=0.9, markerscale=1)
+
+
+@figure
+def learn_sdm_folds():
+    occ, env = sdm_inputs()
+    data = ls.sdm.prepare(occ, env, background=2000)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5.6))
+    sdm_folds_map(axes[0], ls.sdm.random_folds(data, 5, seed=1), env, "Random folds", random=True)
+    sdm_folds_map(axes[1], data, env, "Spatial blocks (presences and background)")
+    fig.tight_layout()
+    save(fig, "learn_sdm_folds")
+
+
+@figure
+def learn_sdm_mess():
+    from matplotlib.colors import TwoSlopeNorm
+
+    occ, env = sdm_inputs()
+    data = ls.sdm.prepare(occ, env, background=2000)
+    full = (-125.5, -31.5, -56.5, 40.5)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5.8))
+    for ax, clim, title in ((axes[0], env, "MESS, present climate"), (axes[1], sdm_warmer(env), "MESS, 2 °C warmer")):
+        m = ls.sdm.mess(data, clim.sel(band=data.predictors)).sel(band="mess")
+        sdm_base(ax, env, f"{title}: {int((m < 0).sum())} novel cells", window=full)
+        im = ax.imshow(np.asarray(m.values, dtype=float), extent=sdm_extent(m), interpolation="nearest",
+                       cmap="RdBu", norm=TwoSlopeNorm(0, -15, 100))
+        ys, xs = np.where(m.values < 0)
+        ax.plot(m.x.values[xs], m.y.values[ys], "s", ms=3.2, mfc="none", mec="#b91c1c", mew=0.8)
+    cb = fig.colorbar(im, ax=axes, shrink=0.7, label="similarity to the reference (negative, outlined: novel)")
+    cb.set_ticks([-15, 0, 25, 50, 75, 100])
+    save(fig, "learn_sdm_mess")
+
+
+@figure
+def sdm_clean():
+    _, env = sdm_inputs()
+    records = ls.load_table(ls.sdm.example_data("acaule"))
+    records["species"] = "Solanum acaule"
+    flags = ls.sdm.clean_occurrences(records, action="flag", countries={"column": "ISO2"})
+    flags = flags[~flags["flag_invalid"]]
+    fig, ax = plt.subplots(figsize=(6.4, 6.2))
+    sdm_base(ax, env, "Solanum acaule: records and flags", window=(-85, -35, -45, 5))
+    ok = flags[~flags["flagged"]]
+    ax.plot(ok["lon"], ok["lat"], "o", ms=3, color="#15803d", alpha=0.5, label=f"kept ({len(ok)})")
+    styles = {"countries": ("#2563eb", "s"), "outliers": ("#9333ea", "D"), "capitals": ("#f59e0b", "*"),
+              "seas": ("#0891b2", "v"), "zeros": ("#b91c1c", "X"), "equal": ("#b91c1c", "P")}
+    for test, (color, marker) in styles.items():
+        sel = flags[flags[f"flag_{test}"]]
+        if len(sel):
+            ax.plot(sel["lon"], sel["lat"], marker, ms=7, mfc=color, mec="black", mew=0.5, ls="none",
+                    label=f"{test} ({len(sel)})")
+    ax.legend(loc="lower right", fontsize=7.5, frameon=True, framealpha=0.9, title="flag (records)",
+              title_fontsize=8)
+    ax.text(-84, 3.5, "zeros at 0°/0° and the record in Antarctica\nlie outside the map", fontsize=7.5,
+            color="#475569", va="top")
+    save(fig, "sdm_clean")
+
+
+@figure
+def sdm_prepare():
+    occ, env = sdm_inputs()
+    occ1 = ls.sdm.one_per_cell(ls.sdm.clean_occurrences(occ), env)
+    occ2 = ls.sdm.thin(occ1, 50_000, seed=1)
+    area = ls.sdm.accessible_area(occ2, distance=500_000)
+    env2 = ls.sdm.select_predictors(env, vif=5, area=area, seed=1)
+    bg = ls.sdm.background(env2, 2000, occ=occ2, area=area, seed=1)
+    fig, ax = plt.subplots(figsize=(6.4, 6.2))
+    sdm_base(ax, env, "Accessible area, background and records")
+    area.boundary.plot(ax=ax, color="#2563eb", lw=1.2)
+    ax.plot(bg.geometry.x, bg.geometry.y, ".", ms=2, color="#64748b", label="background (2000)")
+    gone = occ1.loc[~occ1.index.isin(occ2.index)]
+    ax.plot(gone["lon"], gone["lat"], "o", ms=5, mfc="white", mec="#b91c1c", label=f"thinned out ({len(gone)})")
+    ax.plot(occ2["lon"], occ2["lat"], "o", ms=5, mfc="#15803d", mec="black", mew=0.5,
+            label=f"presences ({len(occ2)})")
+    ax.plot([], [], color="#2563eb", label="500 km around the records")
+    ax.legend(loc="lower left", fontsize=7.5, frameon=True, framealpha=0.9)
+    save(fig, "sdm_prepare")
+
+
+@figure
+def sdm_folds():
+    _, env = sdm_inputs()
+    careful = sdm_tutorial()["careful"]
+    fig, ax = plt.subplots(figsize=(6.4, 6.2))
+    sdm_folds_map(ax, careful, env, "Five folds of 500 km hexagons")
+    save(fig, "sdm_folds")
+
+
+@figure
+def sdm_ensemble():
+    _, env = sdm_inputs()
+    s = sdm_tutorial()
+    suit, careful = s["suit"], s["careful"]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5.6))
+    im = sdm_raster(axes[0], suit.sel(band="ensemble"), env, "Ensemble suitability", cmap="viridis", vmin=0, vmax=1)
+    pres = careful.coords[careful.y == 1]
+    axes[0].plot(pres.geometry.x, pres.geometry.y, "o", ms=3, mfc="white", mec="black", mew=0.4)
+    fig.colorbar(im, ax=axes[0], shrink=0.7)
+    im = sdm_raster(axes[1], suit.sel(band="sd"), env, "Disagreement between models (sd)", cmap="magma_r",
+                    vmin=0, vmax=0.4)
+    fig.colorbar(im, ax=axes[1], shrink=0.7)
+    fig.tight_layout()
+    save(fig, "sdm_ensemble")
+
+
+@figure
+def sdm_response():
+    res = sdm_tutorial()["res"]
+    curves = ls.sdm.response_curves(res)
+    labels = {"bio5": "bio5: max temperature of the warmest month (°C × 10)",
+              "bio7": "bio7: annual range of temperature (°C × 10)",
+              "bio16": "bio16: rain of the wettest quarter (mm)",
+              "bio17": "bio17: rain of the driest quarter (mm)"}
+    colors = {"glm": "#2563eb", "rf": "#16a34a", "brt": "#f97316"}
+    fig, axes = plt.subplots(1, 4, figsize=(14, 3.4), sharey=True)
+    for ax, p in zip(axes, res.predictors):
+        for model, g in curves[curves["predictor"] == p].groupby("model"):
+            ax.plot(g["value"], g["suitability"], color=colors[model], lw=1.8, label=model)
+        ax.set_xlabel(labels[p], fontsize=8)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.grid(color="#e2e8f0")
+        ax.set_axisbelow(True)
+    axes[0].set_ylabel("suitability")
+    axes[0].legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    save(fig, "sdm_response")
+
+
+@figure
+def sdm_threshold():
+    _, env = sdm_inputs()
+    s = sdm_tutorial()
+    ens = s["suit"].sel(band="ensemble")
+    v = (ens >= s["threshold"]).astype(float).where(ens.notnull())
+    fig, ax = plt.subplots(figsize=(6.4, 6.2))
+    sdm_raster(ax, v, env, f"Suitable at the maximum-TSS threshold ({s['threshold']:.2f})",
+               cmap=ListedColormap(["#f1f5f9", "#15803d"]), vmin=0, vmax=1)
+    ax.legend(handles=[Patch(color="#15803d", label="suitable"), Patch(color="#f1f5f9", label="unsuitable")],
+              loc="lower left", fontsize=8, frameon=True, framealpha=0.9)
+    save(fig, "sdm_threshold")
+
+
+@figure
+def sdm_future():
+    _, env = sdm_inputs()
+    s = sdm_tutorial()
+    res, careful, t = s["res"], s["careful"], s["threshold"]
+    warmer = sdm_warmer(env)
+    ens = s["suit"].sel(band="ensemble")
+    today = (ens >= t).values
+    later = (ls.sdm.predict(res, warmer).sel(band="ensemble") >= t).values
+    change = np.where(ens.notnull().values, 1.0, np.nan)
+    change[today & later] = 2
+    change[today & ~later] = 3
+    change[~today & later] = 4
+    mess = ls.sdm.mess(careful, warmer.sel(band=careful.predictors)).sel(band="mess")
+    fig, axes = plt.subplots(1, 2, figsize=(11, 5.6))
+    sdm_base(axes[0], env, "Suitable today and 2 °C warmer")
+    axes[0].imshow(change, extent=sdm_extent(ens), interpolation="nearest",
+                   cmap=ListedColormap(["#f1f5f9", "#15803d", "#dc2626", "#2563eb"]), vmin=0.5, vmax=4.5)
+    axes[0].legend(handles=[Patch(color="#15803d", label="suitable in both"), Patch(color="#dc2626", label="lost"),
+                            Patch(color="#2563eb", label="gained")], loc="lower left", fontsize=8, frameon=True,
+                   framealpha=0.9)
+    from matplotlib.colors import TwoSlopeNorm
+
+    im = sdm_raster(axes[1], mess, env, "MESS of the warmer climate", cmap="RdBu", norm=TwoSlopeNorm(0, -15, 100))
+    if careful.area is not None:
+        careful.area.boundary.plot(ax=axes[1], color="black", lw=0.8)
+    cb = fig.colorbar(im, ax=axes[1], shrink=0.7, label="similarity (negative: novel); outline: accessible area")
+    cb.set_ticks([-15, 0, 25, 50, 75, 100])
+    fig.tight_layout()
+    save(fig, "sdm_future")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:

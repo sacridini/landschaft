@@ -1,4 +1,4 @@
-<p class="ls-chapter">Chapter 13</p>
+<p class="ls-chapter">Chapter 14</p>
 
 # From question to tool
 
@@ -23,7 +23,8 @@ and a checklist of what to report.
    else ([chapter 1](landscape-ecology.md#pattern-process-and-scale)).
 2. **The organism and its habitat.** Define habitat for the species or
    group studied, with references to its natural history
-   ([chapter 1](landscape-ecology.md#habitat-is-species-specific)).
+   ([chapter 1](landscape-ecology.md#habitat-is-species-specific)), or
+   model it from the species' records ([chapter 13](sdm.md)).
 3. **The map.** Choose a map whose legend separates that habitat, whose
    grain resolves the features that matter and whose extent contains the
    process. Know its date, minimum mapping unit and accuracy
@@ -71,6 +72,10 @@ and a checklist of what to report.
 | which places matter most for many species at once | `ls.prioritize.zonation` | [12](prioritization.md) |
 | how much of every species a share of the land would protect | performance curves (`feature_curves`) | [12](prioritization.md) |
 | what existing reserves miss, and how to complete them | hierarchic mask, gap analysis | [12](prioritization.md) |
+| **Species distributions** | | |
+| where a species could live, from records and environmental maps | `ls.sdm.prepare`, `ls.sdm.fit`, `ls.sdm.predict` | [13](sdm.md) |
+| how well a distribution model predicts new places | spatial folds, `ls.sdm.evaluate` (AUC, TSS, Boyce, omission) | [13](sdm.md) |
+| where a projection to another climate or region extrapolates | `ls.sdm.mess`, `ls.sdm.mop`, `ls.sdm.exdet` | [13](sdm.md) |
 | **Change** | | |
 | what was gained and lost, and whether it is real | `ls.simple_change`, `ls.morphological_change` | [10](change.md) |
 | how fragmentation classes shifted | `ls.fos_change`, `ls.fad_multiscale_change` | [10](change.md) |
@@ -91,6 +96,7 @@ and a checklist of what to report.
 | graphs | patches and distances | indices, rankings | movement depends on distance between patches | ranks patches and links; fast | patch definition; ignores routes within the matrix unless least-cost distances are used |
 | circuits | resistance map | current and resistance maps | random-walk movement | all routes, pinch points | needs a resistance surface; computation for large maps |
 | least-cost | resistance map | paths, corridors, costs | movement along the optimal route | simple, mappable corridors | one route; assumes knowledge of the landscape |
+| distribution models | occurrence records, environmental rasters | suitability maps | records sample the conditions the species uses; equilibrium with the environment | habitat maps for species without one; projections to other climates | sampling bias; relative suitability only from presence-only data; extrapolation |
 
 ## A worked example
 
@@ -210,6 +216,7 @@ ls.__version__
 | resistance values from a single expert guess, untested | several plausible sets; report which conclusions hold |
 | change maps from independent maps, without accuracy | consistent map series; accuracy of change; filter boundary noise |
 | treating MSPA bridges as proven corridors | structural hypotheses to validate with species data |
+| a species' habitat taken from a land-cover class without checking | a distribution model from its records, or at least a check of the class against them |
 
 !!! success "Key points"
     - Start from the question and the process, then define habitat, choose

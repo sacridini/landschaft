@@ -108,4 +108,12 @@ and follow along.
     Rank a landscape for many species with Zonation: performance curves,
     weights, costs, existing reserves and connectivity.
 
+-   :material-map-marker-radius-outline:{ .lg .middle } **[Species distributions](species-distributions.md)**
+
+    ---
+
+    Clean and thin occurrence records, prepare predictors and background,
+    fit and cross-validate models on spatial folds, project and check
+    extrapolation.
+
 </div>

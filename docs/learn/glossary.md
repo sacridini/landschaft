@@ -2,6 +2,9 @@
 
 The terms of the course, with the chapter where each is introduced.
 
+Accessible area (M)
+:   The area a species has been able to reach by dispersal over the relevant period; in a distribution model, where its background is drawn. [Ch. 13](sdm.md#records-and-their-problems)
+
 Additive benefit function (ABF)
 :   A Zonation rule: the marginal loss of a cell is the sum over the features of the loss of a benefit that saturates with the share kept (R<sup>z</sup>). [Ch. 12](prioritization.md#how-zonation-ranks)
 
@@ -18,11 +21,23 @@ Area-weighted mean (`_am`)
 Attrition
 :   The disappearance of patches, typically small ones. [Ch. 10](change.md)
 
+AUC
+:   The area under the ROC curve: the probability that a random presence gets a higher prediction than a random background point or absence (the Mann-Whitney statistic); depends on the extent of the background. [Ch. 13](sdm.md#auc)
+
 Autocorrelation length (Sal)
 :   The shortest distance at which a surface's autocorrelation falls to 0.2: the size of the grain of its texture. [Ch. 11](surfaces.md#spatial-structure)
 
+Background points
+:   A sample of the conditions available in the study area, contrasted with the presences by presence-only distribution models; not absences. [Ch. 13](sdm.md#presences-absences-and-background)
+
+BAM diagram
+:   The places where abiotic (A) and biotic (B) conditions suit a species and that it can reach (M); it occurs where the three overlap. [Ch. 13](sdm.md#niche-and-distribution)
+
 Bearing area curve
 :   The heights of a surface sorted from the highest, against the share of the surface at or above each; its core, peak and valley zones give Sk, Spk and Svk. [Ch. 11](surfaces.md#the-bearing-area-curve)
+
+Boyce index (continuous)
+:   The rank correlation between predicted suitability and the ratio of presences to background predicted in moving windows of suitability: near 1 for a good presence-only model. [Ch. 13](sdm.md#tss-the-boyce-index-and-omission)
 
 Bridge
 :   In MSPA, a non-core strip of habitat connecting two different core
@@ -31,6 +46,9 @@ Bridge
 Circuit theory
 :   The modelling of movement as electric current through a landscape of
     resistances; equivalent to random walks. [Ch. 8](circuits.md)
+
+Clamping
+:   Holding each predictor at the edge of its training range before projecting a model, so that responses stay flat beyond the data. [Ch. 13](sdm.md#projection-and-extrapolation)
 
 Class
 :   A category of a categorical map (a land-cover type); class-level metrics
@@ -100,6 +118,9 @@ Edge width
 Effective resistance
 :   The resistance between two points of a circuit, combining the length and
     the number of routes between them. [Ch. 8](circuits.md)
+
+Ensemble (of models)
+:   An average of several distribution models, often weighted by their cross-validated scores; the spread between them maps uncertainty. [Ch. 13](sdm.md#the-algorithms-in-brief)
 
 Equivalent connected area (EC, ECA)
 :   The area of a single patch that would provide the same reachable habitat
@@ -173,6 +194,12 @@ Matrix
 :   The dominant, most connected land cover in which habitat patches are
     embedded. [Ch. 1](landscape-ecology.md#patches-corridors-and-the-matrix)
 
+Maxent
+:   A presence-background distribution model: a log-linear model of the relative occurrence rate with a lasso penalty, equivalent to a Poisson point process model and to infinitely weighted logistic regression. [Ch. 13](sdm.md#the-algorithms-in-brief)
+
+MESS
+:   Multivariate environmental similarity surface: for every cell, the similarity of its least similar predictor to the data a model was fitted to; negative where a projection extrapolates. [Ch. 13](sdm.md#projection-and-extrapolation)
+
 Metapopulation
 :   A set of local populations in separate patches, linked by dispersal,
     persisting through a balance of local extinction and recolonisation.
@@ -181,6 +208,9 @@ Metapopulation
 Minimum mapping unit (MMU)
 :   The smallest area delineated on a map; it can make the effective grain
     coarser than the cell size. [Ch. 2](scale.md)
+
+MOP
+:   Mobility-oriented parity: the distance from each cell to its nearest reference conditions, and whether it is outside their ranges. [Ch. 13](sdm.md#projection-and-extrapolation)
 
 Moving window
 :   A neighbourhood of fixed size and shape centred on every cell in turn, in
@@ -195,6 +225,12 @@ Neutral landscape model
 :   An artificial map with known properties, used as a baseline to test the
     effects of pattern. [Ch. 3](fragmentation.md); tools:
     [neutral landscapes](../tutorials/neutral-landscapes.md)
+
+Niche (fundamental, realized)
+:   The environmental conditions in which a species can maintain populations (fundamental), and the part of them it occupies given competitors, predators and dispersal (realized). [Ch. 13](sdm.md#niche-and-distribution)
+
+Omission rate
+:   The share of test presences predicted below a threshold set on the training presences (minimum or 10th percentile); much above 0 and 10 % signals overfitting. [Ch. 13](sdm.md#tss-the-boyce-index-and-omission)
 
 Omnidirectional connectivity
 :   Connectivity mapped between all places within a moving window, without
@@ -225,6 +261,9 @@ Pinch point
 :   A narrow place where movement is funnelled, marked by high current
     density. [Ch. 8](circuits.md)
 
+Presence-only data
+:   Records of where a species was found, without records of where it was looked for and not found: museum specimens, herbarium sheets, most GBIF data. [Ch. 13](sdm.md#presences-absences-and-background)
+
 ProtConn
 :   The percentage of a region that is protected and connected.
     [Ch. 7](networks.md#protected-area-connectivity)
@@ -240,8 +279,14 @@ Scale of effect
 Shrinkage
 :   The reduction of patch size, typically from the edges. [Ch. 10](change.md)
 
+Spatial cross-validation
+:   Cross-validation with folds made of spatial blocks, so that test records are not next to training ones; random folds overestimate how well a model predicts new places. [Ch. 13](sdm.md#evaluating-a-model)
+
 Spatial prioritization
 :   The ranking or selection of areas for conservation actions, balancing many features, costs and constraints. [Ch. 12](prioritization.md)
+
+Species distribution model (SDM)
+:   A model relating the records of a species to environmental predictors, projected onto maps of them; also ecological niche or habitat suitability model. [Ch. 13](sdm.md)
 
 Structuring element
 :   In mathematical morphology, the small reference shape used to probe the
@@ -253,11 +298,17 @@ Surface metrics
 Systematic conservation planning
 :   Choosing areas for conservation with explicit goals, measuring what exists, and selecting areas for what they add to the whole (Margules & Pressey 2000). [Ch. 12](prioritization.md#why-prioritize-systematically)
 
+Target-group background
+:   Background points drawn with the same sampling bias as the presences, from the records of the whole taxonomic group, so that the bias cancels. [Ch. 13](sdm.md#records-and-their-problems)
+
 Texture image
 :   A map of a surface metric computed in a moving window around every cell. [Ch. 11](surfaces.md#surfaces-in-moving-windows)
 
 Thematic resolution
 :   How finely the classes of a map are defined. [Ch. 2](scale.md)
+
+Thinning (spatial)
+:   Removing occurrence records until none is closer than a given distance to another, to reduce sampling bias and pseudo-replication. [Ch. 13](sdm.md#records-and-their-problems)
 
 Topographic position index (TPI)
 :   Elevation minus the mean elevation of a window: positive on ridges, negative in valleys. [Ch. 11](surfaces.md#elevation-terrain-indices)
@@ -265,3 +316,9 @@ Topographic position index (TPI)
 Transition matrix
 :   A table of the cells that moved from each class at one date to each class
     at another. [Ch. 10](change.md)
+
+TSS
+:   True skill statistic: sensitivity + specificity − 1 at a threshold, from −1 to 1 (0 for a random model). [Ch. 13](sdm.md#tss-the-boyce-index-and-omission)
+
+VIF
+:   Variance inflation factor: 1 / (1 − R²) of a predictor regressed on the others; above 5–10, collinearity makes its effect unstable. [Ch. 13](sdm.md#predictors-and-collinearity)

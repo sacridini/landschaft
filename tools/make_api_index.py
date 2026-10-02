@@ -42,7 +42,9 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("biodiversity.md", "Biodiversity analysis", ":material-paw:",
           "Species counts per cell, phylogenies and dissimilarity matrices (Biodiverse)."),
          ("prioritization.md", "Spatial prioritization", ":material-star-circle-outline:",
-          "Zonation's ranking of the cells for conservation: rules, weights, costs, curves.")]
+          "Zonation's ranking of the cells for conservation: rules, weights, costs, curves."),
+         ("sdm.md", "Species distributions", ":material-map-search-outline:",
+          "Clean records, choose predictors and background, spatial folds, fit, evaluate, project.")]
 
 INTRO = '''# API reference
 
@@ -60,6 +62,7 @@ ls.surface.metrics(z)               # surface texture of continuous rasters
 ls.nlm.random(100, 100, seed=1)     # neutral landscape models
 ls.bio.BaseData.from_table(...)     # biodiversity analysis
 ls.prioritize.zonation(features)    # spatial conservation prioritization
+ls.sdm.prepare(occ, env)            # species distribution models
 ```
 
 !!! example "Every example runs"

@@ -112,3 +112,12 @@ def test_blocks_of_the_autocorrelation_range(inputs):
     manual = ls.sdm.spatial_blocks(ls.sdm.prepare(occ, env, clean=False, background=800, folds=False),
                                    size=r, k=4, seed=1)
     np.testing.assert_array_equal(data.folds, manual.folds)
+
+
+def test_pipelines_get_the_weights(inputs):
+    occ, env = inputs
+    data = ls.sdm.prepare(occ, env, clean=False, background=800, folds=False)
+    res = ls.sdm.fit(data, {"glm": glm()})
+    direct = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000)).fit(
+        data.X, data.y, logisticregression__sample_weight=data.sample_weight)
+    np.testing.assert_allclose(res.models["glm"].predict_proba(data.X), direct.predict_proba(data.X))
