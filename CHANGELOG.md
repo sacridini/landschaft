@@ -6,6 +6,17 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-02
+
+### Changed
+- `ls.plot` is faster on stacks and makes smaller pages. The bands of a stack are rendered a band
+  per thread (47 bands of 1000 x 1000: 3.9 s -> 1.1 s); the images and data go into the page in
+  one pass (a replace per image went over the page as it grew); PNGs are compressed at level 2
+  (about 1 ms more per image, pages about 30 % smaller: a class map of 10 000 x 10 000,
+  2.5 -> 1.6 MB; 2 million points, 7.8 -> 4.8 MB). Measured and left as they are: lossless WebP
+  (40 % smaller than PNG but 10 to 30 times slower to encode) and landschaft's own warp kernel for
+  the reprojection to Web Mercator (no faster than GDAL's on images of the screen's size).
+
 ## [1.4.0] - 2026-10-02
 
 ### Added
