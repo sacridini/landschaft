@@ -6,6 +6,22 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-02
+
+### Fixed
+- `ls.plot`: an HTML page opens without a network connection. Leaflet and plotly are in the page
+  instead of loaded from CDNs (folium's unused jQuery, Bootstrap and Font Awesome are left out);
+  a window loads plotly from the installed package. The full-screen button and the coordinates
+  under the cursor are Landschaft's own controls.
+- `ls.plot`: NoData of a true-colour composite is transparent and left out of its stretch (an
+  integer NoData such as 0 was drawn black and darkened the image); a lazy raster's NoData is left
+  out of its block means.
+- `ls.plot(..., bands=)` takes the bands by their labels first (the band numbers of a file, from
+  1), then by position: `bands=[1]` drew the second band of a file read by `load_raster`.
+- `ls.plot`: `vmin`, `vmax` and `log` apply to the column of a vector layer too; a ramp's legend
+  marks its ends `≤` / `≥` when values beyond them share their colours (static figures: arrow
+  ends on the colour bar); the values of a vector layer's tooltip are escaped.
+
 ## [1.0.1] - 2026-10-02
 
 ### Changed

@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "landschaft"
-version = "1.0.1"
+version = "1.0.2"
 description = "Fast, exact landscape pattern, fragmentation, landscape-metric and connectivity analysis for Python."
 readme = "README.md"
 license = "GPL-3.0-or-later"
