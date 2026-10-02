@@ -15,9 +15,11 @@
 #include <vector>
 
 #include "nlm/rng.hpp"
+#include "lsm/extended.hpp"
 #include "lsm/rmath.hpp"
 #include "sdm/clean.hpp"
 #include "sdm/collinear.hpp"
+#include "sdm/extrapolation.hpp"
 #include "sdm/geocircle/geocircle.hpp"
 #include "sdm/rstats.hpp"
 #include "sdm/thin.hpp"
@@ -165,6 +167,35 @@ void register_python(py::module_& m) {
             return to_array(std::move(out));
         },
         py::arg("x"), "R's cos() of a vector (x87 fcos on Windows)");
+    m.def(
+        "sdm_knn_mean_distance",
+        [](const py::array_t<double, py::array::c_style | py::array::forcecast>& ref,
+           const py::array_t<double, py::array::c_style | py::array::forcecast>& g, i64 k, bool squared) {
+            if (ref.ndim() != 2 || g.ndim() != 2 || ref.shape(1) != g.shape(1))
+                throw std::invalid_argument("expected two tables with the same columns");
+            std::vector<double> out;
+            {
+                py::gil_scoped_release release;
+                out = knn_mean_distance(ref.data(), ref.shape(0), g.data(), g.shape(0), g.shape(1), k, squared);
+            }
+            return to_array(std::move(out));
+        },
+        py::arg("ref"), py::arg("g"), py::arg("k"), py::arg("squared") = false,
+        "mop: mean of the k smallest distances of each row of g to the rows of ref");
+    m.def(
+        "sdm_r_colmeans",
+        [](const py::array_t<double, py::array::c_style | py::array::forcecast>& x) {
+            if (x.ndim() != 2) throw std::invalid_argument("expected a 2-D table");
+            const i64 n = x.shape(0), p = x.shape(1);
+            std::vector<double> out(static_cast<std::size_t>(p));
+            for (i64 j = 0; j < p; ++j) {  // colMeans: one 80-bit pass, divided by n in 80 bits
+                lsm::Extended s = 0.0;
+                for (i64 i = 0; i < n; ++i) s += x.data()[i * p + j];
+                out[static_cast<std::size_t>(j)] = static_cast<double>(s / lsm::Extended(n));
+            }
+            return to_array(std::move(out));
+        },
+        py::arg("x"), "R's colMeans()");
     m.def(
         "sdm_r_cor2",
         [](const Vec& x, const Vec& y, bool kendall) {

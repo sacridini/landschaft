@@ -19,7 +19,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background", "folds", "evaluate"]
+GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background", "folds", "evaluate", "extrapolation"]
 
 
 @dataclass
@@ -315,7 +315,35 @@ def eval_scale1000() -> pd.DataFrame:
     return d
 
 
+def ref_x() -> pd.DataFrame:
+    """The predictor values of the Bradypus presences and background (the reference conditions)."""
+    return _bradypus_data().X.copy()
+
+
+def env_warm():
+    """bioclim + 30: 3 degrees warmer and 30 mm wetter (temperatures in tenths of a degree)."""
+    return bioclim() + 30.0
+
+
+def env_small():
+    """A 40 x 40 window of bioclim."""
+    return bioclim().isel(y=slice(80, 120), x=slice(80, 120))
+
+
+def tg_small() -> pd.DataFrame:
+    """The complete cells of env_small, three variables, as a table."""
+    e = env_small().sel(band=["bio1", "bio12", "bio16"])
+    v = e.values.reshape(3, -1).T
+    d = pd.DataFrame(v, columns=["bio1", "bio12", "bio16"]).dropna().reset_index(drop=True)
+    d.loc[0, "bio1"] = 400.0  # a cell outside the range of bio1
+    return d
+
+
 INPUTS: dict[str, Callable[[], object]] = {
+    "ref_x": ref_x,
+    "env_warm": env_warm,
+    "env_small": env_small,
+    "tg_small": tg_small,
     "eval_small": eval_small,
     "eval_beta": eval_beta,
     "eval_big": eval_big,
@@ -791,6 +819,83 @@ def _or_py(d: str):
 
 
 CASES["omission_beta"] = Case("evaluate", r=_OR_R.format(d="eval_beta"), inputs=("eval_beta",), py=_or_py("eval_beta"))
+
+
+_MESS_R = ("{ suppressMessages(library(predicts)); m <- mess(env_warm, ref_x, full = TRUE); "
+           "out <- lapply(seq_len(nlyr(m)), function(k) values(m[[k]], mat = FALSE)); names(out) <- names(m); out }")
+
+
+def _mess_py(**kw):
+    import landschaft as ls
+
+    m = ls.sdm.mess(kw["ref_x"], kw["env_warm"], full=True)
+    return {str(b): m.sel(band=b).values.ravel() for b in m.band.values}
+
+
+CASES["mess_full"] = Case("extrapolation", r=_MESS_R, inputs=("ref_x", "env_warm"), py=_mess_py)
+
+_MOP_R = ("{{ suppressMessages({{ library(mop); library(terra) }}); "
+          "o <- mop(as.matrix(ref_x), {env}{args}, progress_bar = FALSE); "
+          "v <- function(r) if (is.null(r)) rep(NA_real_, ncell({env})) else values(r, mat = FALSE); "
+          "out <- list(mop = v(o$mop_distances), basic = v(o$mop_basic)); "
+          "if (!is.null(o$mop_simple)) out$simple <- v(o$mop_simple); "
+          "if (!is.null(o$mop_detailed$towards_low_combined)) {{ out$low_combined <- v(o$mop_detailed$towards_low_combined); "
+          "out$high_combined <- v(o$mop_detailed$towards_high_combined) }}; out }}")
+
+
+def _mop_py(env: str, **opts):
+    def run(**kw):
+        import landschaft as ls
+
+        o = ls.sdm.mop(kw["ref_x"], kw[env], **opts)
+        return {str(b): o.sel(band=b).values.ravel() for b in o.band.values}
+    return run
+
+
+CASES["mop_detailed"] = Case("extrapolation", r=_MOP_R.format(
+    env="env_warm", args=", type = 'detailed', calculate_distance = TRUE, where_distance = 'all'"),
+    inputs=("ref_x", "env_warm"), py=_mop_py("env_warm", type="detailed", where="all"))
+CASES["mop_scaled"] = Case("extrapolation", r=_MOP_R.format(
+    env="bioclim", args=", calculate_distance = TRUE, scale = TRUE, center = TRUE, percentage = 10,"
+                        " rescale_distance = TRUE"),
+    inputs=("ref_x", "bioclim"), py=_mop_py("bioclim", scale=True, center=True, percentage=10, rescale=True))
+
+# Mahalanobis with the covariance of the reference (mop takes that of the cells tested)
+_MOP_MAHAL_R = """{ suppressMessages(library(terra)); xp <- c("bio1", "bio12", "bio16")
+m <- as.matrix(ref_x[, xp]); g <- values(env_small[[xp]])
+ok <- complete.cases(g); k <- max(round(nrow(m) * 5 / 100), 1); cv <- cov(m)
+d <- rep(NA_real_, nrow(g))
+d[ok] <- apply(g[ok, , drop = FALSE], 1, function(gi) mean(sort(mahalanobis(m, gi, cv))[1:k]))
+list(mop = d) }"""
+
+
+def _mop_mahal_py(**kw):
+    import landschaft as ls
+
+    o = ls.sdm.mop(kw["ref_x"], kw["env_small"].sel(band=["bio1", "bio12", "bio16"]), distance="mahalanobis",
+                   where="all", percentage=5)
+    return {"mop": o.sel(band="mop").values.ravel()}
+
+
+CASES["mop_mahalanobis"] = Case("extrapolation", r=_MOP_MAHAL_R, inputs=("ref_x", "env_small"), py=_mop_mahal_py,
+                                notes="tolerance: R inverts the covariance with LAPACK")
+
+# dsmextra's ExDet with its combinatorial MIC numbered the right way round
+_EXDET_R = """{ .libPaths(.libPaths()); suppressMessages(library(dsmextra)); xp <- c("bio1", "bio12", "bio16")
+ref <- na.omit(ref_x[, xp]); e <- dsmextra:::ExDet(ref, tg_small[, xp], xp = xp)
+mic <- ifelse(!is.na(e$mic_combinatorial), length(xp) + 1 - e$mic_combinatorial, e$mic)
+list(exdet = e$ExDet, mic = mic) }"""
+
+
+def _exdet_py(**kw):
+    import landschaft as ls
+
+    e = ls.sdm.exdet(kw["ref_x"], kw["tg_small"])
+    return {"exdet": e["exdet"].to_numpy(), "mic": e["mic"].to_numpy()}
+
+
+CASES["exdet"] = Case("extrapolation", r=_EXDET_R, inputs=("ref_x", "tg_small"), py=_exdet_py,
+                      notes="NT2 to tolerance (LAPACK solve)")
 
 
 def case_ids(group: str) -> list[str]:

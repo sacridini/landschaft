@@ -35,7 +35,12 @@ between minor versions.
   `ls.sdm.evaluate` (predicts' `pa_evaluate`: AUC, kappa, TSS and the rest per threshold, the usual
   thresholds, the same values), `ls.sdm.boyce` (ecospat's continuous Boyce index without its "+1
   trick", which made the index depend on the scale of the predictions), `ls.sdm.threshold` and
-  `ls.sdm.omission_rate` (ENMeval's `or.mtp` / `or.10p`), and the reference harness
+  `ls.sdm.omission_rate` (ENMeval's `or.mtp` / `or.10p`), extrapolation: `ls.sdm.mess` (predicts'
+  MESS, the same values), `ls.sdm.mop` (the mop package: out-of-range codes and distances to the
+  nearest reference conditions in C++; the Mahalanobis distance with the reference's covariance,
+  where mop used that of the cells tested) and `ls.sdm.exdet` (dsmextra's NT1 / NT2, with its
+  combinatorial "most influential covariate" numbered the right way round), and the reference
+  harness
   (`tools/make_reference_sdm.py`).
 - R data files (`.rda`, `.rds`) are read without R (`landschaft._rdata`), so the reference tables
   of R packages (CoordinateCleaner's centroids, capitals, institutions, land and sea) are used as

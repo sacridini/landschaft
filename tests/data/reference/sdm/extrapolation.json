@@ -1,0 +1,81 @@
+{
+ "arrays": {
+  "exdet/exdet": {
+   "kind": "vector"
+  },
+  "exdet/mic": {
+   "kind": "vector"
+  },
+  "mess_full/bio12_mess": {
+   "kind": "vector"
+  },
+  "mess_full/bio16_mess": {
+   "kind": "vector"
+  },
+  "mess_full/bio17_mess": {
+   "kind": "vector"
+  },
+  "mess_full/bio1_mess": {
+   "kind": "vector"
+  },
+  "mess_full/bio5_mess": {
+   "kind": "vector"
+  },
+  "mess_full/bio6_mess": {
+   "kind": "vector"
+  },
+  "mess_full/bio7_mess": {
+   "kind": "vector"
+  },
+  "mess_full/bio8_mess": {
+   "kind": "vector"
+  },
+  "mess_full/bio9_mess": {
+   "kind": "vector"
+  },
+  "mess_full/mess": {
+   "kind": "vector"
+  },
+  "mop_detailed/basic": {
+   "kind": "vector"
+  },
+  "mop_detailed/high_combined": {
+   "kind": "vector"
+  },
+  "mop_detailed/low_combined": {
+   "kind": "vector"
+  },
+  "mop_detailed/mop": {
+   "kind": "vector"
+  },
+  "mop_detailed/simple": {
+   "kind": "vector"
+  },
+  "mop_mahalanobis/mop": {
+   "kind": "vector"
+  },
+  "mop_scaled/basic": {
+   "kind": "vector"
+  },
+  "mop_scaled/mop": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "CoordinateCleaner": "3.0.1",
+  "ENMeval": "2.0.5.2",
+  "biomod2": "4.3.4.5",
+  "blockCV": "3.2.0",
+  "dismo": "1.3.16",
+  "ecospat": "4.1.3",
+  "glmnet": "4.1.10",
+  "maxnet": "0.1.4",
+  "mop": "0.1.4",
+  "predicts": "0.1.19",
+  "sf": "1.0.19",
+  "spThin": "0.2.0",
+  "terra": "1.9.50",
+  "usdm": "2.1.7"
+ }
+}

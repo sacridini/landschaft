@@ -25,6 +25,7 @@ from ._clean import clean_occurrences
 from ._data import SDMData, dataset
 from ._evaluate import Evaluation, boyce, evaluate, omission_rate, threshold
 from ._examples import example_data
+from ._extrapolation import exdet, mess, mop
 from ._folds import (
     buffer_folds,
     checkerboard_folds,
@@ -51,7 +52,10 @@ __all__ = [
     "download_gbif",
     "evaluate",
     "example_data",
+    "exdet",
     "jackknife_folds",
+    "mess",
+    "mop",
     "omission_rate",
     "one_per_cell",
     "quadrant_folds",

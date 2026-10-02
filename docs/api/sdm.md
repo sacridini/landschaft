@@ -71,6 +71,14 @@ m = ls.sdm.accessible_area(occ, distance=300_000)       # where the background c
 
 ::: landschaft.sdm.omission_rate
 
+## Extrapolation
+
+::: landschaft.sdm.mess
+
+::: landschaft.sdm.mop
+
+::: landschaft.sdm.exdet
+
 ## Example data
 
 ::: landschaft.sdm.example_data
