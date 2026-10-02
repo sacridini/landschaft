@@ -236,6 +236,47 @@ times: z5 gains 1.7 to 3 times from its 12 threads, Landschaft 4.7 to 6.3. Memor
 cell with data during the ranking, plus 1 to 2 bytes per value that is not
 zero; `storage=` puts the large arrays in memory-mapped files.
 
+### Species distributions
+
+Against the R packages each step reproduces (R 4.4.2, terra 1.9-50):
+CoordinateCleaner 3.0.1, spThin 0.2.0, usdm 2.1-7, dismo 1.3-16, blockCV
+3.2-0, predicts 0.1-19, ecospat 4.1.3 and maxnet 0.1.4 with glmnet 4.1-10.
+The inputs are the example climate (9 bioclimatic layers, 192 × 186 cells of
+0.5°), the *Bradypus* records with 10 000 background points, 5 000 synthetic
+records over the same area and 2 000 clustered ones. Measured with
+`tools/benchmark_sdm.py` (version 1.0) on the performance cores: the best of
+3 runs in R (fast tasks repeated to 0.5 s), of 5 in Landschaft with the
+default threads. Every result is the same as R's, the random steps included
+(same seed), except where the notes on accuracy below say otherwise.
+
+| Task | R | Landschaft | Since |
+|---|---|---|---|
+| Clean 5 000 records: capitals, centroids, equal, GBIF, institutions, outliers, zeros (CoordinateCleaner) | 1.99 s | 0.16 s | 1.0 |
+| Thin 2 000 records at 10 km, 10 repetitions (spThin) | 0.91 s | 1.4 ms | 1.0 |
+| VIF selection, 9 layers (usdm `vifstep`) | 0.17 s | 16 ms | 1.0 |
+| 10 000 background points (dismo `randomPoints`) | 0.43 s | 12 ms | 1.0 |
+| Hexagonal blocks of 500 km, 10 116 points, 100 iterations (blockCV `cv_spatial`) | 1.77 s | 53 ms | 1.0 |
+| k-means folds, 10 116 points, 25 starts (blockCV `cv_cluster`) | 93 ms | 14 ms | 1.0 |
+| Autocorrelation range, 9 layers, 5 000 cells each (blockCV `cv_spatial_autocor`) | 17.5 s | 0.73 s | 1.0 |
+| Evaluate 1 000 presences against 10 000 background points (predicts `pa_evaluate`) | 0.19 s | 8.3 ms | 1.0 |
+| Boyce index, the same predictions (ecospat) | 9.8 ms | 1.6 ms | 1.0 |
+| MESS, 9 layers, 10 116 reference points (predicts) | 0.75 s | 19 ms | 1.0 |
+| MaxNet, 116 presences and 10 000 background points, 9 predictors (maxnet) | 3.25 s | 0.30 s | 1.0 |
+
+The largest gains are where R works on whole matrices: spThin computes the
+distance between every pair of records and rescans them after each removal
+(Landschaft keeps only the neighbours, in a grid over the sphere, and the
+counts in a tree: a million records take seconds, where R runs out of
+memory), and blockCV's blocks and predicts' evaluation go through data frames
+row by row. MaxNet keeps glmnet's arithmetic and order of operations, so the
+gain comes from screening (most gradient checks are settled by a bound,
+without the exact dot product) and from parallel work around the coordinate
+descent, which itself stays serial; with 20 predictors and hinge features
+(10 000 background points) it fits in 0.47 s against R's 6.4 s. Weighted
+sampling without replacement, which R does in time proportional to the cells
+times the draws, runs in closed form over runs of equal weights (1 million
+cells and 30 000 draws: 0.24 s against 16-20 s with R's algorithm).
+
 ### Zonal statistics and extraction
 
 Not a reproduction of another tool: the functions that read a raster in zones
@@ -329,6 +370,11 @@ raster read in strips), and only that is reprojected and encoded.
 | Surface metrics: amplitude parameters (`sa`, `sq`, `ssk`, `sku`, `sv`, `sph`, `smean`), trend surfaces of order 0-3 and the choice of the best one, slopes and developed area (`sdq`, `sdq6`, `sdr`), peaks, valleys, `sds`, `ssc`, `s10z`, the bearing area curve and its parameters (`sdc`, `sbi`, `svi`, `sci`, `sk`, `spk`, `svk`), autocorrelation, correlation lengths, texture direction and wavelength, fractal dimension, texture images | geodiv 1.1.1 (R 4.4.2, terra 1.9.50, spatial 7.3-17), and where geodiv errs geodiv with its errors corrected (`tools/surface_fixed.R`): 70 reference cases, projected and longitude/latitude, among them geodiv's example rasters, NA cells, non-square cells and ties | identical bits |
 | Terrain indices: slope, aspect, tpi, tri, vrm, srr, dissection, curvature, spherical standard deviation, hsp, trasp, hli | spatialEco 2.0-5 and terra 1.9-50 (R 4.4.2), and where spatialEco errs spatialEco with its errors corrected (`tools/surface_fixed.R`): 3 DEMs (square and rectangular cells, missing cells, longitude/latitude) | identical bits; focal means (tpi, hsp, srr, vrm, spherical standard deviation, Bolstad's curvature) within 1e-12 of summing each window (compensated prefix sums), 1e-11 of terra's running sums; on longitude/latitude slope and aspect within 1e-12 |
 | Spatial prioritization: the ranking (8 rules, weights and weight groups, output groups, thresholds, zero modes, value extraction, costs, hierarchic masks, analysis areas, smoothing, 8 and 16 bits), condition, retention, pre-processing maps, transformed layers, connectivity transforms, post-processing, impact assessment | Zonation 5 v2.4 (`z5.exe`, `z5_16bit.exe`, on one thread): 64 reference projects, and the timing cases below | identical rank maps and iterations; curve, statistics, post-processing and impact files digit for digit |
+| Species distributions: occurrence cleaning (all 13 tests, records on circle vertices, the antimeridian and poles), thinning, one record per cell | CoordinateCleaner 3.0.1 (its errors corrected: `tools/cc_fixed.R`), spThin 0.2.0, terra 1.9-50: 14 reference cases | identical flags and kept records; the circles' vertices identical (GeographicLib 2.7 and 1.52 with mingw's x87 maths) |
+| Species distributions: predictor selection, background points, spatial blocks and clusters, ENMeval partitions | usdm 2.1-7, dismo 1.3-16, blockCV 3.2-0 (its own k-means: R's `kmeans`, 48 cases), ENMeval 2.0.5.2: 53 reference cases with R's generator | identical bits, random steps included |
+| Species distributions: evaluation, Boyce index, omission rates, MESS, MOP | predicts 0.1-19, ecospat 4.1.3 (its errors corrected: `tools/ecospat_fixed.R`), ENMeval, mop 0.1.4: 16 reference cases | identical bits; the p-value of the correlation to 1e-9 (R's `pt`) |
+| Species distributions: Mahalanobis distances (MOP, ExDet), autocorrelation range | mop, dsmextra 1.1.6 (its covariate index corrected), blockCV `cv_spatial_autocor` (automap, gstat 2.1-6) | 1e-9 (R inverts the covariance with LAPACK); variograms identical, fitted ranges to 1e-6 |
+| MaxNet | maxnet 0.1.4 with glmnet 4.1-10: 13 fits (Bradypus and synthetic, every feature class, regularisation multipliers, factors) | identical bits: coefficients, lambda, entropy and the four output types, on Windows and Linux |
 | Neutral landscape models: random, percolation, gradients, midpoint displacement, fractional Brownian motion, Gaussian fields, Poisson line and Voronoi mosaics, random, neighbourhood and rectangular clusters, curds, classification | NLMR 1.4.0 (R 4.4.2) with the same seeds; R's generator and the libstdc++ distributions of NLMR's C++ code against R and the Rtools compiler | identical bits |
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an
@@ -371,6 +417,14 @@ its code:
     - **Zonation 5 on several threads** adds up the layers per thread, and its
       results can differ from its run on one thread; Landschaft's do not
       depend on the threads and equal z5's on one thread.
+    - **Species distributions** keep the R packages' results except where
+      they err (each case listed in IDEAS.md and in the functions' notes).
+      Three of the corrections change values people compare with R: the
+      continuous Boyce index drops ecospat's "+1" on the last window (which
+      made the index depend on the scale of the predictions), country
+      checks use Natural Earth's `iso_a3_eh` (with `iso_a3`, France and
+      Norway are "-99"), and MOP's Mahalanobis distance uses the
+      reference's covariance (mop used that of the cells tested).
     - **Off Windows**, the arctangent of the slopes of `surface.terrain` is
       the C library's, as terra's is on Windows: R takes it from Windows'
       UCRT, whose code is not public, and other C libraries (glibc) differ
@@ -405,3 +459,6 @@ originals, and `python tools/benchmark.py --exe <mspa executable>` repeats
 the MSPA timings. `tools/make_reference_prioritize.py` and
 `tools/benchmark_prioritize.py` look for Zonation 5's `z5.exe` and
 `z5_16bit.exe` in `LANDSCHAFT_Z5_DIR`.
+`tools/make_reference_sdm.py` and `tools/benchmark_sdm.py` use R with the
+packages listed above in `LANDSCHAFT_SDM_R_LIBS` (default
+`%LOCALAPPDATA%/R/landschaft-sdm-lib`).

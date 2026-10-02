@@ -381,6 +381,9 @@ BENCHMARKS = [
     ("Curvature, 371×371", "spatialEco", 1.58, 0.0016),
     ("Zonation CAZ2, 2000×2000, 30 features", "Zonation 5", 48.0, 7.29),
     ("Zonation CAZ2, 1000×1000, 200 features", "Zonation 5", 33.6, 3.16),
+    ("Thin 2 000 records, 10 repetitions", "spThin", 0.91, 0.0014),
+    ("Autocorrelation range, 9 layers", "blockCV", 17.5, 0.73),
+    ("MaxNet, 10 000 background points", "maxnet", 3.25, 0.30),
 ]
 
 
