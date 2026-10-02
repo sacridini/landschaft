@@ -6,6 +6,21 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-02
+
+### Added
+- `ls.plot` maps read their values: under the cursor (with the coordinates, bottom left) and in a
+  popup on a click, every raster visible gives its class name or its value (to 1/254 of its
+  ramp). The values come from the page itself: each image's palette holds one colour per index,
+  read back from the pixel in the browser, so no second image is needed.
+- Every layer of a map has a legend card with an opacity slider; a card hides while its layer is
+  switched off. Vector layers drawn in one colour and true-colour composites have cards too.
+
+### Changed
+- `ls.plot`: a layer's opacity is applied by the map, the images' palettes are opaque (static
+  figures apply it when drawing). The base map's credits keep to one line (all of them on hover),
+  so they no longer hide the scale bar and the legends.
+
 ## [1.0.2] - 2026-10-02
 
 ### Fixed
