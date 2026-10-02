@@ -6,6 +6,21 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-02
+
+### Added
+- `ls.plot(..., static=True)` for publications: a scale bar of a round ground length (corrected for
+  latitude on Web Mercator and degrees), a north arrow, longitudes and latitudes on a single map;
+  small multiples for a stack's bands (one colour scale and colour bar, `bands=` respected), a
+  result's rasters and two dates (`compare=True`); one legend for maps of the same colours;
+  options `figsize=`, `ncols=`, `scalebar=False`, `north_arrow=False`.
+
+### Fixed
+- Static figures drew only the first band of a stack and the first raster of a result; their
+  vector layers ignored `cmap` dictionaries, `labels`, `categorical`, `vmin` / `vmax` / `log`
+  (they now take the interactive map's colours and legend); a GeoDataFrame was drawn as a table;
+  tables without numbers no longer fail.
+
 ## [1.2.0] - 2026-10-02
 
 ### Added
