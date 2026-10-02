@@ -6,6 +6,8 @@ between minor versions.
 
 ## [Unreleased]
 
+## [0.101.0] - 2026-10-02
+
 ### Changed
 - `ls.reclassify` runs in C++, in one parallel pass with no temporary arrays (it now takes
   `n_threads`). 8- and 16-bit rasters go through a table of every value of their type, and 32/64-bit
