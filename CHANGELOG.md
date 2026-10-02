@@ -6,6 +6,25 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-02
+
+### Added
+- `ls.plot` of a stack: one entry in the layer control and, on its legend card, a slider choosing
+  the band shown and a button playing through them (a time series), instead of a layer per band.
+- `ls.plot` of a species distribution model (`ls.sdm.fit`): the response curves of every
+  predictor and model, the cross-validated scores with their spread, the thresholds; with
+  `env=` the predictor rasters, the suitability of each model, the ensemble and its spread
+  (`ls.sdm.predict`) with the presences.
+- `ls.plot` of a clustergram (`SpatialSignatureAnalysis.clustergram`), interactive: the clusters
+  of each k at their means, sized by their rows, and the rows moving between them.
+- `ls.plot` of a least-cost path: the path outlined over the combined cost surface (it stays
+  visible however far the map zooms out) and its numbers.
+
+### Changed
+- `ls.plot` of a habitat graph with `distance=`: the links on a colour ramp of their distance (the
+  shortest bright), with a legend, instead of all in white.
+- The tests draw static figures with matplotlib's Agg backend (`MPLBACKEND`, in `conftest.py`).
+
 ## [1.3.0] - 2026-10-02
 
 ### Added
