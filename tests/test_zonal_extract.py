@@ -395,12 +395,40 @@ def test_reclassify_ranges_first_wins_and_nan():
     np.testing.assert_array_equal(mixed, [[1, 1, 4], [10, 5, np.nan]])
 
 
-def test_reclassify_lookup_table_and_general_paths_agree():
+@pytest.mark.parametrize("shape", [(60, 70), (300, 310)])  # one thread, a pass per value / in parallel, tables
+@pytest.mark.parametrize("dtype", ["uint8", "int8", "uint16", "int16", "uint32", "int32", "int64", "float32",
+                                   "float64", ">i2", "bool"])
+def test_reclassify_every_type_and_path_agrees(dtype, shape):
     rng = np.random.default_rng(0)
-    table = {int(k): int(k) * 3 + 1 for k in rng.choice(200, 50, replace=False)}
-    small = rng.integers(0, 200, (60, 70)).astype(np.int16)  # lookup table over the type
-    wide = small.astype(np.int32)  # searchsorted
-    np.testing.assert_array_equal(ls.reclassify(small, table, others=0), ls.reclassify(wide, table, others=0))
+    table = {int(k): int(k) * 3 + 1 for k in rng.choice(120, 40, replace=False)}
+    values = rng.integers(0, 120, shape)
+    if np.dtype(dtype).kind in "iuf" and np.dtype(dtype).itemsize >= 4:
+        values[0, 0] = 10**6  # a wide span: no table from the minimum to the maximum
+    if dtype == "bool":
+        values %= 2
+    v = values.astype(dtype)
+    keys = values.astype(np.float64)
+    expected = np.vectorize(lambda x: table.get(x, 0))(keys)
+    np.testing.assert_array_equal(ls.reclassify(v, table, others=0), expected)
+    kept = np.vectorize(lambda x: table.get(x, x))(keys)
+    np.testing.assert_array_equal(ls.reclassify(v, table), kept)
+    # without the wide value, 32- and 64-bit integers go through a table of their span
+    narrow = np.where(values == 10**6, 7, values).astype(dtype)
+    np.testing.assert_array_equal(ls.reclassify(narrow, table, others=0),
+                                  np.vectorize(lambda x: table.get(x, 0))(narrow.astype(np.float64)))
+
+
+def test_reclassify_kept_values_and_threads():
+    big = np.array([[2**53 + 1, 5, -(2**62) - 3]], np.int64)  # not through float64: exact
+    assert ls.reclassify(big, {5: 1}).tolist() == [[2**53 + 1, 1, -(2**62) - 3]]
+    neg = np.array([[1, 2, 40000]], np.uint16)  # kept in int32 (the type of -5 and of uint16)
+    out = ls.reclassify(neg, {1: -5})
+    assert out.dtype == np.int32 and out.tolist() == [[-5, 2, 40000]]
+    v = np.random.default_rng(1).random((400, 300)) * 50
+    ranges = [(0, 10, 1), (5, 30, 2), (30, np.inf, 3)]
+    one = ls.reclassify(v, ranges, others="nodata", n_threads=1)
+    np.testing.assert_array_equal(one, ls.reclassify(v, ranges, others="nodata", n_threads=4))
+    np.testing.assert_array_equal(one, np.where(v < 10, 1, np.where(v < 30, 2, 3)))
 
 
 def test_reclassify_lazy_and_habitat_mode(classes):
@@ -409,6 +437,8 @@ def test_reclassify_lazy_and_habitat_mode(classes):
     assert lazy.chunks is not None and lazy.values.tolist() == [[100, 2, 3], [23, 24, 255]]
     habitat = ls.reclassify(classes, [23, 24])  # a list of values: the habitat of a habitat map
     assert habitat.values.tolist() == [[1, 1, 1], [2, 2, 0]]
+    lazy_habitat = ls.reclassify(classes.chunk({"y": 1}), foreground=[23, 24], missing=[1], background=[2, 3])
+    assert lazy_habitat.chunks is not None and lazy_habitat.values.tolist() == [[0, 1, 1], [2, 2, 0]]
     assert ls.reclassify(classes, foreground=23).values.tolist() == [[1, 1, 1], [2, 1, 0]]
     with pytest.raises(ValueError, match="habitat maps"):
         ls.reclassify(classes, {1: 2}, missing=[3])

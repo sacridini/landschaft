@@ -81,4 +81,28 @@ void burn_runs(T* out, int ny, int nx, const Runs& runs, const double* value, bo
 template <class T>
 std::vector<float> block_mean(const T* values, int ny, int nx, int f, bool has_nodata, double nodata);
 
+// The rules of ls.reclassify, resolved: a cell is `missing` where it is NaN or
+// nodata, else the value of the interval [breaks[i], breaks[i + 1]) it falls in
+// when break_set[i] (the ranges), else key_out[k] where it equals keys[k]
+// (sorted), else its own value (keep) or `other`. Values are compared as doubles.
+template <class Out>
+struct ReclassRules {
+    bool has_nodata = false;
+    double nodata = 0.0;
+    const double* keys = nullptr;
+    const Out* key_out = nullptr;
+    i64 n_keys = 0;
+    const double* breaks = nullptr;  // n_breaks breaks, n_breaks - 1 intervals
+    const Out* break_out = nullptr;
+    const std::uint8_t* break_set = nullptr;
+    i64 n_breaks = 0;
+    bool keep = true;
+    Out other{};
+    Out missing{};
+};
+
+// out[i] = the new value of in[i], for n cells.
+template <class T, class Out>
+void reclassify(const T* in, Out* out, i64 n, const ReclassRules<Out>& rules);
+
 }  // namespace lsio

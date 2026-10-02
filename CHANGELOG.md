@@ -6,6 +6,16 @@ between minor versions.
 
 ## [Unreleased]
 
+### Changed
+- `ls.reclassify` runs in C++, in one parallel pass with no temporary arrays (it now takes
+  `n_threads`). 8- and 16-bit rasters go through a table of every value of their type, and 32/64-bit
+  integers through a table of the raster's range when that range is small. Ranges and other values
+  use a branchless search. On 5000 x 5000 cells (11 threads): uint8 0.17 s -> 0.005 s, int32
+  0.97 s -> 0.01 s, float32 with ranges 0.65 s -> 0.02 s, a habitat map 0.27 s -> 0.004 s (with a
+  function 0.23 s -> 0.05 s). Peak memory drops from 18 to 40 bytes per cell to the result alone.
+  The results are the same, except that an int64 kept value above 2^53 is now exact (it was
+  rounded through float64), and a dask-backed habitat map stays lazy.
+
 ### Fixed
 - `ls.plot` of a stack draws up to 128 bands (was 16: the later years of a 41-year land-cover
   series were left out), 1024 pixels on the long side up to 64 bands; the map's list of layers

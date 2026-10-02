@@ -254,6 +254,66 @@ void register_python(py::module_& m) {
         "Mean of every factor x factor block (cells with data), float32.");
 
     m.def(
+        "io_reclassify",
+        [](const py::array& values, py::array& out, bool has_nodata, double nodata, const DoubleArray& keys,
+           const py::array& key_out, const DoubleArray& breaks, const py::array& break_out,
+           const py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>& break_set, bool keep,
+           const py::array& other, const py::array& missing) {
+            if (!(out.flags() & py::array::c_style) || !out.writeable()) {
+                throw py::value_error("out must be C-contiguous and writeable");
+            }
+            if (out.size() != values.size()) throw py::value_error("out must have one cell per value");
+            const py::dtype dt = out.dtype();
+            for (const py::array* a : {&key_out, &break_out, &other, &missing}) {
+                if (!a->dtype().is(dt) || !(a->flags() & py::array::c_style)) {
+                    throw py::type_error("the new values must be C-contiguous, of the type of out");
+                }
+            }
+            if (key_out.size() != keys.size()) throw py::value_error("one new value per key");
+            const py::ssize_t intervals = breaks.size() > 0 ? breaks.size() - 1 : 0;
+            if (break_out.size() != intervals || break_set.size() != intervals) {
+                throw py::value_error("one new value per interval between breaks");
+            }
+            if (other.size() != 1 || missing.size() != 1) throw py::value_error("other and missing are one value");
+            const i64 n = static_cast<i64>(values.size());
+            auto run = [&](auto* o) {
+                using Out = std::remove_pointer_t<decltype(o)>;
+                ReclassRules<Out> r;
+                r.has_nodata = has_nodata;
+                r.nodata = nodata;
+                r.keys = keys.data();
+                r.key_out = static_cast<const Out*>(key_out.data());
+                r.n_keys = static_cast<i64>(keys.size());
+                r.breaks = breaks.data();
+                r.break_out = static_cast<const Out*>(break_out.data());
+                r.break_set = break_set.data();
+                r.n_breaks = static_cast<i64>(breaks.size());
+                r.keep = keep;
+                r.other = *static_cast<const Out*>(other.data());
+                r.missing = *static_cast<const Out*>(missing.data());
+                with_typed(values, [&](const auto* p) {
+                    py::gil_scoped_release release;
+                    reclassify(p, o, n, r);
+                });
+            };
+            void* d = out.mutable_data();
+            if (dt.is(py::dtype::of<std::uint8_t>())) run(static_cast<std::uint8_t*>(d));
+            else if (dt.is(py::dtype::of<std::int8_t>())) run(static_cast<std::int8_t*>(d));
+            else if (dt.is(py::dtype::of<std::uint16_t>())) run(static_cast<std::uint16_t*>(d));
+            else if (dt.is(py::dtype::of<std::int16_t>())) run(static_cast<std::int16_t*>(d));
+            else if (dt.is(py::dtype::of<std::uint32_t>())) run(static_cast<std::uint32_t*>(d));
+            else if (dt.is(py::dtype::of<std::int32_t>())) run(static_cast<std::int32_t*>(d));
+            else if (dt.is(py::dtype::of<std::int64_t>())) run(static_cast<std::int64_t*>(d));
+            else if (dt.is(py::dtype::of<float>())) run(static_cast<float*>(d));
+            else if (dt.is(py::dtype::of<double>())) run(static_cast<double*>(d));
+            else throw py::type_error("unsupported output type");
+        },
+        py::arg("values"), py::arg("out"), py::arg("has_nodata"), py::arg("nodata"), py::arg("keys"),
+        py::arg("key_out"), py::arg("breaks"), py::arg("break_out"), py::arg("break_set"), py::arg("keep"),
+        py::arg("other"), py::arg("missing"),
+        "The new value of every cell of values into out (ls.reclassify's rules, resolved).");
+
+    m.def(
         "io_warp",
         [](const py::array& src, int method, const std::array<int, 2>& src_shape, const std::array<int, 2>& window,
            const std::array<double, 2>& scales, bool has_src_nodata, double src_nodata, double dst_nodata,

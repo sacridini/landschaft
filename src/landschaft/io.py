@@ -17,6 +17,7 @@ import rasterio.windows
 import rioxarray  # noqa: F401  (registers the .rio accessor)
 import xarray as xr
 
+from . import _core, _threads
 from ._palettes import (
     CHANGE_PALETTE,
     CONTORTION_PALETTE,
@@ -603,6 +604,7 @@ def reclassify(
     background: Iterable[int] | int | None = None,
     others="keep",
     dtype=None,
+    n_threads: int | None = None,
 ):
     """Give the values of a raster new values: from a table, or into a habitat map.
 
@@ -645,6 +647,8 @@ def reclassify(
     dtype
         Table: output type (default: the smallest that holds the new values, and
         the kept ones).
+    n_threads
+        Threads (default: all cores but one).
 
     Returns
     -------
@@ -685,12 +689,12 @@ def reclassify(
     if foreground is not None:
         if table is not None:
             raise ValueError("give either a table or foreground=, not both")
-        return _habitat_map(data, foreground, missing, background)
+        return _habitat_map(data, foreground, missing, background, n_threads)
     if table is None:
         raise TypeError("reclassify needs a table of new values or foreground= (a habitat map)")
     if missing is not None or background is not None:
         raise ValueError("missing= and background= make habitat maps: use them with foreground=")
-    return _reclassify_table(data, table, others, dtype)
+    return _reclassify_table(data, table, others, dtype, n_threads)
 
 
 def _is_habitat_spec(spec) -> bool:
@@ -705,27 +709,34 @@ def _is_habitat_spec(spec) -> bool:
     return arr is not None and arr.ndim == 1 and all(isinstance(v, (int, np.integer)) for v in arr.tolist())
 
 
-def _habitat_map(data, foreground, missing, background):
-    values = np.asarray(data)
-
-    def isin(spec) -> np.ndarray:
+def _habitat_map(data, foreground, missing, background, n_threads):
+    def spec_values(spec) -> np.ndarray:
         if spec is None:
-            return np.zeros(values.shape, dtype=bool)
-        return np.isin(values, np.atleast_1d(np.asarray(list(spec) if isinstance(spec, Iterable) else spec)))
+            return np.empty(0)
+        return np.atleast_1d(np.asarray(list(spec) if isinstance(spec, Iterable) else spec, dtype=np.float64))
 
-    fg = np.asarray(foreground(values), dtype=bool) if callable(foreground) else isin(foreground)
-    miss = isin(missing)
-    if np.issubdtype(values.dtype, np.floating):
-        miss |= np.isnan(values)
     nodata = data.rio.nodata if isinstance(data, xr.DataArray) else None
-    if nodata is not None:
-        miss |= values == nodata
-
-    out = np.full(values.shape, MISSING if background is not None else BACKGROUND, dtype=np.uint8)
-    if background is not None:
-        out[isin(background)] = BACKGROUND
-    out[fg] = FOREGROUND
-    out[miss] = MISSING
+    if nodata is not None and np.isnan(nodata):
+        nodata = None
+    # missing wins over habitat, habitat over background
+    codes: dict[float, int] = {}
+    for spec, code in ((missing, MISSING), (None if callable(foreground) else foreground, FOREGROUND),
+                       (background, BACKGROUND)):
+        for v in spec_values(spec).tolist():
+            codes.setdefault(v, code)
+    neither = 3  # a function's habitat wins over the values given no class
+    if callable(foreground):
+        other = neither if background is not None else BACKGROUND
+        values = np.asarray(data)
+    else:
+        other = MISSING if background is not None else BACKGROUND
+        values = data.data if isinstance(data, xr.DataArray) else data
+    out = _reclass_values(values, np.dtype(np.uint8), MISSING, nodata, list(codes), list(codes.values()), [],
+                          False, other, n_threads)
+    if callable(foreground):  # np.where: much faster than assigning through a boolean mask
+        out = np.where(np.asarray(foreground(values), dtype=bool) & (out != MISSING), np.uint8(FOREGROUND), out)
+        if background is not None:
+            out = np.where(out == neither, np.uint8(MISSING), out)
 
     if isinstance(data, xr.DataArray):
         result = data.copy(data=out)
@@ -776,7 +787,71 @@ def _smallest_type(values: np.ndarray, keep_dtype) -> np.dtype:
     return np.dtype(np.float32)
 
 
-def _reclassify_table(data, table, others, dtype):
+# the raster types of the compiled kernel (in and out)
+_KERNEL_TYPES = frozenset(np.dtype(t) for t in
+                          ("uint8", "int8", "uint16", "int16", "uint32", "int32", "int64", "float32", "float64"))
+
+
+def _range_intervals(ranges) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Ranges ``[low, high)`` as disjoint intervals: their sorted breaks, the new value of every
+    interval and whether a range holds it (where ranges overlap, the first one wins)."""
+    ranges = [(lo, hi, v) for lo, hi, v in ranges if lo < hi]  # empty or NaN ranges hold nothing
+    if not ranges:
+        return np.empty(0), np.empty(0), np.empty(0, np.uint8)
+    breaks = np.unique(np.array([b for lo, hi, _ in ranges for b in (lo, hi)], dtype=np.float64))
+    values = np.full(breaks.size - 1, np.nan)
+    held = np.zeros(breaks.size - 1, np.uint8)
+    for lo, hi, v in reversed(ranges):
+        i0, i1 = np.searchsorted(breaks, [lo, hi])
+        values[i0:i1] = v
+        held[i0:i1] = 1
+    return breaks, values, held
+
+
+def _reclass_values(raw, out_dtype: np.dtype, out_nodata, nodata, keys, new, ranges, keep: bool, other: float,
+                    n_threads):
+    """The new values of a raster (numpy or dask) by the compiled kernel: NaN and ``nodata`` become
+    NoData, then the first range holding a value, else the value's own rule (``keys`` to ``new``),
+    else the value itself (``keep``) or ``other``. New values NaN: NoData (``out_nodata`` in an
+    integer type)."""
+    # the kernel knows the native types by their instances (np.dtype(name): int32 is "i" or "l" on Windows)
+    kernel_dtype = np.dtype(out_dtype.name) if out_dtype in _KERNEL_TYPES else np.dtype(np.float64)
+
+    def as_out(values) -> np.ndarray:
+        v = np.asarray(values, dtype=np.float64)
+        if kernel_dtype.kind != "f":
+            v = np.where(np.isnan(v), out_nodata, v)
+        return np.ascontiguousarray(v.astype(kernel_dtype))
+
+    keys = np.asarray(keys, dtype=np.float64)
+    new = np.asarray(new, dtype=np.float64)
+    keep_rule = ~np.isnan(keys)  # NaN is NoData whatever the table says
+    order = np.argsort(keys[keep_rule])
+    breaks, interval_new, held = _range_intervals(ranges)
+    rules = (nodata is not None, 0.0 if nodata is None else float(nodata),
+             np.ascontiguousarray(keys[keep_rule][order]), as_out(new[keep_rule][order]),
+             breaks, as_out(interval_new), held, keep, as_out([other]), as_out([np.nan]))
+    threads = _threads.current() if n_threads is None else _threads.resolve(n_threads)  # for dask's threads too
+
+    def block(v) -> np.ndarray:
+        v = np.asarray(v)
+        in_type = np.dtype(v.dtype.name) if v.dtype.kind in "biuf" else v.dtype
+        if in_type not in _KERNEL_TYPES:
+            in_type = np.dtype(np.uint8 if in_type == bool else np.float32 if in_type == np.float16 else np.float64)
+        v = np.ascontiguousarray(v, dtype=in_type)
+        res = np.empty(v.shape, kernel_dtype)
+        with _threads.limit(threads):
+            _core.io_reclassify(v, res, *rules)
+        if kernel_dtype == out_dtype:
+            return res
+        return np.where(np.isnan(res), out_nodata, res).astype(out_dtype)
+
+    if hasattr(raw, "dask"):
+        return raw.map_blocks(block, dtype=out_dtype)
+    return block(raw)
+
+
+def _reclassify_table(data, table, others, dtype, n_threads):
     old, new, ranges = _table_rules(table)
     is_da = isinstance(data, xr.DataArray)
     raw = data.data if is_da else (data if hasattr(data, "dask") else np.asarray(data))
@@ -802,44 +877,8 @@ def _reclassify_table(data, table, others, dtype):
         out_nodata = info.max if info.min == 0 else info.min
     needs_nodata = to_nodata or in_nodata is not None or np.issubdtype(in_dtype, np.floating)
 
-    order = np.argsort(old)
-    old_sorted, new_sorted = old[order], new[order]
-    lut = None
-    if np.issubdtype(in_dtype, np.integer) and not ranges and in_dtype.itemsize <= 2:
-        info = np.iinfo(in_dtype)  # a lookup table over every value of the type: one pass
-        codes = np.arange(info.min, info.max + 1, dtype=np.int64)
-        base = codes.astype(np.float64) if keep else np.full(codes.size, np.nan if to_nodata else float(others))
-        idx = np.searchsorted(old_sorted, codes)
-        hit = (idx < old_sorted.size) & (old_sorted[np.minimum(idx, old_sorted.size - 1)] == codes)
-        base[hit] = new_sorted[idx[hit]]
-        if in_nodata is not None:
-            base[int(in_nodata) - info.min] = np.nan
-        lut = (base, int(info.min))
-
-    def block(v: np.ndarray) -> np.ndarray:
-        v = np.asarray(v)
-        if lut is not None:
-            res = lut[0][v.astype(np.int64) - lut[1]]
-        else:
-            x = v.astype(np.float64)
-            missing_in = np.isnan(x) | ((x == in_nodata) if in_nodata is not None else False)
-            res = x.copy() if keep else np.full(x.shape, np.nan if to_nodata else float(others))
-            if old_sorted.size:
-                idx = np.searchsorted(old_sorted, x)
-                ok = idx < old_sorted.size
-                ok[ok] = old_sorted[idx[ok]] == x[ok]
-                res[ok] = new_sorted[idx[ok]]
-            for lo, hi, val in reversed(ranges):  # the first range wins
-                res[(x >= lo) & (x < hi)] = val
-            res[missing_in] = np.nan
-        if out_float:
-            return res.astype(out_dtype)
-        return np.where(np.isnan(res), out_nodata, res).astype(out_dtype)
-
-    if hasattr(raw, "dask"):
-        out = raw.map_blocks(block, dtype=out_dtype)
-    else:
-        out = block(raw)
+    other = np.nan if to_nodata else 0.0 if keep else float(others)
+    out = _reclass_values(raw, out_dtype, out_nodata, in_nodata, old, new, ranges, keep, other, n_threads)
     if not is_da:
         return out
     result = data.copy(data=out)
