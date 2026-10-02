@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""ls.reproject: rasters against GDAL's warp (one block: GDAL's own call; exact transformations:
-GDAL warping the whole destination at once), the same bits in memory, lazily, from a file and
-with any number of threads; references (like=), vectors."""
+"""ls.reproject: rasters against GDAL's warp (exact transformations: GDAL warping the whole
+destination at once, bit for bit, for every method, type and odd projection; the default
+lattice of coordinates: close to them), the same bits in memory, lazily, from a file and with
+any number of threads; references (like=), vectors."""
 
 from __future__ import annotations
 
@@ -15,6 +16,8 @@ from rasterio.warp import Resampling, calculate_default_transform
 from rasterio.warp import reproject as gdal_reproject
 
 import landschaft as ls
+from landschaft import _gdaltransform
+from landschaft import _reproject as R
 
 gpd = pytest.importorskip("geopandas")
 shapely = pytest.importorskip("shapely")
@@ -25,6 +28,8 @@ TRANSFORM = from_origin(500000.0, 4500000.0, 30.0, 30.0)
 H, W = 300, 400
 METHODS = ("nearest", "bilinear", "cubic", "cubic_spline", "lanczos", "average", "mode", "min", "max", "med", "q1",
            "q3", "sum", "rms")
+# GDAL's coordinates come from the GDAL rasterio loads; without it (pyproj's PROJ) the last bits differ.
+needs_gdal = pytest.mark.skipif(_gdaltransform.open_library() is None, reason="rasterio's GDAL library not found")
 
 
 def grid(values, transform=TRANSFORM, crs=SRC_CRS, nodata=None) -> xr.DataArray:
@@ -54,12 +59,14 @@ def classes():
     return grid(v, nodata=0)
 
 
-def gdal(da: xr.DataArray, out: xr.DataArray, method: str, src_nodata, dst_nodata, tolerance=0.0) -> np.ndarray:
+def gdal(da: xr.DataArray, out: xr.DataArray, method: str, src_nodata, dst_nodata, tolerance=0.0,
+         **options) -> np.ndarray:
     """GDAL's warp of the whole destination in one chunk."""
     ref = np.full(out.shape, dst_nodata, dtype=out.dtype)
     gdal_reproject(da.values, ref, src_transform=da.rio.transform(), src_crs=CRS.from_user_input(da.rio.crs),
                    src_nodata=src_nodata, dst_transform=out.rio.transform(), dst_crs=CRS.from_user_input(out.rio.crs),
-                   dst_nodata=dst_nodata, resampling=Resampling[method], tolerance=tolerance, warp_mem_limit=4096)
+                   dst_nodata=dst_nodata, resampling=Resampling[method], tolerance=tolerance, warp_mem_limit=4096,
+                   **options)
     return ref
 
 
@@ -106,34 +113,163 @@ def test_same_grid_is_returned_as_it_is(surface):
 # --- values: GDAL's ----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method", METHODS)
-@pytest.mark.parametrize("target,res", [("EPSG:4326", None), ("EPSG:3035", 100)])
-def test_one_block_is_gdals_own_warp(surface, method, target, res):
-    out = ls.reproject(surface, target, res=res, resampling=method)
-    assert out.dtype == np.float32 and np.isnan(out.rio.nodata) and max(out.shape) <= 1024
-    assert same(out.values, gdal(surface, out, method, np.nan, np.nan, tolerance=0.125)).all()
-
-
+@needs_gdal
 @pytest.mark.parametrize("method", METHODS)
 @pytest.mark.parametrize("target,res", [("EPSG:4326", None), ("EPSG:3035", 100), ("EPSG:3035", 12)])
 def test_exact_transformations_give_gdals_whole_warp(surface, method, target, res):
     out = ls.reproject(surface, target, res=res, resampling=method, tolerance=0)
+    assert out.dtype == np.float32 and np.isnan(out.rio.nodata)
     ref = gdal(surface, out, method, np.nan, np.nan)
-    if method in ("nearest", "mode", "min", "max", "med", "q1", "q3"):  # values of the source
-        assert same(out.values, ref).all()
-    else:  # the blocks see their source cells from other origins than GDAL's chunks
+    if method == "sum":  # GDAL's own warp in blocks, which see their source cells from other origins
         assert_ulps(out.values, ref)
+    else:
+        assert same(out.values, ref).all()
 
 
-@pytest.mark.parametrize("method", ["nearest", "mode", "min", "max"])
-def test_classes_match_gdal_and_keep_their_type(classes, method):
-    out = ls.reproject(classes, "EPSG:4326", resampling=method)
+def typed(dtype, nodata, seed=3):
+    rng = np.random.default_rng(seed)
+    info = np.iinfo(dtype) if np.issubdtype(dtype, np.integer) else None
+    if info is None:
+        v = rng.normal(100, 30, (H // 2, W // 2)).astype(dtype)
+    else:
+        v = rng.integers(max(info.min, -1000), min(int(info.max), 1000) + 1, (H // 2, W // 2)).astype(dtype)
+        v[0, :5] = info.max  # the destination NoData of a type without one: moved one step (AvoidNoData)
+    if nodata is not None:
+        v[rng.random(v.shape) < 0.05] = nodata
+    return grid(v, nodata=nodata)
+
+
+@needs_gdal
+@pytest.mark.parametrize("dtype,nodata", [(np.uint8, 0), (np.uint8, None), (np.int8, -128), (np.int16, -9999),
+                                          (np.uint16, None), (np.int32, -1), (np.uint32, None), (np.int64, -1),
+                                          (np.float64, -9999.0)])
+@pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic", "lanczos", "average", "mode", "min", "med", "rms"])
+def test_every_type_matches_gdal(dtype, nodata, method):
+    if dtype == np.int8 and tuple(int(v) for v in rasterio.__gdal_version__.split(".")[:3]) < (3, 12, 3):
+        pytest.skip("GDAL < 3.12.3 warps Int8 as Int16 (values past -128 do not avoid the NoData)")
+    da = typed(dtype, nodata)
+    out = ls.reproject(da, "EPSG:3035", res=45, resampling=method, tolerance=0)
+    src_nodata, dst_nodata, _ = R._nodata(da)
+    assert out.dtype == np.dtype(dtype) and out.rio.nodata == dst_nodata
+    assert same(out.values, gdal(da, out, method, src_nodata, dst_nodata)).all()
+
+
+@needs_gdal
+@pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic_spline", "average", "mode", "q3"])
+def test_bands_count_as_nodata_where_all_are(surface, method):
+    """GDAL's unified NoData: a cell is NoData when every band is."""
+    v = np.stack([surface.values, surface.values * 2, surface.values + 1])
+    v[0, :30] = np.nan
+    v[1, 20:60] = np.nan
+    stack = grid(v)
+    out = ls.reproject(stack, "EPSG:4326", resampling=method, tolerance=0)
+    assert same(out.values, gdal(stack, out, method, np.nan, np.nan)).all()
+
+
+@needs_gdal
+@pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic", "lanczos", "average", "mode", "max", "med"])
+@pytest.mark.parametrize("proj", ["+proj=ortho +lat_0=40 +lon_0=15 +datum=WGS84",
+                                  "+proj=ortho +lat_0=0 +lon_0=170 +datum=WGS84", "EPSG:3031"])
+def test_a_world_in_odd_projections_matches_gdal(method, proj):
+    """A global geographic source: points off the globe, the antimeridian, a pole; NoData holes
+    (cells at the edge of the projection's domain take a neighbour, as in GDAL). GDAL misses a
+    pole in the destination when the source is geographic (it does not reproject it): GDAL with
+    that fixed samples the source window on a grid, as SAMPLE_GRID=YES does."""
+    t = from_origin(-180, 90, 1.0, 1.0)
+    v = np.random.default_rng(0).random((180, 360), dtype=np.float32)
+    v[60:75, 200:260] = np.nan
+    v[:, 100:103] = np.nan
+    world = grid(v, transform=t, crs="EPSG:4326")
+    side, cell = (280, 50000) if "ortho" in proj else (320, 25000)
+    half = side * cell / 2
+    like = grid(np.zeros((side, side), np.float32), transform=from_origin(-half, half, cell, cell),
+                crs=CRS.from_user_input(proj))
+    out = ls.reproject(world, like=like, resampling=method, tolerance=0)
+    points = R._Points(t, CRS.from_epsg(4326), (180, 360), like.rio.transform(), CRS.from_user_input(proj),
+                       (side, side))
+    pole = any(0 <= x <= side and 0 <= y <= side for x, y in points.special_points())
+    assert pole == (proj != "+proj=ortho +lat_0=0 +lon_0=170 +datum=WGS84")  # that one's poles are on its far side
+    options = {"SAMPLE_GRID": "YES"} if pole else {}
+    assert same(out.values, gdal(world, out, method, np.nan, np.nan, **options)).all()
+    approx = ls.reproject(world, like=like, resampling=method)
+    lazy = ls.reproject(world.chunk({"y": 50, "x": 70}), like=like, resampling=method).compute()
+    assert same(lazy.values, approx.values).all()
+
+
+@needs_gdal
+@pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic", "average", "mode"])
+def test_a_geographic_source_matches_gdal(surface, method):
+    lonlat = ls.reproject(surface, "EPSG:4326", tolerance=0)
+    for target, res in (("EPSG:32633", None), ("EPSG:3857", None), ("EPSG:4326", 0.0007)):
+        out = ls.reproject(lonlat, target, res=res, resampling=method, tolerance=0)
+        assert same(out.values, gdal(lonlat, out, method, np.nan, np.nan)).all()
+
+
+@pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic", "average", "mode"])
+def test_the_same_crs_is_exact_at_any_tolerance(surface, method):
+    """No reprojection: the coordinates are the geotransforms', GDAL's even with the default
+    tolerance; a whole number of cells apart, GDAL takes the nearest cell whatever the method."""
+    out = ls.reproject(surface, res=(41, 37), resampling=method)
+    assert same(out.values, gdal(surface, out, method, np.nan, np.nan)).all()
+    shifted = grid(np.zeros((150, 200), np.float32),
+                   transform=from_origin(500000.0 + 30 * 7, 4500000.0 - 30 * 5, 30, 30))
+    moved = ls.reproject(surface, like=shifted, resampling=method)
+    assert same(moved.values, surface.values[5:155, 7:207]).all()
+    assert same(moved.values, gdal(surface, moved, method, np.nan, np.nan)).all()
+
+
+@pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic", "lanczos", "average", "mode", "min", "med", "rms"])
+def test_the_default_tolerance_stays_close_to_exact(surface, method):
+    approx = ls.reproject(surface, "EPSG:3035", res=20, resampling=method)
+    exact = ls.reproject(surface, "EPSG:3035", res=20, resampling=method, tolerance=0)
+    a, b = approx.values, exact.values
+    assert (np.isnan(a) != np.isnan(b)).mean() < 1e-3
+    ok = ~np.isnan(a) & ~np.isnan(b)
+    if method in ("nearest", "mode", "min", "med"):  # values of the source: a few cells pick another
+        assert (a[ok] != b[ok]).mean() < 1e-3
+    else:
+        assert np.abs(a[ok] - b[ok]).max() < 1e-3
+
+
+def test_the_lattice_is_exact_at_its_nodes_and_close_between():
+    t = from_origin(-180, -50, 0.1, 0.1)
+    for src_crs, src_t, shape, dst_crs, res in (("EPSG:32633", TRANSFORM, (H, W), "EPSG:3035", 7.0),
+                                                ("EPSG:4326", t, (400, 3600), "EPSG:3031", 5000.0)):
+        s_crs, d_crs = CRS.from_user_input(src_crs), CRS.from_user_input(dst_crs)
+        dst_t, dw, dh = calculate_default_transform(s_crs, d_crs, shape[1], shape[0], *array_bounds(*shape, src_t),
+                                                    resolution=res)
+        warps = [R._Warp(shape, src_t, s_crs, dst_t, (dh, dw), d_crs, "bilinear", np.nan, np.nan,
+                         np.dtype(np.float32), tol, 1, 2) for tol in (0.125, 0.0)]
+        approx, exact = (w.sample_coords(0, 0, dh, dw, 2) for w in warps)
+        assert (approx[::16, ::16] == exact[::16, ::16]).all()  # the nodes: exact transformations
+        err = np.abs(approx - exact).sum(-1)
+        inside = ((exact[..., 0] > 0) & (exact[..., 0] < shape[1]) & (exact[..., 1] > 0)
+                  & (exact[..., 1] < shape[0]))
+        assert err[inside].max() < (1e-3 if dst_crs == "EPSG:3035" else 0.25)  # checked at the midpoints only
+        levels = np.bincount(warps[0].lattice(0, 0, dh, dw, 2).level, minlength=5)
+        if dst_crs == "EPSG:3031":  # finer cells near the pole only
+            assert levels[1:].sum() > 0 and levels[0] > 5 * levels[1:].sum()
+        else:
+            assert levels[1:].sum() == 0
+
+
+def test_without_gdals_library_pyproj_gives_the_coordinates(surface, monkeypatch):
+    monkeypatch.setattr(_gdaltransform, "_searched", True)
+    monkeypatch.setattr(_gdaltransform, "_lib", None)
+    for tolerance in (0.125, 0.0):
+        out = ls.reproject(surface, "EPSG:4326", tolerance=tolerance)
+        lazy = ls.reproject(surface.chunk({"y": 70, "x": 90}), "EPSG:4326", tolerance=tolerance).compute()
+        assert same(out.values, lazy.values).all()
+        ref = gdal(surface, out, "bilinear", np.nan, np.nan)
+        assert (np.isnan(out.values) == np.isnan(ref)).mean() > 0.999
+        np.testing.assert_allclose(out.values, ref, atol=1e-4)
+
+
+def test_classes_keep_their_type(classes):
+    out = ls.reproject(classes, "EPSG:4326")
     assert out.dtype == np.uint8 and out.rio.nodata == 0
-    assert same(out.values, gdal(classes, out, method, 0, 0, tolerance=0.125)).all()
     assert set(np.unique(out.values)) <= set(range(7))
-    exact = ls.reproject(classes, "EPSG:4326", resampling=method, tolerance=0)
-    assert same(exact.values, gdal(classes, exact, method, 0, 0)).all()
-    assert same(out.values, exact.values).mean() > 0.9  # the approximation moves few cells
+    assert same(out.values, ls.reproject(classes, "EPSG:4326", tolerance=0).values).mean() > 0.99
 
 
 def test_auto_takes_nearest_for_integers_bilinear_for_floats(surface, classes):

@@ -8,13 +8,20 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "io/io.hpp"
+#include "io/warp.hpp"
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 namespace py = pybind11;
 
@@ -50,6 +57,84 @@ std::array<int, 3> raster_shape(const py::array& a) {
     if (a.ndim() == 2) return {1, static_cast<int>(a.shape(0)), static_cast<int>(a.shape(1))};
     if (a.ndim() == 3) return {static_cast<int>(a.shape(0)), static_cast<int>(a.shape(1)), static_cast<int>(a.shape(2))};
     throw py::value_error("expected a 2-D (y, x) or 3-D (band, y, x) raster");
+}
+
+
+using DoubleArray = py::array_t<double, py::array::c_style | py::array::forcecast>;
+using Int8Array = py::array_t<std::int8_t, py::array::c_style | py::array::forcecast>;
+using I64Array = py::array_t<i64, py::array::c_style | py::array::forcecast>;
+using PointerArray = py::array_t<std::uintptr_t, py::array::c_style | py::array::forcecast>;
+
+// The source coordinates of the warp kernel's samples (checked): samples rows
+// r0 .. last_row - 1, columns c0 .. last_col - 1 must be covered.
+lsio::WarpCoords make_coords(int kind, double offset, const std::array<double, 6>& gt,
+                             const std::array<double, 6>& inv, const Int8Array& level, const DoubleArray& grid0,
+                             const I64Array& node_off, const DoubleArray& nodes, const std::array<i64, 3>& cells,
+                             const DoubleArray& dense, i64 dense_row0, i64 dense_col0, std::uintptr_t transformer,
+                             const PointerArray& transformer_args, i64 r0, i64 c0, i64 last_row, i64 last_col) {
+    using lsio::kWarpCell;
+    using lsio::WarpCoords;
+    WarpCoords c;
+    c.kind = kind;
+    c.offset = offset;
+    std::copy(gt.begin(), gt.end(), c.gt);
+    std::copy(inv.begin(), inv.end(), c.inv);
+    if (kind == WarpCoords::LATTICE) {
+        const i64 cells_x = cells[0], cell_x0 = cells[1], cell_y0 = cells[2];
+        if (cells_x < 1 || cell_x0 < 0 || cell_y0 < 0 || level.size() % cells_x != 0) {
+            throw py::value_error("bad lattice");
+        }
+        const i64 cells_y = static_cast<i64>(level.size()) / cells_x;
+        if (cell_x0 * kWarpCell > c0 || cell_y0 * kWarpCell > r0 || (cell_x0 + cells_x) * kWarpCell < last_col ||
+            (cell_y0 + cells_y) * kWarpCell < last_row) {
+            throw py::value_error("the lattice does not cover the destination region");
+        }
+        if (node_off.size() != level.size()) throw py::value_error("one node offset per lattice cell");
+        if (grid0.size() != (cells_x + 1) * (cells_y + 1) * 2) {
+            throw py::value_error("grid0 must hold the corners of every lattice cell");
+        }
+        const i64 n_nodes = static_cast<i64>(nodes.size()) / 2;
+        for (i64 k = 0; k < static_cast<i64>(level.size()); ++k) {
+            const int lev = level.data()[k];
+            if (lev < 0 || lev > 4) throw py::value_error("lattice levels go from 0 to 4");
+            if (lev == 0) continue;
+            const i64 side = kWarpCell / (kWarpCell >> lev) + 1;
+            if (node_off.data()[k] < 0 || node_off.data()[k] + side * side > n_nodes) {
+                throw py::value_error("lattice nodes out of range");
+            }
+        }
+        c.cells_x = cells_x;
+        c.cells_y = cells_y;
+        c.cell_x0 = cell_x0;
+        c.cell_y0 = cell_y0;
+        c.level = level.data();
+        c.grid0 = grid0.data();
+        c.node_off = node_off.data();
+        c.nodes = nodes.data();
+    } else if (kind == WarpCoords::DENSE) {
+        if (dense.ndim() != 3 || dense.shape(2) != 2) {
+            throw py::value_error("dense coordinates must be (rows, columns, 2)");
+        }
+        if (dense_row0 > r0 || dense_col0 > c0 || dense_row0 + dense.shape(0) < last_row ||
+            dense_col0 + dense.shape(1) < last_col) {
+            throw py::value_error("the dense coordinates do not cover the destination region");
+        }
+        c.dense = dense.data();
+        c.dense_row0 = dense_row0;
+        c.dense_col0 = dense_col0;
+        c.dense_stride = dense.shape(1);
+    } else if (kind != WarpCoords::AFFINE && kind != WarpCoords::EXACT) {
+        throw py::value_error("unknown coordinate kind");
+    }
+    if (transformer != 0) {
+        if (transformer_args.size() < 1) throw py::value_error("one transformer argument per thread");
+        c.transformer = reinterpret_cast<lsio::TransformerFunc>(transformer);
+        c.transformer_args = reinterpret_cast<void* const*>(transformer_args.data());
+        c.n_transformer_args = static_cast<int>(transformer_args.size());
+    } else if (kind == WarpCoords::EXACT) {
+        throw py::value_error("exact coordinates need the transformer");
+    }
+    return c;
 }
 
 }  // namespace
@@ -167,6 +252,131 @@ void register_python(py::module_& m) {
         },
         py::arg("values"), py::arg("factor"), py::arg("has_nodata"), py::arg("nodata"),
         "Mean of every factor x factor block (cells with data), float32.");
+
+    m.def(
+        "io_warp",
+        [](const py::array& src, int method, const std::array<int, 2>& src_shape, const std::array<int, 2>& window,
+           const std::array<double, 2>& scales, bool has_src_nodata, double src_nodata, double dst_nodata,
+           const std::array<int, 4>& region, int kind, double offset, const std::array<double, 6>& gt,
+           const std::array<double, 6>& inv,
+           const Int8Array& level, const DoubleArray& grid0, const I64Array& node_off, const DoubleArray& nodes,
+           const std::array<i64, 3>& cells, const DoubleArray& dense, i64 dense_row0, i64 dense_col0,
+           std::uintptr_t transformer, const PointerArray& transformer_args) {
+            if (src.ndim() != 3) throw py::value_error("src must be (bands, rows, columns)");
+            if (!(src.flags() & py::array::c_style)) throw py::value_error("src must be C-contiguous");
+            WarpSpec sp;
+            sp.method = method;
+            sp.bands = static_cast<int>(src.shape(0));
+            sp.src_h = src_shape[0];
+            sp.src_w = src_shape[1];
+            sp.win_r0 = window[0];
+            sp.win_c0 = window[1];
+            sp.win_h = static_cast<int>(src.shape(1));
+            sp.win_w = static_cast<int>(src.shape(2));
+            sp.xscale = scales[0];
+            sp.yscale = scales[1];
+            sp.has_src_nodata = has_src_nodata;
+            sp.src_nodata = src_nodata;
+            sp.dst_nodata = dst_nodata;
+            sp.dst_r0 = region[0];
+            sp.dst_c0 = region[1];
+            sp.dst_h = region[2];
+            sp.dst_w = region[3];
+            const bool valid_method = (method >= WARP_NEAREST && method <= WARP_MODE) ||
+                                      (method >= WARP_MAX && method <= WARP_Q3) || method == WARP_RMS;
+            if (!valid_method) throw py::value_error("unknown warp method");
+            if (sp.bands < 1 || sp.dst_h < 0 || sp.dst_w < 0 || sp.dst_r0 < 0 || sp.dst_c0 < 0) {
+                throw py::value_error("bad destination region");
+            }
+            if (sp.win_r0 < 0 || sp.win_c0 < 0 || sp.win_r0 + sp.win_h > sp.src_h || sp.win_c0 + sp.win_w > sp.src_w) {
+                throw py::value_error("the source window must lie in the source");
+            }
+            if (!(scales[0] > 0) || !(scales[1] > 0)) throw py::value_error("scales must be positive");
+            // Samples needed: rows r0 .. r0 + h (+ 1 for the corners of the area methods).
+            const i64 extra = warp_by_area(method) ? 1 : 0;
+            const i64 last_row = static_cast<i64>(sp.dst_r0) + sp.dst_h + extra;  // exclusive
+            const i64 last_col = static_cast<i64>(sp.dst_c0) + sp.dst_w + extra;
+            const WarpCoords c = make_coords(kind, offset, gt, inv, level, grid0, node_off, nodes, cells, dense,
+                                             dense_row0, dense_col0, transformer, transformer_args, sp.dst_r0,
+                                             sp.dst_c0, last_row, last_col);
+#ifdef _OPENMP
+            if (c.transformer != nullptr && c.n_transformer_args < omp_get_max_threads()) {
+                throw py::value_error("one transformer argument per thread");
+            }
+#endif
+            py::array out(src.dtype(), std::vector<py::ssize_t>{sp.bands, sp.dst_h, sp.dst_w});
+            void* o = out.mutable_data();
+            auto run = [&](const auto* p) {
+                using T = std::remove_const_t<std::remove_pointer_t<decltype(p)>>;
+                py::gil_scoped_release release;
+                warp<T>(p, static_cast<T*>(o), c, sp);
+                return 0;
+            };
+            if (src.dtype().is(py::dtype::of<std::uint64_t>())) run(static_cast<const std::uint64_t*>(src.data()));
+            else with_typed(src, run);
+            return out;
+        },
+        py::arg("src"), py::arg("method"), py::arg("src_shape"), py::arg("window"), py::arg("scales"),
+        py::arg("has_src_nodata"), py::arg("src_nodata"), py::arg("dst_nodata"), py::arg("region"), py::arg("kind"),
+        py::arg("offset"), py::arg("gt"), py::arg("inv"), py::arg("level"), py::arg("grid0"), py::arg("node_off"),
+        py::arg("nodes"), py::arg("cells"), py::arg("dense"), py::arg("dense_row0"), py::arg("dense_col0"),
+        py::arg("transformer"), py::arg("transformer_args"),
+        "GDAL's warp kernel on a region of the destination: (bands, rows, columns).");
+
+    m.def(
+        "io_warp_coords",
+        [](int kind, double offset, const std::array<double, 6>& gt, const std::array<double, 6>& inv,
+           const Int8Array& level, const DoubleArray& grid0, const I64Array& node_off, const DoubleArray& nodes,
+           const std::array<i64, 3>& cells, const DoubleArray& dense, i64 dense_row0, i64 dense_col0,
+           std::uintptr_t transformer, const PointerArray& transformer_args, const std::array<i64, 4>& region) {
+            const i64 r0 = region[0], c0 = region[1], nr = region[2], nc = region[3];
+            if (r0 < 0 || c0 < 0 || nr < 0 || nc < 0 || nc > INT32_MAX) throw py::value_error("bad region");
+            const WarpCoords c = make_coords(kind, offset, gt, inv, level, grid0, node_off, nodes, cells, dense,
+                                             dense_row0, dense_col0, transformer, transformer_args, r0, c0, r0 + nr,
+                                             c0 + nc);
+            py::array_t<double> out({nr, nc, static_cast<i64>(2)});
+            double* o = out.mutable_data();
+            {
+                py::gil_scoped_release release;
+                std::vector<double> x(static_cast<std::size_t>(nc)), y(static_cast<std::size_t>(nc));
+                for (i64 j = 0; j < nr; ++j) {
+                    c.row(r0 + j, c0, static_cast<int>(nc), x.data(), y.data());
+                    for (i64 i = 0; i < nc; ++i) {
+                        o[2 * (j * nc + i)] = x[static_cast<std::size_t>(i)];
+                        o[2 * (j * nc + i) + 1] = y[static_cast<std::size_t>(i)];
+                    }
+                }
+            }
+            return out;
+        },
+        py::arg("kind"), py::arg("offset"), py::arg("gt"), py::arg("inv"), py::arg("level"), py::arg("grid0"),
+        py::arg("node_off"), py::arg("nodes"), py::arg("cells"), py::arg("dense"), py::arg("dense_row0"),
+        py::arg("dense_col0"), py::arg("transformer"), py::arg("transformer_args"), py::arg("region"),
+        "The source coordinates the warp kernel takes for the samples of a region: (rows, columns, 2).");
+
+    m.def(
+        "io_lattice_checks",
+        [](const py::array_t<double, py::array::c_style | py::array::forcecast>& g, int src_h, int src_w) {
+            if (g.ndim() != 4 || g.shape(3) != 2 || g.shape(1) % 2 != 1 || g.shape(2) % 2 != 1 || g.shape(1) < 3 ||
+                g.shape(2) < 3) {
+                throw py::value_error("g must be (n, 2 my + 1, 2 mx + 1, 2)");
+            }
+            const i64 n = g.shape(0);
+            const int my = static_cast<int>((g.shape(1) - 1) / 2), mx = static_cast<int>((g.shape(2) - 1) / 2);
+            py::array_t<double> err({n, static_cast<i64>(my), static_cast<i64>(mx)});
+            py::array_t<bool> bad({n, static_cast<i64>(my), static_cast<i64>(mx)});
+            py::array_t<bool> outside({n, static_cast<i64>(my), static_cast<i64>(mx)});
+            py::array_t<double> bbox({n, static_cast<i64>(my), static_cast<i64>(mx), static_cast<i64>(4)});
+            {
+                py::gil_scoped_release release;
+                lattice_checks(g.data(), n, my, mx, src_h, src_w, err.mutable_data(),
+                               reinterpret_cast<std::uint8_t*>(bad.mutable_data()),
+                               reinterpret_cast<std::uint8_t*>(outside.mutable_data()), bbox.mutable_data());
+            }
+            return py::make_tuple(err, bad, outside, bbox);
+        },
+        py::arg("g"), py::arg("src_h"), py::arg("src_w"),
+        "Checks of lattice cells: (err, bad, outside, bbox), one per cell of every grid.");
 
     m.def(
         "io_extract",

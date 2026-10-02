@@ -162,9 +162,10 @@ target_include_directories(priocore PUBLIC src/cpp)
 # Eigen's generic_pow on Packet2d (Zonation's Array2d::pow).
 target_link_libraries(priocore PRIVATE eigen_headers)
 set_target_properties(priocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
-# Raster values by zone and at points (ls.zonal_stats, ls.extract); GDAL's
-# polygon rasterizer (lsm/rasterize.cpp).
+# Raster values by zone and at points (ls.zonal_stats, ls.extract), GDAL's warp
+# kernel (ls.reproject); GDAL's polygon rasterizer (lsm/rasterize.cpp).
 add_library(iocore STATIC
+    src/cpp/io/warp.cpp
     src/cpp/io/zonal.cpp
 )
 target_include_directories(iocore PUBLIC src/cpp)

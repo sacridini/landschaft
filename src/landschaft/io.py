@@ -316,10 +316,10 @@ def match_grid(data: xr.DataArray, like, *, resampling: str = "auto") -> xr.Data
     Rasters from different sources (a species model, a cost layer, a
     land-cover map) rarely share their grid; most tools need them cell by
     cell. ``match_grid`` reprojects and resamples ``data`` onto the grid of
-    ``like`` with GDAL (in parallel), and gives it the coordinates of ``like``.
-    :func:`load_raster` does the same on reading with ``like=``, and
-    :func:`reproject` with ``like=`` (which also reprojects to a CRS, and
-    vectors).
+    ``like`` with GDAL's resampling (in parallel), and gives it the
+    coordinates of ``like``. :func:`load_raster` does the same on reading
+    with ``like=``, and :func:`reproject` with ``like=`` (which also
+    reprojects to a CRS, and vectors).
 
     Parameters
     ----------

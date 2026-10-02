@@ -71,11 +71,13 @@ back = ls.reproject(lonlat, like=landcover)               # cell by cell with la
 back.shape                                                # (2000, 2000)
 ```
 
-The warp is GDAL's, always in the same blocks of the result: the values do
-not depend on the number of threads, and a raster too large for memory, read
-lazily (`chunks="auto"`) or given as a path, gets the values it would get in
-memory. `tolerance=0` transforms every cell exactly instead of GDAL's 1/8-cell
-approximation (slower).
+The resampling is GDAL's (its kernels, ported to C++), on source coordinates
+fixed beforehand: GDAL's transformation every 16 cells of the result (finer
+where the projection bends), interpolated in between to within 1/8 cell. The
+values do not depend on the number of threads, and a raster too large for
+memory, read lazily (`chunks="auto"`) or given as a path, gets the values it
+would get in memory. `tolerance=0` transforms every cell exactly (slower):
+the values are then GDAL's, bit for bit.
 Vectors keep their attributes; `densify=` adds vertices first, so that long
 straight edges follow the curvature of the new CRS.
 

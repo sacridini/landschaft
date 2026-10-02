@@ -11,18 +11,30 @@ between minor versions.
   the grid GDAL suggests, with a cell size (`res=`), or onto the grid of a reference raster
   (`like=`); `res=` alone resamples in the same CRS; a vector, or a raster passed as `crs=`,
   gives its CRS only. Every GDAL resampling method; vectors keep their attributes and can be
-  densified first (`densify=`). The warp is GDAL's, always in the same blocks of the result,
-  each with the kernel scale of the whole grid: in memory, lazy (dask) or from a file (read
-  window by window), with any number of threads, the values are the same bits (GDAL's own warp
-  depends on how its memory limit splits the raster). `tolerance=0` transforms every cell
-  exactly instead of GDAL's 1/8-cell approximation.
+  densified first (`densify=`). Rasters are warped by GDAL's resampling kernels ported to C++
+  (`gdalwarpkernel.cpp`, every method but `sum`, which runs GDAL's warp itself), in parallel, on
+  source coordinates fixed beforehand: GDAL's own transformation (the GDAL rasterio loads) at the
+  nodes of a lattice anchored at the result's origin, every 16 cells, finer down to every cell
+  where interpolating them would be off by more than `tolerance` (1/8 cell), interpolated in
+  between. In memory, lazy (dask) or from a file (read window by window), with any number of
+  threads, the values are the same bits (GDAL's own warp depends on how its memory limit splits
+  the raster), and faster than GDAL's own warp (8000 x 8000 float32, UTM to EPSG:4326, 11
+  threads on 6 cores: nearest 0.13 s against 0.49 s, bilinear 0.21 s against 0.57 s, average
+  0.33 s against 0.64 s). `tolerance=0` transforms every cell exactly: GDAL's warp of the
+  whole result at once, bit for bit, for every method and type, across the antimeridian, at
+  the poles and off the globe, but for two GDAL bugs, fixed here:
+  from a geographic source GDAL does not reproject the poles it checks for in the result (and,
+  missing one there, estimates the kernel scale from the result's edges only; GDAL 3.12, still
+  in its master), and GDAL before 3.12.3 warps Int8 rasters as Int16 (values past -128 then
+  become the NoData).
 - `ls.write_raster(..., colormap={value: colour})` takes colours as `"#rrggbb"`, names
   (`"forestgreen"`) or `(r, g, b[, a])`, as `ls.plot` does.
 
 ### Changed
-- `ls.match_grid` and `load_raster(..., like=)` warp as `ls.reproject` does, in fixed blocks:
-  their values can differ slightly from before, and no longer depend on GDAL's memory limit. A
-  lazy raster stays lazy instead of being loaded whole.
+- `ls.match_grid` and `load_raster(..., like=)` warp as `ls.reproject` does: their values can
+  differ slightly from before (in the last digits of interpolated values, and the few cells whose
+  nearest source cell lies within 1/8 cell of an edge), and no longer depend on GDAL's memory
+  limit. A lazy raster stays lazy instead of being loaded whole.
 - The tutorials, the quickstart, the concepts and the home page look at results with `ls.plot`,
   save them with `ls.write_raster`, `ls.write_vector` and `ls.save`, read tables with
   `ls.load_table` and recode classes with `ls.reclassify`.

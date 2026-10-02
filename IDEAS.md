@@ -72,25 +72,79 @@ motivou isso (medido num 8000×8000 float32, UTM 23S → EPSG:4326, Apple M, 9 t
   rasterio reconstrói a transformação a cada chamada (12 ms por bloco entre
   EPSG:3035 e UTM).
 
-**Fase 2 (quando houver tempo): kernel C++ próprio**, para tirar o custo restante
-(bilinear ainda 2,5× o GDAL padrão; o GDAL gasta ~0,5–5 ms de preparação por chamada,
-uma por bloco) sem perder o determinismo:
+**Feito (fase 2): kernel C++ próprio** (`src/cpp/io/warp.cpp`, `_reproject.py`,
+`_gdaltransform.py`), com o determinismo e agora bit a bit igual ao GDAL com
+`tolerance=0`:
 
-- Coordenadas numa grade fixa ancorada na origem do destino inteiro (p. ex. pontos
-  exatos a cada 16 células, calculados pelo PROJ/pyproj de uma vez, interpolados
-  dentro de cada célula da grade com erro controlado, como o transformador aproximado
-  do GDAL mas independente dos blocos). O erro máximo pode ser verificado contra a
-  transformação exata e refinado onde passar da tolerância.
-- Kernels com OpenMP sobre linhas do destino, com os mesmos pesos do
-  `gdalwarpkernel.cpp` (nearest, bilinear, cubic, cubic_spline, lanczos com o
-  XSCALE/YSCALE da grade; average com pesos por área de sobreposição; mode, min, max,
-  med, q1, q3, sum, rms) e o mesmo tratamento de NoData (`UNIFIED_SRC_NODATA`).
-- Validação: com a grade de coordenadas no passo 1 (exata), os mesmos bits do GDAL com
-  `tolerance=0` e o destino num chunk (nearest e estatísticas de classes) ou até 1 ulp
-  (contínuos); com o passo padrão, diferença limitada pela tolerância e resultado
-  idêntico entre memória, lazy e threads (os testes de `tests/test_reproject.py`).
-- Operações fundidas numa passada (reprojetar + recortar + reclassificar) e blocos
-  dask pequenos, onde o custo fixo por chamada do GDAL mais pesa.
+- Porte do `gdalwarpkernel.cpp` (GDAL 3.12.4, o do rasterio 1.5.1) só pelos caminhos que
+  o GDAL toma no nosso caso: o destino tem NoData, então sempre há `panDstValid` e nunca
+  os caminhos `NoMasksOrDstDensityOnly` (nearest de Byte/Int8/Int16/UInt16/Float32 por
+  `GWKNearestThread<T>`, o resto por `GWKRealCase`; `GWKAverageOrMode` com o modo por
+  histograma nos tipos de 8/16 bits e `GWKModeRealType` nos outros). Mesmas operações na
+  mesma ordem (pesos, `SRC_DENSITY_THRESHOLD`, mistura de densidade < 0,9999, arredondamento
+  e `AvoidNoData`, máscara unificada de NoData das bandas, a soma SSE2 de 6 colunas do
+  Lanczos de Byte, `floor`/`ceil` trocados por conversões inteiras equivalentes). As
+  coordenadas são as da origem inteira (a janela só indexa): subtrair o deslocamento
+  inteiro da janela é exato, então o resultado não depende da janela.
+- Coordenadas: o transformador do próprio GDAL (`GDALCreateGenImgProjTransformer2` +
+  `GDALGenImgProjTransform` da DLL que o rasterio carrega, achada pelos módulos do
+  processo e chamada por ctypes, que solta o GIL; um transformador por thread). O pyproj
+  não serve para a paridade: traz o PROJ 9.5 e o rasterio o 9.8, e a inversa da LAEA
+  difere em até 0,7 mm. Sem a DLL, o pyproj é a reserva (mesmo determinismo, últimos
+  bits diferentes). O C++ recebe o ponteiro da função para o que o GDAL transforma sob
+  demanda: coordenadas exatas por linha (`tolerance=0`), o ajuste de borda
+  `GWKAdjustSrcOffsetOnEdge` (um canto da origem fora do domínio da projeção) e o teste
+  de antimeridiano das áreas (ponto médio da célula).
+- Grade de coordenadas ancorada na origem do destino: nós exatos a cada 16 amostras,
+  verificados no centro e nos meios das arestas de cima e da esquerda de cada célula
+  (erro |dx| + |dy|, como o transformador aproximado do GDAL) e refinados para 8, 4, 2, 1
+  onde passa da tolerância ou algo falha; células bem fora da origem não refinam. Cada
+  célula só depende de si: cada tarefa lazy calcula a grade das suas células (a memória
+  não cresce com o raster). Erro medido: 2e-5 célula (UTM → 4326), 0,16 perto do polo
+  (4326 → 3031; as verificações são só nos pontos médios).
+- XSCALE/YSCALE como o GDAL para o destino inteiro num chunk: `ComputeSourceWindow`
+  (21 pontos por aresta, todos se um canto falha, grade 23×23 se algum falha ou um polo
+  cai no destino — o `GDALTransformLonLatToDestGenImgProjTransformer` nem reprojeta o
+  polo quando a origem é geográfica, replicado — e `ComputeSourceWindowStartingFromSource`),
+  depois as regras do `PerformWarp`. Translação inteira no mesmo CRS: nearest.
+- Validação (`tests/test_reproject.py`, 202 testes): `tolerance=0` igual bit a bit ao GDAL
+  com o destino num chunk para todos os métodos (menos `sum`), tipos (u)int8/16/32, int64,
+  float32/64 com e sem NoData, 3 bandas com NaN diferentes, origem geográfica, mesmo CRS,
+  e um mundo em 4326 para ortográfica (pontos fora do globo, antimeridiano) e polar, com
+  buracos de NaN; memória = lazy = threads = pickle em todos. O padrão fica a ≤ 1e-3 do
+  exato nos contínuos e troca < 0,1% das células nos que escolhem valores.
+- Tempos (8000×8000 float32, UTM 23S → 4326, i5-13600K, 11 threads nos 6 núcleos P):
+  nearest 0,13 s, bilinear 0,21 s, cubic 0,46 s, average 0,33 s, mode 0,40 s; o GDAL do
+  rasterio na mesma máquina (padrão, 11 threads): 0,49 / 0,57 / 0,74 / 0,64 / 0,68 s; a
+  fase 1: 0,38 / 0,45 / 0,62 / 0,56 / 0,55 s. `tolerance=0`: 0,93 / 1,0 / 1,3 / 1,2 / 1,3 s
+  (fase 1: 1,8–2,0 s). A grade custa 0,05 s; numa thread o kernel leva ~6 ns por célula no
+  nearest, 17 no bilinear, 38 no cubic.
+
+Bugs do GDAL corrigidos (só a forma correta, testada contra o GDAL corrigido):
+
+- `GDALTransformLonLatToDestGenImgProjTransformer` (GDAL 3.12 e master): com origem
+  geográfica, a "otimização" que evita criar a transformação lon/lat → origem também pula
+  a reprojeção origem → destino, e o polo vira coordenadas de pixel sem sentido; o GDAL não
+  vê o polo no destino e estima a escala do kernel só pelas bordas. Aqui o polo é
+  reprojetado; os testes comparam com o GDAL com `SAMPLE_GRID=YES` (o que o GDAL corrigido
+  faz ao ver o polo).
+- GDAL < 3.12.3 (o rasterio 1.5.2 do Linux traz o 3.12.2): o tipo de trabalho partia de
+  Byte, e Byte ∪ Int8 = Int16, então rasters Int8 eram warpados em Int16 (no cubic e no
+  Lanczos, valores abaixo de -128 viravam -128, o NoData, sem o `AvoidNoData`). Aqui é
+  Int8, como no 3.12.3+; o teste pula Int8 com GDAL mais antigo.
+
+Ficou de fora / próximos passos:
+
+- `sum` continua no warp do GDAL em blocos (fase 1): usa a transformação inversa e uma
+  quadtree (`GWKSumPreserving`), cuja ordem de soma teria de ser replicada.
+- Um NoData sem nenhuma célula NoData: o GDAL descarta a máscara e o Lanczos soma em outra
+  ordem (diferença nos últimos bits); aqui a máscara fica sempre, para não depender da
+  janela de cada tarefa.
+- Velocidade: o cubic e o modo por histograma de 16 bits são os mais lentos por célula;
+  as 4 linhas do cubic caberiam em SIMD (2 linhas por registro SSE2, mesma ordem por
+  linha). A janela de origem de cada tarefa lazy refaz a grade da tarefa (o dobro do
+  custo da grade, pequeno).
+- Operações fundidas numa passada (reprojetar + recortar + reclassificar).
 - Outras ideias: o `partial` do terra para vetores que saem do domínio da projeção
   (hoje viram coordenadas infinitas), referências do `terra::project` em R para a
   escolha da grade (hoje é a do GDAL, `calculate_default_transform`), e alinhar a
