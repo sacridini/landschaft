@@ -30,10 +30,11 @@ the field; with `basemap=None` nothing at all is downloaded.
 | a raster of integers with at most 64 values, or booleans | classes, each in a distinct colour |
 | a floating-point raster of at most 12 whole numbers (a class map read with `masked=True`, NaN for its NoData) | classes, each in a distinct colour |
 | any other raster | a colour ramp from the 2nd to the 98th percentile |
-| a stack `(band, y, x)` | one layer per band, on one scale; red, green and blue bands as true colour |
+| a stack `(band, y, x)` | one layer, on one scale for all its bands, the band shown chosen on its legend card (a slider, and ▶ to play through them); red, green and blue bands as true colour |
 | a GeoDataFrame, GeoSeries or geometry | polygons, lines or points, coloured by `column=` |
 | a DataFrame or Series | bars, lines or one chart per metric |
-| a tool's result (Zonation, habitat graphs, Biodiverse, PCA, results with several rasters) | its maps, charts and summary numbers |
+| a tool's result (Zonation, habitat graphs, Biodiverse, PCA, clustergrams, least-cost paths, results with several rasters) | its maps, charts and summary numbers |
+| a species distribution model (`ls.sdm.fit`) | its response curves and cross-validated scores; with `env=` (the predictors), the suitability map of each model and of the ensemble, with the presences |
 | a change between two dates (`simple_change`, `morphological_change`, `fos_change`, `fad_multiscale_change`) | the change map with its classes named, the flows between the classes as a Sankey diagram, the counts |
 | a list of rasters and vectors | one map, one layer each |
 

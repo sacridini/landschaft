@@ -265,7 +265,7 @@ def _map_layers(items, opts):
                 img.show = j == 0
                 images.append(img)
             legend = dataclasses.replace(images[-1].legend, title=name) if images[-1].legend else None
-            groups.append(Group(name, legend, opacity, None, images))
+            groups.append(Group(name, legend, opacity, None, images, bands=[labels[k] for k in idx]))
             continue
         img = _raster.render(da, max_size=opts["max_size"], cmap=opts.get("cmap"), vmin=opts.get("vmin"),
                              vmax=opts.get("vmax"), log=opts.get("log"), opacity=opacity,
@@ -497,6 +497,11 @@ def plot(obj, *, column=None, cmap=None, labels=None, categorical=None, vmin=Non
         ``scalebar=False``, ``north_arrow=False``.
     max_size
         Pixels on the long side of every raster drawn (default 2048).
+    **kwargs
+        Options of a tool's result: ``env=`` (a species distribution model: the
+        predictor rasters, to map its suitability), ``scale=`` (a FAD change: the
+        window size, default the multiscale map), ``distance=`` (a habitat graph:
+        the links up to that distance); of a static figure (see ``static``).
     show
         Show the plot now (default: outside notebooks, unless the environment
         variable ``LANDSCHAFT_PLOT_SHOW`` is ``0``); in a notebook, the returned

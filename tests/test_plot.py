@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import io
 import re
+from html import unescape
 
 import numpy as np
 import pandas as pd
@@ -341,7 +342,7 @@ def test_maps_read_values_and_have_a_card_per_layer(forest):
     poly = gpd.GeoDataFrame(geometry=[box(500300, 4498900, 500900, 4499500)], crs=32633)
     html = page(ls.plot([stack, poly]))
     assert html.count("class='ls-legend'") == 2  # the stack's bands share a card; the polygons have theirs
-    assert html.count("type='range'") == 2 and "title='Opacity'" in html
+    assert html.count("title='Opacity'") == 2 and html.count("class='bands'") == 1  # opacity; the band shown
     assert "getImageData" in html and '"n": "stack: b0"' in html and '"vmin"' in html  # values under the cursor
     pts = gpd.GeoDataFrame({"kind": np.resize(["oak", "pine"], 30000)}, crs=32633,
                            geometry=gpd.points_from_xy(np.linspace(5e5, 6e5, 30000), np.linspace(4.4e6, 4.5e6, 30000)))
@@ -449,3 +450,52 @@ def test_static_vectors_take_the_map_colours():
     colours = ax.collections[0].get_facecolors()[:, :3].round(2).tolist()
     assert colours == [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]
     assert [t.get_text() for t in ax.get_legend().get_texts()] == ["oak", "pine"]
+
+
+# --- stacks band by band, results of their own -------------------------------------------------------------
+
+
+def test_a_stack_is_one_layer_with_a_band_slider():
+    stack = grid(np.random.default_rng(7).random((5, 40, 50)).astype("float32"), name="ndvi")
+    html = page(ls.plot(stack))
+    assert html.count("class='bands'") == 1 and "max='4'" in html and ">b0</span>" in html
+    assert "LC.addOverlay(grp, g.t)" in html and '"b": ["b0", "b1", "b2", "b3", "b4"]' in html
+
+
+def test_species_distribution_results():
+    pytest.importorskip("sklearn")
+    from sklearn.linear_model import LogisticRegression
+
+    occ = ls.load_table(ls.sdm.example_data("bradypus"))
+    env = ls.load_raster(ls.sdm.example_data("bioclim"))
+    data = ls.sdm.prepare(occ, env, clean=False, background=500)
+    res = ls.sdm.fit(data, {"glm": LogisticRegression(max_iter=5000)})
+    p = ls.plot(res)
+    assert [x.kind for x in p.panels] == ["chart", "chart", "html"]
+    assert len(p.charts[0].data) == len(res.predictors)  # a response curve per predictor
+    assert p.charts[1].data[0].error_y.array is not None  # scores with their spread
+    p = ls.plot(res, env=env)
+    assert p.panels[0].kind == "map"
+    html = unescape(page(p))  # the map in a frame of the page
+    assert '"n": "suitability: glm"' in html and "<b>presences</b>" in html
+
+
+def test_clustergram_least_cost_path_and_graph_links(forest):
+    signatures = ls.SpatialSignatureAnalysis(ls.example_data("clc"), grid=5000, landscape_metrics=["shdi", "ed"])
+    p = ls.plot(signatures.clustergram(range(1, 5)))
+    assert p.charts[0].data[-1].mode == "markers" and p.charts[0].layout.xaxis.title.text.startswith("number")
+    resistance = ls.distance_to_resistance(forest)
+    objects = ls.accounting(forest)
+    ids = objects.ids.values
+    marker = np.zeros(forest.shape, dtype="uint8")
+    marker[ids == objects.largest[0][0]] = 1
+    marker[ids == objects.largest[1][0]] = 2
+    path = ls.least_cost_path(resistance, marker == 1, marker == 2)
+    html = unescape(page(ls.plot(path)))
+    assert "least-cost path" in html and '{"type":"FeatureCollection"' in html  # the path drawn as polygons
+    patches = gpd.GeoDataFrame({"name": ["a", "b", "c"]}, crs="EPSG:3035", geometry=[
+        box(0, 0, 500, 500), box(900, 0, 1400, 400), box(3000, 0, 3300, 300)])
+    graph = ls.HabitatGraph.from_vector(patches, id="name", area_unit="ha", distance="edge")
+    html = unescape(page(ls.plot(graph, distance=5000)))
+    assert html.count("class='ls-legend'") == 2  # nodes and links
+    assert re.search(r"<b>links</b>.*?class='ramp'", html)  # the links on a ramp of their distance

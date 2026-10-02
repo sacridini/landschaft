@@ -40,6 +40,12 @@ _CSS = """
 .ls-legend .head b { margin: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
 .ls-legend input[type=range] { width: 56px; height: 12px; margin: 0; accent-color: #555; cursor: pointer; opacity: 0.55; }
 .ls-legend:hover input[type=range] { opacity: 1; }
+.ls-legend .bands { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.ls-legend .bands input { flex: 1; min-width: 70px; height: 12px; margin: 0; accent-color: #555; cursor: pointer; }
+.ls-legend .bands span { min-width: 3em; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ls-legend .bands button { border: 1px solid #bbb; background: #fff; border-radius: 4px; width: 22px; height: 20px;
+  padding: 0; font-size: 10px; line-height: 18px; cursor: pointer; color: #333; }
 .ls-full a { font: bold 18px/30px sans-serif; text-align: center; cursor: pointer; }
 .ls-coords { background: rgba(255,255,255,0.88); padding: 2px 7px; margin: 0 0 4px 10px !important; border-radius: 4px;
   font: 11px/1.45 Inter, "Segoe UI", Helvetica, Arial, sans-serif; color: #1d1d1b; font-variant-numeric: tabular-nums;
@@ -91,6 +97,7 @@ class Group:
     colour: str | None = None                   # a vector layer drawn in one colour
     items: list = field(default_factory=list)   # Images and vector layers
     layers: list = field(default_factory=list)  # their layers on the map
+    bands: list | None = None                   # a stack: the band names, one band shown at a time
 
 
 _CONTROLS = None
@@ -100,7 +107,7 @@ _CONTROLS = None
 # its class or (on a ramp of 255 colours) its value, to 1/254 of the ramp.
 _SCRIPT = """
 {% macro script(this, kwargs) %}
-(function(map, L_, P, G) {
+(function(map, L_, P, G, LC) {
     var Full = L.Control.extend({options: {position: "topleft"}, onAdd: function() {
         var bar = L.DomUtil.create("div", "leaflet-bar leaflet-control ls-full");
         var a = L.DomUtil.create("a", "", bar);
@@ -200,16 +207,34 @@ _SCRIPT = """
         });
     }
 
-    G.forEach(function(names, i) {
+    G.forEach(function(g, i) {
         var card = document.querySelector(".ls-legend[data-g='" + i + "']");
         if (!card) { return; }
-        var lays = names.map(function(n) { return window[n]; });
+        var lays = g.n.map(function(n) { return window[n]; });
+        if (g.b && lays.length > 1) {  // a stack: one entry in the layer control, the band chosen on the card
+            var grp = L.layerGroup(), cur = 0, timer = null;
+            lays.forEach(function(x) { if (map.hasLayer(x)) { map.removeLayer(x); } LC.removeLayer(x); });
+            grp.addLayer(lays[0]).addTo(map);
+            LC.addOverlay(grp, g.t);
+            var range = card.querySelector(".bands input"), lab = card.querySelector(".bands span");
+            var play = card.querySelector(".bands button");
+            var show = function(k) {
+                grp.removeLayer(lays[cur]); cur = k; grp.addLayer(lays[cur]);
+                range.value = k; lab.textContent = g.b[k];
+            };
+            range.addEventListener("input", function() { show(+range.value); });
+            play.addEventListener("click", function() {
+                if (timer) { clearInterval(timer); timer = null; play.innerHTML = "&#9654;"; return; }
+                play.innerHTML = "&#10073;&#10073;";
+                timer = setInterval(function() { show((cur + 1) % lays.length); }, 900);
+            });
+        }
         var sync = function() {
             card.style.display = lays.some(function(x) { return map.hasLayer(x); }) ? "" : "none";
         };
         map.on("overlayadd overlayremove", sync);
         sync();
-        var r = card.querySelector("input");
+        var r = card.querySelector(".head input");
         if (!r) { return; }
         r.addEventListener("input", function() {
             var o = r.value / 100;
@@ -226,12 +251,13 @@ _SCRIPT = """
             });
         });
     });
-})({{ this._parent.get_name() }}, {{ this.layers|tojson }}, {{ this.palettes|tojson }}, {{ this.groups|tojson }});
+})({{ this._parent.get_name() }}, {{ this.layers|tojson }}, {{ this.palettes|tojson }}, {{ this.groups|tojson }},
+  {{ this.control }});
 {% endmacro %}
 """
 
 
-def _controls(layers: list, palettes: list, groups: list):
+def _controls(layers: list, palettes: list, groups: list, control: str):
     """Full screen (top left); the coordinates and the values under the cursor (bottom left), and
     in a popup on a click; the legend cards following their layers, with their opacity."""
     global _CONTROLS
@@ -241,13 +267,13 @@ def _controls(layers: list, palettes: list, groups: list):
         class Controls(MacroElement):
             _template = Template(_SCRIPT)
 
-            def __init__(self, layers, palettes, groups):
+            def __init__(self, layers, palettes, groups, control):
                 super().__init__()
                 self._name = "LsControls"
-                self.layers, self.palettes, self.groups = layers, palettes, groups
+                self.layers, self.palettes, self.groups, self.control = layers, palettes, groups, control
 
         _CONTROLS = Controls
-    return _CONTROLS(layers, palettes, groups)
+    return _CONTROLS(layers, palettes, groups, control)
 
 
 _SWIPE = """
@@ -320,13 +346,14 @@ def cards(groups: list[Group]) -> list[Group]:
     out, seen = [], {}
     for g in groups:
         lg = g.legend
-        key = None if lg is None else (tuple(lg.classes), tuple(lg.ramp), lg.vmin, lg.vmax, lg.log, lg.under, lg.over)
+        key = None if lg is None or g.bands else (tuple(lg.classes), tuple(lg.ramp), lg.vmin, lg.vmax, lg.log,
+                                                   lg.under, lg.over)
         if key is not None and key in seen:
             card = seen[key]
             card.title = f"{card.title} · {g.title}"
             card.layers = card.layers + g.layers
             continue
-        card = Group(g.title, lg, g.opacity, g.colour, list(g.items), list(g.layers))
+        card = Group(g.title, lg, g.opacity, g.colour, list(g.items), list(g.layers), g.bands)
         out.append(card)
         if key is not None:
             seen[key] = card
@@ -355,6 +382,10 @@ def legend_html(groups: list[Group]) -> str:
                         f"<span>{high}</span></div>")
         elif g.colour:
             body.append(f"<div class='row'><span class='sw' style='background:{g.colour}'></span>features</div>")
+        if g.bands and len(g.layers) > 1:  # the band shown, and a button to step through them
+            body.append(f"<div class='bands'><button type='button' title='Play'>&#9654;</button>"
+                        f"<input type='range' min='0' max='{len(g.layers) - 1}' value='0' step='1' "
+                        f"aria-label='Band of {name}'><span>{html.escape(str(g.bands[0]))}</span></div>")
         parts.append(f"<div class='ls-legend' data-g='{i}'>" + "".join(body) + "</div>")
     return "<div class='ls-legends'>" + "".join(parts) + "</div>" if parts else ""
 
@@ -457,10 +488,11 @@ def finish(m, bounds: list, groups: list[Group], title: str | None = None):
     import folium
     from branca.element import Element
 
-    folium.LayerControl(collapsed=True, position="topright").add_to(m)
+    control = folium.LayerControl(collapsed=True, position="topright").add_to(m)
     layers, palettes = _readable(groups)
     merged = cards(groups)
-    _controls(layers, palettes, [[x.get_name() for x in g.layers] for g in merged]).add_to(m)
+    _controls(layers, palettes, [{"n": [x.get_name() for x in g.layers], "b": g.bands, "t": g.title} for g in merged],
+              control.get_name()).add_to(m)
     root = m.get_root()
     root.header.add_child(Element(_CSS))
     extra = legend_html(merged)

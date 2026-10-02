@@ -67,8 +67,10 @@ def _graph(g, opts, title):
             cent = shapely.centroid(nodes.geometry.values)
             xy = shapely.get_coordinates(cent)
             lines = shapely.linestrings(np.stack([xy[pi[keep]], xy[pj[keep]]], axis=1))
+            # the links coloured by their distance (or cost): the shortest, the strongest, bright
             items.append(("links", gpd.GeoDataFrame({"distance": val[keep]}, geometry=lines, crs=nodes.crs),
-                          {"column": None, "color": "#ffffff"}))
+                          {"column": "distance", "cmap": "magma_r", "categorical": False, "vmin": None,
+                           "vmax": None, "log": None}))
         return _map(items, {**opts, "column": name if opts.get("column") is None else opts["column"]}, title)
     raster = g.to_raster(attr, name=name)
     return _map([(name, raster)], {**opts, "categorical": False}, title)
@@ -220,4 +222,141 @@ def _fad_change(res, opts, title):
     panels.append(_summary({"scale": label, "foreground A": sc.fg_area_a, "foreground B": sc.fg_area_b,
                             "net change": sc.net_change, "same class": sc.same_class, "changed class": sc.changed,
                             "less fragmented (%)": sc.frag_decrease_pct, "more fragmented (%)": sc.frag_increase_pct}))
+    return panels
+
+
+# --- species distributions -----------------------------------------------------------------------------
+
+
+@register("SDMResult")
+def _sdm(res, opts, title):
+    """With ``env=`` (the predictor rasters), the suitability map (one band per model, the ensemble
+    and its spread) with the presences; the response curves; the cross-validated scores."""
+    from plotly.subplots import make_subplots
+
+    from .. import sdm
+    from . import _charts
+    from ._core import _map, _Panel
+
+    panels = []
+    env = opts.get("env")
+    if env is not None:
+        suit = sdm.predict(res, env).rename("suitability")
+        items = [("suitability", suit)]
+        if res.data is not None and getattr(res.data, "coords", None) is not None:
+            presences = res.data.coords[np.asarray(res.data.y) == 1]
+            items.append(("presences", presences, {"column": None, "color": "#ffffff", "cmap": None}))
+        panels += _map(items, {**opts, "cmap": opts.get("cmap") or "viridis", "categorical": False,
+                               "vmin": 0.0 if opts.get("vmin") is None else opts["vmin"],
+                               "vmax": 1.0 if opts.get("vmax") is None else opts["vmax"]},
+                       title or "Habitat suitability")
+    if res.data is not None:
+        curves = sdm.response_curves(res, n=60)
+        preds = list(dict.fromkeys(curves["predictor"]))
+        cols = min(3, len(preds))
+        rows = -(-len(preds) // cols)
+        fig = make_subplots(rows=rows, cols=cols, subplot_titles=preds, shared_yaxes=True,
+                            vertical_spacing=0.12 if rows > 1 else 0.1)
+        models = list(dict.fromkeys(curves["model"]))
+        colours = dict(zip(models, _palettes.distinct(len(models))))
+        for i, p in enumerate(preds):
+            for m in models:
+                sub = curves[(curves["predictor"] == p) & (curves["model"] == m)]
+                fig.add_scatter(x=sub["value"], y=sub["suitability"], mode="lines", name=str(m),
+                                line={"color": colours[m], "width": 2}, legendgroup=str(m), showlegend=i == 0,
+                                row=i // cols + 1, col=i % cols + 1)
+        fig.update_yaxes(range=[0, 1])
+        fig.update_layout(**{**_charts._LAYOUT, "height": max(360, 260 * rows)},
+                          title="Response curves (the other predictors at their mean)")
+        panels.append(_Panel("chart", fig, "response curves"))
+    s = res.summary
+    metrics = [m for m in ("auc_test", "tss", "boyce") if (m, "mean") in s.columns]
+    if metrics:
+        go = _charts._go()
+        fig = _charts.figure("Cross-validated scores (mean and standard deviation over the folds)",
+                             barmode="group", yaxis_title="score")
+        for m, c in zip(metrics, _palettes.distinct(len(metrics))):
+            fig.add_trace(go.Bar(x=[str(i) for i in s.index], y=s[(m, "mean")], name=m, marker_color=c,
+                                 error_y={"type": "data", "array": s[(m, "std")].fillna(0).to_numpy()}))
+        panels.append(_Panel("chart", fig, "scores"))
+    numbers = {f"threshold ({m}, max TSS)": float(t) for m, t in res.thresholds.items()}
+    if res.data is not None:
+        y = np.asarray(res.data.y)
+        numbers |= {"presences": int((y == 1).sum()), "background": int((y == 0).sum())}
+    panels.append(_summary(numbers | {"predictors": list(res.predictors)}))
+    return panels
+
+
+# --- landscapes compared -------------------------------------------------------------------------------
+
+
+@register("ClustergramResult")
+def _clustergram(res, opts, title):
+    """Schonlau's clustergram: for each k a dot per cluster at its mean, sized by its rows, and the
+    rows moving between the clusters of k and k + 1 as lines as wide as their number."""
+    from . import _charts
+    from ._core import _Panel
+
+    go = _charts._go()
+    means = res.means
+    n = max(len(means), 1)
+    ks = list(means.columns)
+    fig = _charts.figure(title or "Clustergram", xaxis_title="number of clusters (k)",
+                         yaxis_title="PCA-weighted mean of the clusters" if res.pca_weighted else "mean of the clusters",
+                         showlegend=False)
+    for i, k in enumerate(ks[:-1]):
+        if ks[i + 1] != k + 1:
+            continue
+        for (a, b), m in means.groupby([k, k + 1]).size().items():
+            fig.add_trace(go.Scatter(x=[k, k + 1], y=[a, b], mode="lines", hoverinfo="text",
+                                     text=f"{m} rows", line={"color": "rgba(40,40,40,0.55)",
+                                                              "width": max(0.5, 30 * m / n)}))
+    for k in ks:
+        counts = means[k].value_counts()
+        fig.add_trace(go.Scatter(x=[k] * len(counts), y=counts.index, mode="markers",
+                                 marker={"size": 6 + 30 * np.sqrt(counts.to_numpy() / n), "color": "#d62728",
+                                         "line": {"color": "white", "width": 1.5}},
+                                 text=[f"k = {k}: {c} rows" for c in counts.to_numpy()], hoverinfo="text"))
+    fig.update_xaxes(dtick=1)
+    panels = [_Panel("chart", fig, "clustergram")]
+    if res.dropped:
+        panels.append(_summary({"rows left out (missing values)": len(res.dropped)}))
+    return panels
+
+
+# --- corridors -------------------------------------------------------------------------------------------
+
+
+def _mask_outline(mask):
+    """The cells of a mask as polygons (a path stays visible however far the map zooms out)."""
+    import geopandas as gpd
+    import shapely
+    from rasterio.features import shapes
+
+    from ..io import _transform
+
+    m = np.asarray(mask) > 0
+    if not m.any():
+        return None
+    geoms = [shapely.geometry.shape(g) for g, v in shapes(m.astype("uint8"), mask=m, transform=_transform(mask))
+             if v == 1]
+    return gpd.GeoDataFrame(geometry=geoms, crs=mask.rio.crs)
+
+
+@register("LeastCostPathResult")
+def _least_cost_path(res, opts, title):
+    """The path over the combined cost surface, and its numbers."""
+    from ._core import _is_geo_raster, _map, _Panel, _plain_array_chart
+
+    cost, path = res.combined_cost, res.lcp_mask
+    if _is_geo_raster(cost) and _is_geo_raster(path):
+        items = [("combined cost", cost)]
+        outline = _mask_outline(path)
+        if outline is not None:
+            items.append(("least-cost path", outline, {"column": None, "color": "#ff2d2d", "opacity": 0.95}))
+        panels = _map(items, {**opts, "categorical": False}, title or "Least-cost path")
+    else:
+        panels = [_Panel("chart", _plain_array_chart(np.asarray(cost), title or "combined cost"))]
+    panels.append(_summary({"path length (cells)": res.path_length, "cells to restore": res.rest_pixels,
+                            "cost": res.expense, "mean distance of the restored cells": res.avg_distance}))
     return panels
