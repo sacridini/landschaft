@@ -34,6 +34,7 @@ the field; with `basemap=None` nothing at all is downloaded.
 | a GeoDataFrame, GeoSeries or geometry | polygons, lines or points, coloured by `column=` |
 | a DataFrame or Series | bars, lines or one chart per metric |
 | a tool's result (Zonation, habitat graphs, Biodiverse, PCA, results with several rasters) | its maps, charts and summary numbers |
+| a change between two dates (`simple_change`, `morphological_change`, `fos_change`, `fad_multiscale_change`) | the change map with its classes named, the flows between the classes as a Sankey diagram, the counts |
 | a list of rasters and vectors | one map, one layer each |
 
 The ramp follows the name and the values of a raster: priority ranks (`rank`,
@@ -56,6 +57,20 @@ Every layer has a card in the legend, with a slider for its opacity (to see the
 imagery underneath); a card hides while its layer is switched off in the layer
 control (top right). The button under the zoom buttons shows the map full
 screen.
+
+## Comparing two dates
+
+`compare=True` draws two rasters (or vector layers) on one map, the first on the
+left of a line, the second on its right; drag the handle to sweep between them:
+
+```python
+forest = ls.load_raster(ls.example_data("input"))
+after = forest.where(forest.x < forest.x[400], 1)     # the east cut
+p = ls.plot([ls.mspa(forest), ls.mspa(after)], compare=True, title="Before / after")
+```
+
+Two maps of the same colours share one legend card. The values under the
+cursor are read on both sides.
 
 ## Choosing the colours
 

@@ -94,6 +94,9 @@ def _layer_class():
             _template = Template("""
 {% macro script(this, kwargs) %}
     var {{ this.get_name() }} = L.geoJson(null, {
+        {%- if this.pane %}
+        pane: {{ this.pane|tojson }},
+        {%- endif %}
         style: function(f) {
             var c = (f.properties && f.properties.__c) || {{ this.color|tojson }};
             return {color: {{ this.edge|tojson }} || c, weight: 1.5, fillColor: c,
@@ -102,7 +105,7 @@ def _layer_class():
         pointToLayer: function(f, latlng) {
             var c = (f.properties && f.properties.__c) || {{ this.color|tojson }};
             return L.circleMarker(latlng, {radius: 4, color: "#222222", weight: 1, fillColor: c,
-                                           fillOpacity: 0.9});
+                                           fillOpacity: 0.9{% if this.pane %}, pane: {{ this.pane|tojson }}{% endif %}});
         },
         onEachFeature: function(f, layer) {
             var keys = {{ this.fields|tojson }};
@@ -125,6 +128,7 @@ def _layer_class():
                 self._name = "GeoJsonLayer"
                 self.token, self.color, self.edge = token, color, edge
                 self.fill_opacity, self.fields = fill_opacity, list(fields)
+                self.pane = None  # a pane of its own (one side of a swipe)
 
         _LAYER_CLASS = GeoJsonLayer
     return _LAYER_CLASS

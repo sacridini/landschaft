@@ -192,7 +192,8 @@ def fad(
     return FADResult(
         density=_wrap_as_dataarray(c_density, data, f"fad_{window_size}", attrs),
         raw_density=_wrap_as_dataarray(c_raw, data, f"fad_raw_{window_size}"),
-        classes=_wrap_as_dataarray(c_classes, data, f"fad_classes_{window_size}"),
+        classes=_wrap_as_dataarray(c_classes, data, f"fad_classes_{window_size}",
+                                   {"landschaft_product": "FAD_CLASSES"}),
         window_size=window_size,
         stats=stats_df,
     )
@@ -258,7 +259,7 @@ def fad_multiscale(
     ms_map = raw_res["multiscale_map"]
     ms_attrs = {"landschaft_product": "FAD_MULTISCALE", "colormap": "fad"}
     wrapped_ms = _wrap_as_dataarray(ms_map, data, "fad_multiscale", ms_attrs)
-    classes = _wrap_as_dataarray(raw_res["classes"], data, "fad_classes")
+    classes = _wrap_as_dataarray(raw_res["classes"], data, "fad_classes", {"landschaft_product": "FAD_CLASSES"})
 
     # GTB's AVCON: average FAD scaled to the reporting unit (non-missing area)
     avcon_factor = int((arr == 2).sum()) / int((arr != 0).sum())

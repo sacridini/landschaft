@@ -93,6 +93,8 @@ def distinct(n: int) -> list[str]:
 LEGEND_ORDER = {
     "MSPA": ["Core", "Islet", "Perforation", "Edge", "Loop", "Bridge", "Branch", "Background", "Core-Opening",
              "Border-Opening"],
+    "SIMPLE_CHANGE": ["Stable foreground", "Gain", "Loss", "Stable background"],
+    "MORPHOLOGICAL_CHANGE": ["Stable foreground", "Gain", "Loss", "Spurious change", "Stable background"],
 }
 
 
@@ -102,22 +104,69 @@ def product_style(attrs: dict) -> tuple[dict | None, dict | None]:
     product = attrs.get("landschaft_product")
     if not product:
         return None, None
+    if product == "FAD_CLASSES":
+        return dict(FAD_CLASS_COLOURS), class_names(product, attrs)
     from .. import io
 
     cmap = io._resolve_colormap("auto", type("A", (), {"attrs": attrs})())
     return cmap, class_names(product, attrs)
 
 
+#: The classes of a density map (FAD, FOS: percentages 0-100) by their colours, and its codes above 100.
+_DENSITY_CLASSES = ((0, 9, "Rare (0-9%)"), (10, 39, "Patchy (10-39%)"), (40, 59, "Transitional (40-59%)"),
+                    (60, 89, "Dominant (60-89%)"), (90, 99, "Interior (90-99%)"), (100, 100, "Intact (100%)"))
+_DENSITY_CLASSES_5 = _DENSITY_CLASSES[:4] + ((90, 100, "Interior (90-100%)"),)
+_DENSITY_CODES = {101: "Background", 102: "Missing", 105: "Special background",
+                  106: "Special background, non-fragmenting"}
+#: The colours of the six classes of :func:`fad` (``classes``), as on its density map.
+FAD_CLASS_COLOURS = {1: (215, 50, 40, 255), 2: (250, 140, 90, 255), 3: (255, 200, 0, 255), 4: (140, 200, 100, 255),
+                     5: (0, 175, 0, 255), 6: (0, 120, 0, 255), 101: (175, 175, 175, 255), 102: (255, 255, 255, 255),
+                     105: (0, 100, 255, 255), 106: (0, 200, 255, 255)}
+
+
+def _density_names(five: bool = False) -> dict:
+    out = {v: name for lo, hi, name in (_DENSITY_CLASSES_5 if five else _DENSITY_CLASSES) for v in range(lo, hi + 1)}
+    return out | _DENSITY_CODES
+
+
+def _fos_change_names() -> dict:
+    """ΔFOS (shifted by 100) in the ranges of its colours, and the codes of the change map."""
+    from .._palettes import FOSCHANGE_PALETTE
+
+    out, lo = {}, 0
+    for v in range(1, 202):
+        if v == 201 or FOSCHANGE_PALETTE[v] != FOSCHANGE_PALETTE[lo]:
+            a, b = lo - 100, v - 1 - 100
+            name = "no change" if a <= 0 <= b and b - a <= 2 else f"ΔFOS {a:+d}" if a == b else f"ΔFOS {a:+d} to {b:+d}"
+            out.update({k: name for k in range(lo, v)})
+            lo = v
+    return out | {250: "Foreground gain", 251: "Foreground loss", 252: "Stable background", 253: "Water",
+                  254: "Missing"}
+
+
+#: The classes of the change maps (``simple_change``, ``morphological_change``).
+CHANGE_CLASSES = {11: "Stable background", 12: "Gain", 21: "Loss", 22: "Stable foreground", 176: "Spurious change",
+                  255: "Missing"}
+
+
 def class_names(product: str, attrs: dict) -> dict | None:
     """The names of the classes of a product."""
+    if product in ("FAD", "FAD_MULTISCALE"):
+        return _density_names()
+    if product == "FOS":
+        return _density_names(attrs.get("fos_classes") == 5)
+    if product == "FAD_CLASSES":
+        from ..fad import FAD_CLASSES
+
+        return FAD_CLASSES
+    if product in ("SIMPLE_CHANGE", "MORPHOLOGICAL_CHANGE"):
+        return CHANGE_CLASSES
+    if product == "FOS_CHANGE":
+        return _fos_change_names()
     if product == "MSPA":
         from ..mspa import MSPA_CLASSES
 
         return MSPA_CLASSES
-    if product in ("FAD", "FAD_MULTISCALE", "FOS"):
-        from ..fad import FAD_CLASSES
-
-        return FAD_CLASSES
     if product == "LANDSCAPE_MOSAIC":
         from ..mosaic import LM19_CLASSES
 

@@ -347,3 +347,48 @@ def test_maps_read_values_and_have_a_card_per_layer(forest):
                            geometry=gpd.points_from_xy(np.linspace(5e5, 6e5, 30000), np.linspace(4.4e6, 4.5e6, 30000)))
     html = page(ls.plot(pts, column="kind"))
     assert '"labels": [null, "oak", "pine", "no value"]' in html  # features drawn as an image read too
+
+
+# --- class names of the products, comparing two dates, change results ----------------------------------
+
+
+def test_density_and_change_maps_name_their_classes(forest):
+    fad = ls.fad(forest)
+    labels = [label for _, label in _raster.render(fad.density, mercator=False).legend.classes]
+    assert labels[:3] == ["Rare (0-9%)", "Patchy (10-39%)", "Transitional (40-59%)"] and "Background" in labels
+    cls = _raster.render(fad.classes, mercator=False).legend.classes
+    assert cls[0] == ("#d73228", "Rare (<10%)") and cls[5][0] == "#007800"  # the density map's colours
+    after = forest.where(forest.x < forest.x[150], 1)
+    change = ls.simple_change(forest, after)
+    names = [label for _, label in _raster.render(change.change_map, mercator=False).legend.classes]
+    assert names == ["Stable foreground", "Loss", "Stable background"]
+    fos = ls.fos_change(forest, after)
+    legend = _raster.render(fos.change_map, mercator=False).legend.classes
+    assert len(legend) <= 30 and any(lab == "no change" for _, lab in legend)
+
+
+def test_compare_two_dates_with_a_swipe(forest):
+    after = forest.where(forest.x < forest.x[150], 1)
+    html = page(ls.plot([forest, after], compare=True))
+    assert len(re.findall(r'createPane\(\s*"ls(?:left|right)"', html)) == 2
+    assert '"pane": "lsleft"' in html and '"pane": "lsright"' in html
+    assert "ls-swipe-knob" in html and '"input (1)", "input (2)"' in html  # one side each, named
+    assert html.count("class='ls-legend'") == 1 and "input (1) · input (2)" in html  # the same colours: one card
+    pts = gpd.GeoDataFrame(geometry=[Point(float(forest.x[10]), float(forest.y[10]))], crs=forest.rio.crs)
+    assert 'pane: "lsright"' in page(ls.plot([forest, pts], compare=True))
+    with pytest.raises(ValueError, match="two rasters"):
+        ls.plot([forest], compare=True)
+
+
+def test_change_results_show_their_flows(forest):
+    after = forest.where(forest.x < forest.x[150], 1)
+    p = ls.plot(ls.simple_change(forest, after))
+    assert [x.kind for x in p.panels] == ["map", "chart", "html"] and p.charts[0].data[0].type == "sankey"
+    flows = p.charts[0].data[0]
+    assert sum(flows.link.value) == ls.simple_change(forest, after).total_valid
+    p = ls.plot(ls.fos_change(forest, after))
+    assert p.charts[0].data[0].type == "sankey" and "Rare" in p.charts[0].data[0].node.label[0]
+    p = ls.plot(ls.morphological_change(forest, after))
+    assert [x.kind for x in p.panels] == ["map", "chart", "html"]
+    p = ls.plot(ls.fad_multiscale_change(forest, after))
+    assert p.charts[0].data[0].type == "sankey" and len(p.charts[0].data[0].node.label) == 14

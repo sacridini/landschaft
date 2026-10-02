@@ -280,19 +280,26 @@ def _map(items, opts, title):
 
     groups, notes = _map_layers(items, opts)
     m = _maps.new_map(opts.get("basemap", "satellite"))
+    swipe = None
+    if opts.get("compare"):  # the first item on the left of a swipe, the second on its right
+        swipe = _maps.add_swipe(m, [g.title for g in groups])
+    panes = ["lsleft", "lsright"] if swipe is not None else [None] * len(groups)
     bounds = []
-    for g in groups:  # images under the vector layers
+    for g, pane in zip(groups, panes):  # images under the vector layers
         for x in g.items:
             if isinstance(x, Image):
-                g.layers.append(_maps.add_image(m, x, show=getattr(x, "show", True)))
+                g.layers.append(_maps.add_image(m, x, show=getattr(x, "show", True), pane=pane))
                 bounds.append(x.bounds_latlon)
-    for g in groups:
+    for g, pane in zip(groups, panes):
         for x in g.items:
             if not isinstance(x, Image):
+                x.pane = pane
                 g.layers.append(_maps.add_vector(m, x))
                 b = getattr(x, "_ls_bounds", None) or x.get_bounds()
                 if b and b[0][0] is not None:
                     bounds.append(((b[0][0], b[0][1]), (b[1][0], b[1][1])))
+    if swipe is not None:
+        swipe.add_to(m)
     _maps.finish(m, bounds, groups, title)
     panels = [_Panel("map", m, title)]
     if notes:
@@ -393,6 +400,14 @@ def _result_panels(obj, opts, title):
 def _panels(obj, opts, title):
     from . import _charts
 
+    if opts.get("compare"):
+        if not (isinstance(obj, (list, tuple)) and len(obj) == 2 and all(_is_geo_raster(o) or _is_vector(o)
+                                                                        for o in obj)):
+            raise ValueError("compare=True takes a list of two rasters or vector layers: [before, after]")
+        names = [_name(o, i) for i, o in enumerate(obj)]
+        if names[0] == names[1]:
+            names = [f"{names[0]} (1)", f"{names[1]} (2)"]
+        return _map(list(zip(names, obj)), opts, title)
     if isinstance(obj, (list, tuple)) and obj and all(_is_geo_raster(o) or _is_vector(o) for o in obj):
         items = [(_name(o, i), o) for i, o in enumerate(obj)]
         return _map(items, opts, title)
@@ -419,8 +434,8 @@ def _name(obj, i) -> str:
 
 
 def plot(obj, *, column=None, cmap=None, labels=None, categorical=None, vmin=None, vmax=None, log=None,
-         opacity=None, bands=None, title=None, basemap="satellite", static=False, max_size: int = 2048,
-         show=None, **kwargs) -> Plot:
+         opacity=None, bands=None, title=None, basemap="satellite", compare=False, static=False,
+         max_size: int = 2048, show=None, **kwargs) -> Plot:
     """Plot anything: a raster, a vector layer, a table or the result of a tool, as it calls for.
 
     The form follows the data. A raster (any, or a landschaft product) goes on an
@@ -469,6 +484,10 @@ def plot(obj, *, column=None, cmap=None, labels=None, categorical=None, vmin=Non
     basemap
         ``"satellite"`` (default, Esri World Imagery), ``"osm"``, ``"topo"``,
         ``"light"``, ``"relief"`` or ``None``; the others stay selectable.
+    compare
+        ``obj`` a list of two rasters or vector layers ``[before, after]``: the
+        first on the left of a line dragged across the map, the second on its
+        right.
     static
         A static matplotlib figure instead (for publications and offline use; the
         satellite imagery needs contextily).
@@ -495,9 +514,11 @@ def plot(obj, *, column=None, cmap=None, labels=None, categorical=None, vmin=Non
     >>> p = ls.plot(dem, cmap="terrain", title="Elevation")
     >>> p.save("elevation.html").name
     'elevation.html'
+    >>> after = forest.where(forest.x < forest.x[400], 1)      # the east cut
+    >>> p = ls.plot([forest, after], compare=True)            # drag the line to compare
     """
     opts = dict(column=column, cmap=cmap, labels=labels, categorical=categorical, vmin=vmin, vmax=vmax, log=log,
-                opacity=opacity, bands=bands, basemap=basemap, max_size=int(max_size), **kwargs)
+                opacity=opacity, bands=bands, basemap=basemap, compare=bool(compare), max_size=int(max_size), **kwargs)
 
     def static_figure():
         from . import _static

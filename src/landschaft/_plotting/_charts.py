@@ -82,6 +82,39 @@ def histogram(values, title=None, xlabel=None, bins=50):
     return fig
 
 
+def sankey(matrix: pd.DataFrame, title=None, colours: dict | None = None, unit: str = "pixels",
+           left: str = "A", right: str = "B", flows: dict | None = None):
+    """The flows of a transition matrix (rows: the classes at the first date, columns: at the
+    second), a node per class and date, each flow in the colour of the class it leaves (or of
+    ``flows[(row, column)]``)."""
+    go = _go()
+    rows, cols = [str(r) for r in matrix.index], [str(c) for c in matrix.columns]
+    names = list(dict.fromkeys(rows + cols))
+    base = dict(zip(names, _palettes.distinct(len(names))))
+    colour = {n: (colours or {}).get(n, base[n]) for n in names}
+    v = matrix.to_numpy(dtype=float)
+    total = v.sum(axis=1, keepdims=True)
+    src, dst, val, share, link_colour = [], [], [], [], []
+    for i in range(len(rows)):
+        for j in range(len(cols)):
+            if v[i, j] > 0:
+                src.append(i)
+                dst.append(len(rows) + j)
+                val.append(v[i, j])
+                share.append(100 * v[i, j] / total[i, 0])
+                r, g, b = _palettes.hex_to_rgb((flows or {}).get((rows[i], cols[j]), colour[rows[i]]))
+                link_colour.append(f"rgba({r},{g},{b},{0.25 if rows[i] == cols[j] else 0.55})")  # changes stand out
+    fig = go.Figure(go.Sankey(
+        arrangement="snap", valueformat=",.0f", valuesuffix=f" {unit}",
+        node={"label": [f"{r} ({left})" for r in rows] + [f"{c} ({right})" for c in cols], "pad": 14, "thickness": 16,
+              "color": [colour[r] for r in rows] + [colour[c] for c in cols], "line": {"color": "#444", "width": 0.5}},
+        link={"source": src, "target": dst, "value": val, "color": link_colour, "customdata": share,
+              "hovertemplate": "%{source.label} → %{target.label}<br>%{value} (%{customdata:.1f}% of the source)"
+                               "<extra></extra>"}))
+    fig.update_layout(**{**_LAYOUT, "height": max(420, 34 * max(len(rows), len(cols)) + 120)}, title=title)
+    return fig
+
+
 def metrics(table: pd.DataFrame, title=None):
     """A landscapemetrics-style long table (level, class, metric, value): one panel per metric."""
     from plotly.subplots import make_subplots

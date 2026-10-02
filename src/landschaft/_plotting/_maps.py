@@ -50,6 +50,20 @@ _CSS = """
 /* the base map's credits on one line (all of them on hover): they hid the scale and the legends */
 .leaflet-control-attribution { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55vw; }
 .leaflet-control-attribution:hover { white-space: normal; }
+.ls-swipe { position: absolute; top: 0; bottom: 0; width: 0; z-index: 800; pointer-events: none; }
+.ls-swipe::before { content: ""; position: absolute; top: 0; bottom: 0; left: -1.5px; width: 3px; background: #fff;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5); }
+.ls-swipe-knob { position: absolute; top: 50%; left: -19px; width: 38px; height: 26px; margin-top: -13px;
+  border-radius: 13px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: ew-resize;
+  pointer-events: auto; font: 10px/26px sans-serif; text-align: center; color: #444; letter-spacing: -1px;
+  touch-action: none; user-select: none; }
+.ls-swipe-tag { position: absolute; top: 52px; padding: 2px 8px; border-radius: 4px; white-space: nowrap;
+  background: rgba(255,255,255,0.9); box-shadow: 0 1px 3px rgba(0,0,0,0.3); font: 600 12px Inter, "Segoe UI",
+  Helvetica, Arial, sans-serif; color: #1d1d1b; }
+.ls-swipe-tag.left { right: 10px; }
+.ls-swipe-tag.left::before { content: "\\25C0  "; color: #888; }
+.ls-swipe-tag.right { left: 10px; }
+.ls-swipe-tag.right::after { content: "  \\25B6"; color: #888; }
 .ls-pop th { text-align: left; padding: 1px 10px 1px 0; font-weight: 600; }
 .ls-pop td { font-variant-numeric: tabular-nums; }
 </style>
@@ -236,6 +250,61 @@ def _controls(layers: list, palettes: list, groups: list):
     return _CONTROLS(layers, palettes, groups)
 
 
+_SWIPE = """
+{% macro script(this, kwargs) %}
+(function(map, names) {
+    var panes = [map.getPane("lsleft"), map.getPane("lsright")], c = map.getContainer();
+    var bar = L.DomUtil.create("div", "ls-swipe", c);
+    var knob = L.DomUtil.create("div", "ls-swipe-knob", bar);
+    knob.innerHTML = "&#x25C0;&#x25B6;"; knob.title = "Drag to compare";
+    var tags = names.map(function(n, i) {
+        var t = L.DomUtil.create("div", "ls-swipe-tag " + (i ? "right" : "left"), bar);
+        t.textContent = n;
+        return t;
+    });
+    var x = 0.5, drag = false;
+    function clip() {
+        var size = map.getSize(), nw = map.containerPointToLayerPoint([0, 0]);
+        var se = map.containerPointToLayerPoint(size), cx = nw.x + size.x * x;
+        panes[0].style.clip = "rect(" + [nw.y, cx, se.y, nw.x].join("px,") + "px)";
+        panes[1].style.clip = "rect(" + [nw.y, se.x, se.y, cx].join("px,") + "px)";
+        bar.style.left = Math.round(size.x * x) + "px";
+    }
+    function move(e) {
+        var r = c.getBoundingClientRect();
+        x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+        clip();
+    }
+    L.DomEvent.disableClickPropagation(bar);
+    L.DomEvent.on(knob, "pointerdown", function(e) { L.DomEvent.stop(e); drag = true; map.dragging.disable(); });
+    document.addEventListener("pointermove", function(e) { if (drag) { move(e); } });
+    document.addEventListener("pointerup", function() { if (drag) { drag = false; map.dragging.enable(); } });
+    map.on("move zoom resize viewreset", clip);
+    clip();
+})({{ this._parent.get_name() }}, {{ this.names|tojson }});
+{% endmacro %}
+"""
+
+
+def add_swipe(m, names: list[str]):
+    """Two panes, ``lsleft`` and ``lsright``, for the layers of the two sides, created before them."""
+    from branca.element import MacroElement, Template
+    from folium.map import CustomPane
+
+    CustomPane("lsleft", z_index=401, pointer_events=True).add_to(m)
+    CustomPane("lsright", z_index=402, pointer_events=True).add_to(m)
+
+    class Swipe(MacroElement):
+        _template = Template(_SWIPE)
+
+        def __init__(self):
+            super().__init__()
+            self._name = "LsSwipe"
+            self.names = [str(n) for n in names]
+
+    return Swipe()
+
+
 def _fmt(v: float) -> str:
     return f"{v:.4g}"
 
@@ -243,6 +312,25 @@ def _fmt(v: float) -> str:
 def ramp_ends(lg: Legend) -> tuple[str, str]:
     """The labels of a ramp's ends; ``≤`` / ``≥`` where values beyond them share their colour."""
     return ("≤ " if lg.under else "") + _fmt(lg.vmin), ("≥ " if lg.over else "") + _fmt(lg.vmax)
+
+
+def cards(groups: list[Group]) -> list[Group]:
+    """The legend cards: groups of the same colours (two dates of a product, say) share one, its
+    slider setting the opacity of them all."""
+    out, seen = [], {}
+    for g in groups:
+        lg = g.legend
+        key = None if lg is None else (tuple(lg.classes), tuple(lg.ramp), lg.vmin, lg.vmax, lg.log, lg.under, lg.over)
+        if key is not None and key in seen:
+            card = seen[key]
+            card.title = f"{card.title} · {g.title}"
+            card.layers = card.layers + g.layers
+            continue
+        card = Group(g.title, lg, g.opacity, g.colour, list(g.items), list(g.layers))
+        out.append(card)
+        if key is not None:
+            seen[key] = card
+    return out
 
 
 def legend_html(groups: list[Group]) -> str:
@@ -293,7 +381,7 @@ def new_map(basemap: str | None = "satellite"):
     return m
 
 
-def add_image(m, img: Image, show: bool = True):
+def add_image(m, img: Image, show: bool = True, pane: str | None = None):
     """An image layer. The map holds a short token where the image goes, replaced by the PNG
     only in the page rendered (render): folium re-parses its scripts as Jinja templates, which
     takes about a second per 20 MB of image."""
@@ -307,7 +395,8 @@ def add_image(m, img: Image, show: bool = True):
     layer = folium.raster_layers.ImageOverlay(image=token, bounds=[list(img.bounds_latlon[0]),
                                                                    list(img.bounds_latlon[1])],
                                               name=img.name, opacity=img.opacity, interactive=False,
-                                              cross_origin=False, zindex=2, show=show)
+                                              cross_origin=False, zindex=2, show=show,
+                                              **({"pane": pane} if pane else {}))
     layer.add_to(m)
     return layer
 
@@ -370,10 +459,11 @@ def finish(m, bounds: list, groups: list[Group], title: str | None = None):
 
     folium.LayerControl(collapsed=True, position="topright").add_to(m)
     layers, palettes = _readable(groups)
-    _controls(layers, palettes, [[x.get_name() for x in g.layers] for g in groups]).add_to(m)
+    merged = cards(groups)
+    _controls(layers, palettes, [[x.get_name() for x in g.layers] for g in merged]).add_to(m)
     root = m.get_root()
     root.header.add_child(Element(_CSS))
-    extra = legend_html(groups)
+    extra = legend_html(merged)
     if title:
         extra += ("<div style='position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;"
                   "background:rgba(255,255,255,0.92);padding:4px 12px;border-radius:6px;font:600 14px Inter,"
