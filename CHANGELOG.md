@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-02
+
 ### Changed
 - `ls.sdm.autocorrelation_range` computes gstat's sample variogram and fits the models in C++ (9 layers of
   5 000 cells: 11.6 s -> 0.73 s, 24 times faster than blockCV); `ls.sdm.clean_occurrences` only draws the
