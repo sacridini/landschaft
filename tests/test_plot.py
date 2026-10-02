@@ -392,3 +392,60 @@ def test_change_results_show_their_flows(forest):
     assert [x.kind for x in p.panels] == ["map", "chart", "html"]
     p = ls.plot(ls.fad_multiscale_change(forest, after))
     assert p.charts[0].data[0].type == "sankey" and len(p.charts[0].data[0].node.label) == 14
+
+
+# --- static figures ----------------------------------------------------------------------------------------
+
+
+def _maps_of(fig):
+    return [ax for ax in fig.axes if ax.get_visible() and ax.images]
+
+
+def test_static_maps_have_a_scale_bar_a_north_arrow_and_coordinates(forest):
+    pytest.importorskip("matplotlib")
+    from matplotlib.offsetbox import AnchoredOffsetbox
+
+    utm = grid(np.arange(60 * 80).reshape(60, 80) % 3)
+    fig = ls.plot(utm, static=True, basemap=None).figure
+    ax = _maps_of(fig)[0]
+    bars = [a for a in ax.artists if isinstance(a, AnchoredOffsetbox)]
+    assert len(bars) == 1 and any(t.get_text() == "N" for t in ax.texts)
+    assert not ax.get_xticks().size  # a projected CRS: no degrees to show
+    from landschaft._plotting._static import _metres_per_unit
+
+    assert _metres_per_unit(ax, utm.rio.crs) == 1.0
+    assert forest.rio.crs.is_geographic
+    fig = ls.plot(forest, static=True, basemap=None).figure
+    fig.canvas.draw()
+    labels = [t.get_text() for t in _maps_of(fig)[0].get_xticklabels()]
+    assert labels and all(lab.endswith("°E") for lab in labels if lab) and len(set(labels)) == len(labels)
+    fig = ls.plot(forest, static=True, basemap=None, scalebar=False, north_arrow=False).figure
+    assert not _maps_of(fig)[0].artists and not _maps_of(fig)[0].texts
+
+
+def test_static_small_multiples(forest):
+    pytest.importorskip("matplotlib")
+    stack = grid(np.random.default_rng(6).random((4, 40, 50)).astype("float32"), name="ndvi")
+    fig = ls.plot(stack, static=True, basemap=None).figure
+    maps = _maps_of(fig)
+    assert len(maps) == 4 and len(fig.axes) == 5  # the bands, and one colour bar
+    assert fig.axes[-1].get_ylabel() == "ndvi"
+    assert len(_maps_of(ls.plot(stack, static=True, basemap=None, bands=["b1", "b3"]).figure)) == 2
+    after = forest.where(forest.x < forest.x[150], 1)
+    fig = ls.plot([ls.mspa(forest), ls.mspa(after)], compare=True, static=True, basemap=None).figure
+    maps = _maps_of(fig)
+    assert [ax.get_title() for ax in maps] == ["mspa (1)", "mspa (2)"]
+    assert maps[0].get_legend() is None and maps[1].get_legend().get_title().get_text() == "mspa"  # once
+    fig = ls.plot(ls.fad(forest), static=True, basemap=None).figure
+    assert [ax.get_title() for ax in _maps_of(fig)] == ["density", "raw_density", "classes"]
+
+
+def test_static_vectors_take_the_map_colours():
+    pytest.importorskip("matplotlib")
+    polys = gpd.GeoDataFrame({"kind": ["oak", "pine"]}, crs=32633,
+                             geometry=[box(500000, 4498000, 501000, 4499000), box(501500, 4498500, 502000, 4499500)])
+    fig = ls.plot(polys, column="kind", cmap={"oak": "#ff0000", "pine": "#0000ff"}, static=True, basemap=None).figure
+    ax = fig.axes[0]
+    colours = ax.collections[0].get_facecolors()[:, :3].round(2).tolist()
+    assert colours == [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]
+    assert [t.get_text() for t in ax.get_legend().get_texts()] == ["oak", "pine"]

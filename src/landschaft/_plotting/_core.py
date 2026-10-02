@@ -490,7 +490,11 @@ def plot(obj, *, column=None, cmap=None, labels=None, categorical=None, vmin=Non
         right.
     static
         A static matplotlib figure instead (for publications and offline use; the
-        satellite imagery needs contextily).
+        satellite imagery needs contextily): a stack's bands, a result's rasters or
+        two dates compared side by side as small multiples, with a scale bar, a
+        north arrow and, on a single map, longitudes and latitudes. Its options,
+        given as keywords: ``figsize=(w, h)`` (inches), ``ncols=``,
+        ``scalebar=False``, ``north_arrow=False``.
     max_size
         Pixels on the long side of every raster drawn (default 2048).
     show

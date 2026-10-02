@@ -104,12 +104,26 @@ p = ls.plot(landcover == 23, cmap={0: "#f4f1de", 1: "#2d6a4f"},
 
 `static=True` draws a matplotlib figure instead, for papers and reports; the
 satellite imagery under it comes from [contextily](https://contextily.readthedocs.io/).
-An interactive plot saved as `.png`, `.pdf` or `.svg` is drawn the same way:
+An interactive plot saved as `.png`, `.pdf` or `.svg` is drawn the same way.
+
+A map has a scale bar (a round length, measured on the ground: Web Mercator and
+degrees are corrected for latitude) and a north arrow; a single map on Web
+Mercator or degrees has longitudes and latitudes on its axes. Several maps come
+as small multiples: the bands of a stack (on one colour scale, one colour bar),
+the rasters of a result, or two dates with `compare=True`. Layers of the same
+colours share one legend. Vector layers take the colours of the interactive map
+(`column=`, `cmap=`, `labels=`...). The figure's options are keywords:
+`figsize=(w, h)` in inches, `ncols=`, `scalebar=False`, `north_arrow=False`.
 
 ```python
 p = ls.plot(forest, static=True, basemap=None)
 p.figure                                      # the matplotlib figure
 p.save("forest.png").name                     # 'forest.png'
+```
+
+```python
+stack = ls.load_raster(ls.example_data("orelevation")).expand_dims(band=["a", "b"])
+p = ls.plot(stack, static=True, basemap=None, ncols=2, figsize=(9, 4))
 ```
 
 ## Speed
