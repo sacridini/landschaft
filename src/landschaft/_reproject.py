@@ -117,7 +117,7 @@ def _grid_size(da: xr.DataArray) -> tuple[int, int]:
 
 def _nodata(data: xr.DataArray):
     """(source NoData, destination NoData, the type the warp works in)."""
-    dtype = data.dtype
+    dtype = data.dtype.newbyteorder("=")  # the kernel reads the machine's byte order
     nodata = data.rio.nodata
     if dtype == np.bool_:
         dtype = np.dtype(np.uint8)

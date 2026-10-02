@@ -29,20 +29,33 @@ namespace {
 
 using lsio::i64;
 
+// Whether two types are the same by kind and size, in the machine's byte order: NumPy has
+// two dtypes for one C type (int and long are both int32 on Windows, long and long long
+// int64 elsewhere), so an identity check rejects e.g. np.result_type(np.uint16, np.int16).
+bool same_type(const py::dtype& a, const py::dtype& b) {
+    return a.kind() == b.kind() && a.itemsize() == b.itemsize() && a.attr("isnative").cast<bool>() &&
+           b.attr("isnative").cast<bool>();
+}
+
+template <class T>
+bool is_type(const py::dtype& dt) {
+    return same_type(dt, py::dtype::of<T>());
+}
+
 // Calls f with the typed data of a C-contiguous array of one of the raster types.
 template <class F>
 auto with_typed(const py::array& a, F&& f) {
     if (!(a.flags() & py::array::c_style)) throw py::value_error("expected a C-contiguous array");
     const py::dtype dt = a.dtype();
-    if (dt.is(py::dtype::of<std::uint8_t>())) return f(static_cast<const std::uint8_t*>(a.data()));
-    if (dt.is(py::dtype::of<std::int8_t>())) return f(static_cast<const std::int8_t*>(a.data()));
-    if (dt.is(py::dtype::of<std::uint16_t>())) return f(static_cast<const std::uint16_t*>(a.data()));
-    if (dt.is(py::dtype::of<std::int16_t>())) return f(static_cast<const std::int16_t*>(a.data()));
-    if (dt.is(py::dtype::of<std::uint32_t>())) return f(static_cast<const std::uint32_t*>(a.data()));
-    if (dt.is(py::dtype::of<std::int32_t>())) return f(static_cast<const std::int32_t*>(a.data()));
-    if (dt.is(py::dtype::of<std::int64_t>())) return f(static_cast<const std::int64_t*>(a.data()));
-    if (dt.is(py::dtype::of<float>())) return f(static_cast<const float*>(a.data()));
-    if (dt.is(py::dtype::of<double>())) return f(static_cast<const double*>(a.data()));
+    if (is_type<std::uint8_t>(dt)) return f(static_cast<const std::uint8_t*>(a.data()));
+    if (is_type<std::int8_t>(dt)) return f(static_cast<const std::int8_t*>(a.data()));
+    if (is_type<std::uint16_t>(dt)) return f(static_cast<const std::uint16_t*>(a.data()));
+    if (is_type<std::int16_t>(dt)) return f(static_cast<const std::int16_t*>(a.data()));
+    if (is_type<std::uint32_t>(dt)) return f(static_cast<const std::uint32_t*>(a.data()));
+    if (is_type<std::int32_t>(dt)) return f(static_cast<const std::int32_t*>(a.data()));
+    if (is_type<std::int64_t>(dt)) return f(static_cast<const std::int64_t*>(a.data()));
+    if (is_type<float>(dt)) return f(static_cast<const float*>(a.data()));
+    if (is_type<double>(dt)) return f(static_cast<const double*>(a.data()));
     throw py::type_error("unsupported raster type: use (u)int8/16/32, int64, float32 or float64");
 }
 
@@ -221,15 +234,15 @@ void register_python(py::module_& m) {
                 burn_runs(p, ny, nx, runs, value.data(), add);
             };
             void* d = out.mutable_data();
-            if (dt.is(py::dtype::of<std::uint8_t>())) run(static_cast<std::uint8_t*>(d));
-            else if (dt.is(py::dtype::of<std::int8_t>())) run(static_cast<std::int8_t*>(d));
-            else if (dt.is(py::dtype::of<std::uint16_t>())) run(static_cast<std::uint16_t*>(d));
-            else if (dt.is(py::dtype::of<std::int16_t>())) run(static_cast<std::int16_t*>(d));
-            else if (dt.is(py::dtype::of<std::uint32_t>())) run(static_cast<std::uint32_t*>(d));
-            else if (dt.is(py::dtype::of<std::int32_t>())) run(static_cast<std::int32_t*>(d));
-            else if (dt.is(py::dtype::of<std::int64_t>())) run(static_cast<std::int64_t*>(d));
-            else if (dt.is(py::dtype::of<float>())) run(static_cast<float*>(d));
-            else if (dt.is(py::dtype::of<double>())) run(static_cast<double*>(d));
+            if (is_type<std::uint8_t>(dt)) run(static_cast<std::uint8_t*>(d));
+            else if (is_type<std::int8_t>(dt)) run(static_cast<std::int8_t*>(d));
+            else if (is_type<std::uint16_t>(dt)) run(static_cast<std::uint16_t*>(d));
+            else if (is_type<std::int16_t>(dt)) run(static_cast<std::int16_t*>(d));
+            else if (is_type<std::uint32_t>(dt)) run(static_cast<std::uint32_t*>(d));
+            else if (is_type<std::int32_t>(dt)) run(static_cast<std::int32_t*>(d));
+            else if (is_type<std::int64_t>(dt)) run(static_cast<std::int64_t*>(d));
+            else if (is_type<float>(dt)) run(static_cast<float*>(d));
+            else if (is_type<double>(dt)) run(static_cast<double*>(d));
             else throw py::type_error("unsupported raster type");
         },
         py::arg("out"), py::arg("runs"), py::arg("value"), py::arg("add"),
@@ -265,7 +278,7 @@ void register_python(py::module_& m) {
             if (out.size() != values.size()) throw py::value_error("out must have one cell per value");
             const py::dtype dt = out.dtype();
             for (const py::array* a : {&key_out, &break_out, &other, &missing}) {
-                if (!a->dtype().is(dt) || !(a->flags() & py::array::c_style)) {
+                if (!same_type(a->dtype(), dt) || !(a->flags() & py::array::c_style)) {
                     throw py::type_error("the new values must be C-contiguous, of the type of out");
                 }
             }
@@ -297,15 +310,15 @@ void register_python(py::module_& m) {
                 });
             };
             void* d = out.mutable_data();
-            if (dt.is(py::dtype::of<std::uint8_t>())) run(static_cast<std::uint8_t*>(d));
-            else if (dt.is(py::dtype::of<std::int8_t>())) run(static_cast<std::int8_t*>(d));
-            else if (dt.is(py::dtype::of<std::uint16_t>())) run(static_cast<std::uint16_t*>(d));
-            else if (dt.is(py::dtype::of<std::int16_t>())) run(static_cast<std::int16_t*>(d));
-            else if (dt.is(py::dtype::of<std::uint32_t>())) run(static_cast<std::uint32_t*>(d));
-            else if (dt.is(py::dtype::of<std::int32_t>())) run(static_cast<std::int32_t*>(d));
-            else if (dt.is(py::dtype::of<std::int64_t>())) run(static_cast<std::int64_t*>(d));
-            else if (dt.is(py::dtype::of<float>())) run(static_cast<float*>(d));
-            else if (dt.is(py::dtype::of<double>())) run(static_cast<double*>(d));
+            if (is_type<std::uint8_t>(dt)) run(static_cast<std::uint8_t*>(d));
+            else if (is_type<std::int8_t>(dt)) run(static_cast<std::int8_t*>(d));
+            else if (is_type<std::uint16_t>(dt)) run(static_cast<std::uint16_t*>(d));
+            else if (is_type<std::int16_t>(dt)) run(static_cast<std::int16_t*>(d));
+            else if (is_type<std::uint32_t>(dt)) run(static_cast<std::uint32_t*>(d));
+            else if (is_type<std::int32_t>(dt)) run(static_cast<std::int32_t*>(d));
+            else if (is_type<std::int64_t>(dt)) run(static_cast<std::int64_t*>(d));
+            else if (is_type<float>(dt)) run(static_cast<float*>(d));
+            else if (is_type<double>(dt)) run(static_cast<double*>(d));
             else throw py::type_error("unsupported output type");
         },
         py::arg("values"), py::arg("out"), py::arg("has_nodata"), py::arg("nodata"), py::arg("keys"),
@@ -372,7 +385,7 @@ void register_python(py::module_& m) {
                 warp<T>(p, static_cast<T*>(o), c, sp);
                 return 0;
             };
-            if (src.dtype().is(py::dtype::of<std::uint64_t>())) run(static_cast<const std::uint64_t*>(src.data()));
+            if (is_type<std::uint64_t>(src.dtype())) run(static_cast<const std::uint64_t*>(src.data()));
             else with_typed(src, run);
             return out;
         },

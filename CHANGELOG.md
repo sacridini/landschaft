@@ -17,6 +17,11 @@ between minor versions.
   rounded through float64), and a dask-backed habitat map stays lazy.
 
 ### Fixed
+- `ls.zonal_stats`, `ls.extract`, `ls.rasterize` and `ls.reproject` failed with "unsupported raster
+  type" on rasters of the second NumPy dtype of a C type: int32 as `int` on Windows (e.g. the type
+  of `np.result_type(np.uint16, np.int16)`, or of a raster computed from int16 and uint16 ones)
+  and int64 as `long long` on Linux and macOS. `ls.reproject` also failed on rasters in the
+  other byte order.
 - `ls.plot` of a stack draws up to 128 bands (was 16: the later years of a 41-year land-cover
   series were left out), 1024 pixels on the long side up to 64 bands; the map's list of layers
   scrolls when it is longer than the map.

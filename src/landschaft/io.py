@@ -814,8 +814,7 @@ def _reclass_values(raw, out_dtype: np.dtype, out_nodata, nodata, keys, new, ran
     NoData, then the first range holding a value, else the value's own rule (``keys`` to ``new``),
     else the value itself (``keep``) or ``other``. New values NaN: NoData (``out_nodata`` in an
     integer type)."""
-    # the kernel knows the native types by their instances (np.dtype(name): int32 is "i" or "l" on Windows)
-    kernel_dtype = np.dtype(out_dtype.name) if out_dtype in _KERNEL_TYPES else np.dtype(np.float64)
+    kernel_dtype = out_dtype if out_dtype in _KERNEL_TYPES else np.dtype(np.float64)
 
     def as_out(values) -> np.ndarray:
         v = np.asarray(values, dtype=np.float64)
@@ -835,7 +834,7 @@ def _reclass_values(raw, out_dtype: np.dtype, out_nodata, nodata, keys, new, ran
 
     def block(v) -> np.ndarray:
         v = np.asarray(v)
-        in_type = np.dtype(v.dtype.name) if v.dtype.kind in "biuf" else v.dtype
+        in_type = np.dtype(v.dtype.name) if v.dtype.kind in "biuf" else v.dtype  # in the machine's byte order
         if in_type not in _KERNEL_TYPES:
             in_type = np.dtype(np.uint8 if in_type == bool else np.float32 if in_type == np.float16 else np.float64)
         v = np.ascontiguousarray(v, dtype=in_type)

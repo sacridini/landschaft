@@ -149,6 +149,30 @@ def test_zonal_stats_types_and_threads():
     assert one["mean"].iloc[0] == pytest.approx(float(big.values.astype(np.float64).mean()), rel=1e-12)
 
 
+@pytest.mark.parametrize("dtype", [np.intc, np.long, np.longlong, np.uintc, ">i4", ">f8", "<u2"])
+def test_every_numpy_variant_of_a_type(dtype):
+    # NumPy has two dtypes for int32 on Windows (int, long) and for int64 elsewhere (long, long
+    # long), e.g. np.result_type(np.uint16, np.int16) is "i" on Windows; and other byte orders.
+    # Each variant gives what the canonical dtype of its type gives.
+    rng = np.random.default_rng(6)
+    base = rng.integers(0, 50, (40, 40))
+    canonical = np.dtype(np.dtype(dtype).name)
+    ref, r = grid(base.astype(canonical)), grid(base.astype(dtype))
+    zones = [box(500000, 4499100, 500600, 4500000), box(500300, 4498800, 501200, 4499700)]
+    stats = ["sum", "median", "majority"]
+    pd.testing.assert_frame_equal(ls.zonal_stats(r, zones, stats), ls.zonal_stats(ref, zones, stats))
+    pd.testing.assert_frame_equal(ls.zonal_stats(ref, grid((base // 10).astype(dtype)), ["sum"]),
+                                  ls.zonal_stats(ref, grid((base // 10).astype(canonical)), ["sum"]))
+    pts = gpd.GeoDataFrame(geometry=gpd.points_from_xy([500100, 500700], [4499100, 4499500]), crs=CRS)
+    pd.testing.assert_frame_equal(ls.extract(r, pts), ls.extract(ref, pts))
+    gdf = gpd.GeoDataFrame({"v": [3, 4]}, geometry=zones, crs=CRS)
+    np.testing.assert_array_equal(ls.rasterize(gdf, r, field="v", dtype=np.dtype(dtype).newbyteorder("=")),
+                                  ls.rasterize(gdf, r, field="v", dtype=canonical))
+    np.testing.assert_array_equal(ls.reproject(r, "EPSG:3035", resampling="nearest"),
+                                  ls.reproject(ref, "EPSG:3035", resampling="nearest"))
+    np.testing.assert_array_equal(ls.reclassify(r, {3: 100}, others=0), ls.reclassify(ref, {3: 100}, others=0))
+
+
 @pytest.mark.parametrize("dtype", ["float32", "int16", "uint8"])
 def test_percentiles_of_zones_over_a_million_cells_match_numpy(dtype):
     # zones of 2^20 cells or more select their percentiles from the raster in parallel
