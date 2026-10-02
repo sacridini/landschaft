@@ -66,7 +66,10 @@ def test_products_take_their_colours_and_class_names(forest):
     html = page(p)
     for name in ("Core", "Edge", "Background"):
         assert f">{name}<" in html
-    assert "Bridge in Edge" not in html  # classes of one colour under one name, as GuidosToolbox
+    start = html.index("class='ls-legends'")
+    legend = html[start:html.index("<script", start)]
+    assert "Bridge in Edge" not in legend  # classes of one colour under one name, as GuidosToolbox
+    assert '"Bridge in Edge"' in html  # but the cursor reads each class by its name
     img = images(html)[0]
     assert img.mode == "P"  # 8-bit with a palette
     palette = np.array(img.getpalette()[:768]).reshape(-1, 3)
@@ -301,3 +304,46 @@ def test_vector_ramps_take_their_range():
     assert lg.log and lg.vmin > 1 and lg.vmax < 1e4
     html = page(ls.plot(pts, column="v", vmin=10, vmax=100))
     assert "≤ 10" in html and "≥ 100" in html and "esc(f.properties[k])" in html
+
+
+# --- reading values on the map, legend cards ----------------------------------------------------------
+
+
+def test_a_pixel_colour_gives_back_its_value(forest):
+    from landschaft._plotting._raster import distinct_palette
+
+    pal = np.array([[0, 0, 0, 0], [9, 9, 9, 255], [9, 9, 9, 255], [9, 9, 255, 255], [9, 9, 255, 255]], np.uint8)
+    out = distinct_palette(pal)
+    assert len({tuple(c) for c in out[1:, :3].tolist()}) == 4 and (out[:2] == pal[:2]).all()
+    assert np.abs(out.astype(int) - pal.astype(int)).max() <= 1  # nudged by a unit, invisible
+    img = _raster.render(ls.mspa(forest), mercator=False)
+    rgb = img.rgba  # what the browser reads: colours back to their indices, one to one
+    keys = {tuple(c): i for i, c in enumerate(img.palette[:, :3].tolist()) if i}
+    drawn = img.pixels > 0
+    back = np.array([keys[tuple(c)] for c in rgb[drawn][:, :3].tolist()])
+    assert (back == img.pixels[drawn]).all() and (img.palette[1:, 3] == 255).all()
+    labels = img.lookup["labels"]
+    m = np.asarray(ls.mspa(forest))
+    from landschaft.mspa import MSPA_CLASSES
+
+    i, j = np.argwhere(drawn)[100]
+    assert labels[img.pixels[i, j]] == MSPA_CLASSES[int(m[i, j])]
+    dem = grid(np.linspace(0, 1000, 60 * 80).reshape(60, 80).astype("float32"), name="dem")
+    ramp = _raster.render(dem, vmin=0, vmax=1000, mercator=False)
+    u = ramp.lookup
+    k = ramp.pixels[30, 40]
+    assert abs(u["vmin"] + (k - 1) / 254 * (u["vmax"] - u["vmin"]) - float(dem[30, 40])) <= 1000 / 254
+    assert ramp.opacity == 0.85  # applied by the map to the layer, the palette opaque
+
+
+def test_maps_read_values_and_have_a_card_per_layer(forest):
+    stack = grid(np.random.default_rng(5).random((3, 40, 50)).astype("float32"), name="stack")
+    poly = gpd.GeoDataFrame(geometry=[box(500300, 4498900, 500900, 4499500)], crs=32633)
+    html = page(ls.plot([stack, poly]))
+    assert html.count("class='ls-legend'") == 2  # the stack's bands share a card; the polygons have theirs
+    assert html.count("type='range'") == 2 and "title='Opacity'" in html
+    assert "getImageData" in html and '"n": "stack: b0"' in html and '"vmin"' in html  # values under the cursor
+    pts = gpd.GeoDataFrame({"kind": np.resize(["oak", "pine"], 30000)}, crs=32633,
+                           geometry=gpd.points_from_xy(np.linspace(5e5, 6e5, 30000), np.linspace(4.4e6, 4.5e6, 30000)))
+    html = page(ls.plot(pts, column="kind"))
+    assert '"labels": [null, "oak", "pine", "no value"]' in html  # features drawn as an image read too

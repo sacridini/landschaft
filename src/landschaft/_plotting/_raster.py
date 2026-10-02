@@ -38,7 +38,9 @@ class Legend:
 @dataclass
 class Image:
     """A rendered layer and where it goes: palette indices (0 transparent) and their
-    RGBA colours, or RGBA pixels (true colour)."""
+    RGBA colours, or RGBA pixels (true colour). The layer's opacity is applied by the map
+    (the palette is opaque, each index in a colour of its own, so that the browser reads
+    the index of a pixel back from its colour: the value under the cursor)."""
 
     pixels: np.ndarray          # (rows, cols) uint8 indices, or (rows, cols, 4) uint8 RGBA
     bounds_latlon: tuple        # ((south, west), (north, east)) of a Web Mercator image
@@ -48,6 +50,8 @@ class Image:
     crs: object = None
     mercator_extent: tuple | None = None  # (xmin, ymin, xmax, ymax) of the Web Mercator image
     palette: np.ndarray | None = None  # (n <= 256, 4) uint8 RGBA of the indices
+    opacity: float = 1.0
+    lookup: dict | None = None  # the value of each index: {"labels": [...]} or {"vmin", "vmax", "log", ...}
 
     @property
     def rgba(self) -> np.ndarray:
@@ -209,9 +213,10 @@ def float_classes(da: xr.DataArray) -> bool:
 
 
 def colour_classes(v: np.ndarray, ok: np.ndarray, table: dict | None, names: dict | None, title: str,
-                   opacity: float, order: list | None = None):
+                   order: list | None = None):
     """Palette indices of class values (0: no data) from a colour table (or distinct colours),
-    their palette and the legend; None for the indices when there are over 255 classes."""
+    their palette (opaque, but for the classes' own transparency), the legend and the name of
+    each index; None for the indices when there are over 255 classes."""
     values = np.unique(v[ok]) if ok.any() else np.array([], dtype=v.dtype)
     if v.dtype == bool:
         v = v.astype(np.uint8)
@@ -219,15 +224,15 @@ def colour_classes(v: np.ndarray, ok: np.ndarray, table: dict | None, names: dic
     if table is None:
         colours = _palettes.distinct(len(values))
         table = {int(k): (*_palettes.hex_to_rgb(c), 255) for k, c in zip(values.tolist(), colours)}
-    alpha = round(255 * opacity)
     legend = Legend(title, classes=_legend_classes(values, table, names or {}, order))
     drawn = [int(k) for k in values.tolist() if int(k) in table]
     if len(drawn) > 255:
-        return None, None, legend
+        return None, None, legend, None
     palette = np.zeros((len(drawn) + 1, 4), np.uint8)
     for n, k in enumerate(drawn, 1):
         c = tuple(table[k]) + (255,) * (4 - len(table[k]))
-        palette[n] = (*c[:3], min(c[3], alpha))
+        palette[n] = c[:4]
+    labels = [None] + [str((names or {}).get(k, k)) for k in drawn]
     index = np.zeros(v.shape, np.uint8)
     if drawn:
         lo, hi = min(drawn), max(drawn)
@@ -240,7 +245,24 @@ def colour_classes(v: np.ndarray, ok: np.ndarray, table: dict | None, names: dic
             for n, k in enumerate(drawn, 1):
                 index[ok & (v == k)] = n
     index[~ok] = 0
-    return index, palette, legend
+    return index, palette, legend, labels
+
+
+def distinct_palette(palette: np.ndarray) -> np.ndarray:
+    """The palette with each colour once (a repeated one nudged by a unit of blue or green,
+    which no eye sees), so that a pixel's colour gives back its index."""
+    out = palette.copy()
+    seen = set()
+    for i in range(1, len(out)):
+        c = tuple(int(x) for x in out[i, :3])
+        if c in seen:
+            r, g, b = c
+            c = next(x for d in range(1, 256) for x in ((r, g, min(255, b + d)), (r, g, max(0, b - d)),
+                                                        (r, min(255, g + d), b), (r, max(0, g - d), b))
+                     if x not in seen)
+        seen.add(c)
+        out[i, :3] = c
+    return out
 
 
 def _legend_classes(values, table: dict, names: dict, order: list | None = None) -> list[tuple[str, str]]:
@@ -266,9 +288,9 @@ def _legend_classes(values, table: dict, names: dict, order: list | None = None)
     return out
 
 
-def colour_values(v: np.ndarray, ok: np.ndarray, cmap, vmin, vmax, log: bool, title: str, opacity: float):
-    """Palette indices 1-255 of continuous values on a colour ramp (0: no data), the palette
-    and the legend."""
+def colour_values(v: np.ndarray, ok: np.ndarray, cmap, vmin, vmax, log: bool, title: str):
+    """Palette indices 1-255 of continuous values on a colour ramp (0: no data), the (opaque)
+    palette and the legend."""
     vals = v[ok]
     if log:
         vals = vals[vals > 0]
@@ -295,7 +317,7 @@ def colour_values(v: np.ndarray, ok: np.ndarray, cmap, vmin, vmax, log: bool, ti
     index[~ok] = 0
     palette = np.zeros((256, 4), np.uint8)
     palette[1:, :3] = table
-    palette[1:, 3] = round(255 * opacity)
+    palette[1:, 3] = 255
     stops = [_palettes.rgb_to_hex(c) for c in table[:: 255 // 8]] + [_palettes.rgb_to_hex(table[-1])]
     return index, palette, Legend(title, ramp=stops, vmin=float(vmin), vmax=float(vmax), log=log, under=under,
                                   over=over)
@@ -403,8 +425,9 @@ def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax
             values = np.unique(v[ok]) if ok.any() else np.array([])
             ramp = _palettes.lut(cmap, max(len(values), 2))
             table = {int(k): (*ramp[i], 255) for i, k in enumerate(values.tolist())}
-        pixels, palette, legend = colour_classes(v, ok, table, names, title, opacity,
-                                                 _palettes.LEGEND_ORDER.get(da.attrs.get("landschaft_product")))
+        pixels, palette, legend, labels = colour_classes(v, ok, table, names, title,
+                                                         _palettes.LEGEND_ORDER.get(da.attrs.get("landschaft_product")))
+        lookup = {"labels": labels}
         if pixels is None:  # over 255 classes: a ramp
             categorical = False
     if not categorical:
@@ -414,14 +437,21 @@ def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax
             m = float(np.percentile(np.abs(v[ok]), 98)) if ok.any() else 1.0
             vmin, vmax = -m, m
         pixels, palette, legend = colour_values(v, ok, cmap if isinstance(cmap, (str, list, tuple)) else auto_cmap,
-                                                vmin, vmax, use_log, title, opacity)
+                                                vmin, vmax, use_log, title)
+        lookup = ramp_lookup(legend)
+    palette = distinct_palette(palette)
     xmin, ymax = t.c, t.f
     xmax, ymin = xmin + t.a * v.shape[1], ymax + t.e * v.shape[0]
     crs = da.rio.crs
     if mercator and crs is not None:
         img, bounds, merc = to_web_mercator(pixels, t, crs, n_threads or default_threads())
-        return Image(img, bounds, legend, title, (xmin, ymin, xmax, ymax), crs, merc, palette)
-    return Image(pixels, None, legend, title, (xmin, ymin, xmax, ymax), crs, None, palette)
+        return Image(img, bounds, legend, title, (xmin, ymin, xmax, ymax), crs, merc, palette, opacity, lookup)
+    return Image(pixels, None, legend, title, (xmin, ymin, xmax, ymax), crs, None, palette, opacity, lookup)
+
+
+def ramp_lookup(legend: Legend) -> dict:
+    """What the browser needs to give the value of a ramp's index back (index 1 + 254 x)."""
+    return {"vmin": legend.vmin, "vmax": legend.vmax, "log": legend.log, "under": legend.under, "over": legend.over}
 
 
 def render_rgb(da: xr.DataArray, *, max_size: int = 2048, opacity: float = 1.0, title: str | None = None,
@@ -441,8 +471,8 @@ def render_rgb(da: xr.DataArray, *, max_size: int = 2048, opacity: float = 1.0, 
     rgb = np.stack(bands, -1)
     rgba = np.zeros(rgb.shape[:2] + (4,), np.uint8)
     rgba[..., :3] = np.nan_to_num(rgb).astype(np.uint8)
-    rgba[..., 3] = np.where(ok, int(255 * opacity), 0)
+    rgba[..., 3] = np.where(ok, 255, 0)
     title = title or "RGB"
     crs = da.rio.crs
     img, bounds, merc = to_web_mercator(rgba, t, crs, n_threads or default_threads())
-    return Image(img, bounds, None, title, None, crs, merc)
+    return Image(img, bounds, None, title, None, crs, merc, opacity=opacity)

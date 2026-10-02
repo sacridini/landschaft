@@ -8,7 +8,7 @@ import math
 import numpy as np
 
 from . import _palettes
-from ._raster import Image, Legend
+from ._raster import Image, Legend, distinct_palette, ramp_lookup
 
 #: Above this many features (or vertices), a layer is drawn as an image instead of GeoJSON.
 MAX_FEATURES = 20_000
@@ -175,7 +175,6 @@ def _as_image(gdf, codes, palette, color, opacity, name, max_size, legend) -> Im
     import shapely
     import xarray as xr
     from rasterio.transform import from_origin
-    from rasterio.warp import transform_bounds
 
     from .._vector import rasterize
     from ..io import _with_georef
@@ -198,23 +197,33 @@ def _as_image(gdf, codes, palette, color, opacity, name, max_size, legend) -> Im
         values = np.where(codes < 0, len(palette), codes) + 1  # 1-based: 0 is no feature
     frame = gpd.GeoDataFrame({"__k": values}, geometry=merc.geometry.values, crs=merc.crs)
     burnt = np.asarray(rasterize(frame, like, field="__k", all_touched=True, dtype="uint16"))
+    return _image(burnt, colours, legend, name, opacity, (x0, y1 - size * h, x0 + size * w, y1))
+
+
+def _image(burnt, colours, legend, name, opacity, extent) -> Image:
+    """An image of features burnt as 1-based indices of their colours (0: none), on a Web Mercator grid."""
+    from rasterio.warp import transform_bounds
+
     pal = np.zeros((len(colours) + 1, 4), np.uint8)
     for i, c in enumerate(colours, 1):
-        pal[i] = (*_palettes.hex_to_rgb(c), int(255 * opacity))
+        pal[i] = (*_palettes.hex_to_rgb(c), 255)
+    lookup = None
     if len(pal) <= 256:  # palette indices
-        pixels, palette_out = burnt.astype(np.uint8), pal
+        pixels, palette_out = burnt.astype(np.uint8), distinct_palette(pal)
+        if legend is not None and legend.ramp:
+            lookup = ramp_lookup(legend)
+        elif legend is not None:
+            lookup = {"labels": [None] + [lab for _, lab in legend.classes] + ["no value"]}
     else:
         pixels, palette_out = pal[burnt], None
-    w_, s_, e_, n_ = transform_bounds("EPSG:3857", "EPSG:4326", x0, y1 - size * h, x0 + size * w, y1)
-    return Image(pixels, ((s_, w_), (n_, e_)), legend, name, None, "EPSG:3857",
-                 (x0, y1 - size * h, x0 + size * w, y1), palette_out)
+    w_, s_, e_, n_ = transform_bounds("EPSG:3857", "EPSG:4326", *extent)
+    return Image(pixels, ((s_, w_), (n_, e_)), legend, name, None, "EPSG:3857", extent, palette_out, opacity, lookup)
 
 
 def _points_image(gdf, codes, palette, color, opacity, name, max_size, legend) -> Image:
     """Very many points as an image: their coordinates reprojected (no geometries made), the cell of
     every point found directly, the last point of a cell drawn."""
     import shapely
-    from rasterio.warp import transform_bounds
 
     xy = shapely.get_coordinates(gdf.geometry.values)
     x, y = xy[:, 0], xy[:, 1]
@@ -233,17 +242,7 @@ def _points_image(gdf, codes, palette, color, opacity, name, max_size, legend) -
     flat = row * w + col
     pixels = np.zeros(h * w, np.uint16)
     pixels[flat] = values  # several points in a cell: one of them
-    pal = np.zeros((len(colours) + 1, 4), np.uint8)
-    for i, c in enumerate(colours, 1):
-        pal[i] = (*_palettes.hex_to_rgb(c), int(255 * opacity))
-    pixels = pixels.reshape(h, w)
-    if len(pal) <= 256:
-        pixels, palette_out = pixels.astype(np.uint8), pal
-    else:
-        pixels, palette_out = pal[pixels], None
-    w_, s_, e_, n_ = transform_bounds("EPSG:3857", "EPSG:4326", x0, y1 - size * h, x0 + size * w, y1)
-    return Image(pixels, ((s_, w_), (n_, e_)), legend, name, None, "EPSG:3857",
-                 (x0, y1 - size * h, x0 + size * w, y1), palette_out)
+    return _image(pixels.reshape(h, w), colours, legend, name, opacity, (x0, y1 - size * h, x0 + size * w, y1))
 
 
 

@@ -82,7 +82,7 @@ def _draw_spatial(ax, items, opts) -> None:
         if da.ndim == 3 and _is_rgb(da):
             img = _raster.render_rgb(da, max_size=opts["max_size"], title=name)
             ext = img.mercator_extent
-            ax.imshow(img.rgba, extent=(ext[0], ext[2], ext[1], ext[3]), interpolation="nearest")
+            ax.imshow(img.rgba, extent=(ext[0], ext[2], ext[1], ext[3]), interpolation="nearest", alpha=img.opacity)
             crs = crs or 3857
             continue
         if da.ndim == 3:
@@ -92,7 +92,8 @@ def _draw_spatial(ax, items, opts) -> None:
                              categorical=opts.get("categorical"), labels=opts.get("labels"), title=name,
                              mercator=merc)
         ext = img.mercator_extent if merc else img.extent
-        ax.imshow(img.rgba, extent=(ext[0], ext[2], ext[1], ext[3]), interpolation="nearest", zorder=2)
+        ax.imshow(img.rgba, extent=(ext[0], ext[2], ext[1], ext[3]), interpolation="nearest", zorder=2,
+                  alpha=img.opacity)
         crs = crs or (3857 if merc else da.rio.crs)
         _legend(ax, img.legend)
     if merc:

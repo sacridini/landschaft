@@ -43,6 +43,20 @@ ramp, NDVI from red to green, values on both sides of zero on a diverging ramp
 centred on zero. NoData is transparent, and so is the *Missing* class of a
 product (the area outside the map): the imagery shows through.
 
+## Reading the map
+
+Move the cursor over a map and the box at its bottom left gives the coordinates
+and, for every raster drawn, the value under the cursor: the name of a class
+(`Core`, `Bridge in Edge`...) or, on a colour ramp, the value to 1/254 of the
+ramp's range (`≈ 1006`; `≤` / `≥` beyond its ends). Click to keep them in a
+popup. The values are read from the image in the page, so they are those of the
+map drawn: block means where a large raster was reduced to the screen.
+
+Every layer has a card in the legend, with a slider for its opacity (to see the
+imagery underneath); a card hides while its layer is switched off in the layer
+control (top right). The button under the zoom buttons shows the map full
+screen.
+
 ## Choosing the colours
 
 The defaults can all be changed in the call:

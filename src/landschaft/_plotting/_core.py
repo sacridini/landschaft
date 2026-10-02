@@ -155,7 +155,7 @@ def _maps_iframe(page: str, height: str) -> str:
     """A map's page in a frame as wide as the cell or page, ``height`` high, its corner
     dragged to make it taller or shorter (Leaflet follows the frame's size)."""
     return (f"<div class='ls-map' style='width:100%;height:{height};resize:vertical;overflow:hidden;"
-            "border-radius:6px'><iframe style='width:100%;height:100%;border:0;display:block' "
+            "border-radius:6px'><iframe allowfullscreen style='width:100%;height:100%;border:0;display:block' "
             f"srcdoc=\"{_html.escape(page, quote=True)}\"></iframe></div>")
 
 
@@ -206,10 +206,11 @@ def _band_index(da, dim, sel) -> list[int]:
 
 
 def _map_layers(items, opts):
-    """(images, vector layers, legends, notes) of spatial items."""
+    """The layers of spatial items, in groups that share a legend card, and notes."""
     from . import _raster, _vectors
+    from ._maps import Group
 
-    images, vectors, legends, notes = [], [], [], []
+    groups, notes = [], []
     base = opts
     for item in items:
         name, obj = item[0], item[1]
@@ -224,18 +225,18 @@ def _map_layers(items, opts):
                 import geopandas as gpd
 
                 gdf = gpd.GeoDataFrame(geometry=obj)
-            kind, layer, legend = _vectors.layer(gdf, column=opts.get("column"), cmap=opts.get("cmap"),
-                                                 categorical=opts.get("categorical"), name=name,
-                                                 vmin=opts.get("vmin"), vmax=opts.get("vmax"), log=opts.get("log"),
-                                                 max_size=opts["max_size"],
-                                                 color=opts.get("color") or "#ffd60a",
-                                                 opacity=opts.get("opacity") or 0.7)
-            (images if kind == "image" else vectors).append(layer)
-            legends.append(legend)
+            colour, opacity = opts.get("color") or "#ffd60a", opts.get("opacity") or 0.7
+            _, layer, legend = _vectors.layer(gdf, column=opts.get("column"), cmap=opts.get("cmap"),
+                                              categorical=opts.get("categorical"), name=name,
+                                              vmin=opts.get("vmin"), vmax=opts.get("vmax"), log=opts.get("log"),
+                                              max_size=opts["max_size"], color=colour, opacity=opacity)
+            groups.append(Group(name, legend, opacity, None if legend is not None else colour, [layer]))
             continue
         da = obj
+        opacity = opts.get("opacity") or 0.85
         if da.ndim == 3 and _is_rgb(da) and opts.get("rgb", True):
-            images.append(_raster.render_rgb(da, max_size=opts["max_size"], title=name))
+            img = _raster.render_rgb(da, max_size=opts["max_size"], title=name, opacity=opts.get("opacity") or 1.0)
+            groups.append(Group(name, None, img.opacity, None, [img]))
             continue
         if da.ndim == 3:
             dim = _band_dim(da)
@@ -256,39 +257,43 @@ def _map_layers(items, opts):
                 if s.size:
                     vmin, vmax = (float(v) for v in np.percentile(s, (2, 98)))
             labels = [str(v) for v in da[dim].values.tolist()] if dim in da.coords else [str(i + 1) for i in range(n)]
+            images = []
             for j, k in enumerate(idx):
                 img = _raster.render(da.isel({dim: k}), max_size=size, cmap=opts.get("cmap"), vmin=vmin, vmax=vmax,
-                                     log=opts.get("log"), opacity=opts.get("opacity") or 0.85,
-                                     categorical=opts.get("categorical"), labels=opts.get("labels"),
-                                     title=f"{name}: {labels[k]}")
+                                     log=opts.get("log"), opacity=opacity, categorical=opts.get("categorical"),
+                                     labels=opts.get("labels"), title=f"{name}: {labels[k]}")
                 img.show = j == 0
                 images.append(img)
-            legends.append(images[-1].legend)
+            legend = dataclasses.replace(images[-1].legend, title=name) if images[-1].legend else None
+            groups.append(Group(name, legend, opacity, None, images))
             continue
         img = _raster.render(da, max_size=opts["max_size"], cmap=opts.get("cmap"), vmin=opts.get("vmin"),
-                             vmax=opts.get("vmax"), log=opts.get("log"), opacity=opts.get("opacity") or 0.85,
+                             vmax=opts.get("vmax"), log=opts.get("log"), opacity=opacity,
                              categorical=opts.get("categorical"), labels=opts.get("labels"), title=name)
-        images.append(img)
-        legends.append(img.legend)
-    return images, vectors, legends, notes
+        groups.append(Group(name, img.legend, opacity, None, [img]))
+    return groups, notes
 
 
 def _map(items, opts, title):
     from . import _maps
+    from ._raster import Image
 
-    images, vectors, legends, notes = _map_layers(items, opts)
+    groups, notes = _map_layers(items, opts)
     m = _maps.new_map(opts.get("basemap", "satellite"))
     bounds = []
-    for img in images:
-        _maps.add_image(m, img, show=getattr(img, "show", True))
-        bounds.append(img.bounds_latlon)
-    for layer in vectors:
-        _maps.add_vector(m, layer)
-        b = getattr(layer, "_ls_bounds", None) or layer.get_bounds()
-        if b and b[0][0] is not None:
-            bounds.append(((b[0][0], b[0][1]), (b[1][0], b[1][1])))
-    # a stack shows one legend (its first layer's); every other layer its own
-    _maps.finish(m, bounds, [lg for lg in legends if lg is not None], title)
+    for g in groups:  # images under the vector layers
+        for x in g.items:
+            if isinstance(x, Image):
+                g.layers.append(_maps.add_image(m, x, show=getattr(x, "show", True)))
+                bounds.append(x.bounds_latlon)
+    for g in groups:
+        for x in g.items:
+            if not isinstance(x, Image):
+                g.layers.append(_maps.add_vector(m, x))
+                b = getattr(x, "_ls_bounds", None) or x.get_bounds()
+                if b and b[0][0] is not None:
+                    bounds.append(((b[0][0], b[0][1]), (b[1][0], b[1][1])))
+    _maps.finish(m, bounds, groups, title)
     panels = [_Panel("map", m, title)]
     if notes:
         panels.append(_Panel("html", "<p style='color:#6b6a66'>" + "<br>".join(_html.escape(n) for n in notes)

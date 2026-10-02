@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import functools
 import html
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ._raster import Image, Legend
@@ -35,10 +36,22 @@ _CSS = """
 .ls-legend .sw { width: 14px; height: 12px; border: 1px solid rgba(0,0,0,0.25); flex: none; }
 .ls-legend .ramp { height: 12px; border: 1px solid rgba(0,0,0,0.25); }
 .ls-legend .ends { display: flex; justify-content: space-between; color: #4a4a48; }
+.ls-legend .head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.ls-legend .head b { margin: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.ls-legend input[type=range] { width: 56px; height: 12px; margin: 0; accent-color: #555; cursor: pointer; opacity: 0.55; }
+.ls-legend:hover input[type=range] { opacity: 1; }
 .ls-full a { font: bold 18px/30px sans-serif; text-align: center; cursor: pointer; }
-.ls-coords { background: rgba(255,255,255,0.8); padding: 1px 6px; margin: 0 0 4px 10px !important; border-radius: 4px;
-  font: 11px/1.5 Inter, "Segoe UI", Helvetica, Arial, sans-serif; color: #1d1d1b; font-variant-numeric: tabular-nums; }
+.ls-coords { background: rgba(255,255,255,0.88); padding: 2px 7px; margin: 0 0 4px 10px !important; border-radius: 4px;
+  font: 11px/1.45 Inter, "Segoe UI", Helvetica, Arial, sans-serif; color: #1d1d1b; font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25); max-width: 320px; }
+.ls-coords .ll { color: #6b6a66; }
+.ls-coords b { font-weight: 600; margin-right: 4px; }
 .ls-coords:empty { display: none; }
+/* the base map's credits on one line (all of them on hover): they hid the scale and the legends */
+.leaflet-control-attribution { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55vw; }
+.leaflet-control-attribution:hover { white-space: normal; }
+.ls-pop th { text-align: left; padding: 1px 10px 1px 0; font-weight: 600; }
+.ls-pop td { font-variant-numeric: tabular-nums; }
 </style>
 """
 
@@ -53,19 +66,27 @@ def _leaflet() -> str:
     return f"<style>{css}</style>\n<script>{(_JS / 'leaflet.js').read_text(encoding='utf-8')}</script>"
 
 
+@dataclass
+class Group:
+    """Layers that share a legend card (a raster, the bands of a stack, a vector layer): the card
+    shows while one of them is on the map, and its slider sets their opacity."""
+
+    title: str
+    legend: Legend | None
+    opacity: float
+    colour: str | None = None                   # a vector layer drawn in one colour
+    items: list = field(default_factory=list)   # Images and vector layers
+    layers: list = field(default_factory=list)  # their layers on the map
+
+
 _CONTROLS = None
 
-
-def _controls():
-    """Full screen (top left) and the coordinates under the cursor (bottom left)."""
-    global _CONTROLS
-    if _CONTROLS is None:
-        from branca.element import MacroElement, Template
-
-        class Controls(MacroElement):
-            _template = Template("""
+# The value under the cursor: each image's palette is opaque with one colour per index, so the
+# colour of a pixel, read from the image drawn on a canvas, gives back its index and the index
+# its class or (on a ramp of 255 colours) its value, to 1/254 of the ramp.
+_SCRIPT = """
 {% macro script(this, kwargs) %}
-(function(map) {
+(function(map, L_, P, G) {
     var Full = L.Control.extend({options: {position: "topleft"}, onAdd: function() {
         var bar = L.DomUtil.create("div", "leaflet-bar leaflet-control ls-full");
         var a = L.DomUtil.create("a", "", bar);
@@ -73,33 +94,146 @@ def _controls():
         L.DomEvent.disableClickPropagation(bar);
         L.DomEvent.on(a, "click", function(e) {
             L.DomEvent.preventDefault(e);
-            var c = map.getContainer();
             if (document.fullscreenElement) { document.exitFullscreen(); }
-            else if (c.requestFullscreen) { c.requestFullscreen(); }
+            else if (document.documentElement.requestFullscreen) { document.documentElement.requestFullscreen(); }
         });
         return bar;
     }});
     new Full().addTo(map);
     document.addEventListener("fullscreenchange", function() { map.invalidateSize(); });
-    var Coords = L.Control.extend({options: {position: "bottomleft"}, onAdd: function() {
-        var div = L.DomUtil.create("div", "leaflet-control ls-coords");
-        map.on("mousemove", function(e) {
-            div.textContent = e.latlng.lat.toFixed(5) + ", " + e.latlng.lng.toFixed(5);
+
+    var esc = function(v) { return String(v).replace(/[&<>"]/g, function(c) {
+        return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); };
+    var fmt = function(x) {
+        var a = Math.abs(x);
+        return (a !== 0 && (a >= 1e6 || a < 1e-3)) ? x.toExponential(3) : String(+x.toPrecision(4));
+    };
+    var keys = P.map(function(pal) {
+        var k = {};
+        pal.forEach(function(c, i) { if (i > 0) { k[(c[0] << 16) | (c[1] << 8) | c[2]] = i; } });
+        return k;
+    });
+    function index(l, d) {
+        var i = keys[l.p][(d[0] << 16) | (d[1] << 8) | d[2]];
+        if (i !== undefined) { return i; }
+        var best = 1, dist = Infinity;  // a colour blended by the browser: the nearest
+        P[l.p].forEach(function(c, j) {
+            if (j === 0) { return; }
+            var e = (c[0] - d[0]) * (c[0] - d[0]) + (c[1] - d[1]) * (c[1] - d[1]) + (c[2] - d[2]) * (c[2] - d[2]);
+            if (e < dist) { dist = e; best = j; }
         });
-        map.on("mouseout", function() { div.textContent = ""; });
+        return best;
+    }
+    function value(l, i) {
+        var u = l.u;
+        if (u.labels) { return u.labels[i]; }
+        if (i <= 1 && u.under) { return "\\u2264 " + fmt(u.vmin); }
+        if (i >= 255 && u.over) { return "\\u2265 " + fmt(u.vmax); }
+        var x = (i - 1) / 254;
+        var v = u.log ? Math.pow(10, Math.log10(u.vmin) + x * (Math.log10(u.vmax) - Math.log10(u.vmin)))
+                      : u.vmin + x * (u.vmax - u.vmin);
+        return "\\u2248 " + fmt(v);
+    }
+    function read(l, latlng) {  // the value of a layer at a point; null: no data; undefined: outside
+        var lay = window[l.v], e = l.ext;
+        if (!map.hasLayer(lay)) { return undefined; }
+        var p = L.CRS.EPSG3857.project(latlng);
+        if (p.x < e[0] || p.x >= e[2] || p.y <= e[1] || p.y > e[3]) { return undefined; }
+        if (!l.ctx) {
+            var img = lay.getElement();
+            if (!img || !img.complete || !img.naturalWidth) { return undefined; }
+            var c = document.createElement("canvas");
+            c.width = img.naturalWidth; c.height = img.naturalHeight;
+            l.ctx = c.getContext("2d", {willReadFrequently: true});
+            l.ctx.drawImage(img, 0, 0);
+        }
+        var w = l.ctx.canvas.width, h = l.ctx.canvas.height;
+        var col = Math.min(w - 1, Math.floor((p.x - e[0]) / (e[2] - e[0]) * w));
+        var row = Math.min(h - 1, Math.floor((e[3] - p.y) / (e[3] - e[1]) * h));
+        var d = l.ctx.getImageData(col, row, 1, 1).data;
+        return d[3] === 0 ? null : value(l, index(l, d));
+    }
+    function rows(latlng) {
+        var out = [];
+        L_.forEach(function(l) {
+            var v = read(l, latlng);
+            if (v !== undefined) { out.push([l.n, v === null ? "no data" : v]); }
+        });
+        return out;
+    }
+
+    var Readout = L.Control.extend({options: {position: "bottomleft"}, onAdd: function() {
+        var div = L.DomUtil.create("div", "leaflet-control ls-coords");
+        map.on("mousemove", function(e) {  // a pixel read per visible layer: well under a millisecond
+            var ll = e.latlng;
+            var h = "<span class='ll'>" + ll.lat.toFixed(5) + ", " + ll.lng.toFixed(5) + "</span>";
+            rows(ll).forEach(function(r) { h += "<div><b>" + esc(r[0]) + "</b> " + esc(r[1]) + "</div>"; });
+            div.innerHTML = h;
+        });
+        map.on("mouseout", function() { div.innerHTML = ""; });
         return div;
     }});
-    new Coords().addTo(map);
-})({{ this._parent.get_name() }});
-{% endmacro %}
-""")
+    new Readout().addTo(map);
+    if (L_.length) {
+        map.on("click", function(e) {
+            var r = rows(e.latlng);
+            if (!r.length) { return; }
+            var h = "<table class='ls-pop'>" + r.map(function(x) {
+                return "<tr><th>" + esc(x[0]) + "</th><td>" + esc(x[1]) + "</td></tr>"; }).join("") +
+                "<tr><th>lat, lon</th><td>" + e.latlng.lat.toFixed(6) + ", " + e.latlng.lng.toFixed(6) +
+                "</td></tr></table>";
+            L.popup({maxWidth: 360}).setLatLng(e.latlng).setContent(h).openOn(map);
+        });
+    }
 
-            def __init__(self):
+    G.forEach(function(names, i) {
+        var card = document.querySelector(".ls-legend[data-g='" + i + "']");
+        if (!card) { return; }
+        var lays = names.map(function(n) { return window[n]; });
+        var sync = function() {
+            card.style.display = lays.some(function(x) { return map.hasLayer(x); }) ? "" : "none";
+        };
+        map.on("overlayadd overlayremove", sync);
+        sync();
+        var r = card.querySelector("input");
+        if (!r) { return; }
+        r.addEventListener("input", function() {
+            var o = r.value / 100;
+            lays.forEach(function(x) {
+                if (x.setOpacity) { x.setOpacity(o); }
+                else if (x.eachLayer) {
+                    x.eachLayer(function(f) {
+                        if (f.setStyle) {
+                            f.setStyle(f instanceof L.CircleMarker ? {fillOpacity: o, opacity: o}
+                                                                   : {fillOpacity: o * 0.6, opacity: Math.min(1, o + 0.2)});
+                        }
+                    });
+                }
+            });
+        });
+    });
+})({{ this._parent.get_name() }}, {{ this.layers|tojson }}, {{ this.palettes|tojson }}, {{ this.groups|tojson }});
+{% endmacro %}
+"""
+
+
+def _controls(layers: list, palettes: list, groups: list):
+    """Full screen (top left); the coordinates and the values under the cursor (bottom left), and
+    in a popup on a click; the legend cards following their layers, with their opacity."""
+    global _CONTROLS
+    if _CONTROLS is None:
+        from branca.element import MacroElement, Template
+
+        class Controls(MacroElement):
+            _template = Template(_SCRIPT)
+
+            def __init__(self, layers, palettes, groups):
                 super().__init__()
                 self._name = "LsControls"
+                self.layers, self.palettes, self.groups = layers, palettes, groups
 
         _CONTROLS = Controls
-    return _CONTROLS
+    return _CONTROLS(layers, palettes, groups)
 
 
 def _fmt(v: float) -> str:
@@ -111,25 +245,29 @@ def ramp_ends(lg: Legend) -> tuple[str, str]:
     return ("≤ " if lg.under else "") + _fmt(lg.vmin), ("≥ " if lg.over else "") + _fmt(lg.vmax)
 
 
-def legend_html(legends: list[Legend]) -> str:
+def legend_html(groups: list[Group]) -> str:
+    """A card per group of layers: its title, its opacity, its colours."""
     parts = []
-    for lg in legends:
-        if lg is None:
-            continue
-        body = [f"<b>{html.escape(lg.title)}</b>"]
-        if lg.classes:
+    for i, g in enumerate(groups):
+        lg = g.legend
+        name = html.escape(g.title)
+        body = [(f"<div class='head'><b>{name}</b><input type='range' min='0' max='100' "
+                 f"value='{round(100 * g.opacity)}' title='Opacity' aria-label='Opacity of {name}'></div>")]
+        if lg is not None and lg.classes:
             for colour, label in lg.classes[:40]:
                 body.append(f"<div class='row'><span class='sw' style='background:{colour}'></span>"
                             f"{html.escape(str(label))}</div>")
             if len(lg.classes) > 40:
                 body.append(f"<div class='row'>... {len(lg.classes) - 40} more</div>")
-        elif lg.ramp:
+        elif lg is not None and lg.ramp:
             grad = ", ".join(lg.ramp)
             low, high = ramp_ends(lg)
             body.append(f"<div class='ramp' style='background: linear-gradient(to right, {grad})'></div>"
                         f"<div class='ends'><span>{low}</span><span>{'log ' if lg.log else ''}</span>"
                         f"<span>{high}</span></div>")
-        parts.append("<div class='ls-legend'>" + "".join(body) + "</div>")
+        elif g.colour:
+            body.append(f"<div class='row'><span class='sw' style='background:{g.colour}'></span>features</div>")
+        parts.append(f"<div class='ls-legend' data-g='{i}'>" + "".join(body) + "</div>")
     return "<div class='ls-legends'>" + "".join(parts) + "</div>" if parts else ""
 
 
@@ -152,7 +290,6 @@ def new_map(basemap: str | None = "satellite"):
         p = xyz.query_name(provider)
         folium.TileLayer(tiles=p.build_url(), attr=p.html_attribution, name=label, max_zoom=p.get("max_zoom", 19),
                          overlay=False, control=True, show=i == 0).add_to(m)
-    _controls()().add_to(m)
     return m
 
 
@@ -167,15 +304,19 @@ def add_image(m, img: Image, show: bool = True):
     images = m.__dict__["_ls_images"]
     token = f"data:image/png;base64,LSIMAGE{len(images)}x{id(m)}"
     images[token] = img.data_url()
-    folium.raster_layers.ImageOverlay(image=token, bounds=[list(img.bounds_latlon[0]), list(img.bounds_latlon[1])],
-                                      name=img.name, opacity=1.0, interactive=False, cross_origin=False,
-                                      zindex=2, show=show).add_to(m)
+    layer = folium.raster_layers.ImageOverlay(image=token, bounds=[list(img.bounds_latlon[0]),
+                                                                   list(img.bounds_latlon[1])],
+                                              name=img.name, opacity=img.opacity, interactive=False,
+                                              cross_origin=False, zindex=2, show=show)
+    layer.add_to(m)
+    return layer
 
 
 def add_vector(m, layer):
     """A GeoJSON layer of _vectors, its data put in by render."""
     add_payload(m, layer)
     layer.add_to(m)
+    return layer
 
 
 def add_payload(m, layer):
@@ -189,8 +330,6 @@ def add_payload(m, layer):
 
 def _install(m):
     """folium's own save and display put the images and data in too."""
-    from pathlib import Path
-
     from ._core import _maps_iframe
 
     m.save = lambda path, **_: Path(path).write_text(render(m), encoding="utf-8")
@@ -206,16 +345,35 @@ def render(m) -> str:
     return page
 
 
-def finish(m, bounds: list, legends: list[Legend], title: str | None = None):
-    """Layer control, legends, title, and the view on everything drawn."""
+def _readable(groups: list[Group]) -> tuple[list, list]:
+    """The image layers whose values the cursor reads, and their palettes (each once)."""
+    layers, palettes, seen = [], [], {}
+    for g in groups:
+        for img, layer in zip(g.items, g.layers):
+            if not isinstance(img, Image) or img.lookup is None or img.palette is None:
+                continue
+            pal = img.palette[:, :3].tolist()
+            key = repr(pal)
+            if key not in seen:
+                seen[key] = len(palettes)
+                palettes.append(pal)
+            lookup = {k: (v if not isinstance(v, float) else round(v, 12)) for k, v in img.lookup.items()}
+            layers.append({"v": layer.get_name(), "ext": [float(x) for x in img.mercator_extent], "p": seen[key],
+                           "n": img.name, "u": lookup})
+    return layers, palettes
+
+
+def finish(m, bounds: list, groups: list[Group], title: str | None = None):
+    """Layer control, legend cards, the readout of values, title, and the view on everything drawn."""
     import folium
     from branca.element import Element
 
     folium.LayerControl(collapsed=True, position="topright").add_to(m)
+    layers, palettes = _readable(groups)
+    _controls(layers, palettes, [[x.get_name() for x in g.layers] for g in groups]).add_to(m)
     root = m.get_root()
     root.header.add_child(Element(_CSS))
-    html_legends = legend_html(legends)
-    extra = html_legends
+    extra = legend_html(groups)
     if title:
         extra += ("<div style='position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;"
                   "background:rgba(255,255,255,0.92);padding:4px 12px;border-radius:6px;font:600 14px Inter,"
