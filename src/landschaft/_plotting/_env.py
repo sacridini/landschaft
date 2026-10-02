@@ -29,6 +29,18 @@ def auto_show() -> bool:
     return os.environ.get("LANDSCHAFT_PLOT_SHOW", "1") not in ("0", "false", "no") and not in_notebook()
 
 
+def plotly_url() -> str | bool:
+    """plotly's script as a file of the installed package (a window's page loads it from disk,
+    without the network), else in the page."""
+    try:
+        import plotly
+
+        js = Path(plotly.__file__).parent / "package_data" / "plotly.min.js"
+    except ImportError:  # pragma: no cover - depends on the environment
+        return True
+    return js.as_uri() if js.exists() else True
+
+
 def open_window(html_page: str, title: str = "landschaft") -> Path:
     """A page in a window of its own (pywebview), else in the web browser; the file written."""
     path = Path(tempfile.mkdtemp(prefix="landschaft_plot_")) / "plot.html"

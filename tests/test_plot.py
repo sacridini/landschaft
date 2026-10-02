@@ -43,11 +43,11 @@ def page(p) -> str:
 
 
 def images(html: str) -> list:
-    """The PNG images of a page, decoded."""
+    """The PNG images of a page (not the icons of its style), decoded."""
     from PIL import Image
 
     out = []
-    for b64 in re.findall(r"data:image/png;base64,([A-Za-z0-9+/=]+)", html):
+    for b64 in re.findall(r"(?<!url\()data:image/png;base64,([A-Za-z0-9+/=]+)", html):
         out.append(Image.open(io.BytesIO(base64.b64decode(b64))))
     return out
 
@@ -164,12 +164,12 @@ def test_vectors_as_geojson_or_image():
     polys = gpd.GeoDataFrame({"name": ["a", "b"], "area": [1.0, 2.0]}, crs=32633,
                              geometry=[box(500000, 4498000, 501000, 4499000), box(501500, 4498500, 502000, 4499500)])
     html = page(ls.plot(polys, column="name"))
-    assert '"FeatureCollection"' in html and '"__c"' in html and ">a<" in html
+    assert '{"type":"FeatureCollection"' in html and '"__c"' in html and ">a<" in html
     rng = np.random.default_rng(0)
     pts = gpd.GeoDataFrame({"v": rng.random(30000)}, crs=32633,
                            geometry=gpd.points_from_xy(rng.uniform(5e5, 6e5, 30000), rng.uniform(4.4e6, 4.5e6, 30000)))
     html = page(ls.plot(pts, column="v"))
-    assert '"FeatureCollection"' not in html and images(html)  # too many: an image
+    assert '{"type":"FeatureCollection"' not in html and images(html)  # too many: an image
 
 
 def test_lists_of_anything():
@@ -246,3 +246,58 @@ def test_windows_only_outside_notebooks(monkeypatch, forest):
     ls.plot(forest)
     ls.plot(forest, show=False)
     assert opened == ["here"]
+
+
+# --- offline pages, NoData, bands, vector ramps -------------------------------------------------------
+
+
+def test_pages_open_offline(forest):
+    html = page(ls.plot(forest))
+    assert "L.map(" in html and "Leaflet 1.9.3" in html  # Leaflet in the page
+    assert not re.findall(r"<(?:script|link)[^>]+(?:src|href)=[\"']https?://", html)  # nothing from a CDN
+    assert "jquery" not in html.lower() and "bootstrap" not in html.lower()
+    s = pd.Series([3, 1, 2], index=["a", "b", "c"], name="n")
+    charts = page(ls.plot([s, s * 2]))
+    assert not re.findall(r"<script[^>]+src=[\"']https?://", charts)  # plotly's script in the page...
+    assert charts.count("plotly.js v") == 1  # ...once
+    assert _env.plotly_url() is True or _env.plotly_url().startswith("file:")  # a window loads it from disk
+
+
+def test_true_colour_leaves_nodata_out():
+    v = np.random.default_rng(4).integers(100, 2000, (3, 40, 50)).astype("uint16")
+    v[:, :10] = 0
+    rgb = grid(v, nodata=0).assign_coords(band=["red", "green", "blue"])
+    img = _raster.render_rgb(rgb)
+    alpha = img.rgba[..., 3]
+    assert (alpha == 0).mean() >= 10 / 40 - 0.05 and alpha.max() == 255  # NoData transparent, not black
+    lazy = pytest.importorskip("dask.array")
+    f = np.where(np.arange(3000 * 40).reshape(3000, 40) % 3 == 0, -9, 5).astype("float32")
+    da = grid(f, nodata=-9).copy(data=lazy.from_array(f, chunks=500))
+    out, _ = _raster.reduce(da, 1000, False)
+    assert np.nanmax(out) == 5  # NoData out of the block means of a lazy raster
+
+
+def test_bands_by_label_then_position():
+    from landschaft._plotting._core import _band_index
+
+    stack = grid(np.zeros((3, 4, 5), "float32")).assign_coords(band=[1, 2, 3])
+    assert _band_index(stack, "band", [1]) == [0]  # the band numbered 1 (a file's first band)
+    named = grid(np.zeros((3, 4, 5), "float32"))
+    assert _band_index(named, "band", ["b2", 0]) == [2, 0]
+    with pytest.raises(ValueError, match="the bands are"):
+        _band_index(named, "band", ["nir"])
+    p = ls.plot(stack, bands=[3])
+    assert len(images(page(p))) == 1
+
+
+def test_vector_ramps_take_their_range():
+    pts = gpd.GeoDataFrame({"v": np.geomspace(1, 1e4, 50), "s": ["<b>&"] * 50}, crs=32633,
+                           geometry=gpd.points_from_xy(np.linspace(5e5, 5.1e5, 50), np.full(50, 4.45e6)))
+    from landschaft._plotting import _vectors
+
+    _, _, lg = _vectors.layer(pts, column="v", vmin=10, vmax=100)
+    assert (lg.vmin, lg.vmax, lg.under, lg.over) == (10, 100, True, True)
+    _, _, lg = _vectors.layer(pts, column="v", log=True)
+    assert lg.log and lg.vmin > 1 and lg.vmax < 1e4
+    html = page(ls.plot(pts, column="v", vmin=10, vmax=100))
+    assert "≤ 10" in html and "≥ 100" in html and "esc(f.properties[k])" in html

@@ -58,13 +58,13 @@ class Plot:
         return next((p.obj for p in self.panels if p.kind == "figure"), None)
 
     # -- HTML -------------------------------------------------------------------------------------
-    def _panel_html(self, p: _Panel, height: str) -> str:
+    def _panel_html(self, p: _Panel, height: str, plotlyjs="cdn") -> str:
         if p.kind == "map":
             from ._maps import render
 
             return _maps_iframe(render(p.obj), height)
         if p.kind == "chart":
-            return p.obj.to_html(full_html=False, include_plotlyjs="cdn", config={"responsive": True})
+            return p.obj.to_html(full_html=False, include_plotlyjs=plotlyjs, config={"responsive": True})
         if p.kind == "figure":
             import base64
             import io
@@ -81,15 +81,24 @@ class Plot:
         return "<div class='ls-plot'>" + "".join(f"<div style='margin-bottom:12px'>{x}</div>" for x in parts) + "</div>"
 
     def to_html(self) -> str:
-        """A self-contained HTML page of the plot."""
+        """A self-contained HTML page of the plot: it opens without a network connection (but
+        for the satellite imagery and other base maps)."""
+        return self._page(True)
+
+    def _page(self, plotlyjs) -> str:
+        """The page, plotly's script (charts) put in once: ``True`` inline, ``"cdn"``, or a URL."""
         alone = len(self.panels) == 1 and self.panels[0].kind == "map"
         if alone:
             from ._maps import render
 
             return render(self.panels[0].obj)
         # a map fills the window, whatever its size; the other panels follow below
-        body = "".join(f"<section>{self._panel_html(p, 'max(480px, calc(100vh - 64px))')}</section>"
-                       for p in self.panels)
+        parts = []
+        for p in self.panels:
+            parts.append(self._panel_html(p, "max(480px, calc(100vh - 64px))", plotlyjs))
+            if p.kind == "chart":
+                plotlyjs = False  # once a page
+        body = "".join(f"<section>{x}</section>" for x in parts)
         title = _html.escape(self.title or "landschaft")
         return ("<!doctype html><html><head><meta charset='utf-8'><title>" + title + "</title>"
                 "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -112,7 +121,7 @@ class Plot:
 
             plt.show()
             return
-        _env.open_window(self.to_html(), self.title or "landschaft")
+        _env.open_window(self._page(_env.plotly_url()), self.title or "landschaft")
 
     def save(self, path, *, dpi: int = 200) -> Path:
         """Write the plot: ``.html`` (interactive, self-contained), or ``.png``, ``.pdf``,
@@ -172,6 +181,27 @@ def _is_rgb(da) -> bool:
     return any(names == s for s in _RGB_NAMES)
 
 
+def _band_index(da, dim, sel) -> list[int]:
+    """Positions of the bands chosen: by their labels (the band coordinate: names, or the band
+    numbers of a file, from 1), else by position (from 0)."""
+    n = da.sizes[dim]
+    if sel is None:
+        return list(range(n))
+    if isinstance(sel, (str, int, np.integer)):
+        sel = [sel]
+    labels = da[dim].values.tolist() if dim in da.coords else []
+    out = []
+    for b in sel:
+        b = b.item() if isinstance(b, np.generic) else b
+        if b in labels:
+            out.append(labels.index(b))
+        elif isinstance(b, int) and 0 <= b < n:
+            out.append(b)
+        else:
+            raise ValueError(f"no band {b!r}: the bands are {labels or list(range(n))}")
+    return out
+
+
 # --- the layers of a map -----------------------------------------------------------------------------------
 
 
@@ -196,6 +226,7 @@ def _map_layers(items, opts):
                 gdf = gpd.GeoDataFrame(geometry=obj)
             kind, layer, legend = _vectors.layer(gdf, column=opts.get("column"), cmap=opts.get("cmap"),
                                                  categorical=opts.get("categorical"), name=name,
+                                                 vmin=opts.get("vmin"), vmax=opts.get("vmax"), log=opts.get("log"),
                                                  max_size=opts["max_size"],
                                                  color=opts.get("color") or "#ffd60a",
                                                  opacity=opts.get("opacity") or 0.7)
@@ -209,9 +240,7 @@ def _map_layers(items, opts):
         if da.ndim == 3:
             dim = _band_dim(da)
             n = da.sizes[dim]
-            sel = opts.get("bands")
-            idx = list(range(n)) if sel is None else [list(da[dim].values).index(b) if not isinstance(b, int) or
-                                                      b not in range(n) else b for b in sel]
+            idx = _band_index(da, dim, opts.get("bands"))
             if len(idx) > MAX_BANDS:
                 notes.append(f"{name}: the first {MAX_BANDS} of {len(idx)} bands are drawn (bands= to choose)")
                 idx = idx[:MAX_BANDS]
@@ -428,7 +457,8 @@ def plot(obj, *, column=None, cmap=None, labels=None, categorical=None, vmin=Non
     opacity
         Opacity of the layers.
     bands
-        A stack: the bands to draw (names or numbers).
+        A stack: the bands to draw, by their labels (names, or the band numbers
+        of a file read by :func:`load_raster`, from 1), else by position (from 0).
     title
         Title of the map or chart.
     basemap

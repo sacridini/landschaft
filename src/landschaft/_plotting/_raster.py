@@ -31,6 +31,8 @@ class Legend:
     vmin: float = 0.0
     vmax: float = 1.0
     log: bool = False
+    under: bool = False  # values below vmin, drawn in its colour
+    over: bool = False   # values above vmax
 
 
 @dataclass
@@ -104,18 +106,22 @@ def reduce(da: xr.DataArray, max_size: int, categorical: bool):
         v = v.compute() if hasattr(v, "dask") else np.asarray(v)
         return v, t * t.scale(f)
     block = data[: oy * f, : ox * f]
+    nd = da.rio.nodata
+    has = nd is not None and not (isinstance(nd, float) and math.isnan(nd))
     if hasattr(block, "dask"):
         import dask.array as dsa
 
-        v = dsa.coarsen(np.nanmean, block.astype(np.float32), {0: f, 1: f}, trim_excess=True).compute()
+        block = block.astype(np.float32)
+        if has:  # NoData left out of the means
+            block = dsa.where(block == np.float32(nd), np.float32(np.nan), block)
+        with _quiet():  # blocks of NoData only: NaN
+            v = dsa.coarsen(np.nanmean, block, {0: f, 1: f}, trim_excess=True).compute()
     else:  # C++ (OpenMP): NaN and NoData left out of the means
         from .. import _core
 
         arr = np.ascontiguousarray(np.asarray(data))  # the whole raster: the incomplete blocks are left out
         if arr.dtype == bool:
             arr = arr.view(np.uint8)
-        nd = da.rio.nodata
-        has = nd is not None and not (isinstance(nd, float) and math.isnan(nd))
         v = _core.io_block_mean(arr, f, has, float(nd) if has else 0.0)
     return v, t * t.scale(f)
 
@@ -278,6 +284,8 @@ def colour_values(v: np.ndarray, ok: np.ndarray, cmap, vmin, vmax, log: bool, ti
     if vmax == vmin:
         vmax = vmin + 1.0
     table = _palettes.lut(cmap, 255)
+    under = bool(vals.size) and bool(vals.min() < vmin) or (log and bool((v[ok] <= 0).any()))
+    over = bool(vals.size) and bool(vals.max() > vmax)
     with np.errstate(invalid="ignore", divide="ignore"):
         if log:
             x = (np.log10(np.maximum(v, vmin)) - math.log10(vmin)) / (math.log10(vmax) - math.log10(vmin))
@@ -289,7 +297,8 @@ def colour_values(v: np.ndarray, ok: np.ndarray, cmap, vmin, vmax, log: bool, ti
     palette[1:, :3] = table
     palette[1:, 3] = round(255 * opacity)
     stops = [_palettes.rgb_to_hex(c) for c in table[:: 255 // 8]] + [_palettes.rgb_to_hex(table[-1])]
-    return index, palette, Legend(title, ramp=stops, vmin=float(vmin), vmax=float(vmax), log=log)
+    return index, palette, Legend(title, ramp=stops, vmin=float(vmin), vmax=float(vmax), log=log, under=under,
+                                  over=over)
 
 
 def choose_cmap(da: xr.DataArray, v: np.ndarray, ok: np.ndarray) -> tuple[str, bool, bool]:
@@ -422,13 +431,14 @@ def render_rgb(da: xr.DataArray, *, max_size: int = 2048, opacity: float = 1.0, 
 
     bands = []
     t = None
+    ok = None
     for k in range(3):
         v, t = reduce(da.isel({da.dims[0]: k}), max_size, False)
-        ok = np.isfinite(v)
-        lo, hi = np.percentile(v[ok], (2, 98)) if ok.any() else (0, 1)
-        bands.append(np.clip((v - lo) / max(hi - lo, 1e-12) * 255, 0, 255))
+        valid = _valid(v, da.rio.nodata)  # NoData out of the stretch, and transparent
+        ok = valid if ok is None else ok & valid
+        lo, hi = np.percentile(v[valid], (2, 98)) if valid.any() else (0, 1)
+        bands.append(np.clip((v.astype(np.float32) - lo) / max(hi - lo, 1e-12) * 255, 0, 255))
     rgb = np.stack(bands, -1)
-    ok = np.isfinite(rgb).all(-1)
     rgba = np.zeros(rgb.shape[:2] + (4,), np.uint8)
     rgba[..., :3] = np.nan_to_num(rgb).astype(np.uint8)
     rgba[..., 3] = np.where(ok, int(255 * opacity), 0)

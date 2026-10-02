@@ -17,6 +17,11 @@ In a notebook (Jupyter, JupyterLab, VS Code, Colab) the plot shows inline. In a
 script it opens in a window of its own ([pywebview](https://pywebview.flowrl.com/),
 installed with Landschaft), or in the web browser where no window can open.
 
+A plot saved as `.html` is a single file that opens without a network connection:
+the map library and the chart library are in the page, only the satellite imagery
+and the other base maps come from the web. Send it to a colleague or open it in
+the field; with `basemap=None` nothing at all is downloaded.
+
 ## What is drawn, and how
 
 | Input | Plot |
@@ -57,7 +62,11 @@ p = ls.plot(landcover == 23, cmap={0: "#f4f1de", 1: "#2d6a4f"},
 - `labels`: `{value: name}`, the names of the classes; a class given a
   transparent colour (`"#00000000"`) is left out of the map and the legend;
 - `categorical`: `True` draws the values as classes, `False` on a ramp;
-- `vmin`, `vmax`, `log`: the range of the ramp and a log scale;
+- `vmin`, `vmax`, `log`: the range of the ramp and a log scale, for rasters and
+  for the column of a vector layer; values beyond the range take the colour of
+  its end, marked `≤` and `≥` in the legend;
+- `bands`: the bands of a stack to draw, by their names or the band numbers of
+  the file (`bands=[4, 3, 2]`);
 - `column`: the column of a vector layer that colours it;
 - `basemap`: `"satellite"` (default), `"osm"`, `"topo"`, `"light"`, `"relief"`
   or `None`; the others stay selectable in the map's layer control.

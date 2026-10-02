@@ -18,7 +18,7 @@ MAX_TOOLTIP = 6
 _MISSING = "#808080"
 
 
-def _colours(gdf, column, cmap, categorical):
+def _colours(gdf, column, cmap, categorical, vmin=None, vmax=None, log=None):
     """A palette index per feature (-1: no value), the palette (hex) and the legend; vectorised."""
     if column is None:
         return None, None, None
@@ -27,16 +27,31 @@ def _colours(gdf, column, cmap, categorical):
     values = gdf[column]
     numeric = _palettes.is_number(values.dtype) and categorical is not True
     if numeric and (categorical is False or values.nunique(dropna=True) > 12):
-        v = values.to_numpy(np.float64)
+        v = values.to_numpy(np.float64, na_value=np.nan)
         ok = np.isfinite(v)
-        lo, hi = (np.percentile(v[ok], (2, 98)) if ok.any() else (0.0, 1.0))
-        hi = hi if hi > lo else lo + 1.0
+        log = bool(log)
+        if vmin is None or vmax is None:
+            sample = v[ok & (v > 0)] if log else v[ok]
+            lo, hi = np.percentile(np.log10(sample) if log else sample, (2, 98)) if sample.size else (0.0, 1.0)
+            lo, hi = (10 ** lo, 10 ** hi) if log else (lo, hi)
+            lo = lo if vmin is None else vmin
+            hi = hi if vmax is None else vmax
+        else:
+            lo, hi = vmin, vmax
+        lo, hi = float(lo), float(hi)
+        if hi <= lo:
+            hi = lo * 10 if log and lo > 0 else lo + 1.0
         table = _palettes.lut(cmap if isinstance(cmap, (str, list, tuple)) else "viridis", 255)
-        codes = np.clip((np.nan_to_num(v, nan=lo) - lo) / (hi - lo) * 254 + 0.5, 0, 254).astype(np.int64)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            x = ((np.log10(np.maximum(v, lo)) - np.log10(lo)) / (np.log10(hi) - np.log10(lo)) if log
+                 else (v - lo) / (hi - lo))
+        codes = np.clip(np.nan_to_num(x, nan=0.0) * 254 + 0.5, 0, 254).astype(np.int64)
         codes[~ok] = -1
         palette = [_palettes.rgb_to_hex(c) for c in table]
         stops = palette[:: 255 // 8] + [palette[-1]]
-        return codes, palette, Legend(str(column), ramp=stops, vmin=float(lo), vmax=float(hi))
+        under = bool(ok.any() and v[ok].min() < lo)
+        over = bool(ok.any() and v[ok].max() > hi)
+        return codes, palette, Legend(str(column), ramp=stops, vmin=lo, vmax=hi, log=log, under=under, over=over)
     codes, cats = pd.factorize(values, sort=False)
     cats = list(cats)
     if isinstance(cmap, dict):
@@ -92,9 +107,11 @@ def _layer_class():
         onEachFeature: function(f, layer) {
             var keys = {{ this.fields|tojson }};
             if (keys.length) {
+                var esc = function(v) { return String(v).replace(/[&<>"]/g, function(c) {
+                    return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); };
                 layer.bindTooltip("<table>" + keys.map(function(k) {
-                    return "<tr><th style='text-align:left;padding-right:8px'>" + k + "</th><td>" +
-                           f.properties[k] + "</td></tr>"; }).join("") + "</table>", {sticky: false});
+                    return "<tr><th style='text-align:left;padding-right:8px'>" + esc(k) + "</th><td>" +
+                           esc(f.properties[k]) + "</td></tr>"; }).join("") + "</table>", {sticky: false});
             }
         }
     });
@@ -114,7 +131,7 @@ def _layer_class():
 
 
 def layer(gdf, *, column=None, cmap=None, categorical=None, color: str = "#ffd60a", opacity: float = 0.7,
-          name: str | None = None, max_size: int = 2048, tooltip: bool = True):
+          name: str | None = None, max_size: int = 2048, tooltip: bool = True, vmin=None, vmax=None, log=None):
     """A vector layer for a folium map: ("geojson", folium layer, legend) or ("image", Image, legend)."""
     import shapely
 
@@ -123,7 +140,7 @@ def layer(gdf, *, column=None, cmap=None, categorical=None, color: str = "#ffd60
     keep_rows = ~shapely.is_missing(geoms) & ~shapely.is_empty(geoms)
     if not keep_rows.all():
         gdf = gdf[keep_rows]
-    codes, palette, legend = _colours(gdf, column, cmap, categorical)
+    codes, palette, legend = _colours(gdf, column, cmap, categorical, vmin, vmax, log)
     vertices = int(shapely.get_num_coordinates(gdf.geometry.values).sum())
     if len(gdf) > MAX_FEATURES or vertices > MAX_VERTICES:
         return "image", _as_image(gdf, codes, palette, color, opacity, name, max_size, legend), legend

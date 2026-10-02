@@ -46,7 +46,9 @@ def _legend(ax, legend: Legend | None) -> None:
         norm = LogNorm(legend.vmin, legend.vmax) if legend.log and legend.vmin > 0 else Normalize(legend.vmin,
                                                                                                  legend.vmax)
         sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
-        cb = ax.figure.colorbar(sm, ax=ax, shrink=0.75, pad=0.02)
+        extend = {(True, True): "both", (True, False): "min", (False, True): "max"}.get((legend.under, legend.over),
+                                                                                       "neither")
+        cb = ax.figure.colorbar(sm, ax=ax, shrink=0.75, pad=0.02, extend=extend)
         cb.set_label(legend.title)
 
 
