@@ -11,9 +11,14 @@ import landschaft as ls
 
 occ = ls.load_table(ls.sdm.example_data("bradypus"))
 env = ls.load_raster(ls.sdm.example_data("bioclim"))
-occ = ls.sdm.one_per_cell(occ, env)                     # one record per predictor cell
-m = ls.sdm.accessible_area(occ, distance=300_000)       # where the background comes from
+data = ls.sdm.prepare(occ, env)          # clean, one per cell, predictors, background, spatial folds
+res = ls.sdm.fit(data, models)           # cross-validated scikit-learn models (or ls.sdm.MaxNet)
+suit = ls.sdm.predict(res, env)          # ensemble and its uncertainty
 ```
+
+## The whole preparation
+
+::: landschaft.sdm.prepare
 
 ## Occurrence records
 
@@ -78,6 +83,18 @@ m = ls.sdm.accessible_area(occ, distance=300_000)       # where the background c
 ::: landschaft.sdm.mop
 
 ::: landschaft.sdm.exdet
+
+## Models and projections
+
+::: landschaft.sdm.fit
+
+::: landschaft.sdm.SDMResult
+
+::: landschaft.sdm.predict
+
+::: landschaft.sdm.response_curves
+
+::: landschaft.sdm.importance
 
 ## Example data
 

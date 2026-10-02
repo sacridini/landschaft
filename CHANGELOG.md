@@ -39,8 +39,13 @@ between minor versions.
   MESS, the same values), `ls.sdm.mop` (the mop package: out-of-range codes and distances to the
   nearest reference conditions in C++; the Mahalanobis distance with the reference's covariance,
   where mop used that of the cells tested) and `ls.sdm.exdet` (dsmextra's NT1 / NT2, with its
-  combinatorial "most influential covariate" numbered the right way round), and the reference
-  harness
+  combinatorial "most influential covariate" numbered the right way round), and the pipeline:
+  `ls.sdm.prepare` (every step in one call with sensible defaults, each step skipped, set by a
+  number, a dict of its arguments or a function; `report`, `settings` and `redo()`), `ls.sdm.fit`
+  (any scikit-learn estimator, cross-validated on the folds: AUC, TSS, Boyce, omission rates and
+  overfitting per fold), `ls.sdm.predict` (in blocks of rows, lazy rasters included; weighted
+  ensemble and the spread between models; clamping to the data's ranges),
+  `ls.sdm.response_curves` and `ls.sdm.importance`, and the reference harness
   (`tools/make_reference_sdm.py`).
 - R data files (`.rda`, `.rds`) are read without R (`landschaft._rdata`), so the reference tables
   of R packages (CoordinateCleaner's centroids, capitals, institutions, land and sea) are used as

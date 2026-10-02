@@ -35,13 +35,16 @@ from ._folds import (
     spatial_blocks,
 )
 from ._gbif import download_gbif
+from ._models import SDMResult, fit, importance, predict, response_curves
 from ._predictors import select_predictors, vif
+from ._prepare import prepare
 from ._refdata import reference_data
 from ._thin import thin
 
 __all__ = [
     "Evaluation",
     "SDMData",
+    "SDMResult",
     "accessible_area",
     "background",
     "boyce",
@@ -52,15 +55,20 @@ __all__ = [
     "download_gbif",
     "evaluate",
     "example_data",
+    "importance",
     "exdet",
+    "fit",
     "jackknife_folds",
     "mess",
     "mop",
     "omission_rate",
     "one_per_cell",
+    "predict",
+    "prepare",
     "quadrant_folds",
     "random_folds",
     "reference_data",
+    "response_curves",
     "select_predictors",
     "spatial_blocks",
     "thin",
