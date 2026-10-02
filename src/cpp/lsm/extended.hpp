@@ -44,6 +44,8 @@ public:
     friend SoftExtended operator-(const SoftExtended& a, const SoftExtended& b) { return add(a, b, true); }
     friend SoftExtended operator*(const SoftExtended& a, const SoftExtended& b);
     friend SoftExtended operator/(const SoftExtended& a, const SoftExtended& b);
+    // sqrtl(): the square root rounded to the 64-bit mantissa (the x87's fsqrt)
+    friend SoftExtended sqrt_ext(const SoftExtended& a);
     SoftExtended& operator+=(const SoftExtended& b) { return *this = *this + b; }
     // Accumulating a double: fast path for a same-sign addend no larger
     // than the sum (the common case of sums of positive values).
@@ -323,11 +325,50 @@ inline SoftExtended operator/(const SoftExtended& a, const SoftExtended& b) {
     return SoftExtended::round(hi, lo, e, neg);
 }
 
+inline SoftExtended sqrt_ext(const SoftExtended& a) {
+    using U = std::uint64_t;
+    if (a.kind_ == SoftExtended::kNan || (a.neg_ && a.kind_ != SoftExtended::kZero))
+        return SoftExtended::special(SoftExtended::kNan, false);
+    if (a.kind_ != SoftExtended::kFinite) return a;  // +-0, +inf
+    // a = m * 2^E with m in [2^63, 2^64): N = m * 2^k in [2^126, 2^128) with k + E even, so that
+    // sqrt(a) = sqrt(N) * 2^((E - k) / 2) and isqrt(N) has exactly 64 bits
+    const std::int32_t E = a.e_;
+    const int k = (E % 2 == 0) ? 64 : 63;
+    const U nhi = k == 64 ? a.m_ : (a.m_ >> 1);
+    const U nlo = k == 64 ? 0 : (a.m_ << 63);
+    auto le = [&](U g) {  // g * g <= N
+        const SoftExtended::U128 sq = SoftExtended::mul64(g, g);
+        return sq.hi < nhi || (sq.hi == nhi && sq.lo <= nlo);
+    };
+    double approx = std::sqrt(std::ldexp(static_cast<double>(nhi), 64) + static_cast<double>(nlo));
+    U g = approx >= 18446744073709551615.0 ? ~U(0) : static_cast<U>(approx);
+    if (g < (U(1) << 63)) g = U(1) << 63;
+    // one Newton step from the double estimate, then exact corrections
+    if (nhi < g) {
+        U rem;
+        const U q = SoftExtended::div128(nhi, nlo, g, &rem);
+        const U sum_lo = g + q;
+        const bool carry = sum_lo < g;
+        g = (sum_lo >> 1) | (carry ? (U(1) << 63) : 0);
+    }
+    while (!le(g)) --g;
+    while (g != ~U(0) && le(g + 1)) ++g;
+    // the fraction of sqrt(N) beyond g: above one half iff N - g^2 > g (never exactly one half)
+    const SoftExtended::U128 sq = SoftExtended::mul64(g, g);
+    const U rlo = nlo - sq.lo;
+    const U rhi = nhi - sq.hi - (nlo < sq.lo ? 1 : 0);
+    const bool exact = rhi == 0 && rlo == 0;
+    const bool above = rhi != 0 || rlo > g;
+    const U frac = exact ? 0 : (above ? (U(3) << 62) : (U(1) << 62));
+    return SoftExtended::round(g, frac, (E - k) / 2 - 64, false);
+}
+
 // Windows starts threads with the x87 unit at 53-bit precision (MinGW only
 // switches to 64 bits in programs it builds), so a MinGW module loaded by
 // Python would round every long double to double: emulate there too.
 #if LDBL_MANT_DIG == 64 && !defined(_WIN32)
 using Extended = long double;
+inline long double sqrt_ext(long double a) { return std::sqrt(a); }
 #else
 using Extended = SoftExtended;
 #endif

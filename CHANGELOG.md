@@ -31,8 +31,11 @@ between minor versions.
   the same folds for the same seed; on longitude / latitude data with straight block edges, and
   offsets in the blocks' own units, where blockCV mixes metres and degrees), `ls.sdm.buffer_folds`
   (blockCV's `cv_buffer`), and ENMeval's partitions `ls.sdm.quadrant_folds` ("block"),
-  `ls.sdm.checkerboard_folds`, `ls.sdm.random_folds` and `ls.sdm.jackknife_folds`, and the reference
-  harness
+  `ls.sdm.checkerboard_folds`, `ls.sdm.random_folds` and `ls.sdm.jackknife_folds`, evaluation:
+  `ls.sdm.evaluate` (predicts' `pa_evaluate`: AUC, kappa, TSS and the rest per threshold, the usual
+  thresholds, the same values), `ls.sdm.boyce` (ecospat's continuous Boyce index without its "+1
+  trick", which made the index depend on the scale of the predictions), `ls.sdm.threshold` and
+  `ls.sdm.omission_rate` (ENMeval's `or.mtp` / `or.10p`), and the reference harness
   (`tools/make_reference_sdm.py`).
 - R data files (`.rda`, `.rds`) are read without R (`landschaft._rdata`), so the reference tables
   of R packages (CoordinateCleaner's centroids, capitals, institutions, land and sea) are used as
@@ -41,6 +44,9 @@ between minor versions.
   checksum (`LANDSCHAFT_CACHE`).
 
 ### Changed
+- R's weighted sampling without replacement (`sample.int(..., prob = )`, used by the neutral landscape
+  models and ls.sdm) runs in closed form over runs of equal weights with a Fenwick tree, the same
+  draws as R: 1 million cells and 30 000 draws in 0.24 s instead of 16-20 s.
 - `ls.load_table` reads delimited text saved in Windows-1252 / Latin-1 (as Excel on Windows often
   saves it) when it is not valid UTF-8; `encoding=` sets it explicitly.
 

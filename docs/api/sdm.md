@@ -59,6 +59,18 @@ m = ls.sdm.accessible_area(occ, distance=300_000)       # where the background c
 
 ::: landschaft.sdm.jackknife_folds
 
+## Evaluation
+
+::: landschaft.sdm.evaluate
+
+::: landschaft.sdm.Evaluation
+
+::: landschaft.sdm.boyce
+
+::: landschaft.sdm.threshold
+
+::: landschaft.sdm.omission_rate
+
 ## Example data
 
 ::: landschaft.sdm.example_data

@@ -1,0 +1,306 @@
+{
+ "arrays": {
+  "boyce_breaks/cor": {
+   "kind": "vector"
+  },
+  "boyce_breaks/f": {
+   "kind": "vector"
+  },
+  "boyce_breaks/hs": {
+   "kind": "vector"
+  },
+  "boyce_breaks/used": {
+   "kind": "vector"
+  },
+  "boyce_default/cor": {
+   "kind": "vector"
+  },
+  "boyce_default/f": {
+   "kind": "vector"
+  },
+  "boyce_default/hs": {
+   "kind": "vector"
+  },
+  "boyce_default/used": {
+   "kind": "vector"
+  },
+  "boyce_keep_duplicates/cor": {
+   "kind": "vector"
+  },
+  "boyce_keep_duplicates/f": {
+   "kind": "vector"
+  },
+  "boyce_keep_duplicates/hs": {
+   "kind": "vector"
+  },
+  "boyce_keep_duplicates/used": {
+   "kind": "vector"
+  },
+  "boyce_kendall/cor": {
+   "kind": "vector"
+  },
+  "boyce_kendall/f": {
+   "kind": "vector"
+  },
+  "boyce_kendall/hs": {
+   "kind": "vector"
+  },
+  "boyce_kendall/used": {
+   "kind": "vector"
+  },
+  "boyce_nclass/cor": {
+   "kind": "vector"
+  },
+  "boyce_nclass/f": {
+   "kind": "vector"
+  },
+  "boyce_nclass/hs": {
+   "kind": "vector"
+  },
+  "boyce_nclass/used": {
+   "kind": "vector"
+  },
+  "boyce_pearson/cor": {
+   "kind": "vector"
+  },
+  "boyce_pearson/f": {
+   "kind": "vector"
+  },
+  "boyce_pearson/hs": {
+   "kind": "vector"
+  },
+  "boyce_pearson/used": {
+   "kind": "vector"
+  },
+  "boyce_scale1000/cor": {
+   "kind": "vector"
+  },
+  "boyce_scale1000/f": {
+   "kind": "vector"
+  },
+  "boyce_scale1000/hs": {
+   "kind": "vector"
+  },
+  "boyce_scale1000/used": {
+   "kind": "vector"
+  },
+  "boyce_small/cor": {
+   "kind": "vector"
+  },
+  "boyce_small/f": {
+   "kind": "vector"
+  },
+  "boyce_small/hs": {
+   "kind": "vector"
+  },
+  "boyce_small/used": {
+   "kind": "vector"
+  },
+  "boyce_window/cor": {
+   "kind": "vector"
+  },
+  "boyce_window/f": {
+   "kind": "vector"
+  },
+  "boyce_window/hs": {
+   "kind": "vector"
+  },
+  "boyce_window/used": {
+   "kind": "vector"
+  },
+  "omission_beta/mtp1": {
+   "kind": "vector"
+  },
+  "omission_beta/mtp10": {
+   "kind": "vector"
+  },
+  "omission_beta/mtp11": {
+   "kind": "vector"
+  },
+  "omission_beta/mtp2": {
+   "kind": "vector"
+  },
+  "omission_beta/mtp29": {
+   "kind": "vector"
+  },
+  "omission_beta/mtp5": {
+   "kind": "vector"
+  },
+  "omission_beta/mtp9": {
+   "kind": "vector"
+  },
+  "omission_beta/p101": {
+   "kind": "vector"
+  },
+  "omission_beta/p1010": {
+   "kind": "vector"
+  },
+  "omission_beta/p1011": {
+   "kind": "vector"
+  },
+  "omission_beta/p102": {
+   "kind": "vector"
+  },
+  "omission_beta/p1029": {
+   "kind": "vector"
+  },
+  "omission_beta/p105": {
+   "kind": "vector"
+  },
+  "omission_beta/p109": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/auc": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/ccr": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/cor": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/fnr": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/fpr": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/kappa": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/mcr": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/npp": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/or": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/pcor": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/ppp": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/thresholds": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/tnr": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/tpr": {
+   "kind": "vector"
+  },
+  "pa_eval_beta/tr": {
+   "kind": "vector"
+  },
+  "pa_eval_big/auc": {
+   "kind": "vector"
+  },
+  "pa_eval_big/ccr": {
+   "kind": "vector"
+  },
+  "pa_eval_big/cor": {
+   "kind": "vector"
+  },
+  "pa_eval_big/fnr": {
+   "kind": "vector"
+  },
+  "pa_eval_big/fpr": {
+   "kind": "vector"
+  },
+  "pa_eval_big/kappa": {
+   "kind": "vector"
+  },
+  "pa_eval_big/mcr": {
+   "kind": "vector"
+  },
+  "pa_eval_big/npp": {
+   "kind": "vector"
+  },
+  "pa_eval_big/or": {
+   "kind": "vector"
+  },
+  "pa_eval_big/pcor": {
+   "kind": "vector"
+  },
+  "pa_eval_big/ppp": {
+   "kind": "vector"
+  },
+  "pa_eval_big/thresholds": {
+   "kind": "vector"
+  },
+  "pa_eval_big/tnr": {
+   "kind": "vector"
+  },
+  "pa_eval_big/tpr": {
+   "kind": "vector"
+  },
+  "pa_eval_big/tr": {
+   "kind": "vector"
+  },
+  "pa_eval_small/auc": {
+   "kind": "vector"
+  },
+  "pa_eval_small/ccr": {
+   "kind": "vector"
+  },
+  "pa_eval_small/cor": {
+   "kind": "vector"
+  },
+  "pa_eval_small/fnr": {
+   "kind": "vector"
+  },
+  "pa_eval_small/fpr": {
+   "kind": "vector"
+  },
+  "pa_eval_small/kappa": {
+   "kind": "vector"
+  },
+  "pa_eval_small/mcr": {
+   "kind": "vector"
+  },
+  "pa_eval_small/npp": {
+   "kind": "vector"
+  },
+  "pa_eval_small/or": {
+   "kind": "vector"
+  },
+  "pa_eval_small/pcor": {
+   "kind": "vector"
+  },
+  "pa_eval_small/ppp": {
+   "kind": "vector"
+  },
+  "pa_eval_small/thresholds": {
+   "kind": "vector"
+  },
+  "pa_eval_small/tnr": {
+   "kind": "vector"
+  },
+  "pa_eval_small/tpr": {
+   "kind": "vector"
+  },
+  "pa_eval_small/tr": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.4.2 (2024-10-31 ucrt)",
+ "versions": {
+  "CoordinateCleaner": "3.0.1",
+  "ENMeval": "2.0.5.2",
+  "biomod2": "4.3.4.5",
+  "blockCV": "3.2.0",
+  "dismo": "1.3.16",
+  "ecospat": "4.1.3",
+  "glmnet": "4.1.10",
+  "maxnet": "0.1.4",
+  "mop": "0.1.4",
+  "predicts": "0.1.19",
+  "sf": "1.0.19",
+  "spThin": "0.2.0",
+  "terra": "1.9.50",
+  "usdm": "2.1.7"
+ }
+}

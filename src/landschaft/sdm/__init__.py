@@ -23,6 +23,7 @@ from ._background import background
 from ._cells import one_per_cell
 from ._clean import clean_occurrences
 from ._data import SDMData, dataset
+from ._evaluate import Evaluation, boyce, evaluate, omission_rate, threshold
 from ._examples import example_data
 from ._folds import (
     buffer_folds,
@@ -38,16 +39,20 @@ from ._refdata import reference_data
 from ._thin import thin
 
 __all__ = [
+    "Evaluation",
     "SDMData",
     "accessible_area",
     "background",
+    "boyce",
     "buffer_folds",
     "checkerboard_folds",
     "clean_occurrences",
     "dataset",
     "download_gbif",
+    "evaluate",
     "example_data",
     "jackknife_folds",
+    "omission_rate",
     "one_per_cell",
     "quadrant_folds",
     "random_folds",
@@ -55,5 +60,6 @@ __all__ = [
     "select_predictors",
     "spatial_blocks",
     "thin",
+    "threshold",
     "vif",
 ]

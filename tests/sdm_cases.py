@@ -19,7 +19,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background", "folds"]
+GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background", "folds", "evaluate"]
 
 
 @dataclass
@@ -281,7 +281,45 @@ def brad_points():
     return gpd.GeoDataFrame({"occ": d.y.astype(float)}, geometry=d.coords.geometry.to_numpy(), crs="EPSG:4326")
 
 
+def eval_small() -> pd.DataFrame:
+    """predicts' example of ties: 7 presences, 8 background values."""
+    p = [0.9, 0.8, 0.8, 0.7, 0.6, 0.55, 0.3]
+    a = [0.8, 0.5, 0.4, 0.4, 0.3, 0.2, 0.1, 0.05]
+    return pd.DataFrame({"pred": p + a, "y": [1.0] * len(p) + [0.0] * len(a)})
+
+
+def eval_beta() -> pd.DataFrame:
+    """200 uniform background predictions (3 decimals) and 30 presences skewed high (Beta(4, 1.5)-like)."""
+    from landschaft import _core
+
+    r = _core.RRandom(1)
+    fit = np.round(r.runif(200, 0.0, 1.0), 3)
+    u = r.runif(30, 0.0, 1.0)
+    obs = np.round(1 - (1 - u) ** 0.6, 3)  # high values more likely
+    return pd.DataFrame({"pred": np.concatenate([obs, fit]), "y": [1.0] * 30 + [0.0] * 200})
+
+
+def eval_big() -> pd.DataFrame:
+    """1500 presences and 1200 background predictions: quantile thresholds."""
+    from landschaft import _core
+
+    r = _core.RRandom(7)
+    p = np.round(r.runif(1500, 0.2, 1.0), 4)
+    a = np.round(r.runif(1200, 0.0, 0.8), 4)
+    return pd.DataFrame({"pred": np.concatenate([p, a]), "y": [1.0] * 1500 + [0.0] * 1200})
+
+
+def eval_scale1000() -> pd.DataFrame:
+    d = eval_beta()
+    d["pred"] = d["pred"] * 1000
+    return d
+
+
 INPUTS: dict[str, Callable[[], object]] = {
+    "eval_small": eval_small,
+    "eval_beta": eval_beta,
+    "eval_big": eval_big,
+    "eval_scale1000": eval_scale1000,
     "cc_edges": cc_edges,
     "blk_points": blk_points,
     "blk_grid": blk_grid,
@@ -670,6 +708,89 @@ def _cc_edges_py(**kw):
 
 
 CASES["clean_edges"] = Case("clean", r=_CC_EDGES_R, inputs=("cc_edges",), py=_cc_edges_py)
+
+
+_BOYCE_R = ("{{ source(file.path(TOOLS, 'ecospat_fixed.R')); d <- {d}; obs <- d$pred[d$y == 1]; "
+            "fit <- d$pred[d$y == 0]; b <- ecospat_boyce_fixed(c(fit, obs), obs{args}); "
+            "list(cor = b$cor, f = b$F.ratio, hs = b$HS, used = b$used) }}")
+
+
+def _boyce_py(d: str, **opts):
+    def run(**kw):
+        import landschaft as ls
+
+        x = kw[d]
+        obs = x["pred"][x["y"] == 1].to_numpy()
+        fit = x["pred"][x["y"] == 0].to_numpy()
+        b = ls.sdm.boyce(obs, np.concatenate([fit, obs]), **opts)
+        return {"cor": [b["cor"]], "f": b["f_ratio"], "hs": b["hs"], "used": b["used"]}
+    return run
+
+
+for _name, _d, _args, _opts in [
+    ("boyce_default", "eval_beta", "", {}),
+    ("boyce_scale1000", "eval_scale1000", "", {}),
+    ("boyce_nclass", "eval_beta", ", nclass = 5", {"nclass": 5}),
+    ("boyce_pearson", "eval_beta", ", method = 'pearson'", {"method": "pearson"}),
+    ("boyce_kendall", "eval_beta", ", method = 'kendall'", {"method": "kendall"}),
+    ("boyce_keep_duplicates", "eval_beta", ", rm.duplicate = FALSE", {"rm_duplicate": False}),
+    ("boyce_window", "eval_beta", ", window.w = 0.25, res = 20", {"window": 0.25, "res": 20}),
+    ("boyce_breaks", "eval_beta", ", nclass = c(-1, 0.2, 0.5, 0.7, 1.5)", {"nclass": [-1, 0.2, 0.5, 0.7, 1.5]}),
+    ("boyce_small", "eval_small", "", {}),
+]:
+    CASES[_name] = Case("evaluate", r=_BOYCE_R.format(d=_d, args=_args), inputs=(_d,), py=_boyce_py(_d, **_opts))
+
+_PA_R = ("{{ suppressMessages(library(predicts)); d <- {d}; e <- pa_evaluate(d$pred[d$y == 1], d$pred[d$y == 0]); "
+         "s <- e@tr_stats; th <- e@thresholds; "
+         "list(auc = e@stats$auc, cor = e@stats$cor, pcor = e@stats$pcor, tr = s$treshold, kappa = s$kappa, "
+         "ccr = s$CCR, tpr = s$TPR, tnr = s$TNR, fpr = s$FPR, fnr = s$FNR, ppp = s$PPP, npp = s$NPP, mcr = s$MCR, "
+         "or = s$OR, thresholds = c(th$max_kappa, th$max_spec_sens, th$no_omission, th$equal_prevalence, "
+         "th$equal_sens_spec)) }}")
+
+
+def _pa_py(d: str):
+    def run(**kw):
+        import landschaft as ls
+
+        x = kw[d]
+        e = ls.sdm.evaluate(x["pred"][x["y"] == 1].to_numpy(), x["pred"][x["y"] == 0].to_numpy())
+        tb = e.table
+        th = e.thresholds
+        out = {"auc": [e.stats["auc"]], "cor": [e.stats["cor"]], "pcor": [e.stats["pcor"]],
+               "tr": tb["threshold"].to_numpy(),
+               "thresholds": [th[k] for k in ("max_kappa", "max_spec_sens", "no_omission", "equal_prevalence",
+                                              "equal_sens_spec")]}
+        for c in ("kappa", "ccr", "tpr", "tnr", "fpr", "fnr", "ppp", "npp", "mcr", "or"):
+            out[c] = tb[c].to_numpy()
+        return out
+    return run
+
+
+for _d in ("eval_small", "eval_beta", "eval_big"):
+    CASES[f"pa_{_d}"] = Case("evaluate", r=_PA_R.format(d=_d), inputs=(_d,), py=_pa_py(_d))
+
+_OR_R = ("{{ suppressMessages(library(ENMeval)); d <- {d}; p <- d$pred[d$y == 1]; out <- list(); "
+         "for (n in c(1, 2, 5, 9, 10, 11, 29)) {{ tr <- p[seq_len(n)]; te <- p[-seq_len(n)]; "
+         "out[[paste0('mtp', n)]] <- mean(te < min(tr)); "
+         "out[[paste0('p10', n)]] <- mean(te < ENMeval:::calc.10p.trainThresh(tr)) }}; out }}")
+
+
+def _or_py(d: str):
+    def run(**kw):
+        import landschaft as ls
+
+        x = kw[d]
+        p = x["pred"][x["y"] == 1].to_numpy()
+        out = {}
+        for n in (1, 2, 5, 9, 10, 11, 29):
+            tr, te = p[:n], p[n:]
+            out[f"mtp{n}"] = [ls.sdm.omission_rate(tr, te, "mtp")]
+            out[f"p10{n}"] = [ls.sdm.omission_rate(tr, te, "p10")]
+        return out
+    return run
+
+
+CASES["omission_beta"] = Case("evaluate", r=_OR_R.format(d="eval_beta"), inputs=("eval_beta",), py=_or_py("eval_beta"))
 
 
 def case_ids(group: str) -> list[str]:
