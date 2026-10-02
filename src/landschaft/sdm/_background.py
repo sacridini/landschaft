@@ -229,10 +229,10 @@ def background(env, n: int = 10_000, *, occ=None, area=None, bias=None, distance
         raise ValueError("no cell with data to draw from")
     lonlat = lonlat_correction and _could_be_lonlat(env)
     dx = None
-    if lonlat:
-        rows = cells // nx
-        yc = ymax - (rows + 0.5) * yres
-        dx = _core.cost_geodesic(np.zeros(yc.size), yc, np.full(yc.size, xres), yc)
+    if lonlat:  # the east-west width of each row's cells (raster's pointDistance), then per cell
+        yc = ymax - (np.arange(ny) + 0.5) * yres
+        width = _core.cost_geodesic(np.zeros(ny), yc, np.full(ny, xres), yc)
+        dx = width[cells // nx]
     if bias is not None:
         prob = b[cells]
         if lonlat:
