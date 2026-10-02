@@ -15,27 +15,26 @@ Riitters, K., et al. (2002). Fragmentation of continental United States forests.
 
 from __future__ import annotations
 
-from ._threads import threaded
-
 import io
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
 from . import _core
-from .io import FAD_COLORMAP
-from .validation import validate_fad_input, validate_mspa_input
 from ._save import Saveable
+from ._threads import threaded
+from .validation import validate_fad_input, validate_mspa_input
 
 __all__ = [
+    "FAD_CLASSES",
+    "FADMultiscaleResult",
+    "FADResult",
     "fad",
     "fad_multiscale",
-    "FADResult",
-    "FADMultiscaleResult",
-    "FAD_CLASSES",
 ]
 
 FAD_CLASSES: dict[int, str] = {

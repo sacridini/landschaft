@@ -8,9 +8,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from gtb_reference import find_executable
 from rasterio.errors import NotGeoreferencedWarning
 
-from gtb_reference import find_executable
 from landschaft import _core
 
 DATA = Path(__file__).parent / "data"
