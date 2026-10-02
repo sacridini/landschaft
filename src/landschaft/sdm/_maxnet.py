@@ -221,7 +221,7 @@ class MaxNet(_Classifier, _Base):
     @staticmethod
     def _codes(s: pd.Series, levels: list) -> np.ndarray:
         values = s.astype(object) if isinstance(s.dtype, pd.CategoricalDtype) else s
-        codes = pd.Categorical(values, categories=levels).codes.astype(np.int32)
+        codes = pd.Index(levels).get_indexer(values).astype(np.int32)
         codes[(codes == -1) & s.notna().to_numpy()] = -2  # a level not seen in training
         return codes
 
