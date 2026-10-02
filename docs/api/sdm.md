@@ -54,6 +54,8 @@ suit = ls.sdm.predict(res, env)          # ensemble and its uncertainty
 
 ::: landschaft.sdm.spatial_blocks
 
+::: landschaft.sdm.autocorrelation_range
+
 ::: landschaft.sdm.buffer_folds
 
 ::: landschaft.sdm.quadrant_folds

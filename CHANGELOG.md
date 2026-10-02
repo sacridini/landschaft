@@ -30,7 +30,8 @@ between minor versions.
   (blockCV's `cv_spatial`: square or hexagonal blocks, random / systematic / checkerboard selection,
   the same folds for the same seed; on longitude / latitude data with straight block edges, and
   offsets in the blocks' own units, where blockCV mixes metres and degrees), `ls.sdm.buffer_folds`
-  (blockCV's `cv_buffer`), and ENMeval's partitions `ls.sdm.quadrant_folds` ("block"),
+  (blockCV's `cv_buffer`), `ls.sdm.autocorrelation_range` (blockCV's `cv_spatial_autocor`: automap's
+  variogram classes and models with gstat's Gauss-Newton fit, ranges to 1e-6), and ENMeval's partitions `ls.sdm.quadrant_folds` ("block"),
   `ls.sdm.checkerboard_folds`, `ls.sdm.random_folds` and `ls.sdm.jackknife_folds`, evaluation:
   `ls.sdm.evaluate` (predicts' `pa_evaluate`: AUC, kappa, TSS and the rest per threshold, the usual
   thresholds, the same values), `ls.sdm.boyce` (ecospat's continuous Boyce index without its "+1

@@ -19,7 +19,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background", "folds", "evaluate", "extrapolation"]
+GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background", "folds", "evaluate", "extrapolation", "autocorrelation"]
 
 
 @dataclass
@@ -339,7 +339,26 @@ def tg_small() -> pd.DataFrame:
     return d
 
 
+def smooth_field():
+    """Two smooth random fields (moving averages of noise) on a projected 60 x 70 grid of 1 km."""
+    import xarray as xr
+    from scipy.ndimage import uniform_filter
+
+    from landschaft import _core
+
+    r = _core.RRandom(12)
+    layers = []
+    for size in (9, 21):
+        noise = r.rnorm(80 * 90, 0, 1).reshape(80, 90)
+        layers.append(uniform_filter(noise, size=size, mode="wrap")[10:70, 10:80] * 10)
+    da = xr.DataArray(np.stack(layers), dims=("band", "y", "x"),
+                      coords={"band": ["fine", "coarse"], "y": 7_400_000.0 - (np.arange(60) + 0.5) * 1000.0,
+                              "x": 500_000.0 + (np.arange(70) + 0.5) * 1000.0})
+    return da.rio.write_crs("EPSG:32722")
+
+
 INPUTS: dict[str, Callable[[], object]] = {
+    "smooth_field": smooth_field,
     "ref_x": ref_x,
     "env_warm": env_warm,
     "env_small": env_small,
@@ -896,6 +915,50 @@ def _exdet_py(**kw):
 
 CASES["exdet"] = Case("extrapolation", r=_EXDET_R, inputs=("ref_x", "tg_small"), py=_exdet_py,
                       notes="NT2 to tolerance (LAPACK solve)")
+
+
+_AUTOCOR_R = """{{ suppressMessages({{ library(blockCV); library(terra); library(sf); library(gstat) }})
+sf_use_s2(FALSE); r <- {env}; set.seed({seed})
+a <- suppressWarnings(cv_spatial_autocor(r, num_sample = {n}, plot = FALSE, progress = FALSE))
+out <- list(range = a$range)
+for (k in seq_along(a$variograms)) {{ v <- a$variograms[[k]]; e <- as.data.frame(v$exp_var)
+  nm <- names(r)[k]
+  out[[paste0(nm, "/np")]] <- e$np; out[[paste0(nm, "/dist")]] <- e$dist; out[[paste0(nm, "/gamma")]] <- e$gamma
+  out[[paste0(nm, "/fit")]] <- c(v$var_model$psill, v$var_model$range[2], v$var_model$kappa[2]) }}
+out }}"""
+
+
+def _autocor_py(env: str, bands, n: int, seed: int):
+    def run(**kw):
+        import landschaft as ls
+        from landschaft import _core
+        from landschaft.sdm import _autocorrelation as A
+
+        e = kw[env]
+        if bands is not None:
+            e = e.sel(band=bands)
+        res = ls.sdm.autocorrelation_range(e, n=n, seed=seed)
+        out = {"range": [res["range"]]}
+        rng = _core.RRandom(seed)
+        lonlat = A._could_be_lonlat(e) if hasattr(A, "_could_be_lonlat") else False
+        from landschaft.sdm._background import _could_be_lonlat
+
+        for b in e.band.values:
+            x, y, z = A._sample_points(e.sel(band=b), n, rng)
+            f = A._autofit(x, y, z, _could_be_lonlat(e))
+            v = f["variogram"]
+            out[f"{b}/np"] = v["np"].to_numpy()
+            out[f"{b}/dist"] = v["dist"].to_numpy()
+            out[f"{b}/gamma"] = v["gamma"].to_numpy()
+            out[f"{b}/fit"] = [f["nugget"], f["sill"], f["range"], f["kappa"]]
+        return out
+    return run
+
+
+CASES["autocor_bio12"] = Case("autocorrelation", r=_AUTOCOR_R.format(env="bioclim[['bio12']]", seed=1, n=1000),
+                              inputs=("bioclim",), py=_autocor_py("bioclim", ["bio12"], 1000, 1))
+CASES["autocor_field"] = Case("autocorrelation", r=_AUTOCOR_R.format(env="smooth_field", seed=4, n=1500),
+                              inputs=("smooth_field",), py=_autocor_py("smooth_field", None, 1500, 4))
 
 
 def case_ids(group: str) -> list[str]:

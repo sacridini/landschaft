@@ -19,6 +19,7 @@ Typical use::
 """
 
 from ._area import accessible_area
+from ._autocorrelation import autocorrelation_range
 from ._background import background
 from ._cells import one_per_cell
 from ._clean import clean_occurrences
@@ -46,6 +47,7 @@ __all__ = [
     "SDMData",
     "SDMResult",
     "accessible_area",
+    "autocorrelation_range",
     "background",
     "boyce",
     "buffer_folds",
