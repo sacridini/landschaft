@@ -6,6 +6,25 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-02
+
+### Added
+- `ls.plot([before, after], compare=True)`: two rasters or vector layers on one map, either side of
+  a line dragged across it (each side in a Leaflet pane of its own, clipped). Layers of the same
+  colours share one legend card.
+- `ls.plot` of a change between two dates: `simple_change` (the flows between background and
+  foreground as a Sankey diagram, gain in green, loss in red), `fos_change` (the flows between the
+  fragmentation classes of the common foreground), `fad_multiscale_change` (the flows between the
+  FAD classes at one scale, `scale=`, default the multiscale map, and the averages by scale) and
+  `morphological_change` (the counts of each kind of change), with their maps and numbers.
+
+### Fixed
+- `ls.plot`: the legend of a FAD or FOS density map names its classes (`Rare (0-9%)` to
+  `Intact (100%)`, `Background`); the class of each density was named by the code of another
+  (`Patchy` for 2%). The `classes` map of `fad` / `fad_multiscale` is drawn in the colours of the
+  density map (its `landschaft_product` attribute is `"FAD_CLASSES"`), and the change maps name
+  their classes (`Gain`, `Loss`, ΔFOS ranges...).
+
 ## [1.1.0] - 2026-10-02
 
 ### Added
