@@ -267,6 +267,13 @@ def test_pages_open_offline(forest):
     assert _env.plotly_url() is True or _env.plotly_url().startswith("file:")  # a window loads it from disk
 
 
+def test_maps_hidden_at_load_fit_when_shown(forest):
+    # a notebook's output can load hidden, at no size: the view is fitted again once it has one
+    html = page(ls.plot(forest))
+    assert "new ResizeObserver" in html
+    assert html.index("map.fitBounds = function") < html.rindex(".fitBounds(")  # in place before the fit
+
+
 def test_true_colour_leaves_nodata_out():
     v = np.random.default_rng(4).integers(100, 2000, (3, 40, 50)).astype("uint16")
     v[:, :10] = 0

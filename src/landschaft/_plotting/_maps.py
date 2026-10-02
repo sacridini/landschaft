@@ -124,6 +124,23 @@ _SCRIPT = """
     new Full().addTo(map);
     document.addEventListener("fullscreenchange", function() { map.invalidateSize(); });
 
+    // A frame loaded while hidden (a notebook's output not yet on screen) has no size: fitted
+    // then, the map stays on the whole world at zoom 0. The view is fitted again once it has one.
+    var fit = map.fitBounds, unfitted = null, box = map.getContainer();
+    map.fitBounds = function(b, o) {
+        unfitted = (box.clientWidth && box.clientHeight) ? null : [b, o];
+        return fit.call(map, b, o);
+    };
+    if (window.ResizeObserver) {
+        new ResizeObserver(function() {
+            if (unfitted && box.clientWidth && box.clientHeight) {
+                var f = unfitted; unfitted = null;
+                map.invalidateSize(false);
+                fit.call(map, f[0], L.extend({}, f[1], {animate: false}));
+            }
+        }).observe(box);
+    }
+
     var esc = function(v) { return String(v).replace(/[&<>"]/g, function(c) {
         return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); };
     var fmt = function(x) {
