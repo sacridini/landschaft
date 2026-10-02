@@ -1374,11 +1374,16 @@ ls.sdm.mess(data, fut)
 5. **Feito**: `evaluate` (predicts `pa_evaluate` bit a bit; p-valor 1e-9), `boyce`, `threshold`,
    `omission_rate` (ENMeval). `cor(x, y)` do R (`cov_na_2`, com `sqrtl` de 80 bits: `lsm::sqrt_ext`) e `round(x,
    d)` do R portados.
-6. **Feito** (menos o MaxNet como modelo padrão): `prepare` (uma chamada; `report`, `settings`, `redo`), `fit`,
+6. **Feito**: `prepare` (uma chamada; `report`, `settings`, `redo`), `fit`,
    `predict` (em blocos, ensemble ponderado, desvio entre modelos, clamp), `response_curves`, `importance`,
    `mess` (predicts bit a bit), `mop` (mop bit a bit; Mahalanobis 1e-9), `exdet` (dsmextra; NT2 1e-9).
-7. Em andamento: MaxNet em C++ (protótipo bit a bit com o R nos 11 casos da especificação).
-8. Em andamento: capítulo 13 do Learn e tutorial.
+7. **Feito**: `MaxNet` em C++ (`maxnet.cpp`, `lognet.cpp`: o caminho do glmnet com a ordem de soma do Eigen e o
+   `exp` x87 do R), bit a bit com o maxnet em 13 casos (Windows e Linux); 10 mil pontos de background e 20
+   preditores em 0,47 s contra 6,4 s no R (KKT decidido por cota de resíduo e cópia de 16 bits com erro
+   rigoroso; AVX2 com a mesma ordem de soma). Modelo padrão do `fit`.
+8. **Feito**: capítulo 13 do Learn ("Species distributions"; "From question to tool" virou 14), tutorial
+   `docs/tutorials/species-distributions.md`, glossário, leituras, índice da API. Benchmarks contra os pacotes
+   R ficaram nos números dos commits (página de benchmarks: pendente).
 Desempenho: o `sample.int(..., prob)` sem reposição do R ficou exato e rápido (sequências de pesos iguais em
 forma fechada + Fenwick: 1 milhão de células e 30 mil sorteios em 0,24 s contra 16-20 s).
 
