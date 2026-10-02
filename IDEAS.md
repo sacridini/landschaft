@@ -1247,173 +1247,111 @@ estocástico:
 
 ---
 
-## Modelagem de distribuição de espécies (SDM / ENM: biomod2, elapid, scikit-learn)
+## Modelagem de distribuição de espécies (`ls.sdm`)
 
-Análise de 2026-09-30. A modelagem de distribuição de espécies (SDM / *Species Distribution Modeling*) e nicho
-ecológico (ENM) gera mapas contínuos de probabilidade de presença ou adequabilidade de habitat a partir de registros
-de ocorrência e preditores ambientais (clima, relevo, uso do solo).
+Plano acordado em 2026-10-02 (substitui a análise inicial de 2026-09-30). Submódulo `landschaft.sdm` (`ls.sdm`) com
+C++ em `src/cpp/sdm/`. O foco é a **preparação dos dados** (80 % do tempo de quem faz SDM: limpeza, desbaste, área
+acessível, preditores, background, partições espaciais); o ajuste dos modelos fica com o scikit-learn (API
+`fit`/`predict_proba`), com exceção do **MaxNet**, implementado em C++ (última fase).
 
-### O papel ecológico no landschaft e o diagnóstico do ecossistema
-1. **O elo fundamental da conservação:** A camada de adequabilidade de habitat gerada pelo SDM é a entrada primordial
-   para quase todas as análises de paisagem aplicada:
-   * Define as superfícies de custo/resistência para conectividade (`ls.circuit.omniscape`, `ls.least_cost_path`);
-   * Gera as camadas de feições biológicas $q_{ij}$ para priorização espacial (`ls.prioritize`);
-   * Alimenta os mapas de restrição e atratores de regeneração na simulação do uso do solo (`ls.simulate`).
-2. **O abismo entre R e Python:**
-   * No ecossistema R, ferramentas consolidadas como `biomod2`, `dismo`, `CoordinateCleaner`, `spThin`, `blockCV`
-     e `ENMTools` dominam a pesquisa há mais de uma década.
-   * No ecossistema Python, o cenário é fragmentado e incompleto: `elapid` foca primordialmente no algoritmo MaxEnt,
-     `pyimpute` está descontinuado, `pygbif` é apenas um cliente REST cru, e a maioria dos pesquisadores recorre a
-     scripts manuais com `geopandas` e `rasterio`.
-   * Não existe hoje em Python um fluxo unificado e de alta performance que una curadoria, validação espacial,
-     modelagem em ensemble e projeção matricial em larga escala.
+### Princípios
+* **Objetos de dados, arquivos pelo `ls.load_*` / `ls.write_*`** (regra de I/O da 0.97): as funções recebem
+  GeoDataFrame / DataFrame / DataArray, nunca caminhos.
+* **Três níveis sobre as mesmas funções:** `ls.sdm.prepare(...)` (uma chamada, padrões sensatos); cada etapa como
+  função pública (`clean_occurrences`, `thin`, `background`...); e o `SDMData` entra direto no scikit-learn
+  (`data.X`, `data.y`, `data.sample_weight`, `data.cv`).
+* **Cada etapa do `prepare` aceita** `False` (pula), um número (o parâmetro principal, ex. `thin=20_000` m), um
+  `dict` (os argumentos da função da etapa) ou uma função do usuário.
+* **Nada some sem explicação:** a limpeza pode só marcar (`action="flag"`, colunas `flag_*`); `data.report` diz
+  quantos registros cada etapa tirou e por quê; `data.settings` guarda as escolhas e a `seed` (seção de métodos,
+  reprodutibilidade); `data.redo(thin=30_000)` refaz a partir de uma etapa mantendo o resto.
+* **Paridade** com os pacotes R de referência de cada etapa (bit a bit onde o cálculo é determinístico; as etapas
+  aleatórias usam os geradores do R já portados no `nlm`); **desempenho** em C++/OpenMP com `n_threads` (padrão:
+  todos os núcleos menos um). Bugs das referências: só a forma correta, testada contra a referência corrigida.
+* **Dependências:** `scikit-learn` no extra `landschaft[sdm]`; `pygbif` só para o download. A preparação (fases
+  1-5) não depende de nenhum dos dois. Dados de referência geográfica (terra/mar do Natural Earth, capitais,
+  centroides, instituições) **baixados sob demanda com cache** (como o `example_data`), não embutidos.
 
-### Estratégia de machine learning: scikit-learn como motor, landschaft nos gargalos espaciais
-Reinventar algoritmos tradicionais de ML (Random Forest, Gradient Boosting, SVM, GLM) seria redundante e contraproducente:
-* O `scikit-learn` (e bibliotecas complementares como `xgboost` e `lightgbm`) já possui implementações estado-da-arte,
-  paralelizadas em C/Cython e amplamente validadas pela comunidade científica.
-* O landschaft adota a API padrão do scikit-learn (`fit`, `predict`, `predict_proba`), permitindo acoplar qualquer
-  estimador compatível.
-* **Exceção de algoritmo próprio:** Implementação nativa e leve do **MaxEnt** (Maximum Entropy Model) baseada em
-  otimização convexa de entropia máxima via `scipy.optimize` / C++, eliminando a dependência do runtime Java do
-  MaxEnt original.
-* O verdadeiro diferencial e gargalo do SDM consome 80% do tempo do pesquisador e reside no **pré e pós-processamento
-  espacial e ecológico**, onde o landschaft atua com precisão.
+### Objetos
+* Ocorrências: GeoDataFrame comum (o do `ls.bio.read_occurrences` / `ls.load_vector`).
+* `SDMData`: `X`, `y` (1 presença, 0 background/ausência), `sample_weight`, `coords`, `folds` / `cv`,
+  `predictors`, `area` (M), `report`, `settings`, `.redo(...)`, `ls.save`.
+* `SDMResult`: modelos ajustados, métricas por modelo e dobra, limiares, importância.
 
-### Os 4 gargalos operacionais resolvidos no `ls.sdm`
+### Funções por etapa (referência de paridade; C++)
+| Etapa | Funções | Referência | C++ |
+|---|---|---|---|
+| Ocorrências | `download_gbif`; `clean_occurrences` (nulas/iguais, centroides de países e capitais, instituições, mar, outliers, sede do GBIF, país divergente) | CoordinateCleaner | distâncias aos pontos de referência |
+| | `one_per_cell`; `thin` (geodésico, grade, espaço ambiental) | spThin (gerador do R) | vizinhos por grade / KD-tree |
+| Área | `accessible_area` (buffer, polígono convexo, ecorregiões com presenças) | (geometria) | - |
+| Preditores | `select_predictors` (correlação, VIF passo a passo, `keep=`, PCA, categóricas) | usdm `vifstep`/`vifcor` | correlação em blocos |
+| Background | `background` (aleatório na área, buffer, viés por grupo-alvo, disco, SRE) | predicts/dismo, biomod2 | amostragem em rasters grandes |
+| Montagem | `dataset(occ, bg, env)` (extração pelo `ls.extract`, pesos presença/background) | - | já existe |
+| Partição | `spatial_blocks`, `spatial_clusters`, `buffer_loo`, `checkerboard`, `block4`, `autocorrelation_range` | blockCV, ENMeval | atribuição de células |
+| Avaliação | `evaluate` (AUC-ROC/PR, TSS, kappa, Boyce contínuo, omissão), `threshold` (max TSS, sens = spec, LPT, P10) | ecospat, predicts, ENMeval | Boyce por janelas |
+| Modelos | `fit(data, models)` (qualquer estimador do sklearn, balanceamento, RF subamostrado de Valavi et al. 2021); `MaxNet` | maxnet/glmnet (tolerância) | caminho do glmnet |
+| Projeção | `predict` (blocos/dask, ensemble ponderado, desvio padrão, `clamp=`) | blocos = cálculo inteiro, bit a bit | paralelo por bloco |
+| Extrapolação | `mess`, `exdet`, `mop` | predicts `mess`, dsmextra, mop | ECDF por variável, busca binária |
+| Diagnóstico | `response_curves`, `importance` (permutação), gráficos no `ls.plot` | - | - |
 
-#### 1. Curadoria e desbaste espacial de ocorrências (`ls.sdm.clean_occurrences`, `ls.sdm.spatial_thin`)
-* **Download integrado:** Integração com GBIF (aproveitando o parser Darwin Core já introduzido em
-  `ls.bio.read_occurrences`) e speciesLink;
-* **Limpeza automatizada de anomalias geográficas:**
-  * Remoção de coordenadas nulas `(0, 0)`;
-  * Detecção de centróides de países e capitais (artefato comum de geocodificação sem precisão municipal);
-  * Máscara marinha/terrestre de alta resolução para remover registros em oceanos para espécies terrestres;
-  * Detecção de buffers ao redor de jardins botânicos, zoológicos e herbários;
-  * Filtragem por incerteza espacial (`coordinateUncertaintyInMeters`).
-* **Desbaste Espacial (*Spatial Thinning*):**
-  * Dados de ocorrência sofrem de viés de amostragem severo (aglomerações próximas a estradas, universidades e trilhas);
-  * Algoritmo de desbaste por distância euclidiana/geodésica mínima ($d_{\min}$) acelerado por KD-Tree ou indexação
-    espacial em C++, eliminando o viés de esforço amostral com garantia de espaçamento uniforme.
-
-#### 2. Preditores ambientais e amostragem de background (`ls.sdm.vif_filter`, `ls.sdm.sample_background`)
-* **Multicolinearidade de Preditores (VIF):**
-  * Camadas bioclimáticas (ex: WorldClim 19 variáveis) possuem altíssima correlação, inflando a variância dos
-    coeficientes de modelos estatísticos;
-  * Filtragem iterativa baseada no Fator de Inflação da Variância:
-    $$\text{VIF}_k = \frac{1}{1 - R_k^2}$$
-    com eliminação recursiva dos preditores que ultrapassam o limiar ($\text{VIF} > 5$ ou $10$), combinada com matriz
-    de correlação cruzada (Pearson / Spearman).
-* **Amostragem de Fundo / Pseudo-Ausências:**
-  * Para modelos de presença-apenas, a escolha do background define o envelope de calibração;
-  * Métodos suportados:
-    1. *Uniforme:* sorteio aleatório sobre a área de estudo ou máscara de bioma;
-    2. *Buffer Geográfico:* amostragem restrita a um raio ao redor das presenças conhecidas;
-    3. *Target-Group Background (TGB):* amostragem a partir de pontos de ocorrência de todo o grupo taxonômico superior
-       (ex: todos os mamíferos para modelar uma espécie específica de mamífero), neutralizando matematicamente o viés de
-       esforço de coleta.
-* **Extração Pontual Otimizada:** Extração dos valores de múltiplos rasters nos pontos de presença e background sem
-  necessidade de carregar o raster inteiro em memória.
-
-#### 3. Validação cruzada espacial e métricas ecológicas (`ls.sdm.SpatialBlockCV`, `ls.sdm.evaluate`)
-* **O perigo da validação aleatória tradicional:**
-  * O particionamento puramente aleatório (`train_test_split`) comete erro metodológico em dados espaciais: a
-    autocorrelação espacial (SAC) faz os pontos de teste estarem colados aos de treino, gerando métricas artificialmente
-    infladas (AUC > 0.95) que falham completamente em generalizar na paisagem real.
-* **Validação Cruzada em Blocos Espaciais (*Spatial Block CV*):**
-  * Geração de blocos contíguos regulares (*checkerboard*), faixas espaciais ou k-means geográfico para garantir
-    independência espacial estrita entre dobras (*folds*) de calibração e teste.
-* **Métricas Especializadas de Avaliação:**
-  * **TSS** (*True Skill Statistic*): $\text{TSS} = \text{Sensibilidade} + \text{Especificidade} - 1$, imune a
-    variações de prevalência;
-  * **Índice Contínuo de Boyce** (*Continuous Boyce Index*): Mede a correlação entre a frequência prevista/esperada
-    em janelas móveis de adequabilidade, sendo a métrica padrão-ouro para dados de presença-apenas e background;
-  * **AUC-ROC** e **AUC-PR**;
-  * **Seleção de Limiar Ótimo (*Thresholding*):** Maximização de TSS, ponto de igualdade entre sensibilidade e
-    especificidade, ou corte pelo 10º percentil de treino (LPT).
-
-#### 4. Projeção espacial massiva, ensembles e incerteza (`ls.sdm.project`, `ls.sdm.ensemble`, `ls.sdm.mess`)
-* **Projeção em Rasters Gigantescos (Out-of-Core):**
-  * O scikit-learn não suporta predição direta sobre GeoTIFFs de alta resolução. O landschaft aproveita sua
-    infraestrutura de *tiling* e blocos de linhas (`block_rows` / Dask) para projetar os modelos treinados sobre rasters
-    de escala continental sem sobrecarregar a memória RAM;
-* **Modelagem em Ensemble:**
-  * Agregação de predições de múltiplos algoritmos ponderada por desempenho (peso proporcional a TSS ou AUC),
-    gerando mapas consensuais de adequabilidade (média ponderada, mediana);
-  * **Mapa de Incerteza Espacial:** Desvio-padrão célula a célula entre as predições dos diferentes algoritmos do
-    ensemble, evidenciando geograficamente as áreas onde os modelos divergem;
-* **Detecção de Extrapolação Climática (MESS e ExDet):**
-  * Ao projetar modelos sobre cenários de mudanças climáticas futuras (IPCC CMIP6 / SSP), calcula a Superfície de
-    Similaridade Ambiental Multivariada (**MESS** - *Multivariate Environmental Similarity Surface*);
-  * Aponta exatamente onde as variáveis climáticas futuras extrapolam o espaço ambiental conhecido na calibração,
-    alertando o pesquisador sobre extrapolações não confiáveis.
-
-### Proposta de API (`ls.sdm`)
-
+### Pipeline típico
 ```python
 import landschaft as ls
-from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier
 
-# 1. Curadoria e desbaste espacial
-occ = ls.sdm.download_occurrences("Tapirus terrestris", source="gbif")
-clean_occ = ls.sdm.clean_occurrences(
-    occ,
-    drop_zeros=True,
-    drop_centroids=True,
-    drop_marine=True,
-    max_uncertainty=5000,
-)
-thinned_occ = ls.sdm.spatial_thin(clean_occ, min_distance=10_000)
+occ  = ls.bio.read_occurrences("gbif_download.zip", max_uncertainty=10_000)
+env  = ls.load_raster("worldclim/*.tif", stack=True)            # (band, y, x)
 
-# 2. Preditores ambientais e pseudo-ausências
-env_rasters = ls.sdm.vif_filter("data/bioclim/*.tif", vif_threshold=7.0)
-bg_points = ls.sdm.sample_background(
-    env_rasters,
-    n=10_000,
-    method="target_group",
-    mask="data/bioma_pantanal.tif",
-)
-dataset = ls.sdm.prepare_dataset(
-    presences=thinned_occ,
-    background=bg_points,
-    rasters=env_rasters,
-)
+data = ls.sdm.prepare(occ, env, species="Tapirus terrestris")   # limpeza -> M -> 1 por célula -> desbaste
+print(data.report)                                              # -> preditores -> background -> dobras
 
-# 3. Validação cruzada espacial e treino em ensemble
-cv = ls.sdm.SpatialBlockCV(block_size=50_000, n_splits=5)
-ensemble = ls.sdm.SDMEnsemble(
-    models={
-        "rf": RandomForestClassifier(n_estimators=100),
-        "hgb": HistGradientBoostingClassifier(),
-        "maxent": ls.sdm.MaxEnt(),
-    },
-    cv=cv,
-)
-results = ensemble.fit(dataset)
-print(results.metrics)  # TSS, Boyce Index, AUC-ROC
+res  = ls.sdm.fit(data, {"rf": RandomForestClassifier(), "maxnet": ls.sdm.MaxNet()})
+res.metrics                                                     # AUC, TSS, Boyce por modelo e dobra
+suit = ls.sdm.predict(res, env)                                 # ensemble + desvio padrão
+ls.write_raster(suit, "adequabilidade.tif")
 
-# 4. Projeção espacial out-of-core e mapa de incerteza
-proj = ensemble.project(
-    rasters=env_rasters,
-    out_suitability="suitability_present.tif",
-    out_uncertainty="uncertainty_sd.tif",
-    weights="tss",
+# os detalhes, sem sair do prepare
+data = ls.sdm.prepare(
+    occ, env, species="Tapirus terrestris",
+    area={"method": "buffer", "distance": 300_000, "within": cerrado},
+    clean={"centroids": 2_000, "institutions": False, "action": "flag"},
+    thin=20_000,
+    predictors={"vif": 5, "keep": ["bio1", "bio12"]},
+    background={"n": 20_000, "bias": target_group_occ},
+    folds={"method": "blocks", "size": 100_000, "k": 5},
+    seed=42,
 )
+data2 = data.redo(thin=40_000)
 
-# 5. Projeção futura e teste de novidade climática
-future_rasters = "data/bioclim_ssp585_2050/*.tif"
-proj_future = ensemble.project(future_rasters, out_suitability="suitability_2050.tif")
-mess_map = ls.sdm.mess(reference=dataset.X, future=future_rasters, out_file="mess_2050.tif")
+# etapa por etapa
+occ  = ls.sdm.clean_occurrences(occ, centroids=2_000)
+occ  = ls.sdm.one_per_cell(occ, env)
+occ  = ls.sdm.thin(occ, 20_000)
+m    = ls.sdm.accessible_area(occ, buffer=300_000)
+env2 = ls.sdm.select_predictors(env, area=m, vif=5)
+bg   = ls.sdm.background(env2, n=20_000, area=m)
+data = ls.sdm.dataset(occ, bg, env2, folds=ls.sdm.spatial_blocks(size=100_000, k=5))
+
+# futuro e extrapolação
+fut = ls.load_raster("ssp585_2050/*.tif", stack=True)
+ls.sdm.predict(res, fut, clamp=True)
+ls.sdm.mess(data, fut)
 ```
 
-### Estratégia de dependências e modularidade
-O núcleo do landschaft permanece focado em C++ e dependências geoespaciais básicas. O submódulo de SDM é instalado
-como extra opcional:
-```bash
-pip install "landschaft[sdm]"
-```
-Adicionando `scikit-learn` e bibliotecas leves de download/requisição (`pygbif`, `requests`), sem sobrecarregar o
-ambiente de usuários focados estritamente em métricas de paisagem.
+### Fases
+0. Harness: biblioteca R própria (`%LOCALAPPDATA%/R/landschaft-sdm-lib`: CoordinateCleaner, spThin, usdm, blockCV,
+   ENMeval, ecospat, predicts, dismo, maxnet, glmnet, biomod2, mop), `tools/sdm_reference.R`,
+   `tools/make_reference_sdm.py`, `tests/sdm_cases.py`, dados de exemplo (*Bradypus* + bioclimáticos do
+   dismo/maxnet, GPL), cache de dados geográficos sob demanda.
+1. Ocorrências: `clean_occurrences`, `one_per_cell`, `thin`, `download_gbif`.
+2. Área e preditores: `accessible_area`, `select_predictors`.
+3. Background e montagem: `background`, `dataset`, `SDMData`.
+4. Partições espaciais: blocos, clusters, LOO com buffer, checkerboard, block4.
+5. Avaliação: `evaluate`, `threshold`.
+6. Ajuste e projeção: `prepare`, `fit`, `predict` em blocos, ensemble, `mess`/`exdet`/`mop`, curvas de resposta,
+   importância.
+7. MaxNet nativo em C++ (feições do maxnet e caminho do glmnet, otimizado ao máximo), conferido com tolerância.
+8. Tutorial, capítulo do Learn, benchmarks contra os pacotes R e o elapid.
 
 ---
 
@@ -1448,11 +1386,10 @@ flowchart TD
     subgraph Modulo_Prioritizacao ["2. Priorização Espacial (ls.prioritize)"]
         CAZ["Core-Area Zonation (CAZ)"]
         ABF["Additive Benefit Function (ABF)"]
-        BLP["Boundary Length Penalty (BLP)"]
-        KERN["Suavização Metapopulacional 2D (AVX2)"]
-        HEAP["Radix Heap / Remoção Iterativa em C++"]
-        
-        CAZ & ABF & BLP & KERN --> HEAP
+        KERN["Conectividade por kernels (FFT)"]
+        HEAP["Ordenações iterativas (Z5) em C++"]
+
+        CAZ & ABF & KERN --> HEAP
         HEAP --> MAP_PRIO["Mapa de Prioridade Hierárquica [0.0 - 1.0]"]
     end
 

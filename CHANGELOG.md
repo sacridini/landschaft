@@ -6,6 +6,18 @@ between minor versions.
 
 ## [Unreleased]
 
+### Added
+- `ls.sdm`, species distribution modelling (in progress; plan in IDEAS.md): example data
+  (`ls.sdm.example_data`: the *Bradypus* and *Solanum acaule* records and the bioclimatic and biome
+  rasters of the R package predicts), `ls.sdm.one_per_cell` (one record per predictor cell, as
+  `terra::cellFromXY` + `duplicated()`), and the reference harness (`tools/make_reference_sdm.py`).
+- Reference data too large to ship are downloaded on first use into a cache folder, pinned by
+  checksum (`LANDSCHAFT_CACHE`).
+
+### Changed
+- `ls.load_table` reads delimited text saved in Windows-1252 / Latin-1 (as Excel on Windows often
+  saves it) when it is not valid UTF-8; `encoding=` sets it explicitly.
+
 ## [0.101.0] - 2026-10-02
 
 ### Changed

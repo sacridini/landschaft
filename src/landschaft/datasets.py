@@ -37,6 +37,10 @@ _MODULE_DATA: dict[str, tuple[str, str]] = {
     "pop_coord": ("landschaft.cost", "pop_coord.csv"),
     "sites": ("landschaft.bio", "example_sites.csv"),
     "tree": ("landschaft.bio", "example_tree.nex"),
+    "bradypus": ("landschaft.sdm", "bradypus.csv"),
+    "acaule": ("landschaft.sdm", "acaule.csv"),
+    "bioclim": ("landschaft.sdm", "bioclim.tif"),
+    "biome": ("landschaft.sdm", "biome.tif"),
 }
 
 
@@ -67,6 +71,11 @@ def example_data(name: str = "input") -> Path:
 
         Biodiversity (see :func:`landschaft.bio.example_data`): ``"sites"``
         (species records, CSV) and ``"tree"`` (their phylogeny, Nexus).
+
+        Species distributions (see :func:`landschaft.sdm.example_data`):
+        ``"bradypus"`` and ``"acaule"`` (occurrence records, CSV),
+        ``"bioclim"`` (nine bioclimatic variables) and ``"biome"`` (biomes),
+        0.5 degree over Central and South America.
 
     Returns
     -------

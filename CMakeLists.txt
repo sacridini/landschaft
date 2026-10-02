@@ -260,7 +260,7 @@ endif()
 
 pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
                     src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
-                    src/cpp/prio/python.cpp src/cpp/io/python.cpp)
+                    src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp)
 target_link_libraries(_core PRIVATE eigen_headers)
 target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
                       iocore)

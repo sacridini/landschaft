@@ -41,11 +41,12 @@ def _sniff(path: Path, sep, decimal):
 
 
 def load_table(source, *, sheet=None, sep: str | None = None, decimal: str | None = None, columns=None,
-               **kwargs) -> pd.DataFrame:
+               encoding: str | None = None, **kwargs) -> pd.DataFrame:
     """Read a table, the format given by the file extension.
 
     ``.csv`` / ``.txt`` / ``.tsv`` (also ``.gz``; the separator ``,`` ``;``
-    tab or ``|`` and a decimal comma are detected), ``.xlsx`` / ``.xls``
+    tab or ``|``, a decimal comma and a Windows / Latin-1 encoding are
+    detected), ``.xlsx`` / ``.xls``
     (needs openpyxl), ``.parquet``, ``.feather``, ``.json``, and the
     attribute table of a vector file (``.gpkg``, ``.shp``, ``.dbf``...).
 
@@ -60,6 +61,10 @@ def load_table(source, *, sheet=None, sep: str | None = None, decimal: str | Non
         detected).
     columns
         Columns to read (default: all).
+    encoding
+        Delimited text: the character encoding (default: UTF-8, or Windows-1252
+        / Latin-1 when the file is not valid UTF-8, as tables saved by Excel on
+        Windows often are).
     **kwargs
         Passed to the pandas reader.
 
@@ -81,7 +86,13 @@ def load_table(source, *, sheet=None, sep: str | None = None, decimal: str | Non
     suffix = _suffix(path)
     if suffix in (".csv", ".txt", ".tsv"):
         s, d = _sniff(path, sep, decimal)
-        return pd.read_csv(path, sep=s, decimal=d, usecols=columns, **kwargs)
+        if encoding is not None:
+            return pd.read_csv(path, sep=s, decimal=d, usecols=columns, encoding=encoding, **kwargs)
+        for enc in ("utf-8", "cp1252", "latin-1"):  # latin-1 decodes any byte
+            try:
+                return pd.read_csv(path, sep=s, decimal=d, usecols=columns, encoding=enc, **kwargs)
+            except UnicodeDecodeError:
+                continue
     if suffix in (".parquet", ".pq"):
         return pd.read_parquet(path, columns=columns, **kwargs)
     if suffix == ".feather":
