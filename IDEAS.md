@@ -1375,6 +1375,88 @@ ls.plot(sol)
     multi-action), página de benchmarks e guia de migração do prioritizr/prioriactions/prioripy (tabela R ↔
     Python).
 
+### Resultados da fase 0 (2026-10-03)
+**Harness**: `tools/make_reference_optimize.py` + `tools/optimize_reference.R`, casos em
+`tests/optimize_cases.py` (entradas geradas em Python com sementes fixas), referências em
+`tests/data/reference/optimize/{core,actions}.npz/json`, leitura em `tests/optimize_reference.py`. 16 casos:
+`core` (10: min_set com metas relativas por feição e absolutas, locked in/out, decisões binárias, de proporção e
+semicontínuas; unidades em raster, tabela, tabelas rij estilo Marxan, polígonos alinhados às células e cortando
+células) e `actions` (6: minimizeCosts, blm, metas de conservação, maximizeBenefits com orçamento e blm, curva 3).
+Cada caso guarda o modelo compilado (triplas 0-based de A, obj, lb, ub, rhs, sense, vtype, row_ids/col_ids) e o
+ótimo do Gurobi com gap 0 em 1 thread. `tests/test_optimize_reference_data.py`: o ótimo satisfaz o modelo e as
+mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 3 com `addGenConstrPow`).
+
+**Fatos do prioritizr para a paridade bit a bit (fase 1)**:
+* Raster: as unidades são as células com custo, na ordem das células; a matriz traz os valores das feições bit a
+  bit (NaN = 0). **Metas relativas usam o total do raster inteiro**, inclusive células sem custo, somado em
+  sequência em double (terra), não o total das unidades.
+* Tabelas: metas relativas sobre o `sum()` do R (acumulação de 80 bits): o `lsm::r_sum` (SoftExtended) reproduz.
+* `add_semicontinuous_decisions(u)` compila como variáveis contínuas com ub = u; locked out vira ub = 0.
+* prioriactions: sentidos `==` (o prioritizr usa `=`); `curve > 1` usa restrições gerais de potência do Gurobi
+  (`genconpow`: y = x^a), que o HiGHS não tem: formulação linear por partes nossa, paridade por tolerância no
+  objetivo. O prioriactions mascara `problem()` e `solve()` do prioritizr: no R, só `prioriactions::`.
+
+**HiGHS 1.15.1** (2026-07-02, a última versão; fixar esta, a mesma do `highspy` do benchmark), lido no código:
+* Callbacks: `MipImprovingSolution`, `MipInterrupt`, `MipGetCutPool` (só leitura) e **`MipUserSolution`**: o
+  solver pede soluções nossas em 7 pontos da busca (`queryExternalSolution`), entrada natural das heurísticas.
+* **Lazy constraints: não existem.** `kCallbackMipDefineLazyConstraints` é só um nome: o MIP nunca o chama e a
+  entrada do callback não tem campos para cortes. Contiguidade e corredores: cortes em rodadas (re-solve).
+* **Sem pool de soluções** (só `mip_max_improving_sols` + `getSavedMipSolutions`, as soluções que melhoraram):
+  portfólios por cortes, como planejado.
+* **Agendador por thread**: o executor de tarefas é `thread_local` (`threadLocalExecutorHandle`); cada thread que
+  chama o HiGHS cria o seu, com o `threads` da primeira chamada, fixo até `Highs::resetGlobalScheduler`. Várias
+  instâncias com `threads = 1` em threads diferentes rodam de fato em paralelo: 8 cópias do `boundary_100` (10⁴
+  unidades, gap 10%) em 8 threads levaram 16,8 s contra 86,4 s uma após a outra (5,1x em 6 núcleos físicos).
+
+**Benchmark** (`tools/benchmark_optimize.py`; i5-13600K, P-cores 0-11, 12 threads, gap alvo 1%, limite 120 s;
+30 feições tipo espécie, metas de 30%, custo de 1 a 10; tempo até 10% de gap entre colchetes):
+
+| modelo | unidades | linhas x colunas | compile (R) | HiGHS | Gurobi |
+|---|---:|---|---:|---|---|
+| min_set | 10³ | 30 x 1.024 | 0,3 s | limite, gap 1,2% [0,07 s] | 2 s [0,07 s] |
+| min_set | 10⁴ | 30 x 10⁴ | 0,4 s | 0,5 s | 0,1 s |
+| min_set | 10⁵ | 30 x 10⁵ | 1,0 s | 7 s | 2 s |
+| min_set | 10⁶ | 30 x 10⁶ | 4,7 s | limite, gap 100% (solução 2,1x o ótimo) | 20 s |
+| borda | 10³ | 4,0 mil x 3,0 mil | 0,4 s | limite, gap 1,3% [1,3 s] | limite, gap 1,1% [0,4 s] |
+| borda | 10⁴ | 40 mil x 30 mil | 0,4 s | 20 s [11 s] | 2 s |
+| borda | 10⁵ | 398 mil x 299 mil | 1,2 s | **744 s sem solução** (ignora o limite) | 13 s |
+| borda | 10⁶ | 4,0 mi x 3,0 mi | 6,1 s | **sem resposta em 16 min** | limite, sem gap útil |
+| contiguidade | 10³ | 3,0 mil x 3,0 mil | 0,4 s | limite, gap 3,6% | limite, gap 1,2% |
+| contiguidade | 10⁴ | 30 mil x 30 mil | 0,4 s | limite, sem solução | limite, gap 10,7% |
+| max_utility | 10⁴ | 31 x 10⁴ | 0,4 s | 12 s | 0,03 s |
+| max_utility | 10⁵ / 10⁶ | 31 x 10⁵ / 10⁶ | 1,0 / 4,9 s | **sem resposta em 16 min** | 1 s / 13 s |
+| multi-action | 10⁴ | 40 mil x 52 mil | 0,2 s | 27 s [1,9 s] | 0,3 s |
+| multi-action | 10⁵ | 399 mil x 519 mil | 1,6 s | limite, sem solução | 3 s |
+
+* **O gap 1% é difícil mesmo pequeno**: min_set com 30 feições contínuas é uma mochila multidimensional; nenhum
+  dos dois fecha 1% em 1.024 unidades no limite, os dois chegam a 10% (o padrão do prioritizr) em < 0,1 s.
+* **Threads não ajudam no gap 10%**: borda 10⁴ leva o mesmo tempo com 1, 2, 4 ou 12 threads nos dois solvers (o
+  ótimo a 10% sai no nó raiz; o tempo é o LP da raiz, serial). Paralelismo útil = instâncias independentes.
+* **Onde o HiGHS trava** (diagnóstico com log): (1) no **presolve do MIP** em modelos largos: o max_utility 10⁵
+  reduz a 1 linha (mochila) x 99.844 colunas e fica parado ali sem olhar o limite de tempo; com `presolve=off` o
+  mesmo MIP sai em 6 s, e o LP da relaxação sai em 0,5 s; (2) no **processamento da raiz** com 10⁶ colunas: sem
+  presolve, o min_set 10⁶ faz 12 iterações de LP em 123 s (limite inferior ainda 0), e as soluções das
+  heurísticas são ruins (2,1x o ótimo; borda 10⁵: 18% acima do Gurobi; max_utility 10⁶ passa de 300 s). O LP
+  em si não é o problema.
+* **O R não é o gargalo**: o `compile()` do prioritizr leva no máximo ~6 s em 10⁶ unidades com borda.
+
+**Consequências para o plano**:
+* Com o HiGHS "de fábrica", o landschaft só serviria até ~10⁴ unidades. A camada própria não é otimização de
+  luxo: sem ela, 10⁵ já falha. Antecipar para a **fase 1** o mínimo dela: (a) **presolve próprio** e chamada do
+  MIP do HiGHS com o presolve dele desligado ou limitado, sempre com relógio nosso (o limite de tempo do HiGHS
+  não é confiável: o max_utility 10⁶ passou de 300 s mesmo com `presolve=off`; interromper pelo callback
+  `MipInterrupt` e não mandar ao MIP do HiGHS os modelos largos em que ele trava); (b) para os objetivos com
+  **poucas linhas** (min_set, max_utility, max_features: uma linha por feição), **relaxação linear resolvida
+  por nós** e arredondamento + busca local: uma solução básica do LP tem no máximo tantas variáveis fracionárias
+  quanto linhas (30 em 10⁶), então o arredondamento já dá gap mínimo com limite inferior certificado (o Gurobi
+  chega a 0,01% no min_set 10⁶); essa solução entra no HiGHS como solução inicial / `MipUserSolution` quando o
+  MIP for tratável.
+* Borda e multi-action em 10⁵+: decomposição, soluções iniciais e o motor `anneal` (fase 4) são o caminho; o
+  Gurobi também falha na borda 10⁶.
+* Contiguidade: fraca nos dois (sem lazy constraints no HiGHS); formulação mais forte e cortes em rodadas.
+* O `n_threads` vai para o paralelismo nosso (instâncias, subproblemas, re-solves), com 1 thread do HiGHS por
+  instância; threads dentro do HiGHS só para um MIP grande e único.
+
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
   prioritizr e o prioriactions, e o Marxan entra depois como referência do motor `anneal` (verificar a

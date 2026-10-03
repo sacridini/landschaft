@@ -1,0 +1,335 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Cases shared by tools/make_reference_optimize.py and the MILP prioritization tests.
+
+Every input is built in Python (numpy's generator, fixed seeds): rasters as
+DataArrays, planning-unit polygons as a GeoDataFrame, tables as DataFrames.
+A case is R code that sees the inputs it names as variables and gives a
+named list. ``tools/optimize_reference.R`` adds helpers:
+
+- ``reference(p)``: a prioritizr problem's compiled model (``model``) and
+  its optimum on Gurobi with gap 0 on one thread (``objective``,
+  ``status``, ``solution`` in planning-unit order);
+- ``actions_reference(m)``: the same for a prioriactions problem
+  (``solution`` is its whole variable vector);
+- ``pa_data(...)``: ``prioriactions::inputData`` of the ``pa_*`` tables.
+
+A compiled model is stored as ``model/<field>``: the constraint matrix as
+0-based triplets (``A_i``, ``A_j``, ``A_x``, in the reference's order),
+``obj``, ``lb``, ``ub``, ``rhs``, ``sense``, ``vtype``, ``modelsense`` and,
+for prioritizr, ``row_ids`` and ``col_ids``.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from functools import cache
+from itertools import pairwise
+
+import numpy as np
+
+GROUPS: list[str] = ["core", "actions"]
+
+NY, NX = 12, 15
+RES = 100.0
+
+
+@dataclass
+class Case:
+    group: str
+    inputs: tuple[str, ...]
+    r: str
+    notes: str = ""
+
+
+# ----------------------------------------------------------------------------- inputs
+
+def grid(values: np.ndarray, res: float = RES, crs: str = "EPSG:32723", names=None):
+    """A raster DataArray of the values (2-D, or bands first), top-left at (0, rows * res)."""
+    import rioxarray  # noqa: F401  (the .rio accessor)
+    import xarray as xr
+
+    v = np.asarray(values, dtype=np.float64)
+    ny, nx = v.shape[-2:]
+    coords = {"y": (np.arange(ny)[::-1] + 0.5) * res, "x": (np.arange(nx) + 0.5) * res}
+    if v.ndim == 3:
+        coords["band"] = list(names) if names is not None else [f"f{k + 1}" for k in range(v.shape[0])]
+        da = xr.DataArray(v, dims=("band", "y", "x"), coords=coords)
+    else:
+        da = xr.DataArray(v, dims=("y", "x"), coords=coords)
+    return da.rio.write_crs(crs)
+
+
+def smooth_field(seed: int, shape=(NY, NX), width: int = 2) -> np.ndarray:
+    """Uniform noise smoothed by a (2 width + 1)-cell moving average: values in (0, 1), autocorrelated."""
+    rng = np.random.default_rng(seed)
+    v = rng.random((shape[0] + 2 * width, shape[1] + 2 * width))
+    k = np.ones(2 * width + 1) / (2 * width + 1)
+    v = np.apply_along_axis(np.convolve, 1, v, k, "valid")
+    v = np.apply_along_axis(np.convolve, 0, v, k, "valid")
+    return v
+
+
+@cache
+def _cost() -> np.ndarray:
+    """Cost of the 12 x 15 cells: 10 to 100, no data in the top-left corner and two holes."""
+    c = 10.0 + 90.0 * smooth_field(11)
+    c[:3, :4] = np.nan
+    c[6, 7] = np.nan
+    c[9, 2] = np.nan
+    return c
+
+
+@cache
+def _features() -> np.ndarray:
+    """Five features: species-like (zero below a quantile), one rare, one everywhere, a few NaN cells."""
+    out = []
+    for k, share in enumerate((0.5, 0.3, 0.15, 1.0, 0.4)):
+        f = smooth_field(100 + k)
+        cut = np.quantile(f, 1 - share) if share < 1 else 0.0
+        out.append(np.where(f > cut, f - cut, 0.0) * (k + 1))
+    f = np.stack(out)
+    f[1, 10, 12] = np.nan  # NaN in a planning unit: no amount
+    f[4, 0, 0] = np.nan
+    return f
+
+
+def _units() -> np.ndarray:
+    """Cell indices (row-major) of the planning units: the cells with a cost."""
+    return np.flatnonzero(np.isfinite(_cost()).ravel())
+
+
+def pu_cost():
+    return grid(_cost())
+
+
+def features():
+    return grid(_features())
+
+
+def locked_in():
+    """Cells to select (1) or not constrained (0); NaN outside the planning units."""
+    m = np.zeros((NY, NX))
+    m[4:6, 10:12] = 1.0
+    m[11, 14] = 1.0
+    return grid(np.where(np.isfinite(_cost()), m, np.nan))
+
+
+def locked_out():
+    m = np.zeros((NY, NX))
+    m[8:10, 5:8] = 1.0
+    m[0, 14] = 1.0
+    return grid(np.where(np.isfinite(_cost()), m, np.nan))
+
+
+def pu_table():
+    """The raster's planning units as a table: id, cost, f1..f5 amounts (NaN = 0), locks."""
+    import pandas as pd
+
+    cells = _units()
+    f = np.nan_to_num(_features().reshape(5, -1)[:, cells])
+    li = locked_in().values.ravel()[cells] == 1
+    lo = locked_out().values.ravel()[cells] == 1
+    data = {"id": np.arange(1, cells.size + 1, dtype=np.float64), "cost": _cost().ravel()[cells]}
+    data.update({f"f{k + 1}": f[k] for k in range(5)})
+    data["locked_in"] = li
+    data["locked_out"] = lo
+    return pd.DataFrame(data)
+
+
+def spec_table():
+    import pandas as pd
+
+    return pd.DataFrame({"id": np.arange(1.0, 6.0), "name": [f"f{k}" for k in range(1, 6)]})
+
+
+def rij_table():
+    """Marxan-style amounts: one row per planning unit and feature with a non-zero amount."""
+    import pandas as pd
+
+    t = pu_table()
+    rows = [(pu, k + 1.0, a) for k in range(5) for pu, a in zip(t["id"], t[f"f{k + 1}"]) if a > 0]
+    pu, sp, amount = map(np.asarray, zip(*rows))
+    return pd.DataFrame({"pu": pu, "species": sp, "amount": amount})
+
+
+def _polygons(xbreaks, ybreaks):
+    import geopandas as gpd
+    from shapely.geometry import box
+
+    rng = np.random.default_rng(7)
+    boxes = [box(x0, y0, x1, y1) for y0, y1 in pairwise(ybreaks) for x0, x1 in pairwise(xbreaks)]
+    cost = np.round(rng.uniform(50, 500, len(boxes)), 2)
+    return gpd.GeoDataFrame({"cost": cost}, geometry=boxes, crs="EPSG:32723")
+
+
+def pu_polygons():
+    """4 x 5 rectangles of whole cells (the features' cells fall entirely inside one of them)."""
+    return _polygons(np.array([0, 3, 7, 10, 12, 15]) * RES, np.array([0, 2, 5, 9, 12]) * RES)
+
+
+def pu_polygons_partial():
+    """4 x 4 rectangles cutting through cells: amounts weighted by the covered fraction."""
+    return _polygons(np.array([0, 3.5, 7.25, 11.6, 15]) * RES, np.array([0, 2.3, 6.5, 9.75, 12]) * RES)
+
+
+# --- prioriactions: a 10 x 10 grid of units, 4 features, 2 threats
+
+PA_SIDE = 10
+
+
+@cache
+def _pa():
+    rng = np.random.default_rng(21)
+    n = PA_SIDE * PA_SIDE
+    feat = rng.random((4, n)) < np.array([0.45, 0.25, 0.6, 0.35])[:, None]
+    threat = rng.random((2, n)) < np.array([0.5, 0.4])[:, None]
+    return {
+        "monitoring": rng.integers(1, 4, n).astype(np.float64),
+        "feat": feat,
+        "threat": threat,
+        "action_cost": rng.integers(1, 5, (2, n)).astype(np.float64),
+        "status_pu": np.where(rng.random(n) < 0.04, 2.0, 0.0),
+    }
+
+
+def pa_pu():
+    import pandas as pd
+
+    d = _pa()
+    n = PA_SIDE * PA_SIDE
+    status = d["status_pu"].copy()
+    status[[17, 63]] = 3.0  # locked out
+    return pd.DataFrame({"id": np.arange(1.0, n + 1), "monitoring_cost": d["monitoring"], "status": status})
+
+
+def pa_features():
+    import pandas as pd
+
+    d = _pa()
+    # recoverable where the feature lives with at least one threat on it
+    total = (d["feat"] & d["threat"].any(axis=0)).sum(axis=1)
+    return pd.DataFrame({"id": np.arange(1.0, 5.0), "target_recovery": np.floor(0.4 * total),
+                         "name": [f"feature{k}" for k in range(1, 5)]})
+
+
+def pa_dist_features():
+    import pandas as pd
+
+    feat = _pa()["feat"]
+    pu, k = np.nonzero(feat.T)
+    return pd.DataFrame({"pu": pu + 1.0, "feature": k + 1.0, "amount": np.ones(pu.size)})
+
+
+def pa_threats():
+    import pandas as pd
+
+    return pd.DataFrame({"id": [1.0, 2.0], "name": ["threat1", "threat2"], "blm_actions": [0.0, 0.0]})
+
+
+def pa_dist_threats():
+    import pandas as pd
+
+    d = _pa()
+    pu, t = np.nonzero(d["threat"].T)
+    status = np.zeros(pu.size)
+    status[[3, 40]] = 2.0  # action locked in
+    status[[11, 52]] = 3.0  # action locked out
+    return pd.DataFrame({"pu": pu + 1.0, "threat": t + 1.0, "amount": np.ones(pu.size),
+                         "action_cost": d["action_cost"][t, pu], "status": status})
+
+
+def pa_sensitivity():
+    import pandas as pd
+
+    f, t = np.meshgrid(np.arange(1.0, 5.0), np.arange(1.0, 3.0))
+    return pd.DataFrame({"feature": f.ravel(), "threat": t.ravel()})
+
+
+def pa_boundary():
+    """Shared edges of the grid (length 1), each pair once."""
+    import pandas as pd
+
+    ids = np.arange(1, PA_SIDE * PA_SIDE + 1).reshape(PA_SIDE, PA_SIDE).astype(np.float64)
+    a = np.concatenate([ids[:, :-1].ravel(), ids[:-1, :].ravel()])
+    b = np.concatenate([ids[:, 1:].ravel(), ids[1:, :].ravel()])
+    return pd.DataFrame({"id1": a, "id2": b, "boundary": np.ones(a.size)})
+
+
+INPUTS = {f.__name__: f for f in (
+    pu_cost, features, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
+    pu_polygons_partial, pa_pu, pa_features, pa_dist_features, pa_threats, pa_dist_threats, pa_sensitivity,
+    pa_boundary)}
+
+
+def build_input(name: str):
+    return INPUTS[name]()
+
+
+# ----------------------------------------------------------------------------- cases
+
+RASTER = ("pu_cost", "features")
+PA = ("pa_pu", "pa_features", "pa_dist_features", "pa_threats", "pa_dist_threats", "pa_sensitivity", "pa_boundary")
+
+CASES: dict[str, Case] = {
+    # --- core: planning units, min set, targets, locks, decisions
+    "minset_raster_relative": Case("core", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_binary_decisions())"""),
+    "minset_raster_relative_each": Case("core", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |>
+                  add_relative_targets(c(0.1, 0.25, 0.5, 0.2, 0.35)) |> add_binary_decisions())"""),
+    "minset_raster_absolute": Case("core", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |>
+                  add_absolute_targets(c(1.2, 0.9, 1, 120, 4)) |> add_binary_decisions())"""),
+    "minset_raster_locked": Case("core", (*RASTER, "locked_in", "locked_out"), """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_locked_in_constraints(locked_in) |> add_locked_out_constraints(locked_out) |>
+                  add_binary_decisions())"""),
+    "minset_raster_proportion": Case("core", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_proportion_decisions())""", notes="an LP"),
+    "minset_raster_semicontinuous": Case("core", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_semicontinuous_decisions(0.6))"""),
+    "minset_table": Case("core", ("pu_table",), """
+        reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |>
+                  add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_locked_in_constraints("locked_in") |> add_locked_out_constraints("locked_out") |>
+                  add_binary_decisions())"""),
+    "minset_rij": Case("core", ("pu_table", "spec_table", "rij_table"), """
+        reference(problem(pu_table[, c("id", "cost")], spec_table, rij = rij_table, cost_column = "cost") |>
+                  add_min_set_objective() |> add_absolute_targets(c(1.2, 0.9, 1, 120, 4)) |>
+                  add_binary_decisions())""", notes="Marxan-style tables"),
+    "minset_polygons": Case("core", ("pu_polygons", "features"), """
+        reference(problem(pu_polygons, features, cost_column = "cost") |> add_min_set_objective() |>
+                  add_relative_targets(0.3) |> add_binary_decisions())""",
+                            notes="amounts: sums of whole cells (exactextractr)"),
+    "minset_polygons_partial": Case("core", ("pu_polygons_partial", "features"), """
+        reference(problem(pu_polygons_partial, features, cost_column = "cost") |> add_min_set_objective() |>
+                  add_relative_targets(0.3) |> add_binary_decisions())""",
+                                    notes="amounts weighted by the covered fraction (exactextractr)"),
+    # --- actions: prioriactions
+    "actions_mincost": Case("actions", PA, """
+        actions_reference(prioriactions::problem(pa_data(), model_type = "minimizeCosts"))"""),
+    "actions_mincost_blm": Case("actions", PA, """
+        thr <- pa_threats; thr$blm_actions <- c(0.5, 0.25)
+        actions_reference(prioriactions::problem(pa_data(threats = thr), model_type = "minimizeCosts",
+                                                 blm = 1))"""),
+    "actions_mincost_conservation": Case("actions", PA, """
+        ft <- pa_features; ft$target_conservation <- c(3, 2, 4, 1)
+        actions_reference(prioriactions::problem(pa_data(features = ft), model_type = "minimizeCosts"))"""),
+    "actions_maxbenefit": Case("actions", PA, """
+        actions_reference(prioriactions::problem(pa_data(), model_type = "maximizeBenefits", budget = 60))"""),
+    "actions_maxbenefit_blm": Case("actions", PA, """
+        actions_reference(prioriactions::problem(pa_data(), model_type = "maximizeBenefits", budget = 60,
+                                                 blm = 0.5))"""),
+    "actions_mincost_curve3": Case("actions", PA, """
+        sens <- pa_sensitivity; sens$a <- 0; sens$b <- 1; sens$c <- 0; sens$d <- 1
+        actions_reference(prioriactions::problem(pa_data(sensitivity = sens), model_type = "minimizeCosts",
+                                                 curve = 3, segments = 3))""",
+                                   notes="power curve: Gurobi general constraints (genconpow)"),
+}
+
+
+def case_ids(group: str) -> list[str]:
+    return [k for k, c in CASES.items() if c.group == group]
