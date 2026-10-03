@@ -187,9 +187,10 @@ add_library(simcore STATIC
     src/cpp/sim/change.cpp
     src/cpp/sim/woe.cpp
     src/cpp/sim/rglm.cpp
+    src/cpp/sim/clues.cpp
 )
 target_include_directories(simcore PUBLIC src/cpp)
-target_link_libraries(simcore PUBLIC lsmcore)
+target_link_libraries(simcore PUBLIC lsmcore nlmcore)
 set_target_properties(simcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Raster values by zone and at points (ls.zonal_stats, ls.extract), ls.reclassify, GDAL's warp
 # kernel (ls.reproject); GDAL's polygon rasterizer (lsm/rasterize.cpp).

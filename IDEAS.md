@@ -1592,7 +1592,28 @@ sim.supply; sim.shortfall; sim.trajectory()
      (`WoeManager`: o mapa inteiro como área possível, combinação w+ + Σw− − w−, faixas dadas pelo usuário,
      transição de maior peso por célula) e o seu simulador CA ficam para a fase dos presets (7).
 3. `Model` e alocação do lulcc: CLUE-S e modelo ordenado, vizinhança, transições permitidas, demanda
-   interpolada; bit a bit.
+   interpolada; bit a bit. **Feita** (1.8.0): `Model(potential, demand, allocation, rules).run(landscape,
+   drivers, seed=)` → `Simulation` (mapas por passo, tabela por passo, semente, histórico), `AreaDemand`
+   (tabela ou `from_maps` = `approxExtrapDemand`: `approx` do R por bissecção, retas das pontas do
+   `Hmisc::approxExtrap`, `roundSum` com ordenação estável), `Rules` (matriz com os códigos 0/1/-1/-2/100+/1000+,
+   elasticidade, restrições, histórico), `Neighbourhood` (média focal ponderada em C++), `CLUE` (o
+   `allocateclues.c` em `src/cpp/sim/clues.cpp`, com o gerador do R) e `Ordered`. Bit a bit com o lulcc em 7
+   casos (vinheta CLUE-S e ordenado, critério da média agindo, todas as regras com histórico e máscara,
+   vizinhança nas três classes, ordenado determinístico e com regras + vizinhança), a referência corrigida em
+   `tools/lulcc_fixed.R`. Plum Island, 14 passos: CLUE-S 4,1 s (lulcc 10,0 s; 2463 passagens, o custo é o
+   gerador serial do R, ~840 M sorteios), ordenado 0,38 s (3,4 s).
+   - Corrigidos (forma correta, testada contra o lulcc corrigido): o critério da média do CLUE-S soma as
+     diferenças com sinal (somam 0, nunca age), aqui a média dos valores absolutos; a atualização do
+     `NeighbRasterStack` guarda só o mapa da última classe (`maps <- eval(cl)`); `CluesModel`/`OrderedModel`
+     comparam o número de regras de vizinhança com `length(neighb)`, que num RasterStack é células x camadas
+     (regras de vizinhança sempre davam erro); no ordenado, as células liberadas por uma classe que encolhe e
+     que nenhuma classe seguinte toma ficam -1 (classe inválida no mapa e no passo seguinte): aqui mantêm a
+     classe. O `allow.c` (`break` em código inválido) e o `autoconvert.c` (`NA_REAL` num inteiro) viram erros
+     de validação.
+   - Mantido do lulcc: no ordenado, até 1001 sorteios por classe e depois as células do último sorteio (a
+     demanda pode ficar sem atender): aqui com aviso e o passo marcado como não convergido; o CLUE avisa ao
+     chegar em `max_iter` (o lulcc também). Os padrões do lulcc (`scale = 0.0005`) oscilam sem convergir em
+     mapas de ~10^5 células (o caso do critério da média usa os parâmetros da vinheta).
 4. CLUMondo / Dyna-CLUE: sistemas de uso, `ServiceDemand`, `Supply`, ordem de conversão, resistência, sucessão
    bottom-up, tetos; `LandSystemStack` com sobreposição e `Roles`.
 5. Manchas: Expander/Patcher (clean-room: tamanho log-normal, isometria) e o PGA do FUTURES (bit a bit).

@@ -20,6 +20,14 @@ mk = ch.markov(steps=14)                                       # transition rate
 ef = ls.load_raster(ls.simulate.example_data("pie_drivers"))
 woe = ls.simulate.weights_of_evidence(lu[0], lu[2], ef, {"dist_built_1985": 100})
 p = woe.probability(lu[2], ef)                                 # Dinamica EGO's transition probabilities
+
+forms = {1: ["elevation", "slope"], 2: ["elevation", "slope", "dist_built_1985"], 3: ["elevation", "slope"]}
+model = ls.simulate.Model(                                     # CLUE-S, as lulcc
+    potential=ls.simulate.LogisticRegression(forms).fit(lu[0], ef),
+    demand=ls.simulate.AreaDemand.from_maps(lu, times=[0, 6, 14]),
+    allocation=ls.simulate.CLUE(jitter=0.0002, scale=1e-6, max_diff=50, mean_diff=50),
+    rules=ls.simulate.Rules(elasticity=[0.2, 0.2, 0.2]))
+sim = model.run(lu[0], ef, seed=1)                             # 14 yearly maps
 ```
 
 ## Change between maps
@@ -65,6 +73,22 @@ p = woe.probability(lu[2], ef)                                 # Dinamica EGO's 
 ::: landschaft.simulate.MultiCriteria
 
 ::: landschaft.simulate.RasterPotential
+
+## Allocation
+
+::: landschaft.simulate.Model
+
+::: landschaft.simulate.Simulation
+
+::: landschaft.simulate.AreaDemand
+
+::: landschaft.simulate.Rules
+
+::: landschaft.simulate.Neighbourhood
+
+::: landschaft.simulate.CLUE
+
+::: landschaft.simulate.Ordered
 
 ## Example data
 

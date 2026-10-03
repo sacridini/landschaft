@@ -542,4 +542,11 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.Estimator`](simulate.md#landschaft.simulate.Estimator) | Potential of each class from a scikit-learn classifier, one model per class |
 | [`ls.MultiCriteria`](simulate.md#landschaft.simulate.MultiCriteria) | Potential from weighted factors, the weights from pairwise comparisons (AHP; MOLUSCE's MCE) |
 | [`ls.RasterPotential`](simulate.md#landschaft.simulate.RasterPotential) | A potential given as maps: one layer per class (or transition), as computed elsewhere |
+| [`ls.Model`](simulate.md#landschaft.simulate.Model) | A land change model: potential, demand, allocation and rules |
+| [`ls.Simulation`](simulate.md#landschaft.simulate.Simulation) | The maps of a simulation and what happened at each step |
+| [`ls.AreaDemand`](simulate.md#landschaft.simulate.AreaDemand) | Cells each class must cover at each time step (CLUE-S's demand) |
+| [`ls.Rules`](simulate.md#landschaft.simulate.Rules) | Decision rules of the allocation (lulcc's ``rules``, ``elas``, ``mask``, ``hist``, ``neighb``) |
+| [`ls.Neighbourhood`](simulate.md#landschaft.simulate.Neighbourhood) | Neighbourhood thresholds (lulcc's ``NeighbRasterStack`` and ``nb.rules``) |
+| [`ls.CLUE`](simulate.md#landschaft.simulate.CLUE) | CLUE-S allocation (Verburg et al. 2002), as lulcc's ``CluesModel`` |
+| [`ls.Ordered`](simulate.md#landschaft.simulate.Ordered) | The ordered allocation of Fuchs et al. (2013) with stochastic choice, as lulcc's ``OrderedModel`` |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |

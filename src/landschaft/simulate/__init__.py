@@ -24,7 +24,9 @@ Typical use::
     ls.simulate.Markov.from_maps(lu[0], lu[2], steps=14).multi     # rates per year
 """
 
+from ._allocation import CLUE, Ordered
 from ._change import Changes, IntensityAnalysis, changes, crosstab
+from ._demand import AreaDemand
 from ._difference import (
     composite_matrix,
     difference_components,
@@ -39,16 +41,25 @@ from ._examples import example_data
 from ._glm import LogisticRegression
 from ._markov import Markov
 from ._mce import MultiCriteria
+from ._model import Model, Simulation
+from ._rules import Neighbourhood, Rules
 from ._woe import WeightsOfEvidence, weights_of_evidence
 
 __all__ = [
+    "CLUE",
+    "AreaDemand",
     "Changes",
     "Estimator",
     "IntensityAnalysis",
     "LogisticRegression",
     "Markov",
+    "Model",
     "MultiCriteria",
+    "Neighbourhood",
+    "Ordered",
     "RasterPotential",
+    "Rules",
+    "Simulation",
     "WeightsOfEvidence",
     "changes",
     "composite_matrix",

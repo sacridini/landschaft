@@ -6,6 +6,25 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-03
+
+### Added
+- `ls.simulate` phase 3, allocation (lulcc):
+  - `Model(potential, demand, allocation, rules).run(landscape, drivers, seed=)`: the simulation loop of
+    lulcc's `allocate` (elasticities, neighbourhood and conversion rules, automatic conversions, history),
+    giving a `Simulation` (the map of every step, a table per step, the seed, the history map);
+  - `AreaDemand`: cells per class and step, from a table or interpolated/extrapolated from observed
+    maps (`approxExtrapDemand`);
+  - `Rules` (conversion matrix with lulcc's codes, elasticities, restricted areas, history) and
+    `Neighbourhood` (focal thresholds, in C++);
+  - `CLUE` (CLUE-S's iterative allocation, in C++) and `Ordered` (the ordered procedure, stochastic or
+    not). The same maps as lulcc bit for bit with the same `set.seed`; Plum Island's 14 steps in
+    4.1 s (lulcc 10.0 s) and 0.38 s (3.4 s).
+- lulcc defects corrected (tested against a corrected lulcc): the CLUE-S mean criterion averages
+  the absolute differences (lulcc's signed ones always sum to 0); neighbourhood rules work on more
+  than one class and through the models (lulcc stops with an error); cells released in the ordered
+  allocation that no class takes keep their class (lulcc leaves -1).
+
 ## [1.7.0] - 2026-10-03
 
 ### Added

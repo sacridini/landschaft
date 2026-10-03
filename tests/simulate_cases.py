@@ -1059,3 +1059,131 @@ CASES.update({
     "mce_molusce": Case("mce", "molusce", job=lambda: molusce_mce_job, py=_mce_py,
                         notes="MOLUSCE's MCE: AHP weights, consistency ratio, the potential map."),
 })
+
+
+# ----------------------------------------------------------------------------- allocation (lulcc CLUE-S, ordered)
+
+GROUPS += ["allocation"]
+
+
+def pie_rules_maps():
+    """Plum Island's land use history (0-12 steps, seed 5) and a mask (lulcc's: 0 = restricted) with a
+    restricted block."""
+    import xarray as xr
+
+    lu = pie()[0]
+    nan = np.isnan(lu.values)
+    hist = np.random.default_rng(5).integers(0, 13, lu.shape).astype(np.float64)
+    mask = np.ones(lu.shape)
+    mask[100:200, 150:300] = 0
+    hist[nan] = np.nan
+    mask[nan] = np.nan
+    return xr.concat([lu.copy(data=hist), lu.copy(data=mask)], dim="band").assign_coords(band=["hist", "mask"])
+
+
+INPUTS.update({"pie_rules_maps": pie_rules_maps})
+
+_ALLOC_R = """
+source(file.path(TOOLS, "lulcc_fixed.R"))
+obs <- ObsLulcRasterStack(x = pie_raster, categories = c(1, 2, 3), labels = c("Forest", "Built", "Other"),
+                          t = c(0, 6, 14))
+ef <- ExpVarRasterList(list(ef_001 = pie_drivers_raster[[1]], ef_002 = pie_drivers_raster[[2]],
+                            ef_003 = pie_drivers_raster[[3]]))
+cells <- which(!is.na(getValues(obs[[1]])))
+train <- getPredictiveModelInputData(obs = obs, ef = ef, cells = cells)
+forms <- list(Built ~ ef_001 + ef_002 + ef_003, Forest ~ ef_001 + ef_002, Other ~ ef_001 + ef_002)
+models <- glmModels(formula = forms, family = binomial, data = train, obs = obs)
+dmd <- approxExtrapDemand(obs = obs, tout = 0:14)
+model <- {model}
+set.seed({seed})
+o <- allocate(model{extra})@output
+res <- list(demand = dmd)
+for (k in 1:nlayers(o)) res[[paste0("step", k - 1)]] <- matrix(getValues(o[[k]]), nrow(o), ncol(o), byrow = TRUE)
+res
+"""
+
+_RULES = [[1, 1008, 105], [0, 1, 0], [-1, -2, 1]]
+_NB = {1: 0.3, 2: 0.2, 3: 0.3}
+
+
+def _alloc_r(model, seed, extra=""):
+    return _ALLOC_R.replace("{model}", model).replace("{seed}", str(seed)).replace("{extra}", extra)
+
+
+def _clues_r(elas, params, extra_args=""):
+    p = ", ".join(f"{k} = {v!r}" for k, v in params.items())
+    return (f"CluesModel(obs = obs, ef = ef, models = models, time = 0:14, demand = dmd, "
+            f"elas = c({', '.join(map(str, elas))}), params = list({p}){extra_args})")
+
+
+_R_RULES = ("rules = matrix(c(" + ", ".join(str(v) for row in _RULES for v in row) + "), 3, 3, byrow = TRUE), "
+            "hist = pie_rules_maps_raster[[1]], mask = pie_rules_maps_raster[[2]]")
+_R_NB = ("neighb = NeighbRasterStack(x = obs[[1]], weights = matrix(1, 3, 3), categories = c(1, 2, 3)), "
+         f"nb.rules = c({', '.join(str(v) for v in _NB.values())})")
+
+
+def _alloc_py(pie, pie_drivers, allocation, seed, rules=None, pie_rules_maps=None, **kw):
+    ls = _ls()
+    rules = rules or ls.simulate.Rules()
+    if pie_rules_maps is not None:
+        rules.allowed = np.array(_RULES)
+        rules.history = pie_rules_maps[0]
+        rules.restrictions = pie_rules_maps[1] == 0
+    lr = ls.simulate.LogisticRegression(_PIE_FORMS).fit(pie[0], pie_drivers)
+    demand = ls.simulate.AreaDemand.from_maps(pie, times=[0, 6, 14])
+    sim = ls.simulate.Model(lr, demand, allocation, rules).run(pie[0], pie_drivers, seed=seed)
+    out = {"demand": demand.table.to_numpy()}
+    out.update({f"step{k}": sim.maps[k].values for k in range(sim.maps.shape[0])})
+    return out
+
+
+def _clue_case(seed, elas, params, *, rules=False, nb=False, notes=""):
+    ls = _ls()
+    names = {"jitter.f": "jitter", "scale.f": "scale", "max.iter": "max_iter", "max.diff": "max_diff",
+             "ave.diff": "mean_diff"}
+    extra = (", " + _R_RULES if rules else "") + (", " + _R_NB if nb else "")
+    inputs = ("pie", "pie_drivers") + (("pie_rules_maps",) if rules else ())
+
+    def py(**kw):
+        r = ls.simulate.Rules(elasticity=list(elas),
+                              neighbourhood=ls.simulate.Neighbourhood(dict(_NB)) if nb else None)
+        return _alloc_py(allocation=ls.simulate.CLUE(**{names[k]: v for k, v in params.items()}), seed=seed,
+                         rules=r, **kw)
+    return Case("allocation", "r", inputs, r=_alloc_r(_clues_r(elas, params, extra), seed), py=py, notes=notes)
+
+
+def _ordered_case(seed, order, stochastic, *, rules=False, nb=False, notes=""):
+    ls = _ls()
+    extra = (", " + _R_RULES if rules else "") + (", " + _R_NB if nb else "")
+    inputs = ("pie", "pie_drivers") + (("pie_rules_maps",) if rules else ())
+    model = (f"OrderedModel(obs = obs, ef = ef, models = models, time = 0:14, demand = dmd, "
+             f"order = c({', '.join(map(str, order))}){extra})")
+
+    def py(**kw):
+        r = ls.simulate.Rules(neighbourhood=ls.simulate.Neighbourhood(dict(_NB)) if nb else None)
+        return _alloc_py(allocation=ls.simulate.Ordered(order=list(order), stochastic=stochastic), seed=seed,
+                         rules=r, **kw)
+    return Case("allocation", "r", inputs, r=_alloc_r(model, seed, f", stochastic = {str(stochastic).upper()}"),
+                py=py, notes=notes)
+
+
+_VIGNETTE = {"jitter.f": 0.0002, "scale.f": 0.000001, "max.iter": 1000, "max.diff": 50, "ave.diff": 50}
+
+CASES.update({
+    "clues_pie": _clue_case(1, (0.2, 0.2, 0.2), _VIGNETTE,
+                            notes="lulcc's vignette: CLUE-S on Plum Island, 14 steps."),
+    "clues_pie_mean": _clue_case(7, (0.1, 0.5, 0.3), {**_VIGNETTE, "max.diff": 40, "ave.diff": 12},
+                                 notes="The mean criterion (of the absolute differences) is what stops most "
+                                       "steps."),
+    "clues_pie_rules": _clue_case(11, (0.2, 0.6, 0.1), _VIGNETTE, rules=True,
+                                  notes="Conversion rules with every code (0, 1, -1, -2, 100+, 1000+), a history "
+                                        "map and a restricted block."),
+    "clues_pie_neighb": _clue_case(13, (0.2, 0.2, 0.2), _VIGNETTE, nb=True,
+                                   notes="Neighbourhood rules on the three classes (3 x 3 window), updated at "
+                                         "every step."),
+    "ordered_pie": _ordered_case(3, (2, 1, 3), True, notes="lulcc's vignette: the ordered allocation."),
+    "ordered_pie_det": _ordered_case(3, (2, 1, 3), False, notes="Deterministic ordered allocation."),
+    "ordered_pie_rules": _ordered_case(5, (2, 1, 3), True, rules=True, nb=True,
+                                       notes="Ordered allocation with conversion rules, history, mask and "
+                                             "neighbourhood rules."),
+})

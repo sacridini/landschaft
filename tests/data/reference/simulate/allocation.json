@@ -1,0 +1,800 @@
+{
+ "arrays": {
+  "clues_pie/demand": {
+   "dim": [
+    15,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step0": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step1": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step10": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step11": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step12": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step13": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step14": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step2": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step3": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step4": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step5": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step6": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step7": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step8": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie/step9": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/demand": {
+   "dim": [
+    15,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step0": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step1": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step10": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step11": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step12": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step13": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step14": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step2": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step3": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step4": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step5": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step6": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step7": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step8": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_mean/step9": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/demand": {
+   "dim": [
+    15,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step0": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step1": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step10": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step11": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step12": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step13": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step14": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step2": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step3": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step4": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step5": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step6": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step7": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step8": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_neighb/step9": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/demand": {
+   "dim": [
+    15,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step0": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step1": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step10": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step11": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step12": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step13": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step14": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step2": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step3": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step4": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step5": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step6": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step7": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step8": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "clues_pie_rules/step9": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/demand": {
+   "dim": [
+    15,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step0": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step1": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step10": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step11": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step12": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step13": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step14": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step2": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step3": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step4": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step5": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step6": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step7": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step8": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie/step9": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/demand": {
+   "dim": [
+    15,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step0": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step1": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step10": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step11": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step12": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step13": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step14": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step2": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step3": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step4": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step5": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step6": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step7": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step8": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_det/step9": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/demand": {
+   "dim": [
+    15,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step0": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step1": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step10": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step11": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step12": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step13": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step14": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step2": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step3": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step4": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step5": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step6": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step7": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step8": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "ordered_pie_rules/step9": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "r": {
+   "r": "R version 4.4.2 (2024-10-31 ucrt)",
+   "versions": {
+    "OpenLand": "1.0.5",
+    "diffeR": "0.0.8",
+    "lulcc": "1.0.4",
+    "raster": "3.6.31",
+    "terra": "1.9.50"
+   }
+  }
+ }
+}

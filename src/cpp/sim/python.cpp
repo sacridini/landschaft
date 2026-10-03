@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "sim/change.hpp"
+#include "sim/clues.hpp"
 #include "sim/rglm.hpp"
 #include "sim/rng.hpp"
 #include "sim/woe.hpp"
@@ -213,6 +214,43 @@ py::array_t<double> sim_glm_predict(const DArray& x, const DArray& coefficients,
     return r;
 }
 
+py::dict sim_clues(const DArray& tprob, const DArray& landuse, const DArray& demand, const DArray& codes, double jitter,
+                   double scale, double max_iter, double max_diff, double mean_diff, nlm::RRng& rng) {
+    const int ncode = static_cast<int>(codes.size());
+    const i64 ncell = static_cast<i64>(landuse.size());
+    if (tprob.size() != static_cast<py::ssize_t>(ncode * ncell)) throw std::invalid_argument("tprob must be (classes, cells)");
+    if (demand.size() != ncode) throw std::invalid_argument("one demand per class");
+    sim::CluesResult r;
+    {
+        py::gil_scoped_release release;
+        r = sim::clues_allocate(tprob.data(), landuse.data(), ncell, demand.data(), codes.data(), ncode, jitter, scale,
+                                max_iter, max_diff, mean_diff, rng);
+    }
+    py::dict d;
+    py::array_t<double> a(static_cast<py::ssize_t>(r.allocation.size()));
+    std::copy(r.allocation.begin(), r.allocation.end(), a.mutable_data());
+    d["allocation"] = a;
+    d["iterations"] = r.iterations;
+    d["converged"] = r.converged;
+    d["max_diff"] = r.max_diff;
+    d["mean_diff"] = r.mean_diff;
+    return d;
+}
+
+py::array_t<double> sim_focal_mean(const DArray& x, const DArray& w) {
+    if (x.ndim() != 2 || w.ndim() != 2) throw std::invalid_argument("x and w must be 2-D");
+    if (w.shape(0) % 2 == 0 || w.shape(1) % 2 == 0) throw std::invalid_argument("the window must have odd sides");
+    std::vector<double> out;
+    {
+        py::gil_scoped_release release;
+        out = sim::focal_mean(x.data(), x.shape(0), x.shape(1), w.data(), static_cast<int>(w.shape(0)),
+                              static_cast<int>(w.shape(1)));
+    }
+    py::array_t<double> r({x.shape(0), x.shape(1)});
+    std::copy(out.begin(), out.end(), r.mutable_data());
+    return r;
+}
+
 }  // namespace
 
 namespace sim {
@@ -243,6 +281,11 @@ void register_python(py::module_& m) {
           "R's glm(family = binomial) fit (glm.fit), x the model matrix as (p, n).");
     m.def("sim_glm_predict", &sim_glm_predict, py::arg("x"), py::arg("coefficients"), py::arg("pivot"),
           py::arg("rank"), "predict(glm, type = 'response') on the model matrix (p, n).");
+    m.def("sim_clues", &sim_clues, py::arg("tprob"), py::arg("landuse"), py::arg("demand"), py::arg("codes"),
+          py::arg("jitter"), py::arg("scale"), py::arg("max_iter"), py::arg("max_diff"), py::arg("mean_diff"),
+          py::arg("rng"), "CLUE-S allocation (lulcc's allocateclues) with R's generator.");
+    m.def("sim_focal_mean", &sim_focal_mean, py::arg("x"), py::arg("w"),
+          "raster::focal(x, w, fun = mean, pad = TRUE, na.rm = TRUE).");
 }
 
 }  // namespace sim
