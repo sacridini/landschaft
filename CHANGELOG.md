@@ -6,6 +6,20 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-03
+
+### Added
+- `ls.simulate` phase 5a, urban growth by patches (FUTURES, GRASS GIS's r.futures):
+  - `PatchGrowing`: r.futures.simulation's allocation in C++ (seeds drawn on the development
+    probability, patch sizes from a library per subregion, compact growth, development pressure
+    updated around new cells, overflow between subregions and steps, incentive, potential weights,
+    zoning with stringency, potential subregions); the same maps as GRASS bit for bit with the
+    same seed; 480,000 cells over 5 steps in 0.20 s (GRASS 0.35 s);
+  - `development_pressure` (r.futures.devpressure), `DevelopmentDemand` with `from_population`
+    (r.futures.demand's regressions), `DevelopmentPotential`, `Simulation.development`.
+- FUTURES defect corrected (tested against a patched module): every cell of a patch that crosses
+  into another subregion adds its development pressure.
+
 ## [1.9.0] - 2026-10-03
 
 ### Added
