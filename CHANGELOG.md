@@ -6,6 +6,29 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-03
+
+### Added
+- `ls.simulate` phase 4, land systems (CLUMondo):
+  - `CLUMondo`: the demand-driven allocation of land systems (goods and services per cell, conversion
+    order, demand weights, deviations in % or absolute, resistance, CLUMondo's conversion codes with
+    maps, minimum and maximum ages and autonomous succession, restricted areas, random or given
+    ages, neighbourhood effects, location preferences, drivers and supply per step), in C++; the
+    same maps as CLUMondo bit for bit (6 cases), 400 x 500 cells over 8 years in 1.7 s (CLUMondo
+    16.2 s);
+  - `ServiceDemand`, `Supply`, `NeighbourhoodEffect`, `LogisticRegression.from_coefficients`;
+  - from the CLUMondo executable of 2017 (manual): minimum and maximum demands, a deviation per
+    demand, patches (97-100% of cells in agreement with it);
+  - `LandSystemStack`: land systems as overlapping binary layers (bit masks; overlap policies,
+    priority, rare combinations merged, new mosaics), supply and suitability from the layers;
+    `Roles` (expansion, regeneration, intensification, de-intensification), rules by role
+    (forbidden roles, transition resistance, conversion order), `Cap` (most cells or area a year),
+    `Succession`;
+  - `Simulation.layers`, `cover`, `supply`, `shortfall`, `trajectory`, `outputs`, `ages`.
+- `Rules(elasticity=...)` accepts one value for all classes.
+- CLUMondo defect corrected (tested against a patched CLUMondo): restricted cells keep their age
+  (CLUMondo sets it to -9999 after the first year, which stops autonomous changes there).
+
 ## [1.8.0] - 2026-10-03
 
 ### Added
