@@ -6,6 +6,31 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-03
+
+### Added
+- `ls.simulate` phase 1, land change analysis:
+  - `changes()`: the transitions of a series of maps (OpenLand's `contingencyTable`), the class
+    areas (lulcc's `total`), the intensity analysis of Aldwaik & Pontius at the interval, category
+    and transition levels with the stationarity tests (OpenLand's `intensityAnalysis`), the number
+    of changes per cell (`acc_changes`), and links to the components and the Markov chain;
+  - `crosstab()` (lulcc's `crossTabulate`, diffeR's `crosstabm`), in C++: 41.7 million cells in
+    0.03 s;
+  - the components of difference of diffeR: `difference_components` (`diffTablej`),
+    `overall_difference`, `difference_resolutions` (`differenceMR`), `composite_matrix`,
+    `memberships`, `mad` (`MAD`), `sample_to_population` (`sample2pop`);
+  - `Markov`: transition probabilities of a period and per time step (Dinamica EGO's
+    DetermineTransitionMatrix), the principal root by `expm(logm(P) / n)`, projections of areas.
+  The same numbers as the R packages, bit for bit; Dinamica within its 15 printed digits. On the
+  Sao Lourenco basin (5 maps of 41.7 million cells): the transition tables in 0.16 s (OpenLand's
+  `contingencyTable`: 120 s), the change counts in 0.25 s (`acc_changes`: 24 s).
+- Corrected where the references are wrong (tested against corrected versions): OpenLand drops the
+  transitions into a class found only in the last map from the intensity analysis; diffeR's
+  `composite` counts a missing value as a category, so `differenceMR` gives NaN at every coarser
+  resolution of a map with missing cells; `sample2pop` takes the population of the row's position
+  instead of its category; Dinamica gives a class absent at the start a row of zeros (its
+  multi-step rates come out wrong) and gives up on matrices with repeated or complex eigenvalues.
+
 ## [1.5.0] - 2026-10-03
 
 ### Added
