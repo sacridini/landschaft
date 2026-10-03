@@ -144,3 +144,74 @@ def test_gurobi_backend():
     sol = optimize_cases.CASES["minset_raster_locked"].py().add_gurobi_solver(gap=0, n_threads=1).solve()
     assert sol.solver == "gurobi" and sol.status == "optimal"
     assert sol.objective == pytest.approx(result("core", "minset_raster_locked")["objective"][0], rel=1e-9)
+
+
+# ----------------------------------------------------------------------------- the covering engine
+
+def _wide_cover(n=20000, m=10, seed=3):
+    """A random minimum-set model, wide enough for the bundle method and the sifting (n > 4 working sets)."""
+    import scipy.sparse as sp
+
+    rng = np.random.default_rng(seed)
+    a = sp.random(m, n, density=0.3, random_state=rng, format="csr") * 5
+    a.sort_indices()
+    rhs = 0.3 * np.asarray(a.sum(axis=1)).ravel()
+    cost = 1 + 9 * rng.random(n)
+    return a, cost, rhs
+
+
+def _cover(a, cost, rhs, method, gap=0.0, threads=1, time_limit=math.inf, integer=True):
+    n = cost.size
+    return _core.opt_solve_highs(
+        start=a.indptr.astype(np.int64), index=a.indices.astype(np.int64), value=a.data, obj=cost,
+        lb=np.zeros(n), ub=np.ones(n), row_lo=rhs, row_hi=np.full(rhs.size, np.inf),
+        integer=np.full(n, int(integer), dtype=np.uint8), maximize=False, offset=0.0, gap=gap,
+        time_limit=time_limit, threads=threads, presolve="choose", verbose=False, relaxation=False, initial=None,
+        method=method)
+
+
+def test_covering_same_bits_on_any_threads():
+    a, cost, rhs = _wide_cover()
+    r1 = _cover(a, cost, rhs, "covering", gap=0.01, threads=1)
+    r4 = _cover(a, cost, rhs, "covering", gap=0.01, threads=4)
+    assert r1["status"] == r4["status"] == "optimal"
+    assert np.array_equal(r1["x"], r4["x"])
+    assert r1["objective"] == r4["objective"] and r1["bound"] == r4["bound"]
+
+
+def test_covering_bounds_agree_with_highs():
+    """Each solver's bound is below the other's solution, and ours is within the gap asked for."""
+    a, cost, rhs = _wide_cover(n=12000, m=6)
+    ours = _cover(a, cost, rhs, "covering", gap=0.01, threads=2, time_limit=60)
+    highs = _cover(a, cost, rhs, "highs", gap=0.01, time_limit=60)
+    assert ours["status"] == "optimal"
+    tol = 1e-9 * abs(ours["objective"])
+    assert ours["bound"] <= highs["objective"] + tol
+    assert highs["bound"] <= ours["objective"] + tol
+    assert ours["objective"] <= highs["objective"] * 1.01
+    x = ours["x"]
+    assert set(np.unique(x)) <= {0.0, 1.0}
+    assert np.all(a @ x >= rhs - 1e-9 * np.maximum(1, rhs))
+
+
+def test_covering_lp_and_gap():
+    a, cost, rhs = _wide_cover()
+    lp = _cover(a, cost, rhs, "covering", integer=False)
+    ref = _cover(a, cost, rhs, "highs", integer=False)
+    assert lp["status"] == "optimal" and lp["gap"] == 0.0
+    assert lp["objective"] == pytest.approx(ref["objective"], rel=1e-9)
+    mip = _cover(a, cost, rhs, "covering", gap=0.01, threads=2)
+    # the LP bound is valid and the reported gap within what was asked for
+    assert mip["bound"] <= mip["objective"]
+    assert mip["bound"] == pytest.approx(lp["objective"], rel=1e-9)
+    assert (mip["objective"] - mip["bound"]) / mip["objective"] <= 0.01
+
+
+def test_covering_infeasible_and_time_limit():
+    a, cost, rhs = _wide_cover()
+    total = np.asarray(a.sum(axis=1)).ravel()
+    bad = rhs.copy()
+    bad[2] = total[2] * 1.01
+    assert _cover(a, cost, bad, "covering")["status"] == "infeasible"
+    r = _cover(a, cost, rhs, "covering", time_limit=0.0)
+    assert r["status"] == "time_limit" and r["seconds"] < 5

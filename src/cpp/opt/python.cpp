@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "opt/cover.hpp"
 #include "opt/milp.hpp"
 
 namespace py = pybind11;
@@ -81,7 +82,7 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
                         const Doubles& lb, const Doubles& ub, const Doubles& row_lo, const Doubles& row_hi,
                         const Bytes& integer, bool maximize, double offset, double gap, double time_limit,
                         int threads, const std::string& presolve, bool verbose, bool relaxation,
-                        const py::object& initial) {
+                        const py::object& initial, const std::string& method) {
     const opt::Model m = model_of(start, index, value, obj, lb, ub, row_lo, row_hi, integer, maximize, offset);
     opt::SolveOptions o;
     o.gap = gap;
@@ -91,10 +92,13 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
     o.verbose = verbose;
     o.relaxation = relaxation;
     if (!initial.is_none()) o.start = vec<double>(initial.cast<Doubles>());
+    if (method != "highs" && method != "covering") throw std::invalid_argument("method must be 'highs' or 'covering'");
+    if (method == "covering" && !opt::is_covering(m))
+        throw std::invalid_argument("not a covering model (a minimisation with only >= rows and finite bounds)");
     opt::SolveResult r;
     {
         py::gil_scoped_release release;
-        r = opt::solve_highs(m, o);
+        r = method == "covering" ? opt::solve_covering(m, o) : opt::solve_highs(m, o);
     }
     return result_dict(std::move(r));
 }
@@ -108,7 +112,9 @@ void register_python(py::module_& m) {
           py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"),
           py::arg("maximize"), py::arg("offset"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),
           py::arg("presolve"), py::arg("verbose"), py::arg("relaxation"), py::arg("initial"),
-          "Solve a model (rows in CSR) on HiGHS: status, has_solution, x, objective, bound, gap, nodes, seconds.");
+          py::arg("method") = "highs",
+          "Solve a model (rows in CSR) on HiGHS ('highs') or with the covering engine ('covering': sifted LP, "
+          "rounding, then HiGHS): status, has_solution, x, objective, bound, gap, nodes, seconds.");
 }
 
 }  // namespace opt

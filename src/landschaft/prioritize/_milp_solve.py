@@ -15,8 +15,17 @@ from ._milp import OptimizationProblem, Units
 __all__ = ["Solution", "solve_model"]
 
 
+def _is_covering(m: OptimizationProblem) -> bool:
+    """A minimisation with only >= rows and finite bounds (prioritizr's minimum set and its kin)."""
+    return (m.modelsense == "min" and all(s == ">=" for s in m.sense) and bool(np.isfinite(m.lb).all())
+            and bool(np.isfinite(m.ub).all()))
+
+
 def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, presolve: str, verbose: bool,
            start: np.ndarray | None, relaxation: bool = False) -> dict:
+    """HiGHS; covering models go through landschaft's own engine first (a sifted LP from a bundle method
+    on the dual, rounding, then HiGHS's MIP only if the gap is still too wide), which keeps HiGHS off the
+    wide models it stalls on."""
     from .. import _core
 
     lo, hi = m.row_bounds()
@@ -25,7 +34,8 @@ def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, 
         start=a.indptr.astype(np.int64), index=a.indices.astype(np.int64), value=a.data, obj=m.obj, lb=m.lb,
         ub=m.ub, row_lo=lo, row_hi=hi, integer=np.isin(np.asarray(m.vtype), ("B", "I")).astype(np.uint8),
         maximize=m.modelsense == "max", offset=0.0, gap=gap, time_limit=time_limit, threads=threads,
-        presolve=presolve, verbose=verbose, relaxation=relaxation, initial=start)
+        presolve=presolve, verbose=verbose, relaxation=relaxation, initial=start,
+        method="covering" if _is_covering(m) else "highs")
 
 
 def _gurobi(m: OptimizationProblem, gap: float, time_limit: float, threads: int, verbose: bool,

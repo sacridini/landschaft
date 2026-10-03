@@ -93,6 +93,11 @@ SolveResult solve_highs(const Model& model, const SolveOptions& options) {
         throw std::invalid_argument("the start solution must have one value per column");
 
     const auto t0 = Clock::now();
+    if (options.time_limit <= 0) {  // no time at all (HiGHS rejects a negative limit)
+        SolveResult r;
+        r.status = "time_limit";
+        return r;
+    }
     use_threads(options.threads);
     Highs h;
     set(h, "output_flag", options.verbose);
@@ -157,6 +162,7 @@ SolveResult solve_highs(const Model& model, const SolveOptions& options) {
     } else if (r.status == "optimal") {
         r.bound = r.objective;
         r.gap = 0.0;
+        if (info.dual_solution_status == kSolutionStatusFeasible) r.row_dual = h.getSolution().row_dual;
     }
     return r;
 }

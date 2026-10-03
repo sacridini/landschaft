@@ -60,6 +60,7 @@ struct SolveResult {
     double gap = std::numeric_limits<double>::quiet_NaN();
     i64 nodes = 0;
     double seconds = 0.0;
+    std::vector<double> row_dual;  // nrow, for an LP solved to optimality (HiGHS's signs: c - A'y)
 };
 
 // Solves on HiGHS in the calling thread. HiGHS keeps one task scheduler per
