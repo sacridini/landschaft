@@ -1351,7 +1351,47 @@ sim.supply; sim.shortfall; sim.trajectory()
      existe no fim fica com linha identidade (o Dinamica põe zeros: as células somem depois de um passo e as
      taxas para ela saem quase iguais às do período inteiro).
 2. Potencial: WoE (binário e multiclasse, faixas adaptativas, Cramér's V, JIU), `glm` do R portado
-   (`LogisticRegression`), `Estimator` do sklearn, potencial a partir de raster.
+   (`LogisticRegression`), `Estimator` do sklearn, potencial a partir de raster. **Feita** (1.7.0):
+   `WeightsOfEvidence` / `weights_of_evidence` (faixas, pesos, relatório, `correlation`, `probability`),
+   `LogisticRegression` (o `glm.fit` do R em `src/cpp/sim/rglm.cpp`, mais `r_dqrls` em `lsm/rlm.cpp`),
+   `Estimator` (qualquer classificador do scikit-learn, presença ou expansão = LEAS do PLUS, amostragem e
+   balanceamento), `MultiCriteria` (AHP do MCE do MOLUSCE) e `RasterPotential`. O WoE do Dinamica, deduzido das
+   saídas (caixa-preta, 9 casos iguais: faixas e contagens exatas, pesos a 1e-13 = os 15 dígitos do relatório):
+   - faixas: buffers aninhados a partir de 0 (ou de floor(mín/inc)·inc se negativo), extensão (mín, máx) só nas
+     células da classe de origem com valor nos dois mapas; um valor até 1e-14 abaixo de um limite sobe para o
+     buffer seguinte; pontos (A, A·exp(W+)) com A = células possíveis acumuladas (exp(W+) = 0 num buffer
+     acumulado sem transições ou só com transições, sem a correção); quebra no ponto i quando dx ≥ delta
+     mínimo e (dx > delta máximo ou |ângulo(âncora→i) − ângulo(âncora anterior→âncora)| > tolerância), a
+     referência inicial horizontal, o último ponto sempre; 84 de 84 sondagens com curvas desenhadas iguais
+     (a lição 18 do wiki do Dinamica dá o espaço dos pontos; uma curva ROC acumulada não explica as quebras);
+   - categóricas: uma faixa por categoria, [valor, próximo valor), a última até valor + 1;
+   - pesos: W+ de Bonham-Carter (o "Weight_Coefficient"), contraste W+ − W−, significativo se |C| > 1,96·s(C);
+     anormais (sem transição ou só transições) valem 0, contraste 0; com "fix abnormal weights",
+     W+ = −ln(B·N + 1) e ln(B·(A − N) + 1) (deduzido de 5 configurações); "potential transition criteria" =
+     `possible="any"` (todas as células da classe) ou `"stay"` (as que ficaram + as da transição);
+   - probabilidade (`CalcWOfEProbabilityMap`): logística multinomial entre as transições da mesma classe
+     pedidas juntas, exp(S_j) / (1 + Σ_k exp(S_k)), S = soma dos W+; variável ausente na célula soma 0;
+     `uint8` = trunc(255·p), 0 fora;
+   - correlação: sobre todas as células com valor nas duas variáveis (não só da classe), as faixas da
+     transição; valores além da extensão calibrada viram categorias próprias (abaixo, acima) e, quando
+     existem, o V de Cramér divide por min(faixas + 2) − 1; qui-quadrado, Cramér, contingência, entropia
+     conjunta (ln) e incerteza conjunta de Bonham-Carter.
+   - Defeito do Dinamica com valores negativos (só a forma coerente aqui, conferida por invariância a
+     deslocamento; os casos de paridade usam variáveis não negativas): o início é (trunc(mín/inc) − 1)·inc
+     quando trunc < 0, então valores em (−inc, 0) somem quando o mínimo está aí, aparece um buffer vazio no
+     início quando o mínimo é múltiplo, as quebras do lado negativo saem um buffer antes e a última antes de 0
+     se perde (um deslocamento de um buffer na contagem do functor de faixas).
+   - Escolha nossa (sem referência): na probabilidade, valores além da extensão calibrada usam a primeira ou
+     a última faixa.
+   - `glm`: bit a bit com o R em 2 casos (o `glmModels` do lulcc em Plum Island e um sintético com variável
+     colinear, coeficiente NA): IRLS com o `C_Cdqrls` (tol 1e-11), as funções C da ligação logit (±30), `exp`/
+     `log` x87, `sqrt` vetorial x87, deviance com a soma de 80 bits, `x %*% beta` pelo `dgemv` de referência,
+     `predict.lm` nas colunas pivotadas; acertou na primeira tentativa.
+   - MOLUSCE MCE: pesos pelo autovetor principal (`numpy.linalg.eig`, como o MOLUSCE), razão de consistência de
+     Saaty; o MOLUSCE trunca cada termo ponderado para um inteiro (0-100) antes de somar: aqui a soma em ponto
+     flutuante (o teste refaz a truncagem a partir dos nossos pesos e fatores e bate). O WoE do MOLUSCE
+     (`WoeManager`: o mapa inteiro como área possível, combinação w+ + Σw− − w−, faixas dadas pelo usuário,
+     transição de maior peso por célula) e o seu simulador CA ficam para a fase dos presets (7).
 3. `Model` e alocação do lulcc: CLUE-S e modelo ordenado, vizinhança, transições permitidas, demanda
    interpolada; bit a bit.
 4. CLUMondo / Dyna-CLUE: sistemas de uso, `ServiceDemand`, `Supply`, ordem de conversão, resistência, sucessão

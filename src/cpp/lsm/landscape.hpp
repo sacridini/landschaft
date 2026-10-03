@@ -133,6 +133,9 @@ void r_lm_coef(const double* x, const double* y, int n, double* b0, double* b1);
 // R's lm.fit(x, y): the residuals of y on the n x p model matrix x (column-major,
 // intercept included; overwritten), operation for operation. Returns the rank.
 int r_lm_residuals(double* x, const double* y, int n, int p, double* rsd);
+// LINPACK dqrls as R's C_Cdqrls calls it (tolerance tol): the coefficients b (0 beyond the rank) and
+// the 1-based pivot of x (column-major n x p, overwritten). Returns the rank (rlm.cpp).
+int r_dqrls(double* x, const double* y, int n, int p, double tol, double* b, int* jpvt);
 
 // FRAGSTATS' am (weights w), md or ra of x[0..n) (metrics.cpp).
 double reduce_statistic(const std::string& stat, const double* x, i64 n, const double* w);

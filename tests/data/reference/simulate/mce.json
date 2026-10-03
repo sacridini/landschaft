@@ -1,0 +1,22 @@
+{
+ "arrays": {
+  "mce_molusce/confidence": {
+   "dim": [
+    50,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "mce_molusce/consistency": {
+   "kind": "vector"
+  },
+  "mce_molusce/weights": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "molusce": {
+   "molusce": "5.3.0"
+  }
+ }
+}

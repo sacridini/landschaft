@@ -16,6 +16,10 @@ ch = ls.simulate.changes(lu)                                   # transitions, ar
 ia = ch.intensity(gain=2, loss=1)                              # intensity analysis
 ls.simulate.difference_components(ch.matrix())                 # quantity, exchange, shift
 mk = ch.markov(steps=14)                                       # transition rates per year
+
+ef = ls.load_raster(ls.simulate.example_data("pie_drivers"))
+woe = ls.simulate.weights_of_evidence(lu[0], lu[2], ef, {"dist_built_1985": 100})
+p = woe.probability(lu[2], ef)                                 # Dinamica EGO's transition probabilities
 ```
 
 ## Change between maps
@@ -47,6 +51,20 @@ mk = ch.markov(steps=14)                                       # transition rate
 ## Markov chains
 
 ::: landschaft.simulate.Markov
+
+## Transition potential
+
+::: landschaft.simulate.WeightsOfEvidence
+
+::: landschaft.simulate.weights_of_evidence
+
+::: landschaft.simulate.LogisticRegression
+
+::: landschaft.simulate.Estimator
+
+::: landschaft.simulate.MultiCriteria
+
+::: landschaft.simulate.RasterPotential
 
 ## Example data
 

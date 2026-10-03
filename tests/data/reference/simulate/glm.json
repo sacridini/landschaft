@@ -1,0 +1,112 @@
+{
+ "arrays": {
+  "glm_pie/coef/1": {
+   "kind": "vector"
+  },
+  "glm_pie/coef/2": {
+   "kind": "vector"
+  },
+  "glm_pie/coef/3": {
+   "kind": "vector"
+  },
+  "glm_pie/dev/1": {
+   "kind": "vector"
+  },
+  "glm_pie/dev/2": {
+   "kind": "vector"
+  },
+  "glm_pie/dev/3": {
+   "kind": "vector"
+  },
+  "glm_pie/iter/1": {
+   "kind": "vector"
+  },
+  "glm_pie/iter/2": {
+   "kind": "vector"
+  },
+  "glm_pie/iter/3": {
+   "kind": "vector"
+  },
+  "glm_pie/pred/1": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "glm_pie/pred/2": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "glm_pie/pred/3": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "glm_synth/coef/1": {
+   "kind": "vector"
+  },
+  "glm_synth/coef/2": {
+   "kind": "vector"
+  },
+  "glm_synth/coef/3": {
+   "kind": "vector"
+  },
+  "glm_synth/dev/1": {
+   "kind": "vector"
+  },
+  "glm_synth/dev/2": {
+   "kind": "vector"
+  },
+  "glm_synth/dev/3": {
+   "kind": "vector"
+  },
+  "glm_synth/iter/1": {
+   "kind": "vector"
+  },
+  "glm_synth/iter/2": {
+   "kind": "vector"
+  },
+  "glm_synth/iter/3": {
+   "kind": "vector"
+  },
+  "glm_synth/pred/1": {
+   "dim": [
+    50,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "glm_synth/pred/2": {
+   "dim": [
+    50,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "glm_synth/pred/3": {
+   "dim": [
+    50,
+    60
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "r": {
+   "r": "R version 4.4.2 (2024-10-31 ucrt)",
+   "versions": {
+    "OpenLand": "1.0.5",
+    "diffeR": "0.0.8",
+    "lulcc": "1.0.4",
+    "raster": "3.6.31",
+    "terra": "1.9.50"
+   }
+  }
+ }
+}

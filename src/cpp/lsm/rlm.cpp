@@ -303,6 +303,94 @@ int r_lm_residuals(double* x, const double* y, int n, int p, double* rsd) {
     return k;
 }
 
+// LINPACK's dqrls as R's C_Cdqrls calls it for one response: dqrdc2 with
+// tolerance `tol` on x (column-major n x p, overwritten), then dqrsl with job
+// 1110 for the coefficients b (p values, those of the columns beyond the
+// rank left at 0, as R's zero-filled output). jpvt receives the pivot (1-based).
+// Returns the rank.
+int r_dqrls(double* x, const double* y, int n, int p, double tol, double* b, int* jpvt) {
+    auto X = [&](int i, int j) -> double& { return x[static_cast<std::size_t>(j) * n + i]; };  // 0-based
+    std::vector<double> qraux(static_cast<std::size_t>(p)), work1(static_cast<std::size_t>(p)),
+        work2(static_cast<std::size_t>(p));
+    for (int j = 0; j < p; ++j) jpvt[j] = j + 1;
+    for (int j = 0; j < p; ++j) {
+        qraux[j] = dnrm2(n, &X(0, j));
+        work1[j] = qraux[j];
+        work2[j] = qraux[j];
+        if (work2[j] == 0.0) work2[j] = 1.0;
+    }
+    const int lup = std::min(n, p);
+    int k = p + 1;
+    for (int l = 1; l <= lup; ++l) {
+        while (!(l >= k || qraux[l - 1] >= work2[l - 1] * tol)) {
+            const int lp1 = l + 1;
+            for (int i = 0; i < n; ++i) {
+                const double t = X(i, l - 1);
+                for (int j = lp1; j <= p; ++j) X(i, j - 2) = X(i, j - 1);
+                X(i, p - 1) = t;
+            }
+            const int ii = jpvt[l - 1];
+            const double t = qraux[l - 1], tt = work1[l - 1], ttt = work2[l - 1];
+            for (int j = lp1; j <= p; ++j) {
+                jpvt[j - 2] = jpvt[j - 1];
+                qraux[j - 2] = qraux[j - 1];
+                work1[j - 2] = work1[j - 1];
+                work2[j - 2] = work2[j - 1];
+            }
+            jpvt[p - 1] = ii;
+            qraux[p - 1] = t;
+            work1[p - 1] = tt;
+            work2[p - 1] = ttt;
+            k = k - 1;
+        }
+        if (l == n) continue;
+        double nrmxl = dnrm2(n - l + 1, &X(l - 1, l - 1));
+        if (nrmxl == 0.0) continue;
+        if (X(l - 1, l - 1) != 0.0) nrmxl = std::copysign(std::fabs(nrmxl), X(l - 1, l - 1));
+        dscal(n - l + 1, 1.0 / nrmxl, &X(l - 1, l - 1));
+        X(l - 1, l - 1) = 1.0 + X(l - 1, l - 1);
+        const int lp1 = l + 1;
+        for (int j = lp1; j <= p; ++j) {
+            const double t = -ddot(n - l + 1, &X(l - 1, l - 1), &X(l - 1, j - 1)) / X(l - 1, l - 1);
+            daxpy(n - l + 1, t, &X(l - 1, l - 1), &X(l - 1, j - 1));
+            if (qraux[j - 1] == 0.0) continue;
+            const double r = std::fabs(X(l - 1, j - 1)) / qraux[j - 1];
+            double tt = 1.0 - r * r;
+            tt = std::max(tt, 0.0);
+            if (std::fabs(tt) < 1e-6) {
+                qraux[j - 1] = dnrm2(n - l, &X(l, j - 1));
+                work1[j - 1] = qraux[j - 1];
+            } else {
+                qraux[j - 1] = qraux[j - 1] * std::sqrt(tt);
+            }
+        }
+        qraux[l - 1] = X(l - 1, l - 1);
+        X(l - 1, l - 1) = -nrmxl;
+    }
+    k = std::min(k - 1, n);
+    for (int j = 0; j < p; ++j) b[j] = 0.0;
+    if (k < 1) return 0;
+    std::vector<double> qty(y, y + n);
+    const int ju = std::min(k, n - 1);
+    for (int j = 1; j <= ju; ++j) {
+        if (qraux[j - 1] == 0.0) continue;
+        const double temp = X(j - 1, j - 1);
+        X(j - 1, j - 1) = qraux[j - 1];
+        const double t = -ddot(n - j + 1, &X(j - 1, j - 1), &qty[j - 1]) / X(j - 1, j - 1);
+        daxpy(n - j + 1, t, &X(j - 1, j - 1), &qty[j - 1]);
+        X(j - 1, j - 1) = temp;
+    }
+    for (int j = 0; j < k; ++j) b[j] = qty[j];
+    for (int jj = 1; jj <= k; ++jj) {
+        const int j = k - jj + 1;
+        if (X(j - 1, j - 1) == 0.0) return k;  // dqrsl's info: singular (not reached for rank k)
+        b[j - 1] = b[j - 1] / X(j - 1, j - 1);
+        if (j == 1) continue;
+        daxpy(j - 1, -b[j - 1], &X(0, j - 1), b);
+    }
+    return k;
+}
+
 // Slope of R's lm(y ~ x) for n points: NaN when x is (numerically) constant
 // (rank 1, R's NA).
 double r_lm_slope(const double* xv, const double* yv, int n) {

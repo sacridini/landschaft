@@ -34,13 +34,22 @@ from ._difference import (
     overall_difference,
     sample_to_population,
 )
+from ._estimator import Estimator, RasterPotential
 from ._examples import example_data
+from ._glm import LogisticRegression
 from ._markov import Markov
+from ._mce import MultiCriteria
+from ._woe import WeightsOfEvidence, weights_of_evidence
 
 __all__ = [
     "Changes",
+    "Estimator",
     "IntensityAnalysis",
+    "LogisticRegression",
     "Markov",
+    "MultiCriteria",
+    "RasterPotential",
+    "WeightsOfEvidence",
     "changes",
     "composite_matrix",
     "crosstab",
@@ -51,4 +60,5 @@ __all__ = [
     "memberships",
     "overall_difference",
     "sample_to_population",
+    "weights_of_evidence",
 ]

@@ -185,6 +185,8 @@ set_target_properties(sdmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Land use change (ls.simulate): cross-tabulation and change counts.
 add_library(simcore STATIC
     src/cpp/sim/change.cpp
+    src/cpp/sim/woe.cpp
+    src/cpp/sim/rglm.cpp
 )
 target_include_directories(simcore PUBLIC src/cpp)
 target_link_libraries(simcore PUBLIC lsmcore)

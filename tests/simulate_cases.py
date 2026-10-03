@@ -681,3 +681,381 @@ list(fixed = sample2pop_fixed(ct, pop))
     "markov_absorbing": _markov_case("absorbing", 0, 1, 3),
     "markov_idempotent": _markov_case("idempotent", 0, 1, 2, "A singular matrix (eigenvalue 0)."),
 })
+
+
+# ============================================================================= phase 2: weights of evidence
+
+GROUPS += ["woe"]
+
+
+def woe_synth():
+    """Three classes on 60 x 70 cells, transitions 1 -> 2, 1 -> 3 and 3 -> 2 driven by a distance (minimum 5,
+    decimals), an elevation, a slope with holes and a categorical soil (seed 31)."""
+    import xarray as xr
+
+    rng = np.random.default_rng(31)
+    ny, nx = 60, 70
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    dist = 5.0 + np.hypot(yy - 20, xx - 15) * 30.0 + rng.random((ny, nx)) * 3
+    elev = 80.0 + yy * 7.5 + np.sin(xx / 9) * 40  # Dinamica mishandles negative values: kept positive
+    slope = np.abs(np.cos(yy / 7) * 12 + rng.normal(0, 2, (ny, nx)))
+    slope[40:46, 50:60] = np.nan
+    soil = (1 + (xx // 18) + 2 * (yy > 35)).astype(np.float64)
+    soil[soil == 4] = 9
+    t0 = rng.choice([1, 2, 3], (ny, nx), p=[0.55, 0.15, 0.3]).astype(np.float64)
+    t1 = t0.copy()
+    p12 = 0.5 * np.exp(-dist / 500) + 0.02
+    p13 = 0.15 * (elev > 300) + 0.03
+    p32 = 0.25 * (soil == 2) + 0.05
+    r = rng.random((ny, nx))
+    t1[(t0 == 1) & (r < p12)] = 2
+    t1[(t0 == 1) & (r >= p12) & (r < p12 + p13)] = 3
+    t1[(t0 == 3) & (r < p32)] = 2
+    t0[0:3, 0:5] = np.nan
+    t1[5:7, 60:64] = np.nan
+    names = ["t0", "t1", "dist", "elev", "slope", "soil"]
+    return xr.concat([grid(v) for v in (t0, t1, dist, elev, slope, soil)], dim="band").assign_coords(band=names)
+
+
+def woe_strips():
+    """The designed strip maps of the range probes (cells and transitions per increment of 30)."""
+    import xarray as xr
+
+    def strip(cells, trans):
+        rows, nk = max(cells), len(cells)
+        t0 = np.full((rows, nk), 3.0)
+        t1 = t0.copy()
+        for k, (n, t) in enumerate(zip(cells, trans)):
+            t0[:n, k] = 1
+            t1[:n, k] = 1
+            t1[:t, k] = 2
+        return t0, t1, np.tile(np.arange(nk) * 30.0, (rows, 1))
+
+    rng = np.random.default_rng(0)
+    cells = [int(x) for x in rng.integers(10, 80, 40)]
+    p = np.clip(0.3 * np.exp(-np.arange(40) / 12) + 0.02, 0, 1)
+    trans = [int(rng.binomial(c, q)) for c, q in zip(cells, p)]
+    out = []
+    for cl, tr in (([50] * 40, [5] * 10 + [15] * 30), ([50] * 45, [5] * 15 + [20] * 15 + [8] * 15),
+                   ([50] * 40, [15] * 10 + [5] * 30), (cells, trans)):
+        t0, t1, v = strip(cl, tr)
+        pad = 80 - t0.shape[0], 45 - t0.shape[1]
+        t0, t1, v = (np.pad(a, ((0, pad[0]), (0, pad[1])), constant_values=np.nan) for a in (t0, t1, v))
+        out.append(xr.concat([grid(t0), grid(t1), grid(v)], dim="band").assign_coords(band=["t0", "t1", "v"]))
+    return xr.concat(out, dim="strip")
+
+
+def sibuyan_woe():
+    """Sibuyan 1997 -> 2011 with distance to roads, to the sea, elevation, slope and diorite (categorical)."""
+    import xarray as xr
+
+    import landschaft as ls
+
+    lu = sibuyan()
+    d = ls.load_raster(ls.simulate.example_data("sibuyan_drivers"))
+    d = d.where(np.isfinite(d))
+    keep = ["dist_roads", "dist_sea", "elevation", "slope", "diorite"]
+    bands = [lu[0], lu[1], *[d.sel(band=k) for k in keep]]
+    return xr.concat([b.drop_vars("band", errors="ignore") for b in bands], dim="band").assign_coords(
+        band=["t0", "t1", *keep])
+
+
+def pie_woe():
+    """Plum Island 1985 -> 1999 (forest -> built) with elevation, slope and distance to built land."""
+    import xarray as xr
+
+    import landschaft as ls
+
+    lu = pie()
+    d = ls.load_raster(ls.simulate.example_data("pie_drivers"))
+    d = d.where(np.isfinite(d))
+    keep = ["elevation", "slope", "dist_built_1985"]
+    bands = [lu[0], lu[2], *[d.sel(band=k) for k in keep]]
+    return xr.concat([b.drop_vars("band", errors="ignore") for b in bands], dim="band").assign_coords(
+        band=["t0", "t1", "elev", "slope", "dist"])
+
+
+INPUTS.update({"woe_synth": woe_synth, "woe_strips": woe_strips, "sibuyan_woe": sibuyan_woe, "pie_woe": pie_woe})
+
+
+def _woe_skeleton(plan) -> str:
+    parts = []
+    for (f, t), variables in plan.items():
+        vs = []
+        for name, spec in variables.items():
+            if spec == "categorical":
+                vs.append(f'"{name}/{name}"')
+            else:
+                inc, mx, mn, ang = spec
+                vs.append(f'"{name}/{name}" {inc} {mx} {mn} {ang}')
+        parts.append(f"{f}->{t} [ {', '.join(vs)} ]")
+    return "[ " + ", ".join(parts) + " ]"
+
+
+def _woe_job(data, plan, *, fix=False, criteria=True, prob=True, corr=True):
+    names = sorted({n for v in plan.values() for n in v})
+    cats = {n for v in plan.values() for n, s in v.items() if s == "categorical"}
+    rasters = {k: data.sel(band=k).assign_attrs(categorical=True) for k in ("t0", "t1")}
+    loads, maps = [], []
+    for n in names:
+        da = data.sel(band=n)
+        if n in cats:
+            da = da.assign_attrs(categorical=True)
+            loads.append(f'  {n} := LoadCategoricalMap "{n}.tif" .none .default 0;')
+        else:
+            loads.append(f'  {n} := LoadMap "{n}.tif";')
+        rasters[n] = da
+        maps.append(f'    NameMap {n} "{n}";')
+    nm = "\n".join(maps)
+    opts = f"{'.yes' if fix else '.no'} {'.yes' if criteria else '.no'}"
+    trans = "[ " + ", ".join(f"{f}->{t}" for f, t in plan) + " ]"
+    body = [
+        'Script {{',
+        '  t0 := LoadCategoricalMap "t0.tif" .none .default 0;',
+        '  t1 := LoadCategoricalMap "t1.tif" .none .default 0;',
+        *loads,
+        f"  ranges := DetermineWeightsOfEvidenceRanges t0 t1 {_woe_skeleton(plan)} {opts} {{{{", nm, "  }};",
+        f"  weights report := DetermineWeightsOfEvidenceCoefficients t0 t1 ranges {opts} {{{{", nm, "  }};",
+        '  SaveTable report "report.csv";',
+    ]
+    outputs = ["report.csv"]
+    if corr and any(len(v) > 1 for v in plan.values()):
+        body += [f"  corr := DetermineWeightsOfEvidenceCorrelation ranges {trans} {{{{", nm, "  }};",
+                 '  SaveTable corr "corr.csv";']
+        outputs.append("corr.csv")
+    if prob:
+        body += [f"  prob := CalcWOfEProbabilityMap t0 weights {trans} .float64 {{{{", nm, "  }};",
+                 '  SaveMap prob "prob.tif";']
+        outputs.append("prob.tif")
+    body.append("}};")
+    return {"rasters": rasters, "script": "\n".join(body) + "\n", "outputs": outputs}
+
+
+def _woe_py(data, plan, *, fix=False, criteria=True, prob=True, corr=True):
+    import landschaft as ls
+
+    ranges = {}
+    for (f, t), variables in plan.items():
+        ranges[(f, t)] = {n: "categorical" if s == "categorical" else
+                          {"increment": s[0], "max_delta": s[1], "min_delta": s[2], "tolerance": s[3]}
+                          for n, s in variables.items()}
+    names = sorted({n for v in plan.values() for n in v})
+    drivers = {n: data.sel(band=n) for n in names}
+    w = ls.simulate.WeightsOfEvidence(ranges, fix_abnormal=fix, possible="any" if criteria else "stay")
+    w.fit(data.sel(band="t0"), data.sel(band="t1"), drivers)
+    out = {}
+    tab = w.table.sort_values(["Transition_From", "Transition_To", "Variable", "Range_Lower_Limit"], kind="stable")
+    cols = {"Transition_From": "Transition_From*", "Transition_To": "Transition_To*", "Variable": "Variable*",
+            "Range_Lower_Limit": "Range_Lower_Limit*", "Range_Upper_Limit": "Range_Upper_Limit*"}
+    for c in tab.columns:
+        key = f"report.csv/{cols.get(c, c)}"
+        out[key] = [f"{v}/{v}" for v in tab[c]] if c == "Variable" else tab[c].to_numpy(float)
+    if corr and any(len(v) > 1 for v in plan.values()):
+        cr = w.correlation()
+        ccols = {"Transition_From": "Transition_From*", "Transition_To": "Transition_To*",
+                 "First_Variable": "First_Variable*", "Second_Variable": "Second_Variable*"}
+        for c in cr.columns:
+            key = f"corr.csv/{ccols.get(c, c)}"
+            out[key] = [f"{v}/{v}" for v in cr[c]] if "Variable" in c else cr[c].to_numpy(float)
+    if prob:
+        out["prob.tif"] = np.squeeze(w.probability(data.sel(band="t0"), drivers).values)
+    return out
+
+
+_SYNTH_PLAN = {(1, 2): {"dist": (25, 100000, 1, 5), "elev": (10, 100000, 1, 5), "soil": "categorical"},
+               (1, 3): {"elev": (12.5, 600, 30, 3), "slope": (0.5, 100000, 1, 2)},
+               (3, 2): {"soil": "categorical", "dist": (40, 100000, 50, 10), "slope": (1, 100000, 1, 5)}}
+_SIB_PLAN = {(1, 3): {"dist_roads": (250, 100000, 1, 5), "elevation": (20, 100000, 1, 5),
+                      "slope": (1, 100000, 1, 5), "diorite": "categorical"},
+             (3, 2): {"dist_roads": (250, 100000, 1, 5), "dist_sea": (250, 100000, 1, 5)}}
+_PIE_PLAN = {(1, 2): {"dist": (100, 100000, 1, 5), "elev": (2, 100000, 1, 5), "slope": (0.5, 100000, 1, 5)}}
+
+
+def _strip_plan(k):
+    return {(1, 2): {"v": (30, 100000, 1, (5, 1, 0.5, 2)[k])}}
+
+
+def _woe_case(name, plan, notes="", **kw):
+    return Case("woe", "dinamica", (name,), job=lambda **d: _woe_job(d[name], plan, **kw),
+                py=lambda **d: _woe_py(d[name], plan, **kw), notes=notes)
+
+
+def _strip_case(k):
+    return Case("woe", "dinamica", ("woe_strips",),
+                job=lambda woe_strips: _woe_job(woe_strips[k], _strip_plan(k), prob=False),
+                py=lambda woe_strips: _woe_py(woe_strips[k], _strip_plan(k), prob=False),
+                notes="A designed curve of the range probes.")
+
+
+CASES.update({
+    "woe_synth": _woe_case("woe_synth", _SYNTH_PLAN, "Three transitions, per-transition settings, missing cells."),
+    "woe_synth_fix": _woe_case("woe_synth", _SYNTH_PLAN, "Abnormal weights fixed.", fix=True),
+    "woe_synth_stay": _woe_case("woe_synth", _SYNTH_PLAN, "Possible = kept the class or made the transition.",
+                                criteria=False),
+    "woe_sibuyan": _woe_case("sibuyan_woe", _SIB_PLAN, "Sibuyan 1997 -> 2011."),
+    "woe_pie": _woe_case("pie_woe", _PIE_PLAN, "Plum Island 1985 -> 1999, forest to built."),
+    **{f"woe_strip_{k}": _strip_case(k) for k in range(4)},
+})
+
+
+# ----------------------------------------------------------------------------- logistic regression (lulcc / glm)
+
+GROUPS += ["glm"]
+
+
+def pie_drivers():
+    import landschaft as ls
+
+    d = ls.load_raster(ls.simulate.example_data("pie_drivers")).astype("float64")
+    return d.where(np.isfinite(d))
+
+
+def glm_synth():
+    """A map of 3 classes and 4 drivers on 50 x 60 cells, one driver a linear combination of two others
+    (aliased in R's glm), holes in a driver (seed 41)."""
+    import xarray as xr
+
+    rng = np.random.default_rng(41)
+    ny, nx = 50, 60
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    a = xx / nx + rng.normal(0, 0.1, (ny, nx))
+    b = yy / ny + rng.normal(0, 0.1, (ny, nx))
+    c = 2 * a - 3 * b
+    d = np.sin(xx / 5) * np.cos(yy / 7)
+    d[10:14, 20:30] = np.nan
+    eta = np.stack([0.5 + 2 * a - b, -1 + 3 * b + d, 0.2 * a])
+    p = np.exp(eta) / np.exp(eta).sum(axis=0)
+    u = rng.random((ny, nx))
+    lu = np.where(u < p[0], 1.0, np.where(u < p[0] + p[1], 2.0, 3.0))
+    lu[0:2, 0:6] = np.nan
+    return xr.concat([grid(v) for v in (lu, a, b, c, d)], dim="band").assign_coords(band=["lu", "a", "b", "c", "d"])
+
+
+INPUTS.update({"pie_drivers": pie_drivers, "glm_synth": glm_synth})
+
+
+def _glm_py(lu, drivers, formulas):
+    import landschaft as ls
+
+    lr = ls.simulate.LogisticRegression(formulas).fit(lu, drivers)
+    out = {}
+    for k, cls in enumerate(formulas):
+        f = lr._fits[cls]
+        out[f"coef/{k + 1}"] = f["coefficients"]
+        out[f"iter/{k + 1}"] = np.array([float(f["iterations"])])
+        out[f"dev/{k + 1}"] = np.array([f["deviance"], f["null_deviance"]])
+        p = lr.predict(drivers, classes=[cls], landscape=lu).values[0]
+        out[f"pred/{k + 1}"] = p
+    return out
+
+
+_GLM_R = """
+cells <- which(!is.na(values({lu})))
+df <- as.data.frame(values(c({drivers})))
+df$lu <- values({lu})[, 1]
+forms <- list({forms})
+out <- list()
+for (k in seq_along(forms)) {{
+  cls <- forms[[k]][[1]]; vars <- forms[[k]][[2]]
+  d <- df; d$y <- as.numeric(d$lu == cls)
+  m <- glm(reformulate(vars, "y"), family = binomial, data = d[cells, ])
+  out[[paste0("coef/", k)]] <- unname(coef(m))
+  out[[paste0("iter/", k)]] <- m$iter
+  out[[paste0("dev/", k)]] <- c(m$deviance, m$null.deviance)
+  pr <- rep(NA_real_, nrow(df)); ok <- complete.cases(df[, vars, drop = FALSE]) & !is.na(df$lu)
+  pr[ok] <- predict(m, newdata = df[ok, ], type = "response")
+  out[[paste0("pred/", k)]] <- matrix(pr, nrow({lu}), ncol({lu}), byrow = TRUE)
+}}
+out
+"""
+
+
+def _glm_r(lu, drivers, formulas):
+    forms = ", ".join(f'list({c}, c({", ".join(repr(v).replace(chr(39), chr(34)) for v in vs)}))'
+                      for c, vs in formulas.items())
+    return _GLM_R.format(lu=lu, drivers=drivers, forms=forms)
+
+
+_PIE_FORMS = {2: ["elevation", "slope", "dist_built_1985"], 1: ["elevation", "slope"], 3: ["elevation", "slope"]}
+_SYN_FORMS = {1: ["a", "b", "c", "d"], 2: ["b", "d"], 3: ["a"]}
+
+CASES.update({
+    "glm_pie": Case(
+        "glm", "r", ("pie", "pie_drivers"),
+        r=_glm_r("pie[[1]]", "pie_drivers", _PIE_FORMS),
+        py=lambda pie, pie_drivers: _glm_py(pie[0], pie_drivers, _PIE_FORMS),
+        notes="lulcc's glmModels on Plum Island (the vignette's formulas), every cell."),
+    "glm_synth": Case(
+        "glm", "r", ("glm_synth",),
+        r=_glm_r("glm_synth[[1]]", "glm_synth[[2:5]]", _SYN_FORMS),
+        py=lambda glm_synth: _glm_py(glm_synth[0], glm_synth[1:5], _SYN_FORMS),
+        notes="An aliased driver (c = 2a - 3b: NA coefficient), holes in a driver."),
+})
+
+
+# ----------------------------------------------------------------------------- MOLUSCE: multi-criteria evaluation
+
+GROUPS += ["mce"]
+
+_MCE_A = [[1, 3, 5, 7], [1 / 3, 1, 2, 4], [1 / 5, 1 / 2, 1, 3], [1 / 7, 1 / 4, 1 / 3, 1]]
+
+
+def _mce_inputs():
+    d = glm_synth()
+    lu = d.sel(band="lu").values
+    factors = [d.sel(band=k).values for k in ("a", "b", "c", "d")]
+    return lu, factors
+
+
+def molusce_mce_job(import_module) -> dict:
+    from numpy import ma
+
+    dp = import_module("molusce.algorithms.dataprovider")
+    mce_mod = import_module("molusce.algorithms.models.mce.mce")
+    aa = import_module("molusce.algorithms.models.area_analysis.manager")
+    lu, factors = _mce_inputs()
+    geo = {"xSize": lu.shape[1], "ySize": lu.shape[0], "proj": "", "transform": (0, 1, 0, 0, 0, -1),
+           "units": "m"}
+
+    def raster(a, dtype):
+        r = dp.Raster()
+        m = ma.masked_invalid(a.astype(np.float64)).astype(dtype)
+        r.create([m], dict(geo))
+        return r
+
+    r = dp.Raster()
+    r.create([ma.array(np.where(np.isnan(lu), 0, lu).astype(np.uint8), mask=np.isnan(lu))], dict(geo))
+    state = r
+    rasters = [raster(f, np.float64) for f in factors]
+    analyst = aa.AreaAnalyst(state, second=None)
+    m = mce_mod.MCE(rasters, _MCE_A, 1, 2, analyst)
+    conf = m.getPrediction(state) and m.getConfidence().getBand(1)
+    return {"weights": np.asarray(m.getWeights(), float), "consistency": np.array([m.getConsistency()]),
+            "confidence": np.asarray(ma.filled(conf.astype(float), np.nan))}
+
+
+def _mce_py() -> dict:
+    import pandas as pd
+
+    import landschaft as ls
+
+    lu, factors = _mce_inputs()
+    names = ["a", "b", "c", "d"]
+    mce = ls.simulate.MultiCriteria(pd.DataFrame(_MCE_A, index=names, columns=names), transition=(1, 2))
+    # MOLUSCE truncates each weighted term to an integer percentage and adds them as uint8: rebuilt here from
+    # our weights and rescaled factors to show they are the same
+    conf = np.zeros(lu.shape, dtype=np.uint8)
+    mask = np.isnan(lu)
+    for w, f in zip(mce.weights.to_numpy(), factors):
+        norm = (f - np.nanmin(f)) / (np.nanmax(f) - np.nanmin(f))
+        conf = conf + np.nan_to_num(norm * w * 100).astype(np.uint8)
+        mask |= np.isnan(f)
+    conf = conf * (lu == 1)
+    return {"weights": mce.weights.to_numpy(), "consistency": np.array([mce.consistency]),
+            "confidence": np.where(mask, np.nan, conf.astype(float))}
+
+
+CASES.update({
+    "mce_molusce": Case("mce", "molusce", job=lambda: molusce_mce_job, py=_mce_py,
+                        notes="MOLUSCE's MCE: AHP weights, consistency ratio, the potential map."),
+})

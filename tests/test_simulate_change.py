@@ -11,7 +11,7 @@ import simulate_reference
 
 import landschaft as ls
 
-BITWISE = ["crosstab", "openland", "differ"]
+BITWISE = ["crosstab", "openland", "differ", "glm", "mce"]
 
 
 def _cases(groups):
@@ -137,3 +137,22 @@ def test_overall_identity():
     d = ls.simulate.overall_difference(ls.simulate.crosstab(lu[0], lu[1]))
     assert d["overall"] == pytest.approx(d["quantity"] + d["exchange"] + d["shift"])
     assert d["allocation"] == pytest.approx(d["exchange"] + d["shift"])
+
+
+# ----------------------------------------------------------------------------- weights of evidence (phase 2)
+
+_WOE_TOL = {"Weight_Coefficient": 1e-13, "Contrast": 1e-13, "Chi_2": 1e-13, "Cramer": 1e-13,
+            "Contingency": 1e-13, "Joint_Entropy": 1e-13, "Joint_Uncertainty": 1e-13, "prob.tif": 1e-13,
+            "Range_Lower_Limit*": 1e-14, "Range_Upper_Limit*": 1e-14}
+
+
+@pytest.mark.parametrize("case", simulate_reference.case_ids("woe"))
+def test_woe_as_dinamica(case):
+    # Dinamica writes 15 significant digits: weights compared to 1e-13, counts and ranges exactly
+    ref = simulate_reference.result("woe", case)
+    ours = simulate_cases.run_python(case)
+    assert set(ours) == set(ref), sorted(set(ours) ^ set(ref))
+    for key, value in ours.items():
+        col = key.split("/")[-1]
+        tol = _WOE_TOL.get(col, 0.0)
+        simulate_reference.assert_same(value, ref[key], f"{case}/{key}", rtol=tol, atol=tol)

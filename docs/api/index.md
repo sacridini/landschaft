@@ -536,4 +536,10 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.mad`](simulate.md#landschaft.simulate.mad) | Mean absolute deviation between two continuous maps and its components (diffeR's ``MAD``) |
 | [`ls.sample_to_population`](simulate.md#landschaft.simulate.sample_to_population) | A sample's cross-tabulation scaled to the population of each row category (diffeR's ``sample2pop``) |
 | [`ls.Markov`](simulate.md#landschaft.simulate.Markov) | A Markov chain of land change: the transition probabilities of a period and of each time step |
+| [`ls.WeightsOfEvidence`](simulate.md#landschaft.simulate.WeightsOfEvidence) | Weights of evidence of land use transitions, calibrated on two maps (Dinamica EGO's method) |
+| [`ls.weights_of_evidence`](simulate.md#landschaft.simulate.weights_of_evidence) | Calibrate weights of evidence in one call: ``WeightsOfEvidence(ranges, **kwargs).fit(t0, t1, drivers)`` |
+| [`ls.LogisticRegression`](simulate.md#landschaft.simulate.LogisticRegression) | Logistic regression of the presence of each land use class on the drivers (lulcc's ``glmModels``) |
+| [`ls.Estimator`](simulate.md#landschaft.simulate.Estimator) | Potential of each class from a scikit-learn classifier, one model per class |
+| [`ls.MultiCriteria`](simulate.md#landschaft.simulate.MultiCriteria) | Potential from weighted factors, the weights from pairwise comparisons (AHP; MOLUSCE's MCE) |
+| [`ls.RasterPotential`](simulate.md#landschaft.simulate.RasterPotential) | A potential given as maps: one layer per class (or transition), as computed elsewhere |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |

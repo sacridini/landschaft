@@ -94,6 +94,23 @@ def write_geotiff(path: Path, da) -> None:
     ls.write_raster(da, path, compress="none")
 
 
+def write_dinamica_raster(path: Path, da, name: str) -> None:
+    """A GeoTIFF Dinamica EGO reads: the band named ``name`` (its layer is ``name/name``); float maps as float64
+    with -9999 as no data (Dinamica needs a null value for NaN), categorical ones (``attrs["categorical"]``, or
+    integer maps) as int32 with -1 as no data."""
+    import rasterio
+
+    v = np.asarray(da.values)
+    if np.issubdtype(v.dtype, np.floating) and not da.attrs.get("categorical", False):
+        out = da.copy(data=np.where(np.isnan(v), -9999.0, v)).rio.write_nodata(-9999.0)
+    else:
+        f = v.astype(np.float64)
+        out = da.copy(data=np.where(np.isnan(f), -1, f).astype(np.int32)).rio.write_nodata(-1)
+    write_geotiff(path, out)
+    with rasterio.open(path, "r+") as dst:
+        dst.set_band_description(1, name)
+
+
 def read_geotiff(path: Path) -> np.ndarray:
     import rasterio
 
@@ -212,7 +229,7 @@ def run_dinamica(job: dict, tmp: Path) -> dict:
     if not DINAMICA.is_file():
         raise FileNotFoundError(f"Dinamica EGO console not found at {DINAMICA} (set LANDSCHAFT_DINAMICA)")
     for name, da in job.get("rasters", {}).items():
-        write_geotiff(tmp / f"{name}.tif", da)
+        write_dinamica_raster(tmp / f"{name}.tif", da, name)
     (tmp / "model.ego").write_text(job["script"], newline="\n")
     proc = subprocess.run([str(DINAMICA), "-processors", "1", "-predefined-seed", "model.ego"], cwd=tmp,
                           capture_output=True, text=True, timeout=job.get("timeout", 3600), check=False)
@@ -260,7 +277,17 @@ def _qgis_stubs() -> None:
     def pyqtSlot(*args, **kwargs):
         return lambda f: f
 
-    qtcore = types.ModuleType("qgis.PyQt.QtCore")
+    class _Any(types.ModuleType):
+        """A module whose every attribute is an empty class (names MOLUSCE imports but never calls here)."""
+
+        def __getattr__(self, name):
+            if name.startswith("__"):
+                raise AttributeError(name)
+            cls = type(name, (), {"__init__": lambda self, *a, **k: None})
+            setattr(self, name, cls)
+            return cls
+
+    qtcore = _Any("qgis.PyQt.QtCore")
     qtcore.QObject = QObject
     qtcore.QCoreApplication = QCoreApplication
     qtcore.pyqtSignal = _Signal
@@ -271,7 +298,19 @@ def _qgis_stubs() -> None:
     pyqt = types.ModuleType("qgis.PyQt")
     pyqt.QtCore = qtcore
     qgis.PyQt = pyqt
-    sys.modules.update({"qgis": qgis, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore})
+    extra = {name: _Any(name) for name in ("qgis.core", "qgis.gui", "qgis.PyQt.QtWidgets", "qgis.PyQt.QtXml",
+                                           "qgis.PyQt.QtGui", "osgeo.osr")}
+    gdal = types.ModuleType("osgeo.gdal")
+    for k, name in enumerate(["GDT_Unknown", "GDT_Byte", "GDT_UInt16", "GDT_Int16", "GDT_UInt32", "GDT_Int32",
+                              "GDT_Float32", "GDT_Float64"]):
+        setattr(gdal, name, k)
+    gdal.DCAP_CREATE = "DCAP_CREATE"
+    osgeo = types.ModuleType("osgeo")
+    osgeo.gdal, osgeo.osr = gdal, extra["osgeo.osr"]
+    qgis.core, qgis.gui = extra["qgis.core"], extra["qgis.gui"]
+    pyqt.QtWidgets, pyqt.QtXml, pyqt.QtGui = extra["qgis.PyQt.QtWidgets"], extra["qgis.PyQt.QtXml"], extra["qgis.PyQt.QtGui"]
+    sys.modules.update({"qgis": qgis, "qgis.PyQt": pyqt, "qgis.PyQt.QtCore": qtcore, "osgeo": osgeo,
+                        "osgeo.gdal": gdal, **extra})
 
 
 def molusce_version() -> str:

@@ -68,7 +68,7 @@ def run_r(cases: dict) -> tuple[dict, dict, dict]:
         out = tmp / "out"
         out.mkdir()
         subprocess.run([str(rscript), str(R_SCRIPT), str(tmp / "job.json"), str(out)], check=True,
-                       env=r_environment())
+                       env=r_environment(), cwd=tmp)  # plots R makes (Rplots.pdf) stay in tmp
         result = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         arrays: dict[str, np.ndarray] = {}
         meta: dict[str, dict] = {}

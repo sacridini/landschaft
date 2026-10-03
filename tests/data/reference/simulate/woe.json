@@ -1,0 +1,1259 @@
+{
+ "arrays": {
+  "woe_pie/corr.csv/Chi_2": {
+   "kind": "vector"
+  },
+  "woe_pie/corr.csv/Contingency": {
+   "kind": "vector"
+  },
+  "woe_pie/corr.csv/Cramer": {
+   "kind": "vector"
+  },
+  "woe_pie/corr.csv/First_Variable*": {
+   "kind": "text",
+   "values": [
+    "dist/dist",
+    "dist/dist",
+    "elev/elev"
+   ]
+  },
+  "woe_pie/corr.csv/Joint_Entropy": {
+   "kind": "vector"
+  },
+  "woe_pie/corr.csv/Joint_Uncertainty": {
+   "kind": "vector"
+  },
+  "woe_pie/corr.csv/Second_Variable*": {
+   "kind": "text",
+   "values": [
+    "elev/elev",
+    "slope/slope",
+    "slope/slope"
+   ]
+  },
+  "woe_pie/corr.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_pie/corr.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_pie/prob.tif": {
+   "dim": [
+    434,
+    497
+   ],
+   "kind": "matrix"
+  },
+  "woe_pie/report.csv/Contrast": {
+   "kind": "vector"
+  },
+  "woe_pie/report.csv/Executed_Transitions": {
+   "kind": "vector"
+  },
+  "woe_pie/report.csv/Possible_Transitions": {
+   "kind": "vector"
+  },
+  "woe_pie/report.csv/Range_Lower_Limit*": {
+   "kind": "vector"
+  },
+  "woe_pie/report.csv/Range_Upper_Limit*": {
+   "kind": "vector"
+  },
+  "woe_pie/report.csv/Significant": {
+   "kind": "vector"
+  },
+  "woe_pie/report.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_pie/report.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_pie/report.csv/Variable*": {
+   "kind": "text",
+   "values": [
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "slope/slope",
+    "slope/slope"
+   ]
+  },
+  "woe_pie/report.csv/Weight_Coefficient": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/corr.csv/Chi_2": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/corr.csv/Contingency": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/corr.csv/Cramer": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/corr.csv/First_Variable*": {
+   "kind": "text",
+   "values": [
+    "diorite/diorite",
+    "diorite/diorite",
+    "diorite/diorite",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "elevation/elevation",
+    "dist_roads/dist_roads"
+   ]
+  },
+  "woe_sibuyan/corr.csv/Joint_Entropy": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/corr.csv/Joint_Uncertainty": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/corr.csv/Second_Variable*": {
+   "kind": "text",
+   "values": [
+    "dist_roads/dist_roads",
+    "elevation/elevation",
+    "slope/slope",
+    "elevation/elevation",
+    "slope/slope",
+    "slope/slope",
+    "dist_sea/dist_sea"
+   ]
+  },
+  "woe_sibuyan/corr.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/corr.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/prob.tif": {
+   "dim": [
+    2,
+    108,
+    128
+   ],
+   "kind": "matrix"
+  },
+  "woe_sibuyan/report.csv/Contrast": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/report.csv/Executed_Transitions": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/report.csv/Possible_Transitions": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/report.csv/Range_Lower_Limit*": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/report.csv/Range_Upper_Limit*": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/report.csv/Significant": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/report.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/report.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_sibuyan/report.csv/Variable*": {
+   "kind": "text",
+   "values": [
+    "diorite/diorite",
+    "diorite/diorite",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "elevation/elevation",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_roads/dist_roads",
+    "dist_sea/dist_sea",
+    "dist_sea/dist_sea",
+    "dist_sea/dist_sea",
+    "dist_sea/dist_sea",
+    "dist_sea/dist_sea",
+    "dist_sea/dist_sea",
+    "dist_sea/dist_sea",
+    "dist_sea/dist_sea",
+    "dist_sea/dist_sea",
+    "dist_sea/dist_sea"
+   ]
+  },
+  "woe_sibuyan/report.csv/Weight_Coefficient": {
+   "kind": "vector"
+  },
+  "woe_strip_0/report.csv/Contrast": {
+   "kind": "vector"
+  },
+  "woe_strip_0/report.csv/Executed_Transitions": {
+   "kind": "vector"
+  },
+  "woe_strip_0/report.csv/Possible_Transitions": {
+   "kind": "vector"
+  },
+  "woe_strip_0/report.csv/Range_Lower_Limit*": {
+   "kind": "vector"
+  },
+  "woe_strip_0/report.csv/Range_Upper_Limit*": {
+   "kind": "vector"
+  },
+  "woe_strip_0/report.csv/Significant": {
+   "kind": "vector"
+  },
+  "woe_strip_0/report.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_strip_0/report.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_strip_0/report.csv/Variable*": {
+   "kind": "text",
+   "values": [
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v"
+   ]
+  },
+  "woe_strip_0/report.csv/Weight_Coefficient": {
+   "kind": "vector"
+  },
+  "woe_strip_1/report.csv/Contrast": {
+   "kind": "vector"
+  },
+  "woe_strip_1/report.csv/Executed_Transitions": {
+   "kind": "vector"
+  },
+  "woe_strip_1/report.csv/Possible_Transitions": {
+   "kind": "vector"
+  },
+  "woe_strip_1/report.csv/Range_Lower_Limit*": {
+   "kind": "vector"
+  },
+  "woe_strip_1/report.csv/Range_Upper_Limit*": {
+   "kind": "vector"
+  },
+  "woe_strip_1/report.csv/Significant": {
+   "kind": "vector"
+  },
+  "woe_strip_1/report.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_strip_1/report.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_strip_1/report.csv/Variable*": {
+   "kind": "text",
+   "values": [
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v"
+   ]
+  },
+  "woe_strip_1/report.csv/Weight_Coefficient": {
+   "kind": "vector"
+  },
+  "woe_strip_2/report.csv/Contrast": {
+   "kind": "vector"
+  },
+  "woe_strip_2/report.csv/Executed_Transitions": {
+   "kind": "vector"
+  },
+  "woe_strip_2/report.csv/Possible_Transitions": {
+   "kind": "vector"
+  },
+  "woe_strip_2/report.csv/Range_Lower_Limit*": {
+   "kind": "vector"
+  },
+  "woe_strip_2/report.csv/Range_Upper_Limit*": {
+   "kind": "vector"
+  },
+  "woe_strip_2/report.csv/Significant": {
+   "kind": "vector"
+  },
+  "woe_strip_2/report.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_strip_2/report.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_strip_2/report.csv/Variable*": {
+   "kind": "text",
+   "values": [
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v"
+   ]
+  },
+  "woe_strip_2/report.csv/Weight_Coefficient": {
+   "kind": "vector"
+  },
+  "woe_strip_3/report.csv/Contrast": {
+   "kind": "vector"
+  },
+  "woe_strip_3/report.csv/Executed_Transitions": {
+   "kind": "vector"
+  },
+  "woe_strip_3/report.csv/Possible_Transitions": {
+   "kind": "vector"
+  },
+  "woe_strip_3/report.csv/Range_Lower_Limit*": {
+   "kind": "vector"
+  },
+  "woe_strip_3/report.csv/Range_Upper_Limit*": {
+   "kind": "vector"
+  },
+  "woe_strip_3/report.csv/Significant": {
+   "kind": "vector"
+  },
+  "woe_strip_3/report.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_strip_3/report.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_strip_3/report.csv/Variable*": {
+   "kind": "text",
+   "values": [
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v",
+    "v/v"
+   ]
+  },
+  "woe_strip_3/report.csv/Weight_Coefficient": {
+   "kind": "vector"
+  },
+  "woe_synth/corr.csv/Chi_2": {
+   "kind": "vector"
+  },
+  "woe_synth/corr.csv/Contingency": {
+   "kind": "vector"
+  },
+  "woe_synth/corr.csv/Cramer": {
+   "kind": "vector"
+  },
+  "woe_synth/corr.csv/First_Variable*": {
+   "kind": "text",
+   "values": [
+    "dist/dist",
+    "dist/dist",
+    "elev/elev",
+    "elev/elev",
+    "dist/dist",
+    "dist/dist",
+    "slope/slope"
+   ]
+  },
+  "woe_synth/corr.csv/Joint_Entropy": {
+   "kind": "vector"
+  },
+  "woe_synth/corr.csv/Joint_Uncertainty": {
+   "kind": "vector"
+  },
+  "woe_synth/corr.csv/Second_Variable*": {
+   "kind": "text",
+   "values": [
+    "elev/elev",
+    "soil/soil",
+    "soil/soil",
+    "slope/slope",
+    "slope/slope",
+    "soil/soil",
+    "soil/soil"
+   ]
+  },
+  "woe_synth/corr.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_synth/corr.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_synth/prob.tif": {
+   "dim": [
+    3,
+    60,
+    70
+   ],
+   "kind": "matrix"
+  },
+  "woe_synth/report.csv/Contrast": {
+   "kind": "vector"
+  },
+  "woe_synth/report.csv/Executed_Transitions": {
+   "kind": "vector"
+  },
+  "woe_synth/report.csv/Possible_Transitions": {
+   "kind": "vector"
+  },
+  "woe_synth/report.csv/Range_Lower_Limit*": {
+   "kind": "vector"
+  },
+  "woe_synth/report.csv/Range_Upper_Limit*": {
+   "kind": "vector"
+  },
+  "woe_synth/report.csv/Significant": {
+   "kind": "vector"
+  },
+  "woe_synth/report.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_synth/report.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_synth/report.csv/Variable*": {
+   "kind": "text",
+   "values": [
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil"
+   ]
+  },
+  "woe_synth/report.csv/Weight_Coefficient": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/corr.csv/Chi_2": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/corr.csv/Contingency": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/corr.csv/Cramer": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/corr.csv/First_Variable*": {
+   "kind": "text",
+   "values": [
+    "dist/dist",
+    "dist/dist",
+    "elev/elev",
+    "elev/elev",
+    "dist/dist",
+    "dist/dist",
+    "slope/slope"
+   ]
+  },
+  "woe_synth_fix/corr.csv/Joint_Entropy": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/corr.csv/Joint_Uncertainty": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/corr.csv/Second_Variable*": {
+   "kind": "text",
+   "values": [
+    "elev/elev",
+    "soil/soil",
+    "soil/soil",
+    "slope/slope",
+    "slope/slope",
+    "soil/soil",
+    "soil/soil"
+   ]
+  },
+  "woe_synth_fix/corr.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/corr.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/prob.tif": {
+   "dim": [
+    3,
+    60,
+    70
+   ],
+   "kind": "matrix"
+  },
+  "woe_synth_fix/report.csv/Contrast": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/report.csv/Executed_Transitions": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/report.csv/Possible_Transitions": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/report.csv/Range_Lower_Limit*": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/report.csv/Range_Upper_Limit*": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/report.csv/Significant": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/report.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/report.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_synth_fix/report.csv/Variable*": {
+   "kind": "text",
+   "values": [
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil"
+   ]
+  },
+  "woe_synth_fix/report.csv/Weight_Coefficient": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/corr.csv/Chi_2": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/corr.csv/Contingency": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/corr.csv/Cramer": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/corr.csv/First_Variable*": {
+   "kind": "text",
+   "values": [
+    "dist/dist",
+    "dist/dist",
+    "elev/elev",
+    "elev/elev",
+    "dist/dist",
+    "dist/dist",
+    "slope/slope"
+   ]
+  },
+  "woe_synth_stay/corr.csv/Joint_Entropy": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/corr.csv/Joint_Uncertainty": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/corr.csv/Second_Variable*": {
+   "kind": "text",
+   "values": [
+    "elev/elev",
+    "soil/soil",
+    "soil/soil",
+    "slope/slope",
+    "slope/slope",
+    "soil/soil",
+    "soil/soil"
+   ]
+  },
+  "woe_synth_stay/corr.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/corr.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/prob.tif": {
+   "dim": [
+    3,
+    60,
+    70
+   ],
+   "kind": "matrix"
+  },
+  "woe_synth_stay/report.csv/Contrast": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/report.csv/Executed_Transitions": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/report.csv/Possible_Transitions": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/report.csv/Range_Lower_Limit*": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/report.csv/Range_Upper_Limit*": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/report.csv/Significant": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/report.csv/Transition_From*": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/report.csv/Transition_To*": {
+   "kind": "vector"
+  },
+  "woe_synth_stay/report.csv/Variable*": {
+   "kind": "text",
+   "values": [
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "elev/elev",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "dist/dist",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "slope/slope",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil",
+    "soil/soil"
+   ]
+  },
+  "woe_synth_stay/report.csv/Weight_Coefficient": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "dinamica": {
+   "dinamica": "8130"
+  }
+ }
+}

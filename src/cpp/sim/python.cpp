@@ -13,7 +13,9 @@
 #include <vector>
 
 #include "sim/change.hpp"
+#include "sim/rglm.hpp"
 #include "sim/rng.hpp"
+#include "sim/woe.hpp"
 
 namespace py = pybind11;
 
@@ -118,6 +120,99 @@ py::array_t<i64> sim_lrand48(i64 seed, i64 n, bool is_signed) {
     return out;
 }
 
+using DArray = py::array_t<double, py::array::c_style | py::array::forcecast>;
+using IArray = py::array_t<std::int32_t, py::array::c_style | py::array::forcecast>;
+
+py::array_t<std::int32_t> sim_woe_buckets(const py::array& var, std::optional<double> nodata, bool categorical,
+                                          const DArray& classes, double start, double inc, i64 n_buckets) {
+    const auto view = map_view(var, nodata);
+    std::vector<double> c(classes.data(), classes.data() + classes.size());
+    std::vector<std::int32_t> b;
+    {
+        py::gil_scoped_release release;
+        b = sim::woe_buckets(view, categorical, c, start, inc, n_buckets);
+    }
+    py::array_t<std::int32_t> out(static_cast<py::ssize_t>(b.size()));
+    std::copy(b.begin(), b.end(), out.mutable_data());
+    return out;
+}
+
+py::array_t<std::int64_t> sim_woe_counts(const py::array& t0, const py::array& t1, const IArray& buckets,
+                                         i64 n_buckets, double from, const DArray& final_classes,
+                                         std::optional<double> nodata_t0, std::optional<double> nodata_t1) {
+    const auto a = map_view(t0, nodata_t0), b = map_view(t1, nodata_t1);
+    std::vector<std::int32_t> k(buckets.data(), buckets.data() + buckets.size());
+    std::vector<double> fc(final_classes.data(), final_classes.data() + final_classes.size());
+    std::vector<std::int64_t> c;
+    {
+        py::gil_scoped_release release;
+        c = sim::woe_counts(a, b, k, n_buckets, from, fc);
+    }
+    py::array_t<std::int64_t> out({static_cast<py::ssize_t>(n_buckets), static_cast<py::ssize_t>(fc.size())});
+    std::copy(c.begin(), c.end(), out.mutable_data());
+    return out;
+}
+
+py::array_t<double> sim_woe_probability(const py::array& landscape, std::optional<double> nodata, double from,
+                                        const std::vector<IArray>& buckets, const std::vector<DArray>& weights) {
+    const auto view = map_view(landscape, nodata);
+    std::vector<const std::int32_t*> b;
+    std::vector<std::vector<double>> w;
+    for (const auto& x : buckets) {
+        if (static_cast<i64>(x.size()) != view.n) throw std::invalid_argument("buckets and landscape differ in size");
+        b.push_back(x.data());
+    }
+    for (const auto& x : weights) w.emplace_back(x.data(), x.data() + x.size());
+    std::vector<double> p;
+    {
+        py::gil_scoped_release release;
+        p = sim::woe_probability(view, from, b, w, view.n);
+    }
+    py::array_t<double> out(static_cast<py::ssize_t>(p.size()));
+    std::copy(p.begin(), p.end(), out.mutable_data());
+    return out;
+}
+
+// x: (p, n) C-contiguous, i.e. the n x p model matrix column by column (R's layout)
+py::dict sim_glm_logit(const DArray& x, const DArray& y, int maxit, double epsilon) {
+    if (x.ndim() != 2) throw std::invalid_argument("x must be (p, n)");
+    const int p = static_cast<int>(x.shape(0)), n = static_cast<int>(x.shape(1));
+    std::vector<double> xv(x.data(), x.data() + x.size()), yv(y.data(), y.data() + y.size());
+    sim::GlmFit fit;
+    {
+        py::gil_scoped_release release;
+        fit = sim::glm_logit(xv, yv, n, p, maxit, epsilon);
+    }
+    py::dict d;
+    d["coefficients"] = py::array_t<double>(fit.coefficients.size(), fit.coefficients.data());
+    d["pivot"] = py::array_t<int>(fit.pivot.size(), fit.pivot.data());
+    d["rank"] = fit.rank;
+    d["iterations"] = fit.iterations;
+    d["converged"] = fit.converged;
+    d["boundary"] = fit.boundary;
+    d["deviance"] = fit.deviance;
+    d["null_deviance"] = fit.null_deviance;
+    return d;
+}
+
+py::array_t<double> sim_glm_predict(const DArray& x, const DArray& coefficients, const py::array_t<int>& pivot, int rank) {
+    if (x.ndim() != 2) throw std::invalid_argument("x must be (p, n)");
+    const int p = static_cast<int>(x.shape(0));
+    const i64 n = static_cast<i64>(x.shape(1));
+    sim::GlmFit fit;
+    fit.coefficients.assign(coefficients.data(), coefficients.data() + coefficients.size());
+    fit.pivot.assign(pivot.data(), pivot.data() + pivot.size());
+    fit.rank = rank;
+    std::vector<double> out;
+    {
+        py::gil_scoped_release release;
+        out = sim::glm_logit_predict(x.data(), n, p, fit);
+    }
+    py::array_t<double> r(static_cast<py::ssize_t>(out.size()));
+    std::copy(out.begin(), out.end(), r.mutable_data());
+    return r;
+}
+
 }  // namespace
 
 namespace sim {
@@ -136,6 +231,18 @@ void register_python(py::module_& m) {
           "Cells of each class of a (rows) holding each class of b (columns).");
     m.def("sim_change_count", &sim_change_count, py::arg("maps"), py::arg("nodata") = py::none(),
           "Per cell, the number of consecutive maps that differ (-1 where any map is missing).");
+    m.def("sim_woe_buckets", &sim_woe_buckets, py::arg("var"), py::arg("nodata"), py::arg("categorical"),
+          py::arg("classes"), py::arg("start"), py::arg("inc"), py::arg("n_buckets"),
+          "Bucket (increment or category index) of each cell, -1 where missing.");
+    m.def("sim_woe_counts", &sim_woe_counts, py::arg("t0"), py::arg("t1"), py::arg("buckets"), py::arg("n_buckets"),
+          py::arg("from_class"), py::arg("final_classes"), py::arg("nodata_t0") = py::none(),
+          py::arg("nodata_t1") = py::none(), "Cells of initial class from_class by bucket and final class.");
+    m.def("sim_woe_probability", &sim_woe_probability, py::arg("landscape"), py::arg("nodata"), py::arg("from_class"),
+          py::arg("buckets"), py::arg("weights"), "Sum of the weights of each cell (NaN outside the class).");
+    m.def("sim_glm_logit", &sim_glm_logit, py::arg("x"), py::arg("y"), py::arg("maxit") = 25, py::arg("epsilon") = 1e-8,
+          "R's glm(family = binomial) fit (glm.fit), x the model matrix as (p, n).");
+    m.def("sim_glm_predict", &sim_glm_predict, py::arg("x"), py::arg("coefficients"), py::arg("pivot"),
+          py::arg("rank"), "predict(glm, type = 'response') on the model matrix (p, n).");
 }
 
 }  // namespace sim
