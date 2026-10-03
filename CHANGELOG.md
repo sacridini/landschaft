@@ -6,6 +6,23 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-10-03
+
+### Added
+- `ls.simulate` phase 5b, FUTURES' climate submodel and tools:
+  - `Flooding` (`PatchGrowing(climate=...)`): floods drawn per catchment from depth maps or from
+    flood probability and HAND, depth-damage curves per region, a Gaussian response from adaptive
+    capacity (retreat, adapt, stay), abandonment, migration of demand between subregions through a
+    redistribution matrix and population densities; `Simulation.adaptation`, `floods`,
+    `redistribution`; bit for bit with r.futures.simulation;
+  - `patch_library` and `calibrate_patches` (r.futures.calib), bit for bit;
+  - `DevelopmentPotential.fit` (r.futures.potential): R's `glmer` with a random intercept or slope
+    per subregion (Laplace; within lme4's convergence tolerance), MuMIn's dredge by AIC, R's `glm`
+    with one subregion (bit for bit); `DevelopmentPotential.surface` (r.futures.potsurface).
+- FUTURES defects corrected (tested against the patched module): the flood level samples the whole
+  catchment (the module reads only the first column of its bounding box); only simulated cells set a
+  catchment's flood probability.
+
 ## [1.10.0] - 2026-10-03
 
 ### Added
