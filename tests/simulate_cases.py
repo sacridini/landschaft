@@ -1507,3 +1507,291 @@ CASES.update({
     "clumondo_stops": _clumondo_case("stops", "clumondo_fixed", "No solution in year 6 (20000 iterations): "
                                      "the simulation stops after year 5."),
 })
+
+
+# ----------------------------------------------------------------------------- FUTURES
+
+GROUPS += ["futures"]
+
+_FUT_STEPS = 5
+
+
+def futures_world():
+    """60 x 80 cells (30 m): developed clusters, an excluded lake, three subregions (ids 30, 10, 20 in order of
+    first appearance), two potential subregions, three predictors, a weight map and zones (seed 17)."""
+    import xarray as xr
+
+    rng = np.random.default_rng(17)
+    ny, nx = 60, 80
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    centres = [(15, 20), (40, 55), (10, 65), (48, 15)]
+    dist = np.min([np.hypot(yy - a, xx - b) for a, b in centres], axis=0)
+    developed = (dist + 3 * rng.random((ny, nx)) < 6).astype(np.float64)
+    lake = np.hypot(yy - 30, xx - 35) < 6
+    developed[lake] = np.nan
+    sub = np.where(xx < 30, 30.0, np.where(yy < 30, 10.0, 20.0))
+    sub[0, 40] = 20.0  # row order: 30 first, then 20 (this cell), then 10
+    psub = np.where(yy < 35, 1.0, 2.0)
+    slope = (np.abs(np.sin(xx / 9.0) * np.cos(yy / 7.0)) * 20 + rng.random((ny, nx))).round(3)
+    road = np.minimum(np.abs(yy - 25), np.abs(xx - 45)) * 30.0
+    forest = rng.random((ny, nx)).round(4)
+    forest[5, 5] = np.nan  # a hole in a predictor: the cell is excluded
+    weight = np.where((xx > 60) & (yy > 40), -0.6, np.where((xx < 15) & (yy < 15), 0.5, 0.0))
+    zone = np.select([xx < 20, xx < 40, yy < 20], [130.0, 200.0, 101.0], 301.0)
+    layers = {"developed": developed, "sub": sub, "psub": psub, "slope": slope, "road": road, "forest": forest,
+              "weight": weight, "zone": zone}
+    return xr.concat([grid(v) for v in layers.values()], dim="band").assign_coords(band=list(layers))
+
+
+INPUTS.update({"futures_world": futures_world})
+
+_FUT_POT = [  # subregion, intercept, development_pressure, slope, road, forest
+    (30, -2.6, 0.08, -0.06, -0.0011, -0.8),
+    (10, -2.2, 0.11, -0.05, -0.0009, -1.1),
+    (20, -2.9, 0.06, -0.07, -0.0013, -0.5),
+    (1, -2.5, 0.09, -0.06, -0.001, -0.9),
+]
+_FUT_POT_PSUB = [(1, -2.4, 0.09, -0.06, -0.001, -0.9), (2, -2.8, 0.07, -0.05, -0.0012, -0.6)]
+_FUT_DEMAND = {30: [40, 35, 50, 30, 45], 10: [25, 30, 20, 35, 28], 20: [30, 22, 41, 18, 33],
+               1: [95, 87, 111, 83, 106]}
+_FUT_PATCHES = {30: [1, 3, 5, 8, 2, 12, 4, 1, 6], 10: [2, 2, 7, 15, 3, 1], 20: [4, 9, 1, 1, 5, 20, 2, 3]}
+
+
+def _all_patches():
+    return [v for sizes in _FUT_PATCHES.values() for v in sizes]
+
+
+def _fut_table(rows, header):
+    return "\n".join([",".join(header)] + [",".join(repr(v) for v in r) for r in rows]) + "\n"
+
+
+def _fut_files(opts):
+    pot = _FUT_POT_PSUB if opts.get("potential_subregions") else _FUT_POT
+    regions = opts.get("regions", [30, 10, 20])
+    files = {"potential.csv": _fut_table(pot, ["ID", "Intercept", "development_pressure", "slope", "road", "forest"])}
+    years = list(range(2021, 2021 + _FUT_STEPS))
+    files["demand.csv"] = _fut_table([(y, *(_FUT_DEMAND[r][k] for r in regions)) for k, y in enumerate(years)],
+                                     ["year", *map(str, regions)])
+    if opts.get("patch_columns"):
+        n = max(len(v) for v in _FUT_PATCHES.values())
+        rows = [[str(_FUT_PATCHES[r][k]) if k < len(_FUT_PATCHES[r]) else "" for r in regions] for k in range(n)]
+        files["patches.csv"] = ",".join(map(str, regions)) + "\n" + "\n".join(",".join(r) for r in rows) + "\n"
+    else:
+        files["patches.csv"] = "\n".join(str(v) for v in _all_patches()) + "\n"
+    if opts.get("zoning_effects") is not None:
+        z = opts["zoning_effects"]
+        files["zoning.csv"] = ",".join(["region", "stringency", *map(str, z["zones"])]) + "\n" + "\n".join(
+            ",".join([str(r), repr(z["stringency"][r]), *(repr(e) for e in z["effects"][r])]) for r in regions) + "\n"
+    return files
+
+
+def futures_job(world, opts, module="r.futures.simulation"):
+    bands = ["developed", "sub", "slope", "road", "forest"]
+    if opts.get("potential_subregions"):
+        bands.append("psub")
+    if opts.get("weight"):
+        bands.append("weight")
+    if opts.get("zoning"):
+        bands.append("zone")
+    rasters = {b: world.sel(band=b).drop_vars("band") for b in bands}
+    if opts.get("regions") == [1]:
+        rasters["sub"] = rasters["sub"].copy(data=np.ones(rasters["sub"].shape))
+    files = _fut_files(opts)
+    heredocs = "".join(f"cat > {name} <<'EOF'\n{text}EOF\n" for name, text in files.items())
+    pr = opts.get("pressure", {"method": "gravity", "size": 8, "gamma": 1.5, "scaling_factor": 1.0})
+    dp = (f"r.futures.devpressure -n input=developed output=pressure method={pr['method']} size={pr['size']}"
+          + (f" gamma={pr['gamma']} scaling_factor={pr['scaling_factor']}" if pr["method"] != "occurrence" else ""))
+    args = ["developed=developed subregions=sub predictors=slope,road,forest development_pressure=pressure",
+            f"n_dev_neighbourhood={pr['size']} development_pressure_approach={pr['method']}",
+            f"gamma={pr.get('gamma', 1.5)} scaling_factor={pr.get('scaling_factor', 1.0)}",
+            "devpot_params=potential.csv demand=demand.csv patch_sizes=patches.csv",
+            f"num_neighbors={opts.get('num_neighbors', 4)} seed_search={opts.get('seed_search', 'probability')}",
+            f"compactness_mean={opts.get('compactness_mean', 0.4)} compactness_range={opts.get('compactness_range', 0.05)}",
+            f"discount_factor={opts.get('discount_factor', 1.0)} random_seed={opts.get('seed', 1)}",
+            f"incentive_power={opts.get('incentive_power', 1.0)} output=final output_series=step"]
+    if opts.get("potential_subregions"):
+        args.append("subregions_potential=psub")
+    if opts.get("weight"):
+        args.append("potential_weight=weight")
+    if opts.get("zoning"):
+        args.append("zoning=zone" + (" zoning_effects=zoning.csv" if opts.get("zoning_effects") else ""))
+    script = (heredocs + dp + "\n" + module + " " + " ".join(args) + "\n"
+              + "r.out.gdal --quiet -c input=pressure output=$OUT/pressure.tif type=Float32\n"
+              + "".join(f"r.out.gdal --quiet -c input=step_{k} output=$OUT/step_{k}.tif type=Int32\n"
+                        for k in range(1, _FUT_STEPS + 1)))
+    outputs = ["pressure.tif"] + [f"step_{k}.tif" for k in range(1, _FUT_STEPS + 1)]
+    return {"rasters": rasters, "script": script, "outputs": outputs}
+
+
+def futures_py(world, opts) -> dict:
+    import pandas as pd
+
+    S = _ls().simulate
+    regions = opts.get("regions", [30, 10, 20])
+    w = {b: world.sel(band=b).drop_vars("band") for b in world.band.values}
+    sub = w["sub"] if regions != [1] else w["sub"].copy(data=np.ones(w["sub"].shape))
+    pot_rows = _FUT_POT_PSUB if opts.get("potential_subregions") else _FUT_POT
+    pot = S.DevelopmentPotential(pd.DataFrame(pot_rows, columns=["ID", "Intercept", "development_pressure", "slope",
+                                                                  "road", "forest"]).set_index("ID"))
+    years = list(range(2021, 2021 + _FUT_STEPS))
+    demand = S.DevelopmentDemand(pd.DataFrame({r: _FUT_DEMAND[r] for r in regions}, index=years))
+    patches = {r: _FUT_PATCHES[r] for r in regions} if opts.get("patch_columns") else \
+        _all_patches()
+    pr = opts.get("pressure", {"method": "gravity", "size": 8, "gamma": 1.5, "scaling_factor": 1.0})
+    ze = opts.get("zoning_effects")
+    zoning_effects = None
+    if ze is not None:
+        zoning_effects = pd.DataFrame({"stringency": [ze["stringency"][r] for r in regions],
+                                       **{z: [ze["effects"][r][k] for r in regions] for k, z in enumerate(ze["zones"])}},
+                                      index=regions)
+    alloc = S.PatchGrowing(
+        patches, subregions=sub, potential_subregions=w["psub"] if opts.get("potential_subregions") else None,
+        neighborhood=pr["size"], approach=pr["method"], gamma=pr.get("gamma", 1.5),
+        scaling_factor=pr.get("scaling_factor", 1.0), discount_factor=opts.get("discount_factor", 1.0),
+        compactness_mean=opts.get("compactness_mean", 0.4), compactness_range=opts.get("compactness_range", 0.05),
+        num_neighbors=opts.get("num_neighbors", 4), seed_search=opts.get("seed_search", "probability"),
+        incentive_power=opts.get("incentive_power", 1.0), weight=w["weight"] if opts.get("weight") else None,
+        zoning=w["zone"] if opts.get("zoning") else None, zoning_effects=zoning_effects)
+    drivers = {k: w[k] for k in ("slope", "road", "forest")}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sim = S.Model(pot, demand, alloc).run(w["developed"], drivers, seed=opts.get("seed", 1))
+    pressure = S.development_pressure(w["developed"], pr["size"], method=pr["method"], gamma=pr.get("gamma"),
+                                      scaling_factor=pr.get("scaling_factor"))
+    out = {"pressure.tif": pressure.values.astype(np.float64)}
+    for k in range(1, _FUT_STEPS + 1):
+        out[f"step_{k}.tif"] = sim.development.values[k]
+    return out
+
+
+def _fut_case(opts, module, notes):
+    return Case("futures", "grass", ("futures_world",),
+                job=lambda futures_world: futures_job(futures_world, opts, module),
+                py=lambda futures_world: futures_py(futures_world, opts), notes=notes)
+
+
+_ZONING = {"zones": [130, 200, 101, 301],
+           "stringency": {30: 1.3, 10: 0.7, 20: 1.0},
+           "effects": {30: [-0.5, 0.2, -0.1, 0.4], 10: [-0.8, -0.3, 0.6, 0.1], 20: [0.0, -0.2, -0.9, 0.3]}}
+
+CASES.update({
+    "futures_one": _fut_case({"regions": [1]}, "r.futures.simulation",
+                             "One subregion (patches cannot cross into another: the module as released)."),
+    "futures_regions": _fut_case({"patch_columns": True, "num_neighbors": 8, "discount_factor": 0.7},
+                                 "r.futures.simulation_fixed",
+                                 "Three subregions, a patch library per subregion, 8 neighbours, discount factor; "
+                                 "patches cross subregions (pressure correction)."),
+    "futures_random": _fut_case({"seed_search": "random", "incentive_power": 2.0, "weight": True, "seed": 7,
+                                 "pressure": {"method": "kernel", "size": 6, "gamma": 2.0, "scaling_factor": 3.0},
+                                 "compactness_mean": 0.6, "compactness_range": 0.3},
+                                "r.futures.simulation_fixed",
+                                "Random seeds, infill incentive, potential weights, kernel pressure."),
+    "futures_zoning": _fut_case({"zoning": True, "potential_subregions": True, "seed": 3,
+                                 "pressure": {"method": "occurrence", "size": 5}},
+                                "r.futures.simulation_fixed",
+                                "Predefined zoning effects, potential subregions, occurrence pressure."),
+    "futures_zoning_custom": _fut_case({"zoning": True, "zoning_effects": _ZONING, "seed": 11,
+                                        "incentive_power": 0.5},
+                                       "r.futures.simulation_fixed",
+                                       "Zoning effects per subregion with stringency; sprawl incentive."),
+})
+
+
+def _fut_pressure_job(world, method, size, gamma, scaling):
+    dev = world.sel(band="developed").drop_vars("band")
+    extra = f" gamma={gamma} scaling_factor={scaling}" if method != "occurrence" else ""
+    script = (f"r.futures.devpressure input=developed output=pressure method={method} size={size}{extra}\n"
+              "r.out.gdal --quiet -c input=pressure output=$OUT/pressure.tif type=Float32\n")
+    return {"rasters": {"developed": dev}, "script": script, "outputs": ["pressure.tif"]}
+
+
+def _fut_pressure_py(world, method, size, gamma, scaling):
+    dev = world.sel(band="developed").drop_vars("band")
+    p = _ls().simulate.development_pressure(dev, size, method=method, gamma=gamma, scaling_factor=scaling, pad=False)
+    return {"pressure.tif": p.values.astype(np.float64)}
+
+
+def _fut_pressure_case(method, size, gamma=None, scaling=None):
+    return Case("futures", "grass", ("futures_world",),
+                job=lambda futures_world: _fut_pressure_job(futures_world, method, size, gamma, scaling),
+                py=lambda futures_world: _fut_pressure_py(futures_world, method, size, gamma, scaling),
+                notes=f"r.futures.devpressure without -n ({method}): edges keep their values, the lake gives NaN.")
+
+
+def _fut_observed(world):
+    """Four observed maps of development (the world's grown outwards) at 2000, 2005, 2010, 2015."""
+    from scipy import ndimage
+
+    dev = world.sel(band="developed").values
+    lake = np.isnan(dev)
+    maps = [dev]
+    cur = np.nan_to_num(dev).astype(bool)
+    for k in range(3):
+        grown = ndimage.binary_dilation(cur, iterations=1)
+        rng = np.random.default_rng(100 + k)
+        cur = cur | (grown & (rng.random(cur.shape) < 0.35))
+        maps.append(np.where(lake, np.nan, cur.astype(np.float64)))
+    return maps
+
+
+_FUT_OBS_POP = [(2000, 12000, 9000, 15000), (2005, 13500, 9600, 15800), (2010, 15600, 10100, 16900),
+                (2015, 17000, 10900, 17500)]
+_FUT_PROJ_POP = [(2020, 18800, 11500, 18600), (2025, 20500, 12300, 19300), (2030, 22900, 12900, 20800)]
+
+
+def _fut_demand_job(world, methods):
+    maps = _fut_observed(world)
+    rasters = {f"dev{k}": world.sel(band="developed").drop_vars("band").copy(data=m) for k, m in enumerate(maps)}
+    rasters["sub"] = world.sel(band="sub").drop_vars("band")
+    header = "year,30,10,20"
+    obs = header + "\n" + "\n".join(",".join(map(str, r)) for r in _FUT_OBS_POP) + "\n"
+    proj = header + "\n" + "\n".join(",".join(map(str, r)) for r in _FUT_PROJ_POP) + "\n"
+    times = ",".join(str(y) for y in range(2015, 2031))
+    script = (f"cat > obs.csv <<'EOF'\n{obs}EOF\ncat > proj.csv <<'EOF'\n{proj}EOF\n"
+              "r.mapcalc --quiet expression='subi = int(sub)'\n"
+              f"r.futures.demand development={','.join(f'dev{k}' for k in range(len(maps)))} subregions=subi "
+              f"observed_population=obs.csv projected_population=proj.csv simulation_times={times} "
+              f"method={','.join(methods)} demand=$OUT/demand.csv population_demand=$OUT/population.csv "
+              f"resulting_curves=$OUT/curves.txt separator=comma\n")
+    return {"rasters": rasters, "script": script, "outputs": ["demand.csv", "population.csv", "curves.txt"]}
+
+
+def _fut_demand_py(world, methods):
+    import pandas as pd
+
+    S = _ls().simulate
+    maps = _fut_observed(world)
+    obs = pd.DataFrame(_FUT_OBS_POP, columns=["year", 30, 10, 20]).set_index("year")
+    proj = pd.DataFrame(_FUT_PROJ_POP, columns=["year", 30, 10, 20]).set_index("year")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        d = S.DevelopmentDemand.from_population(maps, world.sel(band="sub").values, obs, proj, range(2015, 2031),
+                                                methods=methods)
+    out = {"demand.csv/year": np.asarray(d.table.index, dtype=np.float64),
+           "population.csv/year": np.asarray(d.population.index, dtype=np.float64)}
+    for c in d.table.columns:
+        out[f"demand.csv/{c}"] = d.table[c].to_numpy(dtype=np.float64)
+        out[f"population.csv/{c}"] = d.population[c].to_numpy(dtype=np.float64)
+    lines = ["subregion,method,coef,rmse"]
+    for sid, row in d.curves.sort_index(key=lambda i: i.astype(str)).iterrows():
+        lines.append(f"{sid},{row['method']},{';'.join(str(c) for c in row['coefficients'])},{row['rmse']}")
+    out["curves.txt"] = lines
+    return out
+
+
+def _fut_demand_case(methods, notes):
+    return Case("futures", "grass", ("futures_world",),
+                job=lambda futures_world: _fut_demand_job(futures_world, methods),
+                py=lambda futures_world: _fut_demand_py(futures_world, methods), notes=notes,
+                extra={"text_tolerance": True})
+
+
+CASES.update({
+    "futures_pressure_gravity": _fut_pressure_case("gravity", 4, 1.5, 1.0),
+    "futures_pressure_kernel": _fut_pressure_case("kernel", 3, 2.0, 5.0),
+    "futures_pressure_occurrence": _fut_pressure_case("occurrence", 2),
+    "futures_demand": _fut_demand_case(("linear", "logarithmic", "exponential"),
+                                       "r.futures.demand: linear, logarithmic and exponential regressions."),
+    "futures_demand_curves": _fut_demand_case(("exp_approach", "logarithmic2", "linear"),
+                                              "r.futures.demand: scipy's curve fits (exp_approach, logarithmic2)."),
+})

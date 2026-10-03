@@ -1,0 +1,53 @@
+diff -ru --strip-trailing-cr ../grass-addons/src/raster/r.futures/r.futures.simulation/Makefile r.futures.simulation_fixed/Makefile
+--- ../grass-addons/src/raster/r.futures/r.futures.simulation/Makefile	2026-10-03 11:44:04.520068700 +0200
++++ r.futures.simulation_fixed/Makefile	2026-10-03 16:44:18.373412300 +0200
+@@ -1,6 +1,6 @@
+ MODULE_TOPDIR = ../..
+ 
+-PGM = r.futures.simulation
++PGM = r.futures.simulation_fixed
+ 
+ LIBES = $(SEGMENTLIB) $(RASTERLIB) $(GISLIB) $(MATHLIB) $(DATETIMELIB)
+ DEPENDENCIES = $(SEGMENTDEP) $(RASTERDEP) $(GISDEP) $(DATETIMEDEP)
+diff -ru --strip-trailing-cr ../grass-addons/src/raster/r.futures/r.futures.simulation/patch.c r.futures.simulation_fixed/patch.c
+--- ../grass-addons/src/raster/r.futures/r.futures.simulation/patch.c	2026-10-03 11:44:04.523580100 +0200
++++ r.futures.simulation_fixed/patch.c	2026-10-03 16:44:18.373412300 +0200
+@@ -302,6 +302,8 @@
+  * @param[out] added_ids array of ids of grown cells
+  * @return number of grown cells including seed grown inside this region
+  */
++int grow_patch_total;
++
+ int grow_patch(int seed_row, int seed_col, int patch_size, int step, int region,
+                struct PatchInfo *patch_info, struct Segments *segments,
+                int *patch_overflow, int *added_ids, enum patch_type type)
+@@ -411,5 +413,6 @@
+         G_free(candidates.candidates);
+ 
+     Segment_flush(&segments->developed);
++    grow_patch_total = found;
+     return found_in_this_region;
+ }
+diff -ru --strip-trailing-cr ../grass-addons/src/raster/r.futures/r.futures.simulation/patch.h r.futures.simulation_fixed/patch.h
+--- ../grass-addons/src/raster/r.futures/r.futures.simulation/patch.h	2026-10-03 11:44:04.523580100 +0200
++++ r.futures.simulation_fixed/patch.h	2026-10-03 16:44:18.367411700 +0200
+@@ -49,6 +49,7 @@
+                     struct Segments *segments, struct PatchInfo *patch_info,
+                     int step, enum patch_type type);
+ double get_distance(int row1, int col1, int row2, int col2);
++extern int grow_patch_total; /* cells grown, in all subregions */
+ int grow_patch(int seed_row, int seed_col, int patch_size, int step, int region,
+                struct PatchInfo *patch_info, struct Segments *segments,
+                int *patch_overflow, int *added_ids, enum patch_type type);
+diff -ru --strip-trailing-cr ../grass-addons/src/raster/r.futures/r.futures.simulation/simulation.c r.futures.simulation_fixed/simulation.c
+--- ../grass-addons/src/raster/r.futures/r.futures.simulation/simulation.c	2026-10-03 11:44:04.528581300 +0200
++++ r.futures.simulation_fixed/simulation.c	2026-10-03 16:44:18.373412300 +0200
+@@ -355,7 +355,7 @@
+         //                              2000, -1, step, false, false);
+ 
+         /* update devpressure for every newly developed cell */
+-        for (i = 0; i < found; i++) {
++        for (i = 0; i < grow_patch_total; i++) {
+             get_xy_from_idx(patch_ids[i], Rast_window_cols(), &row, &col);
+             update_development_pressure_precomputed(row, col, segments,
+                                                     devpressure_info);

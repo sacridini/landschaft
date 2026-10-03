@@ -50,6 +50,21 @@ sim = model.run(st, seed=1)
 sim.layers["forest"]; sim.shortfall; sim.trajectory()
 ```
 
+Urban growth by patches (FUTURES):
+
+<!-- no-run -->
+```python
+demand = S.DevelopmentDemand.from_population(observed_maps, counties, observed_pop, projected_pop,
+                                             range(2020, 2051))
+model = S.Model(
+    potential=S.DevelopmentPotential(coefficients_df),         # intercept, devpressure, predictors per county
+    demand=demand,
+    allocation=S.PatchGrowing(patch_library, subregions=counties, neighborhood=10,
+                              compactness_mean=0.4, compactness_range=0.05, incentive_power=2))
+sim = model.run(developed_2020, {"slope": slope, "road_dist": road_dist}, seed=1)
+sim.development                                                # step in which each cell was developed
+```
+
 ## Change between maps
 
 ::: landschaft.simulate.changes
@@ -127,6 +142,16 @@ sim.layers["forest"]; sim.shortfall; sim.trajectory()
 ::: landschaft.simulate.Cap
 
 ::: landschaft.simulate.Succession
+
+## Urban growth (FUTURES)
+
+::: landschaft.simulate.PatchGrowing
+
+::: landschaft.simulate.DevelopmentDemand
+
+::: landschaft.simulate.DevelopmentPotential
+
+::: landschaft.simulate.development_pressure
 
 ## Example data
 

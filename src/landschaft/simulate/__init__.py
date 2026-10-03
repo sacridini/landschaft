@@ -39,6 +39,12 @@ from ._difference import (
 )
 from ._estimator import Estimator, RasterPotential
 from ._examples import example_data
+from ._futures import (
+    DevelopmentDemand,
+    DevelopmentPotential,
+    PatchGrowing,
+    development_pressure,
+)
 from ._glm import LogisticRegression
 from ._landsystems import Cap, LandSystemStack, Roles, Succession
 from ._markov import Markov
@@ -53,6 +59,8 @@ __all__ = [
     "CLUMondo",
     "Cap",
     "Changes",
+    "DevelopmentDemand",
+    "DevelopmentPotential",
     "Estimator",
     "IntensityAnalysis",
     "LandSystemStack",
@@ -63,6 +71,7 @@ __all__ = [
     "Neighbourhood",
     "NeighbourhoodEffect",
     "Ordered",
+    "PatchGrowing",
     "RasterPotential",
     "Roles",
     "Rules",
@@ -74,6 +83,7 @@ __all__ = [
     "changes",
     "composite_matrix",
     "crosstab",
+    "development_pressure",
     "difference_components",
     "difference_resolutions",
     "example_data",

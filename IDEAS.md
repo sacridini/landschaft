@@ -1673,6 +1673,28 @@ sim.supply; sim.shortfall; sim.trajectory()
      a ordem da soma e o tratamento das bordas no fonte do GRASS, com e sem `-n`) e `r.futures.demand`
      (regressões linear, logarítmica, `logarithmic2` e `exp_approach` do scipy por sub-região, escolha pelo
      RMSE, arredondamento das células por ano). Casos sintéticos escritos pelo harness (motor `grass`).
+     **Feita** (1.10.0): `PatchGrowing` (alocação com laço próprio; C++ `src/cpp/sim/futures.cpp`),
+     `DevelopmentDemand` (+ `from_population` = r.futures.demand), `DevelopmentPotential` (a tabela do
+     r.futures.potential), `development_pressure` (r.futures.devpressure com e sem `-n`), `Simulation.development`
+     (o passo em que cada célula foi desenvolvida, a codificação do módulo). Bit a bit com o GRASS em 10 casos
+     (uma sub-região com o módulo original; três sub-regiões com biblioteca por sub-região, vizinhança 8 e
+     desconto; sementes aleatórias + incentivo + pesos + pressão kernel; zoneamento predefinido + sub-regiões do
+     potencial + ocorrência; zoneamento por sub-região com `stringency`; pressão sem `-n` nos três métodos;
+     r.futures.demand com linear/logarítmica/exponencial e com os ajustes do scipy: demandas inteiras iguais,
+     coeficientes a 1e-12 porque o numpy/scipy do WSL é outro). 600 x 800 células, 5 passos: 0,20 s
+     (r.futures.simulation 0,35 s), mapas iguais; acertou na primeira tentativa.
+     - Fatos do módulo: a pressão de desenvolvimento lida em float; o r.mfilter soma a janela em double na
+       ordem das linhas, qualquer nulo na janela dá nulo, as células a menos de `size` da borda copiam a
+       entrada e a saída é float (sem `-n`); sub-regiões indexadas pela primeira aparição entre as células com
+       sub-região (mesmo nulas em outras camadas); probabilidade `float` com `exp` em double; ranking dos
+       candidatos em double; os candidatos da semente não são ordenados antes do primeiro sorteio.
+     - Corrigido (referência `tools/futures_fixed.patch`, instalado no WSL como `r.futures.simulation_fixed`):
+       depois de crescer uma mancha o módulo atualiza a pressão só das primeiras n células, n = células dentro
+       da sub-região da semente; mancha que atravessa para outra sub-região deixa as últimas sem pressão. Aqui
+       todas somam pressão (o módulo original diverge a partir do passo 2: 169 a 691 células no passo 5).
+     - Demanda negativa: o módulo a compara como `size_t` e converte todas as células; aqui erro de validação.
+     - Redesenvolvimento com densidade: código morto no módulo publicado (`use_density` sempre falso, sem
+       opções); fica de fora. A `population_demand` só age no módulo de clima (5b).
    - **5b. Clima e ferramentas do FUTURES:** inundação por profundidade ou probabilidade (HAND e percentil,
      mapas por passo, bacias `huc`), curvas de dano (`depth_damage_functions` por sub-região), capacidade
      adaptativa, resposta (`response_func`, desvio-padrão; gerador gaussiano polar de Marsaglia), adaptação,

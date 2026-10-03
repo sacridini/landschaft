@@ -15,6 +15,7 @@
 #include "sim/change.hpp"
 #include "sim/clues.hpp"
 #include "sim/clumondo.hpp"
+#include "sim/futures.hpp"
 #include "sim/rglm.hpp"
 #include "sim/rng.hpp"
 #include "sim/woe.hpp"
@@ -371,6 +372,92 @@ py::array_t<int> sim_clumondo_random_age(i64 ncell, int max_age, std::uint32_t s
     return to_array(sim::clumondo_random_age(ncell, max_age, seed));
 }
 
+py::dict sim_futures_run(const IArray& developed, const IArray& region, const std::optional<IArray>& pot_region,
+                         const FArray& devpressure, const FArray& aggregated, const std::optional<FArray>& weight,
+                         const std::optional<IArray>& zone, int nregions, int npot, const DArray& intercept,
+                         const DArray& devpressure_coef, int neighborhood, int approach, float gamma, float scaling,
+                         const std::vector<std::vector<int>>& patch_sizes, bool single_column, float compactness_mean,
+                         float compactness_range, int num_neighbors, bool seed_probability, const FArray& incentive,
+                         bool user_effects, const IArray& zone_ids, const IArray& zone_regions,
+                         const FArray& zone_effects, const FArray& stringency, const FArray& demand, int nsteps,
+                         std::int64_t seed) {
+    if (developed.ndim() != 2) throw std::invalid_argument("developed must be 2-D");
+    const i64 rows = developed.shape(0), cols = developed.shape(1), n = rows * cols;
+    auto check = [n](const py::array& a, const char* what) {
+        if (a.size() != n) throw std::invalid_argument(std::string(what) + " differs in size from developed");
+    };
+    check(region, "region");
+    check(devpressure, "devpressure");
+    check(aggregated, "aggregated");
+    if (pot_region) check(*pot_region, "pot_region");
+    if (weight) check(*weight, "weight");
+    if (zone) check(*zone, "zone");
+    sim::FuturesSettings s;
+    s.rows = rows;
+    s.cols = cols;
+    s.nregions = nregions;
+    s.npot = npot;
+    s.intercept.assign(intercept.data(), intercept.data() + intercept.size());
+    s.devpressure_coef.assign(devpressure_coef.data(), devpressure_coef.data() + devpressure_coef.size());
+    s.neighborhood = neighborhood;
+    s.approach = approach;
+    s.gamma = gamma;
+    s.scaling = scaling;
+    s.patch_sizes = patch_sizes;
+    s.single_column = single_column;
+    s.max_patch_size = 1;
+    for (const auto& v : patch_sizes)
+        for (int x : v) s.max_patch_size = std::max(s.max_patch_size, x);
+    s.compactness_mean = compactness_mean;
+    s.compactness_range = compactness_range;
+    s.num_neighbors = num_neighbors;
+    s.seed_probability = seed_probability;
+    s.incentive.assign(incentive.data(), incentive.data() + incentive.size());
+    s.use_zone = zone.has_value();
+    s.user_effects = user_effects;
+    s.zone_ids.assign(zone_ids.data(), zone_ids.data() + zone_ids.size());
+    s.zone_regions.assign(zone_regions.data(), zone_regions.data() + zone_regions.size());
+    s.zone_effects.assign(zone_effects.data(), zone_effects.data() + zone_effects.size());
+    s.stringency.assign(stringency.data(), stringency.data() + stringency.size());
+    s.use_weight = weight.has_value();
+    s.demand.assign(demand.data(), demand.data() + demand.size());
+    s.nsteps = nsteps;
+    s.seed = seed;
+    sim::FuturesResult r;
+    {
+        py::gil_scoped_release release;
+        r = sim::futures_run(s, developed.data(), region.data(), pot_region ? pot_region->data() : nullptr,
+                             devpressure.data(), aggregated.data(), weight ? weight->data() : nullptr,
+                             zone ? zone->data() : nullptr);
+    }
+    py::dict d;
+    py::array_t<int> dev({rows, cols});
+    std::copy(r.developed.begin(), r.developed.end(), dev.mutable_data());
+    py::array_t<int> series({static_cast<i64>(r.series.size()), rows, cols});
+    for (std::size_t k = 0; k < r.series.size(); ++k)
+        std::copy(r.series[k].begin(), r.series[k].end(), series.mutable_data() + k * n);
+    d["developed"] = dev;
+    d["series"] = series;
+    d["converted"] = to_array(r.converted);
+    d["overflow"] = to_array(r.overflow);
+    d["warnings"] = to_array(r.warnings);
+    return d;
+}
+
+py::array_t<float> sim_futures_mfilter(const DArray& input, const DArray& matrix) {
+    if (input.ndim() != 2 || matrix.ndim() != 2 || matrix.shape(0) != matrix.shape(1) || matrix.shape(0) % 2 == 0)
+        throw std::invalid_argument("a 2-D input and a square matrix with odd sides");
+    std::vector<float> out;
+    {
+        py::gil_scoped_release release;
+        out = sim::futures_mfilter(input.data(), input.shape(0), input.shape(1), matrix.data(),
+                                   static_cast<int>(matrix.shape(0) / 2));
+    }
+    py::array_t<float> r({input.shape(0), input.shape(1)});
+    std::copy(out.begin(), out.end(), r.mutable_data());
+    return r;
+}
+
 }  // namespace
 
 namespace sim {
@@ -421,6 +508,16 @@ void register_python(py::module_& m) {
           py::arg("kernel"), "CLUMondo's neighbourhood share of a land system (calc_neigh).");
     m.def("sim_clumondo_random_age", &sim_clumondo_random_age, py::arg("ncell"), py::arg("max_age"),
           py::arg("seed") = 1, "CLUMondo's random initial ages: rand() % max_age + 1 per cell.");
+    m.def("sim_futures_run", &sim_futures_run, py::arg("developed"), py::arg("region"), py::arg("pot_region"),
+          py::arg("devpressure"), py::arg("aggregated"), py::arg("weight"), py::arg("zone"), py::arg("nregions"),
+          py::arg("npot"), py::arg("intercept"), py::arg("devpressure_coef"), py::arg("neighborhood"),
+          py::arg("approach"), py::arg("gamma"), py::arg("scaling"), py::arg("patch_sizes"), py::arg("single_column"),
+          py::arg("compactness_mean"), py::arg("compactness_range"), py::arg("num_neighbors"),
+          py::arg("seed_probability"), py::arg("incentive"), py::arg("user_effects"), py::arg("zone_ids"),
+          py::arg("zone_regions"), py::arg("zone_effects"), py::arg("stringency"), py::arg("demand"),
+          py::arg("nsteps"), py::arg("seed"), "FUTURES (r.futures.simulation) patch-growing simulation.");
+    m.def("sim_futures_mfilter", &sim_futures_mfilter, py::arg("input"), py::arg("matrix"),
+          "r.mfilter as r.futures.devpressure runs it (edges keep their values, nulls give null).");
 }
 
 }  // namespace sim

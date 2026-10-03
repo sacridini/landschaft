@@ -1,0 +1,307 @@
+{
+ "arrays": {
+  "futures_demand/curves.txt": {
+   "kind": "text",
+   "values": [
+    "subregion,method,coef,rmse",
+    "10,logarithmic,293.79614361761855;-2609.03602916706,2.7578670540769252",
+    "20,exponential,0.00021786553821855184;0.9209116098962801,2.8693404374196994",
+    "30,exponential,9.838215849861177e-05;3.6742543284971068,1.79678716788268"
+   ]
+  },
+  "futures_demand/demand.csv/10": {
+   "kind": "vector"
+  },
+  "futures_demand/demand.csv/20": {
+   "kind": "vector"
+  },
+  "futures_demand/demand.csv/30": {
+   "kind": "vector"
+  },
+  "futures_demand/demand.csv/year": {
+   "kind": "vector"
+  },
+  "futures_demand/population.csv/10": {
+   "kind": "vector"
+  },
+  "futures_demand/population.csv/20": {
+   "kind": "vector"
+  },
+  "futures_demand/population.csv/30": {
+   "kind": "vector"
+  },
+  "futures_demand/population.csv/year": {
+   "kind": "vector"
+  },
+  "futures_demand_curves/curves.txt": {
+   "kind": "text",
+   "values": [
+    "subregion,method,coef,rmse",
+    "10,linear,0.029536082474226823;-199.1572164948456,3.1884537182468518",
+    "20,linear,0.019037433155080264;-220.81016042780834,3.4303614502183923",
+    "30,linear,0.01630800611932689;-69.37378888322306,3.8421824709043353"
+   ]
+  },
+  "futures_demand_curves/demand.csv/10": {
+   "kind": "vector"
+  },
+  "futures_demand_curves/demand.csv/20": {
+   "kind": "vector"
+  },
+  "futures_demand_curves/demand.csv/30": {
+   "kind": "vector"
+  },
+  "futures_demand_curves/demand.csv/year": {
+   "kind": "vector"
+  },
+  "futures_demand_curves/population.csv/10": {
+   "kind": "vector"
+  },
+  "futures_demand_curves/population.csv/20": {
+   "kind": "vector"
+  },
+  "futures_demand_curves/population.csv/30": {
+   "kind": "vector"
+  },
+  "futures_demand_curves/population.csv/year": {
+   "kind": "vector"
+  },
+  "futures_one/pressure.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_one/step_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_one/step_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_one/step_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_one/step_4.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_one/step_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_pressure_gravity/pressure.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_pressure_kernel/pressure.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_pressure_occurrence/pressure.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_random/pressure.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_random/step_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_random/step_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_random/step_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_random/step_4.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_random/step_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_regions/pressure.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_regions/step_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_regions/step_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_regions/step_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_regions/step_4.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_regions/step_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning/pressure.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning/step_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning/step_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning/step_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning/step_4.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning/step_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning_custom/pressure.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning_custom/step_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning_custom/step_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning_custom/step_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning_custom/step_4.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_zoning_custom/step_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "grass": {
+   "addons": "r.futures (OSGeo/grass-addons, grass8 branch)",
+   "grass": "GRASS GIS 8.3.2"
+  }
+ }
+}
