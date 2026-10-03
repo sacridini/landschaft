@@ -241,9 +241,8 @@ ls.connectivity_grid(g, grid_zones(...))
   `d_v + w` passa do maior custo provisório, depois que todos os nós foram
   alcançados); custos em `float` só para filtrar; quando as distâncias são métricas
   (centroides), o caminho direto já é o melhor para os pares ligados.
-- A decidir:
-  - vetores com geopandas/shapely como dependências opcionais (extra `vector`);
-  - se ProtConn e SAMC entram no escopo.
+- Decidido depois: geopandas/shapely são dependências normais (o `pyproject` instala tudo por
+  padrão); ProtConn e SAMC entraram (fases 5 e 7).
 
 ## Conectividade por teoria de circuitos (Omniscape / Circuitscape)
 
@@ -1405,11 +1404,13 @@ forma fechada + Fenwick: 1 milhão de células e 30 mil sorteios em 0,24 s contr
   com blocos de uma linha. dsmextra: índice MIC combinatório invertido.
 * maxnet: comparação de presenças como texto com fatores; `response.plot` com o nível errado.
 
-### Decisões tomadas pela regra "só a forma correta" (confirmar com o usuário)
+### Decisões tomadas pela regra "só a forma correta" (confirmadas pelo usuário em 2026-10-03)
 * Boyce sem o "+1 trick": o CBI deixa de coincidir com ecospat / ENMeval / biomod2 em predições 0-1 (muda na
   3ª casa em ~90 % dos casos).
 * `cc_coun` com `iso_a3_eh` / `iso_a2_eh` (com `iso_a3` França e Noruega são "-99"); `aohi` com 10 000 m (o
   padrão do `cc_aohi`); limite de 7000 linhas também no `vifstep` de tabelas (usdm usa 6000 só ali).
+* `mop`: Mahalanobis com a covariância da referência (a área de calibração), como na definição do MOP; o pacote
+  `mop` usa a das células testadas.
 * Dependências: o `pyproject` instala tudo por padrão (sem extras); o `ls.sdm` não exige scikit-learn (o `fit`
   aceita qualquer estimador com a API dele; o MaxNet é nativo) e o download do GBIF usa a API REST direto.
 
