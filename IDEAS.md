@@ -1615,8 +1615,77 @@ sim.supply; sim.shortfall; sim.trajectory()
      chegar em `max_iter` (o lulcc também). Os padrões do lulcc (`scale = 0.0005`) oscilam sem convergir em
      mapas de ~10^5 células (o caso do critério da média usa os parâmetros da vinheta).
 4. CLUMondo / Dyna-CLUE: sistemas de uso, `ServiceDemand`, `Supply`, ordem de conversão, resistência, sucessão
-   bottom-up, tetos; `LandSystemStack` com sobreposição e `Roles`.
+   bottom-up, tetos; `LandSystemStack` com sobreposição e `Roles`. **Feita** (1.9.0): `CLUMondo` (alocação com
+   laço anual próprio, chamada pelo `Model`), `ServiceDemand`, `Supply` (fixa ou por passo = lusmatrix
+   dinâmica), ordem de conversão (`lusconv`; padrão: posto da oferta), pesos, desvio em % ou absoluto,
+   `NeighbourhoodEffect` (neighmat + alloc2.reg), preferências locais (locspec, por passo), regras com os códigos
+   do CLUMondo (0/1, mapas 2-99 por `allow_maps`, 100+ idade mínima, -100- idade máxima, 1000+ sucessão
+   autônoma), restrições, idades (mapa ou `rand() % n + 1`), drivers por passo, `LogisticRegression.
+   from_coefficients` (o alloc1.reg) com a suitability em float; C++ `src/cpp/sim/clumondo.cpp`. Bit a bit com o
+   CLUMondo (fonte a5c0c1f, Win32 MSVC) em 6 casos (básico, 5 sistemas x 3 serviços com -1 na ordem e
+   restrições, regras de idade + sucessão + mapa + desvio absoluto, vizinhança + preferências, drivers e oferta
+   dinâmicos + idade de mapa, ano sem solução). 400 x 500 células, 8 anos: 1,7 s (CLUMondo 16,2 s), mapas iguais.
+   - Aritmética: floats ficam float (SSE2 /fp:precise do Win32), float com double em double arredondado ao
+     guardar; o `expf` do Win32 é exatamente `(float)exp((double)x)` (conferido em 320 M entradas; o do x64
+     difere em 3385); o fator aleatório é `srand(101 - 1/speed)` + `rand()` a cada iteração (o `rand()` da idade
+     inicial usa a semente 1); a soma da oferta sai das contagens quando é exata em double, senão em ordem.
+   - Corrigido (referência: `tools/clumondo_fixed.patch`, motor `clumondo_fixed`): o `calc_age` põe -9999 na
+     idade das células restritas depois do 1º ano, e a sucessão autônoma que o manual diz valer nelas para; aqui
+     elas envelhecem (150 células e mapas diferentes a partir do ano 2 no caso de idades).
+   - CLUMondo quebra com demanda 0 (divide por ela): aqui erro de validação.
+   - Do `.exe` de maio/2017 (sem fonte; manual de nov/2017, conferido no log de iteração): tipos de demanda
+     (`kinds`: mínimo aceita excesso, máximo aceita falta = desvio 0), desvio por demanda (modo 2: cada uma no
+     seu limite), manchas (`patches`: raio, limiar de suitability, tamanho mínimo; semente = célula recém
+     alocada, em ordem de linha; dentro de cada iteração, antes do cálculo da oferta). Concordância com o
+     `.exe` de 2017: 97-100% das células (o próprio caso simples difere em 2 de 2000 células: outro compilador);
+     o 2017 mantém o defeito da idade e trocou a linha 13 (pesos) pelos tipos de demanda. `lusdev` (desvio da
+     oferta por célula) e várias regiões (o manual diz que não funciona) ficaram de fora.
+   - Extensões nossas (sem referência): `LandSystemStack` (camadas binárias -> máscara de bits; política de
+     sobreposição por par ou padrão, prioridade, `min_cells`, `allow_new_mosaics`; `supply` split/full/dado,
+     `suitability` média/máx/mín das camadas, `from_categorical`), `Roles` (expansão, regeneração,
+     intensificação, desintensificação, other; `set`), regras por papel (`allowed={"expansion": 0}`,
+     `transition_resistance`, `conversion_order` = 0,1 de resistência por posição, `caps=[Cap(...)]` com as
+     células de maior margem sobre ficar, `succession=[Succession(...)]`), saídas `layers`, `cover`, `supply`,
+     `shortfall`, `trajectory`, `outputs` (outputmatrix/initoutputmap). Um mapa categórico como pilha dá os
+     mapas do CLUMondo bit a bit; a pilha com mosaicos roda igual ao mapa categórico das combinações.
 5. Manchas: Expander/Patcher (clean-room: tamanho log-normal, isometria) e o PGA do FUTURES (bit a bit).
+   O FUTURES atual é maior que o previsto: o `r.futures.pga` virou um invólucro do `r.futures.simulation`
+   (FUTURES 3.0, ~5700 linhas de C), que além do crescimento de manchas tem redesenvolvimento com densidade,
+   demanda a partir da população, zoneamento e um módulo de clima/inundação; o potencial (`r.futures.potential`)
+   ajusta modelos mistos com o `glmer` do lme4 (R) e escolhe pelo `dredge` do MuMIn. Dividida em três entregas
+   (cada uma com versão, commit e push):
+   - **5a. Núcleo do FUTURES (bit a bit com o GRASS 8.3.2 no WSL, addons já instalados):** o laço do
+     `r.futures.simulation` em C++: probabilidade por célula (intercepto + pressão de desenvolvimento + soma dos
+     preditores em float, logística, transformação de incentivo `pow(i/1000, expoente)` em 1001 pontos, pesos
+     `potential_weight` e efeitos de zoneamento com `stringency` por sub-região), células não desenvolvidas por
+     sub-região na ordem das linhas com probabilidade acumulada normalizada, semente por bissecção (`probability`)
+     ou sorteio (`random`), `MAX_TRIES`/`MAX_SEED_ITER`, desafio `drand48() < p`, tamanho da mancha sorteado da
+     biblioteca (`discount_factor`, coluna única ou por sub-região pelo cabeçalho), crescimento com vizinhança 4
+     ou 8, candidatos ordenados por `p / dist^alpha` (alpha uniforme em [média - faixa/2, média + faixa/2),
+     sorteado por candidato; ordenação estável, como o `qsort` do glibc 2.39, que voltou ao mergesort),
+     estratégia `skip`, transbordo entre sub-regiões e entre passos (`patch_overflow`), último passo sem
+     ultrapassar a demanda; pressão de desenvolvimento atualizada pela matriz pré-calculada (ocorrência,
+     gravidade `s / d^gamma`, kernel `s * exp(-2d/gamma)`; o centro entra como 1, infinito ou `s`); sub-regiões
+     e sub-regiões do potencial indexadas pela ordem da primeira aparição; gerador `G_drand48` (já em
+     `rng.hpp`). Redesenvolvimento com densidade (`density`, `density_capacity`, `redevelopment_lag`, densidade
+     da mancha uniforme entre a média e a capacidade mínima) e demanda por população (`population_demand`,
+     população acomodada por mancha). Peças auxiliares: `r.futures.devpressure` (filtro do `r.mfilter`; conferir
+     a ordem da soma e o tratamento das bordas no fonte do GRASS, com e sem `-n`) e `r.futures.demand`
+     (regressões linear, logarítmica, `logarithmic2` e `exp_approach` do scipy por sub-região, escolha pelo
+     RMSE, arredondamento das células por ano). Casos sintéticos escritos pelo harness (motor `grass`).
+   - **5b. Clima e ferramentas do FUTURES:** inundação por profundidade ou probabilidade (HAND e percentil,
+     mapas por passo, bacias `huc`), curvas de dano (`depth_damage_functions` por sub-região), capacidade
+     adaptativa, resposta (`response_func`, desvio-padrão; gerador gaussiano polar de Marsaglia), adaptação,
+     abandono e redistribuição da população pela matriz (`redistribution_matrix`, saída por passo), registro das
+     inundações; `r.futures.calib` (biblioteca de manchas a partir das mudanças observadas e calibração da
+     compacidade), `r.futures.validation`/`gridvalidation` (já cobertos em parte pela fase 8) e o
+     `r.futures.potential`: o `glmer` binomial com intercepto aleatório por sub-região (aproximação de Laplace,
+     PIRLS + otimizador) e a seleção do MuMIn; a paridade com o lme4 será por tolerância (otimizador numérico),
+     a decidir na fase.
+   - **5c. Expander e Patcher do Dinamica (clean-room):** manchas novas e expansão das existentes com tamanho
+     médio, variância (log-normal) e isometria, fração expander/patcher por transição, `prune factor`;
+     implementados dos artigos (Soares-Filho et al. 2002) e conferidos estatisticamente contra o Dinamica EGO 8
+     instalado (tamanhos de mancha, forma, demanda atendida), sem comparação célula a célula.
 6. PLUS: LEAS (`Estimator(sample="expansion")`) e CARS com inércia adaptativa (clean-room).
 7. Laço temporal completo: variáveis dinâmicas, demanda por região, vizinhança por rede (`ls.cost`),
    `presets`, `run` / `report` / `redo`, cenários e réplicas em paralelo.

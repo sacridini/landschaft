@@ -83,8 +83,9 @@ class Rules:
         t``: allowed only once it has had it for ``t`` steps or more.
     elasticity
         Added to the suitability of each cell's own class (CLUE-S's
-        conversion elasticity, 0 to 1; ``{class: value}`` or a list in the
-        class order). Used by the CLUE allocation only, as in lulcc.
+        conversion elasticity, 0 to 1; one value for all, ``{class: value}``
+        or a list in the class order). Used by the CLUE and CLUMondo
+        allocations (not by the ordered one, as in lulcc).
     restrictions
         Map of restricted cells (``True`` or non-zero: the cell keeps its
         class), lulcc's mask with the opposite convention.
@@ -93,7 +94,32 @@ class Rules:
         as lulcc), updated at each step: +1 where the class stays, 0 where
         it changes.
     neighbourhood
-        :class:`Neighbourhood` thresholds.
+        :class:`Neighbourhood` thresholds (lulcc's allocations).
+    allow_maps
+        CLUMondo: ``{(from, to): map}``, the conversion code of each cell for
+        that pair (0 not allowed, 1 allowed, or an age code below).
+
+    With the :class:`CLUMondo` allocation the conversion matrix takes
+    CLUMondo's codes instead: ``1`` allowed, ``0`` not; ``100 + t``: only
+    once the cell has had its system for ``t`` years; ``-100 - t``: only
+    until then (the system must leave after ``t`` years when the code is
+    on the diagonal); ``1000 + t``: autonomous change (succession) after
+    ``t`` years, whatever the demand. ``elasticity`` is CLUMondo's
+    conversion resistance, ``history`` the starting ages (a map, or a
+    number: random ages from 1 to it, as CLUMondo draws them).
+
+    With CLUMondo, rules may also be given by the role of the transitions
+    (``roles``, a :class:`Roles`):
+
+    - ``allowed`` as ``{role: code}`` (``{"expansion": 0}``; other pairs 1);
+    - ``transition_resistance``: ``{role or (from, to): value}`` subtracted
+      from the score of making that transition;
+    - ``conversion_order``: roles from the first tried to the last, as a
+      resistance of 0.1 per position (``["intensification",
+      "expansion"]``: expansion 0.1); ``transition_resistance`` overrides;
+    - ``caps``: :class:`Cap` limits per year (``Cap("expansion",
+      area=...)``);
+    - ``succession``: :class:`Succession` (autonomous changes).
     """
 
     allowed: object = None
@@ -101,10 +127,16 @@ class Rules:
     restrictions: object = None
     history: object = None
     neighbourhood: Neighbourhood | None = None
+    allow_maps: dict | None = None
+    roles: object = None
+    transition_resistance: dict | None = None
+    conversion_order: list | None = None
+    caps: list | None = None
+    succession: list | None = None
     _matrix: np.ndarray | None = field(default=None, repr=False)
 
     def matrix(self, classes: list) -> np.ndarray | None:
-        if self.allowed is None:
+        if self.allowed is None or (isinstance(self.allowed, dict) and not isinstance(self.allowed, pd.DataFrame)):
             return None
         if isinstance(self.allowed, pd.DataFrame):
             a = self.allowed.copy()
@@ -124,6 +156,8 @@ class Rules:
             e = {_class_value(k): v for k, v in e.items()}
             return np.array([float(e.get(c, 0.0)) for c in classes])
         e = np.asarray(e, dtype=np.float64)
+        if e.ndim == 0:
+            return np.full(len(classes), float(e))
         if e.size != len(classes):
             raise ValueError("one elasticity per class")
         return e

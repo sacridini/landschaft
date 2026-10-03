@@ -39,6 +39,11 @@ import numpy as np
 
 DEV = Path.home() / "Documents" / "dev"
 CLUMONDO = Path(os.environ.get("LANDSCHAFT_CLUMONDO", DEV / "CLUMondo" / "build" / "bin" / "Release" / "clumondo.exe"))
+# CLUMondo with tools/clumondo_fixed.patch applied, built the same way
+CLUMONDO_FIXED = Path(os.environ.get("LANDSCHAFT_CLUMONDO_FIXED",
+                                     DEV / "CLUMondo_fixed" / "build" / "bin" / "Release" / "clumondo.exe"))
+# the official executable of May 2017 (newer than the source: demand types, iteration mode 2, patches)
+CLUMONDO_2017 = Path(os.environ.get("LANDSCHAFT_CLUMONDO_2017", DEV / "CLUMondo" / "ref" / "CLUMondo_may_2017.exe"))
 DINAMICA = Path(os.environ.get("LANDSCHAFT_DINAMICA",
                                DEV / "dinamica_ego" / "install" / "DinamicaConsole8.exe"))
 MOLUSCE = Path(os.environ.get("LANDSCHAFT_MOLUSCE", DEV / "qgis_molusce" / "src"))
@@ -121,7 +126,7 @@ def read_geotiff(path: Path) -> np.ndarray:
 
 # ----------------------------------------------------------------------------- CLUMondo
 
-def run_clumondo(job: dict, tmp: Path) -> dict:
+def run_clumondo(job: dict, tmp: Path, exe: Path | None = None) -> dict:
     """Write the project files, run CLUMondo, read the output grids and tables.
 
     ``job``: ``files`` (name -> text, or 2-D array written as an ASCII grid
@@ -129,15 +134,16 @@ def run_clumondo(job: dict, tmp: Path) -> dict:
     and the optional mode), ``outputs`` (file names or glob patterns; ASCII
     grids become arrays, other files text lines).
     """
-    if not CLUMONDO.is_file():
-        raise FileNotFoundError(f"CLUMondo not found at {CLUMONDO} (set LANDSCHAFT_CLUMONDO)")
+    exe = exe or CLUMONDO
+    if not exe.is_file():
+        raise FileNotFoundError(f"CLUMondo not found at {exe} (set LANDSCHAFT_CLUMONDO / _FIXED / _2017)")
     grid = job.get("grid", {})
     for name, content in job["files"].items():
         if isinstance(content, str):
             (tmp / name).write_text(content, newline="\n")
         else:
             write_ascii_grid(tmp / name, content, **grid)
-    proc = subprocess.run([str(CLUMONDO), *map(str, job["args"])], cwd=tmp, capture_output=True, text=True,
+    proc = subprocess.run([str(exe), *map(str, job["args"])], cwd=tmp, capture_output=True, text=True,
                           timeout=job.get("timeout", 3600), check=False)
     log = (tmp / "log.fil").read_text(errors="replace") if (tmp / "log.fil").exists() else ""
     if proc.returncode != 0 or "Error" in proc.stdout:
@@ -341,6 +347,8 @@ def dinamica_version() -> str:
 
 ENGINES = {
     "clumondo": run_clumondo,
+    "clumondo_fixed": lambda job, tmp: run_clumondo(job, tmp, CLUMONDO_FIXED),
+    "clumondo_2017": lambda job, tmp: run_clumondo(job, tmp, CLUMONDO_2017),
     "grass": run_grass,
     "wsl_python": run_wsl_python,
     "dinamica": run_dinamica,

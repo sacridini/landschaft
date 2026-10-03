@@ -1,0 +1,722 @@
+{
+ "arrays": {
+  "clumondo2017_kinds/cov_all.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_kinds/cov_all.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_kinds/cov_all.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_kinds/cov_all.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_kinds/cov_all.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_kinds/cov_all.6.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_kinds/cov_all.7.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_kinds/cov_all.8.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_mode2/cov_all.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_mode2/cov_all.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_mode2/cov_all.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_mode2/cov_all.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_mode2/cov_all.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_mode2/cov_all.6.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_mode2/cov_all.7.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_mode2/cov_all.8.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_patches/cov_all.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_patches/cov_all.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo2017_patches/cov_all.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.10.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.6.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.7.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.8.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/age.9.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.10.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.6.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.7.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.8.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_ages/cov_all.9.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/age.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/age.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/age.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/age.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/age.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/cov_all.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/cov_all.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/cov_all.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/cov_all.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_basic/cov_all.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/age.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/age.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/age.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/age.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/age.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/cov_all.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/cov_all.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/cov_all.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/cov_all.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_dynamic/cov_all.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/age.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/age.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/age.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/age.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/age.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/age.6.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/age.7.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/age.8.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/cov_all.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/cov_all.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/cov_all.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/cov_all.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/cov_all.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/cov_all.6.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/cov_all.7.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_neighbourhood/cov_all.8.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/age.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/age.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/age.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/age.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/age.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/age.6.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/age.7.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/age.8.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/cov_all.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/cov_all.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/cov_all.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/cov_all.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/cov_all.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/cov_all.6.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/cov_all.7.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_services/cov_all.8.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/age.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/age.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/age.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/age.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/age.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/cov_all.1.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/cov_all.2.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/cov_all.3.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/cov_all.4.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "clumondo_stops/cov_all.5.asc": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "clumondo": {
+   "clumondo": "github.com/VUEG/CLUMondo a5c0c1f (Win32, MSVC)"
+  },
+  "clumondo_2017": {
+   "clumondo": "CLUMondo_may_2017.exe (DataverseNL doi 10.34894/XZCPQY)"
+  },
+  "clumondo_fixed": {
+   "clumondo": "github.com/VUEG/CLUMondo a5c0c1f + tools/clumondo_fixed.patch (Win32, MSVC)"
+  }
+ }
+}

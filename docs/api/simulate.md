@@ -30,6 +30,26 @@ model = ls.simulate.Model(                                     # CLUE-S, as lulc
 sim = model.run(lu[0], ef, seed=1)                             # 14 yearly maps
 ```
 
+Land systems that supply goods and services (CLUMondo), given as overlapping
+binary layers:
+
+<!-- no-run -->
+```python
+S = ls.simulate
+st = S.LandSystemStack({"forest": f, "extensive": pe, "intensive": pi, "soy": soy})
+st.overlaps()                                                  # the combinations (mosaics) found
+roles = S.Roles(natural=["forest"], families={"cattle": ["extensive", "intensive"], "crops": ["soy"]})
+model = S.Model(
+    potential=st.suitability({"forest": sf, "extensive": se, "intensive": si, "soy": ss}),
+    demand=S.ServiceDemand(demand_df),                         # heads of cattle, tons of soy per year
+    allocation=S.CLUMondo(st.supply({"extensive": {"cattle": 0.6}, "intensive": {"cattle": 2.5},
+                                     "soy": {"soy": 3.4}})),
+    rules=S.Rules(elasticity=0.5, roles=roles, conversion_order=["intensification", "expansion"],
+                  caps=[S.Cap("expansion", cells=500)], restrictions=parks))
+sim = model.run(st, seed=1)
+sim.layers["forest"]; sim.shortfall; sim.trajectory()
+```
+
 ## Change between maps
 
 ::: landschaft.simulate.changes
@@ -89,6 +109,24 @@ sim = model.run(lu[0], ef, seed=1)                             # 14 yearly maps
 ::: landschaft.simulate.CLUE
 
 ::: landschaft.simulate.Ordered
+
+## Land systems (CLUMondo)
+
+::: landschaft.simulate.CLUMondo
+
+::: landschaft.simulate.ServiceDemand
+
+::: landschaft.simulate.Supply
+
+::: landschaft.simulate.NeighbourhoodEffect
+
+::: landschaft.simulate.LandSystemStack
+
+::: landschaft.simulate.Roles
+
+::: landschaft.simulate.Cap
+
+::: landschaft.simulate.Succession
 
 ## Example data
 

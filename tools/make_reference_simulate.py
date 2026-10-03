@@ -95,6 +95,10 @@ def store(case: str, result: dict, arrays: dict, meta: dict) -> None:
 def engine_versions(engine: str) -> dict:
     if engine == "clumondo":
         return {"clumondo": "github.com/VUEG/CLUMondo a5c0c1f (Win32, MSVC)"}
+    if engine == "clumondo_fixed":
+        return {"clumondo": "github.com/VUEG/CLUMondo a5c0c1f + tools/clumondo_fixed.patch (Win32, MSVC)"}
+    if engine == "clumondo_2017":
+        return {"clumondo": "CLUMondo_may_2017.exe (DataverseNL doi 10.34894/XZCPQY)"}
     if engine == "dinamica":
         return {"dinamica": simulate_engines.dinamica_version()}
     if engine == "molusce":

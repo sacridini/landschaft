@@ -14,6 +14,7 @@
 
 #include "sim/change.hpp"
 #include "sim/clues.hpp"
+#include "sim/clumondo.hpp"
 #include "sim/rglm.hpp"
 #include "sim/rng.hpp"
 #include "sim/woe.hpp"
@@ -251,6 +252,125 @@ py::array_t<double> sim_focal_mean(const DArray& x, const DArray& w) {
     return r;
 }
 
+using FArray = py::array_t<float, py::array::c_style | py::array::forcecast>;
+using IArray = py::array_t<int, py::array::c_style | py::array::forcecast>;
+
+template <typename T>
+py::array_t<T> to_array(const std::vector<T>& v) {
+    py::array_t<T> a(static_cast<py::ssize_t>(v.size()));
+    std::copy(v.begin(), v.end(), a.mutable_data());
+    return a;
+}
+
+py::dict sim_clumondo_year(const IArray& oldco, const IArray& region, const IArray& age, const FArray& suit,
+                           const FArray& allow_maps, const IArray& allowed, const IArray& lusconv,
+                           const FArray& lusmatrix, const FArray& weight, const FArray& resistance,
+                           const DArray& demand, const FArray& dem_elas, int itermode, float mean_dev, float max_dev,
+                           float speed, int max_loops, const IArray& kind, const FArray& dev_limit, i64 nx,
+                           const IArray& patch_radius, const FArray& patch_threshold, const IArray& patch_min,
+                           const FArray& pair_resistance, const py::array_t<std::uint8_t, py::array::c_style |
+                           py::array::forcecast>& cap_pairs, const py::array_t<std::int64_t, py::array::c_style |
+                           py::array::forcecast>& cap_cells) {
+    const i64 ncell = static_cast<i64>(oldco.size());
+    const int nsys = static_cast<int>(resistance.size());
+    const int ndem = static_cast<int>(weight.size());
+    if (region.size() != ncell || age.size() != ncell) throw std::invalid_argument("region and age must match the map");
+    if (suit.size() != static_cast<py::ssize_t>(nsys) * ncell) throw std::invalid_argument("suit must be (systems, cells)");
+    if (allowed.size() != nsys * nsys) throw std::invalid_argument("allowed must be (systems, systems)");
+    if (lusconv.size() != nsys * ndem || lusmatrix.size() != nsys * ndem)
+        throw std::invalid_argument("lusconv and lusmatrix must be (systems, demands)");
+    if (demand.size() != ndem || dem_elas.size() != ndem) throw std::invalid_argument("one demand per demand type");
+    const int nmap = ncell ? static_cast<int>(allow_maps.size() / ncell) : 0;
+    sim::ClumondoSettings s;
+    s.nsys = nsys;
+    s.ndem = ndem;
+    s.allowed.assign(allowed.data(), allowed.data() + allowed.size());
+    s.lusconv.assign(lusconv.data(), lusconv.data() + lusconv.size());
+    s.lusmatrix.assign(lusmatrix.data(), lusmatrix.data() + lusmatrix.size());
+    s.weight.assign(weight.data(), weight.data() + ndem);
+    s.resistance.assign(resistance.data(), resistance.data() + nsys);
+    s.itermode = itermode;
+    s.mean_dev = mean_dev;
+    s.max_dev = max_dev;
+    s.speed = speed;
+    s.max_loops = max_loops;
+    if (kind.size()) {
+        if (kind.size() != ndem) throw std::invalid_argument("one demand type per demand");
+        s.kind.assign(kind.data(), kind.data() + ndem);
+    }
+    if (dev_limit.size()) {
+        if (dev_limit.size() != ndem) throw std::invalid_argument("one deviation per demand");
+        s.dev_limit.assign(dev_limit.data(), dev_limit.data() + ndem);
+    }
+    s.nx = nx;
+    if (patch_radius.size()) {
+        if (patch_radius.size() != nsys || patch_threshold.size() != nsys || patch_min.size() != nsys)
+            throw std::invalid_argument("patch settings: one per land system");
+        s.patch_radius.assign(patch_radius.data(), patch_radius.data() + nsys);
+        s.patch_threshold.assign(patch_threshold.data(), patch_threshold.data() + nsys);
+        s.patch_min.assign(patch_min.data(), patch_min.data() + nsys);
+    }
+    if (pair_resistance.size()) {
+        if (pair_resistance.size() != nsys * nsys) throw std::invalid_argument("pair_resistance must be (systems, systems)");
+        s.pair_resistance.assign(pair_resistance.data(), pair_resistance.data() + nsys * nsys);
+    }
+    const auto ncap = cap_cells.size();
+    if (cap_pairs.size() != ncap * nsys * nsys) throw std::invalid_argument("cap_pairs must be (caps, systems, systems)");
+    for (py::ssize_t k = 0; k < ncap; ++k) {
+        s.cap_pairs.emplace_back(cap_pairs.data() + k * nsys * nsys, cap_pairs.data() + (k + 1) * nsys * nsys);
+        s.cap_cells.push_back(cap_cells.data()[k]);
+    }
+    std::vector<float> elas(dem_elas.data(), dem_elas.data() + ndem);
+    sim::ClumondoYear r;
+    {
+        py::gil_scoped_release release;
+        r = sim::clumondo_year(s, ncell, oldco.data(), region.data(), age.data(), suit.data(), allow_maps.data(), nmap,
+                               demand.data(), elas.data());
+    }
+    py::dict d;
+    d["newco"] = to_array(r.newco);
+    d["age"] = to_array(r.age);
+    d["dem_elas"] = to_array(elas);
+    d["supply"] = to_array(r.supply);
+    d["cells"] = to_array(r.cells);
+    d["loops"] = r.loops;
+    d["converged"] = r.converged;
+    d["max_diff"] = r.max_diff;
+    d["mean_diff"] = r.mean_diff;
+    return d;
+}
+
+py::array_t<float> sim_clumondo_logit(const IArray& region, const FArray& x, double constant, const FArray& coef) {
+    const i64 ncell = static_cast<i64>(region.size());
+    const int nx = static_cast<int>(coef.size());
+    if (x.size() != static_cast<py::ssize_t>(nx) * ncell) throw std::invalid_argument("x must be (drivers, cells)");
+    std::vector<float> out;
+    {
+        py::gil_scoped_release release;
+        out = sim::clumondo_logit(ncell, region.data(), x.data(), nx, constant, coef.data());
+    }
+    return to_array(out);
+}
+
+py::array_t<float> sim_clumondo_fraction(const IArray& oldco, const IArray& region, int system, const FArray& kernel) {
+    if (oldco.ndim() != 2 || region.ndim() != 2) throw std::invalid_argument("the maps must be 2-D");
+    if (kernel.ndim() != 2 || kernel.shape(0) != kernel.shape(1) || kernel.shape(0) % 2 == 0)
+        throw std::invalid_argument("the kernel must be square with odd sides");
+    std::vector<float> out;
+    {
+        py::gil_scoped_release release;
+        out = sim::clumondo_fraction(oldco.shape(0), oldco.shape(1), oldco.data(), region.data(), system,
+                                     kernel.data(), static_cast<int>(kernel.shape(0) / 2));
+    }
+    py::array_t<float> r({oldco.shape(0), oldco.shape(1)});
+    std::copy(out.begin(), out.end(), r.mutable_data());
+    return r;
+}
+
+py::array_t<int> sim_clumondo_random_age(i64 ncell, int max_age, std::uint32_t seed) {
+    return to_array(sim::clumondo_random_age(ncell, max_age, seed));
+}
+
 }  // namespace
 
 namespace sim {
@@ -286,6 +406,21 @@ void register_python(py::module_& m) {
           py::arg("rng"), "CLUE-S allocation (lulcc's allocateclues) with R's generator.");
     m.def("sim_focal_mean", &sim_focal_mean, py::arg("x"), py::arg("w"),
           "raster::focal(x, w, fun = mean, pad = TRUE, na.rm = TRUE).");
+    m.def("sim_clumondo_year", &sim_clumondo_year, py::arg("oldco"), py::arg("region"), py::arg("age"),
+          py::arg("suit"), py::arg("allow_maps"), py::arg("allowed"), py::arg("lusconv"), py::arg("lusmatrix"),
+          py::arg("weight"), py::arg("resistance"), py::arg("demand"), py::arg("dem_elas"), py::arg("itermode"),
+          py::arg("mean_dev"), py::arg("max_dev"), py::arg("speed"), py::arg("max_loops") = 20000,
+          py::arg("kind") = IArray(0), py::arg("dev_limit") = FArray(0), py::arg("nx") = 0,
+          py::arg("patch_radius") = IArray(0), py::arg("patch_threshold") = FArray(0),
+          py::arg("patch_min") = IArray(0), py::arg("pair_resistance") = FArray(0),
+          py::arg("cap_pairs") = py::array_t<std::uint8_t>(0), py::arg("cap_cells") = py::array_t<std::int64_t>(0),
+          "One year of CLUMondo's allocation (iteration, autonomous change, ages).");
+    m.def("sim_clumondo_logit", &sim_clumondo_logit, py::arg("region"), py::arg("x"), py::arg("constant"),
+          py::arg("coef"), "CLUMondo's logistic suitability in single precision (calc_reg).");
+    m.def("sim_clumondo_fraction", &sim_clumondo_fraction, py::arg("oldco"), py::arg("region"), py::arg("system"),
+          py::arg("kernel"), "CLUMondo's neighbourhood share of a land system (calc_neigh).");
+    m.def("sim_clumondo_random_age", &sim_clumondo_random_age, py::arg("ncell"), py::arg("max_age"),
+          py::arg("seed") = 1, "CLUMondo's random initial ages: rand() % max_age + 1 per cell.");
 }
 
 }  // namespace sim

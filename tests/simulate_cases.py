@@ -17,6 +17,7 @@ arguments and gives a dict with the same keys.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cache
@@ -1186,4 +1187,323 @@ CASES.update({
     "ordered_pie_rules": _ordered_case(5, (2, 1, 3), True, rules=True, nb=True,
                                        notes="Ordered allocation with conversion rules, history, mask and "
                                              "neighbourhood rules."),
+})
+
+
+# ----------------------------------------------------------------------------- CLUMondo
+
+GROUPS += ["clumondo"]
+
+
+def _clumondo_world(ny=40, nx=50, nsys=3, seed=11, nodata_border=False):
+    """Three drivers (float32: two gradients and noise) and a starting map of nsys land systems."""
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    drivers = [(xx / (nx - 1)).astype(np.float32), (yy / (ny - 1)).astype(np.float32),
+               rng.random((ny, nx)).astype(np.float32)]
+    score = np.stack([np.cos(k + 3 * drivers[0] + 2 * drivers[1] * (k % 2)) + 0.6 * rng.random((ny, nx))
+                      for k in range(nsys)])
+    cov = np.argmax(score, axis=0).astype(np.int32)
+    region = np.zeros((ny, nx), dtype=np.int32)
+    if nodata_border:
+        region[:2, :] = -9999
+        region[:, -3:] = -9999
+    cov[region == -9999] = -9999
+    return drivers, cov, region
+
+
+def _f32(v) -> str:
+    return repr(float(np.float32(v)))
+
+
+def clumondo_job(spec: dict) -> dict:
+    """CLUMondo's project files for a spec (see the cases below); the source version's main.1."""
+    drivers, cov, region = spec["drivers"], spec["cov"], spec["region"]
+    ny, nx = cov.shape
+    nsys, ndem = len(spec["resistance"]), len(spec["weights"])
+    allow_maps = spec.get("allow_maps", {})
+    ndrv = max(len(drivers), 2)
+    natt = ndrv + len(allow_maps)
+    codes = {pair: ndrv + j for j, pair in enumerate(allow_maps)}
+    allowed = np.array(spec.get("allowed", np.ones((nsys, nsys))), dtype=int)
+    for (f, t), code in codes.items():
+        allowed[f, t] = code
+    years = len(spec["demand"]) - 1
+    dyn = spec.get("dynamic_drivers", {})        # {driver: {year: array}}
+    loc = spec.get("preferences")                # {system: (array, weight)}
+    nb = spec.get("neighbourhood")               # {system: {...}}
+    age = spec.get("age", 5)                     # int: random up to it (agemode 1); array: age.0
+    lusmatrix = spec["lusmatrix"]                # array (nsys, ndem) or {year: array}
+    maxf = max(len(c[1]) for c in spec["coefs"])
+    main = [str(nsys), "1", str(max(maxf, 1)), str(natt), str(ndem), str(ny), str(nx), "1000", "0", "0",
+            " ".join(str(k) for k in range(nsys)),
+            " ".join(_f32(v) for v in spec["resistance"]),
+            " ".join(_f32(v) for v in spec["weights"]),
+            f"{spec.get('itermode', 0)} {_f32(spec['mean_dev'])} {_f32(spec['max_dev'])}",
+            f"0 {years}",
+            " ".join([str(len(dyn)), *map(str, dyn)]),
+            "3", "0",
+            f"1 {age}" if np.isscalar(age) else "0",
+            "1" if nb else "0",
+            " ".join(["1", *(_f32(loc[k][1]) if k in loc else "0" for k in range(nsys))]) if loc else "0",
+            "1" if isinstance(lusmatrix, dict) else "0",
+            "0", _f32(spec.get("speed", 0.05)), "0"]
+    alloc = "".join(f"{k}\n{c[0]!r}\n{len(c[1])}\n" + "".join(f"{_f32(b)} {d}\n" for d, b in c[1])
+                    for k, c in enumerate(spec["coefs"]))
+    files = {
+        "main.1": "\n".join(main) + "\n",
+        "alloc1.reg": alloc,
+        "allow.txt": "\n".join(" ".join(map(str, r)) for r in allowed) + "\n",
+        "lusconv.txt": "\n".join(" ".join(map(str, r)) for r in np.asarray(spec["lusconv"], dtype=int)) + "\n",
+        "demand.in1": f"{len(spec['demand'])}\n" + "\n".join(" ".join(repr(float(v)) for v in row)
+                                                          for row in spec["demand"]) + "\n",
+        "region.fil.asc": region,
+        "cov_all.0.asc": cov,
+    }
+
+    def lus(a):
+        return "\n".join(" ".join(_f32(v) for v in r) for r in np.asarray(a)) + "\n"
+    if isinstance(lusmatrix, dict):
+        for y in range(1, years + 1):
+            files[f"lusmatrix.{y}"] = lus(lusmatrix[max(k for k in lusmatrix if k <= y)])
+    else:
+        files["lusmatrix.txt"] = lus(lusmatrix)
+    for k in range(ndrv):
+        files[f"sc1gr{k}.fil.asc"] = drivers[k].astype(np.float64) if k < len(drivers) else np.zeros((ny, nx))
+    for d, per_year in dyn.items():
+        for y in range(1, years + 1):
+            keys = [k for k in per_year if k <= y]
+            files[f"sc1gr{d}.{y}.asc"] = (per_year[max(keys)] if keys else drivers[d]).astype(np.float64)
+    for mp, code in zip(allow_maps.values(), codes.values()):
+        files[f"sc1gr{code}.fil.asc"] = np.asarray(mp, dtype=np.int32)
+    if not np.isscalar(age):
+        files["age.0.asc"] = np.asarray(age, dtype=np.int32)
+    if loc:
+        for k in range(nsys):
+            files[f"locspec{k}.fil.asc"] = (loc[k][0].astype(np.float64) if k in loc else np.zeros((ny, nx)))
+    if nb:
+        weights = [nb[k]["weight"] if k in nb else 0.0 for k in range(nsys)]
+        txt = [" ".join(_f32(w) for w in weights)]
+        for k in range(nsys):
+            if weights[k] > 0:
+                frm = nb[k].get("from", list(range(nsys)))
+                kern = np.asarray(nb[k]["kernel"], dtype=np.float32)
+                txt += [str(len(frm)), " ".join(map(str, frm)), str(kern.shape[0] // 2),
+                        *(" ".join(_f32(v) for v in r) for r in kern)]
+        files["neighmat.txt"] = "\n".join(txt) + "\n"
+        files["alloc2.reg"] = "".join(
+            f"{k}\n{(nb[k]['constant'] if k in nb else 0.0)!r}\n{len(nb[k]['coefficients']) if k in nb else 0}\n"
+            + ("".join(f"{_f32(b)} {s}\n" for s, b in nb[k]["coefficients"].items()) if k in nb else "")
+            for k in range(nsys))
+    outputs = [f"cov_all.{y}.asc" for y in range(1, years + 1)]
+    if not spec.get("maps_only"):
+        outputs += [f"age.{y}.asc" for y in range(1, years + 1)]
+    return {"files": files, "args": ["demand.in1", "region.fil.asc"], "grid": {"cellsize": 1000.0},
+            "outputs": outputs}
+
+
+def clumondo_job_2017(spec: dict, options: dict) -> dict:
+    """The job for the executable of May 2017: line 13 holds the demand types (no weights), line 14 the
+    deviation per demand (iteration mode 2), line 26 the patch switch (patch_input.fil)."""
+    job = clumondo_job({**spec, "maps_only": True})
+    lines = job["files"]["main.1"].rstrip("\n").split("\n")
+    services = [f"s{k}" for k in range(len(spec["weights"]))]
+    kinds = options.get("kinds", {})
+    lines[12] = " ".join({"exact": "1", "minimum": "-1", "maximum": "101"}[kinds.get(v, "exact")] for v in services)
+    dev = options.get("max_deviation")
+    if isinstance(dev, dict):
+        lines[13] = " ".join(["2", *(_f32(dev[v]) for v in services)])
+    patches = options.get("patches")
+    lines.append("1" if patches else "0")
+    if patches:
+        n = len(spec["resistance"])
+        rows = [[patches.get(k, (0, 0.0, 0))[j] for k in range(n)] for j in range(3)]
+        job["files"]["patch_input.fil"] = "\n".join(" ".join(str(v) for v in r) for r in rows) + "\n"
+    job["files"]["main.1"] = "\n".join(lines) + "\n"
+    return job
+
+
+def clumondo_model(spec: dict, options: dict | None = None):
+    """The spec's model through ls.simulate (options: more CLUMondo arguments): model, landscape, drivers."""
+    import pandas as pd
+
+    S = _ls().simulate
+    drivers, cov, region = spec["drivers"], spec["cov"], spec["region"]
+    services = [f"s{k}" for k in range(len(spec["weights"]))]
+    land = np.where(cov == -9999, np.nan, cov.astype(np.float64))
+    maps = {f"x{k}": d for k, d in enumerate(drivers)}
+    dyn = spec.get("dynamic_drivers", {})
+    if dyn:
+        drv = {}
+        for y in sorted({y for v in dyn.values() for y in v} | {1}):
+            m = dict(maps)
+            for d, per_year in dyn.items():
+                keys = [k for k in per_year if k <= y]
+                if keys:
+                    m[f"x{d}"] = per_year[max(keys)]
+            drv[y] = m
+    else:
+        drv = maps
+    lusmatrix = spec["lusmatrix"]
+
+    def table(a):
+        return pd.DataFrame(np.asarray(a, dtype=np.float32).astype(np.float64), columns=services)
+    supply = S.Supply({y: table(a) for y, a in lusmatrix.items()} if isinstance(lusmatrix, dict) else table(lusmatrix))
+    coefs = {k: {"(Intercept)": c[0], **{f"x{d}": float(np.float32(b)) for d, b in c[1]}}
+             for k, c in enumerate(spec["coefs"])}
+    nb = spec.get("neighbourhood")
+    loc = spec.get("preferences")
+    age = spec.get("age", 5)
+    model = S.Model(
+        potential=S.LogisticRegression.from_coefficients(coefs),
+        demand=S.ServiceDemand(pd.DataFrame(np.asarray(spec["demand"], dtype=np.float64), columns=services)),
+        allocation=S.CLUMondo(supply, **{
+            "order": pd.DataFrame(spec["lusconv"], columns=services), "weights": list(spec["weights"]),
+            "deviation": ["percent", "absolute"][spec.get("itermode", 0)], "mean_deviation": spec["mean_dev"],
+            "max_deviation": spec["max_dev"], "speed": spec.get("speed", 0.05),
+            "neighbourhood": S.NeighbourhoodEffect(nb) if nb else None,
+            "preferences": dict(loc) if loc else None, **(options or {})}),
+        rules=S.Rules(elasticity=list(spec["resistance"]), allowed=spec.get("allowed"),
+                      restrictions=region == -9998, history=age if np.isscalar(age) else age.astype(np.float64),
+                      allow_maps=spec.get("allow_maps")))
+    return model, land, drv
+
+
+def clumondo_py(spec: dict, options: dict | None = None) -> dict:
+    """The same model through ls.simulate (options: more CLUMondo arguments)."""
+    model, land, drv = clumondo_model(spec, options)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # a year without solution ends the run (as CLUMondo)
+        sim = model.run(land, drv, seed=1)
+    out = {}
+    for y in range(1, sim.maps.shape[0]):
+        out[f"cov_all.{y}.asc"] = np.nan_to_num(sim.maps.values[y], nan=-9999)
+        if not options:  # the 2017 executable keeps CLUMondo's restricted-age defect: maps only
+            out[f"age.{y}.asc"] = np.nan_to_num(sim.ages.values[y], nan=-9999)
+    return out
+
+
+def _clumondo_basic():
+    drivers, cov, region = _clumondo_world()
+    sup = np.array([[0.0], [1.0], [3.0]])
+    s0 = sum(sup[k, 0] * np.sum(cov == k) for k in range(3))
+    return {"drivers": drivers, "cov": cov, "region": region, "resistance": [0.5, 0.3, 0.5], "weights": [1.0],
+            "lusmatrix": sup, "lusconv": [[0], [1], [2]], "demand": [[s0 * 1.02 ** t] for t in range(6)],
+            "coefs": [(1.5, [(0, -2.0), (1, 0.5)]), (-0.5, [(0, 1.0), (2, -0.2)]), (-2.5, [(0, 3.0), (2, 0.3)])],
+            "mean_dev": 0.5, "max_dev": 1.0}
+
+
+def _clumondo_services(growth=(1.015, 1.01, 0.99), years=8):
+    """Five systems, three services (one met by several systems, -1 in the order), weights, forbidden
+    conversions, a restricted block, no data around."""
+    drivers, cov, region = _clumondo_world(nsys=5, seed=12, nodata_border=True)
+    region[10:20, 10:25] = np.where(region[10:20, 10:25] == -9999, -9999, -9998)
+    sup = np.array([[0.0, 0.0, 1.0], [2.0, 0.5, 0.0], [5.0, 0.2, 0.0], [0.0, 3.0, 0.0], [1.0, 1.0, 0.5]])
+    ncell = {k: np.sum(cov == k) for k in range(5)}
+    s0 = [sum(sup[k, d] * ncell[k] for k in range(5)) for d in range(3)]
+    demand = [[s0[0] * growth[0] ** t, s0[1] * growth[1] ** t, s0[2] * growth[2] ** t] for t in range(years + 1)]
+    allowed = np.ones((5, 5), dtype=int)
+    allowed[3, 0] = 0
+    allowed[2, 0] = 0
+    return {"drivers": drivers, "cov": cov, "region": region, "resistance": [0.8, 0.3, 0.6, 0.4, 0.2],
+            "weights": [1.0, 0.7, 1.2], "lusmatrix": sup,
+            "lusconv": [[0, 0, 2], [1, 1, -1], [2, 0, -1], [0, 2, -1], [1, 2, 1]], "demand": demand,
+            "allowed": allowed,
+            "coefs": [(0.5, [(1, -1.0)]), (-0.2, [(0, 1.5), (2, -0.4)]), (-1.5, [(0, 2.5)]),
+                      (-0.3, [(1, 1.2), (2, 0.2)]), (-1.0, [(0, 0.5), (1, 0.5)])],
+            "mean_dev": 0.3, "max_dev": 0.8, "speed": 0.03}
+
+
+def _clumondo_ages():
+    """Age rules: a minimum age (105), a maximum on the diagonal (-104), autonomous succession (1006, also in
+    a restricted block), a conversion map; absolute deviations."""
+    drivers, cov, region = _clumondo_world(nsys=4, seed=13)
+    region[25:35, 5:20] = -9998
+    sup = np.array([[0.0], [1.0], [2.5], [0.0]])
+    s0 = sum(sup[k, 0] * np.sum(cov == k) for k in range(4))
+    allowed = np.ones((4, 4), dtype=int)
+    allowed[0, 2] = 105
+    allowed[2, 2] = -104
+    allowed[3, 0] = 1006
+    gate = np.zeros(cov.shape, dtype=np.int32)
+    gate[:, : cov.shape[1] // 2] = 1
+    return {"drivers": drivers, "cov": cov, "region": region, "resistance": [0.4, 0.3, 0.2, 0.5], "weights": [1.0],
+            "lusmatrix": sup, "lusconv": [[0], [1], [2], [0]], "demand": [[s0 + 6 * t] for t in range(11)],
+            "allowed": allowed, "allow_maps": {(1, 0): gate}, "itermode": 1, "age": 8,
+            "coefs": [(0.2, [(0, -1.0)]), (-0.4, [(0, 1.0), (2, 0.1)]), (-1.0, [(0, 2.0)]), (-0.5, [(1, 1.0)])],
+            "mean_dev": 5.0, "max_dev": 10.0}
+
+
+def _clumondo_neighbourhood():
+    """Neighbourhood effects (two systems, kernels of radius 1 and 2) and location preferences."""
+    spec = _clumondo_services()
+    ny, nx = spec["cov"].shape
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    k2 = np.ones((5, 5), dtype=np.float32)
+    k2[2, 2] = 0
+    spec["neighbourhood"] = {
+        2: {"weight": 0.6, "kernel": np.ones((3, 3), dtype=np.float32), "from": [1, 2, 4], "constant": -0.1,
+            "coefficients": {2: 1.0, 3: -0.5}},
+        3: {"weight": 0.4, "kernel": k2, "from": [0, 1, 3], "constant": 0.0, "coefficients": {3: 0.8}},
+    }
+    spec["preferences"] = {0: (((xx + yy) % 7 == 0).astype(np.float32), 0.5),
+                           4: ((yy / ny).astype(np.float32), 0.3)}
+    return spec
+
+
+def _clumondo_dynamic():
+    """Drivers and supply that change over time, starting ages from a map."""
+    spec = _clumondo_basic()
+    d0 = spec["drivers"][0]
+    spec["dynamic_drivers"] = {0: {2: np.clip(d0 + 0.1, 0, 1).astype(np.float32),
+                                   4: np.clip(d0 + 0.25, 0, 1).astype(np.float32)}}
+    spec["lusmatrix"] = {1: np.array([[0.0], [1.0], [3.0]]), 3: np.array([[0.0], [1.2], [3.3]])}
+    spec["age"] = (np.random.default_rng(3).integers(1, 12, spec["cov"].shape)).astype(np.int32)
+    spec["allowed"] = np.array([[1, 1, 104], [1, 1, 1], [1, 1, 1]])
+    return spec
+
+
+_CLUMONDO_SPECS = {"basic": _clumondo_basic, "services": _clumondo_services, "ages": _clumondo_ages,
+                   "neighbourhood": _clumondo_neighbourhood, "dynamic": _clumondo_dynamic,
+                   "stops": lambda: _clumondo_services(growth=(1.03, 1.01, 0.99), years=6)}
+
+
+def _services_2017():
+    spec = _clumondo_services()
+    spec["weights"] = [1.0, 1.0, 1.0]  # the 2017 executable has no weights (line 13 holds the demand types)
+    return spec
+
+
+def _clumondo_2017_case(spec, options, notes):
+    return Case("clumondo", "clumondo_2017", job=lambda: clumondo_job_2017(spec(), options),
+                py=lambda: clumondo_py(spec(), options), notes=notes, extra={"agreement": True})
+
+
+def _clumondo_case(name, engine, notes):
+    return Case("clumondo", engine, job=lambda: clumondo_job(_CLUMONDO_SPECS[name]()),
+                py=lambda: clumondo_py(_CLUMONDO_SPECS[name]()), notes=notes)
+
+
+CASES.update({
+    "clumondo_basic": _clumondo_case("basic", "clumondo", "Three systems, one service, random ages; the "
+                                     "original CLUMondo (no restricted cells: the correction does not act)."),
+    "clumondo_services": _clumondo_case("services", "clumondo_fixed", "Five systems, three services, weights, "
+                                        "-1 in the order, forbidden conversions, restricted block, no data."),
+    "clumondo_ages": _clumondo_case("ages", "clumondo_fixed", "Minimum and maximum age, autonomous succession "
+                                    "(also in a restricted block), a conversion map, absolute deviations."),
+    "clumondo_neighbourhood": _clumondo_case("neighbourhood", "clumondo_fixed",
+                                             "Neighbourhood effects and location preferences."),
+    "clumondo_dynamic": _clumondo_case("dynamic", "clumondo", "Dynamic drivers and supply, ages from a map."),
+    "clumondo2017_kinds": _clumondo_2017_case(
+        _services_2017, {"kinds": {"s1": "minimum", "s2": "maximum"}},
+        "Minimum and maximum demands against the executable of May 2017 (no source: cells in agreement)."),
+    "clumondo2017_mode2": _clumondo_2017_case(
+        _services_2017, {"max_deviation": {"s0": 0.5, "s1": 2.0, "s2": 5.0}},
+        "A deviation per demand (iteration mode 2) against the 2017 executable (cells in agreement)."),
+    "clumondo2017_patches": _clumondo_2017_case(
+        _clumondo_basic, {"patches": {2: (1, 0.3, 4)}},
+        "Patches (radius 1, threshold 0.3, 4 cells) against the 2017 executable (cells in agreement; it "
+        "finds no solution after year 3)."),
+    "clumondo_stops": _clumondo_case("stops", "clumondo_fixed", "No solution in year 6 (20000 iterations): "
+                                     "the simulation stops after year 5."),
 })

@@ -26,6 +26,7 @@ Typical use::
 
 from ._allocation import CLUE, Ordered
 from ._change import Changes, IntensityAnalysis, changes, crosstab
+from ._clumondo import CLUMondo, NeighbourhoodEffect, ServiceDemand, Supply
 from ._demand import AreaDemand
 from ._difference import (
     composite_matrix,
@@ -39,6 +40,7 @@ from ._difference import (
 from ._estimator import Estimator, RasterPotential
 from ._examples import example_data
 from ._glm import LogisticRegression
+from ._landsystems import Cap, LandSystemStack, Roles, Succession
 from ._markov import Markov
 from ._mce import MultiCriteria
 from ._model import Model, Simulation
@@ -48,18 +50,26 @@ from ._woe import WeightsOfEvidence, weights_of_evidence
 __all__ = [
     "CLUE",
     "AreaDemand",
+    "CLUMondo",
+    "Cap",
     "Changes",
     "Estimator",
     "IntensityAnalysis",
+    "LandSystemStack",
     "LogisticRegression",
     "Markov",
     "Model",
     "MultiCriteria",
     "Neighbourhood",
+    "NeighbourhoodEffect",
     "Ordered",
     "RasterPotential",
+    "Roles",
     "Rules",
+    "ServiceDemand",
     "Simulation",
+    "Succession",
+    "Supply",
     "WeightsOfEvidence",
     "changes",
     "composite_matrix",

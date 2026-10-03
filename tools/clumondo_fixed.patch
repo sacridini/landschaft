@@ -1,0 +1,19 @@
+CLUMondo (github.com/VUEG/CLUMondo a5c0c1f) with its defect corrected, the reference for the corrected form
+in ls.simulate (tools/simulate_engines.py runs it as the "clumondo_fixed" engine; build Win32 with MSVC).
+
+calc_age sets the age of restricted cells (region -9998) to -9999 after the first year, so the autonomous
+changes the manual says also happen in restricted areas stop after it: here they age like the others.
+
+   patch -p1 < tools/clumondo_fixed.patch
+
+--- a/clumondo/clumondomodules.cpp	2026-10-03 11:38:54.103330200 +0200
++++ b/clumondo/clumondomodules.cpp	2026-10-03 14:06:06.575276500 +0200
+@@ -1566,7 +1566,7 @@
+ 	if (year > 0) {
+ 		for (j = 0; j < rnr; j++) {
+ 			for (k = 0; k < rnc; k++) {
+-				if (region[j][k] > -9900) {
++				if (region[j][k] > -9999) {
+ 					same = false;
+ 					if (mat_newco[j][k] == mat_oldco[j][k]) {
+ 						mat_age[j][k] += 1;

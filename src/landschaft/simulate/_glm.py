@@ -112,6 +112,49 @@ class LogisticRegression:
         self.drivers = sorted({d for v in formulas.values() for d in v})
         return self
 
+    @classmethod
+    def from_coefficients(cls, coefficients) -> LogisticRegression:
+        """A model with given coefficients (CLUMondo's and CLUE-S's ``alloc1.reg``).
+
+        Parameters
+        ----------
+        coefficients
+            ``{class: {"(Intercept)": b0, driver: b, ...}}`` or a DataFrame
+            with a row per class and a column per term (NaN: not in the
+            model), as :attr:`coefficients` gives it.
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> lr = ls.simulate.LogisticRegression.from_coefficients({1: {"(Intercept)": -1.5, "slope": 0.2}})
+        >>> lr.coefficients.loc[1, "slope"]
+        np.float64(0.2)
+        """
+        if isinstance(coefficients, pd.DataFrame):
+            coefficients = {k: {t: v for t, v in row.items() if not pd.isna(v)}
+                            for k, row in coefficients.iterrows()}
+        out = cls()
+        for k, terms in coefficients.items():
+            terms = dict(terms)
+            b0 = float(terms.pop("(Intercept)", 0.0))
+            names = list(terms)
+            p = len(names) + 1
+            out._fits[_class_value(k)] = {
+                "coefficients": np.array([b0, *(float(terms[n]) for n in names)]),
+                "pivot": np.arange(1, p + 1, dtype=np.int32), "rank": p, "drivers": names, "n": 0,
+                "iterations": 0, "converged": True, "deviance": np.nan, "null_deviance": np.nan}
+        out.drivers = sorted({d for f in out._fits.values() for d in f["drivers"]})
+        out.formulas = {k: list(f["drivers"]) for k, f in out._fits.items()}
+        return out
+
+    def _terms(self, cls) -> tuple[float, list, list]:
+        """Intercept, drivers and coefficients of a class's model (aliased drivers left out)."""
+        f = self._fits[_class_value(cls)]
+        b = f["coefficients"]
+        names = [n for n, v in zip(f["drivers"], b[1:]) if not np.isnan(v)]
+        coefs = [v for v in b[1:] if not np.isnan(v)]
+        return float(b[0]), names, coefs
+
     def _check(self):
         if not self._fits:
             raise RuntimeError("fit the logistic regression first")

@@ -549,4 +549,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.Neighbourhood`](simulate.md#landschaft.simulate.Neighbourhood) | Neighbourhood thresholds (lulcc's ``NeighbRasterStack`` and ``nb.rules``) |
 | [`ls.CLUE`](simulate.md#landschaft.simulate.CLUE) | CLUE-S allocation (Verburg et al. 2002), as lulcc's ``CluesModel`` |
 | [`ls.Ordered`](simulate.md#landschaft.simulate.Ordered) | The ordered allocation of Fuchs et al. (2013) with stochastic choice, as lulcc's ``OrderedModel`` |
+| [`ls.CLUMondo`](simulate.md#landschaft.simulate.CLUMondo) | CLUMondo's demand-driven allocation of land systems |
+| [`ls.ServiceDemand`](simulate.md#landschaft.simulate.ServiceDemand) | The demand for goods and services at each time step (CLUMondo's ``demand.in``) |
+| [`ls.Supply`](simulate.md#landschaft.simulate.Supply) | What one cell of each land system supplies of each good or service (CLUMondo's ``lusmatrix``) |
+| [`ls.NeighbourhoodEffect`](simulate.md#landschaft.simulate.NeighbourhoodEffect) | CLUMondo's neighbourhood function (``neighmat.txt`` and ``alloc2.reg``) |
+| [`ls.LandSystemStack`](simulate.md#landschaft.simulate.LandSystemStack) | Binary layers, possibly overlapping, as land systems (bit masks) |
+| [`ls.Roles`](simulate.md#landschaft.simulate.Roles) | What each transition between land systems does to their layers |
+| [`ls.Cap`](simulate.md#landschaft.simulate.Cap) | At most so many cells (or so much area) a year may make a role's transitions (or given pairs) |
+| [`ls.Succession`](simulate.md#landschaft.simulate.Succession) | Autonomous change after some years, whatever the demand (CLUMondo's code 1000 + years) |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |

@@ -47,9 +47,126 @@ class Simulation:
     steps: pd.DataFrame
     seed: int
     history: np.ndarray | None = field(default=None, repr=False)
+    ages: xr.DataArray | None = field(default=None, repr=False)
+    changed: np.ndarray | None = field(default=None, repr=False)
+    supply_table: object = field(default=None, repr=False)
+    demand_table: object = field(default=None, repr=False)
+    stack: object = field(default=None, repr=False)
+    roles: object = field(default=None, repr=False)
+
+    @property
+    def layers(self) -> dict:
+        """With a :class:`LandSystemStack`: ``{layer: (step, y, x)}`` binary maps, as the input."""
+        if self.stack is None:
+            raise ValueError("layers need a simulation of a LandSystemStack")
+        return self.stack.layers(self.maps)
+
+    @property
+    def supply(self) -> pd.DataFrame:
+        """The goods and services supplied at each step (CLUMondo)."""
+        cols = [c for c in self.steps.columns if c.startswith("supply_")]
+        if not cols:
+            raise ValueError("no supply: not a CLUMondo simulation")
+        return self.steps[cols].rename(columns=lambda c: c[len("supply_"):]).astype(float)
+
+    @property
+    def shortfall(self) -> pd.DataFrame:
+        """Demand minus supply at each step (positive: short)."""
+        sup = self.supply
+        dem = self.demand_table.iloc[1: len(sup) + 1][list(sup.columns)].to_numpy(dtype=float)
+        return pd.DataFrame(dem - sup.to_numpy(), index=sup.index, columns=sup.columns)
+
+    def cover(self) -> pd.DataFrame:
+        """Cells of each layer (a stack) or class at each step."""
+        m = self.maps.values
+        steps = pd.Index(range(m.shape[0]), name="step")
+        if self.stack is not None:
+            return pd.DataFrame({n: np.nansum(np.asarray(v), axis=(1, 2)).astype(int)
+                                 for n, v in self.layers.items()}, index=steps)
+        classes = sorted(c for c in np.unique(m[~np.isnan(m)]))
+        return pd.DataFrame({_class_value(c): (m == c).sum(axis=(1, 2)) for c in classes}, index=steps)
+
+    def trajectory(self, roles=None) -> pd.DataFrame:
+        """Cells changing at each step, by the role of their transition (:class:`Roles`)."""
+        roles = roles or self.roles
+        if roles is None:
+            raise ValueError("give the Roles")
+        layers_of = self.stack.names_of if self.stack is not None else (lambda v: (str(_class_value(v)),))
+        m = self.maps.values.reshape(self.maps.shape[0], -1)
+        rows = []
+        for k in range(1, m.shape[0]):
+            a, b = m[k - 1], m[k]
+            ch = (a != b) & ~np.isnan(a) & ~np.isnan(b)
+            row = {"step": k}
+            if ch.any():
+                pairs, counts = np.unique(np.stack([a[ch], b[ch]]), axis=1, return_counts=True)
+                for (f, t), c in zip(pairs.T, counts):
+                    role = roles._lookup(_class_value(f), _class_value(t), layers_of)
+                    row[role] = row.get(role, 0) + int(c)
+            rows.append(row)
+        return pd.DataFrame(rows).set_index("step").fillna(0).astype(int)
+
+    def outputs(self, table, *, initial=None) -> xr.DataArray:
+        """Per step, the value in ``table`` of each cell's class (CLUMondo's output maps).
+
+        Parameters
+        ----------
+        table
+            A DataFrame with a row per class and a column per output (carbon,
+            jobs...), or a Series for one output.
+        initial
+            Optional maps (``{output: map}``) of the real values at the start:
+            cells that never changed class keep them (CLUMondo's
+            ``initoutputmap``).
+
+        Returns
+        -------
+        xarray.DataArray
+            ``(output, step, y, x)``.
+        """
+        if isinstance(table, pd.Series):
+            table = table.to_frame()
+        t = table.copy()
+        t.index = [_class_value(v) for v in t.index]
+        m = self.maps.values
+        flat = m.reshape(m.shape[0], -1)
+        layers = []
+        for col in t.columns:
+            lut = dict(zip(t.index, t[col].to_numpy(dtype=np.float64)))
+            v = np.full(flat.shape, np.nan)
+            for cls, val in lut.items():
+                v[flat == cls] = val
+            if initial is not None and col in initial:
+                init = read_map(initial[col]).as_float().ravel()
+                changed = np.zeros(flat.shape[1], dtype=bool)
+                for k in range(1, flat.shape[0]):
+                    changed |= (flat[k] != flat[k - 1]) & ~np.isnan(flat[k])
+                    v[k, ~changed] = init[~changed]
+                v[0] = np.where(np.isnan(flat[0]), np.nan, init)
+            layers.append(v.reshape(m.shape))
+        da = xr.DataArray(np.stack(layers), dims=("output", *self.maps.dims),
+                          coords={"output": list(t.columns), **dict(self.maps.coords)}, name="output")
+        return da
 
     def __repr__(self) -> str:
         return f"Simulation({self.maps.shape[0] - 1} steps, seed={self.seed})"
+
+
+def _as_maps(stack: np.ndarray, t, name: str) -> xr.DataArray:
+    """``(step, y, x)`` maps on the template's grid."""
+    if t is None:
+        return xr.DataArray(stack, dims=("step", "y", "x"), coords={"step": np.arange(stack.shape[0])}, name=name)
+    da = xr.DataArray(stack, dims=("step", *t.dims),
+                      coords={"step": np.arange(stack.shape[0]), **{k: t.coords[k] for k in t.dims}}, name=name)
+    try:
+        from ..io import _with_georef
+
+        da = _with_georef(da, transform=t.rio.transform())
+        if t.rio.crs is not None:
+            da = _with_georef(da, crs=t.rio.crs)
+    except Exception:
+        pass
+    return da
 
 
 class Model:
@@ -112,6 +229,8 @@ class Model:
         -------
         Simulation
         """
+        if hasattr(self.allocation, "simulate"):  # allocations with their own yearly loop (CLUMondo)
+            return self.allocation.simulate(self, landscape, drivers, seed=seed, nodata=nodata)
         land = read_map(landscape, nodata)
         values = land.as_float().ravel()
         cells = np.flatnonzero(~np.isnan(values))
@@ -164,23 +283,7 @@ class Model:
             maps.append(current)
             rows.append({"step": step, **info, **{f"cells_{c}": int(np.sum(x1 == c)) for c in classes}})
             x0 = x1
-        stack = np.stack(maps)
-        t = land.template
-        if t is not None:
-            da = xr.DataArray(stack, dims=("step", *t.dims),
-                              coords={"step": np.arange(stack.shape[0]), **{k: t.coords[k] for k in t.dims}},
-                              name="landuse")
-            try:
-                from ..io import _with_georef
-
-                da = _with_georef(da, transform=t.rio.transform())
-                if t.rio.crs is not None:
-                    da = _with_georef(da, crs=t.rio.crs)
-            except Exception:
-                pass
-        else:
-            da = xr.DataArray(stack, dims=("step", "y", "x"), coords={"step": np.arange(stack.shape[0])},
-                              name="landuse")
+        da = _as_maps(np.stack(maps), land.template, "landuse")
         hist_map = np.full(values.size, np.nan)
         hist_map[cells] = hist
         return Simulation(da, pd.DataFrame(rows).set_index("step"), int(seed), hist_map.reshape(land.shape))
