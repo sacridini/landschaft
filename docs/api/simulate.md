@@ -143,6 +143,10 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.Succession
 
+## Expander and Patcher (Dinamica)
+
+::: landschaft.simulate.ExpanderPatcher
+
 ## Urban growth (FUTURES)
 
 ::: landschaft.simulate.PatchGrowing

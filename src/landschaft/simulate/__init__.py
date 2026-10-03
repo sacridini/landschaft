@@ -53,6 +53,7 @@ from ._landsystems import Cap, LandSystemStack, Roles, Succession
 from ._markov import Markov
 from ._mce import MultiCriteria
 from ._model import Model, Simulation
+from ._patches import ExpanderPatcher
 from ._rules import Neighbourhood, Rules
 from ._woe import WeightsOfEvidence, weights_of_evidence
 
@@ -65,6 +66,7 @@ __all__ = [
     "DevelopmentDemand",
     "DevelopmentPotential",
     "Estimator",
+    "ExpanderPatcher",
     "Flooding",
     "IntensityAnalysis",
     "LandSystemStack",

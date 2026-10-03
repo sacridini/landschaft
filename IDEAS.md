@@ -1730,6 +1730,28 @@ sim.supply; sim.shortfall; sim.trajectory()
      médio, variância (log-normal) e isometria, fração expander/patcher por transição, `prune factor`;
      implementados dos artigos (Soares-Filho et al. 2002) e conferidos estatisticamente contra o Dinamica EGO 8
      instalado (tamanhos de mancha, forma, demanda atendida), sem comparação célula a célula.
+     **Feita** (1.12.0): `ExpanderPatcher` (alocação com laço próprio; C++ `src/cpp/sim/patches.cpp`): mudanças =
+     round(taxa x células da origem) por passo (`Markov`, matriz de taxas ou `{(de, para): taxa}`), fração do
+     Expander por transição, o resto e as sobras do Expander ao Patcher; potencial = `WeightsOfEvidence`
+     (recalculada a cada passo) ou mapas por transição; tamanhos em células, hectares ou área do mapa.
+     - Medido no Dinamica EGO 8.13 (o código é fechado): os functores `Expander`/`Patcher` **quebram com
+       manchas de mais de uma célula** (assertion `count > 0` em `chooseBestPivotNeighbor`, mesmo com
+       probabilidade e matriz de mudanças feitas pelo próprio Dinamica numa paisagem contínua), então só a
+       seleção das sementes foi medida, com manchas de uma célula e 12 chamadas por caso. Expander: aceitação
+       P n_j / 5 para n_j = 1..4 e P a partir de 5 (o artigo de 2002 dá n_j / 4 e P a partir de 4: o Dinamica
+       EGO usa metade da janela 3 x 3 com o centro); candidatas sorteadas sem reposição em proporção a P',
+       cada uma tentada uma vez (com teto de mudanças, as taxas por n_j batem: 0,058 / 0,195 / 0,391 / 0,611
+       / 0,83 do Dinamica contra 0,058 / 0,204 / 0,39 / 0,603 / 0,83); as não feitas voltam como mudanças
+       restantes. Patcher: sementes sorteadas em proporção a P entre as `prune_factor x mudanças` melhores
+       (probabilidade média das escolhidas 0,633 no Dinamica, 0,630 aqui; a média uniforme seria 0,580), sem
+       excluir as vizinhas da classe (o artigo de 2002 diz que o Patcher age longe dela; o Dinamica EGO não).
+       Formato das tabelas: `"From*","To*","Cells"` (mudanças), `"From*","To*","Mean_Patch_Size",
+       "Patch_Size_Variance","Patch_Isometry"` (parâmetros, tamanhos em hectares); a camada de probabilidade
+       `probability_i_to_j` (descrição da banda).
+     - Crescimento das manchas (dos artigos, sem medida possível): célula a célula, sorteada entre as vizinhas
+       da origem em proporção a P x isometria^k, k = células da mancha na janela (isometria 0 = células
+       isoladas, 1 = segue as probabilidades, 2 = manchas compactas); tamanho log-normal (média, variância).
+       Gerador próprio (xoshiro256**).
 6. PLUS: LEAS (`Estimator(sample="expansion")`) e CARS com inércia adaptativa (clean-room).
 7. Laço temporal completo: variáveis dinâmicas, demanda por região, vizinhança por rede (`ls.cost`),
    `presets`, `run` / `report` / `redo`, cenários e réplicas em paralelo.

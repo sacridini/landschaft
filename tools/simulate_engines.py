@@ -228,14 +228,18 @@ def _read_outputs(folder: Path, outputs) -> dict:
 def run_dinamica(job: dict, tmp: Path) -> dict:
     """Run an EGO script with Dinamica EGO's console in ``tmp``.
 
-    ``job``: ``rasters`` (name -> DataArray, written as ``<name>.tif``),
+    ``job``: ``rasters`` (name -> DataArray, written as ``<name>.tif``, its
+    band named ``band_names[name]`` or ``name``), ``files`` (name -> text),
     ``script`` (the EGO script; relative paths are in ``tmp``), ``outputs``
     (files the script writes: ``.csv`` tables, ``.tif`` maps).
     """
     if not DINAMICA.is_file():
         raise FileNotFoundError(f"Dinamica EGO console not found at {DINAMICA} (set LANDSCHAFT_DINAMICA)")
+    names = job.get("band_names", {})
     for name, da in job.get("rasters", {}).items():
-        write_dinamica_raster(tmp / f"{name}.tif", da, name)
+        write_dinamica_raster(tmp / f"{name}.tif", da, names.get(name, name))
+    for name, text in job.get("files", {}).items():
+        (tmp / name).write_text(text, newline="\n")
     (tmp / "model.ego").write_text(job["script"], newline="\n")
     proc = subprocess.run([str(DINAMICA), "-processors", "1", "-predefined-seed", "model.ego"], cwd=tmp,
                           capture_output=True, text=True, timeout=job.get("timeout", 3600), check=False)

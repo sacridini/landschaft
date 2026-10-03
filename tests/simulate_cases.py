@@ -2169,3 +2169,84 @@ CASES.update({
     "potential_single": _pot_case("glm", "developed ~ x1 + x2 + x3 + pressure",
                                   "One subregion: R's glm (bit for bit)."),
 })
+
+
+# ----------------------------------------------------------------------------- Expander / Patcher (Dinamica EGO)
+
+GROUPS += ["patches"]
+
+_PATCH_RUNS = 12
+
+
+def patches_scattered():
+    """120 x 120 cells: class 2 scattered at 45% (n_j from 0 to 8 around class-1 cells), a class-1 strip."""
+    rng = np.random.default_rng(9)
+    t0 = np.where(rng.random((120, 120)) < 0.45, 2.0, 1.0)
+    t0[:, :20] = 1
+    g = grid(t0)
+    g.attrs["categorical"] = True
+    return g
+
+
+def patches_blobs():
+    """120 x 120 cells of class 1 with four disks of class 2, and a probability of 0.95 within 5 cells of
+    them (a band), 0.5 elsewhere."""
+    from scipy import ndimage
+
+    yy, xx = np.mgrid[0:120, 0:120]
+    t0 = np.ones((120, 120))
+    for a, b in [(30, 30), (80, 40), (50, 90), (95, 95)]:
+        t0[(yy - a) ** 2 + (xx - b) ** 2 < 36] = 2
+    dist = ndimage.distance_transform_edt(t0 != 2)
+    prob = np.where(dist <= 5, 0.95, 0.5)
+    g = grid(t0)
+    g.attrs["categorical"] = True
+    return {"t0": g, "prob": grid(prob)}
+
+
+INPUTS.update({"patches_scattered": patches_scattered, "patches_blobs": lambda: patches_blobs()["t0"],
+               "patches_blobs_prob": lambda: patches_blobs()["prob"]})
+
+
+def _patch_job(t0, prob, functor, cells, mean_ha=0.09):
+    script = ['Script {{', '  t0 := LoadCategoricalMap "t0.tif" .none .default 0;', '  prob := LoadMap "prob.tif";',
+              '  changes := LoadTable "changes.csv";', '  params := LoadTable "params.csv";']
+    for k in range(_PATCH_RUNS):
+        script += [f"  ch{k} co{k} re{k} := {functor} t0 prob changes params;", f'  SaveMap ch{k} "out{k}.tif";']
+    script.append("}};")
+    heredoc = {"changes.csv": f'"From*","To*","Cells"\n1,2,{cells}\n',
+               "params.csv": '"From*","To*","Mean_Patch_Size","Patch_Size_Variance","Patch_Isometry"\n'
+                             f"1,2,{mean_ha},0,1\n"}
+    return {"rasters": {"t0": t0, "prob": prob}, "files": heredoc, "script": "\n".join(script) + "\n",
+            "outputs": [f"out{k}.tif" for k in range(_PATCH_RUNS)],
+            "band_names": {"prob": "probability_1_to_2"}}
+
+
+def _patch_py(t0, prob, functor, cells, runs=40):
+    from landschaft import _core
+
+    land = np.nan_to_num(t0.values, nan=-1).astype(np.int32)
+    out = {}
+    for k in range(runs):
+        t = [{"from": 1, "to": 2, "probability": np.nan_to_num(prob.values).ravel().astype(np.float64),
+              "expand": cells if functor == "Expander" else 0, "patch": 0 if functor == "Expander" else cells,
+              "expander": (1, 0, 1), "patcher": (1, 0, 1)}]
+        r = _core.sim_patches(land, t, 10.0, 3, 3, k)
+        out[f"out{k}.tif"] = r["landscape"].astype(np.float64)
+    return out
+
+
+CASES.update({
+    "patches_expander": Case(
+        "patches", "dinamica", ("patches_scattered",),
+        job=lambda patches_scattered: _patch_job(patches_scattered, grid(np.full(patches_scattered.shape, 0.9)),
+                                                 "Expander", 3000),
+        py=lambda patches_scattered: _patch_py(patches_scattered, grid(np.full(patches_scattered.shape, 0.9)),
+                                               "Expander", 3000),
+        notes="Dinamica EGO's Expander, one-cell patches, 12 calls: the acceptance by n_j (statistical)."),
+    "patches_patcher": Case(
+        "patches", "dinamica", ("patches_blobs", "patches_blobs_prob"),
+        job=lambda patches_blobs, patches_blobs_prob: _patch_job(patches_blobs, patches_blobs_prob, "Patcher", 507),
+        py=lambda patches_blobs, patches_blobs_prob: _patch_py(patches_blobs, patches_blobs_prob, "Patcher", 507),
+        notes="Dinamica EGO's Patcher, one-cell patches, 12 calls: where the seeds fall (statistical)."),
+})

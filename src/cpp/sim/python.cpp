@@ -16,6 +16,7 @@
 #include "sim/clues.hpp"
 #include "sim/clumondo.hpp"
 #include "sim/futures.hpp"
+#include "sim/patches.hpp"
 #include "sim/rglm.hpp"
 #include "sim/rng.hpp"
 #include "sim/woe.hpp"
@@ -534,6 +535,46 @@ py::array_t<float> sim_futures_mfilter(const DArray& input, const DArray& matrix
     return r;
 }
 
+py::dict sim_patches(const IArray& landscape, const py::list& transitions, double prune_factor, int win_rows,
+                     int win_cols, std::uint64_t seed) {
+    if (landscape.ndim() != 2) throw std::invalid_argument("the landscape must be 2-D");
+    const i64 ny = landscape.shape(0), nx = landscape.shape(1), n = ny * nx;
+    std::vector<sim::PatchTransition> ts;
+    for (auto item : transitions) {
+        py::dict d = py::cast<py::dict>(item);
+        sim::PatchTransition t;
+        t.from = py::cast<int>(d["from"]);
+        t.to = py::cast<int>(d["to"]);
+        DArray p = py::cast<DArray>(d["probability"]);
+        if (p.size() != n) throw std::invalid_argument("a probability map differs in size from the landscape");
+        t.probability.assign(p.data(), p.data() + n);
+        t.expand = py::cast<std::int64_t>(d["expand"]);
+        t.patch = py::cast<std::int64_t>(d["patch"]);
+        auto e = py::cast<std::vector<double>>(d["expander"]);
+        auto q = py::cast<std::vector<double>>(d["patcher"]);
+        t.e_mean = e.at(0);
+        t.e_var = e.at(1);
+        t.e_iso = e.at(2);
+        t.p_mean = q.at(0);
+        t.p_var = q.at(1);
+        t.p_iso = q.at(2);
+        ts.push_back(std::move(t));
+    }
+    sim::PatchResult r;
+    {
+        py::gil_scoped_release release;
+        r = sim::allocate_patches(ny, nx, landscape.data(), ts, prune_factor, win_rows, win_cols, seed);
+    }
+    py::dict out;
+    py::array_t<int> land({ny, nx});
+    std::copy(r.landscape.begin(), r.landscape.end(), land.mutable_data());
+    out["landscape"] = land;
+    out["expanded"] = to_array(r.expanded);
+    out["patched"] = to_array(r.patched);
+    out["patches"] = to_array(r.patches);
+    return out;
+}
+
 }  // namespace
 
 namespace sim {
@@ -593,6 +634,9 @@ void register_python(py::module_& m) {
           py::arg("zone_regions"), py::arg("zone_effects"), py::arg("stringency"), py::arg("demand"),
           py::arg("nsteps"), py::arg("seed"), py::arg("climate") = py::none(),
           "FUTURES (r.futures.simulation) patch-growing simulation, with its flood submodel.");
+    m.def("sim_patches", &sim_patches, py::arg("landscape"), py::arg("transitions"), py::arg("prune_factor") = 10.0,
+          py::arg("win_rows") = 3, py::arg("win_cols") = 3, py::arg("seed") = 1,
+          "Expander and Patcher (Soares-Filho et al. 2002): allocation of the changes of each transition.");
     m.def("sim_futures_mfilter", &sim_futures_mfilter, py::arg("input"), py::arg("matrix"),
           "r.mfilter as r.futures.devpressure runs it (edges keep their values, nulls give null).");
 }

@@ -557,6 +557,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.Roles`](simulate.md#landschaft.simulate.Roles) | What each transition between land systems does to their layers |
 | [`ls.Cap`](simulate.md#landschaft.simulate.Cap) | At most so many cells (or so much area) a year may make a role's transitions (or given pairs) |
 | [`ls.Succession`](simulate.md#landschaft.simulate.Succession) | Autonomous change after some years, whatever the demand (CLUMondo's code 1000 + years) |
+| [`ls.ExpanderPatcher`](simulate.md#landschaft.simulate.ExpanderPatcher) | Dinamica's Expander and Patcher allocation of transitions (``AllocateTransitions``) |
 | [`ls.PatchGrowing`](simulate.md#landschaft.simulate.PatchGrowing) | FUTURES' patch growing allocation (r.futures.simulation) |
 | [`ls.DevelopmentDemand`](simulate.md#landschaft.simulate.DevelopmentDemand) | Cells each subregion develops at each step (r.futures.simulation's ``demand`` file) |
 | [`ls.DevelopmentPotential`](simulate.md#landschaft.simulate.DevelopmentPotential) | The development potential's coefficients per subregion (r.futures.potential's table) |

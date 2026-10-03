@@ -1,0 +1,177 @@
+{
+ "arrays": {
+  "patches_expander/out0.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out1.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out10.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out11.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out2.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out3.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out4.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out5.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out6.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out7.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out8.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_expander/out9.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out0.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out1.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out10.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out11.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out2.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out3.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out4.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out5.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out6.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out7.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out8.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  },
+  "patches_patcher/out9.tif": {
+   "dim": [
+    120,
+    120
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "dinamica": {
+   "dinamica": "8130"
+  }
+ }
+}
