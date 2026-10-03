@@ -6,6 +6,26 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-03
+
+### Added
+- `ls.simulate` phase 2, transition potential:
+  - `WeightsOfEvidence` / `weights_of_evidence`: Dinamica EGO's weights of evidence: ranges of
+    continuous variables by its line generalisation of nested buffers (increment, minimum and
+    maximum delta, tolerance angle), categorical variables, W+, contrast and significance, the fix
+    of abnormal weights, both "potential transition" criteria, per-transition settings, the
+    correlation report (chi-square, Cramer's V, contingency, joint entropy and uncertainty) and the
+    probability maps (multinomial over the transitions of a class). The same ranges, counts and
+    weights as Dinamica EGO 8 (its 15 printed digits); counting and probabilities in C++.
+  - `LogisticRegression`: lulcc's `glmModels`, R's `glm(family = binomial)` reproduced operation for
+    operation (coefficients, deviance, predictions bit for bit, aliased drivers as NaN).
+  - `Estimator`: any scikit-learn classifier per class, trained on presence or on expansion between
+    two maps (PLUS's LEAS), with sampling and balancing.
+  - `MultiCriteria`: MOLUSCE's multi-criteria evaluation (Saaty's AHP weights and consistency ratio).
+  - `RasterPotential`: a potential given as maps.
+- Variables with negative values: Dinamica EGO drops values just below zero and shifts its ranges
+  there by one increment; here they are treated like positive ones.
+
 ## [1.6.0] - 2026-10-03
 
 ### Added
