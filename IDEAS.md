@@ -1022,9 +1022,10 @@ Todos os módulos planejados são plenamente viáveis e compatíveis com a licen
 | Módulo / Ferramenta de Referência | Status / Licença Original | Compatibilidade e Estratégia |
 |---|---|---|
 | **Zonation 5** (CAZ / ABF, v2.4) | **GPL-3.0** (código em github.com/zonationteam/Zonation5; vdt LGPL-3) | **100% compatível**. Reimplementação em C++17 das ordenações iterativas. |
-| **PLUS Model** (CARS / Inércia) | **GPL-3.0 / Open Source** | **100% compatível**. Absorção do sorteio estocástico de roleta multiclasse e inércia dinâmica. |
+| **PLUS Model** (CARS / Inércia) | **Sem fonte e sem licença** (o repositório só tem o `.exe`) | **Clean-room** pelo artigo (Liang et al. 2021); nada a copiar. |
 | **TerraME** (Vizinhanças Híbridas) | **LGPL / GPL** (C++/Lua aberto) | **100% compatível**. Inspiração para acoplamento de grade raster com redes e zonas. |
-| **lulcc** / **MOLUSCE** (WoE + CA) | **GPL-3 / GPL-2** (R e Python) | **100% compatível**. Referência aberta para equações bayesianas de Pesos de Evidência. |
+| **lulcc** / **MOLUSCE** / **FUTURES** (CLUE-S, WoE, PGA) | **GPL >= 2** (R, Python, C) | **100% compatível** ("ou posterior" permite GPL-3). |
+| **CLUMondo** (sistemas de uso, Dyna-CLUE) | **GPL-3.0** (C++, github.com/VUEG/CLUMondo; GUI fechada) | **100% compatível**. |
 | **Dinâmica EGO** (Expander / Patcher) | *Freeware / Closed-source* | **Legalmente seguro via Clean-room**. Os métodos matemáticos (Soares-Filho et al., 2002) estão em domínio público na literatura científica. |
 | **biomod2** / **CoordinateCleaner** / **spThin** / **blockCV** | **GPL-2 / GPL-3 / MIT** (R) | **100% compatível**. Reimplementação em Python dos algoritmos de limpeza espacial, desbaste e spatial CV. |
 
@@ -1184,65 +1185,131 @@ ls.write_raster(res.rank, "rankmap.tif")
 
 ---
 
-## Simulação de mudança do uso da terra e autômatos celulares (LULCC)
+## Simulação de mudança do uso da terra e autômatos celulares (`ls.simulate`)
 
-> **Escopo:** Exclusivamente modelagem espacial, morfológica e biofísica de transições de paisagem em C++17
-> (submódulo `ls.simulate`).
+Plano acordado em 2026-10-03 (substitui a lista de ideias anterior). Submódulo `landschaft.simulate`
+(`ls.simulate`), C++ em `src/cpp/sim/`. Objetivo: juntar as funcionalidades da família CLUE (CLUE-S, Dyna-CLUE,
+CLUMondo), do Dinamica EGO, do PLUS, do FUTURES e do MOLUSCE num só modelo, fácil de montar e de rodar.
 
-### Operadores morfológicos realistas (do Dinâmica EGO)
-Supera os autômatos celulares tradicionais (que apenas expandem bordas homogêneas) através do desacoplamento
-estocástico:
-* **Expander:** Dedicado exclusivamente a expandir manchas existentes de forma contígua a partir das bordas;
-* **Patcher (Nucleação Estocástica de Novas Manchas):**
-  * Sorteia sementes no interior da matriz para gerar novos fragmentos e clareiras isoladas;
-  * **Distribuição calibrada de tamanho:** Sorteia o tamanho de cada nova mancha a partir de uma distribuição
-    log-normal (definida por média e variância empíricas observadas na paisagem real);
-  * **Coeficiente de isometria de forma:** Controla se o crescimento ao redor da semente é compacto/circular ou
-    dendrítico/alongado.
+### Referências (levantamento de 2026-10-03)
+| Referência | Licença / código | O que traz | Paridade |
+|---|---|---|---|
+| lulcc 1.0.4 (R; CRAN, republicado em 2025-11-08) | GPL >= 2, R + C | CLUE-S, modelo ordenado (Fuchs et al. 2013), vizinhança, transições permitidas, demanda interpolada, LR/rpart/RF, `ThreeMapComparison`, `AgreementBudget`, `FigureOfMerit` | bit a bit (geradores do R do `nlm`; portar o `glm`) |
+| CLUMondo (github.com/VUEG/CLUMondo) | GPL-3, C++ (CLI; a GUI é fechada) | sistemas de uso com composição e intensidade, demanda de bens e serviços, ordem de conversão, resistência, transições bottom-up do Dyna-CLUE | bit a bit (o README diz que só roda bem em Windows 32 bits: compilar Win32 com MSVC) |
+| FUTURES (`r.futures`, addons do GRASS, C) | GPL >= 2 | crescimento de manchas (PGA) com biblioteca de tamanhos observados, compacidade, incentivo, demanda por região a partir da população | bit a bit provável (GRASS no WSL) |
+| MOLUSCE 5.3 (`dev/qgis_molusce`, plugin QGIS, Python) | GPL >= 2 | WoE, LR, MLP, MCE, matriz de transição, kappa, error budget | fórmulas bit a bit; o CA sorteia com `np.random` sem semente |
+| Dinamica EGO 8 | freeware, código fechado | Expander/Patcher, WoE com faixas adaptativas, Cramér/JIU, similaridade fuzzy, matriz de vários passos | clean-room pelos artigos; o binário como caixa-preta nas partes determinísticas (faixas, pesos, similaridade) e comparação estatística no Expander/Patcher; ler o termo de uso na instalação |
+| PLUS 1.4.2 (github.com/HPSCIL) | **sem fonte e sem licença** (só o `.exe`) | LEAS (RF sobre as áreas de expansão) + CARS (sementes multiclasse, inércia adaptativa) | clean-room pelo artigo (Liang et al. 2021), sem paridade |
+| TerraME (`dev/terrame`) | LGPL, Lua | CA e agentes genéricos, matrizes de proximidade generalizadas | só conceito |
+| OpenLand, diffeR (R) | a conferir na fase 0 | análise de intensidade (Aldwaik & Pontius), componentes quantidade/troca/deslocamento | bit a bit |
 
-### Variáveis dinâmicas em malha fechada (*Moving Frontier*)
-* Capacidade de configurar variáveis explicativas dinâmicas que sofrem recálculo a cada passo temporal $t \to t+1$
-  (ex: o raster de *distância à borda da floresta* ou *densidade de clareiras* é recomputado internamente em C++
-  após cada rodada de desmatamento, alimentando o passo seguinte).
-* Simula com fidelidade o avanço em cadeia da fronteira pioneira (*moving frontier*).
+Algoritmos publicados não são protegidos, o código sim: nada é descompilado nem copiado de Dinamica ou PLUS. As
+partes clean-room seguem o critério das métricas só do FRAGSTATS: implementações diretas das definições
+publicadas e testes estatísticos (manchas com a distribuição de tamanho pedida, efeito da isometria na forma,
+demanda atendida). Fora: agentes (TerraME), SLEUTH, a MLP do MOLUSCE (o scikit-learn cobre).
 
-### Pesos de evidência com discretização adaptativa (WoE)
-* Cálculo estatístico bayesiano dos pesos de contraste espacial:
-  $$W^+ = \ln \left( \frac{P(D|T)}{P(D|\bar{T})} \right), \quad W^- = \ln \left( \frac{P(\bar{D}|T)}{P(\bar{D}|\bar{T})} \right)$$
-* **Binning Adaptativo:** Algoritmo de discretização de variáveis contínuas (declividade, elevação, distâncias) que
-  calcula automaticamente quebras de faixas com suporte estatístico mínimo e contraste ótimo ($W^+ - W^-$);
-* Testes embutidos de independência condicional entre evidências (*Cramer's V* e *Joint Information Uncertainty*).
+### Desenho: um modelo feito de peças trocáveis
+| Peça | Pergunta | Opções |
+|---|---|---|
+| `demand` | quanto muda? | `Markov` (um ou vários passos, raiz da matriz para anos intermediários), `AreaDemand` (CLUE-S), `ServiceDemand` (CLUMondo), população -> área (FUTURES); por região |
+| `potential` | onde é mais provável? | `WeightsOfEvidence`, `LogisticRegression` (`glm` do R), `Estimator(qualquer sklearn, sample="expansion")` (LEAS), raster pronto (ex.: `ls.sdm.predict`) |
+| `rules` | o que pode mudar e como? | conversões permitidas, elasticidade/resistência, restrições, vizinhança, `Succession` (Dyna-CLUE), inércia adaptativa (PLUS), ordem de conversão e tetos (`Cap`) |
+| `allocation` | com que forma? | `CLUE` (iterativo), `Ordered`, `ExpanderPatcher`, `CARS`, `PatchGrowing` (FUTURES) |
 
-### Competição multiclasse com inércia adaptativa (do PLUS / CARS)
-* **Sorteio Estocástico por Roleta Multiclasse:** Em cada célula, múltiplas classes (ex: agricultura, pastagem,
-  silvicultura, regeneração) disputam a ocupação simultaneamente com base na probabilidade de transição local, no
-  efeito de vizinhança e na matriz de custos de conversão;
-* **Inércia Dinâmica:** Mecanismo adaptativo que monitora a demanda acumulada de cada classe a cada ano:
-  * Se a classe estiver expandindo abaixo da meta, seu coeficiente de inércia aumenta dinamicamente;
-  * Se estiver expandindo rápido demais, a inércia é reduzida, garantindo convergência estrita com as metas macro
-    do cenário.
+* Qualquer combinação vale; o `Model` converte entre "línguas" (Markov por transição -> áreas por classe para o
+  CLUE; potencial por classe -> por transição) e diz qual peça trocar quando não faz sentido.
+* `S.presets.clue_s / ordered / dinamica / plus / futures / clumondo` montam os modelos clássicos (e são o que
+  a paridade testa).
+* Três níveis, como no `ls.sdm`: `S.run(lc_t0, lc_t1, drivers, until=..., seed=...)` numa chamada (padrão estilo
+  Dinamica: Markov + WoE automático + Expander/Patcher com tamanhos e formas medidos pelo `lsm` nas mudanças
+  observadas; valida t0 -> t1 antes de projetar; o preset usado aparece no `report`), cada etapa aceita
+  `False` / número / `dict` / função, `report`, `settings`, `redo(...)`; peças avulsas; `S.Model(...).run(...)`.
+* Variáveis dinâmicas (moving frontier): `dynamic={"dist_floresta": S.distance_to(3)}` recalculadas em C++ a
+  cada passo.
+* Saída: `xarray.Dataset` com dimensão `year` (mapas, potenciais opcionais), `ls.plot` com slider e Sankey.
+* Integração: restrições/custos do `ls.prioritize`, potencial de regeneração do `ls.sdm`, métricas no tempo
+  (`lsm`, `mspa`, `HabitatGraph`) por ano e cenário.
+* Cenários e réplicas: `S.scenarios(model, start, years, replicates=20, {...})` em paralelo,
+  `probability(classe, year)`, `metrics([...])`.
+* `seed` em tudo (geradores do R onde a referência é o R; o da referência nos demais), `n_threads` em tudo,
+  mesmos bits com qualquer número de threads.
 
-### Espaços celulares híbridos e acoplamento grade-rede (do TerraME)
-* Conexão das células do raster a múltiplos níveis topológicos de vizinhança:
-  1. *Vizinhança Local:* $3 \times 3$ ou $5 \times 5$ pixels contíguos;
-  2. *Vizinhança Zonal:* Restrições e atratores agregados em nível de bacia hidrográfica ou zona municipal;
-  3. *Vizinhança de Rede:* Células conectadas a grafos de transporte viário (estradas) ou hidrográficos (rios),
-     transmitindo efeitos de acessibilidade a longa distância.
+```python
+S = ls.simulate
+sim = S.run(lc2010, lc2020, drivers, until=2050, seed=42)          # uma chamada
+model = S.Model(
+    demand=S.AreaDemand(cenario_df, regions=municipios),
+    potential=S.Estimator(RandomForestClassifier(), sample="expansion"),
+    rules=S.Rules(allowed=permitidas, elasticity={3: 0.8, 15: 0.3}, restrictions=ucs,
+                  succession=S.Succession(from_=15, to=3, after_years=12), inertia="adaptive"),
+    allocation=S.ExpanderPatcher(expander=0.6, patch_size="observed", isometry=1.4),
+    dynamic={"dist_floresta": S.distance_to(3)},
+)
+sim = model.run(lc2020, years=range(2021, 2051), seed=1)
+```
 
-### Validação multiescala por similaridade fuzzy (*Fuzzy Similarity*)
-* Elimina a armadilha do índice Kappa pixel a pixel para rasters de alta resolução;
-* Compara o mapa simulado com o mapa real através de janelas móveis concêntricas crescentes ($1 \times 1, 3 \times 3,
-  5 \times 5, \dots, 15 \times 15$ pixels) com decaimento exponencial de distância (Hagen/Costanza);
-* Fornece curvas de concordância estrutural e morfológica por escala de observação.
+### Sistemas de uso como camadas binárias com sobreposição (extensão nossa do CLUMondo)
+* Entrada: um raster binário por camada (floresta, pasto extensivo, pasto intensivo, soja, urbano...), com
+  sobreposição permitida. `S.LandSystemStack(camadas)`: máscara de bits por célula (até 32 camadas, `uint32`);
+  cada combinação que ocorre é um sistema. `overlaps()` tabela as combinações antes de tudo.
+* Política por par ou padrão: `"mosaic"` (sistema próprio), prioridade (`priority=[...]`), `"error"`;
+  `min_cells=` funde combinações raras; `allow_new_mosaics=` para criar combinações ausentes do mapa inicial.
+* Papéis sem listar transições: `S.Roles(natural=[...], families={"pecuaria": [extensivo, intensivo], ...})`.
+  Por camada: perder camada natural = expansão; subir na escada ou ganhar camada produtiva mantendo a natural =
+  intensificação; descer = desintensificação; ganhar natural = regeneração/abandono. `roles.table()`,
+  `roles.set(par, papel)` para corrigir.
+* Oferta: `S.Supply(per_layer=..., mosaic="split" | "full" | {combinação: valores})`.
+* Regras por camada, família ou papel: `conversion_order=["intensificacao", "expansao"]`, `resistance`,
+  `max_deforestation=S.Cap(...)`, `Succession(role="abandono", after_years=15)`.
+* Saída no formato da entrada: um binário por camada e ano (`sim.layers[...]`), mais `sim.supply`,
+  `sim.shortfall`, `sim.trajectory()` (área por papel e ano), `sim.cover(...)`.
+* Paridade: um mapa categórico vira uma pilha sem sobreposição e cai no CLUMondo original (bit a bit); a
+  sobreposição é conferida contra o caso categórico equivalente.
 
-### Calibração orientada a padrões (*Pattern-Oriented Modeling*)
-* **Sinergia nativa com o motor do landschaft:**
-  * Uso das métricas de paisagem (`ls.landscape_metrics`) e classes de fragmentação MSPA (`ls.mspa`) como função de
-    perda para calibração automática dos hiperparâmetros de simulação (taxa expander/patcher, isometria, peso de
-    vizinhança):
-    $$\min_{\theta} \sum_{m \in \mathcal{M}} w_m \left| M_m^{\text{simulado}}(\theta) - M_m^{\text{observado}} \right|$$
-  * Permite rodar algoritmos de otimização (Nelder-Mead, otimização Bayesiana ou Algoritmos Genéticos) calibrando
-    cenários futuros para que sejam estruturalmente indistinguíveis da dinâmica real da paisagem.
+```python
+camadas = {"floresta": f, "pasto_extensivo": pe, "pasto_intensivo": pi, "soja": s, "urbano": u}
+sist = S.LandSystemStack(camadas, overlap={("soja", "urbano"): "urbano"}, default_overlap="mosaic")
+roles = S.Roles(natural=["floresta"],
+                families={"pecuaria": ["pasto_extensivo", "pasto_intensivo"], "agricultura": ["soja"]})
+model = S.presets.clumondo(
+    systems=sist, roles=roles,
+    supply=S.Supply(per_layer={"pasto_extensivo": {"gado": 0.6}, "pasto_intensivo": {"gado": 2.5},
+                               "soja": {"soja": 3.4}}, mosaic="split"),
+    demand=S.ServiceDemand(demanda_df),            # t de soja, cabeças de gado, habitantes por ano
+    rules=S.Rules(conversion_order=["intensificacao", "expansao"], restrictions=ucs,
+                  max_deforestation=S.Cap(area_ha=50_000, per="year")),
+)
+sim = model.run(sist, years=range(2021, 2051), seed=7)
+sim.supply; sim.shortfall; sim.trajectory()
+```
+
+### Validação e calibração
+* `S.validate(t0, t1_obs, t1_sim)`: similaridade fuzzy em várias janelas com decaimento (Hagen-Zanker 2003;
+  a versão de duas vias do Dinamica), comparação de três mapas em várias resoluções e figure of merit (Pontius,
+  lulcc), kappa e error budget (MOLUSCE), métricas do `lsm`/`mspa` lado a lado.
+* `S.calibrate(model, start, observed, params={...}, targets={"lsm": [...], "mspa": [...], "fuzzy": ...},
+  method="nelder-mead", replicates=...)`: calibração orientada a padrões com otimizadores do scipy.
+
+### Fases (a ordem é livre, contanto que tudo seja coberto; ao fim de cada fase: versão, commit, push, próxima)
+0. Harness: biblioteca R própria (lulcc, OpenLand, diffeR), GRASS + `r.futures` no WSL, CLUMondo compilado
+   (Win32, MSVC), Dinamica EGO 8 instalado (modelos EGO pela linha de comando; termo de uso lido), MOLUSCE sem o
+   QGIS (stubs), `tools/make_reference_simulate.py`, casos em `tests/simulate_cases.py`, dados de exemplo
+   (Pontiac do lulcc e um recorte brasileiro), esqueleto de `ls.simulate`.
+1. Análise de mudança: matriz cruzada, ganhos/perdas, intensidade, componentes de Pontius, `Markov` (vários
+   passos, raiz da matriz).
+2. Potencial: WoE (binário e multiclasse, faixas adaptativas, Cramér's V, JIU), `glm` do R portado
+   (`LogisticRegression`), `Estimator` do sklearn, potencial a partir de raster.
+3. `Model` e alocação do lulcc: CLUE-S e modelo ordenado, vizinhança, transições permitidas, demanda
+   interpolada; bit a bit.
+4. CLUMondo / Dyna-CLUE: sistemas de uso, `ServiceDemand`, `Supply`, ordem de conversão, resistência, sucessão
+   bottom-up, tetos; `LandSystemStack` com sobreposição e `Roles`.
+5. Manchas: Expander/Patcher (clean-room: tamanho log-normal, isometria) e o PGA do FUTURES (bit a bit).
+6. PLUS: LEAS (`Estimator(sample="expansion")`) e CARS com inércia adaptativa (clean-room).
+7. Laço temporal completo: variáveis dinâmicas, demanda por região, vizinhança por rede (`ls.cost`),
+   `presets`, `run` / `report` / `redo`, cenários e réplicas em paralelo.
+8. Validação: similaridade fuzzy, três mapas em várias resoluções, figure of merit, kappa, error budget.
+9. Calibração orientada a padrões.
+10. Tutorial, capítulo do Learn, benchmarks contra lulcc, CLUMondo, FUTURES e Dinamica.
 
 ---
 
@@ -1455,21 +1522,21 @@ flowchart TD
     end
 
     subgraph Modulo_Simulacao ["3. Simulação de Paisagem (ls.simulate)"]
-        WOE["Pesos de Evidência Adaptativo (WoE)"]
-        CA_EXP["Operador Expander (Borda)"]
-        CA_PAT["Operador Patcher (Log-normal)"]
-        CARS["Competição Multiclasse com Inércia"]
-        MOV_FRONT["Moving Frontier (Feedback de Distância)"]
-        
-        WOE & CA_EXP & CA_PAT & CARS & MOV_FRONT --> SIM_STEP["Simulação Temporal (t -> t+n)"]
-        SIM_STEP --> FUZZY["Validação por Similaridade Fuzzy"]
+        DEM["Demanda (Markov / área / bens e serviços)"]
+        POT["Potencial (WoE / LR / scikit-learn)"]
+        RUL["Regras (elasticidade, sucessão, inércia, ordem de conversão)"]
+        ALO["Alocação (CLUE / Expander-Patcher / CARS / FUTURES)"]
+        MOV_FRONT["Moving Frontier (variáveis dinâmicas)"]
+
+        DEM & POT & RUL & ALO & MOV_FRONT --> SIM_STEP["Simulação Temporal (t -> t+n)"]
+        SIM_STEP --> FUZZY["Validação (fuzzy, Pontius)"]
     end
 
     %% Conexões e Sinergias
     BIO --> CLEAN
     PROJ -->|"Superfície de Adequabilidade (Feições q_ij)"| CAZ & ABF
     PROJ -->|"Inverso da Adequabilidade (Resistência)"| CONN
-    RNG --> CA_PAT & CARS
+    RNG --> ALO
     CONN --> CAZ & ABF
     SIM_STEP -.-> LSM & MSPA
     LSM & MSPA -.->|"Calibração Orientada a Padrões (Loss Function)"| SIM_STEP
