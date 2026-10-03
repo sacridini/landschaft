@@ -120,13 +120,13 @@ dump <- function(case, key, x) {
 
 # --- helpers the cases use
 
-# the solution in planning-unit order (raster: the cells with a cost, in cell order)
+# the solution in planning-unit order (the cells or rows with a cost, in order)
 solution_values <- function(s, p) {
   if (inherits(s, "SpatRaster")) {
     return(values(s[[1]], mat = FALSE)[p$planning_unit_indices()])
   }
   if (inherits(s, "sf")) s <- st_drop_geometry(s)
-  s[["solution_1"]]
+  s[["solution_1"]][p$planning_unit_indices()]
 }
 
 reference <- function(p) {

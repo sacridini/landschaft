@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Spatial conservation prioritization: ranking the cells of a landscape.
+"""Spatial conservation prioritization: ranking the cells of a landscape, or
+selecting the best set of planning units by optimization.
 
 A port of Zonation 5 (Lehtinen, Moilanen et al., University of Helsinki; GPL-3):
 the cells are ranked from the least to the most important for a set of
@@ -20,13 +21,29 @@ Typical use::
 
     # or an existing Zonation 5 project, with z5's switches
     res = ls.prioritize.run_project("settings.z5", "-w -X", mode="CAZ2")
+
+The optimization paradigm of prioritizr (Hanson et al.; GPL-3): a problem of
+planning units, features, an objective, targets and constraints, compiled to
+the same mixed-integer model as prioritizr and solved on HiGHS (built in) or
+Gurobi::
+
+    p = (ls.prioritize.problem(cost, features)
+           .add_min_set_objective()
+           .add_relative_targets(0.3)
+           .add_binary_decisions())
+    sol = p.solve()
+    sol.selection                 # 1 = selected
+    sol.coverage                  # targets met per feature
 """
 
 from ._connectivity import Interaction, Kernel, convolve
 from ._impacts import CumulativeScenario, ImpactScenario, ImpactSource, Pressure
+from ._milp import OptimizationProblem, Problem, problem
+from ._milp_solve import Solution
 from ._postprocess import AreaStatistics
 from ._project import read_project, run_project
 from ._zonation import RULES, ZonationResult, zonation
 
 __all__ = ["AreaStatistics", "CumulativeScenario", "ImpactScenario", "ImpactSource", "Interaction", "Kernel",
-           "Pressure", "RULES", "ZonationResult", "convolve", "read_project", "run_project", "zonation"]
+           "OptimizationProblem", "Pressure", "Problem", "RULES", "Solution", "ZonationResult", "convolve",
+           "problem", "read_project", "run_project", "zonation"]

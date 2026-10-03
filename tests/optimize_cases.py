@@ -4,7 +4,8 @@
 Every input is built in Python (numpy's generator, fixed seeds): rasters as
 DataArrays, planning-unit polygons as a GeoDataFrame, tables as DataFrames.
 A case is R code that sees the inputs it names as variables and gives a
-named list. ``tools/optimize_reference.R`` adds helpers:
+named list; ``py`` (optional) builds the same problem with
+``ls.prioritize.problem``. ``tools/optimize_reference.R`` adds helpers:
 
 - ``reference(p)``: a prioritizr problem's compiled model (``model``) and
   its optimum on Gurobi with gap 0 on one thread (``objective``,
@@ -21,6 +22,7 @@ for prioritizr, ``row_ids`` and ``col_ids``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache
 from itertools import pairwise
@@ -39,6 +41,7 @@ class Case:
     inputs: tuple[str, ...]
     r: str
     notes: str = ""
+    py: Callable | None = None
 
 
 # ----------------------------------------------------------------------------- inputs
@@ -300,6 +303,18 @@ CASES: dict[str, Case] = {
         reference(problem(pu_table[, c("id", "cost")], spec_table, rij = rij_table, cost_column = "cost") |>
                   add_min_set_objective() |> add_absolute_targets(c(1.2, 0.9, 1, 120, 4)) |>
                   add_binary_decisions())""", notes="Marxan-style tables"),
+    "minset_rij_relative": Case("core", ("pu_table", "spec_table", "rij_table"), """
+        reference(problem(pu_table[, c("id", "cost")], spec_table, rij = rij_table, cost_column = "cost") |>
+                  add_min_set_objective() |> add_relative_targets(0.3) |> add_binary_decisions())"""),
+    "minset_table_na_cost": Case("core", ("pu_table",), """
+        t <- pu_table; t$cost[c(3, 50, 51, 120)] <- NA
+        reference(problem(t, features = paste0("f", 1:5), cost_column = "cost") |>
+                  add_min_set_objective() |> add_relative_targets(0.3) |> add_binary_decisions())""",
+                                 notes="units without cost are not planning units"),
+    "minset_raster_locked_proportion": Case("core", (*RASTER, "locked_in", "locked_out"), """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_locked_in_constraints(locked_in) |> add_locked_out_constraints(locked_out) |>
+                  add_proportion_decisions())"""),
     "minset_polygons": Case("core", ("pu_polygons", "features"), """
         reference(problem(pu_polygons, features, cost_column = "cost") |> add_min_set_objective() |>
                   add_relative_targets(0.3) |> add_binary_decisions())""",
@@ -329,6 +344,58 @@ CASES: dict[str, Case] = {
                                                  curve = 3, segments = 3))""",
                                    notes="power curve: Gurobi general constraints (genconpow)"),
 }
+
+
+# ----------------------------------------------------------------------------- the same problems in Python
+
+FEATURES = [f"f{k}" for k in range(1, 6)]
+ABSOLUTE = [1.2, 0.9, 1, 120, 4]
+
+
+def _raster():
+    import landschaft as ls
+
+    return ls.prioritize.problem(pu_cost(), features()).add_min_set_objective()
+
+
+def _table(t=None):
+    import landschaft as ls
+
+    return ls.prioritize.problem(pu_table() if t is None else t, FEATURES, cost_column="cost").add_min_set_objective()
+
+
+def _rij():
+    import landschaft as ls
+
+    return ls.prioritize.problem(pu_table()[["id", "cost"]], spec_table(), cost_column="cost",
+                                 rij=rij_table()).add_min_set_objective()
+
+
+def _table_na_cost():
+    t = pu_table()
+    t.loc[[2, 49, 50, 119], "cost"] = np.nan
+    return _table(t)
+
+
+PY: dict[str, Callable] = {
+    "minset_raster_relative": lambda: _raster().add_relative_targets(0.3).add_binary_decisions(),
+    "minset_raster_relative_each": lambda: _raster().add_relative_targets([0.1, 0.25, 0.5, 0.2, 0.35])
+    .add_binary_decisions(),
+    "minset_raster_absolute": lambda: _raster().add_absolute_targets(ABSOLUTE).add_binary_decisions(),
+    "minset_raster_locked": lambda: _raster().add_relative_targets(0.3).add_locked_in_constraints(locked_in())
+    .add_locked_out_constraints(locked_out()).add_binary_decisions(),
+    "minset_raster_proportion": lambda: _raster().add_relative_targets(0.3).add_proportion_decisions(),
+    "minset_raster_semicontinuous": lambda: _raster().add_relative_targets(0.3).add_semicontinuous_decisions(0.6),
+    "minset_table": lambda: _table().add_relative_targets(0.3).add_locked_in_constraints("locked_in")
+    .add_locked_out_constraints("locked_out").add_binary_decisions(),
+    "minset_rij": lambda: _rij().add_absolute_targets(ABSOLUTE).add_binary_decisions(),
+    "minset_rij_relative": lambda: _rij().add_relative_targets(0.3).add_binary_decisions(),
+    "minset_table_na_cost": lambda: _table_na_cost().add_relative_targets(0.3).add_binary_decisions(),
+    "minset_raster_locked_proportion": lambda: _raster().add_relative_targets(0.3)
+    .add_locked_in_constraints(locked_in()).add_locked_out_constraints(locked_out()).add_proportion_decisions(),
+}
+for _name, _fn in PY.items():
+    CASES[_name].py = _fn
 
 
 def case_ids(group: str) -> list[str]:

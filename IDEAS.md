@@ -1442,7 +1442,7 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
 
 **Consequências para o plano**:
 * Com o HiGHS "de fábrica", o landschaft só serviria até ~10⁴ unidades. A camada própria não é otimização de
-  luxo: sem ela, 10⁵ já falha. Antecipar para a **fase 1** o mínimo dela: (a) **presolve próprio** e chamada do
+  luxo: sem ela, 10⁵ já falha. Antecipar para a **fase 1** o mínimo dela (confirmado pelo usuário em 2026-10-03): (a) **presolve próprio** e chamada do
   MIP do HiGHS com o presolve dele desligado ou limitado, sempre com relógio nosso (o limite de tempo do HiGHS
   não é confiável: o max_utility 10⁶ passou de 300 s mesmo com `presolve=off`; interromper pelo callback
   `MipInterrupt` e não mandar ao MIP do HiGHS os modelos largos em que ele trava); (b) para os objetivos com

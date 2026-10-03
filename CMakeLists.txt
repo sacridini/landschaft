@@ -162,6 +162,38 @@ target_include_directories(priocore PUBLIC src/cpp)
 # Eigen's generic_pow on Packet2d (Zonation's Array2d::pow).
 target_link_libraries(priocore PRIVATE eigen_headers)
 set_target_properties(priocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# HiGHS 1.15.1 (MIT), the MILP / LP solver of the MILP prioritization, built
+# here as a static library linked into _core (no executable, tests or zlib).
+# FETCHCONTENT_SOURCE_DIR_HIGHS=<path> uses a local copy (offline builds).
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)  # HiGHS's option() calls take these values
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_CXX_EXE OFF)
+set(BUILD_TESTING OFF)
+set(BUILD_EXAMPLES OFF)
+set(BUILD_SHARED_EXTRAS_LIB OFF)
+set(ZLIB OFF)
+set(FORTRAN OFF)
+set(CSHARP OFF)
+set(HIPO OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+FetchContent_Declare(highs
+    URL https://github.com/ERGO-Code/HiGHS/archive/refs/tags/v1.15.1.tar.gz
+    URL_HASH SHA256=a840d269dff2fafb371dd247df13ad5e026d7ce3b35ad3dc1eedd59bf0c2fb16
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(highs)
+unset(CMAKE_POSITION_INDEPENDENT_CODE)
+unset(BUILD_SHARED_LIBS)
+
+# MILP prioritization (prioritizr / prioriactions): the model compiler, our own
+# presolve and heuristics, and the calls to HiGHS.
+add_library(optcore STATIC
+    src/cpp/opt/milp.cpp
+)
+target_include_directories(optcore PUBLIC src/cpp)
+target_include_directories(optcore SYSTEM PRIVATE ${highs_SOURCE_DIR}/highs ${highs_BINARY_DIR})
+target_link_libraries(optcore PRIVATE highs)
+set_target_properties(optcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Species distribution modelling: thinning, background sampling, partitions, evaluation, MaxNet.
 add_library(sdmcore STATIC
     src/cpp/sdm/clean.cpp
@@ -260,6 +292,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(iocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(sdmcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(simcore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(optcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
         if(APPLE)
@@ -284,6 +317,7 @@ if(MSVC)
     target_compile_options(priocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(iocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(sdmcore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(optcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -296,22 +330,24 @@ else()
     target_compile_options(priocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(iocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(sdmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(optcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
 pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
                     src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
                     src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
-                    src/cpp/sim/python.cpp)
+                    src/cpp/sim/python.cpp src/cpp/opt/python.cpp)
 target_link_libraries(_core PRIVATE eigen_headers)
 target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
-                      iocore sdmcore simcore)
+                      iocore sdmcore simcore optcore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()
     target_compile_options(_core PRIVATE -ffp-contract=off -fno-fast-math)
 endif()
 
-install(TARGETS _core DESTINATION landschaft)
+# Only this component goes into the wheel (not the headers and library HiGHS installs).
+install(TARGETS _core DESTINATION landschaft COMPONENT landschaft)
 
 # The circuit module again, built for AVX2 and FMA, as a module of its own
 # (landschaft._circuit_avx2): Python loads it only when the CPU has them
@@ -332,5 +368,5 @@ if(LANDSCHAFT_CIRCUIT_AVX2 AND CMAKE_SIZEOF_VOID_P EQUAL 8
     else()
         target_compile_options(_circuit_avx2 PRIVATE -mavx2 -mfma -ffp-contract=off -fno-fast-math)
     endif()
-    install(TARGETS _circuit_avx2 DESTINATION landschaft)
+    install(TARGETS _circuit_avx2 DESTINATION landschaft COMPONENT landschaft)
 endif()
