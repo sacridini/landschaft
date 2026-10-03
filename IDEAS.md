@@ -1703,7 +1703,29 @@ sim.supply; sim.shortfall; sim.trajectory()
      compacidade), `r.futures.validation`/`gridvalidation` (já cobertos em parte pela fase 8) e o
      `r.futures.potential`: o `glmer` binomial com intercepto aleatório por sub-região (aproximação de Laplace,
      PIRLS + otimizador) e a seleção do MuMIn; a paridade com o lme4 será por tolerância (otimizador numérico),
-     a decidir na fase.
+     a decidir na fase. **Feita** (1.11.0): `Flooding` (`PatchGrowing(climate=...)`) bit a bit com o
+     `r.futures.simulation` corrigido em 2 casos (profundidades por probabilidade em dois passos + curvas por
+     sub-região + resposta gaussiana + redistribuição com destino fora da área; probabilidade de inundação + HAND
+     no percentil 90 + uma curva + resposta determinística): log das inundações, abandono, adaptação e matrizes de
+     redistribuição iguais. `patch_library` e `calibrate_patches` (r.futures.calib -l, -ls e a calibração completa,
+     8 combinações x 2 réplicas) bit a bit; `DevelopmentPotential.surface` (r.futures.potsurface) a 1e-15 (o `exp`
+     do glibc e o do MSVC diferem em até 2 ulps em 15 de 4690 células); `DevelopmentPotential.fit`
+     (r.futures.potential): `glmer` próprio (Laplace = soma da deviance + |u|^2 + log det, modos condicionais por
+     Newton por grupo, L-BFGS-B + Nelder-Mead sobre theta e beta) contra lme4 2.0.1/MuMIn 1.48 rodando o mesmo
+     modelo do módulo: coeficientes a 2,6e-6 (intercepto aleatório) e 2,4e-5 (inclinação aleatória), -2 log L
+     sempre um pouco menor (o lme4 para em ftol 1e-5), dredge com a mesma ordem e AIC a 7e-6; com uma sub-região,
+     o `glm` bit a bit.
+     - Corrigidos (patch do `r.futures.simulation_fixed`): o `get_max_HAND` percorre só a primeira coluna do
+       retângulo da bacia (`col <= bbox->w`); a probabilidade máxima de inundação por bacia lia o id bruto da bacia
+       nas células fora da simulação (colide com os índices). A troca altera as próprias inundações (o módulo
+       original diverge em ~1000 células no passo 5 do caso HAND).
+     - Fatos: o `deviance()` do lme4 para GLMM é a deviance condicional, não -2 log L; com 3 grupos o modelo de
+       inclinação aleatória é singular e o lme4 para num ótimo local pior (o nosso acha um menor da mesma função);
+       os casos de paridade usam 10 grupos com variação real. O `update_flood_depth` entra em laço infinito quando
+       falta o mapa de uma probabilidade num passo: aqui erro de validação. Sem matriz de redistribuição o módulo
+       acessa memória não inicializada; aqui a demanda das células abandonadas sai da área.
+     - Ficam para as fases 7/8: `r.futures.parallelpga` (réplicas em paralelo) e `r.futures.validation` /
+       `gridvalidation` (validação); o `r.sample.category` (amostragem estratificada) é outro addon.
    - **5c. Expander e Patcher do Dinamica (clean-room):** manchas novas e expansão das existentes com tamanho
      médio, variância (log-normal) e isometria, fração expander/patcher por transição, `prune factor`;
      implementados dos artigos (Soares-Filho et al. 2002) e conferidos estatisticamente contra o Dinamica EGO 8

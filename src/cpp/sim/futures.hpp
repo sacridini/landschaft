@@ -16,6 +16,36 @@ namespace sim {
 
 constexpr int kFuturesNull = INT_MIN;  // GRASS's CELL null
 
+// The climate (flood) submodel of r.futures.simulation (Sanchez et al. 2023).
+struct FuturesClimate {
+    bool depth_mode = true;              // flood depths per probability, or flood probability + HAND
+    std::vector<int> huc;                // per cell: catchment index, -1 none
+    int nhuc = 0;
+    std::vector<int> huc_ids;            // index -> id (flood log)
+    std::vector<int> flood_steps;        // steps (0-based) with flood inputs, sorted
+    // depth mode: per listed step, per probability (sorted ascending), a map (NaN null)
+    std::vector<float> probabilities;
+    std::vector<std::vector<std::vector<float>>> depths;
+    // probability mode: per listed step a map of flood probability (NaN null); HAND and its percentile
+    std::vector<std::vector<float>> flood_probability;
+    std::vector<float> hand;
+    float percentile = 0;
+    std::vector<float> adaptive_capacity;
+    std::vector<int> adaptation;         // starting adaptation (return period protected, 0 none)
+    // depth-damage functions: levels, damage (%) per DDF region; DDF region index per cell
+    std::vector<double> levels;
+    std::vector<std::vector<double>> damage;
+    std::vector<int> ddf_region;
+    // response: y = a x + b
+    float vulnerability_a = 0, vulnerability_b = 0, resilience_a = 0, resilience_b = 0, stddev = 0;
+    // redistribution (optional): from ids, to ids, probabilities (fractions) per from row
+    bool has_matrix = false;
+    std::vector<int> from_ids, to_ids;
+    std::vector<std::vector<float>> matrix;
+    std::vector<float> population;       // nregions x nsteps
+    std::vector<int> region_ids;         // region index -> id
+};
+
 struct FuturesSettings {
     std::int64_t rows = 0, cols = 0;
     int nregions = 0;          // subregions (indices 0..n-1, in order of first appearance)
@@ -44,6 +74,7 @@ struct FuturesSettings {
     std::vector<float> demand;
     int nsteps = 0;
     std::int64_t seed = 0;
+    const FuturesClimate* climate = nullptr;
 };
 
 struct FuturesResult {
@@ -52,6 +83,12 @@ struct FuturesResult {
     std::vector<std::int64_t> converted; // nsteps x nregions cells developed in each region (inside it)
     std::vector<std::int64_t> overflow;  // nsteps x nregions cells carried to the next step
     std::vector<int> warnings;           // nsteps x nregions: bit 1 not enough cells, bit 2 too many failed tries
+    // climate
+    std::vector<std::vector<int>> adaptation;          // after each step
+    std::vector<int> flood_steps, flood_hucs;           // flood log
+    std::vector<float> flood_probabilities;
+    std::vector<std::vector<float>> moved;              // after each step: from x to cells moved (cumulative)
+    std::vector<float> demand;                          // the demand after the redistributions
 };
 
 // developed: -1 / 0 / null (kFuturesNull) per cell, already null wherever an

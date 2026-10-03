@@ -153,6 +153,12 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.development_pressure
 
+::: landschaft.simulate.Flooding
+
+::: landschaft.simulate.patch_library
+
+::: landschaft.simulate.calibrate_patches
+
 ## Example data
 
 ::: landschaft.simulate.example_data

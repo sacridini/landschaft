@@ -109,7 +109,7 @@ for (case in job$cases) {
   dump(case$name, "", result)
 }
 
-pkgs <- c("lulcc", "OpenLand", "diffeR", "raster", "terra")
+pkgs <- c("lulcc", "OpenLand", "diffeR", "raster", "terra", "lme4", "MuMIn")
 versions <- lapply(pkgs, function(p) tryCatch(as.character(packageVersion(p)), error = function(e) NA))
 names(versions) <- pkgs
 writeLines(toJSON(list(manifest = manifest, versions = versions, r = R.version.string),

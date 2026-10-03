@@ -42,8 +42,11 @@ from ._examples import example_data
 from ._futures import (
     DevelopmentDemand,
     DevelopmentPotential,
+    Flooding,
     PatchGrowing,
+    calibrate_patches,
     development_pressure,
+    patch_library,
 )
 from ._glm import LogisticRegression
 from ._landsystems import Cap, LandSystemStack, Roles, Succession
@@ -62,6 +65,7 @@ __all__ = [
     "DevelopmentDemand",
     "DevelopmentPotential",
     "Estimator",
+    "Flooding",
     "IntensityAnalysis",
     "LandSystemStack",
     "LogisticRegression",
@@ -80,6 +84,7 @@ __all__ = [
     "Succession",
     "Supply",
     "WeightsOfEvidence",
+    "calibrate_patches",
     "changes",
     "composite_matrix",
     "crosstab",
@@ -90,6 +95,7 @@ __all__ = [
     "mad",
     "memberships",
     "overall_difference",
+    "patch_library",
     "sample_to_population",
     "weights_of_evidence",
 ]

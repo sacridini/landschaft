@@ -22,8 +22,11 @@ def _curves(lines):
     return out
 
 
+MIXED = ("potential_intercept", "potential_slope", "potential_dredge")
+
+
 @pytest.mark.parametrize("case", simulate_reference.case_ids("futures"))
-def test_same_as_grass(case):
+def test_same_as_reference(case):
     ref = simulate_reference.result("futures", case)
     ours = simulate_cases.run_python(case)
     assert set(ours) == set(ref), sorted(set(ours) ^ set(ref))
@@ -33,8 +36,16 @@ def test_same_as_grass(case):
                 assert a[:2] == b[:2]
                 np.testing.assert_allclose(a[2], b[2], rtol=1e-12)
                 np.testing.assert_allclose(a[3], b[3], rtol=1e-12)
-            continue
-        simulate_reference.assert_same(value, ref[key], f"{case}/{key}")
+        elif case == "futures_potsurface":  # r.mapcalc's exp (glibc) and the MSVC one differ by up to 2 ulps
+            simulate_reference.assert_same(value, ref[key], f"{case}/{key}", rtol=1e-15)
+        elif case in MIXED and key != "terms":
+            # lme4 stops at an absolute deviance tolerance of 1e-5: the optimum here is lower or equal
+            if key == "m2ll":
+                assert value[0] <= ref[key][0] + 1e-9 and ref[key][0] - value[0] < 1e-3
+            else:
+                np.testing.assert_allclose(value, ref[key], rtol=1e-3, atol=1e-4, err_msg=f"{case}/{key}")
+        else:
+            simulate_reference.assert_same(value, ref[key], f"{case}/{key}")
 
 
 # ----------------------------------------------------------------------------- pieces
@@ -154,3 +165,89 @@ def test_not_enough_cells_warns():
         sim = model.run(layers["developed"], drivers, seed=1)
     sub = layers["sub"].values
     assert np.nansum(sim.maps.values[1][sub == 30] == 0) < np.nansum(layers["developed"].values[sub == 30] == 0)
+
+
+# ----------------------------------------------------------------------------- floods, calibration, potential
+
+def _flood_model(**kw):
+    f = simulate_cases.futures_flood_world()
+    layers = {str(b): f.sel(band=b).drop_vars("band") for b in f.band.values}
+    damage = pd.DataFrame([simulate_cases._DDF["curves"][10]], columns=list(simulate_cases._DDF["levels"]))
+    depths = {1: {p: layers[f"fd_1_{int(p * 1000):03d}"] for p in simulate_cases._FLOOD_PROBS}}
+    flooding = S.Flooding(layers["huc"], layers["ac"], damage, (0.5, 0.35, 0.3, 0.5), depths=depths, **kw)
+    model, wl, drivers = _toy()
+    model.allocation.climate = flooding
+    return model, wl, drivers
+
+
+def test_flooding_abandons_and_adapts():
+    model, layers, drivers = _flood_model()
+    sim = model.run(layers["developed"], drivers, seed=2)
+    code = sim.development.values
+    assert (code[1:] <= -2).any()  # abandoned cells
+    assert sim.floods.columns.tolist() == ["step", "catchment", "probability"] and len(sim.floods) > 0
+    assert set(sim.floods.catchment) <= {101, 102, 103, 104}
+    assert np.nanmax(sim.adaptation.values) in (0, 2, 5, 10, 20, 50, 100)
+    abandoned = code[-1] <= -2
+    assert (sim.maps.values[-1][abandoned] == 0).all()
+    assert not hasattr(sim, "redistribution")
+
+
+def test_flooding_checks():
+    f = simulate_cases.futures_flood_world()
+    huc = f.sel(band="huc").drop_vars("band")
+    with pytest.raises(ValueError, match="either depths or probabilities"):
+        S.Flooding(huc, huc, pd.DataFrame([[1.0]], columns=[0.5]), (0, 0, 0, 0))
+    with pytest.raises(ValueError, match="HAND"):
+        S.Flooding(huc, huc, pd.DataFrame([[1.0]], columns=[0.5]), (0, 0, 0, 0), probabilities={1: huc})
+    with pytest.raises(ValueError, match="response"):
+        S.Flooding(huc, huc, pd.DataFrame([[1.0]], columns=[0.5]), (0, 0, 0), depths={1: {0.1: huc}})
+    model, layers, drivers = _flood_model()
+    model.allocation.climate.depths = {1: {0.5: f.sel(band="fd_1_500").drop_vars("band")},
+                                       3: {0.2: f.sel(band="fd_3_200").drop_vars("band")}}
+    with pytest.raises(ValueError, match="lacks depth maps"):
+        model.run(layers["developed"], drivers, seed=1)
+    model, layers, drivers = _flood_model(redistribution=pd.DataFrame({30: [100.0]}, index=[30]))
+    with pytest.raises(ValueError, match="population"):
+        model.run(layers["developed"], drivers, seed=1)
+
+
+def test_patch_library_shapes():
+    a = np.zeros((6, 8))
+    b = a.copy()
+    b[0, 0:3] = 1           # 3 cells, in subregion 1
+    b[2:4, 2:4] = 1         # 4 cells, crossing into subregion 2 (2 + 2)
+    b[5, 7] = 1             # 1 cell in subregion 2
+    sub = np.ones((6, 8))
+    sub[:, 3:] = 2
+    assert S.patch_library(a, b) == [1, 3, 4]
+    assert S.patch_library(a, b, subregions=sub, per_subregion=True) == {1: [2, 3], 2: [1, 2]}
+    assert S.patch_library(a, b, threshold=3.5) == [4]
+
+
+def test_calibrate_patches_table():
+    w = simulate_cases.futures_world()
+    maps = simulate_cases._fut_observed(w)
+    model, _, drivers = _toy()
+    t = S.calibrate_patches(model, maps[0], maps[3], drivers, compactness_means=(0.3, 0.6),
+                            discount_factors=(1.0,), repeat=1, seed=2)
+    assert list(t.columns) == ["discount_factor", "compactness_mean", "compactness_range", "area_error",
+                               "compactness_error", "combined_error"]
+    assert len(t) == 2 and t["combined_error"].is_monotonic_increasing and t["combined_error"].max() <= 1
+    assert isinstance(t.attrs["library"], list) and len(t.attrs["library"]) > 0
+
+
+def test_potential_fit_and_surface():
+    samples = simulate_cases.futures_samples()
+    pot = S.DevelopmentPotential.fit(samples, pressure="pressure", subregions="county")
+    assert len(pot.table) == 10 and pot.attrs["aic"] > 0
+    assert set(pot.predictors) == {"x1", "x2", "x3"}
+    one = S.DevelopmentPotential.fit(samples, pressure="pressure", subregions=None,
+                                     predictors=["x1", "x2", "x3", "pressure"])
+    assert len(one.table) == 1
+    rng = np.random.default_rng(0)
+    drivers = {k: rng.normal(size=(4, 5)) for k in ("x1", "x2", "x3")}
+    surf = one.surface(drivers, np.zeros((4, 5))).values
+    row = one.table.iloc[0]
+    expect = 1 / (1 + np.exp(-(row["intercept"] + sum(row[k] * drivers[k] for k in ("x1", "x2", "x3")))))
+    np.testing.assert_allclose(surf, expect, rtol=1e-15)

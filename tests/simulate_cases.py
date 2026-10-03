@@ -1795,3 +1795,377 @@ CASES.update({
     "futures_demand_curves": _fut_demand_case(("exp_approach", "logarithmic2", "linear"),
                                               "r.futures.demand: scipy's curve fits (exp_approach, logarithmic2)."),
 })
+
+
+# ----------------------------------------------------------------------------- FUTURES: floods
+
+_FLOOD_PROBS = (0.5, 0.2, 0.05, 0.01)
+_FLOOD_POP = {30: [400, 380, 520, 300, 460], 10: [250, 310, 190, 360, 280], 20: [330, 210, 420, 170, 350]}
+_REDIST = {30: (60.0, 20.0, 15.0, 5.0), 10: (10.0, 70.0, 15.0, 5.0), 20: (25.0, 25.0, 40.0, 10.0)}  # to 30, 10, 20, 99
+_DDF = {"levels": (0.3, 0.6, 0.9, 1.5),
+        "curves": {30: (5.0, 25.0, 45.0, 80.0), 10: (10.0, 30.0, 60.0, 90.0), 20: (2.0, 15.0, 35.0, 70.0)}}
+
+
+def futures_flood_world():
+    """Climate layers on futures_world's grid: catchments 101-104, adaptive capacity, HAND, a river, flood depths
+    for four probabilities at steps 1 and 3 and flood probability maps at steps 1 and 4."""
+    import xarray as xr
+
+    rng = np.random.default_rng(23)
+    ny, nx = 60, 80
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    huc = np.where(yy + 0.3 * xx < 40, 101.0, np.where(xx < 45, 102.0, np.where(yy < 35, 103.0, 104.0)))
+    ac = np.clip(np.sin(xx / 13.0) * np.cos(yy / 11.0) + 0.3 * rng.standard_normal((ny, nx)), -1, 1).round(3)
+    river = np.abs(yy - (30 + 8 * np.sin(xx / 10.0)))
+    hand = (river * 0.15 + 0.2 * rng.random((ny, nx))).round(3)
+    layers = {"huc": huc, "ac": ac, "hand": hand}
+    for st in (1, 3):
+        for p in _FLOOD_PROBS:
+            depth = np.clip((1.0 + 3 * (0.5 - p) + 0.4 * st) - hand, 0, None)
+            layers[f"fd_{st}_{int(p * 1000):03d}"] = np.where(depth > 0, depth.round(3), np.nan)
+    for st in (1, 4):
+        fp = np.clip(0.6 * np.exp(-river / (6.0 + st)) - 0.02, 0, None).round(4)
+        layers[f"fp_{st}"] = np.where(fp > 0, fp, np.nan)
+    return xr.concat([grid(v) for v in layers.values()], dim="band").assign_coords(band=list(layers))
+
+
+INPUTS.update({"futures_flood_world": futures_flood_world})
+
+
+def _flood_files(mode, ddf_regions):
+    regions = [30, 10, 20]
+    years = list(range(2021, 2021 + _FUT_STEPS))
+    files = {"population.csv": _fut_table([(y, *(_FLOOD_POP[r][k] for r in regions)) for k, y in enumerate(years)],
+                                          ["year", *map(str, regions)])}
+    files["matrix.csv"] = "ID,30,10,20,99\n" + "\n".join(f"{r}," + ",".join(repr(v) for v in _REDIST[r])
+                                                          for r in regions) + "\n"
+    if ddf_regions:
+        rows = [(r, *_DDF["curves"][r]) for r in regions]
+    else:
+        rows = [(1, *_DDF["curves"][10])]
+    files["ddf.csv"] = _fut_table(rows, ["ID", *map(repr, _DDF["levels"])])
+    if mode == "depth":
+        lines = ["step,probability,map"] + [f"{st},{p!r},fd_{st}_{int(p * 1000):03d}" for st in (1, 3)
+                                            for p in _FLOOD_PROBS]
+    else:
+        lines = ["step,map"] + [f"{st},fp_{st}" for st in (1, 4)]
+    files["floods.csv"] = "\n".join(lines) + "\n"
+    return files
+
+
+def futures_flood_job(world, flood, opts):
+    regions = [30, 10, 20]
+    rasters = {b: world.sel(band=b).drop_vars("band") for b in ("developed", "sub", "slope", "road", "forest")}
+    for b in flood.band.values:
+        rasters[str(b)] = flood.sel(band=b).drop_vars("band")
+    files = {**_fut_files({"patch_columns": True, "regions": regions}), **_flood_files(opts["mode"], opts["ddf_regions"])}
+    heredocs = "".join(f"cat > {name} <<'EOF'\n{text}EOF\n" for name, text in files.items())
+    resp = ",".join(repr(v) for v in opts["response"])
+    args = ["developed=developed subregions=sub predictors=slope,road,forest development_pressure=pressure",
+            "n_dev_neighbourhood=8 development_pressure_approach=gravity gamma=1.5 scaling_factor=1.0",
+            "devpot_params=potential.csv demand=demand.csv patch_sizes=patches.csv num_neighbors=4",
+            f"seed_search=probability compactness_mean=0.4 compactness_range=0.05 discount_factor=1.0 random_seed={opts['seed']}",
+            "output=final output_series=step population_demand=population.csv",
+            "flood_maps_file=floods.csv huc=huc adaptive_capacity=ac depth_damage_functions=ddf.csv",
+            f"response_func={resp} response_stddev={opts['stddev']!r} redistribution_matrix=matrix.csv",
+            "redistribution_output=redist flood_logfile=$OUT/floods.txt output_adaptation=adapt"]
+    if opts["ddf_regions"]:
+        args.append("ddf_subregions=sub")
+    if opts["mode"] != "depth":
+        args.append(f"hand=hand hand_percentile={opts['percentile']}")
+    script = (heredocs + "r.futures.devpressure -n input=developed output=pressure method=gravity size=8 gamma=1.5 "
+              "scaling_factor=1.0\nr.futures.simulation_fixed " + " ".join(args) + "\n"
+              + "".join(f"r.out.gdal --quiet -c input=step_{k} output=$OUT/step_{k}.tif type=Int32\n"
+                        f"r.out.gdal --quiet -c input=adapt_{k} output=$OUT/adapt_{k}.tif type=Int32\n"
+                        f"cp redist_{k}.csv $OUT/redist_{k}.csv\n" for k in range(1, _FUT_STEPS + 1)))
+    outputs = (["floods.txt"] + [f"step_{k}.tif" for k in range(1, _FUT_STEPS + 1)]
+               + [f"adapt_{k}.tif" for k in range(1, _FUT_STEPS + 1)]
+               + [f"redist_{k}.csv" for k in range(1, _FUT_STEPS + 1)])
+    return {"rasters": rasters, "script": script, "outputs": outputs}
+
+
+def futures_flood_py(world, flood, opts) -> dict:
+    import pandas as pd
+
+    S = _ls().simulate
+    regions = [30, 10, 20]
+    w = {b: world.sel(band=b).drop_vars("band") for b in world.band.values}
+    f = {str(b): flood.sel(band=b).drop_vars("band") for b in flood.band.values}
+    years = list(range(2021, 2021 + _FUT_STEPS))
+    demand = S.DevelopmentDemand(pd.DataFrame({r: _FUT_DEMAND[r] for r in regions}, index=years),
+                                 population=pd.DataFrame({r: _FLOOD_POP[r] for r in regions}, index=years))
+    pot = S.DevelopmentPotential(pd.DataFrame(_FUT_POT, columns=["ID", "Intercept", "development_pressure", "slope",
+                                                                 "road", "forest"]).set_index("ID"))
+    if opts["ddf_regions"]:
+        damage = pd.DataFrame([_DDF["curves"][r] for r in regions], index=regions, columns=list(_DDF["levels"]))
+    else:
+        damage = pd.DataFrame([_DDF["curves"][10]], index=[1], columns=list(_DDF["levels"]))
+    kw = {}
+    if opts["mode"] == "depth":
+        kw["depths"] = {st: {p: f[f"fd_{st}_{int(p * 1000):03d}"] for p in _FLOOD_PROBS} for st in (1, 3)}
+    else:
+        kw.update(probabilities={st: f[f"fp_{st}"] for st in (1, 4)}, hand=f["hand"], hand_percentile=opts["percentile"])
+    flooding = S.Flooding(f["huc"], f["ac"], damage, opts["response"], response_stddev=opts["stddev"],
+                          damage_regions="subregions" if opts["ddf_regions"] else None,
+                          redistribution=pd.DataFrame(_REDIST, index=[30, 10, 20, 99]).T, **kw)
+    alloc = S.PatchGrowing({r: _FUT_PATCHES[r] for r in regions}, subregions=w["sub"], neighborhood=8, climate=flooding)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sim = S.Model(pot, demand, alloc).run(w["developed"], {k: w[k] for k in ("slope", "road", "forest")},
+                                              seed=opts["seed"])
+    out = {"floods.txt": [f"{int(s) - 1},{int(h)},{float(p):.4f}" for s, h, p in sim.floods.itertuples(index=False)]}
+    code = sim.development.values
+    for k in range(1, _FUT_STEPS + 1):
+        c = code[k].copy()
+        c[c == -1] = np.nan  # with floods, the module writes undeveloped cells as null
+        c[c < -1] += 1       # and abandoned ones as -(step)
+        out[f"step_{k}.tif"] = c
+        out[f"adapt_{k}.tif"] = sim.adaptation.values[k]
+        mv = sim.redistribution.sel(step=k).values
+        out[f"redist_{k}.csv/ID"] = np.array(regions, dtype=float)
+        for j, to in enumerate([30, 10, 20, 99]):
+            out[f"redist_{k}.csv/{to}"] = np.array([float(f"{float(v):f}") if v > 0 else float(int(v))
+                                                    for v in mv[:, j]])
+    return out
+
+
+def _flood_case(opts, notes):
+    return Case("futures", "grass", ("futures_world", "futures_flood_world"),
+                job=lambda futures_world, futures_flood_world: futures_flood_job(futures_world, futures_flood_world,
+                                                                                 opts),
+                py=lambda futures_world, futures_flood_world: futures_flood_py(futures_world, futures_flood_world,
+                                                                               opts), notes=notes)
+
+
+CASES.update({
+    "futures_flood_depth": _flood_case(
+        {"mode": "depth", "ddf_regions": True, "response": (0.5, 0.35, 0.3, 0.5), "stddev": 0.1, "seed": 2},
+        "Floods from depth maps (4 probabilities, steps 1 and 3), damage curves per subregion, Gaussian response, "
+        "redistribution with population densities and a destination outside."),
+    "futures_flood_hand": _flood_case(
+        {"mode": "probability", "ddf_regions": False, "response": (0.4, 0.3, 0.2, 0.4), "stddev": 0.0,
+         "percentile": 90, "seed": 9},
+        "Floods from flood probability maps and HAND (90th percentile), one damage curve, deterministic response."),
+})
+
+
+# ----------------------------------------------------------------------------- FUTURES: calibration, potential surface
+
+_INT_DEVS = ("r.mapcalc --quiet expression='dev0 = int(dev0f)'\n"
+             "r.mapcalc --quiet expression='dev3 = int(dev3f)'\n")
+
+
+def _calib_rasters(world, single):
+    maps = _fut_observed(world)
+    base = world.sel(band="developed").drop_vars("band")
+    rasters = {"dev0f": base.copy(data=maps[0]), "dev3f": base.copy(data=maps[3])}
+    sub = world.sel(band="sub").drop_vars("band")
+    rasters["sub"] = sub.copy(data=np.ones(sub.shape)) if single else sub
+    for b in ("slope", "road", "forest"):
+        rasters[b] = world.sel(band=b).drop_vars("band")
+    return rasters
+
+
+def futures_library_job(world, per_subregion):
+    rasters = _calib_rasters(world, False)
+    flag = "-ls" if per_subregion else "-l"
+    script = ("r.mapcalc --quiet expression='subi = int(sub)'\n" + _INT_DEVS +
+              f"r.futures.calib {flag} development_start=dev0 development_end=dev3 subregions=subi "
+              "patch_threshold=0 patch_sizes=$OUT/patches.txt nprocs=1\n")
+    return {"rasters": rasters, "script": script, "outputs": ["patches.txt"]}
+
+
+def futures_library_py(world, per_subregion):
+    S = _ls().simulate
+    r = _calib_rasters(world, False)
+    lib = S.patch_library(r["dev0f"], r["dev3f"], subregions=r["sub"], per_subregion=per_subregion)
+    if not isinstance(lib, dict):
+        return {"patches.txt": [str(v) for v in lib]}
+    keys = list(lib)
+    n = max(len(v) for v in lib.values())
+    lines = [",".join(str(k) for k in keys)]
+    lines += [",".join(str(lib[k][i]) if i < len(lib[k]) else "" for k in keys) for i in range(n)]
+    return {"patches.txt": lines}
+
+
+_CALIB = {"means": (0.2, 0.5), "ranges": (0.05, 0.2), "discounts": (0.5, 1.0), "repeat": 2, "seed": 3}
+
+
+def futures_calib_job(world):
+    rasters = _calib_rasters(world, True)
+    files = _fut_files({"regions": [1]})
+    del files["patches.csv"]
+    heredocs = "".join(f"cat > {name} <<'EOF'\n{text}EOF\n" for name, text in files.items())
+    c = _CALIB
+    script = (heredocs + "r.mapcalc --quiet expression='subi = int(sub)'\n" + _INT_DEVS +
+              "r.futures.devpressure -n input=dev0 output=pressure method=gravity size=8 gamma=1.5 "
+              "scaling_factor=1.0\n"
+              "r.futures.calib development_start=dev0 development_end=dev3 subregions=subi patch_threshold=0 "
+              "patch_sizes=patches.txt nprocs=1 "
+              f"compactness_mean={','.join(map(str, c['means']))} compactness_range={','.join(map(str, c['ranges']))} "
+              f"discount_factor={','.join(map(str, c['discounts']))} repeat={c['repeat']} random_seed={c['seed']} "
+              "calibration_results=$OUT/calib.csv development_pressure=pressure predictors=slope,road,forest "
+              "n_dev_neighbourhood=8 devpot_params=potential.csv num_neighbors=4 seed_search=probability "
+              "development_pressure_approach=gravity gamma=1.5 scaling_factor=1.0 demand=demand.csv\n")
+    return {"rasters": rasters, "script": script, "outputs": ["calib.csv"]}
+
+
+def futures_calib_py(world):
+    import pandas as pd
+
+    S = _ls().simulate
+    r = _calib_rasters(world, True)
+    pot = S.DevelopmentPotential(pd.DataFrame(_FUT_POT, columns=["ID", "Intercept", "development_pressure", "slope",
+                                                                 "road", "forest"]).set_index("ID"))
+    years = list(range(2021, 2021 + _FUT_STEPS))
+    demand = S.DevelopmentDemand(pd.DataFrame({1: _FUT_DEMAND[1]}, index=years))
+    model = S.Model(pot, demand, S.PatchGrowing([1], subregions=r["sub"], neighborhood=8))
+    c = _CALIB
+    t = S.calibrate_patches(model, r["dev0f"], r["dev3f"], {k: r[k] for k in ("slope", "road", "forest")},
+                            compactness_means=c["means"], compactness_ranges=c["ranges"],
+                            discount_factors=c["discounts"], repeat=c["repeat"], seed=c["seed"])
+    return {f"calib.csv/{col}": np.array([float(f"{v:.2f}") for v in t[col]]) for col in t.columns}
+
+
+def futures_potsurface_job(world):
+    rasters = _calib_rasters(world, False)
+    rows = [r for r in _FUT_POT if r[0] != 1]
+    pot = _fut_table(rows, ["ID", "Intercept", "pressure", "slope", "road", "forest"])
+    script = (f"cat > potential.csv <<'EOF'\n{pot}EOF\n"
+              "r.mapcalc --quiet expression='subi = int(sub)'\n" + _INT_DEVS +
+              "r.futures.devpressure -n input=dev0 output=pressure method=gravity size=8 gamma=1.5 "
+              "scaling_factor=1.0\n"
+              "r.futures.potsurface input=potential.csv subregions=subi output=pot\n"
+              "r.out.gdal --quiet -c input=pot output=$OUT/pot.tif type=Float64\n")
+    return {"rasters": rasters, "script": script, "outputs": ["pot.tif"]}
+
+
+def futures_potsurface_py(world):
+    import pandas as pd
+
+    S = _ls().simulate
+    r = _calib_rasters(world, False)
+    rows = [row for row in _FUT_POT if row[0] != 1]
+    pot = S.DevelopmentPotential(pd.DataFrame(rows, columns=["ID", "Intercept", "development_pressure", "slope",
+                                                             "road", "forest"]).set_index("ID"))
+    pressure = S.development_pressure(r["dev0f"], 8)
+    s = pot.surface({k: r[k] for k in ("slope", "road", "forest")}, pressure, r["sub"])
+    return {"pot.tif": s.values}
+
+
+CASES.update({
+    "futures_library": Case("futures", "grass", ("futures_world",),
+                            job=lambda futures_world: futures_library_job(futures_world, False),
+                            py=lambda futures_world: futures_library_py(futures_world, False),
+                            notes="r.futures.calib -l: the patch library of the observed development."),
+    "futures_library_subregions": Case("futures", "grass", ("futures_world",),
+                                       job=lambda futures_world: futures_library_job(futures_world, True),
+                                       py=lambda futures_world: futures_library_py(futures_world, True),
+                                       notes="r.futures.calib -ls: a patch library per subregion."),
+    "futures_calib": Case("futures", "grass", ("futures_world",), job=lambda futures_world: futures_calib_job(futures_world),
+                          py=lambda futures_world: futures_calib_py(futures_world),
+                          notes="r.futures.calib: 8 combinations x 2 runs, one subregion (the module as released)."),
+    "futures_potsurface": Case("futures", "grass", ("futures_world",), job=lambda futures_world: futures_potsurface_job(futures_world),
+                               py=lambda futures_world: futures_potsurface_py(futures_world), notes="r.futures.potsurface: the potential surface."),
+})
+
+
+# ----------------------------------------------------------------------------- FUTURES: potential (r.futures.potential)
+
+def futures_samples():
+    """2500 sampled cells of 10 subregions with random intercepts and pressure slopes (seed 31)."""
+    import pandas as pd
+
+    rng = np.random.default_rng(31)
+    G, n = 10, 250
+    g = np.repeat(np.arange(1, G + 1) * 7, n)
+    x1, x2, x3, pres = rng.normal(size=(4, G * n))
+    a = rng.normal(0, 0.8, G)
+    b = rng.normal(0, 0.4, G)
+    eta = -1.0 + 0.8 * x1 - 0.5 * x2 + (0.6 + b[g // 7 - 1]) * pres + a[g // 7 - 1]
+    y = (rng.random(G * n) < 1 / (1 + np.exp(-eta))).astype(np.float64)
+    x3[5] = np.nan  # a missing value: the row is dropped
+    return pd.DataFrame({"developed": y, "x1": x1.round(5), "x2": x2.round(5), "x3": x3.round(5),
+                         "pressure": pres.round(5), "county": g.astype(np.float64)})
+
+
+INPUTS.update({"futures_samples": futures_samples})
+
+_POT_R = """
+suppressMessages({library(lme4); library(MuMIn)})
+d <- na.omit(futures_samples)
+{body}
+"""
+
+
+def _pot_r(formula, kind, dredge=None):
+    if kind == "glm":
+        fit = f"m <- glm({formula}, family = binomial, data = d, na.action = 'na.fail')"
+        coefs = "cf <- t(as.matrix(coef(m)))"
+    else:
+        fit = f"m <- glmer({formula}, family = binomial, data = d, na.action = 'na.fail')"
+        coefs = "cf <- as.matrix(coef(m)[[1]])"
+    body = fit + "\n"
+    if dredge:
+        body += (f"dd <- dredge(m, rank = 'AIC', fixed = {dredge['fixed']}, m.lim = c({dredge['min']}, {dredge['max']}),"
+                 " trace = FALSE)\n"
+                 "terms <- apply(dd[, setdiff(names(dd)[2:(ncol(dd) - 5)], '(Intercept)'), drop = FALSE], 1,\n"
+                 "               function(r) paste(sort(names(r)[!is.na(r)]), collapse = '+'))\n"
+                 "best <- get.models(dd, 1)[[1]]\n"
+                 + ("m <- glmer(formula(best), family = binomial, data = d, na.action = 'na.fail')\n"
+                    if kind != "glm" else "m <- glm(formula(best), family = binomial, data = d)\n"))
+    body += coefs + "\n"
+    body += ("cols <- c('(Intercept)', 'pressure', 'x1', 'x2', 'x3')\n"
+             "out <- matrix(0, nrow(cf), length(cols)); for (k in seq_along(cols)) if (cols[k] %in% colnames(cf)) "
+             "out[, k] <- cf[, cols[k]]\n"
+             "res <- list(coef = out, m2ll = -2 * as.numeric(logLik(m)))\n")
+    if dredge:
+        body += "res$aic <- as.numeric(dd$AIC); res$terms <- unname(terms)\n"
+    body += "res\n"
+    return _POT_R.replace("{body}", body)
+
+
+def _pot_py(samples, kind, dredge=None):
+    S = _ls().simulate
+    d = samples
+    if kind == "glm":
+        d = samples[samples.county == 7.0]
+    kw = {"pressure": "pressure", "subregions": None if kind == "glm" else "county",
+          "predictors": ["x1", "x2", "x3"] + ([] if kind == "slope" else ["pressure"])}
+    if kind == "slope":
+        kw["random"] = "pressure"
+    if dredge:
+        kw.update(dredge=True, fixed=["pressure"], min_variables=dredge["min"], max_variables=dredge["max"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pot = S.DevelopmentPotential.fit(d, **kw)
+    t = pot.table
+    out = {"coef": t.reindex(columns=["intercept", "devpressure", "x1", "x2", "x3"]).fillna(0.0).to_numpy(),
+           "m2ll": np.array([pot.attrs["deviance"]])}
+    if dredge:
+        dd = pot.attrs["dredge"]
+        out["aic"] = dd["aic"].to_numpy()
+        out["terms"] = ["+".join(sorted(t.split("+"))) for t in dd["terms"]]
+    return out
+
+
+def _pot_case(kind, formula, notes, dredge=None):
+    r = _pot_r(formula, kind, dredge)
+    if kind == "glm":
+        r = r.replace("d <- na.omit(futures_samples)", "d <- na.omit(futures_samples); d <- d[d$county == 7, ]")
+    return Case("futures", "r", ("futures_samples",), r=r, py=lambda futures_samples: _pot_py(futures_samples, kind,
+                                                                                               dredge),
+                notes=notes, extra={"tolerance": kind != "glm"})
+
+
+CASES.update({
+    "potential_intercept": _pot_case("intercept", "developed ~ x1 + x2 + x3 + pressure + (1 | county)",
+                                     "glmer with a random intercept per subregion."),
+    "potential_slope": _pot_case("slope", "developed ~ x1 + x2 + x3 + (pressure | county)",
+                                 "glmer with a random pressure slope (no fixed pressure), as r.futures.potential."),
+    "potential_dredge": _pot_case("intercept", "developed ~ x1 + x2 + x3 + pressure + (1 | county)",
+                                  "MuMIn's dredge by AIC, pressure fixed, 1 to 3 terms.",
+                                  dredge={"fixed": "'pressure'", "min": 1, "max": 3}),
+    "potential_single": _pot_case("glm", "developed ~ x1 + x2 + x3 + pressure",
+                                  "One subregion: R's glm (bit for bit)."),
+})

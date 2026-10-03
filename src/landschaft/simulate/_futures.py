@@ -27,7 +27,8 @@ import xarray as xr
 from .. import _core
 from ._maps import read_map
 
-__all__ = ["DevelopmentDemand", "DevelopmentPotential", "PatchGrowing", "development_pressure"]
+__all__ = ["DevelopmentDemand", "DevelopmentPotential", "Flooding", "PatchGrowing", "calibrate_patches",
+           "development_pressure", "patch_library"]
 
 _APPROACHES = {"occurrence": 0, "gravity": 1, "kernel": 2}
 
@@ -143,6 +144,9 @@ class DevelopmentDemand:
         with ``subregions``. Values are rounded to whole cells (``lroundf``).
     subregions
         The subregion of each column of an array.
+    population
+        The population each subregion adds per step, as ``table`` (used by
+        the redistribution of :class:`Flooding`).
 
     Examples
     --------
@@ -152,7 +156,7 @@ class DevelopmentDemand:
     (2, [1, 2])
     """
 
-    def __init__(self, table, subregions=None):
+    def __init__(self, table, subregions=None, population=None):
         if isinstance(table, dict):
             table = pd.DataFrame(table)
         if not isinstance(table, pd.DataFrame):
@@ -164,7 +168,11 @@ class DevelopmentDemand:
         self.table.columns = [int(c) for c in self.table.columns]
         if (self.table.to_numpy(dtype=np.float64) < 0).any():
             raise ValueError("demands must not be negative")
-        self.population: pd.DataFrame | None = None
+        self.population: pd.DataFrame | None = None if population is None else pd.DataFrame(population).copy()
+        if self.population is not None:
+            self.population.columns = [int(c) for c in self.population.columns]
+            if len(self.population) != len(self.table):
+                raise ValueError("the population needs a row per step of the demand")
         self.curves: pd.DataFrame | None = None
 
     @property
@@ -376,10 +384,132 @@ class DevelopmentPotential:
         if "intercept" not in t.columns or "devpressure" not in t.columns:
             raise ValueError("the table needs the columns intercept and devpressure")
         self.table = t.astype(np.float64)
+        self.attrs: dict = {}
 
     @property
     def predictors(self) -> list:
         return [c for c in self.table.columns if c not in ("intercept", "devpressure")]
+
+    @classmethod
+    def fit(cls, samples: pd.DataFrame, *, response: str = "developed", pressure: str = "devpressure",
+            predictors=None, subregions: str | None = "subregion", random: str | None = None,
+            dredge: bool = False, min_variables: int = 1, max_variables: int | None = None,
+            fixed=None) -> DevelopmentPotential:
+        """Fit the potential on sampled cells (r.futures.potential).
+
+        A binomial mixed model of new development: ``response ~ predictors +
+        (1 | subregion)`` (R's ``glmer``, Laplace), or with a random slope
+        ``(random | subregion)``; with one subregion, R's ``glm`` (bit for
+        bit). The coefficients per subregion are the fixed effects plus the
+        subregion's random effects (lme4's ``coef``).
+
+        Parameters
+        ----------
+        samples
+            One row per sampled cell (rows with missing values are dropped).
+        response
+            The 0/1 column of new development.
+        pressure
+            The development pressure column (the ``devpressure`` coefficient).
+        predictors
+            The predictor columns (default: all other columns).
+        subregions
+            The subregion column (``None``: one subregion).
+        random
+            Column with a random slope per subregion (usually the pressure,
+            which then has no fixed effect, as r.futures.potential).
+        dredge
+            Choose the predictors by AIC over every subset (MuMIn's dredge)
+            with ``min_variables`` to ``max_variables`` terms and the
+            ``fixed`` ones always in.
+
+        Returns
+        -------
+        DevelopmentPotential
+            With ``attrs``: ``aic``, ``deviance`` (-2 log likelihood), and
+            ``dredge`` (the ranked models) when used.
+        """
+        from ._glmer import dredge as _dredge
+        from ._glmer import glmer
+
+        t = samples.copy()
+        if predictors is None:
+            predictors = [c for c in t.columns if c not in (response, subregions, random)]
+        predictors = [c for c in predictors if c not in (subregions, random, response)]
+        cols = list(dict.fromkeys([*predictors, response] + ([subregions] if subregions else [])
+                                  + ([random] if random else [])))
+        t = t[cols].dropna()
+        y = t[response].to_numpy(dtype=np.float64)
+        single = subregions is None or t[subregions].nunique() <= 1
+        level_ids = [None] if subregions is None else sorted(t[subregions].unique().tolist())
+
+        def fit_terms(terms):
+            X = np.column_stack([np.ones(len(t))] + [t[c].to_numpy(dtype=np.float64) for c in terms])
+            names = ["(Intercept)", *terms]
+            if single:
+                fit = _core.sim_glm_logit(np.ascontiguousarray(X.T), y, 25, 1e-8)
+                return _GlmFit(fit, names, level_ids[0])
+            return glmer(y, X, t[subregions].to_numpy(), names=names, random=random,
+                         Zcol=None if random is None else t[random].to_numpy(dtype=np.float64))
+        ranking = None
+        if dredge:
+            ranking = _dredge(fit_terms, list(predictors), fixed=list(fixed or ()), m_min=int(min_variables),
+                              m_max=None if max_variables is None else int(max_variables))
+            best_terms, best = ranking[0]
+        else:
+            best_terms, best = list(predictors), fit_terms(list(predictors))
+        coefs = best.coef()
+        rows = {}
+        for lev, row in coefs.items():
+            out = {"intercept": row.get("(Intercept)", 0.0), "devpressure": row.get(pressure, 0.0)}
+            for c in predictors:
+                if c != pressure:
+                    out[c] = row.get(c, 0.0)
+            rows[lev] = out
+        table = pd.DataFrame.from_dict(rows, orient="index")
+        table.index.name = "subregion"
+        pot = cls(table)
+        pot.attrs = {"aic": best.aic, "deviance": best.deviance, "terms": best_terms}
+        if ranking is not None:
+            aics = np.array([f.aic for _, f in ranking])
+            pot.attrs["dredge"] = pd.DataFrame({"terms": ["+".join(tt) for tt, _ in ranking], "aic": aics,
+                                                "delta": aics - aics[0], "loglik": [f.loglik for _, f in ranking],
+                                                "df": [f.npar for _, f in ranking]})
+        return pot
+
+    def surface(self, drivers, pressure, subregions=None) -> xr.DataArray:
+        """The development probability (r.futures.potsurface): ``1 / (1 + exp(-(intercept + b x ...)))`` in double.
+
+        Parameters
+        ----------
+        drivers
+            The predictors (named as the table's columns).
+        pressure
+            The development pressure map.
+        subregions
+            The subregions map (cells of subregions without coefficients
+            are NaN); default: the only row.
+        """
+        maps = _driver_maps(drivers)
+        missing = set(self.predictors) - set(maps)
+        if missing:
+            raise ValueError(f"drivers lack {sorted(missing)}")
+        pm = read_map(pressure)
+        p = pm.as_float()
+        sub = None if subregions is None else read_map(subregions).as_float()
+        out = np.full(p.shape, np.nan)
+        rows = [(None, self.table.iloc[0])] if sub is None else [(r, self.table.loc[r]) for r in self.table.index]
+        xs = {n: maps[n].as_float() for n in self.predictors}
+        for rid, row in rows:
+            cells = np.ones(p.shape, dtype=bool) if rid is None else (sub == rid)
+            t = row["intercept"] + row["devpressure"] * p
+            for n in self.predictors:
+                t = t + row[n] * xs[n]
+            out[cells] = (1.0 / (1.0 + np.exp(-t)))[cells]
+        tpl = pm.template
+        if tpl is not None:
+            return tpl.copy(data=out).rename("potential")
+        return xr.DataArray(out, dims=("y", "x"), name="potential")
 
     def row(self, subregion) -> pd.Series:
         if None in self.table.index:
@@ -388,6 +518,32 @@ class DevelopmentPotential:
 
     def __repr__(self) -> str:
         return f"DevelopmentPotential({len(self.table)} subregions, {len(self.predictors)} predictors)"
+
+
+class _GlmFit:
+    """glm.fit's result as the mixed models' interface (one level)."""
+
+    def __init__(self, fit, names, level):
+        self.b = np.asarray(fit["coefficients"], dtype=np.float64)
+        self.names = names
+        self.level = level
+        self.deviance = float(fit["deviance"])
+        self.rank = int(fit["rank"])
+
+    @property
+    def npar(self) -> int:
+        return self.rank
+
+    @property
+    def aic(self) -> float:
+        return self.deviance + 2 * self.rank
+
+    @property
+    def loglik(self) -> float:
+        return -self.deviance / 2
+
+    def coef(self) -> dict:
+        return {self.level: {n: (0.0 if np.isnan(v) else float(v)) for n, v in zip(self.names, self.b)}}
 
 
 # ----------------------------------------------------------------------------- allocation
@@ -441,6 +597,9 @@ class PatchGrowing:
         Map of zone ids and their effects: ``None`` (the module's predefined
         zones) or a DataFrame indexed by subregion with a ``stringency``
         column (0-2) and one column per zone id.
+    climate
+        :class:`Flooding`: floods after each step's development, damage,
+        retreat (abandonment), adaptation and migration between subregions.
     """
 
     patch_sizes: object
@@ -460,6 +619,7 @@ class PatchGrowing:
     weight: object = None
     zoning: object = None
     zoning_effects: object = None
+    climate: object = None
 
     def __post_init__(self):
         if self.approach not in _APPROACHES:
@@ -551,6 +711,12 @@ class PatchGrowing:
             if x.shape != shape:
                 raise ValueError(f"driver {n!r} differs in size from the landscape")
             xs.append(x.astype(np.float32))
+        demand = model.demand
+        if not isinstance(demand, DevelopmentDemand):
+            raise TypeError("PatchGrowing needs a DevelopmentDemand")
+        climate = None
+        if self.climate is not None:
+            climate, null = self.climate._inputs(shape, null, regions, reg_index, pregions, pot_index, demand)
         for x in xs:
             null |= np.isnan(x)
         pidx = reg_index if pot_index is None else pot_index
@@ -561,9 +727,6 @@ class PatchGrowing:
             term = (coef[np.clip(pidx, 0, None)] * x.astype(np.float64)).astype(np.float32)
             agg[ok] = agg[ok] + term[ok]
         developed = np.where(null, np.iinfo(np.int32).min, np.nan_to_num(dev) - 1).astype(np.int32)
-        demand = model.demand
-        if not isinstance(demand, DevelopmentDemand):
-            raise TypeError("PatchGrowing needs a DevelopmentDemand")
         absent = set(regions) - set(demand.subregions)
         if absent:
             raise ValueError(f"no demand for subregions {sorted(absent)}")
@@ -584,12 +747,13 @@ class PatchGrowing:
             int(self.neighborhood), _APPROACHES[self.approach], np.float32(self.gamma),
             np.float32(self.scaling_factor), patches, single, np.float32(self.compactness_mean),
             np.float32(self.compactness_range), int(self.num_neighbors), self.seed_search == "probability",
-            incentive, user, zids, zregs, zeff, stringency, np.ascontiguousarray(table), demand.steps, int(seed))
+            incentive, user, zids, zregs, zeff, stringency, np.ascontiguousarray(table), demand.steps, int(seed),
+            climate)
         series = r["series"].astype(np.float64)
         series[series == np.iinfo(np.int32).min] = np.nan
         start = np.where(null, np.nan, developed.astype(np.float64))
         coded = np.concatenate([start[None], series])
-        binary = np.where(np.isnan(coded), np.nan, (coded >= 0).astype(np.float64))
+        binary = np.where(np.isnan(coded), np.nan, (coded >= 0).astype(np.float64))  # abandoned: 0
         conv = np.asarray(r["converted"]).reshape(demand.steps, len(regions))
         over = np.asarray(r["overflow"]).reshape(demand.steps, len(regions))
         warn = np.asarray(r["warnings"]).reshape(demand.steps, len(regions))
@@ -607,6 +771,22 @@ class PatchGrowing:
         sim = Simulation(_as_maps(binary, land.template, "developed"), pd.DataFrame(rows_out).set_index("step"),
                          int(seed))
         sim.development = _as_maps(coded, land.template, "development")
+        if climate is not None:
+            start = climate.get("adaptation", np.zeros(int(np.prod(shape)), dtype=np.int32)).reshape(shape)
+            ad = np.concatenate([start[None], r["adaptation"]]).astype(np.float64)
+            ad[ad == np.iinfo(np.int32).min] = np.nan
+            ad[:, null] = np.nan
+            sim.adaptation = _as_maps(ad, land.template, "adaptation")
+            sim.floods = pd.DataFrame({"step": np.asarray(r["flood_steps"]) + 1, "catchment": r["flood_hucs"],
+                                       "probability": r["flood_probabilities"]})
+            if "from_ids" in climate:
+                mv = np.asarray(r["moved"]).reshape(demand.steps, climate["from_ids"].size, climate["to_ids"].size)
+                sim.redistribution = xr.DataArray(mv, dims=("step", "from", "to"),
+                                                  coords={"step": np.arange(1, demand.steps + 1),
+                                                          "from": climate["from_ids"], "to": climate["to_ids"]},
+                                                  name="cells_moved")
+            sim.demand_table = pd.DataFrame(np.asarray(r["demand"]).reshape(len(regions), demand.steps).T,
+                                            index=demand.table.index, columns=regions)
         return sim
 
     def _zoning(self, regions: list):
@@ -650,6 +830,377 @@ class PatchGrowing:
     def __repr__(self) -> str:
         return f"PatchGrowing(compactness={self.compactness_mean}+-{self.compactness_range / 2}, seed_search=" \
                f"{self.seed_search!r})"
+
+
+# ----------------------------------------------------------------------------- climate (flooding)
+
+@dataclass
+class Flooding:
+    """FUTURES' flood submodel (Sanchez et al. 2023): floods, damage, response, abandonment, migration.
+
+    After the development of each step, a flood may strike each catchment:
+    with probability ``max`` (the largest flood probability of the
+    catchment's cells, or of the depth maps), at a probability ``p`` drawn
+    uniformly. Its depth at each cell comes from the depth maps of the
+    probabilities (the map of the largest probability below ``p``) or, from
+    flood probability maps, as the HAND percentile of the cells flooded at
+    ``p`` minus the cell's HAND. The damage is the depth-damage curve's (%)
+    unless the cell was adapted to such floods; a damaged developed cell
+    then retreats (abandoned, its demand moved to a subregion drawn from the
+    redistribution matrix, scaled by the population densities), adapts
+    (protected up to the return period of the flood) or stays, from its
+    adaptive capacity and the response lines, perturbed by a Gaussian.
+
+    Parameters
+    ----------
+    catchments
+        Map of catchments (HUCs): floods are drawn per catchment.
+    adaptive_capacity
+        Map from -1 (most vulnerable) to 1 (most resilient).
+    damage
+        Depth-damage curves: a DataFrame with the depth levels as columns
+        and the damage (%) per damage region in rows (one row: the same
+        curve everywhere).
+    response
+        ``(vulnerability_a, vulnerability_b, resilience_a, resilience_b)``:
+        the lines ``damage = a * capacity + b`` above which a cell retreats
+        (vulnerable cells otherwise stay, resilient ones adapt).
+    response_stddev
+        Standard deviation of the Gaussian added to capacity and damage.
+    depths
+        ``{step: {probability: map}}``: flood depths for floods of each
+        annual probability, from that step on (steps count from 1).
+    probabilities, hand, hand_percentile
+        Instead of depths: ``{step: map}`` of flood probability, the HAND
+        (height above nearest drainage) map and the percentile giving the
+        flood level.
+    damage_regions
+        Which curve each cell uses: ``None`` (the only row), ``"subregions"``,
+        ``"potential"`` (potential subregions) or a map of regions.
+    adaptation
+        Map of the return period each cell is already protected against.
+    redistribution
+        DataFrame with a row per subregion people leave and a column per
+        destination: the probabilities (%). Without it, retreating cells
+        are abandoned and their demand leaves the area.
+    """
+
+    catchments: object
+    adaptive_capacity: object
+    damage: object
+    response: tuple
+    response_stddev: float = 0.0
+    depths: dict | None = None
+    probabilities: dict | None = None
+    hand: object = None
+    hand_percentile: float | None = None
+    damage_regions: object = None
+    adaptation: object = None
+    redistribution: object = None
+
+    def __post_init__(self):
+        if (self.depths is None) == (self.probabilities is None):
+            raise ValueError("give either depths or probabilities")
+        if self.probabilities is not None and (self.hand is None or self.hand_percentile is None):
+            raise ValueError("flood probabilities need the HAND map and its percentile")
+        if len(self.response) != 4:
+            raise ValueError("response is (vulnerability_a, vulnerability_b, resilience_a, resilience_b)")
+
+    def _inputs(self, shape, null_before, regions, reg_index, pregions, pot_index, demand) -> tuple[dict, np.ndarray]:
+        """The climate dict for the core and the cells nulled by the climate inputs."""
+        ncell = int(np.prod(shape))
+        huc = read_map(self.catchments).as_float()
+        ac = read_map(self.adaptive_capacity).as_float()
+        null = null_before.copy()
+        extra_null = np.isnan(ac)
+        if self.probabilities is not None:
+            hand = read_map(self.hand).as_float()
+            extra_null |= np.isnan(hand)
+        # catchment indices: first appearance among the cells still simulated before these checks
+        cand = ~null & ~np.isnan(huc)
+        ids = _first_appearance(np.where(cand, huc, np.nan))
+        huc_index = np.full(shape, -1, dtype=np.int32)
+        for k, rid in enumerate(ids):
+            huc_index[cand & (huc == rid)] = k
+        # damage regions
+        dmg = pd.DataFrame(self.damage).copy()
+        levels = np.array([float(c) for c in dmg.columns], dtype=np.float64)
+        src = self.damage_regions
+        if src is None:
+            ddf = np.zeros(shape, dtype=np.int32)
+            curves = [dmg.iloc[0].to_numpy(dtype=np.float64)]
+        else:
+            if isinstance(src, str) and src == "subregions":
+                order, idx = regions, reg_index
+            elif isinstance(src, str) and src == "potential":
+                order, idx = pregions, (pot_index if pot_index is not None else reg_index)
+            else:
+                m = read_map(src).as_float()
+                extra_null |= cand & np.isnan(m)
+                order = _first_appearance(np.where(cand, m, np.nan))
+                idx = np.full(shape, -1, dtype=np.int32)
+                for k, rid in enumerate(order):
+                    idx[cand & (m == rid)] = k
+            dmg.index = [int(i) for i in dmg.index]
+            missing = set(order) - set(dmg.index)
+            if missing:
+                raise ValueError(f"no depth-damage curve for regions {sorted(missing)}")
+            curves = [dmg.loc[r].to_numpy(dtype=np.float64) for r in order]
+            ddf = np.asarray(idx, dtype=np.int32)
+        null |= cand & extra_null
+        c = {"depth_mode": self.depths is not None, "huc": huc_index.ravel(), "nhuc": len(ids),
+             "huc_ids": np.array(ids, dtype=np.int32), "adaptive_capacity": ac.astype(np.float32).ravel(),
+             "levels": levels, "damage": np.ascontiguousarray(np.stack(curves)), "ddf_region": ddf.ravel(),
+             "response": np.asarray(self.response, dtype=np.float32), "stddev": float(self.response_stddev),
+             "region_ids": np.array(regions, dtype=np.int32)}
+        if self.depths is not None:
+            steps = sorted(int(k) for k in self.depths)
+            probs = sorted({float(p) for v in self.depths.values() for p in v})
+            c["probabilities"] = np.array(probs, dtype=np.float32)
+            depth_maps = []
+            for st in steps:
+                given = {float(p): m for p, m in self.depths[st].items()}
+                missing = set(probs) - set(given)
+                if missing:
+                    raise ValueError(f"step {st} lacks depth maps for probabilities {sorted(missing)}")
+                depth_maps.append(np.ascontiguousarray(np.stack(
+                    [read_map(given[p]).as_float().astype(np.float32).ravel() for p in probs])))
+            c["depths"] = depth_maps
+        else:
+            steps = sorted(int(k) for k in self.probabilities)
+            c["flood_probability"] = np.ascontiguousarray(np.stack(
+                [read_map(self.probabilities[st]).as_float().astype(np.float32).ravel() for st in steps]))
+            c["hand"] = read_map(self.hand).as_float().astype(np.float32).ravel()
+            c["percentile"] = float(self.hand_percentile)
+        c["flood_steps"] = np.array([st - 1 for st in steps], dtype=np.int32)
+        if self.adaptation is not None:
+            a = read_map(self.adaptation).as_float()
+            c["adaptation"] = np.where(np.isnan(a), np.iinfo(np.int32).min, a).astype(np.int32).ravel()
+        if self.redistribution is not None:
+            m = pd.DataFrame(self.redistribution).copy()
+            if demand.population is None:
+                raise ValueError("redistribution needs the population demand (DevelopmentDemand(population=...))")
+            c["from_ids"] = np.array([int(i) for i in m.index], dtype=np.int32)
+            c["to_ids"] = np.array([int(i) for i in m.columns], dtype=np.int32)
+            c["matrix"] = np.ascontiguousarray((m.to_numpy(dtype=np.float64) / 100.).astype(np.float32))
+            pop = demand.population
+            pop.columns = [int(x) for x in pop.columns]
+            c["population"] = np.stack([pop[r].to_numpy(dtype=np.float32) for r in regions]).ravel()
+        assert ncell == c["huc"].size
+        return c, null
+
+
+# ----------------------------------------------------------------------------- calibration (r.futures.calib)
+
+def _patch_geometry(mask: np.ndarray, ew: float, ns: float) -> np.ndarray:
+    """Area and perimeter of each 4-connected patch (r.clump + r.object.geometry -m), as (n, 2)."""
+    from scipy import ndimage
+
+    labels, n = ndimage.label(mask, structure=[[0, 1, 0], [1, 1, 1], [0, 1, 0]])
+    if n == 0:
+        return np.empty((0, 2))
+    area = np.bincount(labels.ravel(), minlength=n + 1)[1:] * (ew * ns)
+    pad = np.pad(labels, 1)
+    inner = pad[1:-1, 1:-1]
+    perim = np.zeros(n + 1)
+    for shifted, length in ((pad[:-2, 1:-1], ew), (pad[2:, 1:-1], ew), (pad[1:-1, :-2], ns), (pad[1:-1, 2:], ns)):
+        edge = (inner > 0) & (shifted != inner)
+        perim += np.bincount(inner[edge], minlength=n + 1) * length
+    return np.column_stack([area, perim[1:]])
+
+
+def _resolution(m) -> tuple[float, float]:
+    t = m.template
+    if t is not None:
+        try:
+            rx, ry = t.rio.resolution()
+            return abs(float(rx)), abs(float(ry))
+        except Exception:
+            pass
+    return 1.0, 1.0
+
+
+def _new_development(start, end, subregions):
+    s = start
+    sub_ok = ~np.isnan(subregions) & (np.nan_to_num(subregions) != 0)
+    end_ok = ~np.isnan(end) & (np.nan_to_num(end) != 0)
+    start_ok = np.isnan(s) | (np.nan_to_num(s) == 0)
+    return sub_ok & end_ok & start_ok
+
+
+def patch_library(start, end, *, subregions=None, per_subregion: bool = False, threshold: float = 0.0,
+                  nodata=None):
+    """The sizes of the patches developed between two maps (r.futures.calib's patch library).
+
+    Patches are the 4-connected groups of cells developed in ``end`` and not
+    in ``start`` (inside a subregion); their sizes, in cells, are what
+    :class:`PatchGrowing` draws from.
+
+    Parameters
+    ----------
+    start, end
+        Developed (1) maps at two dates.
+    subregions
+        Map of subregions (cells outside, or in subregion 0, are ignored).
+    per_subregion
+        A library per subregion (``{subregion: sizes}``), each patch cut to
+        its part in the subregion.
+    threshold
+        Smallest patch area kept (in the map's area units).
+
+    Returns
+    -------
+    list or dict
+        The sizes, sorted.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> a = np.zeros((5, 6))
+    >>> b = a.copy()
+    >>> b[0, :3] = 1
+    >>> b[3:5, 4:6] = 1
+    >>> ls.simulate.patch_library(a, b)
+    [3, 4]
+    """
+    m0, m1 = read_map(start, nodata), read_map(end, nodata)
+    ew, ns = _resolution(m1)
+    sub = np.ones(m1.shape) if subregions is None else read_map(subregions).as_float()
+    diff = _new_development(m0.as_float(), m1.as_float(), sub)
+    cell = ((ns + ew) / 2.0) ** 2
+    thr = float(threshold) - 1e-6
+
+    def sizes(mask):
+        g = _patch_geometry(mask, ew, ns)
+        g = g[g[:, 0] > thr]
+        return sorted(int(v) for v in np.round(g[:, 0] / cell).astype(int))
+    if not per_subregion:
+        return sizes(diff)
+    from scipy import ndimage
+
+    labels, _ = ndimage.label(diff, structure=[[0, 1, 0], [1, 1, 1], [0, 1, 0]])
+    cats = sorted(int(c) for c in np.unique(sub[~np.isnan(sub)]))
+    out = {}
+    for c in cats:
+        part = np.where(sub == c, labels, 0)
+        if not (part > 0).any():
+            out[c] = []
+            continue
+        # each patch of the whole map, cut to the subregion: one object per patch id (r.object.geometry)
+        ids, counts = np.unique(part[part > 0], return_counts=True)
+        g = np.column_stack([counts * (ew * ns), np.zeros(ids.size)])
+        g = g[g[:, 0] > thr]
+        out[c] = sorted(int(v) for v in np.round(g[:, 0] / cell).astype(int))
+    if len(out) <= 1:
+        return sizes(diff)
+    return out
+
+
+def _histograms(data, cell, bins_a, range_a, bins_c, range_c):
+    area, perimeter = data.T
+    compact = perimeter / (2 * np.sqrt(np.pi * area))
+    ha, _ = np.histogram(area / cell, bins=bins_a, range=range_a, density=True)
+    hc, _ = np.histogram(compact, bins=bins_c, range=range_c, density=True)
+    return ha * 100, hc * 100
+
+
+def _compare_histograms(h1, h2):
+    mask = np.logical_not(np.logical_or(h1, h2))
+    a = np.ma.masked_array(h1, mask=mask)
+    b = np.ma.masked_array(h2, mask=mask)
+    return 0.5 * np.sum(np.power(a - b, 2) / (a.astype(float) + b))
+
+
+def calibrate_patches(model, start, end, drivers=None, *, compactness_means=(0.4,), compactness_ranges=(0.05,),
+                      discount_factors=(1.0,), repeat: int = 10, seed: int = 1, threshold: float = 0.0,
+                      per_subregion: bool = False) -> pd.DataFrame:
+    """Calibrate FUTURES' patch compactness and discount factor (r.futures.calib).
+
+    The patches observed between ``start`` and ``end`` give the patch
+    library and the histograms of patch area and compactness
+    (``perimeter / (2 sqrt(pi area))``); each combination of the parameters
+    is simulated ``repeat`` times from ``start`` (the model's demand and
+    potential) and its patches compared with the observed ones by the
+    histograms' chi-square distance.
+
+    Parameters
+    ----------
+    model
+        A :class:`Model` with a :class:`PatchGrowing` allocation (its patch
+        library is replaced by the observed one).
+    start, end
+        The observed maps of development.
+    drivers
+        The predictors of the potential.
+    compactness_means, compactness_ranges, discount_factors
+        The values to try (every combination).
+    repeat
+        Simulations per combination (seeds ``(seed + k) * 10000 + i``).
+    threshold
+        Smallest patch area kept.
+    per_subregion
+        A patch library per subregion.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Per combination: discount factor, compactness mean and range, the
+        area and compactness errors (normalized by their largest) and their
+        mean, from the best; ``attrs["library"]`` holds the patch library.
+    """
+    import copy
+
+    m0, m1 = read_map(start), read_map(end)
+    ew, ns = _resolution(m1)
+    alloc = model.allocation
+    sub = np.ones(m1.shape) if alloc.subregions is None else read_map(alloc.subregions).as_float()
+    cell = ((ns + ew) / 2.0) ** 2
+    thr = float(threshold) - 1e-6
+    data = _patch_geometry(_new_development(m0.as_float(), m1.as_float(), sub), ew, ns)
+    data = data[data[:, 0] > thr]
+    library = patch_library(start, end, subregions=alloc.subregions, per_subregion=per_subregion,
+                            threshold=threshold)
+    area = data[:, 0] / cell
+    compact = data[:, 1] / (2 * np.sqrt(np.pi * data[:, 0]))
+    bins_a, range_a = int(np.ptp(area) / 1.0), (np.min(area), np.max(area))
+    bins_c, range_c = int(np.ptp(compact) / 0.1), (np.min(compact), np.max(compact))
+    h_area, _ = np.histogram(area, bins=bins_a, range=range_a, density=True)
+    h_comp, _ = np.histogram(compact, bins=bins_c, range=range_c, density=True)
+    h_area, h_comp = h_area * 100, h_comp * 100
+    rows = []
+    s = int(seed)
+    for mean in compactness_means:
+        for rng in compactness_ranges:
+            for disc in discount_factors:
+                trial = copy.copy(model)
+                trial.allocation = copy.copy(alloc)
+                trial.allocation.patch_sizes = library
+                trial.allocation.compactness_mean = float(mean)
+                trial.allocation.compactness_range = float(rng)
+                trial.allocation.discount_factor = float(disc)
+                d_area = d_comp = 0.0
+                for i in range(int(repeat)):
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        sim = trial.run(start, drivers, seed=s * 10000 + i)
+                    final = sim.development.values[-1]
+                    g = _patch_geometry(np.nan_to_num(final, nan=-1) > 0, ew, ns)
+                    g = g[g[:, 0] > thr]
+                    ha, hc = _histograms(g, cell, bins_a, range_a, bins_c, range_c)
+                    d_area += _compare_histograms(h_area, ha)
+                    d_comp += _compare_histograms(h_comp, hc)
+                rows.append((float(disc), d_area / repeat, float(mean), float(rng), d_comp / repeat))
+                s += 1
+    res = np.array(rows, dtype=np.float64)
+    disc, area_err, cm, cr, comp_err = res.T
+    na, nc = area_err / np.max(area_err), comp_err / np.max(comp_err)
+    out = np.column_stack((disc, cm, cr, na, nc, (na + nc) / 2))
+    out = out[out[:, 5].argsort()]
+    table = pd.DataFrame(out, columns=["discount_factor", "compactness_mean", "compactness_range", "area_error",
+                                       "compactness_error", "combined_error"])
+    table.attrs["library"] = library
+    return table
 
 
 def _driver_maps(drivers) -> dict:

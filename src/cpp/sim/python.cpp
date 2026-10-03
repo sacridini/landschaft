@@ -380,7 +380,7 @@ py::dict sim_futures_run(const IArray& developed, const IArray& region, const st
                          float compactness_range, int num_neighbors, bool seed_probability, const FArray& incentive,
                          bool user_effects, const IArray& zone_ids, const IArray& zone_regions,
                          const FArray& zone_effects, const FArray& stringency, const FArray& demand, int nsteps,
-                         std::int64_t seed) {
+                         std::int64_t seed, const std::optional<py::dict>& climate) {
     if (developed.ndim() != 2) throw std::invalid_argument("developed must be 2-D");
     const i64 rows = developed.shape(0), cols = developed.shape(1), n = rows * cols;
     auto check = [n](const py::array& a, const char* what) {
@@ -423,6 +423,67 @@ py::dict sim_futures_run(const IArray& developed, const IArray& region, const st
     s.demand.assign(demand.data(), demand.data() + demand.size());
     s.nsteps = nsteps;
     s.seed = seed;
+    sim::FuturesClimate cl;
+    if (climate) {
+        const py::dict& c = *climate;
+        auto ivec = [&](const char* k) {
+            IArray a = py::cast<IArray>(c[k]);
+            return std::vector<int>(a.data(), a.data() + a.size());
+        };
+        auto fvec = [&](const char* k) {
+            FArray a = py::cast<FArray>(c[k]);
+            return std::vector<float>(a.data(), a.data() + a.size());
+        };
+        auto fmaps = [&](const py::handle& h) {  // (k, cells) -> k vectors
+            FArray a = py::cast<FArray>(h);
+            std::vector<std::vector<float>> out;
+            const i64 k = a.size() / n;
+            for (i64 i = 0; i < k; ++i) out.emplace_back(a.data() + i * n, a.data() + (i + 1) * n);
+            return out;
+        };
+        cl.depth_mode = py::cast<bool>(c["depth_mode"]);
+        cl.huc = ivec("huc");
+        cl.nhuc = py::cast<int>(c["nhuc"]);
+        cl.huc_ids = ivec("huc_ids");
+        cl.flood_steps = ivec("flood_steps");
+        if (cl.depth_mode) {
+            cl.probabilities = fvec("probabilities");
+            for (auto item : py::cast<py::list>(c["depths"])) cl.depths.push_back(fmaps(item));
+        } else {
+            cl.flood_probability = fmaps(c["flood_probability"]);
+            cl.hand = fvec("hand");
+            cl.percentile = py::cast<float>(c["percentile"]);
+        }
+        cl.adaptive_capacity = fvec("adaptive_capacity");
+        if (c.contains("adaptation")) cl.adaptation = ivec("adaptation");
+        DArray lv = py::cast<DArray>(c["levels"]);
+        cl.levels.assign(lv.data(), lv.data() + lv.size());
+        DArray dm = py::cast<DArray>(c["damage"]);
+        const i64 nl = lv.size();
+        for (i64 i = 0; i < dm.size() / nl; ++i) cl.damage.emplace_back(dm.data() + i * nl, dm.data() + (i + 1) * nl);
+        cl.ddf_region = ivec("ddf_region");
+        FArray resp = py::cast<FArray>(c["response"]);
+        cl.vulnerability_a = resp.data()[0];
+        cl.vulnerability_b = resp.data()[1];
+        cl.resilience_a = resp.data()[2];
+        cl.resilience_b = resp.data()[3];
+        cl.stddev = py::cast<float>(c["stddev"]);
+        cl.has_matrix = c.contains("matrix");
+        if (cl.has_matrix) {
+            cl.from_ids = ivec("from_ids");
+            cl.to_ids = ivec("to_ids");
+            FArray m = py::cast<FArray>(c["matrix"]);
+            const i64 nt = static_cast<i64>(cl.to_ids.size());
+            for (std::size_t i = 0; i < cl.from_ids.size(); ++i)
+                cl.matrix.emplace_back(m.data() + i * nt, m.data() + (i + 1) * nt);
+            cl.population = fvec("population");
+        }
+        cl.region_ids = ivec("region_ids");
+        if (static_cast<i64>(cl.huc.size()) != n || static_cast<i64>(cl.ddf_region.size()) != n ||
+            static_cast<i64>(cl.adaptive_capacity.size()) != n)
+            throw std::invalid_argument("climate maps differ in size from developed");
+        s.climate = &cl;
+    }
     sim::FuturesResult r;
     {
         py::gil_scoped_release release;
@@ -441,6 +502,21 @@ py::dict sim_futures_run(const IArray& developed, const IArray& region, const st
     d["converted"] = to_array(r.converted);
     d["overflow"] = to_array(r.overflow);
     d["warnings"] = to_array(r.warnings);
+    if (climate) {
+        py::array_t<int> ad({static_cast<i64>(r.adaptation.size()), rows, cols});
+        for (std::size_t k = 0; k < r.adaptation.size(); ++k)
+            std::copy(r.adaptation[k].begin(), r.adaptation[k].end(), ad.mutable_data() + k * n);
+        d["adaptation"] = ad;
+        d["flood_steps"] = to_array(r.flood_steps);
+        d["flood_hucs"] = to_array(r.flood_hucs);
+        d["flood_probabilities"] = to_array(r.flood_probabilities);
+        const i64 nm = r.moved.empty() ? 0 : static_cast<i64>(r.moved[0].size());
+        py::array_t<float> mv({static_cast<i64>(r.moved.size()), nm});
+        for (std::size_t k = 0; k < r.moved.size(); ++k)
+            std::copy(r.moved[k].begin(), r.moved[k].end(), mv.mutable_data() + k * nm);
+        d["moved"] = mv;
+        d["demand"] = to_array(r.demand);
+    }
     return d;
 }
 
@@ -515,7 +591,8 @@ void register_python(py::module_& m) {
           py::arg("compactness_mean"), py::arg("compactness_range"), py::arg("num_neighbors"),
           py::arg("seed_probability"), py::arg("incentive"), py::arg("user_effects"), py::arg("zone_ids"),
           py::arg("zone_regions"), py::arg("zone_effects"), py::arg("stringency"), py::arg("demand"),
-          py::arg("nsteps"), py::arg("seed"), "FUTURES (r.futures.simulation) patch-growing simulation.");
+          py::arg("nsteps"), py::arg("seed"), py::arg("climate") = py::none(),
+          "FUTURES (r.futures.simulation) patch-growing simulation, with its flood submodel.");
     m.def("sim_futures_mfilter", &sim_futures_mfilter, py::arg("input"), py::arg("matrix"),
           "r.mfilter as r.futures.devpressure runs it (edges keep their values, nulls give null).");
 }

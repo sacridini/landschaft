@@ -561,4 +561,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.DevelopmentDemand`](simulate.md#landschaft.simulate.DevelopmentDemand) | Cells each subregion develops at each step (r.futures.simulation's ``demand`` file) |
 | [`ls.DevelopmentPotential`](simulate.md#landschaft.simulate.DevelopmentPotential) | The development potential's coefficients per subregion (r.futures.potential's table) |
 | [`ls.development_pressure`](simulate.md#landschaft.simulate.development_pressure) | The development pressure of each cell (r.futures.devpressure) |
+| [`ls.Flooding`](simulate.md#landschaft.simulate.Flooding) | FUTURES' flood submodel (Sanchez et al. 2023): floods, damage, response, abandonment, migration |
+| [`ls.patch_library`](simulate.md#landschaft.simulate.patch_library) | The sizes of the patches developed between two maps (r.futures.calib's patch library) |
+| [`ls.calibrate_patches`](simulate.md#landschaft.simulate.calibrate_patches) | Calibrate FUTURES' patch compactness and discount factor (r.futures.calib) |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |

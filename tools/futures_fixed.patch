@@ -1,3 +1,13 @@
+r.futures.simulation (GRASS GIS addons, OSGeo/grass-addons grass8) with its defects corrected, the
+reference for the corrected forms in ls.simulate; installed in WSL as r.futures.simulation_fixed:
+  g.extension extension=r.futures.simulation_fixed url=<patched copy>
+
+- after growing a patch, the development pressure of every grown cell is added (the module adds it for
+  the first n cells, n = cells inside the seed's subregion);
+- get_max_HAND walks the whole bounding box of the catchment (the module walks only its first column);
+- the flood probability of a catchment comes from cells that are simulated (the module also reads the
+  raw catchment ids of cells left out, which collide with catchment indices).
+
 diff -ru --strip-trailing-cr ../grass-addons/src/raster/r.futures/r.futures.simulation/Makefile r.futures.simulation_fixed/Makefile
 --- ../grass-addons/src/raster/r.futures/r.futures.simulation/Makefile	2026-10-03 11:44:04.520068700 +0200
 +++ r.futures.simulation_fixed/Makefile	2026-10-03 16:44:18.373412300 +0200
@@ -9,6 +19,40 @@ diff -ru --strip-trailing-cr ../grass-addons/src/raster/r.futures/r.futures.simu
  
  LIBES = $(SEGMENTLIB) $(RASTERLIB) $(GISLIB) $(MATHLIB) $(DATETIMELIB)
  DEPENDENCIES = $(SEGMENTDEP) $(RASTERDEP) $(GISDEP) $(DATETIMEDEP)
+diff -ru --strip-trailing-cr ../grass-addons/src/raster/r.futures/r.futures.simulation/climate.c r.futures.simulation_fixed/climate.c
+--- ../grass-addons/src/raster/r.futures/r.futures.simulation/climate.c	2026-10-03 11:44:04.520068700 +0200
++++ r.futures.simulation_fixed/climate.c	2026-10-03 17:07:54.301056500 +0200
+@@ -236,7 +236,7 @@
+     i = 0;
+     max_HAND_value = 0;
+     for (row = bbox->n; row <= bbox->s; row++)
+-        for (col = bbox->w; col <= bbox->w; col++) {
++        for (col = bbox->w; col <= bbox->e; col++) {
+             Segment_get(&segments->flood_probability,
+                         (void *)&flood_probability_value, row, col);
+             if (flood_probability_value >= flood_probability) {
+diff -ru --strip-trailing-cr ../grass-addons/src/raster/r.futures/r.futures.simulation/inputs.c r.futures.simulation_fixed/inputs.c
+--- ../grass-addons/src/raster/r.futures/r.futures.simulation/inputs.c	2026-10-03 11:44:04.521577100 +0200
++++ r.futures.simulation_fixed/inputs.c	2026-10-03 17:07:54.309059100 +0200
+@@ -394,6 +394,9 @@
+             }
+             /* flooding; run only for cells which will be part of simulation
+                to avoid collecting unused hucs/ddfs */
++            /* cells left out before the climate inputs keep no catchment */
++            if (segments->use_climate && isnull)
++                Rast_set_c_null_value(&((CELL *)HUC_row)[col], 1);
+             if (segments->use_climate && !isnull) {
+                 if (inputs.HAND)
+                     if (Rast_is_null_value(&((FCELL *)HAND_row)[col],
+@@ -1218,6 +1221,8 @@
+             if (!Rast_is_null_value(&((FCELL *)flood_probability_row)[col],
+                                     FCELL_TYPE)) {
+                 Segment_get(&segments->HUC, (void *)&HUC_index, row, col);
++                if (Rast_is_null_value(&HUC_index, CELL_TYPE))
++                    continue;
+                 fc = ((FCELL *)flood_probability_row)[col];
+                 pvalue = map_get_int(max_flood_probability_map, HUC_index);
+                 if (pvalue) {
 diff -ru --strip-trailing-cr ../grass-addons/src/raster/r.futures/r.futures.simulation/patch.c r.futures.simulation_fixed/patch.c
 --- ../grass-addons/src/raster/r.futures/r.futures.simulation/patch.c	2026-10-03 11:44:04.523580100 +0200
 +++ r.futures.simulation_fixed/patch.c	2026-10-03 16:44:18.373412300 +0200

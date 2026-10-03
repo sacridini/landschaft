@@ -1,5 +1,23 @@
 {
  "arrays": {
+  "futures_calib/calib.csv/area_error": {
+   "kind": "vector"
+  },
+  "futures_calib/calib.csv/combined_error": {
+   "kind": "vector"
+  },
+  "futures_calib/calib.csv/compactness_error": {
+   "kind": "vector"
+  },
+  "futures_calib/calib.csv/compactness_mean": {
+   "kind": "vector"
+  },
+  "futures_calib/calib.csv/compactness_range": {
+   "kind": "vector"
+  },
+  "futures_calib/calib.csv/discount_factor": {
+   "kind": "vector"
+  },
   "futures_demand/curves.txt": {
    "kind": "text",
    "values": [
@@ -66,6 +84,404 @@
   "futures_demand_curves/population.csv/year": {
    "kind": "vector"
   },
+  "futures_flood_depth/adapt_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_depth/adapt_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_depth/adapt_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_depth/adapt_4.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_depth/adapt_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_depth/floods.txt": {
+   "kind": "text",
+   "values": [
+    "0,102,0.2271",
+    "1,104,0.1199",
+    "2,103,0.3563",
+    "2,104,0.0788",
+    "3,103,0.4209",
+    "3,102,0.4294",
+    "3,104,0.1304"
+   ]
+  },
+  "futures_flood_depth/redist_1.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_1.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_1.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_1.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_1.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_2.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_2.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_2.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_2.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_2.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_3.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_3.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_3.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_3.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_3.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_4.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_4.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_4.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_4.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_4.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_5.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_5.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_5.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_5.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/redist_5.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_depth/step_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_depth/step_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_depth/step_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_depth/step_4.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_depth/step_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/adapt_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/adapt_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/adapt_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/adapt_4.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/adapt_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/floods.txt": {
+   "kind": "text",
+   "values": [
+    "0,101,0.4808",
+    "1,101,0.4438",
+    "2,103,0.1010",
+    "2,102,0.0189",
+    "2,104,0.2095",
+    "3,101,0.4532",
+    "3,103,0.4616",
+    "3,104,0.4654",
+    "4,102,0.2129"
+   ]
+  },
+  "futures_flood_hand/redist_1.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_1.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_1.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_1.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_1.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_2.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_2.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_2.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_2.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_2.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_3.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_3.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_3.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_3.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_3.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_4.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_4.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_4.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_4.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_4.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_5.csv/10": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_5.csv/20": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_5.csv/30": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_5.csv/99": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/redist_5.csv/ID": {
+   "kind": "vector"
+  },
+  "futures_flood_hand/step_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/step_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/step_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/step_4.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_flood_hand/step_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_library/patches.txt": {
+   "kind": "text",
+   "values": [
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "1",
+    "2",
+    "2",
+    "2",
+    "2",
+    "2",
+    "2",
+    "2",
+    "2",
+    "2",
+    "3",
+    "3",
+    "3",
+    "4",
+    "4",
+    "4",
+    "4",
+    "5",
+    "5",
+    "5",
+    "6",
+    "6",
+    "6",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "10",
+    "14",
+    "16",
+    "18"
+   ]
+  },
+  "futures_library_subregions/patches.txt": {
+   "kind": "text",
+   "values": [
+    "10,20,30",
+    "1,1,1",
+    "2,1,1",
+    "3,1,1",
+    "4,2,1",
+    "4,5,1",
+    "6,5,1",
+    "8,5,1",
+    "9,6,1",
+    "18,10,1",
+    ",14,1",
+    ",,2",
+    ",,2",
+    ",,2",
+    ",,2",
+    ",,2",
+    ",,2",
+    ",,2",
+    ",,3",
+    ",,3",
+    ",,4",
+    ",,4",
+    ",,6",
+    ",,6",
+    ",,7",
+    ",,10",
+    ",,16"
+   ]
+  },
   "futures_one/pressure.tif": {
    "dim": [
     60,
@@ -102,6 +518,13 @@
    "kind": "matrix"
   },
   "futures_one/step_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "futures_potsurface/pot.tif": {
    "dim": [
     60,
     80
@@ -296,12 +719,77 @@
     80
    ],
    "kind": "matrix"
+  },
+  "potential_dredge/aic": {
+   "kind": "vector"
+  },
+  "potential_dredge/coef": {
+   "dim": [
+    10,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "potential_dredge/m2ll": {
+   "kind": "vector"
+  },
+  "potential_dredge/terms": {
+   "kind": "text",
+   "values": [
+    "pressure+x1+x2",
+    "pressure+x1",
+    "pressure+x1+x3",
+    "pressure+x2",
+    "pressure+x2+x3",
+    "pressure",
+    "pressure+x3"
+   ]
+  },
+  "potential_intercept/coef": {
+   "dim": [
+    10,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "potential_intercept/m2ll": {
+   "kind": "vector"
+  },
+  "potential_single/coef": {
+   "dim": [
+    1,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "potential_single/m2ll": {
+   "kind": "vector"
+  },
+  "potential_slope/coef": {
+   "dim": [
+    10,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "potential_slope/m2ll": {
+   "kind": "vector"
   }
  },
  "versions": {
   "grass": {
    "addons": "r.futures (OSGeo/grass-addons, grass8 branch)",
    "grass": "GRASS GIS 8.3.2"
+  },
+  "r": {
+   "r": "R version 4.4.2 (2024-10-31 ucrt)",
+   "versions": {
+    "OpenLand": "1.0.5",
+    "diffeR": "0.0.8",
+    "lulcc": "1.0.4",
+    "raster": "3.6.31",
+    "terra": "1.9.50"
+   }
   }
  }
 }

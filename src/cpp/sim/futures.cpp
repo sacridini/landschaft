@@ -11,6 +11,7 @@
 #include "sim/futures.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -50,7 +51,7 @@ public:
         : s_(s), ncell_(s.rows * s.cols), dev_(developed, developed + s.rows * s.cols), region_(region),
           pot_(pot_region), pressure_(devpressure, devpressure + s.rows * s.cols), agg_(aggregated),
           weight_(weight), zone_(zone), prob_(static_cast<std::size_t>(s.rows * s.cols), 0.0f),
-          rng_(s.seed), cells_(s.nregions) {
+          rng_(s.seed), cells_(s.nregions), demand_(s.demand) {
         const int n = s.neighborhood, side = 2 * n + 1;
         matrix_.assign(static_cast<std::size_t>(side * side), 0.0f);
         for (int i = 0; i < side; ++i) {
@@ -68,6 +69,7 @@ public:
 
     FuturesResult run() {
         FuturesResult out;
+        if (s_.climate) init_climate();
         std::vector<int> overflow(s_.nregions, 0);
         bool overgrow = true;
         added_.assign(static_cast<std::size_t>(std::max(s_.max_patch_size, 1)), 0);
@@ -81,9 +83,16 @@ public:
                 out.warnings.push_back(warn);
             }
             for (int r = 0; r < s_.nregions; ++r) out.overflow.push_back(overflow[r]);
+            if (s_.climate) {
+                update_floods(step);
+                for (int h = 0; h < s_.climate->nhuc; ++h) climate_step(step, h, out);
+                out.adaptation.push_back(adaptation_);
+                out.moved.push_back(moved_);
+            }
             out.series.push_back(dev_);
         }
         out.developed = dev_;
+        out.demand = demand_;
         return out;
     }
 
@@ -277,7 +286,7 @@ private:
 
     std::int64_t compute_step(int step, int reg, bool overgrow, std::vector<int>& overflow, int& warn) {
         auto& cells = cells_[reg];
-        int n_to_convert = static_cast<int>(std::lround(s_.demand[static_cast<std::size_t>(reg) * s_.nsteps + step]));
+        int n_to_convert = static_cast<int>(std::lround(demand_[static_cast<std::size_t>(reg) * s_.nsteps + step]));
         int n_done = 0;
         bool force = false, allow_tried = false;
         int unsuccessful = 0;
@@ -327,6 +336,230 @@ private:
         return n_done;
     }
 
+    // ------------------------------------------------------------------ climate
+
+    void init_climate() {
+        const auto& c = *s_.climate;
+        adaptation_ = c.adaptation.empty() ? std::vector<int>(static_cast<std::size_t>(ncell_), 0) : c.adaptation;
+        max_flood_.assign(static_cast<std::size_t>(c.nhuc), 0.0f);
+        bbox_.assign(static_cast<std::size_t>(c.nhuc), {-1, -1, -1, -1});
+        for (std::int64_t k = 0; k < ncell_; ++k) {  // create_bboxes over the simulated cells
+            if (dev_[k] == kFuturesNull) continue;
+            const int h = c.huc[k];
+            if (h < 0) continue;
+            const int row = static_cast<int>(k / s_.cols), col = static_cast<int>(k % s_.cols);
+            auto& b = bbox_[h];
+            if (b[0] < 0) {
+                b = {row, row, col, col};  // n, s, e, w
+            } else {
+                b[2] = std::max(b[2], col);
+                b[3] = std::min(b[3], col);
+                b[0] = std::min(b[0], row);
+                b[1] = std::max(b[1], row);
+            }
+        }
+        if (c.has_matrix) moved_.assign(c.from_ids.size() * c.to_ids.size(), 0.0f);
+    }
+
+    int listed(int step) const {
+        const auto& v = s_.climate->flood_steps;
+        for (std::size_t i = 0; i < v.size(); ++i)
+            if (v[i] == step) return static_cast<int>(i);
+        return -1;
+    }
+
+    void update_floods(int step) {
+        const auto& c = *s_.climate;
+        const int k = listed(step);
+        if (k < 0) return;
+        if (c.depth_mode) {
+            current_depths_ = &c.depths[k];
+            float max_rp = 0;
+            for (float rp : c.probabilities)
+                if (rp > max_rp) max_rp = rp;
+            std::fill(max_flood_.begin(), max_flood_.end(), max_rp);
+        } else {
+            current_prob_ = &c.flood_probability[k];
+            std::fill(max_flood_.begin(), max_flood_.end(), 0.0f);
+            for (std::int64_t i = 0; i < ncell_; ++i) {
+                const float f = (*current_prob_)[i];
+                if (std::isnan(f)) continue;
+                const int h = c.huc[i];
+                if (h < 0) continue;  // only catchments of simulated cells (corrected)
+                if (f > max_flood_[h]) max_flood_[h] = f;
+            }
+        }
+    }
+
+    bool is_adapted(float p, std::int64_t k) const {
+        const int a = adaptation_[k];
+        if (a == kFuturesNull || a == 0) return false;
+        return static_cast<double>(p) >= (1. / a);
+    }
+
+    void adapt(float p, std::int64_t k) {
+        static const int rp[] = {2, 5, 10, 20, 50, 100};
+        unsigned i;
+        for (i = 0; i < 6; ++i) {
+            if (1 / p < static_cast<float>(rp[i])) {
+                ++i;
+                break;
+            }
+        }
+        adaptation_[k] = rp[i - 1];
+    }
+
+    float depth_to_damage(float depth, int r) const {
+        const auto& c = *s_.climate;
+        const int n = static_cast<int>(c.levels.size());
+        for (int i = 0; i < n; ++i)
+            if (static_cast<double>(depth) < c.levels[i]) return static_cast<float>(c.damage[r][i] / 100);
+        return static_cast<float>(c.damage[r][n - 1] / 100);
+    }
+
+    void gauss_xy(double sd, double& x, double& y) {
+        double r = 0., v1 = 0, v2 = 0;
+        while (r >= 1. || r == 0.) {
+            v1 = rng_.next_double() * 2. - 1.;
+            v2 = rng_.next_double() * 2. - 1.;
+            r = v1 * v1 + v2 * v2;
+        }
+        const double fac = std::sqrt(std::log(r) * -2. / r);
+        y = 0 + sd * v1 * fac;
+        x = 0 + sd * v2 * fac;
+    }
+
+    int response(float damage, float ac) {  // 0 retreat, 1 adapt, 2 stay
+        const auto& c = *s_.climate;
+        double x, y;
+        if (c.stddev == 0) {
+            x = y = 0;
+        } else {
+            gauss_xy(static_cast<double>(c.stddev), x, y);
+        }
+        if (static_cast<double>(ac) + x > 0) {
+            const double v = static_cast<double>(c.resilience_a) * (static_cast<double>(ac) + x) +
+                             static_cast<double>(c.resilience_b);
+            return static_cast<double>(damage) + y > v ? 0 : 1;
+        }
+        const double v = static_cast<double>(c.vulnerability_a) * (static_cast<double>(ac) + x) +
+                         static_cast<double>(c.vulnerability_b);
+        return static_cast<double>(damage) + y > v ? 0 : 2;
+    }
+
+    void redistribute(int region_index, int step) {
+        const auto& c = *s_.climate;
+        if (!c.has_matrix) return;
+        const int rid = c.region_ids[region_index];
+        int from = -1;
+        for (std::size_t i = 0; i < c.from_ids.size(); ++i)
+            if (c.from_ids[i] == rid) from = static_cast<int>(i);
+        if (from < 0) return;  // not in the matrix: the module warns and moves nothing
+        const int dim_to = static_cast<int>(c.to_ids.size());
+        const double p = rng_.next_double();
+        float cumulative = 0;
+        int to = dim_to - 1;
+        for (int i = 0; i < dim_to; ++i) {
+            cumulative += c.matrix[from][i];
+            if (p <= cumulative) {
+                to = i;
+                break;
+            }
+        }
+        const int to_id = c.to_ids[to];
+        int to_index = -1;
+        for (std::size_t i = 0; i < c.region_ids.size(); ++i)
+            if (c.region_ids[i] == to_id) to_index = static_cast<int>(i);
+        float& moved = moved_[static_cast<std::size_t>(from) * dim_to + to];
+        if (to_index < 0) {  // outside the simulation: the same density
+            moved += 1;
+            return;
+        }
+        const std::size_t ns = static_cast<std::size_t>(s_.nsteps);
+        const float dfrom = c.population[region_index * ns + step] / demand_[region_index * ns + step];
+        const float dto = c.population[to_index * ns + step] / demand_[to_index * ns + step];
+        float to_px;
+        if (to_index == region_index) to_px = 1;
+        else if (dfrom <= 0 || dto <= 0 || !std::isfinite(dfrom) || !std::isfinite(dto)) to_px = 1;
+        else to_px = 1 * dfrom / dto;
+        if (step + 1 < s_.nsteps) {
+            demand_[to_index * ns + step + 1] += to_px;
+            moved += to_px;
+        }
+    }
+
+    float max_hand(const std::array<int, 4>& b, float p) {
+        const auto& c = *s_.climate;
+        hand_.clear();
+        for (int row = b[0]; row <= b[1]; ++row) {
+            for (int col = b[3]; col <= b[2]; ++col) {  // the module walks only column w (corrected)
+                const std::int64_t k = static_cast<std::int64_t>(row) * s_.cols + col;
+                const float f = current_prob_ ? (*current_prob_)[k] : std::nanf("");
+                if (f >= p && !std::isnan(c.hand[k])) hand_.push_back(c.hand[k]);
+            }
+        }
+        if (hand_.empty()) return 0;
+        const int perc = static_cast<int>(static_cast<double>(hand_.size()) * 1e-2 *
+                                          static_cast<int>(c.percentile) - 0.5);
+        std::sort(hand_.begin(), hand_.end());
+        return hand_[perc];
+    }
+
+    float depth_at(std::int64_t k, float p) const {
+        const auto& c = *s_.climate;
+        const auto& d = *current_depths_;
+        const int n = static_cast<int>(c.probabilities.size());
+        if (std::isnan(d[0][k])) return 0;
+        for (int i = n - 1; i >= 0; --i) {
+            if (p > c.probabilities[i]) return std::isnan(d[i][k]) ? 0.0f : d[i][k];
+        }
+        return d[0][k];
+    }
+
+    void climate_step(int step, int h, FuturesResult& out) {
+        const auto& c = *s_.climate;
+        if (!(max_flood_[h] > 0)) return;
+        const double draw = rng_.next_double();
+        if (!(draw <= max_flood_[h])) return;
+        const float p = static_cast<float>(draw);
+        const auto& b = bbox_[h];
+        if (b[0] < 0) return;
+        float level = 0;
+        if (!c.depth_mode) {
+            level = max_hand(b, p);
+            if (level == 0) return;
+        }
+        out.flood_steps.push_back(step);
+        out.flood_hucs.push_back(c.huc_ids[h]);
+        out.flood_probabilities.push_back(p);
+        for (int row = b[0]; row <= b[1]; ++row) {
+            for (int col = b[3]; col <= b[2]; ++col) {
+                const std::int64_t k = static_cast<std::int64_t>(row) * s_.cols + col;
+                if (dev_[k] == kFuturesNull || c.huc[k] != h) continue;
+                float depth;
+                if (c.depth_mode) {
+                    depth = depth_at(k, p);
+                } else {
+                    depth = level - c.hand[k];
+                    depth = depth > 0 ? depth : 0;
+                }
+                float damage = 0;
+                if (depth > 0 && !is_adapted(p, k)) damage = depth_to_damage(depth, c.ddf_region[k]);
+                if (damage > 0 && dev_[k] >= 0) {
+                    const int resp = response(damage, c.adaptive_capacity[k]);
+                    if (resp == 0) {
+                        dev_[k] = -step - 2;
+                        redistribute(region_[k], step);
+                    } else if (resp == 1) {
+                        adapt(p, k);
+                    } else {
+                        adaptation_[k] = 0;
+                    }
+                }
+            }
+        }
+    }
+
     const FuturesSettings& s_;
     std::int64_t ncell_;
     std::vector<int> dev_;
@@ -342,6 +575,15 @@ private:
     std::vector<std::vector<Developable>> cells_;
     std::vector<Candidate> cand_;
     std::vector<int> added_;
+    std::vector<float> demand_;
+    // climate
+    std::vector<int> adaptation_;
+    std::vector<float> max_flood_;
+    std::vector<std::array<int, 4>> bbox_;
+    std::vector<float> moved_;
+    std::vector<float> hand_;
+    const std::vector<std::vector<float>>* current_depths_ = nullptr;
+    const std::vector<float>* current_prob_ = nullptr;
 };
 
 }  // namespace
