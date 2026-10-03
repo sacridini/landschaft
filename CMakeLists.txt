@@ -182,6 +182,13 @@ target_include_directories(sdmcore PUBLIC src/cpp)
 # R's x87 maths (lsm/rmath.hpp), R's generator (nlm/rng.hpp), mingw's cbrt (cost/geodesic.hpp).
 target_link_libraries(sdmcore PUBLIC lsmcore nlmcore costcore)
 set_target_properties(sdmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Land use change (ls.simulate): cross-tabulation and change counts.
+add_library(simcore STATIC
+    src/cpp/sim/change.cpp
+)
+target_include_directories(simcore PUBLIC src/cpp)
+target_link_libraries(simcore PUBLIC lsmcore)
+set_target_properties(simcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Raster values by zone and at points (ls.zonal_stats, ls.extract), ls.reclassify, GDAL's warp
 # kernel (ls.reproject); GDAL's polygon rasterizer (lsm/rasterize.cpp).
 add_library(iocore STATIC
@@ -243,6 +250,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(priocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(iocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(sdmcore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(simcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
         if(APPLE)
@@ -287,7 +295,7 @@ pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp
                     src/cpp/sim/python.cpp)
 target_link_libraries(_core PRIVATE eigen_headers)
 target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
-                      iocore sdmcore)
+                      iocore sdmcore simcore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()

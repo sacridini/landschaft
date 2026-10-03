@@ -1,0 +1,108 @@
+{
+ "arrays": {
+  "markov_absorbing/multi.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_absorbing/multi.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_absorbing/multi.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_absorbing/single.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_absorbing/single.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_absorbing/single.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_chain/multi.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_chain/multi.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_chain/multi.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_chain/single.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_chain/single.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_chain/single.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_idempotent/multi.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_idempotent/multi.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_idempotent/multi.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_idempotent/single.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_idempotent/single.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_idempotent/single.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_pie/multi.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_pie/multi.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_pie/multi.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_pie/single.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_pie/single.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_pie/single.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_series/single.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_series/single.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_series/single.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_sibuyan/multi.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_sibuyan/multi.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_sibuyan/multi.csv/To*": {
+   "kind": "vector"
+  },
+  "markov_sibuyan/single.csv/From*": {
+   "kind": "vector"
+  },
+  "markov_sibuyan/single.csv/Rate": {
+   "kind": "vector"
+  },
+  "markov_sibuyan/single.csv/To*": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "dinamica": {
+   "dinamica": "8130"
+  }
+ }
+}

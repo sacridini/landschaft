@@ -1322,7 +1322,34 @@ sim.supply; sim.shortfall; sim.trajectory()
      Lourenço (OpenLand, Zenodo 3685230, CC-BY-4.0, 6372 x 6546 x 5 anos) baixado sob demanda e convertido
      pelo nosso leitor de `.rda`, que passou a atravessar bytecode do R (`BCODESXP`, do `raster`).
 1. Análise de mudança: matriz cruzada, ganhos/perdas, intensidade, componentes de Pontius, `Markov` (vários
-   passos, raiz da matriz).
+   passos, raiz da matriz). **Feita** (1.6.0): `changes` (tabelas do `contingencyTable`, `total`,
+   `intensityAnalysis` com os testes de estacionariedade, `acc_changes`), `crosstab`, os componentes do diffeR
+   (`difference_components`, `overall_difference`, `difference_resolutions`, `composite_matrix`, `memberships`,
+   `mad`, `sample_to_population`) e `Markov`; C++ `src/cpp/sim/change.cpp` (classes por tabela de consulta,
+   contagem por thread somada em ordem fixa). Bit a bit com lulcc, OpenLand e diffeR em 11 casos; o Dinamica a
+   2e-11 relativo (6 casos). São Lourenço inteiro (5 x 41,7 M células): tabelas 0,16 s (OpenLand
+   `contingencyTable` 120 s), intensidade 0,03 s (0,1 s), contagem de mudanças 0,25 s (`acc_changes` 24 s).
+   - Somas: o OpenLand soma no `summarise` (o `sum` do R, 80 bits, na ordem das linhas do grupo); o diffeR usa
+     `apply(..., sum)`/`colSums` (80 bits) e, no `composite`/`MAD`, o `global` e o `aggregate` do terra (soma
+     double sequencial pulando NaN; blocos parciais da borda completados com NaN, então com `na.rm = FALSE`
+     viram NaN). O OpenLand ordena as tabelas da intensidade pelo fator de períodos invertido e pelos nomes das
+     classes como texto.
+   - Corrigidos (forma correta, testada contra a referência corrigida: `tools/differ_fixed.R` e a legenda
+     completa no caso do OpenLand): o OpenLand monta a legenda só com as classes de origem e perde as
+     transições para uma classe que aparece só no último mapa; o `composite` do diffeR conta o NA como
+     categoria (linha e coluna de NA, rótulos na ordem de aparição), e o `differenceMR` dá NaN em todas as
+     resoluções grossas de um mapa com células sem dado; o `sample2pop` usa a população da posição da linha, não
+     da categoria. Aqui o `composite_matrix` aceita classes diferentes nos dois mapas (união, casadas por valor).
+   - Mantido do diffeR: o `MAD` não limita o último fator ao lado do mapa (o `differenceMR` limita).
+   - Dinamica (caixa-preta, `DetermineTransitionMatrix`): a matriz de um passo lista só as taxas positivas fora
+     da diagonal; a de vários passos é a raiz por autovalores (`V diag(w^(1/n)) V^-1`), sem as taxas negativas,
+     e sai vazia ("Unable to calculate the Multi-Step Transition Matrix") com autovalores negativos ou complexos;
+     com autovalor repetido a decomposição é instável (o Dinamica perde até entradas positivas). Os mapas
+     categóricos precisam ser inteiros (float64 é recusado). Aqui: a raiz principal por `expm(logm(P)/n)` (a 3e-14
+     do valor exato com mpmath; a decomposição em autovalores perde até 1,6e-11, a do Dinamica 4,5e-12), pela
+     decomposição só em matrizes singulares, erro com autovalor negativo (não há raiz real); uma classe que só
+     existe no fim fica com linha identidade (o Dinamica põe zeros: as células somem depois de um passo e as
+     taxas para ela saem quase iguais às do período inteiro).
 2. Potencial: WoE (binário e multiclasse, faixas adaptativas, Cramér's V, JIU), `glm` do R portado
    (`LogisticRegression`), `Estimator` do sklearn, potencial a partir de raster.
 3. `Model` e alocação do lulcc: CLUE-S e modelo ordenado, vizinhança, transições permitidas, demanda

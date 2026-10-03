@@ -1,0 +1,345 @@
+{
+ "arrays": {
+  "differ_composite/composite": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "differ_composite/members/1": {
+   "dim": [
+    145,
+    166
+   ],
+   "kind": "raster"
+  },
+  "differ_composite/members/2": {
+   "dim": [
+    145,
+    166
+   ],
+   "kind": "raster"
+  },
+  "differ_composite/members/3": {
+   "dim": [
+    145,
+    166
+   ],
+   "kind": "raster"
+  },
+  "differ_mad/original/Element": {
+   "kind": "vector"
+  },
+  "differ_mad/original/Quantity": {
+   "kind": "vector"
+  },
+  "differ_mad/original/Resolution": {
+   "kind": "vector"
+  },
+  "differ_mad/original/Strata": {
+   "kind": "vector"
+  },
+  "differ_mad/original/Total": {
+   "kind": "vector"
+  },
+  "differ_mad/plain/Element": {
+   "kind": "vector"
+  },
+  "differ_mad/plain/Multiples": {
+   "kind": "vector"
+  },
+  "differ_mad/plain/Quantity": {
+   "kind": "vector"
+  },
+  "differ_mad/plain/Resolution": {
+   "kind": "vector"
+  },
+  "differ_mad/plain/Strata": {
+   "kind": "vector"
+  },
+  "differ_mad/plain/Total": {
+   "kind": "vector"
+  },
+  "differ_mad/strata/Element": {
+   "kind": "vector"
+  },
+  "differ_mad/strata/Multiples": {
+   "kind": "vector"
+  },
+  "differ_mad/strata/Quantity": {
+   "kind": "vector"
+  },
+  "differ_mad/strata/Resolution": {
+   "kind": "vector"
+  },
+  "differ_mad/strata/Strata": {
+   "kind": "vector"
+  },
+  "differ_mad/strata/Total": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/multiple/Exchange": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/multiple/Multiples": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/multiple/Overall": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/multiple/Quantity": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/multiple/Resolution": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/multiple/Shift": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/proportion/Exchange": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/proportion/Overall": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/proportion/Quantity": {
+   "kind": "vector"
+  },
+  "differ_mr_pie/proportion/Shift": {
+   "kind": "vector"
+  },
+  "differ_mr_series/multiple/Exchange": {
+   "kind": "vector"
+  },
+  "differ_mr_series/multiple/Multiples": {
+   "kind": "vector"
+  },
+  "differ_mr_series/multiple/Overall": {
+   "kind": "vector"
+  },
+  "differ_mr_series/multiple/Quantity": {
+   "kind": "vector"
+  },
+  "differ_mr_series/multiple/Resolution": {
+   "kind": "vector"
+  },
+  "differ_mr_series/multiple/Shift": {
+   "kind": "vector"
+  },
+  "differ_mr_series/proportion/Exchange": {
+   "kind": "vector"
+  },
+  "differ_mr_series/proportion/Overall": {
+   "kind": "vector"
+  },
+  "differ_mr_series/proportion/Quantity": {
+   "kind": "vector"
+  },
+  "differ_mr_series/proportion/Shift": {
+   "kind": "vector"
+  },
+  "differ_sample2pop/fixed": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "differ_table_pie/overall": {
+   "kind": "vector"
+  },
+  "differ_table_pie/overall_pc": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table/Agreement": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table/Category": {
+   "kind": "text",
+   "values": [
+    "1",
+    "2",
+    "3",
+    "Overall"
+   ]
+  },
+  "differ_table_pie/table/Comission": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table/Exchange": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table/Omission": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table/Quantity": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table/Shift": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_change/Category": {
+   "kind": "text",
+   "values": [
+    "1",
+    "2",
+    "3",
+    "Overall"
+   ]
+  },
+  "differ_table_pie/table_change/Exchange": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_change/Gain": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_change/Loss": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_change/Persistence": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_change/Quantity": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_change/Shift": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_pc/Agreement": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_pc/Category": {
+   "kind": "text",
+   "values": [
+    "1",
+    "2",
+    "3",
+    "Overall"
+   ]
+  },
+  "differ_table_pie/table_pc/Comission": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_pc/Exchange": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_pc/Omission": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_pc/Quantity": {
+   "kind": "vector"
+  },
+  "differ_table_pie/table_pc/Shift": {
+   "kind": "vector"
+  },
+  "differ_table_series/overall": {
+   "kind": "vector"
+  },
+  "differ_table_series/overall_pc": {
+   "kind": "vector"
+  },
+  "differ_table_series/table/Agreement": {
+   "kind": "vector"
+  },
+  "differ_table_series/table/Category": {
+   "kind": "text",
+   "values": [
+    "2",
+    "3",
+    "5",
+    "10",
+    "11",
+    "12",
+    "Overall"
+   ]
+  },
+  "differ_table_series/table/Comission": {
+   "kind": "vector"
+  },
+  "differ_table_series/table/Exchange": {
+   "kind": "vector"
+  },
+  "differ_table_series/table/Omission": {
+   "kind": "vector"
+  },
+  "differ_table_series/table/Quantity": {
+   "kind": "vector"
+  },
+  "differ_table_series/table/Shift": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_change/Category": {
+   "kind": "text",
+   "values": [
+    "2",
+    "3",
+    "5",
+    "10",
+    "11",
+    "12",
+    "Overall"
+   ]
+  },
+  "differ_table_series/table_change/Exchange": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_change/Gain": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_change/Loss": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_change/Persistence": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_change/Quantity": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_change/Shift": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_pc/Agreement": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_pc/Category": {
+   "kind": "text",
+   "values": [
+    "2",
+    "3",
+    "5",
+    "10",
+    "11",
+    "12",
+    "Overall"
+   ]
+  },
+  "differ_table_series/table_pc/Comission": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_pc/Exchange": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_pc/Omission": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_pc/Quantity": {
+   "kind": "vector"
+  },
+  "differ_table_series/table_pc/Shift": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "r": {
+   "r": "R version 4.4.2 (2024-10-31 ucrt)",
+   "versions": {
+    "OpenLand": "1.0.5",
+    "diffeR": "0.0.8",
+    "lulcc": "1.0.4",
+    "raster": "3.6.31",
+    "terra": "1.9.50"
+   }
+  }
+ }
+}

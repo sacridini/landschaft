@@ -17,9 +17,38 @@ Typical use::
 
     import landschaft as ls
 
-    lu = ls.load_raster(ls.simulate.example_data("sibuyan_landuse"))
+    lu = ls.load_raster(ls.simulate.example_data("pie_landuse"))   # 1985, 1991, 1999
+    ch = ls.simulate.changes(lu)                                   # transitions, areas, intensity
+    ch.intensity(gain=2, loss=1)                                   # Aldwaik & Pontius
+    ls.simulate.difference_components(ch.matrix())                 # quantity, exchange, shift
+    ls.simulate.Markov.from_maps(lu[0], lu[2], steps=14).multi     # rates per year
 """
 
+from ._change import Changes, IntensityAnalysis, changes, crosstab
+from ._difference import (
+    composite_matrix,
+    difference_components,
+    difference_resolutions,
+    mad,
+    memberships,
+    overall_difference,
+    sample_to_population,
+)
 from ._examples import example_data
+from ._markov import Markov
 
-__all__ = ["example_data"]
+__all__ = [
+    "Changes",
+    "IntensityAnalysis",
+    "Markov",
+    "changes",
+    "composite_matrix",
+    "crosstab",
+    "difference_components",
+    "difference_resolutions",
+    "example_data",
+    "mad",
+    "memberships",
+    "overall_difference",
+    "sample_to_population",
+]

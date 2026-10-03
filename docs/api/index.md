@@ -524,4 +524,16 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
 | Name | Summary |
 |---|---|
+| [`ls.changes`](simulate.md#landschaft.simulate.changes) | Land change along a series of categorical maps |
+| [`ls.Changes`](simulate.md#landschaft.simulate.Changes) | Land change along a series of categorical maps (see `changes`) |
+| [`ls.IntensityAnalysis`](simulate.md#landschaft.simulate.IntensityAnalysis) | Intensity analysis of land change (Aldwaik & Pontius 2012), as OpenLand computes it |
+| [`ls.crosstab`](simulate.md#landschaft.simulate.crosstab) | Cells of each class of one map that hold each class of another (a transition matrix of counts) |
+| [`ls.difference_components`](simulate.md#landschaft.simulate.difference_components) | Agreement and the components of difference of each category and overall (diffeR's ``diffTablej``) |
+| [`ls.overall_difference`](simulate.md#landschaft.simulate.overall_difference) | The overall difference and its components (diffeR's ``overallDiff``, ``overallQtyD``...) |
+| [`ls.difference_resolutions`](simulate.md#landschaft.simulate.difference_resolutions) | Quantity, exchange and shift differences at increasingly coarse resolutions (diffeR's ``differenceMR``) |
+| [`ls.composite_matrix`](simulate.md#landschaft.simulate.composite_matrix) | Cross-tabulation at a coarser resolution by the composite method (diffeR's ``composite``) |
+| [`ls.memberships`](simulate.md#landschaft.simulate.memberships) | The share of each category in each block of factor x factor cells (diffeR's ``memberships``) |
+| [`ls.mad`](simulate.md#landschaft.simulate.mad) | Mean absolute deviation between two continuous maps and its components (diffeR's ``MAD``) |
+| [`ls.sample_to_population`](simulate.md#landschaft.simulate.sample_to_population) | A sample's cross-tabulation scaled to the population of each row category (diffeR's ``sample2pop``) |
+| [`ls.Markov`](simulate.md#landschaft.simulate.Markov) | A Markov chain of land change: the transition probabilities of a period and of each time step |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |

@@ -11,9 +11,42 @@ being built phase by phase; this page grows with it.
 ```python
 import landschaft as ls
 
-lu = ls.load_raster(ls.simulate.example_data("sibuyan_landuse"))
-drivers = ls.load_raster(ls.simulate.example_data("sibuyan_drivers"))
+lu = ls.load_raster(ls.simulate.example_data("pie_landuse"))   # 1985, 1991, 1999
+ch = ls.simulate.changes(lu)                                   # transitions, areas, change counts
+ia = ch.intensity(gain=2, loss=1)                              # intensity analysis
+ls.simulate.difference_components(ch.matrix())                 # quantity, exchange, shift
+mk = ch.markov(steps=14)                                       # transition rates per year
 ```
+
+## Change between maps
+
+::: landschaft.simulate.changes
+
+::: landschaft.simulate.Changes
+
+::: landschaft.simulate.IntensityAnalysis
+
+::: landschaft.simulate.crosstab
+
+## Components of difference
+
+::: landschaft.simulate.difference_components
+
+::: landschaft.simulate.overall_difference
+
+::: landschaft.simulate.difference_resolutions
+
+::: landschaft.simulate.composite_matrix
+
+::: landschaft.simulate.memberships
+
+::: landschaft.simulate.mad
+
+::: landschaft.simulate.sample_to_population
+
+## Markov chains
+
+::: landschaft.simulate.Markov
 
 ## Example data
 

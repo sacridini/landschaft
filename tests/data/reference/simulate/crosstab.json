@@ -1,0 +1,51 @@
+{
+ "arrays": {
+  "differ_crosstab_series/ct": {
+   "dim": [
+    6,
+    6
+   ],
+   "kind": "matrix"
+  },
+  "differ_crosstab_series/pc": {
+   "dim": [
+    6,
+    6
+   ],
+   "kind": "matrix"
+  },
+  "lulcc_pie/ct014": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "lulcc_pie/ct06": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "lulcc_pie/total": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "r": {
+   "r": "R version 4.4.2 (2024-10-31 ucrt)",
+   "versions": {
+    "OpenLand": "1.0.5",
+    "diffeR": "0.0.8",
+    "lulcc": "1.0.4",
+    "raster": "3.6.31",
+    "terra": "1.9.50"
+   }
+  }
+ }
+}
