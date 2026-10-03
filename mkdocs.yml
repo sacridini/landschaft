@@ -187,6 +187,7 @@ nav:
       - Biodiversity analysis: api/biodiversity.md
       - Spatial prioritization: api/prioritization.md
       - Species distributions: api/sdm.md
+      - Land change simulation: api/simulate.md
   - Benchmarks: benchmarks.md
   - About:
       - Changelog: about/changelog.md

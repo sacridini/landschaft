@@ -114,6 +114,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Clean records, choose predictors and background, spatial folds, fit, evaluate, project.
 
+-   :material-timeline-clock-outline:{ .lg .middle } **[Land change simulation](simulate.md)**
+
+    ---
+
+    Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation.
+
 </div>
 
 ## All functions and classes
@@ -498,6 +504,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.checkerboard_folds`](sdm.md#landschaft.sdm.checkerboard_folds) | Folds from a checkerboard of aggregated cells (ENMeval "checkerboard") |
 | [`ls.random_folds`](sdm.md#landschaft.sdm.random_folds) | Random k-fold of the presences, background always training (ENMeval "randomkfold") |
 | [`ls.jackknife_folds`](sdm.md#landschaft.sdm.jackknife_folds) | Leave-one-out: each presence its own fold, background always training (ENMeval "jackknife") |
+| [`ls.MaxNet`](sdm.md#landschaft.sdm.MaxNet) | Maxent fitted as R's maxnet does it, natively: the same model, faster |
 | [`ls.evaluate`](sdm.md#landschaft.sdm.evaluate) | Evaluate predictions at presences against background points (or absences) |
 | [`ls.Evaluation`](sdm.md#landschaft.sdm.Evaluation) | How well predictions separate presences from background (or absences) |
 | [`ls.boyce`](sdm.md#landschaft.sdm.boyce) | Continuous Boyce index: does predicted suitability rise with the frequency of presences? |
@@ -512,3 +519,9 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.response_curves`](sdm.md#landschaft.sdm.response_curves) | How each model's suitability changes along one predictor, the others held at their mean (or median) |
 | [`ls.importance`](sdm.md#landschaft.sdm.importance) | Permutation importance: how much AUC drops when a predictor's values are shuffled |
 | [`ls.example_data`](sdm.md#landschaft.sdm.example_data) | Path of an example data set for species distribution modelling |
+
+### Land change simulation
+
+| Name | Summary |
+|---|---|
+| [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |

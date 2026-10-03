@@ -1294,7 +1294,33 @@ sim.supply; sim.shortfall; sim.trajectory()
 0. Harness: biblioteca R própria (lulcc, OpenLand, diffeR), GRASS + `r.futures` no WSL, CLUMondo compilado
    (Win32, MSVC), Dinamica EGO 8 instalado (modelos EGO pela linha de comando; termo de uso lido), MOLUSCE sem o
    QGIS (stubs), `tools/make_reference_simulate.py`, casos em `tests/simulate_cases.py`, dados de exemplo
-   (Pontiac do lulcc e um recorte brasileiro), esqueleto de `ls.simulate`.
+   (Pontiac do lulcc e um recorte brasileiro), esqueleto de `ls.simulate`. **Feita** (1.5.0):
+   - Referências instaladas: biblioteca R `%LOCALAPPDATA%/R/landschaft-sim-lib` (lulcc 1.0.4, OpenLand 1.0.5
+     GPL-3, diffeR 0.0-8 GPL >= 2; o lulcc foi republicado no CRAN e ainda depende do `raster`); GRASS 8.3.2 no
+     WSL (`apt` como root: `wsl -u root`, o sudo pede senha) com o addon `r.futures` pelo `g.extension` (fonte
+     em `dev/futures/grass-addons`); CLUMondo do GitHub (a5c0c1f) compilado Win32 com o MSVC/CMake do VS 2026
+     (`dev/CLUMondo/build/bin/Release/clumondo.exe`), o `.exe` oficial de maio de 2017 e o manual de nov/2017
+     do DataverseNL (doi 10.34894/XZCPQY, CC0) em `dev/CLUMondo/ref`; Dinamica EGO 8.1.3 (8130) instalado em
+     `dev/dinamica_ego/install` (`DinamicaConsole8.exe -processors 1 -predefined-seed model.ego`).
+   - Termo de uso do Dinamica: proíbe descompilar, engenharia reversa, obras derivadas do produto e
+     redistribuição; usar e comparar saídas é permitido (é o que o harness faz). As submodels `.egoml` que vêm
+     no programa não servem de fonte para a implementação (só os artigos).
+   - CLUMondo: o manual de 2017 descreve o `.exe` de 2017, mais novo que o fonte do GitHub (2016): tem a
+     linha 26 do `main.1` (geração de manchas) e o modo de iteração 2 (desvio por demanda), ausentes do fonte;
+     o fonte compilado é a referência bit a bit, o `.exe` de 2017 a caixa-preta desses extras. `NREG = 1`
+     (uma região só, como o manual avisa). O site pede uso não comercial, mas o código é GPL-3 (o pedido não
+     restringe a licença). Sem dados de exemplo públicos: os casos são sintéticos, escritos pelo harness.
+   - Geradores: CLUMondo usa o `rand()` do runtime da Microsoft (LCG 214013/2531011, saída de 15 bits; a
+     idade inicial aleatória sem `srand`, ou seja, semente 1; `(rand() % 10000) / 1000000` em
+     `calc_change_ch` é divisão inteira, sempre 0); r.futures usa `G_srand48`/`G_drand48` do GRASS (o LCG de
+     48 bits do POSIX, semente = 32 bits baixos). Os dois em `src/cpp/sim/rng.hpp`, conferidos com o
+     `ucrtbase.dll` e com a `libgrass_gis` (por ctypes no WSL).
+   - Saídas do Dinamica: o `SaveTable` grava 15 dígitos significativos (comparar com tolerância ~1e-15 ou
+     achar outra saída).
+   - Dados de exemplo: o lulcc traz Plum Island (`pie`) e Sibuyan (`sibuyan`, o caso clássico do CLUE-S, com
+     quatro cenários de demanda), não Pontiac; exportados por `tools/make_simulate_examples.R` (1,3 MB). São
+     Lourenço (OpenLand, Zenodo 3685230, CC-BY-4.0, 6372 x 6546 x 5 anos) baixado sob demanda e convertido
+     pelo nosso leitor de `.rda`, que passou a atravessar bytecode do R (`BCODESXP`, do `raster`).
 1. Análise de mudança: matriz cruzada, ganhos/perdas, intensidade, componentes de Pontius, `Markov` (vários
    passos, raiz da matriz).
 2. Potencial: WoE (binário e multiclasse, faixas adaptativas, Cramér's V, JIU), `glm` do R portado

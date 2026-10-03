@@ -1,0 +1,64 @@
+{
+ "arrays": {
+  "rng_grass/drand48_0": {
+   "kind": "vector"
+  },
+  "rng_grass/drand48_1": {
+   "kind": "vector"
+  },
+  "rng_grass/drand48_1099511627793": {
+   "kind": "vector"
+  },
+  "rng_grass/drand48_123456789": {
+   "kind": "vector"
+  },
+  "rng_grass/drand48_42": {
+   "kind": "vector"
+  },
+  "rng_grass/drand48_m5": {
+   "kind": "vector"
+  },
+  "rng_grass/lrand48_0": {
+   "kind": "vector"
+  },
+  "rng_grass/lrand48_1": {
+   "kind": "vector"
+  },
+  "rng_grass/lrand48_1099511627793": {
+   "kind": "vector"
+  },
+  "rng_grass/lrand48_123456789": {
+   "kind": "vector"
+  },
+  "rng_grass/lrand48_42": {
+   "kind": "vector"
+  },
+  "rng_grass/lrand48_m5": {
+   "kind": "vector"
+  },
+  "rng_grass/mrand48_0": {
+   "kind": "vector"
+  },
+  "rng_grass/mrand48_1": {
+   "kind": "vector"
+  },
+  "rng_grass/mrand48_1099511627793": {
+   "kind": "vector"
+  },
+  "rng_grass/mrand48_123456789": {
+   "kind": "vector"
+  },
+  "rng_grass/mrand48_42": {
+   "kind": "vector"
+  },
+  "rng_grass/mrand48_m5": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "wsl_python": {
+   "addons": "r.futures (OSGeo/grass-addons, grass8 branch)",
+   "grass": "GRASS GIS 8.3.2"
+  }
+ }
+}

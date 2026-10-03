@@ -47,6 +47,7 @@
 #include "io/python.hpp"
 #include "prio/python.hpp"
 #include "sdm/python.hpp"
+#include "sim/python.hpp"
 #include "conn/cost.hpp"
 #include "conn/graph.hpp"
 #include "conn/nodes.hpp"
@@ -1418,6 +1419,7 @@ PYBIND11_MODULE(_core, m) {
     prio::register_python(m);
     lsio::register_python(m);
     sdm::register_python(m);
+    sim::register_python(m);
     m.def("cpu_supports_avx2_fma", &cpu_supports_avx2_fma, "AVX2 and FMA usable (landschaft._circuit_avx2).");
     m.def("conn_raster_nodes", &conn_raster_nodes, py::arg("values"), py::arg("na"), py::arg("xmin"), py::arg("xmax"),
           py::arg("ymin"), py::arg("ymax"), py::arg("centroids"), py::arg("keep_index"), py::arg("n_threads") = 0,

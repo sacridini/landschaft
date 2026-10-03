@@ -1,0 +1,134 @@
+{
+ "arrays": {
+  "smoke_clumondo/age.0.asc": {
+   "dim": [
+    15,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "smoke_clumondo/age.1.asc": {
+   "dim": [
+    15,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "smoke_clumondo/age.2.asc": {
+   "dim": [
+    15,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "smoke_clumondo/age.3.asc": {
+   "dim": [
+    15,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "smoke_clumondo/cov_all.0.asc": {
+   "dim": [
+    15,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "smoke_clumondo/cov_all.1.asc": {
+   "dim": [
+    15,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "smoke_clumondo/cov_all.2.asc": {
+   "dim": [
+    15,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "smoke_clumondo/cov_all.3.asc": {
+   "dim": [
+    15,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "smoke_dinamica_matrix/multi.csv/From*": {
+   "kind": "vector"
+  },
+  "smoke_dinamica_matrix/multi.csv/Rate": {
+   "kind": "vector"
+  },
+  "smoke_dinamica_matrix/multi.csv/To*": {
+   "kind": "vector"
+  },
+  "smoke_dinamica_matrix/single.csv/From*": {
+   "kind": "vector"
+  },
+  "smoke_dinamica_matrix/single.csv/Rate": {
+   "kind": "vector"
+  },
+  "smoke_dinamica_matrix/single.csv/To*": {
+   "kind": "vector"
+  },
+  "smoke_grass_devpressure/pressure.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "smoke_molusce_woe/map": {
+   "dim": [
+    12,
+    15
+   ],
+   "kind": "matrix"
+  },
+  "smoke_molusce_woe/weights": {
+   "kind": "vector"
+  },
+  "smoke_r_crosstab/crosstab": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "smoke_r_crosstab/differ": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "clumondo": {
+   "clumondo": "github.com/VUEG/CLUMondo a5c0c1f (Win32, MSVC)"
+  },
+  "dinamica": {
+   "dinamica": "8130"
+  },
+  "grass": {
+   "addons": "r.futures (OSGeo/grass-addons, grass8 branch)",
+   "grass": "GRASS GIS 8.3.2"
+  },
+  "molusce": {
+   "molusce": "5.3.0"
+  },
+  "r": {
+   "r": "R version 4.4.2 (2024-10-31 ucrt)",
+   "versions": {
+    "OpenLand": "1.0.5",
+    "diffeR": "0.0.8",
+    "lulcc": "1.0.4",
+    "raster": "3.6.31",
+    "terra": "1.9.50"
+   }
+  }
+ }
+}

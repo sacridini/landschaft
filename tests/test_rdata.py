@@ -18,8 +18,8 @@ def check_df(df: pd.DataFrame) -> None:
     assert df.columns.tolist() == ["i", "d", "l", "s", "f"]
     assert df["i"].tolist()[0] == 1 and pd.isna(df["i"][1]) and df["i"].tolist()[2] == 3
     assert df["d"][0] == 1.5 and np.isnan(df["d"][1]) and df["d"][2] == -0.1
-    assert df["l"][0] is np.True_ or df["l"][0] == True  # noqa: E712
-    assert pd.isna(df["l"][1]) and df["l"][2] == False  # noqa: E712
+    assert df["l"][0] is np.True_ or df["l"][0] == True
+    assert pd.isna(df["l"][1]) and df["l"][2] == False
     assert df["s"].tolist() == ["á", None, "z"]
     assert df["f"].tolist() == ["b", "a", None]
 
@@ -47,3 +47,16 @@ def test_not_r_data(tmp_path):
     p.write_bytes(b"hello")
     with pytest.raises(ValueError, match="not an R data file"):
         _rdata.read_rda(p)
+
+
+@pytest.mark.parametrize("name", ["bytecode.rda", "bytecode.rds"])
+def test_compiled_functions_are_read_past(name):
+    # compiler::cmpfun() bodies are BCODESXP (raster package objects carry such functions)
+    if name.endswith(".rda"):
+        objects = _rdata.read_rda(DATA / name)
+        f, after = objects["f"], objects["after"]
+    else:
+        obj = _rdata.read_rds(DATA / name)
+        f, after = obj.value
+    assert f.type == "closure" and f.value[-1][1].type == "bytecode"
+    assert after.value.tolist() == [1.5, 2.5]  # the stream stays aligned after the bytecode

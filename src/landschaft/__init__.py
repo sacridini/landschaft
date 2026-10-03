@@ -94,6 +94,7 @@ from .morphology import ParcellationResult, contortion, parcellation
 from . import nlm
 from . import prioritize
 from . import sdm
+from . import simulate
 from . import surface
 from .lsm import (
     Landscape,
@@ -203,6 +204,7 @@ __all__ = [
     "nlm",
     "prioritize",
     "sdm",
+    "simulate",
     "surface",
     "batch",
     "clustering_fac",

@@ -180,6 +180,11 @@ class _Reader:
             obj = RObject("list", [self.item() for _ in range(n)])
         elif t == 25:  # S4SXP
             obj = RObject("S4")
+        elif t == 21:  # BCODESXP: compiled functions (e.g. in raster objects); read past, not kept
+            reps: dict[int, RObject] = {}
+            self.int()  # number of repeated cells
+            self._bc1(reps)
+            obj = RObject("bytecode")
         elif t == 238:  # ALTREP
             info, state, attr = self.item(), self.item(), self.item()
             obj = _altrep(info, state)
@@ -193,6 +198,34 @@ class _Reader:
             if isinstance(a, RObject) and a.type == "pairlist":
                 obj.attributes = dict(a.value)
         return obj
+
+    # R's serialize.c ReadBC1 / ReadBCConsts / ReadBCLang
+    def _bc1(self, reps: dict) -> None:
+        self.item()  # the code (an integer vector)
+        for _ in range(self.int()):  # constants
+            kind = self.int()
+            if kind == 21:
+                self._bc1(reps)
+            elif kind in (2, 6, 239, 240, 243, 244):
+                self._bc_lang(kind, reps)
+            else:
+                self.item()
+
+    def _bc_lang(self, kind: int, reps: dict):
+        if kind == 243:  # BCREPREF
+            return reps.get(self.int())
+        if kind in (2, 6, 239, 240, 244):  # LISTSXP, LANGSXP, ATTRLISTSXP, ATTRLANGSXP, BCREPDEF
+            cell = RObject("language")
+            if kind == 244:
+                reps[self.int()] = cell
+                kind = self.int()
+            if kind in (239, 240):
+                self.item()  # attributes
+            self.item()  # tag
+            self._bc_lang(self.int(), reps)  # car
+            self._bc_lang(self.int(), reps)  # cdr
+            return cell
+        return self.item()  # padded (type 0) ordinary item
 
 
 def _altrep(info, state) -> RObject:

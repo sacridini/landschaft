@@ -44,7 +44,9 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("prioritization.md", "Spatial prioritization", ":material-star-circle-outline:",
           "Zonation's ranking of the cells for conservation: rules, weights, costs, curves."),
          ("sdm.md", "Species distributions", ":material-map-search-outline:",
-          "Clean records, choose predictors and background, spatial folds, fit, evaluate, project.")]
+          "Clean records, choose predictors and background, spatial folds, fit, evaluate, project."),
+         ("simulate.md", "Land change simulation", ":material-timeline-clock-outline:",
+          "Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation.")]
 
 INTRO = '''# API reference
 
