@@ -6,6 +6,22 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-03
+
+### Added
+- `ls.simulate`, the land use and land cover change module (plan and phases in IDEAS.md), starts with
+  its reference harness and example data. `ls.simulate.example_data()`: Plum Island Ecosystems and
+  Sibuyan Island from lulcc (land use, drivers, restrictions, demand scenarios) and the Sao Lourenco
+  River Basin from OpenLand (five land use maps of 6372 x 6546 cells, downloaded and converted on
+  first use). `tools/make_reference_simulate.py` runs the cases of `tests/simulate_cases.py` on R
+  (lulcc, OpenLand, diffeR), CLUMondo, GRASS's r.futures (in WSL), Dinamica EGO's console and
+  MOLUSCE's algorithms. The generators of CLUMondo (the Microsoft C runtime's `rand`) and r.futures
+  (GRASS's `G_drand48`) are in C++, the same values as the originals.
+
+### Fixed
+- Reading R data files (`.rda`, `.rds`) with compiled functions (bytecode), such as the raster
+  package's objects, failed with "unsupported R object type 21".
+
 ## [1.4.3] - 2026-10-03
 
 ### Fixed
