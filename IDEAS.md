@@ -1028,6 +1028,11 @@ Todos os módulos planejados são plenamente viáveis e compatíveis com a licen
 | **CLUMondo** (sistemas de uso, Dyna-CLUE) | **GPL-3.0** (C++, github.com/VUEG/CLUMondo; GUI fechada) | **100% compatível**. |
 | **Dinâmica EGO** (Expander / Patcher) | *Freeware / Closed-source* | **Legalmente seguro via Clean-room**. Os métodos matemáticos (Soares-Filho et al., 2002) estão em domínio público na literatura científica. |
 | **biomod2** / **CoordinateCleaner** / **spThin** / **blockCV** | **GPL-2 / GPL-3 / MIT** (R) | **100% compatível**. Reimplementação em Python dos algoritmos de limpeza espacial, desbaste e spatial CV. |
+| **prioritizr** 8.0.6 / **prioriactions** 0.5.0 | **GPL-3 / GPL >= 2** (R + C++) | **100% compatível**. Formulações reimplementadas em C++; os pacotes são a referência de paridade. |
+| **prioripy** 0.11.11 | **MIT** (do próprio autor) | **100% compatível**. Ponto de partida da API; o núcleo é reescrito. |
+| **HiGHS** (solver MILP/LP) | **MIT** (C++) | **100% compatível**. Solver padrão; pode ser embutido no `_core`. |
+| **Gurobi** | Comercial (licença acadêmica gratuita) | Só **opcional** em tempo de execução (gurobipy); nunca obrigatório nem embutido. |
+| **Marxan** (simulated annealing) | Algoritmo publicado (Ball et al. 2009); licença do código do Marxan 4 a verificar | Referência do motor `anneal`: porte com paridade se a licença for compatível, senão **clean-room** pelo artigo. |
 
 ---
 
@@ -1182,6 +1187,200 @@ res.rank                  # xarray.DataArray 0-1 (1 = maior prioridade)
 res.feature_curves        # pandas.DataFrame
 ls.write_raster(res.rank, "rankmap.tif")
 ```
+
+---
+
+## Priorização por otimização (prioritizr / prioriactions) no `ls.prioritize`
+
+Plano acordado em 2026-10-03. Traz para o `ls.prioritize`, ao lado do ranking do Zonation, o paradigma de
+**otimização** (programação inteira mista, MILP): conjunto mínimo, objetivos com orçamento, penalidades e
+restrições espaciais, portfólios de soluções, avaliação e planejamento com múltiplas ações. Referências de
+paridade: **prioritizr 8.0.6** (Hanson et al.; GPL-3) e **prioriactions 0.5.0** (Salgado-Rojas et al.;
+GPL >= 2; monta o modelo em C++ com Rcpp/Armadillo e exporta `getModelInfo`), instalados em
+`C:\Users\eduar\AppData\Local\R\win-library\4.4` junto com o pacote `gurobi` do R e o `lpsymphony`. O
+**prioripy** (`C:\Users\eduar\Documents\dev\prioripy`, 0.11.11, MIT, do próprio autor) é o ponto de partida do
+desenho e da API, mas o núcleo é reescrito (ver "Correções do prioripy"). Solvers: **HiGHS** (MIT) como padrão
+aberto e **Gurobi** opcional (gurobipy; licença acadêmica válida até 2027-09-21 na máquina de desenvolvimento).
+
+### Por que
+* Hoje o `ls.prioritize` só ranqueia. A tabela "Four ways to set priorities" do Learn
+  (`docs/learn/prioritization.md`) já cita o conjunto mínimo e a cobertura máxima, que o landschaft não oferece.
+  Na prática os dois paradigmas são usados juntos: o ranking enquanto as metas ainda estão em negociação, a
+  otimização quando há metas e orçamento.
+* Mesmos dados de entrada, mesmo pré-processamento (condição, retenção, kernels de conectividade, impactos) e
+  pontes entre os motores (o ranking do Zonation como solução inicial do MILP; comparação das duas soluções com
+  o mesmo orçamento). Nem o prioritizr nem o Zonation têm isso.
+
+### Decisão: camada de otimização própria, não um solver MILP geral
+Um MILP competitivo (simplex dual numericamente robusto, presolve, dezenas de famílias de cortes, heurísticas
+primais, branching, paralelismo, tudo calibrado em milhares de instâncias) é trabalho de uma década com equipe
+dedicada, e não há referência para portar bit a bit. Decisão: uma **camada de otimização própria,
+especializada em priorização**, em C++/OpenMP, em volta do HiGHS, que dá a prova de otimalidade e o gap. Essa
+camada conhece a estrutura do problema e o solver genérico não. Muito do que o prioripy atribui a "só o Gurobi
+faz" é limitação do `scipy.milp`, não do HiGHS:
+
+| "Só o Gurobi faz" | Situação com o HiGHS usado diretamente |
+|---|---|
+| Solução inicial (warm start) | O HiGHS aceita (`setSolution`) |
+| Portfólios cuts / shuffle | Cortes no-good adicionados ao modelo e re-solve incremental |
+| Portfólio gap | Emulado com cortes + restrição sobre o objetivo (mais lento que o pool nativo do Gurobi) |
+| Corredores, multi-action | MILPs comuns; a exigência de Gurobi era do código do prioripy |
+| Curvas do prioriactions (`curve > 1`) | O Gurobi tem PWL nativo; no HiGHS, formulação explícita (lambda + binárias) montada por nós |
+| Lazy constraints / cortes do usuário | **Lacuna real** (confirmar o estado na versão atual); importa para contiguidade e corredores |
+| Velocidade em MILPs grandes | **Lacuna real**; é o que a camada própria (presolve, decomposição, soluções iniciais) ataca |
+
+### Correções do prioripy (não portar)
+1. **Os dois backends montam modelos diferentes**: em `max_utility` com penalidade de borda, o Gurobi aplica a
+   penalidade inteira (`solvers/gurobi.py:215`) e o HiGHS multiplica custo e penalidades por 1e-5
+   (`solvers/highs.py:305`); o resultado depende de o gurobipy estar instalado.
+2. **Penalidade de conectividade sem efeito nos objetivos de maximização** (`gurobi.py:234/249`,
+   `highs.py:314/330`): o sinal leva o solver a zerar `y_conn`; no `max_utility` do Gurobi ela é ignorada.
+3. **Escalas 1e-5 arbitrárias** do custo e das penalidades nos objetivos com orçamento (o prioritizr não faz
+   isso); seguir as formulações do prioritizr.
+4. **`eval_ferrier_importance` não é o índice de Ferrier et al. (2000)** do prioritizr (é uma razão
+   simplificada); falta o `eval_replacement_importance`.
+5. **Exceções engolidas** (`except Exception: pass`) no `eval_rank_importance` (`eval.py:276`) e na
+   calibração/Pareto (`calibration.py:250, 431, 542, 567`): um passo que falha vira resultado errado sem aviso.
+6. **Ordem das chamadas importa**: metas relativas calculadas na hora (condition layer depois das metas dá
+   erro); índices de feição adivinhados entre base 0 e 1 (`targets.py:276`).
+7. **`max_cover` do prioripy é o `max_features` do prioritizr** (maximiza o número de metas atingidas); o
+   `max_cover` do prioritizr é outra coisa. Usar os nomes e definições do prioritizr.
+8. Montagem do modelo com laços por linha em Python (`highs.py:141`); contiguidade por fluxo com big-M = N
+   (relaxação linear fraca); `add_neighbor_penalties(data=...)` não implementado.
+
+### Desenho
+* **`Problem` imutável e preguiçoso**: cada `add_*` devolve um novo problema com a especificação acrescentada;
+  metas relativas, condição e transformações só são resolvidas no `compile()`. A ordem das chamadas deixa de
+  importar. Nomes `add_*` do prioritizr (scripts em R traduzem quase linha a linha).
+* **Unidades de planejamento**: células de raster (`DataArray`), polígonos (`GeoDataFrame`) ou hexágonos H3
+  (o `h3` já é dependência). Feições agregadas às unidades pelo `zonal_stats` em C++. Bordas: arestas entre
+  células (com `edge_factor`) ou comprimentos de aresta compartilhada entre polígonos (C++).
+* **Matriz de feições** CSR (feições x unidades) montada em C++ a partir dos blocos dos rasters (os leitores em
+  streaming do `_inputs` do Zonation), sem materializar a pilha em float.
+* **Compilador único em C++** → (A em CSR, c, lb, ub, rhs, sentidos, tipos de variável) com o mesmo layout do
+  `compile()` do prioritizr. Todos os backends consomem o mesmo modelo: não há divergência entre solvers por
+  construção. `Solution` registra o solver usado, o gap e o limite.
+* **Backends**: HiGHS **embutido no `_core`** e Gurobi (gurobipy, opcional, detectado em tempo de execução;
+  recebe o mesmo modelo compilado pelo Python).
+* **HiGHS embutido** (decidido em 2026-10-03): o código-fonte do HiGHS, fixado numa versão, entra no build
+  por `FetchContent` como o Eigen (`FETCHCONTENT_SOURCE_DIR_HIGHS=<caminho>` para builds offline), compilado
+  como biblioteca estática (sem executável nem testes do HiGHS) e ligado ao `_core`; o nosso C++ chama a
+  classe `Highs` diretamente (`passModel` com o CSR do compilador, `setSolution`, `run`, re-solves
+  incrementais). Motivo: a camada própria é feita de laços entre o nosso código e o solver (cortes dos
+  portfólios, subproblemas da decomposição em paralelo, heurísticas, milhares de re-solves do replacement
+  importance), que ficam inteiros em C++/OpenMP, sem passar pelo Python; e o usuário não instala nada além do
+  landschaft, sempre com a versão testada. Custos aceitos: primeira compilação mais lenta (depois o
+  `-Cbuild-dir` resolve), wheel alguns MB maior, aviso de licença MIT do HiGHS. Cuidado: o HiGHS tem
+  agendador de threads próprio, separado do OpenMP; com várias instâncias em paralelo, cada uma usa 1 thread
+  do HiGHS e o paralelismo fica do nosso lado (confirmar o comportamento do agendador global na fase 0).
+  O build tem que funcionar no MSVC e no gcc do WSL. O `highspy` só é usado no ambiente de desenvolvimento,
+  para o benchmark da fase 0; não é dependência do projeto.
+* **`n_threads`** padrão = todos os núcleos menos um (`_threads.py`), no solver e na camada própria.
+* **I/O comum**: as funções recebem objetos (`ls.load_raster`/`load_vector` para arquivos); `Solution` e os
+  resultados de avaliação são `Saveable`; mapas e gráficos pelo `ls.plot`.
+
+```python
+import landschaft as ls
+
+feats = ls.load_raster(["sp1.tif", "sp2.tif", "sp3.tif"])
+cost = ls.load_raster("custo.tif")
+p = (ls.prioritize.problem(cost, feats)          # ou planning_units=gdf (polígonos / H3)
+       .add_min_set_objective()
+       .add_relative_targets(0.3)
+       .add_boundary_penalties(0.5)
+       .add_locked_in_constraints(areas_protegidas)
+       .add_binary_decisions())
+sol = p.solve(solver="highs", gap=0.01)          # "gurobi", "anneal"; warm_start="zonation"
+sol.selection            # DataArray / GeoDataFrame
+sol.coverage             # DataFrame: metas, atingido, déficit por feição
+ls.prioritize.eval_replacement_importance(p, sol)
+ls.plot(sol)
+```
+
+### Camada de otimização própria (C++/OpenMP)
+1. **Presolve específico do domínio**: fixar unidades travadas; remover feições cujas metas as travadas já
+   atingem; eliminar unidades **dominadas** no min_set sem penalidades (mesmas feições ou menos, por custo maior
+   ou igual); fundir unidades idênticas; descartar unidades sem feição quando nenhuma penalidade ou restrição
+   espacial as envolve.
+2. **Decomposição**: sem penalidade espacial, ou com componentes que não se tocam, o problema se divide em
+   subproblemas independentes resolvidos em paralelo.
+3. **Soluções iniciais**: o ranking do Zonation (top x% que atinge as metas), guloso tipo Marxan e busca local
+   (trocas 1-opt/2-opt) entregam ao solver uma solução quase ótima, o que reduz o branch-and-bound.
+4. **Motor heurístico `solver="anneal"`**: simulated annealing paralelo tipo Marxan (clean-room pelo artigo),
+   para escalas que um MILP não alcança (milhões de unidades com borda). Sem prova de otimalidade, mas sempre com
+   o **limite inferior** da relaxação linear (HiGHS; PDLP para LPs enormes) e o gap informado.
+5. **Formulações mais fortes**: contiguidade e corredores com formulações de relaxação mais apertada (cortes
+   separados por nós, se o HiGHS oferecer callbacks de lazy constraints; senão, cortes adicionados em rodadas).
+6. **Portfólios no HiGHS**: cuts e shuffle (re-solve incremental), gap (cortes + restrição de objetivo), top;
+   no Gurobi, o pool nativo.
+
+### Multi-action (prioriactions)
+* Dados como no `inputData` do prioriactions: unidades (custo de monitoramento, status), feições (metas de
+  recuperação e conservação), distribuição das feições, ameaças (`blm_actions`), distribuição das ameaças
+  (quantidade, custo da ação, status 0/2/3), sensibilidade (parâmetros a, b, c, d das curvas de resposta),
+  fronteiras. Entrada também por rasters (uma camada por ameaça, custos por raster ou constante: extensão do
+  prioripy).
+* Objetivos `minimizeCosts` e `maximizeBenefits`; curvas `curve` 1-3 com `segments`, como formulação linear por
+  partes explícita (funciona em qualquer solver).
+* Modelo montado em C++, com presolve próprio (ações que não beneficiam nenhuma feição sensível, ameaças
+  ausentes, metas inatingíveis avisadas antes de resolver). É onde o ganho de velocidade é mais certo.
+* Dependências direcionais (fluxo montante-jusante) do prioripy ficam como extensão nossa, testada contra uma
+  formulação de referência escrita à parte.
+
+### Paridade e testes
+1. **Modelo idêntico, bit a bit**: as nossas matrizes contra o `compile()` do prioritizr e o modelo do
+   prioriactions (`getModelInfo` / exportação). Testa a formulação independentemente do solver.
+2. **Ótimo igual**: casos pequenos com gap = 0, objetivo igual ao da referência no Gurobi. A seleção só é
+   comparada quando o ótimo é único (empates dão várias soluções ótimas).
+3. **Camada própria**: o presolve e a decomposição não mudam o ótimo; heurísticas sempre viáveis e nunca piores
+   que o ótimo do Gurobi + X%; limites inferiores válidos.
+4. **Avaliações** (`eval_*`) contra as do prioritizr nas mesmas soluções.
+* Harness `tools/make_reference_optimize.py` (roda o R via Rscript, `LANDSCHAFT_RSCRIPT`, como os outros);
+  casos em `tests/optimize_cases.py`; referências em `tests/data/reference/optimize/<grupo>.npz/json`
+  (matrizes CSR, objetivo ótimo, soluções, tabelas de avaliação). Testes com Gurobi pulam sem licença.
+
+### Fases (ao fim de cada fase: versão, commit, push, próxima)
+0. **Harness e benchmark de solvers**: casos de referência (prioritizr `compile()`, prioriactions); suíte
+   `tools/benchmark_optimize.py` com problemas reais (min_set, borda, contiguidade, multi-action) em tamanhos
+   crescentes (10³ a 10⁶ unidades) no HiGHS (via `highspy`, só no ambiente de desenvolvimento), no Gurobi e no
+   prioritizr. Saída: onde está a lacuna HiGHS x Gurobi; o que a versão atual do HiGHS oferece (callbacks,
+   lazy constraints, pool, agendador de threads); versão do HiGHS a fixar.
+1. **Núcleo**: HiGHS embutido no `_core` (`FetchContent`, biblioteca estática, MSVC e gcc), `Problem`
+   imutável, unidades (raster, polígonos, H3), matriz de feições em C++, compilador único,
+   `add_min_set_objective`, metas relativas/absolutas, locked in/out, decisões binárias/proporção/semicontínuas,
+   backends HiGHS e Gurobi, `Solution` (seleção, cobertura, Saveable), warm start pelo Zonation.
+2. **Objetivos e metas**: min_shortfall, min_largest_shortfall, max_utility, max_features, max_cover,
+   min_penalties, max_phylo_div / max_phylo_end (árvores do `ls.bio`); metas loglinear, manuais (com sentido) e
+   por sub-região; pesos das feições.
+3. **Penalidades e restrições espaciais**: borda (raster e polígonos), vizinhança, conectividade simétrica e
+   assimétrica (matrizes do `ls.conn`, `ls.circuit` e `ls.cost`), penalidades e restrições lineares,
+   contiguidade, contiguidade por feição, mínimo de vizinhos, corredores com resistência do `ls.cost`.
+4. **Camada de otimização própria**: presolve, decomposição, heurísticas (guloso, busca local), motor `anneal`
+   com limite inferior, formulações mais fortes, portfólios (cuts, shuffle, gap, top) também no HiGHS.
+5. **Multi-action** (prioriactions): dados, objetivos, curvas, modelo e presolve em C++, entrada por rasters,
+   dependências direcionais.
+6. **Avaliação**: cobertura de metas, resumo (custo, número de unidades, perímetro), replacement importance
+   (re-solves em paralelo), Ferrier (2000), rank importance (Jung et al. 2021), ProxIRR (Baisero et al. 2021),
+   irreplaceability/frequência de seleção em portfólios, métricas de paisagem da solução (`ls.lsm`, MSPA).
+7. **Calibração e trade-offs**: calibração de BLM e de pesos (joelho da curva de Pareto), frente de Pareto
+   custo x déficit, solução iterativa com callback acoplável aos passos do `ls.simulate`. Falhas de passo são
+   erros, nunca engolidas.
+8. **Integração**: pré-processamento comum (condição, retenção, kernels, impactos do Zonation como
+   transformações de feição), risco de extinção pela relação espécie-área (SAR), feições do `ls.sdm`,
+   comparação Zonation x MILP no mesmo orçamento, gráficos do `ls.plot` (mapas, Pareto, cobertura) e relatório
+   offline.
+9. **Escala e desempenho**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes (decisões de
+   proporção) por PDLP, perfil e remoção das partes seriais.
+10. **Documentação**: tutorial, capítulo do Learn (conjunto mínimo x ranking, metas, BLM, portfólios,
+    multi-action), página de benchmarks e guia de migração do prioritizr/prioriactions/prioripy (tabela R ↔
+    Python).
+
+### Decisões
+* Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
+  prioritizr e o prioriactions, e o Marxan entra depois como referência do motor `anneal` (verificar a
+  licença do código do Marxan 4: se for compatível, portar com paridade contra o executável com semente fixa;
+  senão, clean-room pelo artigo); o multi-action fica na fase 5; o HiGHS é embutido no `_core` (ver
+  "Desenho"), com o `highspy` só para o benchmark da fase 0.
 
 ---
 
@@ -1612,6 +1811,12 @@ flowchart TD
 
         CAZ & ABF & KERN --> HEAP
         HEAP --> MAP_PRIO["Mapa de Prioridade Hierárquica [0.0 - 1.0]"]
+
+        PROB["Problem (metas, orçamento, penalidades, ações)"]
+        COMP["Compilador único + presolve/heurísticas em C++"]
+        SOLV["HiGHS / Gurobi / anneal"]
+        PROB --> COMP --> SOLV --> SOL["Solução ótima, portfólios e avaliações"]
+        MAP_PRIO -->|"Solução inicial (warm start)"| COMP
     end
 
     subgraph Modulo_Simulacao ["3. Simulação de Paisagem (ls.simulate)"]
@@ -1631,6 +1836,9 @@ flowchart TD
     PROJ -->|"Inverso da Adequabilidade (Resistência)"| CONN
     RNG --> ALO
     CONN --> CAZ & ABF
+    CONN -->|"Penalidades de conectividade / corredores"| PROB
+    PROJ -->|"Feições"| PROB
+    SIM_STEP -.->|"Ameaças futuras (multi-action)"| PROB
     SIM_STEP -.-> LSM & MSPA
     LSM & MSPA -.->|"Calibração Orientada a Padrões (Loss Function)"| SIM_STEP
     MAP_PRIO -.->|"Zona de Restrição / Custo de Conversão"| SIM_STEP
