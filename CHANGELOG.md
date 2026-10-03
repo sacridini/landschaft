@@ -6,6 +6,16 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-10-03
+
+### Added
+- `ls.simulate` phase 5c, Dinamica's transition functions: `ExpanderPatcher` (the Expander grows
+  patches next to existing ones of the target class, the Patcher seeds new ones; lognormal patch
+  sizes, isometry, prune factor, a share of each transition per function), in C++; written from the
+  publications and Dinamica EGO 8's measured seed selection (Expander acceptance `P n_j / 5`, seeds
+  drawn by probability among the pruned cells), statistically checked against it with one-cell
+  patches (its functors crash on larger ones).
+
 ## [1.11.0] - 2026-10-03
 
 ### Added
