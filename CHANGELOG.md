@@ -6,6 +6,17 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-10-04
+
+### Added
+- `ls.simulate` phase 9, pattern-oriented calibration: `calibrate(model or build function, start,
+  observed, params=..., targets=..., method=...)` searches the settings (paths into the model's
+  pieces, or the arguments of a function building it) whose simulations best reproduce the observed
+  map by figure of merit, fuzzy similarity, kappa, quantity or allocation disagreement, landscape
+  metrics or any loss function; Nelder-Mead, differential evolution, grid or Latin hypercube, each
+  evaluation the mean of replicates with common seeds; `Calibration` with the history, the best
+  model and simulation, `validate()` and a plot.
+
 ## [1.18.0] - 2026-10-04
 
 ### Added
