@@ -149,7 +149,17 @@ nav:
       - 9 · Distance, cost and restoration: learn/restoration.md
       - 10 · Landscape change: learn/change.md
       - 11 · Continuous surfaces: learn/surfaces.md
-      - 12 · Conservation priorities: learn/prioritization.md
+      - 12 · Conservation priorities:
+          - 12.1 · Why prioritize?: learn/prioritization.md
+          - 12.2 · Key concepts: learn/prioritization/concepts.md
+          - 12.3 · Ranking a landscape: learn/prioritization/ranking.md
+          - 12.4 · Optimization: learn/prioritization/optimization.md
+          - 12.5 · Spatial design: learn/prioritization/spatial.md
+          - 12.6 · Trade-offs and alternatives: learn/prioritization/tradeoffs.md
+          - 12.7 · Evaluating a plan: learn/prioritization/evaluation.md
+          - 12.8 · Management actions: learn/prioritization/actions.md
+          - 12.9 · Ranking and optimization together: learn/prioritization/together.md
+          - 12.10 · The planning process: learn/prioritization/process.md
       - 13 · Species distributions: learn/sdm.md
       - 14 · Simulating land change: learn/simulation.md
       - 15 · From question to tool: learn/choosing.md
@@ -170,6 +180,7 @@ nav:
       - Surface texture: tutorials/surface-texture.md
       - Biodiversity analysis: tutorials/biodiversity.md
       - Conservation priorities: tutorials/prioritization.md
+      - Optimized conservation plans: tutorials/conservation-plans.md
       - Species distributions: tutorials/species-distributions.md
       - Land change simulation: tutorials/land-change-simulation.md
   - API reference:

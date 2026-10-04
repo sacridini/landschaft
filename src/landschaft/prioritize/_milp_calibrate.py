@@ -211,7 +211,7 @@ def cohon_penalty(p, penalty: str = "boundary", data=None, edge_factor: float = 
     >>> P = ls.prioritize
     >>> cost = ls.load_raster(P.example_data("cost"))
     >>> features = ls.load_raster(P.example_data("features"))
-    >>> c, f = P.coarsen(cost, features, 3)
+    >>> c, f = P.coarsen(cost, features, 6)
     >>> p = P.problem(c, f).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
     >>> value, ideals = P.cohon_penalty(p.add_highs_solver(gap=0.05))
     >>> value > 0
@@ -250,8 +250,9 @@ def calibrate_penalty(p, penalty: str = "boundary", values=None, n: int = 9, dat
     >>> P = ls.prioritize
     >>> cost = ls.load_raster(P.example_data("cost"))
     >>> features = ls.load_raster(P.example_data("features"))
-    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
-    >>> cal = P.calibrate_penalty(p, "boundary", values=[0.001, 0.01, 0.1])
+    >>> c, f = P.coarsen(cost, features, 6)
+    >>> p = P.problem(c, f).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> cal = P.calibrate_penalty(p.add_highs_solver(gap=0.05), "boundary", values=[0.001, 0.01, 0.1])
     >>> cal.table[["value", "status"]]
        value   status
     0  0.001  optimal
@@ -286,7 +287,7 @@ def calibrate_budget(p, penalty: str = "boundary", thresholds=None, inflation=No
     >>> P = ls.prioritize
     >>> cost = ls.load_raster(P.example_data("cost"))
     >>> features = ls.load_raster(P.example_data("features"))
-    >>> c, f = P.coarsen(cost, features, 3)
+    >>> c, f = P.coarsen(cost, features, 6)
     >>> p = P.problem(c, f).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
     >>> cal = P.calibrate_budget(p.add_highs_solver(gap=0.05), "boundary", inflation=[0.1, 0.5, 1.0])
     >>> len(cal.table)
@@ -313,8 +314,9 @@ def calibrate_budget(p, penalty: str = "boundary", thresholds=None, inflation=No
 
 def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> TradeOffs:
     """The trade-off between cost and representation: the least total shortfall of the targets (min
-    shortfall objective: the sum of the shortfalls as shares of their targets) within budgets from a tenth of the least-cost solution's cost up to it
-    (``n`` steps) or the ``budgets`` given. ``p``: a problem with targets (its objective is replaced).
+    shortfall objective: the sum of the shortfalls as shares of their targets) within ``n`` budgets evenly
+    spaced up to the least-cost solution's cost (above the cost of the locked-in units, which every budget
+    includes), or the ``budgets`` given. ``p``: a problem with targets (its objective is replaced).
     The table adds ``met`` (targets met) and ``efficient`` (no other candidate is cheaper and not
     worse, or better and not dearer).
 
@@ -328,10 +330,10 @@ def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> 
     >>> front = P.pareto_front(p, n=4)
     >>> front.table[["met", "efficient"]]
        met  efficient
-    0    0       True
-    1    1       True
+    0    1       True
+    1    3       True
     2    2       True
-    3    6       True
+    3    8       True
     """
     from ._milp_eval import eval_target_coverage_summary
 
@@ -339,7 +341,8 @@ def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> 
         raise ValueError("pareto_front needs targets")
     if budgets is None:
         top = p.add_min_set_objective().solve().cost
-        budgets = np.linspace(top / n, top, int(n))
+        fixed = 0.0 if p.locked_in is None else float(np.dot(p.units.cost, p._mask(p.locked_in)))
+        budgets = np.linspace(fixed + (top - fixed) / n, top, int(n))  # the locked-in units' cost is spent anyway
     budgets = np.asarray(budgets, dtype=np.float64).ravel()
     problems = [p.add_min_shortfall_objective(float(b)) for b in budgets]
     sols = _solve_all(problems, n_threads)
@@ -371,13 +374,13 @@ def calibrate(make, values, criterion, name: str = "criterion", n_threads: int |
     >>> cost = ls.load_raster(P.example_data("cost"))
     >>> features = ls.load_raster(P.example_data("features"))
     >>> def make(w):
-    ...     return P.problem(cost, features).add_max_utility_objective(5000).add_feature_weights([w, 1, 1, 1, 1, 1])
+    ...     return P.problem(cost, features).add_max_utility_objective(5000).add_feature_weights([w, 1, 1, 1, 1, 1, 1, 1])
     >>> def lost(q, s):
     ...     rep = P.eval_feature_representation_summary(q, s)
     ...     return 1 - rep["relative_held"].iloc[1]
-    >>> cal = P.calibrate(make, [1, 10], lost, name="wetland_plant_lost")
+    >>> cal = P.calibrate(make, [1, 10], lost, name="tapir_lost")
     >>> list(cal.table.columns[:3])
-    ['value', 'cost', 'wetland_plant_lost']
+    ['value', 'cost', 'tapir_lost']
     """
     values = list(values)
     if not values:

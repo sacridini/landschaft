@@ -236,6 +236,34 @@ times: z5 gains 1.7 to 3 times from its 12 threads, Landschaft 4.7 to 6.3. Memor
 cell with data during the ranking, plus 1 to 2 bytes per value that is not
 zero; `storage=` puts the large arrays in memory-mapped files.
 
+#### Optimized plans
+
+Against prioritizr 8.0.6's models solved by HiGHS 1.15 alone (the solver
+prioritizr calls) and by Gurobi 12, on synthetic problems of
+`tools/benchmark_optimize.py`: 30 species-like features with targets of 30 %
+and costs from 1 to 10 (multi-action: 10 features, 3 threats), a gap of 1 %,
+12 threads on the performance cores. "No answer" means no plan within the
+time limit (120 s unless stated). The same models and the same optima as
+prioritizr's; Landschaft's engines start HiGHS from near-optimal plans, fix
+the units whose choice is proven, and solve the problems general solvers
+find hard on their own.
+
+| Problem | Units | HiGHS alone | Gurobi | Landschaft | Since |
+|---|---|---|---|---|---|
+| minimum set | 10⁵ | 7 s | 2 s | 0.44 s | 1.21 |
+| minimum set | 10⁶ | no answer (its best plan 2.1 x the optimum) | 20 s | 1.7 s (gap 0.002 %) | 1.21 |
+| minimum set | 10⁷ (5 features) | | | 60 s, proven optimal | 1.26 |
+| boundary penalty | 10⁶ | no answer in 16 min | 289 s | 27 s (gap 0.77 %) | 1.21 |
+| minimum penalties with boundary, gap 10 % | 2400 | more than 150 s | | 12 s | 1.27 |
+| multi-action, least cost | 10⁵ | 57 s | 3 s | 0.7 s | 1.22 |
+| multi-action, least cost, gap 0 | 10⁵ | no answer in 300 s | 13 s | 6 s | 1.22 |
+| multi-action with boundaries | 10⁴ | | 7.5 s | 0.18 s | 1.22 |
+| multi-action with river dependencies (soft / hard) | 10⁵ | | 6 s / 8 s | 1 s / 5.5 s | 1.22 |
+
+Contiguity constraints are the exception: neither HiGHS nor Landschaft has
+cuts inside the branch and bound yet, and Gurobi is faster on them from a few
+thousand units.
+
 ### Species distributions
 
 Against the R packages each step reproduces (R 4.4.2, terra 1.9-50):
@@ -398,6 +426,11 @@ raster read in strips), and only that is reprojected and encoded.
 | Surface metrics: amplitude parameters (`sa`, `sq`, `ssk`, `sku`, `sv`, `sph`, `smean`), trend surfaces of order 0-3 and the choice of the best one, slopes and developed area (`sdq`, `sdq6`, `sdr`), peaks, valleys, `sds`, `ssc`, `s10z`, the bearing area curve and its parameters (`sdc`, `sbi`, `svi`, `sci`, `sk`, `spk`, `svk`), autocorrelation, correlation lengths, texture direction and wavelength, fractal dimension, texture images | geodiv 1.1.1 (R 4.4.2, terra 1.9.50, spatial 7.3-17), and where geodiv errs geodiv with its errors corrected (`tools/surface_fixed.R`): 70 reference cases, projected and longitude/latitude, among them geodiv's example rasters, NA cells, non-square cells and ties | identical bits |
 | Terrain indices: slope, aspect, tpi, tri, vrm, srr, dissection, curvature, spherical standard deviation, hsp, trasp, hli | spatialEco 2.0-5 and terra 1.9-50 (R 4.4.2), and where spatialEco errs spatialEco with its errors corrected (`tools/surface_fixed.R`): 3 DEMs (square and rectangular cells, missing cells, longitude/latitude) | identical bits; focal means (tpi, hsp, srr, vrm, spherical standard deviation, Bolstad's curvature) within 1e-12 of summing each window (compensated prefix sums), 1e-11 of terra's running sums; on longitude/latitude slope and aspect within 1e-12 |
 | Spatial prioritization: the ranking (8 rules, weights and weight groups, output groups, thresholds, zero modes, value extraction, costs, hierarchic masks, analysis areas, smoothing, 8 and 16 bits), condition, retention, pre-processing maps, transformed layers, connectivity transforms, post-processing, impact assessment | Zonation 5 v2.4 (`z5.exe`, `z5_16bit.exe`, on one thread): 64 reference projects, and the timing cases below | identical rank maps and iterations; curve, statistics, post-processing and impact files digit for digit |
+| Optimized prioritization: every objective, target, penalty, constraint, decision and portfolio of prioritizr; raster, table and polygon planning units | prioritizr 8.0.6 (R 4.4.2; its errors corrected: phylogenetic tip order, portfolio cuts): `compile()` of 55 reference problems; the optimum with Gurobi | identical models, row by row and bit for bit; the same optima |
+| Evaluation: summaries, representation, target coverage, Ferrier, rarity-weighted richness, replacement and rank importance; calibration | prioritizr 8.0.6 and its calibration vignette | identical bits (R's `pnorm` ported) |
+| Multi-action planning | prioriactions 0.5.0 (its errors corrected): `getModelInfo` of 6 reference problems, costs, benefits, actions | identical models and figures; the same optima as Gurobi; dependencies and portfolios tested against exhaustive enumeration |
+| Polygon planning units | exactextractr 0.10.0 (`exact_extract(fun = "sum")`) | identical cell fractions and sums |
+| Marxan | Marxan 4.0.6 (its errors corrected), the same seeds | identical runs: solutions, scores, summaries |
 | Species distributions: occurrence cleaning (all 13 tests, records on circle vertices, the antimeridian and poles), thinning, one record per cell | CoordinateCleaner 3.0.1 (its errors corrected: `tools/cc_fixed.R`), spThin 0.2.0, terra 1.9-50: 14 reference cases | identical flags and kept records; the circles' vertices identical (GeographicLib 2.7 and 1.52 with mingw's x87 maths) |
 | Species distributions: predictor selection, background points, spatial blocks and clusters, ENMeval partitions | usdm 2.1-7, dismo 1.3-16, blockCV 3.2-0 (its own k-means: R's `kmeans`, 48 cases), ENMeval 2.0.5.2: 53 reference cases with R's generator | identical bits, random steps included |
 | Species distributions: evaluation, Boyce index, omission rates, MESS, MOP | predicts 0.1-19, ecospat 4.1.3 (its errors corrected: `tools/ecospat_fixed.R`), ENMeval, mop 0.1.4: 16 reference cases | identical bits; the p-value of the correlation to 1e-9 (R's `pt`) |
@@ -495,7 +528,10 @@ The live runs look for the originals in these environment variables:
 
 `tools/make_reference*.py` regenerate the stored references from the
 originals, and `python tools/benchmark.py --exe <mspa executable>` repeats
-the MSPA timings. `tools/make_reference_prioritize.py` and
+the MSPA timings. `tools/make_reference_optimize.py` and `tools/benchmark_optimize.py` use R
+with prioritizr, prioriactions and gurobi (`LANDSCHAFT_RSCRIPT`,
+`LANDSCHAFT_R_LIBS`); Marxan's references come from its executable in WSL.
+`tools/make_reference_prioritize.py` and
 `tools/benchmark_prioritize.py` look for Zonation 5's `z5.exe` and
 `z5_16bit.exe` in `LANDSCHAFT_Z5_DIR`.
 `tools/make_reference_sdm.py` and `tools/benchmark_sdm.py` use R with the

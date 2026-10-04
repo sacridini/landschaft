@@ -150,7 +150,7 @@ def eval_n_summary(p, solution) -> pd.DataFrame:
     >>> sol = p.solve()
     >>> P.eval_n_summary(p, sol)
        summary      n
-    0  overall  169.0
+    0  overall  534.0
     """
     return pd.DataFrame({"summary": ["overall"], "n": [_r_sum(_values(p, solution))]})
 
@@ -190,7 +190,7 @@ def eval_boundary_summary(p, solution, edge_factor: float = 0.5, data=None) -> p
     >>> sol = p.solve()
     >>> P.eval_boundary_summary(p, sol)
        summary  boundary
-    0  overall  300500.0
+    0  overall  382500.0
     """
     from .. import _core
     from ._milp_matrices import boundary_matrix
@@ -259,7 +259,7 @@ def eval_connectivity_summary(p, solution, data) -> pd.DataFrame:
     >>> sol = p.solve()
     >>> cm = P.connectivity_matrix(cost, features[0])
     >>> round(P.eval_connectivity_summary(p, sol, cm)["connectivity"].item(), 2)
-    100117.0
+    1276348.0
     """
     return pd.DataFrame({"summary": ["overall"], "connectivity": [_connectivity(p, solution, data, False)]})
 
@@ -279,7 +279,7 @@ def eval_asym_connectivity_summary(p, solution, data) -> pd.DataFrame:
     >>> cm = P.connectivity_matrix(cost, features[0])
     >>> asym = sp.triu(cm).tocsr()
     >>> round(P.eval_asym_connectivity_summary(p, sol, asym)["asym_connectivity"].item(), 2)
-    50058.5
+    638174.0
     """
     return pd.DataFrame({"summary": ["overall"], "asym_connectivity": [_connectivity(p, solution, data, True)]})
 
@@ -311,12 +311,14 @@ def eval_feature_representation_summary(p, solution) -> pd.DataFrame:
     >>> rep = P.eval_feature_representation_summary(p, sol)
     >>> rep[["feature", "relative_held"]].round(3)
                    feature  relative_held
-    0          forest_bird          0.200
-    1        wetland_plant          0.201
-    2  grassland_butterfly          0.201
-    3         large_mammal          0.200
-    4            amphibian          0.202
-    5        endemic_snail          0.217
+    0               jaguar          0.200
+    1        lowland_tapir          0.201
+    2          harpy_eagle          0.299
+    3           maned_wolf          0.205
+    4  golden_lion_tamarin          0.204
+    5    neotropical_otter          0.201
+    6     araucaria_forest          0.428
+    7             mangrove          0.210
     """
     u = p.units
     held = _held(p, _values(p, solution))
@@ -400,7 +402,7 @@ def eval_extinction_risk(p, solution, z=0.25) -> pd.DataFrame:
     >>> sol = p.solve()
     >>> risk = P.eval_extinction_risk(p, sol)
     >>> round(float(risk["extinction_risk"].iloc[-1]), 3)
-    1.97
+    2.423
     """
     rep = eval_feature_representation_summary(p, solution)
     z = np.broadcast_to(np.asarray(z, dtype=np.float64), (len(rep),))
@@ -438,7 +440,7 @@ def eval_ferrier_importance(p, solution):
     >>> sol = p.solve()
     >>> fi = P.eval_ferrier_importance(p, sol)
     >>> [str(b) for b in fi.band.values][-2:]
-    ['endemic_snail', 'total']
+    ['mangrove', 'total']
     >>> float(fi.sel(band="total").max()) > 0
     True
     """
@@ -624,11 +626,11 @@ def eval_rank_importance(p, solution, n: int | None = None, budgets=None, rescal
     >>> sol = p.solve()
     >>> ranks, steps = P.eval_rank_importance(p, sol, n=4)
     >>> steps[["budget", "status"]].round(1)
-       budget   status
-    0  1182.8  optimal
-    1  2365.6  optimal
-    2  3548.4  optimal
-    3  4731.2  optimal
+        budget   status
+    0   5898.5  optimal
+    1  11797.0  optimal
+    2  17695.4  optimal
+    3  23593.9  optimal
     """
     from ._milp import OptimizationProblem
     from ._milp_compile import compile_problem
@@ -723,8 +725,8 @@ def eval_landscape_metrics(solution, level: str | None = "class", metric=None, *
     >>> sol = p.solve()
     >>> P.eval_landscape_metrics(sol, metric=["np", "ca"])[["metric", "value"]]
       metric    value
-    0     ca  16900.0
-    1     np     29.0
+    0     ca  53400.0
+    1     np     13.0
     """
     from .. import lsm
 

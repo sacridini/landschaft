@@ -71,11 +71,10 @@ def boundary_matrix(x) -> sp.csc_matrix:
     >>> import landschaft as ls
     >>> P = ls.prioritize
     >>> cost = ls.load_raster(P.example_data("cost"))
-    >>> features = ls.load_raster(P.example_data("features"))
     >>> bm = P.boundary_matrix(cost)
     >>> bm.shape
-    (2400, 2400)
-    >>> float(bm[100, 100])
+    (5400, 5400)
+    >>> float(bm[1000, 1000])
     4000.0
     """
     if isinstance(x, xr.DataArray):
@@ -115,7 +114,6 @@ def adjacency_matrix(x, directions: int = 4) -> sp.csc_matrix:
     >>> import landschaft as ls
     >>> P = ls.prioritize
     >>> cost = ls.load_raster(P.example_data("cost"))
-    >>> features = ls.load_raster(P.example_data("features"))
     >>> adj = P.adjacency_matrix(cost)
     >>> int(adj.sum(axis=1).max())
     4
@@ -163,7 +161,7 @@ def connectivity_matrix(x, y) -> sp.csc_matrix:
     >>> features = ls.load_raster(P.example_data("features"))
     >>> cm = P.connectivity_matrix(cost, features[0])
     >>> cm.shape
-    (2400, 2400)
+    (5400, 5400)
     """
     bm = boundary_matrix(x)
     n = bm.shape[0]
@@ -214,11 +212,10 @@ def proximity_matrix(x, distance: float) -> sp.csc_matrix:
     >>> import landschaft as ls
     >>> P = ls.prioritize
     >>> cost = ls.load_raster(P.example_data("cost"))
-    >>> features = ls.load_raster(P.example_data("features"))
     >>> pm = P.proximity_matrix(cost, 1500)
     >>> pm.shape
-    (2400, 2400)
-    >>> int(pm.getrow(500).nnz)
+    (5400, 5400)
+    >>> int(pm.getrow(2000).nnz)
     8
     """
     import shapely
@@ -246,10 +243,9 @@ def unit_points(x) -> np.ndarray:
     >>> import landschaft as ls
     >>> P = ls.prioritize
     >>> cost = ls.load_raster(P.example_data("cost"))
-    >>> features = ls.load_raster(P.example_data("features"))
     >>> pts = P.unit_points(cost)
     >>> pts.shape
-    (2400, 2)
+    (5400, 2)
     """
     if isinstance(x, xr.DataArray):
         from ..io import _transform
@@ -278,12 +274,11 @@ def decay_connectivity(distances, median: float, min_probability: float = 0.001)
     >>> import landschaft as ls
     >>> P = ls.prioritize
     >>> cost = ls.load_raster(P.example_data("cost"))
-    >>> features = ls.load_raster(P.example_data("features"))
     >>> from scipy.spatial.distance import cdist
     >>> pts = P.unit_points(cost)
     >>> dc = P.decay_connectivity(cdist(pts, pts), median=3000)
     >>> dc.shape
-    (2400, 2400)
+    (5400, 5400)
     >>> round(float(dc[0, 1]), 3)
     0.794
     """

@@ -109,9 +109,10 @@ any thread further.
 
     ---
 
-    Systematic conservation planning: complementarity and irreplaceability,
-    how Zonation ranks a landscape, performance curves, costs, reserves and
-    connectivity.
+    Systematic conservation planning in ten chapters: complementarity,
+    targets and costs, Zonation rankings, optimized plans and solvers,
+    spatial design, trade-offs, evaluation, management actions and the
+    planning process.
 
 -   **13 · [Species distributions](sdm.md)**
 

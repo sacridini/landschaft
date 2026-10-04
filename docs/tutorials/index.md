@@ -108,6 +108,13 @@ and follow along.
     Rank a landscape for many species with Zonation: performance curves,
     weights, costs, existing reserves and connectivity.
 
+-   :material-map-check-outline:{ .lg .middle } **[Optimized conservation plans](conservation-plans.md)**
+
+    ---
+
+    The cheapest plan that meets every target: reserves, compactness,
+    budgets, importance, actions against threats, and a report.
+
 -   :material-map-marker-radius-outline:{ .lg .middle } **[Species distributions](species-distributions.md)**
 
     ---

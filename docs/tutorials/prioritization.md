@@ -120,7 +120,7 @@ the forest species, but leave the farmland bird with 4 %. Zonation's order is
 **complementary**: once a species is well covered, its cells lose value, and
 the cells of species still poorly covered come first. The rule decides how
 the losses of the features combine (see the
-[course](../learn/prioritization.md#how-zonation-ranks)):
+[course](../learn/prioritization/ranking.md#how-zonation-ranks)):
 
 ```python
 for rule in ("CAZMAX", "CAZ1", "CAZ2", "ABF"):

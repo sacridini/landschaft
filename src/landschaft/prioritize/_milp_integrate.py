@@ -320,7 +320,7 @@ def coarsen(cost: xr.DataArray, features, factor: int):
     >>> features = ls.load_raster(P.example_data("features"))
     >>> c, f = P.coarsen(cost, features, 4)
     >>> c.shape, f.shape
-    ((10, 15), (6, 10, 15))
+    ((15, 23), (8, 15, 23))
     """
     from ._milp import _layers
 
@@ -350,7 +350,7 @@ def refine(selection, like: xr.DataArray) -> xr.DataArray:
     >>> coarse = P.problem(c, f).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions().solve()
     >>> fine = P.refine(coarse, cost)
     >>> fine.shape
-    (40, 60)
+    (60, 90)
     """
     from ._milp_solve import Solution
 

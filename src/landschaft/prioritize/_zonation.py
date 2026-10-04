@@ -645,13 +645,11 @@ def zonation_features(features, *, names=None, condition=None, renormalize=False
     --------
     >>> import landschaft as ls
     >>> P = ls.prioritize
-    >>> cost = ls.load_raster(P.example_data("cost"))
     >>> features = ls.load_raster(P.example_data("features"))
-    >>> protected = ls.load_raster(P.example_data("protected"))
-    >>> condition = 1 - 0.5 * protected.fillna(0)
-    >>> z = P.zonation_features(features, condition=[condition] * 6)
+    >>> condition = ls.load_raster(P.example_data("condition"))
+    >>> z = P.zonation_features(features, condition=[condition] * 8)
     >>> z.shape
-    (6, 40, 60)
+    (8, 60, 90)
     """
     if bits not in (8, 16):
         raise ValueError("bits must be 8 or 16")

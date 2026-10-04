@@ -98,12 +98,12 @@ def actions_raster_data(monitoring_cost: xr.DataArray, features, threats, action
     >>> threats = ls.load_raster(P.example_data("threats"))
     >>> d = P.actions_raster_data(cost, features, threats, action_cost=[20, 5], target_recovery=0.2)
     >>> d.n_units, d.n_actions
-    (2291, 1579)
+    (4825, 2838)
     >>> sol = d.problem("minimizeCosts").add_highs_solver(gap=0.01).solve()
     >>> sol.status
     'optimal'
     >>> [str(b) for b in sol.maps().band.values]
-    ['monitoring', 'fire', 'grazing']
+    ['monitoring', 'deforestation', 'fire']
     """
     if monitoring_cost.ndim == 3 and monitoring_cost.sizes.get("band", 1) == 1:
         monitoring_cost = monitoring_cost.squeeze("band", drop=True)

@@ -9,7 +9,6 @@ import warnings
 
 import numpy as np
 import optimize_cases as oc
-import pandas as pd
 import pytest
 from optimize_reference import result
 
@@ -131,3 +130,16 @@ def test_calibrate_weights():
     assert t["topsis"].sum() == 1 and "f4_lost" in t
     with pytest.raises(ValueError, match="no values"):
         P.calibrate(make, [], lost)
+
+
+def test_pareto_front_budgets_start_above_the_locked_in_cost():
+    p = oc._raster().add_relative_targets(0.3).add_binary_decisions().add_highs_solver(gap=0)
+    locked = np.zeros(p.units.n, dtype=bool)
+    locked[np.argsort(p.units.cost)[-5:]] = True  # the dearest units: more than a tenth of the plan's cost
+    q = p.add_locked_in_constraints(locked)
+    fixed = float(p.units.cost[locked].sum())
+    top = q.add_min_set_objective().solve().cost
+    front = P.pareto_front(q, n=4)
+    np.testing.assert_allclose(front.table["value"], fixed + (top - fixed) * np.arange(1, 5) / 4)
+    assert (front.table["cost"] >= fixed - 1e-9).all()
+    assert front.table["shortfall"].iloc[-1] == pytest.approx(0, abs=1e-9)

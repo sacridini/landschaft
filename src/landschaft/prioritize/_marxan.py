@@ -114,7 +114,7 @@ def marxan(pu: pd.DataFrame, spec: pd.DataFrame, puvspr: pd.DataFrame, bound: pd
     >>> import numpy as np, pandas as pd
     >>> rij = pu.rij.tocoo()
     >>> res = P.marxan(pd.DataFrame({"id": np.arange(1, pu.n + 1), "cost": pu.cost, "status": 0}),
-    ...                pd.DataFrame({"id": np.arange(1, 7), "prop": 0.2, "spf": 10.0}),
+    ...                pd.DataFrame({"id": np.arange(1, 9), "prop": 0.2, "spf": 10.0}),
     ...                pd.DataFrame({"species": rij.row + 1, "pu": rij.col + 1, "amount": rij.data}),
     ...                num_reps=4, num_iters=20000, seed=1)
     >>> len(res.summary)
