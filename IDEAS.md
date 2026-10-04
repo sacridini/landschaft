@@ -1623,6 +1623,20 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   Relaxação fraca (big-M = K): 166 unidades a gap 10% em 20 s; formulações mais fortes ficam na fase 4.
 * **Fase 3 completa** (2026-10-04).
 
+### Andamento da fase 4
+* **Parte 1**: portfólios em qualquer solver (`_milp_portfolio.py`): `add_cuts_portfolio`, `add_top_portfolio`
+  (as k melhores soluções distintas, uma após a outra, cada uma proibindo as anteriores por um corte
+  "no-good" nas unidades), `add_gap_portfolio` (dentro de `pool_gap` do ótimo: os cortes e uma linha no
+  objetivo) e `add_shuffle_portfolio` (colunas em ordens aleatórias com semente). `Portfolio`: soluções,
+  seleção empilhada, frequência de seleção por unidade, resumo. Mesma sequência de objetivos que o pool do
+  Gurobi (top, gap) e que o portfólio de cortes corrigido. O `extra` (soluções que o Gurobi acha no caminho)
+  fica para quando as soluções guardadas do HiGHS forem expostas.
+  * **Bug do prioritizr (8.0.6 e 9.0)**: o corte do `rcpp_forbid_solution` tem coeficientes 2 s em vez de
+    2 s - 1 (o comentário diz "convert 1s to 1 and 0s to -1", o código faz `-= 0`, desde 2019): proíbe manter
+    metade da solução anterior, não a solução. Confirmado no R: a 2ª solução repete 2 das 6 unidades da 1ª e a
+    3ª já é inviável. Implementado só o corte certo; referência: o mesmo laço no R com
+    `add_linear_constraints(sum(s) - 1, "<=", 2 s - 1)`.
+
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
   prioritizr e o prioriactions, e o Marxan entra depois como referência do motor `anneal` (verificar a

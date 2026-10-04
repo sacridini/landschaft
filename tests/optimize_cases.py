@@ -29,7 +29,7 @@ from itertools import pairwise
 
 import numpy as np
 
-GROUPS: list[str] = ["core", "objectives", "spatial", "matrices", "actions", "exact"]
+GROUPS: list[str] = ["core", "objectives", "spatial", "matrices", "portfolio", "actions", "exact"]
 
 NY, NX = 12, 15
 RES = 100.0
@@ -608,6 +608,30 @@ CASES: dict[str, Case] = {
              connectivity_raster = as.matrix(connectivity_matrix(pu_polygons_partial, penalty_raster)),
              proximity = as.matrix(proximity_matrix(pu_polygons_partial, 120)),
              shapes_boundary = as.matrix(boundary_matrix(shapes)), shapes_adjacency = as.matrix(adjacency_matrix(shapes)))"""),
+    # --- portfolio: the cuts portfolio with its no-good cut fixed (prioritizr's uses 2 s, not 2 s - 1), top, gap
+    "portfolio_cuts_fixed": Case("portfolio", ("pu_table",), """
+        p0 <- problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |> add_min_set_objective() |>
+          add_relative_targets(0.3) |> add_binary_decisions()
+        p <- p0; objs <- c()
+        for (k in 1:4) {
+          s <- solve(add_gurobi_solver(p, gap = 0, threads = 1, verbose = FALSE))
+          v <- s$solution_1
+          objs <- c(objs, unname(attr(s, "objective")))
+          p <- add_linear_constraints(p, sum(v) - 1, "<=", 2 * v - 1)
+        }
+        list(objective = objs)""", notes="the correct cut, by add_linear_constraints"),
+    "portfolio_top": Case("portfolio", ("pu_table",), """
+        p <- problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |> add_min_set_objective() |>
+          add_relative_targets(0.3) |> add_binary_decisions() |> add_top_portfolio(3) |>
+          add_gurobi_solver(gap = 0, threads = 1, verbose = FALSE)
+        s <- solve(p)
+        list(objective = unname(attr(s, "objective")))"""),
+    "portfolio_gap": Case("portfolio", ("pu_table",), """
+        p <- problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |> add_min_set_objective() |>
+          add_relative_targets(0.3) |> add_binary_decisions() |> add_gap_portfolio(5, 0.02) |>
+          add_gurobi_solver(gap = 0, threads = 1, verbose = FALSE)
+        s <- solve(p)
+        list(objective = unname(attr(s, "objective")))"""),
     # --- exact: exactextractr's coverage fractions and sums (the amounts of polygon planning units)
     "exact_shapes": Case("exact", ("features", "shapes"), """
         cov <- exactextractr::coverage_fraction(features[[1]], shapes)

@@ -676,3 +676,39 @@ def test_decay_connectivity_from_cost_distances():
     sol = ls.prioritize.problem(g, optimize_cases.features(), cost_column="cost").add_min_set_objective() \
         .add_relative_targets(0.3).add_connectivity_penalties(10.0, c).add_highs_solver(gap=0.01, time_limit=30).solve()
     assert sol.coverage["met"].all()
+
+
+# ----------------------------------------------------------------------------- portfolios
+
+def _table_minset():
+    return ls.prioritize.problem(optimize_cases.pu_table(), optimize_cases.FEATURES, cost_column="cost") \
+        .add_min_set_objective().add_relative_targets(0.3).add_highs_solver(gap=0)
+
+
+@pytest.mark.parametrize(("case", "portfolio"), [
+    ("portfolio_cuts_fixed", lambda p: p.add_cuts_portfolio(4)),
+    ("portfolio_top", lambda p: p.add_top_portfolio(3)),
+    ("portfolio_gap", lambda p: p.add_gap_portfolio(5, 0.02))])
+def test_portfolios_are_prioritizr(case, portfolio):
+    """The k best distinct solutions: as prioritizr with its no-good cut fixed (cuts), and as Gurobi's
+    solution pool (top, gap)."""
+    ref = result("portfolio", case)["objective"]
+    pf = portfolio(_table_minset()).solve()
+    np.testing.assert_allclose([s.objective for s in pf], ref, rtol=1e-9)
+    v = np.stack([s.values for s in pf])
+    assert len({tuple(r) for r in v}) == len(pf)  # distinct
+    assert list(pf.summary["solution"]) == [f"solution_{k + 1}" for k in range(len(pf))]
+
+
+def test_portfolio_outputs():
+    pf = optimize_cases.CASES["minset_raster_relative"].py().add_highs_solver(gap=0).add_cuts_portfolio(3).solve()
+    assert pf.selection.sizes["band"] == 3 and pf.frequency.shape == pf[0].selection.shape
+    f = pf.frequency.values
+    ok = np.isfinite(f)
+    assert ((f[ok] >= 0) & (f[ok] <= 1)).all() and np.array_equal(ok, np.isfinite(pf[0].selection.values))
+    sh = _table_minset().add_shuffle_portfolio(3, seed=2).solve()
+    assert all(s.objective == pytest.approx(sh[0].objective, rel=1e-9) for s in sh)
+    with pytest.raises(ValueError, match="binary"):
+        _table_minset().add_proportion_decisions().add_cuts_portfolio(2).solve()
+    with pytest.raises(ValueError, match="whole number"):
+        _table_minset().add_cuts_portfolio(0)

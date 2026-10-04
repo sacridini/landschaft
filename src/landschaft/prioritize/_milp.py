@@ -382,6 +382,7 @@ class Problem:
     weights: object = None
     subregional: tuple | None = None
     spatial: tuple = ()  # ("penalty" | "constraint", kind, ...) in the order added
+    portfolio: tuple | None = None  # (kind, options)
 
     def __repr__(self) -> str:
         u = self.units
@@ -656,6 +657,37 @@ class Problem:
         """Any share of every planning unit up to ``upper_limit`` can be selected."""
         return self._with(decisions=("semicontinuous", float(upper_limit)))
 
+    # --- portfolios (several solutions)
+    def add_cuts_portfolio(self, number_solutions: int = 10) -> Problem:
+        """The best ``number_solutions`` distinct solutions, one solve after another, each forbidding
+        the earlier ones (binary decisions)."""
+        from ._milp_portfolio import check_portfolio
+
+        return self._with(portfolio=check_portfolio("cuts", number_solutions))
+
+    def add_top_portfolio(self, number_solutions: int = 10) -> Problem:
+        """As :meth:`add_cuts_portfolio`, every solve to optimality (gap 0)."""
+        from ._milp_portfolio import check_portfolio
+
+        return self._with(portfolio=check_portfolio("top", number_solutions))
+
+    def add_gap_portfolio(self, number_solutions: int = 10, pool_gap: float = 0.1) -> Problem:
+        """Up to ``number_solutions`` distinct solutions whose objective is within ``pool_gap`` (relative)
+        of the optimum's."""
+        from ._milp_portfolio import check_portfolio
+
+        return self._with(portfolio=check_portfolio("gap", number_solutions, pool_gap=float(pool_gap)))
+
+    def add_shuffle_portfolio(self, number_solutions: int = 10, remove_duplicates: bool = True,
+                              seed: int | None = None) -> Problem:
+        """``number_solutions`` solves of the model with its planning units (and other columns) in random
+        orders: different solutions of equal quality when there are ties (``remove_duplicates``: keep
+        distinct ones)."""
+        from ._milp_portfolio import check_portfolio
+
+        return self._with(portfolio=check_portfolio("shuffle", number_solutions,
+                                                    remove_duplicates=bool(remove_duplicates), seed=seed))
+
     # --- solvers
     def add_highs_solver(self, gap: float = 0.1, time_limit: float | None = None, n_threads: int | None = None,
                          presolve: str = "choose", verbose: bool = False) -> Problem:
@@ -696,6 +728,12 @@ class Problem:
         from ._milp_solve import make_solution, solve_model
 
         m, targets = compile_problem(self)
+        if self.portfolio is not None:
+            if start is not None:
+                raise ValueError("a start solution and a portfolio cannot be combined")
+            from ._milp_portfolio import solve_portfolio
+
+            return solve_portfolio(self, m, targets)
         if start is not None:
             start = self._start(start, m)
         r = solve_model(m, self.solver[0], self.solver[1], start, n_units=self.units.n)
