@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-10-04
+
 ### Added
 - `ls.prioritize.coarsen(cost, features, factor)` and `refine(selection, like)`: solve a continental
   problem on blocks of cells and bring the selection back to the fine grid.

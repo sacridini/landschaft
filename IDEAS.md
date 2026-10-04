@@ -1900,6 +1900,8 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   * Ficam abertos (pesquisa, não bloqueiam): limite fraco do max_features (cortes), filogenéticos em 10⁶ (LP que
     não converge em 30 s), multi-action com fronteira em gap 0, núcleo simétrico de 10⁴ no multi-action,
     contiguidade/corredores (acima), fluxos dinâmicos e reparo em paralelo no motor de cortes.
+  * Windows: suíte inteira 3408 passam; Linux (WSL): 375 passam, 0 falham (o `coarsen` agora sem o
+    `coarsen` do xarray, cujo `sum` perdeu o `skipna` na 2026.9). Versão **1.26.0**.
 
 ### Próximos passos (retomar daqui)
 1. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
