@@ -1754,6 +1754,13 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     unidades em vez da quantidade da feição nelas (o modelo usa a quantidade); aqui a quantidade (iguais
     quando as quantidades são 1, como nos casos de referência); (3) a checagem de orçamento das travas do
     `maximizeBenefits` indexa as unidades pelo **id** e não pela posição.
+* **Parte 2 (início)**: o `solve()` resolve um modelo **equivalente** ao do prioriactions (o `compile()` segue bit a
+  bit): ativação desagregada (x_ik <= w_i por ação em vez de sum x_ik <= |K_i| w_i: mesmas soluções inteiras,
+  relaxação muito mais apertada) e, com curva linear, as colunas de benefício b eliminadas quando cada b é
+  igual ao lado direito da sua linha no ótimo (coeficientes >= 0 que somam no máximo 1): substituídas nas metas
+  (ou no objetivo). Benchmark da fase 0 (10 feições, 3 ameaças, gap 1%): 10⁴ unidades no HiGHS de 28,8 s para
+  **1,3 s** (Gurobi 0,9 s); 10⁵ **59 s** (na fase 0 o HiGHS não dava solução; Gurobi 8,4 s). Montagem do
+  modelo em 10⁵: 4,7 s em Python (laços por par; a portar para C++).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

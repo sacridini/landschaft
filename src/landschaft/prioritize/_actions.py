@@ -627,7 +627,9 @@ class ActionsModel:
     segments: int
 
 
-def compile_actions(p: ActionsProblem) -> ActionsModel:
+def compile_actions(p: ActionsProblem, disaggregate: bool = False) -> ActionsModel:
+    """The model; with disaggregate, the activation rows one per action (x_ik <= w_i: the same integer
+    solutions, a much tighter linear relaxation) instead of prioriactions's one per unit."""
     d = p.data
     n, na = len(d.pu), len(d.dist_threats)
     nf, nt = len(d.features), len(d.threats)
@@ -659,10 +661,15 @@ def compile_actions(p: ActionsProblem) -> ActionsModel:
     order = np.lexsort((t_threat, t_unit))
     counts = np.bincount(t_unit, minlength=n)
     starts = np.concatenate([[0], np.cumsum(counts)])
-    for i in range(n):
-        acts = order[starts[i]:starts[i + 1]]
-        b.entries([row0 + i] * (acts.size + 1), list(n + acts) + [i], [1.0] * acts.size + [-1.0 * acts.size])
-    b.rows(np.zeros(n), "<=")
+    if disaggregate:
+        b.entries(np.repeat(row0 + np.arange(na), 2), np.column_stack([n + np.arange(na), t_unit]).ravel(),
+                  np.tile([1.0, -1.0], na))
+        b.rows(np.zeros(na), "<=")
+    else:
+        for i in range(n):
+            acts = order[starts[i]:starts[i + 1]]
+            b.entries([row0 + i] * (acts.size + 1), list(n + acts) + [i], [1.0] * acts.size + [-1.0 * acts.size])
+        b.rows(np.zeros(n), "<=")
     # --- locks: units, then actions
     us = d.pu["status"].to_numpy()
     locked = np.flatnonzero(us != 0)
@@ -800,6 +807,58 @@ def compile_actions(p: ActionsProblem) -> ActionsModel:
                         segments=p.segments)
 
 
+def _eliminate_benefits(am: ActionsModel, pairs: _Pairs):
+    """The model without the benefit columns b (linear curve) when every b equals its row's right side at
+    an optimum: b_is = sum_k coef x_ik (recovery; the coefficients >= 0 and summing to at most 1, so the
+    bound b <= 1 never binds) or b_is = w_i (conservation). Substituted into the targets (or the
+    objective), and the benefit rows dropped: the same optimum, (units + actions) columns fewer. Returns
+    (model, expand) with expand(x) the full solution of the original columns, or None."""
+    m = am.model
+    n, na, npairs = am.n_units, am.n_actions, am.n_pairs
+    if pairs.contribution.size and (pairs.contribution < 0).any():
+        return None
+    sums = np.zeros(npairs)
+    k_of = np.repeat(np.arange(npairs), np.diff(pairs.start))
+    np.add.at(sums, k_of, pairs.contribution)
+    if (sums > 1.0 + 1e-12).any():
+        return None
+    # b = E [w; x]
+    rec = pairs.sum_alpha != 0.0
+    rows = np.concatenate([k_of, np.flatnonzero(~rec)])
+    cols = np.concatenate([n + pairs.action, pairs.unit[~rec]])
+    vals = np.concatenate([pairs.contribution, np.ones(int((~rec).sum()))])
+    E = sp.csr_matrix((vals, (rows, cols)), shape=(npairs, n + na))
+    b0 = n + na
+    keep_cols = np.concatenate([np.arange(b0), np.arange(b0 + npairs, m.ncol)])
+    A = m.A.tocsc()
+    Ab = A[:, b0:b0 + npairs]
+    Ao = A[:, keep_cols]
+    # the benefit rows are the first npairs rows; the others get Ab E on the unit and action columns
+    other = np.arange(npairs, m.nrow)
+    sub = (Ab[other] @ E).tocsc()
+    sub.resize((other.size, keep_cols.size))
+    A2 = (Ao[other] + sub).tocsr()
+    A2.sort_indices()
+    obj2 = m.obj[keep_cols].copy()
+    obj2[:n + na] += E.T @ m.obj[b0:b0 + npairs]
+    lb2, ub2 = m.lb[keep_cols], m.ub[keep_cols]
+    sense = tuple(np.asarray(m.sense, dtype=object)[other])
+    out = OptimizationProblem(A=A2, obj=obj2, lb=lb2, ub=ub2, rhs=m.rhs[other], sense=sense,
+                              vtype=tuple(np.asarray(m.vtype, dtype=object)[keep_cols]), modelsense=m.modelsense,
+                              row_ids=tuple(np.asarray(m.row_ids, dtype=object)[other]),
+                              col_ids=tuple(np.asarray(m.col_ids, dtype=object)[keep_cols]))
+
+    def expand(x: np.ndarray) -> np.ndarray:
+        full = np.zeros(m.ncol)
+        full[keep_cols] = x
+        wx = np.round(x[:n + na])
+        full[:n + na] = wx
+        full[b0:b0 + npairs] = np.minimum(1.0, E @ wx)
+        return full
+
+    return out, expand
+
+
 def _with_curves(am: ActionsModel) -> OptimizationProblem:
     """The model with y = x^curve as the piecewise-linear function Gurobi uses in prioriactions (FuncPieces
     1, FuncPieceLength round(1 / segments, 1), points on the curve), written as an incremental formulation:
@@ -901,9 +960,15 @@ class ActionsProblem:
     def solve(self) -> ActionsSolution:
         from ._milp_solve import solve_model
 
-        am = compile_actions(self)
-        m = _with_curves(am)
-        r = solve_model(m, self.solver[0], self.solver[1])
+        am = compile_actions(self, disaggregate=True)
+        reduced = _eliminate_benefits(am, _pairs(self.data)) if am.curve == 1 else None
+        if reduced is not None:
+            m, expand = reduced
+            r = solve_model(m, self.solver[0], self.solver[1])
+            if r["has_solution"]:
+                r["x"] = expand(np.asarray(r["x"], dtype=np.float64))
+        else:
+            r = solve_model(_with_curves(am), self.solver[0], self.solver[1])
         if not r["has_solution"]:
             raise RuntimeError(f"no solution ({r['solver']}: {r['status']})")
         return self._solution(np.asarray(r["x"], dtype=np.float64), r)
