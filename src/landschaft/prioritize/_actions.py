@@ -538,6 +538,7 @@ class ActionsProblem:
     solver: tuple = ("highs", {"gap": 0.0})
     # directional dependencies: (source unit positions, target unit positions, weights, hard)
     dependencies: tuple = ()
+    portfolio: tuple | None = None  # (kind, options)
 
     def compile(self) -> OptimizationProblem:
         """prioriactions's model (``getModelInfo()``'s matrices), bit for bit; with ``curve`` 2 or 3 the
@@ -574,6 +575,34 @@ class ActionsProblem:
         dep = (src.astype(np.int64), dst.astype(np.int64), w, bool(hard))
         return replace(self, dependencies=self.dependencies + (dep,))
 
+    # --- portfolios (several solutions; the same as the problem's, with cuts on the units and actions)
+    def add_cuts_portfolio(self, number_solutions: int = 10) -> ActionsProblem:
+        """The best ``number_solutions`` distinct solutions (differing in a unit monitored or an action
+        taken), one solve after another, each forbidding the earlier ones."""
+        from ._milp_portfolio import check_portfolio
+
+        return replace(self, portfolio=check_portfolio("cuts", number_solutions))
+
+    def add_top_portfolio(self, number_solutions: int = 10) -> ActionsProblem:
+        """As :meth:`add_cuts_portfolio`, every solve to optimality (gap 0)."""
+        from ._milp_portfolio import check_portfolio
+
+        return replace(self, portfolio=check_portfolio("top", number_solutions))
+
+    def add_gap_portfolio(self, number_solutions: int = 10, pool_gap: float = 0.1) -> ActionsProblem:
+        """Up to ``number_solutions`` distinct solutions within ``pool_gap`` (relative) of the optimum."""
+        from ._milp_portfolio import check_portfolio
+
+        return replace(self, portfolio=check_portfolio("gap", number_solutions, pool_gap=float(pool_gap)))
+
+    def add_shuffle_portfolio(self, number_solutions: int = 10, remove_duplicates: bool = True,
+                              seed: int | None = None) -> ActionsProblem:
+        """``number_solutions`` solves of the model with its units and actions in random orders."""
+        from ._milp_portfolio import check_portfolio
+
+        return replace(self, portfolio=check_portfolio("shuffle", number_solutions,
+                                                       remove_duplicates=bool(remove_duplicates), seed=seed))
+
     def add_highs_solver(self, gap: float = 0.0, time_limit: float | None = None, n_threads: int | None = None,
                          verbose: bool = False, engine: bool = True) -> ActionsProblem:
         """Solve on HiGHS to a relative ``gap`` (prioriactions's ``gap_limit``, default 0), behind
@@ -587,7 +616,7 @@ class ActionsProblem:
         return replace(self, solver=("gurobi", {"gap": gap, "time_limit": time_limit, "n_threads": n_threads,
                                                 "verbose": verbose}))
 
-    def solve(self, start=None) -> ActionsSolution:
+    def solve(self, start=None):
         """Solve the problem.
 
         On HiGHS (the default), the equivalent model (activation one row per action, the benefit
@@ -595,10 +624,17 @@ class ActionsProblem:
         the linear relaxation, by a closed form or minimum cuts, and repaired selections), then, while
         the gap is wider than asked, to HiGHS's MIP from its solution with the units and actions the
         bound proves fixed. ``start``: a solution to start from (an :class:`ActionsSolution` or the
-        units then the actions, 0/1)."""
+        units then the actions, 0/1). With a portfolio, an :class:`ActionsPortfolio` (solved on HiGHS's
+        MIP or Gurobi: the no-good cuts do not fit the engine)."""
         from .. import _core, _threads
         from ._milp_solve import solve_model
 
+        if self.portfolio is not None:
+            if start is not None:
+                raise ValueError("a start solution and a portfolio cannot be combined")
+            from ._actions_portfolio import solve_actions_portfolio
+
+            return solve_actions_portfolio(self)
         d = self.data
         n, na = len(d.pu), len(d.dist_threats)
         arrays = _arrays(d)

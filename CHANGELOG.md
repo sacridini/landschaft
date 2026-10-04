@@ -23,6 +23,10 @@ in a new major version.
   costs `strength x penalty`, or is not allowed with `hard=True`; on the closure engine as pair terms or
   requirements (10^5 units with a river-like flow at 1% gap in 1 s soft, 5.5 s hard; Gurobi 6 s and
   8 s). Unlike prioripy, the penalty is not counted in the budget of `maximizeBenefits`.
+- Multi-action portfolios: `ActionsProblem.add_cuts_portfolio`, `add_top_portfolio`,
+  `add_gap_portfolio` and `add_shuffle_portfolio` (no-good cuts on the units and the actions) give an
+  `ActionsPortfolio` with every solution, a summary and how often each unit is monitored and each action
+  taken (as rasters for raster problems).
 
 ### Changed
 - The multi-action model, its figures and the equivalent model for solving are built in C++:

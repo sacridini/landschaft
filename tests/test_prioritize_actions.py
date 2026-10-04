@@ -385,7 +385,7 @@ def _tiny(seed):
     return data, flow
 
 
-def _brute_force(data, flow, model, penalty, hard, budget=0.0):
+def _brute_force(data, flow, model, penalty, hard, budget=0.0, every=False):
     """The optimum by enumeration, from the definitions: a feature's recovery in a unit is its amount x
     the share of the unit's threats (all harm it, amount 1, default response) acted on; its conservation
     the amount in monitored units without threats; an action needs its unit monitored."""
@@ -401,6 +401,7 @@ def _brute_force(data, flow, model, penalty, hard, budget=0.0):
     w = flow["strength"].to_numpy() * penalty
     feats = data.features
     best = None
+    values = []
     for bits in itertools.product((0, 1), repeat=n + na):
         z = np.asarray(bits, dtype=float)
         units, acts = z[:n], z[n:]
@@ -427,7 +428,11 @@ def _brute_force(data, flow, model, penalty, hard, budget=0.0):
             if cost > budget + 1e-9:
                 continue
             value = -(rec.sum() + con.sum() - pen)
+        values.append(value)
         best = value if best is None else min(best, value)
+    if every:  # every feasible solution's objective, best first
+        values = np.sort(values)
+        return values if model == "minimizeCosts" else -values
     return best if model == "minimizeCosts" else -best
 
 
@@ -466,3 +471,44 @@ def test_dependencies_in_the_model():
     assert (base.A != soft.A[:base.nrow, :base.ncol]).nnz == 0  # prioriactions's model first, unchanged
     with pytest.raises(ValueError, match="do not exist"):
         p.add_directional_dependencies(pd.DataFrame({"source_pu": [99.0], "target_pu": [1.0]}))
+
+
+# ----------------------------------------------------------------------------- portfolios
+
+@pytest.mark.parametrize("model", ["minimizeCosts", "maximizeBenefits"])
+def test_top_portfolio_is_the_best_solutions(model):
+    """The top portfolio's objectives are the k best of every distinct (units, actions) selection."""
+    data, flow = _tiny(2)
+    p = data.problem(model, budget=8.0).add_directional_dependencies(flow, penalty=0.5)
+    want = _brute_force(p.data, flow, model, 0.5, False, p.budget, every=True)[:6]
+    port = p.add_top_portfolio(6).add_highs_solver(gap=0).solve()
+    assert isinstance(port, ls.prioritize.ActionsPortfolio) and len(port) == 6
+    np.testing.assert_allclose(port.summary["objective"].to_numpy(), want, atol=1e-6)
+    keys = {tuple(np.concatenate([s.units, s.actions])) for s in port}
+    assert len(keys) == 6
+
+
+def test_gap_and_shuffle_portfolios():
+    p = ENGINE_CASES["mincost"]()
+    best = p.add_highs_solver(gap=0).solve().objective
+    port = p.add_gap_portfolio(5, pool_gap=0.05).add_highs_solver(gap=0).solve()
+    obj = port.summary["objective"].to_numpy()
+    assert (obj <= best * 1.05 + 1e-6).all() and len({tuple(s.units) + tuple(s.actions) for s in port}) == len(port)
+    sh = p.add_shuffle_portfolio(4, seed=1).add_highs_solver(gap=0).solve()
+    assert np.allclose(sh.summary["objective"], best)
+    f = sh.frequency["monitoring"]["frequency"].to_numpy()
+    assert ((f >= 0) & (f <= 1)).all()
+    np.testing.assert_allclose(f, np.mean([s.units for s in sh], axis=0))
+    with pytest.raises(ValueError, match="cannot be combined"):
+        p.add_cuts_portfolio(2).solve(start=np.zeros(3))
+
+
+def test_portfolio_maps_and_save(tmp_path):
+    cost, feats, thr, acost = _rasters()
+    d = ls.prioritize.actions_raster_data(cost, feats, thr, 1.0, target_recovery=0.3)
+    port = d.problem("minimizeCosts").add_cuts_portfolio(3).add_highs_solver(gap=0).solve()
+    m = port.maps()
+    assert list(m["band"].values) == ["monitoring", "fire", "cattle"]
+    assert np.nanmax(m.values) <= 1 and np.nanmin(m.values) >= 0
+    ls.save(port, tmp_path / "port")
+    assert (tmp_path / "port" / "frequency_maps.tif").exists()

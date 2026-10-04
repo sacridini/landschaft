@@ -1807,9 +1807,14 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   benefício, suave e rígido, 3 sementes) no motor e no HiGHS só. 10⁵ unidades com fluxo em grade, gap 1%:
   suave 1 s, rígido 5,5 s (Gurobi 6 s e 8 s).
 
+* **Parte 7** (2026-10-04): portfólios no multi-action (`add_cuts/top/gap/shuffle_portfolio`, extensão nossa),
+  cortes no-good sobre unidades **e** ações no modelo equivalente; `ActionsPortfolio` (soluções, resumo,
+  frequência de monitoramento e de cada ação, `maps()` para problemas de raster). No MIP do HiGHS ou no
+  Gurobi, não no motor de fecho (os cortes têm coeficientes negativos, as linhas laterais do motor não).
+  Testado: o portfólio top dá os k melhores valores da enumeração exaustiva (min e max).
+
 ### Próximos passos (retomar daqui)
 1. **Fase 5, resto**:
-   * portfólios no multi-action (cortes no-good nas unidades e ações, como no `Problem`);
    * checagem no Linux (WSL) e registro de "Fase 5 completa".
 2. **Fase 6, avaliação**: resumo (custo, unidades, perímetro), cobertura de metas, replacement importance
    (re-solves em paralelo), Ferrier (2000), rank importance (Jung et al. 2021), ProxIRR (Baisero et al. 2021),
