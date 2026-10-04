@@ -24,6 +24,8 @@ class Regional:
         rate matrix / ``{(from, to): rate}`` as the allocation takes them,
         all with the same number of steps.
 
+    Notes
+    -----
     The allocations meet each region's demand on its cells: :class:`CLUE`
     and :class:`Ordered` allocate region by region (in the order of the
     ids, with the one generator), :class:`CARS` with a demand and an

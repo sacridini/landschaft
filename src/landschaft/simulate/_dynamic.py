@@ -60,6 +60,8 @@ class distance_to:  # used as a function: S.distance_to(3)
     unit : {"map", "cells"}
         Euclidean distance in the map's units (square cells) or in cells.
 
+    Notes
+    -----
     Calling it with a map gives the distance map (NaN where the map has no
     value). With no cell of the classes, every cell gets the length of the
     map's diagonal (Euclidean) or ``inf`` (cost).
@@ -124,6 +126,8 @@ class share_of:
     window
         Side of a square window of ones (odd), or the window's weights.
 
+    Notes
+    -----
     The mean of ``weights x presence`` over the window, the cells without a
     value left out (the centre included), as :class:`Neighbourhood`.
 

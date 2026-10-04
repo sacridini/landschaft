@@ -549,6 +549,9 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.Neighbourhood`](simulate.md#landschaft.simulate.Neighbourhood) | Neighbourhood thresholds (lulcc's ``NeighbRasterStack`` and ``nb.rules``) |
 | [`ls.CLUE`](simulate.md#landschaft.simulate.CLUE) | CLUE-S allocation (Verburg et al. 2002), as lulcc's ``CluesModel`` |
 | [`ls.Ordered`](simulate.md#landschaft.simulate.Ordered) | The ordered allocation of Fuchs et al. (2013) with stochastic choice, as lulcc's ``OrderedModel`` |
+| [`ls.distance_to`](simulate.md#landschaft.simulate.distance_to) | Distance from each cell to the nearest cell of some classes |
+| [`ls.share_of`](simulate.md#landschaft.simulate.share_of) | Share of the cells around each cell that hold some classes |
+| [`ls.Regional`](simulate.md#landschaft.simulate.Regional) | A demand per region (municipalities, biomes, basins...) |
 | [`ls.CLUMondo`](simulate.md#landschaft.simulate.CLUMondo) | CLUMondo's demand-driven allocation of land systems |
 | [`ls.ServiceDemand`](simulate.md#landschaft.simulate.ServiceDemand) | The demand for goods and services at each time step (CLUMondo's ``demand.in``) |
 | [`ls.Supply`](simulate.md#landschaft.simulate.Supply) | What one cell of each land system supplies of each good or service (CLUMondo's ``lusmatrix``) |
@@ -558,6 +561,9 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.Cap`](simulate.md#landschaft.simulate.Cap) | At most so many cells (or so much area) a year may make a role's transitions (or given pairs) |
 | [`ls.Succession`](simulate.md#landschaft.simulate.Succession) | Autonomous change after some years, whatever the demand (CLUMondo's code 1000 + years) |
 | [`ls.ExpanderPatcher`](simulate.md#landschaft.simulate.ExpanderPatcher) | Dinamica's Expander and Patcher allocation of transitions (``AllocateTransitions``) |
+| [`ls.CARS`](simulate.md#landschaft.simulate.CARS) | PLUS's CA based on multi-type random patch seeds (Liang et al. 2021) |
+| [`ls.MolusceWoE`](simulate.md#landschaft.simulate.MolusceWoE) | MOLUSCE's weights of evidence (``WoeManager``): one model per transition, persistence included |
+| [`ls.MolusceCA`](simulate.md#landschaft.simulate.MolusceCA) | MOLUSCE's simulator: each iteration makes the observed transitions where the model is most confident |
 | [`ls.PatchGrowing`](simulate.md#landschaft.simulate.PatchGrowing) | FUTURES' patch growing allocation (r.futures.simulation) |
 | [`ls.DevelopmentDemand`](simulate.md#landschaft.simulate.DevelopmentDemand) | Cells each subregion develops at each step (r.futures.simulation's ``demand`` file) |
 | [`ls.DevelopmentPotential`](simulate.md#landschaft.simulate.DevelopmentPotential) | The development potential's coefficients per subregion (r.futures.potential's table) |
@@ -565,4 +571,24 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.Flooding`](simulate.md#landschaft.simulate.Flooding) | FUTURES' flood submodel (Sanchez et al. 2023): floods, damage, response, abandonment, migration |
 | [`ls.patch_library`](simulate.md#landschaft.simulate.patch_library) | The sizes of the patches developed between two maps (r.futures.calib's patch library) |
 | [`ls.calibrate_patches`](simulate.md#landschaft.simulate.calibrate_patches) | Calibrate FUTURES' patch compactness and discount factor (r.futures.calib) |
+| [`ls.three_map_comparison`](simulate.md#landschaft.simulate.three_map_comparison) | Compare the reference maps at the start and the end with the simulated end at several resolutions |
+| [`ls.ThreeMapComparison`](simulate.md#landschaft.simulate.ThreeMapComparison) | Three maps compared at several resolutions (lulcc's ``ThreeMapComparison``) |
+| [`ls.compare_maps`](simulate.md#landschaft.simulate.compare_maps) | MOLUSCE's comparison of two maps (``DependenceCoef``): kappa, agreement and dependence |
+| [`ls.error_budget`](simulate.md#landschaft.simulate.error_budget) | MOLUSCE's error budget (Pontius 2002): agreement for levels of information, at coarser resolutions |
+| [`ls.futures_validation`](simulate.md#landschaft.simulate.futures_validation) | FUTURES' validation (``r.futures.validation``): disagreement, kappa, kappa simulation, change metrics |
+| [`ls.futures_validation_grid`](simulate.md#landschaft.simulate.futures_validation_grid) | FUTURES' validation per tile or per region (``r.futures.gridvalidation``) |
+| [`ls.fuzzy_similarity`](simulate.md#landschaft.simulate.fuzzy_similarity) | Fuzzy similarity of two categorical maps (Dinamica EGO's ``CalcReciprocalSimilarityMap``) |
+| [`ls.FuzzySimilarity`](simulate.md#landschaft.simulate.FuzzySimilarity) | The fuzzy similarity of two maps (`fuzzy_similarity`) |
+| [`ls.differences`](simulate.md#landschaft.simulate.differences) | The map of differences: each cell that changed between the maps, in its new class; NaN elsewhere |
+| [`ls.similarity_of_differences`](simulate.md#landschaft.simulate.similarity_of_differences) | Dinamica EGO's validation: fuzzy similarity of the observed and the simulated change, per window |
+| [`ls.validate`](simulate.md#landschaft.simulate.validate) | Compare a simulated map with the observed one in every way the land change tools do |
+| [`ls.Validation`](simulate.md#landschaft.simulate.Validation) | Every comparison of a simulated map with the observed one (`validate`) |
+| [`ls.calibrate`](simulate.md#landschaft.simulate.calibrate) | Search the settings of a model that best reproduce an observed map |
+| [`ls.Calibration`](simulate.md#landschaft.simulate.Calibration) | The result of `calibrate` |
+| [`ls.run`](simulate.md#landschaft.simulate.run) | Fit a land change model on two maps, check it on the observed period and project it |
+| [`ls.Projection`](simulate.md#landschaft.simulate.Projection) | The result of `run` |
+| [`ls.agreement`](simulate.md#landschaft.simulate.agreement) | How a simulated map matches the observed one, cell by cell and in quantity |
+| [`ls.presets`](simulate.md#landschaft.simulate.presets) | The classic land change models, assembled from ls.simulate's pieces |
+| [`ls.scenarios`](simulate.md#landschaft.simulate.scenarios) | Run a model under several scenarios, several times each, in parallel |
+| [`ls.Ensemble`](simulate.md#landschaft.simulate.Ensemble) | The simulations of `scenarios`: every scenario, replicate and year |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |

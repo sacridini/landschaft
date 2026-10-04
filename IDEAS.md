@@ -1932,6 +1932,15 @@ sim.supply; sim.shortfall; sim.trajectory()
    potencial, presets, `run`, cenários, validação, calibração), página de API já existente ligada ao `nav`,
    `tools/benchmark_simulate.py` (tempos contra lulcc, CLUMondo, r.futures e Dinamica nos casos de paridade e
    em mapas maiores) e a tabela em `docs/benchmarks.md`.
+   **Feita** (1.20.0): capítulo 14 do Learn (`learn/simulation.md`; "From question to tool" passa a 15, com
+   linhas de futuros na tabela de decisão), tutorial `tutorials/land-change-simulation.md` (Sibuyan de ponta a
+   ponta: mudança, demanda, potencial, quatro alocações comparadas, `run`/`redo`, `validate`, `calibrate`,
+   `scenarios`, variáveis dinâmicas), README e página inicial, `tools/benchmark_simulate.py` e as tabelas de
+   velocidade e exatidão do `ls.simulate` em `docs/benchmarks.md` (CLUE-S 36,4 s → 4,1 s; ordenado 2,9 s →
+   0,40 s; três mapas 7,2 s → 0,17 s; MOLUSCE 2,0 s → 53 ms; similaridade do Dinamica 0,67 s → 49 ms; CLUMondo
+   e FUTURES das fases 4 e 5). Todos os exemplos das páginas e das docstrings rodam (`tools/check_docs.py`),
+   `mkdocs build --strict` sem avisos (docstrings com parágrafos soltos depois de `Parameters` passaram para
+   `Notes`).
 
 ---
 

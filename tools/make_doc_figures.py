@@ -384,6 +384,9 @@ BENCHMARKS = [
     ("Thin 2 000 records, 10 repetitions", "spThin", 0.91, 0.0014),
     ("Autocorrelation range, 9 layers", "blockCV", 17.5, 0.73),
     ("MaxNet, 10 000 background points", "maxnet", 3.25, 0.30),
+    ("Land systems, 400×500, 8 years", "CLUMondo", 16.2, 1.7),
+    ("Three-map comparison, 6 resolutions", "lulcc", 7.21, 0.169),
+    ("Weights of evidence and CA, 180×240", "MOLUSCE", 1.99, 0.0533),
 ]
 
 

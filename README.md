@@ -39,6 +39,7 @@ in the test suite, and runs from a few to several hundred times faster.
 | **Biodiversity analysis** | species records in grid cells: richness, endemism, phylogenetic diversity and endemism, randomisations, CANAPE, clustering | Biodiverse |
 | **Spatial prioritization** | ranking of whole landscapes for many features (CAZ and ABF rules), weights, costs, hierarchic masks, connectivity transforms, performance curves, post-processing, impact assessment; maps larger than memory | Zonation 5 |
 | **Species distributions** | cleaning and thinning occurrence records, accessible area, collinearity filters, background points, spatial cross-validation folds, evaluation (AUC, TSS, Boyce index), Maxent (MaxNet), ensembles of scikit-learn models, projection and extrapolation (MESS, MOP, ExDet) | CoordinateCleaner, spThin, usdm, dismo, blockCV, ENMeval, ecospat, predicts, maxnet, mop |
+| **Land change simulation** | change analysis (intensity, components of difference, Markov chains), transition potential (weights of evidence, logistic regression, any scikit-learn model), allocation (CLUE-S, ordered, land systems, Expander/Patcher, random patch seeds, patch growing), dynamic variables, regional demands, validation at several resolutions, fuzzy similarity, calibration, scenarios with replicates | lulcc, OpenLand, diffeR, CLUMondo, FUTURES, MOLUSCE, Dinamica EGO, PLUS |
 | **Large data** | out-of-core tiles and row blocks, parallel batches of rasters | |
 
 ## Installation
@@ -122,6 +123,7 @@ floating-point solvers. Typical speed-ups on the benchmark cases:
 | Neutral landscape models | NLMR 1.4 (same seed) | identical bits | 2–6000× |
 | Spatial prioritization | Zonation 5 v2.4 | identical rank maps and output files | 4–11× |
 | Species distributions | CoordinateCleaner, spThin, usdm, dismo, blockCV, ENMeval, predicts, maxnet | identical bits, random steps included (same seed) | maxnet 14×, kmeans 8×, weighted sampling 70× |
+| Land change simulation | lulcc, OpenLand, diffeR, CLUMondo, r.futures, MOLUSCE; Dinamica EGO (measured) | identical bits (R's and NumPy's random numbers included); Dinamica to its 15 digits | 7–43× |
 
 Methods, machines, full tables and the known differences are on the
 [benchmarks and accuracy page](docs/benchmarks.md). To run the tests:

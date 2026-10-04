@@ -276,6 +276,8 @@ class Roles:
         ``{family: [layers from the least to the most intensive]}``: the
         intensity ladders (``{"cattle": ["extensive", "intensive"]}``).
 
+    Notes
+    -----
     A transition is an ``expansion`` when it loses a natural layer, a
     ``regeneration`` when it gains one (without losing any), an
     ``intensification`` when, keeping the natural layers, it moves up a
@@ -371,6 +373,8 @@ class Cap:
     cell_area
         Area of a cell for ``area`` (default: from the map's resolution).
 
+    Notes
+    -----
     When more cells would make them, those whose change scores highest over
     staying keep it; the others stay, and the demand iteration finds the
     supply elsewhere.

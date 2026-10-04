@@ -21,7 +21,7 @@ any thread further.
       [installed](../getting-started/installation.md).
     - **Answer the questions** at the end of each chapter before opening the
       answers.
-    - **Come back to [chapter 14](choosing.md)** when you start a project: it
+    - **Come back to [chapter 15](choosing.md)** when you start a project: it
       goes from questions to tools.
 
 ## Chapters
@@ -121,7 +121,15 @@ any thread further.
     the accessible area, the main algorithms, spatial cross-validation,
     thresholds and extrapolation.
 
--   **14 · [From question to tool](choosing.md)**
+-   **14 · [Simulating land change](simulation.md)**
+
+    ---
+
+    Land change models: demand, transition potential and allocation, the
+    main families, validation against persistence at several resolutions,
+    calibration by patterns, scenarios and replicates.
+
+-   **15 · [From question to tool](choosing.md)**
 
     ---
 

@@ -246,6 +246,8 @@ class CLUMondo:
         ``min_cells`` is dropped, seed included. Written from the manual
         (its source is not published).
 
+    Notes
+    -----
     The conversion resistance of each system is the model's
     ``Rules(elasticity=...)``; the conversion matrix uses CLUMondo's codes
     (see :class:`Rules`); ``Rules(history=n)`` draws the starting ages as

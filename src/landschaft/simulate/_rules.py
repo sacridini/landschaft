@@ -99,6 +99,8 @@ class Rules:
         CLUMondo: ``{(from, to): map}``, the conversion code of each cell for
         that pair (0 not allowed, 1 allowed, or an age code below).
 
+    Notes
+    -----
     With the :class:`CLUMondo` allocation the conversion matrix takes
     CLUMondo's codes instead: ``1`` allowed, ``0`` not; ``100 + t``: only
     once the cell has had its system for ``t`` years; ``-100 - t``: only

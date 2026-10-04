@@ -1,4 +1,4 @@
-<p class="ls-chapter">Chapter 14</p>
+<p class="ls-chapter">Chapter 15</p>
 
 # From question to tool
 
@@ -85,6 +85,10 @@ and a checklist of what to report.
 | how structure varies across a region | `ls.window_metrics`, `ls.zonal_metrics` | [5](metrics.md) |
 | which types of landscape exist | `ls.SpatialSignatureAnalysis` | [5](metrics.md) |
 | how metrics evolve over a time series | `ls.SpatioTemporalAnalysis` | [10](change.md) |
+| **Future landscapes** | | |
+| where land use is heading if the observed trend continues | `ls.simulate.run` (Markov demand, potential, allocation) | [14](simulation.md) |
+| how scenarios (demands, protected areas, policies) differ in space | `ls.simulate.scenarios`, `Ensemble.probability` | [14](simulation.md) |
+| whether a simulation reproduces the observed change | `ls.simulate.validate` (figure of merit, three maps, fuzzy similarity) | [14](simulation.md) |
 
 ## How the main approaches compare
 

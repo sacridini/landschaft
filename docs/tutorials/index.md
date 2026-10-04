@@ -116,4 +116,12 @@ and follow along.
     fit and cross-validate models on spatial folds, project and check
     extrapolation.
 
+-   :material-map-clock-outline:{ .lg .middle } **[Land change simulation](land-change-simulation.md)**
+
+    ---
+
+    Project land use from two maps: demand, transition potential and four
+    allocations, validation at several resolutions, calibration, scenarios
+    with replicates.
+
 </div>

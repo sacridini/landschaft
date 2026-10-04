@@ -277,6 +277,32 @@ sampling without replacement, which R does in time proportional to the cells
 times the draws, runs in closed form over runs of equal weights (1 million
 cells and 30 000 draws: 0.24 s against 16-20 s with R's algorithm).
 
+### Land change simulation
+
+Against the land change tools `ls.simulate` reproduces, on the cases of its
+reference tests. Measured with `tools/benchmark_simulate.py` (version 1.20):
+lulcc 1.0.4 in R 4.4.2 (with the corrections of `tools/lulcc_fixed.R`, so
+that both sides make the same allocation; only the timed call is measured),
+MOLUSCE 5.3.0's algorithms in Python, Dinamica EGO 8.13's console (the time
+of a script that only loads the maps is subtracted); the best of 3 runs, the
+default threads. CLUMondo and FUTURES were timed when they were written.
+
+| Task | Original | Landschaft | Since |
+|---|---|---|---|
+| CLUE-S allocation, Plum Island, 14 steps (lulcc `allocate`) | 36.4 s | 4.12 s | 1.8 |
+| Ordered allocation, Plum Island, 14 steps (lulcc `allocate`) | 2.9 s | 0.40 s | 1.8 |
+| Land systems, 400 × 500 cells, 8 years (CLUMondo) | 16.2 s | 1.7 s | 1.9 |
+| Urban growth, 600 × 800 cells, 5 steps (`r.futures.simulation`) | 0.35 s | 0.20 s | 1.10 |
+| Weights of evidence and 3 simulator iterations, 180 × 240 (MOLUSCE) | 1.99 s | 53 ms | 1.15 |
+| Three-map comparison, agreement budget and figure of merit, Plum Island, 6 resolutions (lulcc) | 7.21 s | 0.17 s | 1.17 |
+| Fuzzy similarity of the differences, windows 1-11, 480 × 640 (Dinamica EGO) | 0.67 s | 49 ms | 1.18 |
+
+CLUE-S draws a random number per cell and class at each of its thousands of
+passes, from R's generator, one after the other: Landschaft draws the same
+numbers, so the gain is in the rest of the pass. The three-map comparison
+runs lulcc's equations per block in one pass of C++ (R builds a raster per
+class and equation), and MOLUSCE loops over the pixels in Python.
+
 ### Zonal statistics and extraction
 
 Not a reproduction of another tool: the functions that read a raster in zones
@@ -378,6 +404,14 @@ raster read in strips), and only that is reprojected and encoded.
 | Species distributions: Mahalanobis distances (MOP, ExDet), autocorrelation range | mop, dsmextra 1.1.6 (its covariate index corrected), blockCV `cv_spatial_autocor` (automap, gstat 2.1-6) | 1e-9 (R inverts the covariance with LAPACK); variograms identical, fitted ranges to 1e-6 |
 | MaxNet | maxnet 0.1.4 with glmnet 4.1-10: 13 fits (Bradypus and synthetic, every feature class, regularisation multipliers, factors) | identical bits: coefficients, lambda, entropy and the four output types, on Windows and Linux |
 | Neutral landscape models: random, percolation, gradients, midpoint displacement, fractional Brownian motion, Gaussian fields, Poisson line and Voronoi mosaics, random, neighbourhood and rectangular clusters, curds, classification | NLMR 1.4.0 (R 4.4.2) with the same seeds; R's generator and the libstdc++ distributions of NLMR's C++ code against R and the Rtools compiler | identical bits |
+| Land change analysis: cross tables, intensity analysis, components of difference, multiple resolutions, Markov chains | lulcc 1.0.4, OpenLand 1.0.5, diffeR 0.0-8 (R 4.4.2; their errors corrected, `tools/differ_fixed.R`): 11 cases; Dinamica EGO 8 transition matrices: 6 cases | identical bits; Dinamica's matrices to 2e-11 (it writes 15 digits; its root of the matrix is less exact) |
+| Land change: weights of evidence (ranges, weights, correlations, probabilities) | Dinamica EGO 8.13 (its code is closed: inferred from its outputs): 9 cases, 84 range probes | ranges and counts identical, weights to the 15 digits it writes |
+| Land change: logistic regression, CLUE-S and ordered allocation, neighbourhoods, rules | R's `glm` and lulcc 1.0.4 (its errors corrected: `tools/lulcc_fixed.R`): 9 cases | identical bits, R's random numbers included |
+| Land change: land systems (CLUMondo) | CLUMondo (GitHub a5c0c1f, built Win32 with MSVC; its age error corrected: `tools/clumondo_fixed.patch`): 6 cases; the May 2017 executable for its later options | identical maps and iteration logs; 97-100 % of the cells for the 2017 options (no source) |
+| Land change: urban growth (FUTURES): simulation, flooding, demand, pressure, patch library and calibration | `r.futures` addons in GRASS 8.3.2 (their errors corrected: `tools/futures_fixed.patch`): 16 cases; the potential's mixed model against lme4 2.0.1 and MuMIn 1.48 | identical maps and tables; mixed-model coefficients to 2.6e-6 (an optimiser: lme4 stops at its tolerance) |
+| Land change: MOLUSCE's weights of evidence, simulator, multi-criteria evaluation, kappa and error budget | MOLUSCE 5.3.0 imported without QGIS (its confidence corrected: `tools/molusce_fixed.patch`): 6 cases | identical bits, NumPy's random numbers included |
+| Land change validation: three maps at several resolutions, agreement budget, figure of merit, `r.futures.validation` | lulcc 1.0.4 (raster 3.6-31): 2 cases; GRASS's addon: 3 cases | identical bits |
+| Land change validation: fuzzy similarity and similarity of differences | Dinamica EGO 8.13 (measured): 36 maps, windows 1-11, exponential and constant decay | identical maps; means to the 15 digits it writes |
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an
 algebraic multigrid) is itself only about 2e-7 away from the exact solution;
@@ -396,6 +430,9 @@ its code:
 | Restoration status, parcellation | GuidosToolbox's values for its sample map |
 | Cost distance, least-cost path, restoration corridor, contortion, simple and morphological change, FOS change, GraySpatCon metrics other than those of FOS | unit tests on constructed cases |
 | Zonal statistics, extraction at points, clip, rasterize | cells against GDAL's rasterizer, statistics against NumPy and rasterstats |
+| Land change: Dinamica's Expander and Patcher | Dinamica EGO 8.13's functors crash for patches of more than one cell, so their seed selection was measured with one-cell patches (acceptance by neighbours, draw by probability) and the patch growth follows the publications; statistical comparison |
+| Land change: PLUS's CA with multi-type random patch seeds (CARS) | PLUS is distributed without source code or licence: written from its paper, checked by its properties (demand met, growth from patches and seeds, the threshold, the rules, the same maps with any number of threads) |
+| Land change: dynamic variables, regional demands, presets, projections, scenarios, calibration | unit tests: the pieces they assemble are compared above |
 
 !!! warning "Known differences"
     - **Euclidean distance, distance to resistance, influence zones and
@@ -464,3 +501,9 @@ the MSPA timings. `tools/make_reference_prioritize.py` and
 `tools/make_reference_sdm.py` and `tools/benchmark_sdm.py` use R with the
 packages listed above in `LANDSCHAFT_SDM_R_LIBS` (default
 `%LOCALAPPDATA%/R/landschaft-sdm-lib`).
+`tools/make_reference_simulate.py` and `tools/benchmark_simulate.py` use R
+with lulcc, OpenLand and diffeR (`LANDSCHAFT_SIM_R_LIBS`, default
+`%LOCALAPPDATA%/R/landschaft-sim-lib`), CLUMondo (`LANDSCHAFT_CLUMONDO`,
+`LANDSCHAFT_CLUMONDO_FIXED`), GRASS 8 with the `r.futures` addons in WSL,
+Dinamica EGO's console (`LANDSCHAFT_DINAMICA`) and MOLUSCE's sources
+(`LANDSCHAFT_MOLUSCE`, `LANDSCHAFT_MOLUSCE_FIXED`).

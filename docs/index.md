@@ -101,6 +101,12 @@ Python 3.10+ · C++17 / OpenMP core · numpy · xarray · dask · GPL-3.0-or-lat
     Clean occurrence records, choose predictors and background points, fit
     and evaluate models with spatial folds, and project them to new climates.
 
+-   [**Land change simulation**](tutorials/land-change-simulation.md)
+
+    Project land use from two maps: demand, transition potential and
+    allocation, validation against the observed change, calibration and
+    scenarios with replicates.
+
 -   [**Large data & batch**](tutorials/large-data.md)
 
     Folders of rasters in parallel, tiles for maps larger than memory,
@@ -209,8 +215,9 @@ accounting, restoration planning), the R package landscapemetrics and
 FRAGSTATS (landscape metrics), Conefor Sensinode and Makurhini (habitat
 networks), Circuitscape and Omniscape (circuit connectivity), gdistance (routes on
 grids), geodiv and spatialEco (surface metrics), NLMR (neutral landscape models),
-Zonation 5 (spatial prioritization) and the R packages for species distributions
-(CoordinateCleaner, usdm, dismo, blockCV, ENMeval, predicts, ecospat, maxnet), and is
+Zonation 5 (spatial prioritization), the R packages for species distributions
+(CoordinateCleaner, usdm, dismo, blockCV, ENMeval, predicts, ecospat, maxnet) and
+the land change models (lulcc, CLUMondo, FUTURES, MOLUSCE, Dinamica EGO), and is
 [tested against their outputs](benchmarks.md#accuracy).
 
 You do not need to know any of them to use it: the [tutorials](tutorials/index.md)

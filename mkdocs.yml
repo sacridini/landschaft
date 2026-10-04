@@ -151,7 +151,8 @@ nav:
       - 11 · Continuous surfaces: learn/surfaces.md
       - 12 · Conservation priorities: learn/prioritization.md
       - 13 · Species distributions: learn/sdm.md
-      - 14 · From question to tool: learn/choosing.md
+      - 14 · Simulating land change: learn/simulation.md
+      - 15 · From question to tool: learn/choosing.md
       - Glossary: learn/glossary.md
       - Further reading: learn/reading.md
   - Tutorials:
@@ -170,6 +171,7 @@ nav:
       - Biodiversity analysis: tutorials/biodiversity.md
       - Conservation priorities: tutorials/prioritization.md
       - Species distributions: tutorials/species-distributions.md
+      - Land change simulation: tutorials/land-change-simulation.md
   - API reference:
       - api/index.md
       - Data & configuration: api/data.md
