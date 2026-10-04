@@ -360,10 +360,26 @@ def penalty_raster():
     return grid(v)
 
 
+def adj_table():
+    """8-direction adjacency of pu_table's units (their raster cells)."""
+    cells = _units()
+    pos = {c: k for k, c in enumerate(cells)}
+    i, j = [], []
+    for k, c in enumerate(cells):
+        r, q = divmod(int(c), NX)
+        for dr in (-1, 0, 1):
+            for dq in (-1, 0, 1):
+                rr, qq = r + dr, q + dq
+                if (dr or dq) and 0 <= rr < NY and 0 <= qq < NX and rr * NX + qq in pos:
+                    i.append(k)
+                    j.append(pos[rr * NX + qq])
+    return _triplets(i, j, np.ones(len(i)))
+
+
 INPUTS = {f.__name__: f for f in (
     pu_cost, features, shapes, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
     pu_polygons_partial, pa_pu, pa_features, pa_dist_features, pa_threats, pa_dist_threats, pa_sensitivity,
-    pa_boundary, bnd_table, conn_table, asym_table, penalty_raster)}
+    pa_boundary, bnd_table, conn_table, asym_table, penalty_raster, adj_table)}
 
 
 def build_input(name: str):
@@ -551,6 +567,25 @@ CASES: dict[str, Case] = {
                   add_linear_penalties(0.001, data = "f1") |> add_boundary_penalties(0.001, data = bm) |>
                   add_linear_constraints(2, "<=", data = "f2") |> add_locked_in_constraints("locked_in") |>
                   add_binary_decisions())""", notes="penalties and constraints in the order added"),
+    "contiguity_raster": Case("spatial", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.2) |>
+                  add_contiguity_constraints() |> add_binary_decisions())"""),
+    "contiguity_polygons": Case("spatial", ("pu_polygons", "features"), """
+        reference(problem(pu_polygons, features, cost_column = "cost") |> add_min_set_objective() |>
+                  add_relative_targets(0.3) |> add_contiguity_constraints() |> add_binary_decisions())""",
+                                notes="polygons touching at a corner are adjacent (st_intersects)"),
+    "contiguity_matrix": Case("spatial", ("pu_table", "adj_table"), """
+        am <- Matrix::sparseMatrix(i = adj_table$i, j = adj_table$j, x = adj_table$x, dims = rep(nrow(pu_table), 2))
+        reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |> add_min_set_objective() |>
+                  add_relative_targets(0.2) |> add_contiguity_constraints(data = am) |> add_binary_decisions())"""),
+    "neighbors_raster": Case("spatial", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_neighbor_constraints(2) |> add_binary_decisions())"""),
+    "neighbors_matrix": Case("spatial", ("pu_table", "adj_table"), """
+        am <- Matrix::sparseMatrix(i = adj_table$i, j = adj_table$j, x = adj_table$x, dims = rep(nrow(pu_table), 2))
+        reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |>
+                  add_max_utility_objective(2500) |> add_neighbor_constraints(5, data = am) |> add_binary_decisions())""",
+                             notes="k = 5 clamped to the units with fewer neighbours"),
     # --- exact: exactextractr's coverage fractions and sums (the amounts of polygon planning units)
     "exact_shapes": Case("exact", ("features", "shapes"), """
         cov <- exactextractr::coverage_fraction(features[[1]], shapes)
@@ -752,5 +787,20 @@ PY_SPATIAL: dict[str, Callable] = {
     .add_boundary_penalties(0.001, data=_matrix(bnd_table(), len(pu_table())))
     .add_linear_constraints(2, "<=", data="f2").add_locked_in_constraints("locked_in").add_binary_decisions(),
 }
+for _name, _fn in PY_SPATIAL.items():
+    CASES[_name].py = _fn
+
+PY_SPATIAL.update({
+    "contiguity_raster": lambda: _rp().add_min_set_objective().add_relative_targets(0.2)
+    .add_contiguity_constraints().add_binary_decisions(),
+    "contiguity_polygons": lambda: _polygon_problem(pu_polygons()).add_relative_targets(0.3)
+    .add_contiguity_constraints().add_binary_decisions(),
+    "contiguity_matrix": lambda: _tp().add_min_set_objective().add_relative_targets(0.2)
+    .add_contiguity_constraints(data=_matrix(adj_table(), len(pu_table()))).add_binary_decisions(),
+    "neighbors_raster": lambda: _rp().add_min_set_objective().add_relative_targets(0.3)
+    .add_neighbors_constraints(2).add_binary_decisions(),
+    "neighbors_matrix": lambda: _tp().add_max_utility_objective(2500)
+    .add_neighbors_constraints(5, data=_matrix(adj_table(), len(pu_table()))).add_binary_decisions(),
+})
 for _name, _fn in PY_SPATIAL.items():
     CASES[_name].py = _fn

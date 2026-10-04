@@ -1599,6 +1599,12 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     valor (par no empate); o `np.round` arredonda x * 10^d e erra por 1e-6 em valores de 7 casas (`r_round`).
   * Com gap 0 a borda fica lenta mesmo pequena (166 unidades: 25 s no HiGHS puro, igual pelo motor largo); a
     escala da borda é a fase 4 (motor `anneal`, heurísticas).
+* **Parte 2**: `add_contiguity_constraints` e `add_neighbors_constraints` (matriz de adjacência do prioritizr:
+  células com custo vizinhas em 4 direções; polígonos que se intersectam, inclusive só por um vértice, como o
+  `st_intersects`; ou uma matriz dada). Contiguidade: uma coluna por par do triângulo inferior, linhas c1/c2/c3
+  (cada unidade aponta para no máximo um vizinho de índice maior e há pares = selecionadas - 1: uma árvore,
+  logo um só fragmento; conferido com componentes conexos). Vizinhos: k limitado ao número de vizinhos
+  (`clamp`). 5 casos, **modelo bit a bit**.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

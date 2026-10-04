@@ -569,6 +569,20 @@ class Problem:
             raise ValueError("sense must be '>=', '<=' or '='")
         return self._add("constraint", "linear", float(threshold), sense, data)
 
+    def add_contiguity_constraints(self, data=None) -> Problem:
+        """The selected units must form one contiguous patch (prioritizr's formulation: a spanning
+        tree count over the pairs of adjacent units). ``data``: an adjacency matrix of every unit; by
+        default units that share an edge (raster cells, 4 directions) or that touch (polygons)."""
+        return self._add("constraint", "contiguity", data)
+
+    def add_neighbors_constraints(self, k: int, clamp: bool = True, data=None) -> Problem:
+        """Every selected unit must have at least ``k`` selected neighbours (``clamp``: at most as many
+        as it has). ``data``: an adjacency matrix of every unit, by default as
+        :meth:`add_contiguity_constraints`."""
+        if int(k) != k or k < 0:
+            raise ValueError("k must be a whole number >= 0")
+        return self._add("constraint", "neighbors", int(k), bool(clamp), data)
+
     # --- constraints
     def add_locked_in_constraints(self, locked) -> Problem:
         """Planning units that must be selected: a raster (1 = locked), a column name, a boolean

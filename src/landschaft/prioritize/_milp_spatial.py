@@ -336,6 +336,103 @@ def _apply_linear_constraint(b: Builder, u, threshold: float, sense: str, data) 
     b.add_rows(np.zeros(nz.size, dtype=np.int64), nz, v[nz], [sense], [threshold], "lc")
 
 
+# ----------------------------------------------------------------------------- adjacency
+
+def adjacency_matrix(u) -> sp.csc_matrix:
+    """prioritizr's adjacency_matrix of the planning-unit data, cut to the planning units: raster cells
+    with a cost that share an edge (4 directions); polygons that intersect (touching at a corner
+    included), 1 for each pair."""
+    if u.kind == "raster":
+        ny, nx = u.template.shape
+        unit = np.full(ny * nx, -1, dtype=np.int64)
+        unit[u.index] = np.arange(u.n)
+        grid = unit.reshape(ny, nx)
+        i, j = [], []
+        for a, b in ((grid[:-1, :], grid[1:, :]), (grid[:, :-1], grid[:, 1:])):
+            a, b = a.ravel(), b.ravel()
+            ok = (a >= 0) & (b >= 0)
+            i += [a[ok], b[ok]]
+            j += [b[ok], a[ok]]
+        i, j = np.concatenate(i), np.concatenate(j)
+        m = sp.csc_matrix((np.ones(i.size), (i, j)), shape=(u.n, u.n))
+    elif hasattr(u.template, "geometry"):
+        import shapely
+
+        geoms = np.asarray(u.template.geometry.values, dtype=object)
+        left, right = shapely.STRtree(geoms).query(geoms, predicate="intersects")
+        keep = left != right
+        n = geoms.size
+        m = sp.csc_matrix((np.ones(int(keep.sum())), (left[keep], right[keep])), shape=(n, n))
+        m.data[:] = 1.0
+        m = m[u.index][:, u.index].tocsc()
+    else:
+        raise ValueError("constraints on neighbouring units of tables need data: an adjacency matrix of every unit")
+    m.sum_duplicates()
+    m.data[:] = 1.0
+    m.eliminate_zeros()
+    m.sort_indices()
+    return m
+
+
+def _adjacency(u, data) -> sp.csc_matrix:
+    if data is None:
+        return adjacency_matrix(u)
+    return unit_matrix(u, data, "adjacency data")
+
+
+def _apply_contiguity(b: Builder, u, data) -> None:
+    """rcpp_apply_contiguity_constraints (one zone): a column per adjacent pair (lower triangle, by
+    column), y <= x_i for every pair, sum of the pairs of a unit j <= x_j, and pairs = selected - 1."""
+    d = _adjacency(u, data)
+    low = sp.tril(d, k=-1).tocsc()  # forceSymmetric(uplo = "L") then tril: the lower triangle as given
+    low.eliminate_zeros()
+    low.sort_indices()
+    pj = np.repeat(np.arange(low.shape[1]), np.diff(low.indptr))
+    pi = low.indices.astype(np.int64)
+    keep = low.data > 1.0e-15
+    pi, pj = pi[keep], pj[keep]
+    k = pi.size
+    first = b.add_columns(np.zeros(k), 0.0, 1.0, b.vtype[0], "c")
+    var = first + np.arange(k)
+    # c1: y_k - x_i <= 0
+    r1 = np.repeat(np.arange(k), 2)
+    c1 = np.column_stack([var, pi]).ravel()
+    v1 = np.tile([1.0, -1.0], k)
+    # c2: one row per run of pairs with the same j: -x_j + sum y <= 0
+    new = np.ones(k, dtype=bool)
+    new[1:] = pj[1:] != pj[:-1]
+    group = np.cumsum(new) - 1
+    ng = int(new.sum()) if k else 0
+    r2 = np.concatenate([np.arange(ng), group]) + k
+    c2 = np.concatenate([pj[new], var])
+    v2 = np.concatenate([-np.ones(ng), np.ones(k)])
+    # c3: -sum x + sum y = -1
+    r3 = np.full(b.n + k, k + ng)
+    c3 = np.concatenate([np.arange(b.n), var])
+    v3 = np.concatenate([-np.ones(b.n), np.ones(k)])
+    b.add_rows(np.concatenate([r1, r2, r3]), np.concatenate([c1, c2, c3]), np.concatenate([v1, v2, v3]),
+               ["<="] * (k + ng) + ["="], [0.0] * (k + ng) + [-1.0], ["c1"] * k + ["c2"] * ng + ["c3"])
+
+
+def _apply_neighbors(b: Builder, u, k: int, clamp: bool, data) -> None:
+    """rcpp_apply_neighbor_constraints (one zone): every selected unit has at least k selected neighbours
+    (k clamped to its number of neighbours): sum of the neighbours - k x_i >= 0."""
+    d = _adjacency(u, data)
+    kk = np.full(b.n, float(k))
+    if clamp:
+        rs = np.asarray(d.sum(axis=1)).ravel()
+        kk = np.minimum(kk, rs)
+    if not kk.max(initial=0.0) > 0:
+        return
+    col = np.repeat(np.arange(d.shape[1]), np.diff(d.indptr))
+    row = d.indices.astype(np.int64)
+    keep = (d.data > 1.0e-15) & (row != col)
+    r = np.concatenate([np.arange(b.n), row[keep]])
+    c = np.concatenate([np.arange(b.n), col[keep]])
+    v = np.concatenate([kk * -1.0, np.ones(int(keep.sum()))])
+    b.add_rows(r, c, v, [">="] * b.n, [0.0] * b.n, "n")
+
+
 # ----------------------------------------------------------------------------- dispatch
 
 def apply_penalty(b: Builder, u, spec) -> None:
@@ -356,5 +453,9 @@ def apply_constraint(b: Builder, u, spec) -> None:
     kind = spec[0]
     if kind == "linear":
         _apply_linear_constraint(b, u, *spec[1:])
+    elif kind == "contiguity":
+        _apply_contiguity(b, u, *spec[1:])
+    elif kind == "neighbors":
+        _apply_neighbors(b, u, *spec[1:])
     else:
         raise ValueError(f"unknown constraint {kind!r}")

@@ -571,3 +571,16 @@ def test_penalties_follow_the_order_added():
     z = ls.prioritize.problem(optimize_cases.pu_cost(), optimize_cases.features()).add_min_set_objective() \
         .add_relative_targets(0.3).add_boundary_penalties(0.0).compile()
     assert "b" not in z.col_ids
+
+
+def test_contiguity_gives_one_patch():
+    from scipy.sparse.csgraph import connected_components
+
+    from landschaft.prioritize._milp_spatial import adjacency_matrix
+
+    for name in ("contiguity_raster", "contiguity_polygons"):
+        p = optimize_cases.CASES[name].py()
+        sol = p.add_highs_solver(gap=0).solve()
+        sel = np.flatnonzero(sol.values > 0.5)
+        adj = adjacency_matrix(p.units)[sel][:, sel]
+        assert connected_components(adj, directed=False)[0] == 1, name
