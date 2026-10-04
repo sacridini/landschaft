@@ -1752,7 +1752,31 @@ sim.supply; sim.shortfall; sim.trajectory()
        da origem em proporção a P x isometria^k, k = células da mancha na janela (isometria 0 = células
        isoladas, 1 = segue as probabilidades, 2 = manchas compactas); tamanho log-normal (média, variância).
        Gerador próprio (xoshiro256**).
-6. PLUS: LEAS (`Estimator(sample="expansion")`) e CARS com inércia adaptativa (clean-room).
+6. PLUS: LEAS (`Estimator(sample="expansion")`) e CARS com inércia adaptativa (clean-room). **Feita** (1.13.0):
+   `CARS` (alocação com laço próprio; C++ `src/cpp/sim/plus.cpp`), escrito só pelo artigo (Liang et al. 2021,
+   CEUS 85, 101569; o preprint arXiv 2010.11541 traz as equações 1-7): probabilidade geral OP = P x Omega x D,
+   Omega = w_k x células da classe na janela n x n (sem o centro) / (n² - 1) ao fim da iteração anterior;
+   onde Omega = 0, semente aleatória OP = P x (r x mu_k) x D se r < P; roleta sobre OP; muda se P(c) > tau e a
+   matriz de transição permite, tau = delta^l x r (normal de média 1 em [0, 2]), l + 1 a cada iteração que
+   reduziu a soma dos |desvios| em menos que `step_size` células; D_k (coeficiente adaptativo, Eq. 4) começa em
+   1 e cresce quando a falta da classe cresce, encolhe quando o excesso cresce. Padrões do artigo: janela 3,
+   mu = 0,1, delta = 0,9, Step = 500. Demanda `AreaDemand` ou `Markov` (projetada do mapa inicial e arredondada
+   pelo `roundSum`, como o PLUS faz com a cadeia de Markov); regras: matriz 0/1 e restrições (as demais peças
+   das `Rules` dão erro). LEAS = `Estimator(target="expansion")` da fase 2, mais `Estimator.importance()`
+   (contribuição de cada variável por classe: `feature_importances_` ou permutação do scikit-learn; o PLUS usa
+   o erro OOB com ruído).
+   - Escolhas nossas (o artigo não diz; sem código para conferir): desvio-padrão 1/3 na normal do limiar
+     (resorteada fora de [0, 2]); as mudanças propostas numa iteração entram em ordem aleatória, uma classe
+     não ganha células depois de atingir a demanda nem perde abaixo dela (sem isso a soma dos desvios oscila);
+     gerador por hash de (semente, passo, iteração, célula): mesmos mapas com qualquer número de threads.
+   - Testes por propriedade (o PLUS não tem fonte nem licença; nada de comparação célula a célula): demanda
+     atendida em cada passo, mu = 0 só cresce a partir das manchas (uma mancha 8-conexa), mu > 0 cria manchas
+     novas, células novas com P maior que a média, limiar que decai mais com `step_size` grande, regras e
+     restrições respeitadas, classe na demanda intocada, Markov, células sem dado e classe nova, D constante
+     quando os desvios só diminuem, aviso sem convergência; LEAS (floresta aleatória) + CARS em Plum Island.
+     4 M células, 5 classes, 2 passos (42 iterações): 1,5 s com 15 threads (1,1 s no C++), 6,5 s com 1.
+   - Fora: o MOP (programação multiobjetivo da demanda) do artigo; demandas otimizadas vêm do `ls.prioritize`
+     ou de tabelas.
 7. Laço temporal completo: variáveis dinâmicas, demanda por região, vizinhança por rede (`ls.cost`),
    `presets`, `run` / `report` / `redo`, cenários e réplicas em paralelo.
 8. Validação: similaridade fuzzy, três mapas em várias resoluções, figure of merit, kappa, error budget.

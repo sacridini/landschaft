@@ -147,6 +147,10 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.ExpanderPatcher
 
+## Multi-type random patch seeds (PLUS)
+
+::: landschaft.simulate.CARS
+
 ## Urban growth (FUTURES)
 
 ::: landschaft.simulate.PatchGrowing

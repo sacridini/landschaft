@@ -17,6 +17,7 @@
 #include "sim/clumondo.hpp"
 #include "sim/futures.hpp"
 #include "sim/patches.hpp"
+#include "sim/plus.hpp"
 #include "sim/rglm.hpp"
 #include "sim/rng.hpp"
 #include "sim/woe.hpp"
@@ -575,6 +576,55 @@ py::dict sim_patches(const IArray& landscape, const py::list& transitions, doubl
     return out;
 }
 
+py::dict sim_cars(const IArray& landscape, const py::object& fixed, const DArray& probability, const DArray& weights,
+                  const DArray& seeds, const py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>& allowed,
+                  const py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>& demand, int window,
+                  double decay, double step, i64 max_iter, std::uint64_t seed) {
+    if (landscape.ndim() != 2) throw std::invalid_argument("the landscape must be 2-D");
+    const i64 ny = landscape.shape(0), nx = landscape.shape(1), n = ny * nx;
+    const auto k = static_cast<int>(demand.size());
+    if (probability.ndim() != 2 || probability.shape(0) != k || probability.shape(1) != n)
+        throw std::invalid_argument("the probabilities must be (classes, cells)");
+    if (weights.size() != k || seeds.size() != k || allowed.size() != static_cast<i64>(k) * k)
+        throw std::invalid_argument("one weight per class and a square transition matrix");
+    py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast> fx;
+    const std::uint8_t* fptr = nullptr;
+    if (!fixed.is_none()) {
+        fx = py::cast<py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>>(fixed);
+        if (fx.size() != n) throw std::invalid_argument("the fixed cells differ in size from the landscape");
+        fptr = fx.data();
+    }
+    sim::CarsSettings s;
+    s.window = window;
+    s.decay = decay;
+    s.step = step;
+    s.max_iter = max_iter;
+    s.seed = seed;
+    sim::CarsResult r;
+    {
+        py::gil_scoped_release release;
+        r = sim::cars_run(ny, nx, k, landscape.data(), fptr, probability.data(), weights.data(), seeds.data(),
+                          allowed.data(),
+                          demand.data(), s);
+    }
+    py::dict out;
+    py::array_t<int> land({ny, nx});
+    std::copy(r.landscape.begin(), r.landscape.end(), land.mutable_data());
+    out["landscape"] = land;
+    out["iterations"] = r.iterations;
+    out["converged"] = r.converged;
+    out["decays"] = r.decays;
+    const auto rows = static_cast<i64>(r.trace.size()) / std::max(k, 1);
+    py::array_t<std::int64_t> trace({rows, static_cast<i64>(k)});
+    std::copy(r.trace.begin(), r.trace.end(), trace.mutable_data());
+    out["trace"] = trace;
+    out["trace_decays"] = to_array(r.trace_decays);
+    py::array_t<double> td({rows - 1, static_cast<i64>(k)});
+    std::copy(r.trace_d.begin(), r.trace_d.end(), td.mutable_data());
+    out["trace_d"] = td;
+    return out;
+}
+
 }  // namespace
 
 namespace sim {
@@ -637,6 +687,10 @@ void register_python(py::module_& m) {
     m.def("sim_patches", &sim_patches, py::arg("landscape"), py::arg("transitions"), py::arg("prune_factor") = 10.0,
           py::arg("win_rows") = 3, py::arg("win_cols") = 3, py::arg("seed") = 1,
           "Expander and Patcher (Soares-Filho et al. 2002): allocation of the changes of each transition.");
+    m.def("sim_cars", &sim_cars, py::arg("landscape"), py::arg("fixed"), py::arg("probability"), py::arg("weights"),
+          py::arg("seeds"), py::arg("allowed"), py::arg("demand"), py::arg("window") = 3, py::arg("decay") = 0.9,
+          py::arg("step") = 500.0, py::arg("max_iter") = 5000, py::arg("seed") = 1,
+          "CARS, PLUS's cellular automaton of multi-type random patch seeds (Liang et al. 2021).");
     m.def("sim_futures_mfilter", &sim_futures_mfilter, py::arg("input"), py::arg("matrix"),
           "r.mfilter as r.futures.devpressure runs it (edges keep their values, nulls give null).");
 }

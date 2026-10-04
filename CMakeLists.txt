@@ -191,6 +191,7 @@ add_library(simcore STATIC
     src/cpp/sim/clumondo.cpp
     src/cpp/sim/futures.cpp
     src/cpp/sim/patches.cpp
+    src/cpp/sim/plus.cpp
 )
 target_include_directories(simcore PUBLIC src/cpp)
 target_link_libraries(simcore PUBLIC lsmcore nlmcore)

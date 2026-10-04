@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 from .._threads import threaded
@@ -79,6 +80,7 @@ class Estimator:
         self.seed = seed
         self.models: dict = {}
         self.drivers: list[str] = []
+        self._train: dict = {}
 
     def _draw(self, idx: np.ndarray, y: np.ndarray, rng) -> np.ndarray:
         if self.sample is not None:
@@ -131,6 +133,7 @@ class Estimator:
         classes = self.classes or [_class_value(c) for c in _classes([a] if bv is None else [a, read_map(t1, nodata)])]
         rng = np.random.default_rng(self.seed)
         self.models = {}
+        self._train = {}
         for c in classes:
             if self.target == "presence":
                 idx = np.flatnonzero(valid)
@@ -145,6 +148,8 @@ class Estimator:
             model = clone(self.estimator)
             model.fit(x_all[idx], y)
             self.models[c] = model
+            self._train[c] = (idx, y)
+        self._x = x_all
         self._template = a.template
         return self
 
@@ -174,6 +179,43 @@ class Estimator:
 
     probability = predict
     potential = predict
+
+    def importance(self, method: str = "impurity", *, n_repeats: int = 5, seed=None) -> pd.DataFrame:
+        """Contribution of each driver to each class's model (PLUS's driver contributions).
+
+        Parameters
+        ----------
+        method : {"impurity", "permutation"}
+            ``"impurity"``: the estimator's ``feature_importances_`` (a random
+            forest's mean decrease in impurity); ``"permutation"``: the drop in
+            accuracy on the training cells when a driver's values are shuffled
+            (scikit-learn's ``permutation_importance``, any estimator).
+        n_repeats, seed
+            Shuffles per driver and their seed (``"permutation"``).
+
+        Returns
+        -------
+        pandas.DataFrame
+            A row per driver, a column per class.
+        """
+        if not self.models:
+            raise RuntimeError("fit the estimator first")
+        if method not in ("impurity", "permutation"):
+            raise ValueError("method must be 'impurity' or 'permutation'")
+        cols = {}
+        for c, model in self.models.items():
+            if method == "impurity":
+                if not hasattr(model, "feature_importances_"):
+                    raise ValueError(f"{type(model).__name__} has no feature_importances_: use "
+                                     "method='permutation'")
+                cols[c] = np.asarray(model.feature_importances_, dtype=np.float64)
+            else:
+                from sklearn.inspection import permutation_importance
+
+                idx, y = self._train[c]
+                r = permutation_importance(model, self._x[idx], y, n_repeats=n_repeats, random_state=seed)
+                cols[c] = r.importances_mean
+        return pd.DataFrame(cols, index=pd.Index(self.drivers, name="driver"))
 
 
 class RasterPotential:

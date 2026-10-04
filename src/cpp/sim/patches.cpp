@@ -11,47 +11,11 @@
 #include <stdexcept>
 #include <unordered_map>
 
+#include "sim/rng.hpp"
+
 namespace sim {
 
 namespace {
-
-class Xoshiro {
-public:
-    explicit Xoshiro(std::uint64_t seed) {
-        for (auto& v : s_) {
-            seed += 0x9E3779B97F4A7C15ull;
-            std::uint64_t z = seed;
-            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
-            z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
-            v = z ^ (z >> 31);
-        }
-    }
-    double uniform() { return static_cast<double>(next() >> 11) * 0x1.0p-53; }
-    double normal() {  // Marsaglia's polar method (one of the pair)
-        double u, v, s;
-        do {
-            u = 2 * uniform() - 1;
-            v = 2 * uniform() - 1;
-            s = u * u + v * v;
-        } while (s >= 1 || s == 0);
-        return u * std::sqrt(-2 * std::log(s) / s);
-    }
-
-private:
-    static std::uint64_t rotl(std::uint64_t x, int k) { return (x << k) | (x >> (64 - k)); }
-    std::uint64_t next() {
-        const std::uint64_t result = rotl(s_[1] * 5, 7) * 9;
-        const std::uint64_t t = s_[1] << 17;
-        s_[2] ^= s_[0];
-        s_[3] ^= s_[1];
-        s_[1] ^= s_[2];
-        s_[0] ^= s_[3];
-        s_[2] ^= t;
-        s_[3] = rotl(s_[3], 45);
-        return result;
-    }
-    std::uint64_t s_[4];
-};
 
 // Weighted draws without replacement (a Fenwick tree of weights).
 class Weighted {
