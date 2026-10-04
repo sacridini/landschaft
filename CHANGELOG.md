@@ -6,6 +6,18 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-10-04
+
+### Added
+- `ls.simulate` phase 7a, dynamic variables and regions:
+  - `Model(..., dynamic={name: piece})`: drivers computed again from the map at the start of every
+    step, and the potential predicted again (CLUE, Ordered, ExpanderPatcher, CARS, CLUMondo);
+    `distance_to(classes)` (exact Euclidean distance, or the accumulated cost over an `ls.cost`
+    transition: distances along networks) and `share_of(classes, window)`, also usable on their own;
+  - `Regional(regions, {region: demand})`: a demand per region for CLUE, Ordered, CARS (demand and
+    adaptive coefficient per region and class, in C++) and ExpanderPatcher (each region's rates);
+    `Regional.from_maps` and `Regional.markov`.
+
 ## [1.13.0] - 2026-10-04
 
 ### Added
