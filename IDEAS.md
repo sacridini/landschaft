@@ -1839,19 +1839,32 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   * **ProxIRR** (Baisero et al.) não existe no prioritizr 8.0.6 nem há implementação de referência à mão: fica
     para a fase 8 (clean-room pelo artigo, se pedido).
 
+### Andamento da fase 7 (calibração e trade-offs)
+* **Fase 7 completa** (2026-10-04): `_milp_calibrate.py`, pelo tutorial "Calibrating trade-offs" do prioritizr:
+  `calibrate_penalty` (abordagem combinada; sem valores, 1/100 a 100 x a penalidade de Cohon em escala log),
+  `calibrate_budget` (hierárquica: min penalties nos limiares de custo, `ceiling(custo x (1 + seq(1e-5, 4,
+  9)))` como no tutorial), `cohon_penalty` (Cohon et al. 1979: |Δcusto / Δcritério| das duas soluções ideais,
+  arredondado a 5 casas pelo `round` do R), `pareto_front` (min shortfall em orçamentos; critério = soma dos
+  déficits como fração das metas, o objetivo; coluna `efficient`), `calibrate(make, values, criterion)` para
+  qualquer parâmetro (pesos de feições), `topsis` (o algoritmo do pacote `topsis` do R, que não está instalado:
+  testado contra a definição à mão) e `knee_point` (o ponto mais distante da corda, eixos em 0-1); a tabela
+  `Calibration` marca as escolhas de TOPSIS e do joelho; resoluções em paralelo (uma thread de solver cada).
+  `iterative_solve(problem, update, steps, lock_previous)` + `protected_cells(solução)` para as `restrictions`
+  do `ls.simulate.Rules`. Falhas de passo propagam (nada engolido, ao contrário do prioripy). Grupo `calibrate`
+  do harness (3 casos, Gurobi gap 0 com `force = TRUE, run_checks = FALSE` como no tutorial): os ótimos da
+  hierárquica (9 limiares), da combinada (5 penalidades) e da frente (4 orçamentos) iguais aos do prioritizr.
+
 ### Próximos passos (retomar daqui)
-1. **Fase 7, calibração e trade-offs**: calibração de BLM e de pesos (joelho da curva), frente de Pareto custo x
-   déficit, solução iterativa acoplável aos passos do `ls.simulate` (agora completo).
-2. **Fase 8, integração**: transformações de feição do Zonation (condição, retenção, kernels, impactos), SAR,
+1. **Fase 8, integração**: transformações de feição do Zonation (condição, retenção, kernels, impactos), SAR,
    feições do `ls.sdm`, comparação Zonation x MILP no mesmo orçamento, gráficos do `ls.plot` e relatório offline.
-3. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
+2. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
    mais as pendências trazidas das fases anteriores: contiguidade e corredores por cortes de separadores de
    nós em rodadas, limite fraco do max_features (cortes), objetivos filogenéticos em 10⁶ (LP que não converge
    em 30 s), fluxos dinâmicos e reparo em paralelo no motor de cortes; multi-action com fronteira e gap 0
    (limite fraco: o HiGHS não fecha; Gurobi 99 s em 10⁴) e o núcleo simétrico de 10⁴ (5 s no HiGHS contra 1 s
    no Gurobi); replacement importance incremental (só o déficit das feições da unidade, em vez do problema
    inteiro: hoje ~0,3 s por re-solução em 10⁵, 192 s em 19 threads).
-4. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
+3. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
    prioritizr/prioriactions/prioripy (tabela R <-> Python).
 
 ### Decisões
