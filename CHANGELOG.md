@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-10-04
+
 ### Added
 - Evaluation of solutions (prioritizr 8.0.6's `eval_*`), bit for bit with prioritizr: `eval_n_summary`,
   `eval_cost_summary`, `eval_boundary_summary`, `eval_connectivity_summary`,

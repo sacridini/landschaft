@@ -1834,6 +1834,8 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   Desempenho: 10⁵ células com 12.929 selecionadas: Ferrier 0,12 s, fronteira 0,2 s, rank (10 orçamentos)
   1 s, replacement 192 s (uma re-solução do motor de cobertura por unidade, em paralelo; o prioritizr faria
   12.929 resoluções no Gurobi).
+  * Linux (WSL, gcc 13): 362 passam, 0 falham (o `pnorm` com o `exp` x87 inline dá os mesmos bits). Versão
+    **1.23.0**.
   * **ProxIRR** (Baisero et al.) não existe no prioritizr 8.0.6 nem há implementação de referência à mão: fica
     para a fase 8 (clean-room pelo artigo, se pedido).
 
