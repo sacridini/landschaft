@@ -1901,8 +1901,37 @@ sim.supply; sim.shortfall; sim.trajectory()
      - Para o harness: o 2º argumento do `LoadCategoricalMap` é o valor nulo (`.none` ignora o nodata do
        arquivo); valores reais saem por uma tabela literal (`CreateTable` com linhas de CSV) e
        `SetTableCellValue tabela 2 [ chave ] valor`.
-9. Calibração orientada a padrões.
-10. Tutorial, capítulo do Learn, benchmarks contra lulcc, CLUMondo, FUTURES e Dinamica.
+9. Calibração orientada a padrões. Plano: `S.calibrate(model ou build, start, observed, drivers, params={...},
+   targets={...}, method=..., replicates=..., seed=...)` → `Calibration`. `params`: caminho pontuado nas peças
+   do `Model` (`"allocation.step_size"`, `"allocation.seeds[2]"`, `"rules.elasticity[1]"`) com limites
+   `(mín, máx)` (inteiros se os dois forem inteiros) ou lista de valores; ou uma função `build(**params) ->
+   Model` para o que não cabe num caminho. `targets` `{nome: peso}`: `figure_of_merit`, `similarity` /
+   `similarity_<janela>` (similaridade fuzzy das diferenças), `kappa`, `quantity`, `allocation`, `lsm`
+   (diferença relativa média das métricas pedidas, nível classe ou paisagem) e funções
+   `f(observed, simulated) -> perda` (ex.: MSPA, `HabitatGraph`); perda = soma ponderada. `method`:
+   `"nelder-mead"` (scipy, no cubo unitário com limites), `"differential-evolution"` (scipy, semente),
+   `"grid"` (produto dos valores; limites viram `grid_points` valores), `"random"` (hipercubo latino);
+   cada avaliação é a média de `replicates` rodadas com as mesmas sementes (números aleatórios comuns: a
+   superfície de perda fica lisa entre avaliações), avaliações repetidas em cache, `grid`/`random` em
+   paralelo. `Calibration`: `best`, `loss`, `history` (parâmetros, perda e cada componente), `model`,
+   `simulation`, `validate()`, `ls.plot`. Sem referência externa: testes de recuperação de parâmetros
+   conhecidos (mapa "observado" gerado pelo próprio modelo).
+   **Feita** (1.19.0): `calibrate` → `Calibration` (`best`, `loss`, `history`, `model`, `simulation`,
+   `validate()`, `ls.plot`), como no plano. Os caminhos copiam as peças do `Model` (o modelo dado não muda);
+   `grid`/`random` avaliam em paralelo (threads, `n_threads // workers` cada) e gravam o histórico na ordem dos
+   pontos; Nelder-Mead parte de um simplex de um quarto de cada faixa (o padrão do scipy é pequeno demais no
+   cubo unitário); differential evolution com `popsize=5`, sem polimento, `maxiter` tirado de `max_evals`.
+   Testes: a mistura de duas variáveis que gerou o mapa "observado" recuperada por grade (exata) e por
+   Nelder-Mead (perda 0), métodos reprodutíveis com a semente e com qualquer número de workers, caminhos com
+   índice (`allocation.seeds[2]`), réplicas, alvos `lsm` e funções. Sibuyan, isometria do preset `dinamica`:
+   8 avaliações x 2 réplicas em 2,1 s; com poucas réplicas a perda é ruidosa (Nelder-Mead para cedo): mais
+   réplicas, ou `grid`/`random`.
+10. Tutorial, capítulo do Learn, benchmarks contra lulcc, CLUMondo, FUTURES e Dinamica. Plano: capítulo do Learn
+   "Simulating land change" (perguntas, demanda/potencial/alocação, validação e calibração, armadilhas),
+   tutorial `tutorials/land-change-simulation.md` (Sibuyan e Plum Island de ponta a ponta: análise de mudança,
+   potencial, presets, `run`, cenários, validação, calibração), página de API já existente ligada ao `nav`,
+   `tools/benchmark_simulate.py` (tempos contra lulcc, CLUMondo, r.futures e Dinamica nos casos de paridade e
+   em mapas maiores) e a tabela em `docs/benchmarks.md`.
 
 ---
 

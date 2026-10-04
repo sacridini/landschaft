@@ -482,3 +482,31 @@ def _validation(v, opts, title):
     panels.append(_summary({k: (round(float(x), 4) if x is not None else None) for k, x in v.summary().items()},
                            "Summary"))
     return panels
+
+
+@register("Calibration")
+def _calibration(cal, opts, title):
+    """The loss of every evaluation and the loss against each setting (the best marked)."""
+    from . import _charts
+    from ._core import _Panel
+
+    h = cal.history
+    best = int(np.argmin(h["loss"].to_numpy()))
+    panels = [_Panel("chart", _charts.lines(np.arange(len(h)), {"loss": h["loss"].to_numpy(),
+                                                              "best so far": np.minimum.accumulate(h["loss"])},
+                                            title or "Loss of each evaluation", xlabel="evaluation",
+                                            ylabel="loss"), "loss")]
+    go = _charts._go()
+    for name in cal.best:
+        x = h[name]
+        if not np.issubdtype(np.asarray(x).dtype, np.number):
+            x = x.astype(str)
+        fig = _charts.figure(f"Loss against {name}", xaxis_title=name, yaxis_title="loss")
+        fig.add_trace(go.Scatter(x=x, y=h["loss"], mode="markers", name="evaluations",
+                                 marker={"color": "#7f7f7f"}))
+        fig.add_trace(go.Scatter(x=[x.iloc[best]], y=[h["loss"].iloc[best]], mode="markers", name="best",
+                                 marker={"color": "#e03030", "size": 12}))
+        panels.append(_Panel("chart", fig, name))
+    panels.append(_summary({**{k: v for k, v in cal.best.items()}, "loss": round(cal.loss, 6),
+                            "evaluations": len(h), "method": cal.settings.get("method")}, "Best settings"))
+    return panels

@@ -26,6 +26,7 @@ Typical use::
 
 from . import presets
 from ._allocation import CLUE, Ordered
+from ._calibrate import Calibration, calibrate
 from ._change import Changes, IntensityAnalysis, changes, crosstab
 from ._clumondo import CLUMondo, NeighbourhoodEffect, ServiceDemand, Supply
 from ._demand import AreaDemand
@@ -83,6 +84,7 @@ __all__ = [
     "CLUE",
     "AreaDemand",
     "CLUMondo",
+    "Calibration",
     "Cap",
     "Changes",
     "DevelopmentDemand",
@@ -117,6 +119,7 @@ __all__ = [
     "Validation",
     "WeightsOfEvidence",
     "agreement",
+    "calibrate",
     "calibrate_patches",
     "changes",
     "compare_maps",
