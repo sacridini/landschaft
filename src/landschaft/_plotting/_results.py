@@ -455,3 +455,30 @@ def _ensemble(ens, opts, title):
     panels.append(_Panel("chart", _charts.lines(ens.years, series, "Cells of each class (mean of the replicates)",
                                                 xlabel="year", ylabel="cells"), "cover"))
     return panels
+
+
+@register("Validation")
+def _validation(v, opts, title):
+    """The budget of agreement per resolution, the figure of merit and the fuzzy similarity per window."""
+    from . import _charts
+    from ._core import _Panel
+
+    b = v.three_map.agreement_budget()
+    o = b[b.level == "overall"]
+    parts = ["hits", "misses", "wrong_hits", "false_alarms"]
+    fig = _charts.bars([f"{f} cells" for f in o["factor"]], {p.replace("_", " "): o[p].to_numpy() for p in parts},
+                       title or "Agreement and disagreement of the change (share of the area)",
+                       xlabel="resolution", ylabel="share", stacked=True)
+    panels = [_Panel("chart", fig, "budget")]
+    fom = v.three_map.figure_of_merit()["overall"]
+    panels.append(_Panel("chart", _charts.lines(fom.index.to_numpy(), {"figure of merit": fom.to_numpy()},
+                                                "Figure of merit by resolution", xlabel="block side (cells)",
+                                                ylabel="figure of merit"), "figure of merit"))
+    s = v.similarity
+    panels.append(_Panel("chart", _charts.lines(s["window"].to_numpy(), {
+        "simulated changes": s["simulated"].to_numpy(), "observed changes": s["observed"].to_numpy(),
+        "minimum": s["minimum"].to_numpy()}, "Fuzzy similarity of the differences", xlabel="window (cells)",
+        ylabel="similarity"), "similarity"))
+    panels.append(_summary({k: (round(float(x), 4) if x is not None else None) for k, x in v.summary().items()},
+                           "Summary"))
+    return panels

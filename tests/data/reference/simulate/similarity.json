@@ -1,0 +1,267 @@
+{
+ "arrays": {
+  "similarity_dinamica/differences_const_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_const_11.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_const_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_const_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_const_7.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_const_9.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_exp_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_exp_11.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_exp_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_exp_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_exp_7.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/differences_exp_9.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_const_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_const_11.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_const_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_const_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_const_7.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_const_9.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_exp_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_exp_11.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_exp_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_exp_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_exp_7.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/first_exp_9.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/means.csv/Key*": {
+   "kind": "vector"
+  },
+  "similarity_dinamica/means.csv/Value": {
+   "kind": "vector"
+  },
+  "similarity_dinamica/second_const_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_const_11.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_const_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_const_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_const_7.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_const_9.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_exp_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_exp_11.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_exp_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_exp_5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_exp_7.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "similarity_dinamica/second_exp_9.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "dinamica": {
+   "dinamica": "8130"
+  }
+ }
+}

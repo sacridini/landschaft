@@ -1881,6 +1881,26 @@ sim.supply; sim.shortfall; sim.trajectory()
      decaimento e a versão recíproca do Dinamica (`CalcReciprocalSimilarityMap`, caixa-preta), o
      `r.futures.validation` / `gridvalidation` (GRASS), `S.validate(t0, t1_obs, t1_sim)` juntando tudo com as
      métricas do `lsm`/`mspa` lado a lado; o `run` passa a usá-lo.
+     **Feita** (1.18.0): `fuzzy_similarity` (→ `FuzzySimilarity`: os dois mapas e as duas médias),
+     `differences`, `similarity_of_differences` (várias janelas), `futures_validation_grid`
+     (r.futures.gridvalidation: por bloco ou por região), `validate` (→ `Validation`: `three_map`,
+     `similarity`, `kappa`, `error_budget`, `futures`, `metrics` lado a lado, `summary()`, `ls.plot`) e
+     `Projection.validate(...)` (o `run` guarda o `agreement` rápido; a validação completa da calibração sob
+     demanda). C++ `src/cpp/sim/similarity.cpp`.
+     - Medido no Dinamica EGO 8.13 (`CalcReciprocalSimilarityMap first second janela decaimento .float32 -1`
+       → mapa e média do primeiro, mapa e média do segundo; `CalcSimilarityOfDifferences t0 observado
+       simulado decaimento janela` → mapa e valor): numa célula com classe no primeiro mapa, a pertinência da
+       classe no segundo = maior f(d) entre as células da mesma classe na janela quadrada (raio de Chebyshev
+       (janela - 1) / 2, 0 se nenhuma), f(d) = 2^(-d/2) com d euclidiana em células (decaimento exponencial,
+       meia-distância 2 de Hagen 2003; calculado em double e guardado em float32) ou 1 (constante); onde o
+       segundo mapa também tem classe, o mínimo com a pertinência inversa; janela par é recusada. As médias
+       são sobre as células com classe de cada mapa. O `CalcSimilarityOfDifferences` compara os mapas de
+       diferenças (célula que mudou na classe nova, as outras nulas) do simulado (primeiro) e do observado e
+       devolve a menor média e o mapa dela. Bit a bit em 36 mapas (janelas 1-11, os dois decaimentos, um bloco
+       sem dado); as 36 médias iguais aos 15 dígitos do `SaveTable`.
+     - Para o harness: o 2º argumento do `LoadCategoricalMap` é o valor nulo (`.none` ignora o nodata do
+       arquivo); valores reais saem por uma tabela literal (`CreateTable` com linhas de CSV) e
+       `SetTableCellValue tabela 2 [ chave ] valor`.
 9. Calibração orientada a padrões.
 10. Tutorial, capítulo do Learn, benchmarks contra lulcc, CLUMondo, FUTURES e Dinamica.
 

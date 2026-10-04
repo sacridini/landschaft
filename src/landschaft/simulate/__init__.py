@@ -62,6 +62,13 @@ from ._plus import CARS
 from ._regional import Regional
 from ._rules import Neighbourhood, Rules
 from ._run import Projection, agreement, run
+from ._similarity import (
+    FuzzySimilarity,
+    differences,
+    fuzzy_similarity,
+    similarity_of_differences,
+)
+from ._validate import Validation, futures_validation_grid, validate
 from ._validation import (
     ThreeMapComparison,
     compare_maps,
@@ -84,6 +91,7 @@ __all__ = [
     "Estimator",
     "ExpanderPatcher",
     "Flooding",
+    "FuzzySimilarity",
     "IntensityAnalysis",
     "LandSystemStack",
     "LogisticRegression",
@@ -106,6 +114,7 @@ __all__ = [
     "Succession",
     "Supply",
     "ThreeMapComparison",
+    "Validation",
     "WeightsOfEvidence",
     "agreement",
     "calibrate_patches",
@@ -116,10 +125,13 @@ __all__ = [
     "development_pressure",
     "difference_components",
     "difference_resolutions",
+    "differences",
     "distance_to",
     "error_budget",
     "example_data",
     "futures_validation",
+    "futures_validation_grid",
+    "fuzzy_similarity",
     "mad",
     "memberships",
     "overall_difference",
@@ -129,6 +141,8 @@ __all__ = [
     "sample_to_population",
     "scenarios",
     "share_of",
+    "similarity_of_differences",
     "three_map_comparison",
+    "validate",
     "weights_of_evidence",
 ]

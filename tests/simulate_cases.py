@@ -2637,3 +2637,94 @@ CASES.update({
                                py=lambda futval_classes: _futval_py(futval_classes, False),
                                notes="Without the original: quantity, allocation and kappa only."),
 })
+
+
+# ============================================================================= phase 8b: fuzzy similarity (Dinamica EGO)
+
+GROUPS += ["similarity"]
+
+_SIM_WINDOWS = (1, 3, 5, 7, 9, 11)
+
+
+def sim_world():
+    """t0, observed and simulated maps (classes 1-4, 60 x 80) with change in patches near each other and a
+    missing block (numpy's generator, seed 61)."""
+    import xarray as xr
+    from scipy import ndimage
+
+    rng = np.random.default_rng(61)
+    ny, nx = 60, 80
+    t0 = 1 + (ndimage.gaussian_filter(rng.random((ny, nx)), 3) * 40).astype(int) % 4
+    t0 = t0.astype(float)
+    obs, sim = t0.copy(), t0.copy()
+    blobs = ndimage.gaussian_filter(rng.random((ny, nx)), 2)
+    obs[(blobs > np.quantile(blobs, 0.9)) & (t0 != 2)] = 2
+    shifted = np.roll(blobs, (2, 3), axis=(0, 1)) + 0.01 * rng.random((ny, nx))
+    sim[(shifted > np.quantile(shifted, 0.88)) & (t0 != 2)] = 2
+    obs[(t0 == 3) & (rng.random((ny, nx)) < 0.03)] = 4
+    sim[(t0 == 3) & (rng.random((ny, nx)) < 0.03)] = 4
+    for m in (t0, obs, sim):
+        m[50:, :12] = np.nan
+    return xr.concat([grid(v) for v in (t0, obs, sim)], dim="band").assign_coords(band=["t0", "observed",
+                                                                                      "simulated"])
+
+
+def _sim_job(world):
+    rasters = {k: world.sel(band=k).fillna(255).astype("int32").rio.write_nodata(255)
+               for k in ("t0", "observed", "simulated")}
+    lines = ['  t0 := LoadCategoricalMap "t0.tif" 255 .default 0;',
+             '  observed := LoadCategoricalMap "observed.tif" 255 .default 0;',
+             '  simulated := LoadCategoricalMap "simulated.tif" 255 .default 0;']
+    keys, outputs = [], []
+    for decay in (".yes", ".no"):
+        tag = "exp" if decay == ".yes" else "const"
+        for w in _SIM_WINDOWS:
+            lines.append(f"  f{tag}{w} mf{tag}{w} s{tag}{w} ms{tag}{w} := CalcReciprocalSimilarityMap observed "
+                         f"simulated {w} {decay} .float32 -1;")
+            lines.append(f'  SaveMap f{tag}{w} "first_{tag}_{w}.tif";')
+            lines.append(f'  SaveMap s{tag}{w} "second_{tag}_{w}.tif";')
+            lines.append(f"  d{tag}{w} v{tag}{w} := CalcSimilarityOfDifferences t0 observed simulated {decay} {w};")
+            lines.append(f'  SaveMap d{tag}{w} "differences_{tag}_{w}.tif";')
+            outputs += [f"first_{tag}_{w}.tif", f"second_{tag}_{w}.tif", f"differences_{tag}_{w}.tif"]
+            keys += [f"mf{tag}{w}", f"ms{tag}{w}", f"v{tag}{w}"]
+    lines.append("  t := CreateTable [\n\"Key*\",\"Value\"\n" + "\n".join(f"{k + 1},0" for k in range(len(keys)))
+                 + "\n];")
+    prev = "t"
+    for k, name in enumerate(keys):
+        lines.append(f"  t{k} := SetTableCellValue {prev} 2 [ {k + 1} ] {name};")
+        prev = f"t{k}"
+    lines.append(f'  SaveTable {prev} "means.csv";')
+    script = "Script {{\n" + "\n".join(lines) + "\n}};\n"
+    return {"rasters": rasters, "script": script, "outputs": [*outputs, "means.csv"]}
+
+
+def _sim_py(world) -> dict:
+    ls = _ls()
+    t0, obs, sim = (world.sel(band=k) for k in ("t0", "observed", "simulated"))
+    out, means = {}, []
+    for decay in ("exponential", "constant"):
+        tag = "exp" if decay == "exponential" else "const"
+        table = ls.simulate.similarity_of_differences(t0, obs, sim, windows=_SIM_WINDOWS, decay=decay)
+        for k, w in enumerate(_SIM_WINDOWS):
+            s = ls.simulate.fuzzy_similarity(obs, sim, window=w, decay=decay)
+            out[f"first_{tag}_{w}.tif"] = np.asarray(s.first)
+            out[f"second_{tag}_{w}.tif"] = np.asarray(s.second)
+            d = ls.simulate.fuzzy_similarity(ls.simulate.differences(t0, sim), ls.simulate.differences(t0, obs),
+                                             window=w, decay=decay)
+            row = table.iloc[k]
+            out[f"differences_{tag}_{w}.tif"] = np.asarray(d.first if d.first_mean <= d.second_mean else d.second)
+            means += [s.first_mean, s.second_mean, row["minimum"]]
+    out["means.csv/Key*"] = np.arange(1.0, len(means) + 1)
+    out["means.csv/Value"] = np.array(means)
+    return out
+
+
+INPUTS.update({"sim_world": sim_world})
+
+CASES.update({
+    "similarity_dinamica": Case(
+        "similarity", "dinamica", ("sim_world",), job=lambda sim_world: _sim_job(sim_world),
+        py=lambda sim_world: _sim_py(sim_world),
+        notes="Dinamica EGO's CalcReciprocalSimilarityMap (observed against simulated) and "
+              "CalcSimilarityOfDifferences, windows 1-11, exponential and constant decay, a missing block."),
+})

@@ -192,6 +192,7 @@ add_library(simcore STATIC
     src/cpp/sim/futures.cpp
     src/cpp/sim/patches.cpp
     src/cpp/sim/plus.cpp
+    src/cpp/sim/similarity.cpp
     src/cpp/sim/validation.cpp
 )
 target_include_directories(simcore PUBLIC src/cpp)

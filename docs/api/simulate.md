@@ -193,6 +193,20 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.futures_validation
 
+::: landschaft.simulate.futures_validation_grid
+
+::: landschaft.simulate.fuzzy_similarity
+
+::: landschaft.simulate.FuzzySimilarity
+
+::: landschaft.simulate.differences
+
+::: landschaft.simulate.similarity_of_differences
+
+::: landschaft.simulate.validate
+
+::: landschaft.simulate.Validation
+
 ## Presets and one-call projection
 
 ::: landschaft.simulate.run

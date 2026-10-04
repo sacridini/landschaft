@@ -21,6 +21,7 @@
 #include "sim/plus.hpp"
 #include "sim/rglm.hpp"
 #include "sim/rng.hpp"
+#include "sim/similarity.hpp"
 #include "sim/validation.hpp"
 #include "sim/woe.hpp"
 
@@ -596,6 +597,28 @@ py::array_t<double> sim_tmc_table(const DArray& x, const DArray& x1, const DArra
     return out;
 }
 
+py::dict sim_similarity(const IArray& a, const IArray& b, int window, bool exponential) {
+    if (a.ndim() != 2 || b.ndim() != 2 || a.shape(0) != b.shape(0) || a.shape(1) != b.shape(1))
+        throw std::invalid_argument("two maps of the same shape");
+    const i64 ny = a.shape(0), nx = a.shape(1);
+    sim::SimilarityResult r;
+    {
+        py::gil_scoped_release release;
+        r = sim::reciprocal_similarity(ny, nx, a.data(), b.data(), window, exponential);
+    }
+    py::array_t<float> f({ny, nx}), s({ny, nx});
+    std::copy(r.first.begin(), r.first.end(), f.mutable_data());
+    std::copy(r.second.begin(), r.second.end(), s.mutable_data());
+    py::dict out;
+    out["first"] = f;
+    out["second"] = s;
+    out["first_mean"] = r.first_mean;
+    out["second_mean"] = r.second_mean;
+    out["first_cells"] = r.first_cells;
+    out["second_cells"] = r.second_cells;
+    return out;
+}
+
 // R's rowSums(x, na.rm): each row added up in R's 80-bit LDOUBLE, column by column.
 py::array_t<double> sim_r_rowsums(const DArray& x, bool na_rm) {
     if (x.ndim() != 2) throw std::invalid_argument("rowSums needs a matrix");
@@ -740,6 +763,9 @@ void register_python(py::module_& m) {
           "CARS, PLUS's cellular automaton of multi-type random patch seeds (Liang et al. 2021).");
     m.def("sim_tmc_table", &sim_tmc_table, py::arg("x"), py::arg("x1"), py::arg("y1"), py::arg("w"),
           "lulcc's ThreeMapComparison table (Rules 1-4) of one resolution from the class counts per block.");
+    m.def("sim_similarity", &sim_similarity, py::arg("a"), py::arg("b"), py::arg("window"),
+          py::arg("exponential") = true,
+          "Dinamica EGO's CalcReciprocalSimilarityMap: fuzzy similarity of two categorical maps (-1: no class).");
     m.def("sim_r_rowsums", &sim_r_rowsums, py::arg("x"), py::arg("na_rm") = false,
           "R's rowSums (80-bit accumulation; na_rm skips NaN).");
     m.def("sim_futures_mfilter", &sim_futures_mfilter, py::arg("input"), py::arg("matrix"),

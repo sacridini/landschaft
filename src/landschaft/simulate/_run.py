@@ -105,6 +105,16 @@ class Projection:
         args = {**self._call["kwargs"], **changes}
         return run(*self._call["args"], **args)
 
+    def validate(self, **settings):
+        """Every comparison of the calibration's last map with the later map (:func:`validate`)."""
+        from ._validate import validate
+
+        if self.calibration is None:
+            raise ValueError("the projection was run with validate=False: there is no calibration to validate")
+        t0, t1 = self._call["args"][:2]
+        return validate(t0, t1, self.calibration.maps.isel(step=-1), nodata=self._call["kwargs"]["nodata"],
+                        **settings)
+
     def to_dataset(self) -> xr.Dataset:
         """The projected maps (and the calibration's, on its own year axis) as one Dataset."""
         ds = xr.Dataset({"landuse": self.maps})
