@@ -18,8 +18,8 @@ from optimize_reference import case_ids, model, result
 import landschaft as ls
 from landschaft import _core
 
-PY_CASES = [c for c in case_ids("core") if optimize_cases.CASES[c].py is not None]
-ALL = [(g, c) for g in ("core", "actions") for c in case_ids(g)]
+PY_CASES = [(g, c) for g in ("core", "objectives") for c in case_ids(g) if optimize_cases.CASES[c].py is not None]
+ALL = [(g, c) for g in ("core", "objectives", "actions") for c in case_ids(g)]
 
 
 def _solve_stored(m, gap=0.0, time_limit=math.inf, presolve="choose", start=None, relaxation=False):
@@ -34,6 +34,17 @@ def _solve_stored(m, gap=0.0, time_limit=math.inf, presolve="choose", start=None
         verbose=False, relaxation=relaxation, initial=start)
 
 
+def _assert_reference_optimum(ours: float, ref: float, sense: str) -> None:
+    """Our optimum is the reference's (Gurobi, gap 0). In the max objectives the cost only breaks ties
+    (0.01 x cost / total cost): Gurobi stops within its tolerances there, at different optima from
+    prioritizr and from gurobipy (max_features: 8.998077 and 8.998085), where HiGHS finds a feasible
+    8.998091; so ours may be better than the reference by up to 1e-5, never worse."""
+    if ours == pytest.approx(ref, rel=1e-9, abs=1e-9):
+        return
+    better = ours > ref if sense == "max" else ours < ref
+    assert better and abs(ours - ref) <= 1e-5 * max(1.0, abs(ref)), (ours, ref)
+
+
 @pytest.mark.parametrize(("group", "name"), ALL, ids=[c for _, c in ALL])
 def test_builtin_highs_same_optimum(group, name):
     m = model(group, name)
@@ -41,18 +52,23 @@ def test_builtin_highs_same_optimum(group, name):
         pytest.skip("general power constraints (Gurobi only)")
     r = _solve_stored(m)
     assert r["status"] == "optimal" and r["has_solution"]
-    assert r["objective"] == pytest.approx(result(group, name)["objective"][0], rel=1e-9)
+    _assert_reference_optimum(r["objective"], result(group, name)["objective"][0], m.modelsense)
     assert r["x"].shape == (m.obj.size,)
 
 
-@pytest.mark.parametrize("name", PY_CASES)
-def test_compile_is_prioritizr(name):
+@pytest.mark.parametrize(("group", "name"), PY_CASES, ids=[c for _, c in PY_CASES])
+def test_compile_is_prioritizr(group, name):
+    """The same model, bit for bit: the matrix in canonical order (by row, then column; prioritizr also
+    stores the zero costs and coefficients it pushes, which are no entries here)."""
     ours = optimize_cases.CASES[name].py().compile()
-    ref = model("core", name)
+    ref = model(group, name)
+    keep = ref.A_x != 0
+    order = np.lexsort((ref.A_j[keep], ref.A_i[keep]))
     a = ours.A.tocoo()
-    np.testing.assert_array_equal(a.row, ref.A_i, err_msg="A_i")
-    np.testing.assert_array_equal(a.col, ref.A_j, err_msg="A_j")
-    np.testing.assert_array_equal(a.data, ref.A_x, err_msg="A_x")
+    np.testing.assert_array_equal(a.row, ref.A_i[keep][order], err_msg="A_i")
+    np.testing.assert_array_equal(a.col, ref.A_j[keep][order], err_msg="A_j")
+    np.testing.assert_array_equal(a.data, ref.A_x[keep][order], err_msg="A_x")
+    assert ours.A.shape == (len(ref.rhs), len(ref.obj))
     for key in ("obj", "lb", "ub", "rhs"):
         np.testing.assert_array_equal(getattr(ours, key), getattr(ref, key), err_msg=key)
     assert list(ours.sense) == ref.sense
@@ -61,14 +77,19 @@ def test_compile_is_prioritizr(name):
     assert list(ours.row_ids) == ref.row_ids and list(ours.col_ids) == ref.col_ids
 
 
-@pytest.mark.parametrize("name", PY_CASES)
-def test_solve_reaches_prioritizr_optimum(name):
-    sol = optimize_cases.CASES[name].py().add_highs_solver(gap=0).solve()
-    ref = result("core", name)
+@pytest.mark.parametrize(("group", "name"), PY_CASES, ids=[c for _, c in PY_CASES])
+def test_solve_reaches_prioritizr_optimum(group, name):
+    p = optimize_cases.CASES[name].py()
+    sol = p.add_highs_solver(gap=0).solve()
+    ref = result(group, name)
     assert sol.status == "optimal"
-    assert sol.objective == pytest.approx(ref["objective"][0], rel=1e-9)
-    assert sol.cost == pytest.approx(ref["objective"][0], rel=1e-9)
-    assert sol.coverage["met"].all()
+    _assert_reference_optimum(sol.objective, ref["objective"][0], "max" if p.objective[0].startswith("max") else "min")
+    if p.objective[0] == "min_set":
+        assert sol.cost == pytest.approx(ref["objective"][0], rel=1e-9)
+    if p.objective[0] in ("min_set", "min_penalties"):
+        assert sol.coverage["met"].all()
+    if p.objective[0] != "min_set":
+        assert sol.cost <= p.objective[1] * (1 + 1e-9)
 
 
 def test_solution_maps_back_to_the_raster():
@@ -361,3 +382,51 @@ def test_covering_keeps_the_time_limit_on_wide_models():
     r = _cover(a, cost, rhs, "covering", gap=0.0, threads=4, time_limit=1.0)
     assert r["has_solution"] and r["seconds"] < 1.5
     assert r["status"] in ("optimal", "time_limit") and r["gap"] < 1e-3
+
+
+# ----------------------------------------------------------------------------- objectives, targets, weights
+
+def test_ignored_targets_and_weights_warn():
+    p = ls.prioritize.problem(optimize_cases.pu_cost(), optimize_cases.features())
+    with pytest.warns(UserWarning, match="targets are ignored"):
+        p.add_max_utility_objective(2500).add_relative_targets(0.3).compile()
+    with pytest.warns(UserWarning, match="weights are ignored"):
+        p.add_min_set_objective().add_relative_targets(0.3).add_feature_weights([1] * 5).compile()
+
+
+def test_objective_and_target_errors():
+    p = ls.prioritize.problem(optimize_cases.pu_cost(), optimize_cases.features())
+    for bad in (0, -1, np.inf, [1, 2]):
+        with pytest.raises(ValueError, match="budget"):
+            p.add_min_shortfall_objective(bad)
+    with pytest.raises(ValueError, match="needs targets"):
+        p.add_max_features_objective(100).compile()
+    with pytest.raises(ValueError, match="unknown features"):
+        p.add_min_set_objective().add_manual_targets(
+            {"feature": ["f9"], "type": ["absolute"], "target": [1.0]}).compile()
+    with pytest.raises(ValueError, match="'type' column"):
+        p.add_manual_targets({"feature": ["f1"], "target": [1.0]})
+    with pytest.raises(ValueError, match="senses"):
+        p.add_min_set_objective().add_manual_targets(
+            {"feature": ["f1"], "type": ["absolute"], "target": [1.0], "sense": [">"]}).compile()
+    with pytest.raises(ValueError, match="bound targets"):
+        p.add_loglinear_targets(3, 1.5, 300, 0.2)
+    with pytest.raises(ValueError, match="cap"):
+        p.add_loglinear_targets(3, 0.6, 300, 0.2, cap_amount=100)
+    with pytest.raises(ValueError, match="one value per target"):
+        p.add_max_features_objective(2500).add_relative_targets(0.3).add_feature_weights([1, 2]).compile()
+    with pytest.raises(ValueError, match=">= 0"):
+        p.add_feature_weights([1, -1, 1, 1, 1])
+
+
+def test_coverage_by_target():
+    """One row per target, with its sense; without targets, every feature's amount."""
+    sol = optimize_cases.CASES["targets_manual"].py().add_highs_solver(gap=0).solve()
+    c = sol.coverage
+    assert list(c["feature"]) == ["f1", "f2", "f4", "f4", "f5"]
+    assert list(c["sense"]) == [">=", "<=", ">=", "<=", ">="] and c["met"].all()
+    le = c["sense"] == "<="
+    assert (c.loc[le, "absolute_held"] <= c.loc[le, "absolute_target"] + 1e-9).all()
+    sol = optimize_cases.CASES["max_utility"].py().solve()
+    assert list(sol.coverage.columns) == ["feature", "total_amount", "absolute_held", "relative_held"]
+    assert sol.cost <= 2500

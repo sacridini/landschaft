@@ -376,6 +376,7 @@ class Problem:
     locked_out: object = None
     decisions: tuple = ("binary",)
     solver: tuple = ("highs", {})
+    weights: object = None
 
     def __repr__(self) -> str:
         u = self.units
@@ -386,10 +387,39 @@ class Problem:
     def _with(self, **kw) -> Problem:
         return dataclasses.replace(self, **kw)
 
-    # --- objectives
+    # --- objectives (prioritizr's; a budget is the most the selected units may cost)
     def add_min_set_objective(self) -> Problem:
         """Minimum set: meet every target at the least cost."""
         return self._with(objective=("min_set",))
+
+    def add_min_shortfall_objective(self, budget: float) -> Problem:
+        """Minimum shortfall: within the budget, the least sum of the targets' shortfalls, each as a
+        share of its target (weighted by :meth:`add_feature_weights`)."""
+        return self._with(objective=("min_shortfall", _budget(budget)))
+
+    def add_min_largest_shortfall_objective(self, budget: float) -> Problem:
+        """Minimum largest shortfall: within the budget, the least of the largest shortfall of any
+        target, as a share of the target."""
+        return self._with(objective=("min_largest_shortfall", _budget(budget)))
+
+    def add_max_utility_objective(self, budget: float) -> Problem:
+        """Maximum utility: within the budget, the most of the features' amounts (weighted); no
+        targets."""
+        return self._with(objective=("max_utility", _budget(budget)))
+
+    def add_max_features_objective(self, budget: float) -> Problem:
+        """Maximum features: within the budget, the most targets met (weighted)."""
+        return self._with(objective=("max_features", _budget(budget)))
+
+    def add_max_cover_objective(self, budget: float) -> Problem:
+        """Maximum cover: within the budget, the most features held at all (any amount above zero,
+        weighted); no targets."""
+        return self._with(objective=("max_cover", _budget(budget)))
+
+    def add_min_penalties_objective(self, budget: float) -> Problem:
+        """Minimum penalties: meet the targets within the budget with the least penalties (the
+        penalties come in a later phase: until then any solution that meets them is optimal)."""
+        return self._with(objective=("min_penalties", _budget(budget)))
 
     # --- targets
     def add_relative_targets(self, targets) -> Problem:
@@ -399,6 +429,57 @@ class Problem:
     def add_absolute_targets(self, targets) -> Problem:
         """Targets as amounts of every feature (one value or one per feature)."""
         return self._with(targets=("absolute", self._per_feature(targets)))
+
+    def add_manual_targets(self, targets: pd.DataFrame) -> Problem:
+        """Targets from a table, one row per target: ``feature`` (name), ``type`` (``"relative"`` or
+        ``"absolute"``), ``target`` and, optionally, ``sense`` (``">="``, the default, ``"<="`` or
+        ``"="``). A feature may have several targets, or none."""
+        t = pd.DataFrame(targets)
+        for col in ("feature", "type", "target"):
+            if col not in t.columns:
+                raise ValueError(f"the targets table needs a {col!r} column")
+        extra = set(t.columns) - {"feature", "type", "target", "sense"}
+        if extra:
+            raise ValueError(f"unknown columns in the targets table: {sorted(extra)}")
+        if not np.isfinite(t["target"].to_numpy(dtype=np.float64)).all():
+            raise ValueError("targets must be finite")
+        return self._with(targets=("manual", t.reset_index(drop=True).copy()))
+
+    def add_loglinear_targets(self, lower_bound_amount: float, lower_bound_target: float,
+                              upper_bound_amount: float, upper_bound_target: float,
+                              cap_amount: float | None = None, cap_target: float | None = None,
+                              abundances=None) -> Problem:
+        """Targets that fall log-linearly with a feature's total amount (Rodrigues et al. 2004):
+        ``lower_bound_target`` (a share) up to ``lower_bound_amount``, ``upper_bound_target`` from
+        ``upper_bound_amount``, linear in log10(amount) between them; with a cap, features of at
+        least ``cap_amount`` get the absolute target ``cap_target``. ``abundances``: the amounts
+        (default: every feature's total)."""
+        for v in (lower_bound_amount, upper_bound_amount):
+            if not (np.isfinite(v) and v >= 0):
+                raise ValueError("the bound amounts must be finite and >= 0")
+        for v in (lower_bound_target, upper_bound_target):
+            if not 0 <= v <= 1:
+                raise ValueError("the bound targets must be from 0 to 1")
+        if lower_bound_amount > upper_bound_amount:
+            raise ValueError("the lower bound amount must not exceed the upper bound amount")
+        if (cap_amount is None) != (cap_target is None):
+            raise ValueError("give both cap_amount and cap_target, or neither")
+        a = None if abundances is None else self._per_feature(abundances)
+        if a is not None and (a < 0).any():
+            raise ValueError("abundances must be >= 0")
+        return self._with(targets=("loglinear", (float(lower_bound_amount), float(lower_bound_target),
+                                                 float(upper_bound_amount), float(upper_bound_target),
+                                                 cap_amount, cap_target, a)))
+
+    # --- penalties
+    def add_feature_weights(self, weights) -> Problem:
+        """Weights of the features (of the targets, when there are targets) in the objectives that
+        add them up: min shortfall, max utility, max features, max cover (ignored, with a warning,
+        by min set and min largest shortfall)."""
+        w = np.asarray(weights, dtype=np.float64).ravel()
+        if not np.isfinite(w).all() or (w < 0).any():
+            raise ValueError("weights must be finite and >= 0")
+        return self._with(weights=w)
 
     def _per_feature(self, v) -> np.ndarray:
         n = len(self.units.feature_names)
@@ -472,30 +553,9 @@ class Problem:
     # --- compile
     def compile(self) -> OptimizationProblem:
         """The model prioritizr's ``compile()`` gives for this problem."""
-        u = self.units
-        if self.objective is None:
-            raise ValueError("the problem has no objective: add one (add_min_set_objective, ...)")
-        if self.targets is None:
-            raise ValueError("the min set objective needs targets (add_relative_targets, add_absolute_targets)")
-        kind, values = self.targets
-        rhs = values * u.totals if kind == "relative" else values.copy()
-        n = u.n
-        lb = np.zeros(n)
-        if self.decisions[0] == "binary":
-            ub, vtype = np.ones(n), ("B",) * n
-        elif self.decisions[0] == "proportion":
-            ub, vtype = np.ones(n), ("C",) * n
-        else:
-            ub, vtype = np.full(n, self.decisions[1]), ("C",) * n
-        li, lo = self._mask(self.locked_in), self._mask(self.locked_out)
-        if (li & lo).any():
-            raise ValueError(f"{int((li & lo).sum())} planning units are both locked in and locked out")
-        lb[li] = 1.0
-        ub[lo] = 0.0
-        nf = len(u.feature_names)
-        return OptimizationProblem(
-            A=u.rij.copy(), obj=u.cost.copy(), lb=lb, ub=ub, rhs=rhs, sense=(">=",) * nf, vtype=vtype,
-            modelsense="min", row_ids=("spp_target",) * nf, col_ids=("pu",) * n)
+        from ._milp_compile import compile_problem
+
+        return compile_problem(self)[0]
 
     # --- solve
     def solve(self, start=None):
@@ -513,13 +573,14 @@ class Problem:
             every target is met (locked-in units always, locked-out never);
             the solver then drops those not needed and goes on from there.
         """
+        from ._milp_compile import compile_problem
         from ._milp_solve import make_solution, solve_model
 
-        m = self.compile()
+        m, targets = compile_problem(self)
         if start is not None:
             start = self._start(start, m)
         r = solve_model(m, self.solver[0], self.solver[1], start)
-        return make_solution(self.units, m, r)
+        return make_solution(self.units, m, r, targets)
 
     def _start(self, start, m: OptimizationProblem) -> np.ndarray:
         from ._zonation import ZonationResult
@@ -536,6 +597,15 @@ class Problem:
         if start.size != m.ncol:
             raise ValueError(f"the start solution must have one value per planning unit ({m.ncol})")
         return start
+
+
+def _budget(budget) -> float:
+    b = np.asarray(budget, dtype=np.float64).ravel()
+    if b.size != 1:
+        raise ValueError("one budget (problems have one zone)")
+    if not np.isfinite(b[0]) or b[0] <= 0:
+        raise ValueError("the budget must be finite and > 0")
+    return float(b[0])
 
 
 def _zonation_rank(u: Units) -> xr.DataArray:

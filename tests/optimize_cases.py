@@ -29,7 +29,7 @@ from itertools import pairwise
 
 import numpy as np
 
-GROUPS: list[str] = ["core", "actions", "exact"]
+GROUPS: list[str] = ["core", "objectives", "actions", "exact"]
 
 NY, NX = 12, 15
 RES = 100.0
@@ -348,6 +348,58 @@ CASES: dict[str, Case] = {
         reference(problem(pu_polygons_partial, features, cost_column = "cost") |> add_min_set_objective() |>
                   add_relative_targets(0.3) |> add_binary_decisions())""",
                                     notes="amounts weighted by the covered fraction (exactextractr)"),
+    # --- objectives: prioritizr's objectives with a budget, targets (manual, loglinear), feature weights
+    "min_shortfall": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_shortfall_objective(2500) |>
+                  add_relative_targets(0.4) |> add_binary_decisions())"""),
+    "min_shortfall_weights_tiny": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_shortfall_objective(2500) |>
+                  add_absolute_targets(c(1.2, 1e-5, 1, 120, 4)) |> add_feature_weights(c(1, 2, 0.5, 3, 1)) |>
+                  add_binary_decisions())""", notes="a target of 1e-5 (not above it): 0 in the objective, 1e5 x weight with weights"),
+    "min_shortfall_tiny": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_shortfall_objective(2500) |>
+                  add_absolute_targets(c(1.2, 1e-5, 1, 120, 4)) |> add_binary_decisions())"""),
+    "min_largest_shortfall": Case("objectives", (*RASTER, "locked_in", "locked_out"), """
+        reference(problem(pu_cost, features) |> add_min_largest_shortfall_objective(2500) |>
+                  add_relative_targets(c(0.3, 0.4, 0.5, 0.2, 0.35)) |> add_locked_in_constraints(locked_in) |>
+                  add_locked_out_constraints(locked_out) |> add_binary_decisions())"""),
+    "max_utility": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_max_utility_objective(2500) |> add_binary_decisions())"""),
+    "max_utility_weights": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_max_utility_objective(2500) |>
+                  add_feature_weights(c(5, 1, 2, 0.01, 0.5)) |> add_proportion_decisions())""", notes="an LP"),
+    "max_utility_negative": Case("objectives", ("pu_table",), """
+        t <- pu_table; t$f3 <- t$f3 - 0.01
+        reference(problem(t, features = paste0("f", 1:5), cost_column = "cost") |>
+                  add_max_utility_objective(2500) |> add_binary_decisions())""",
+                                 notes="negative amounts: amount columns unbounded below"),
+    "max_features": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_max_features_objective(2500) |>
+                  add_relative_targets(c(0.3, 0.4, 0.5, 0.2, 0.35)) |> add_feature_weights(c(1, 2, 3, 1, 2)) |>
+                  add_binary_decisions())"""),
+    "max_cover": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_max_cover_objective(800) |> add_binary_decisions())"""),
+    "min_penalties": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_penalties_objective(2500) |>
+                  add_relative_targets(0.2) |> add_binary_decisions())""", notes="no penalties yet"),
+    "targets_manual": Case("objectives", RASTER, """
+        t <- data.frame(feature = c("f1", "f2", "f4", "f4", "f5"),
+                        type = c("relative", "absolute", "relative", "absolute", "relative"),
+                        sense = c(">=", "<=", ">=", "<=", ">="), target = c(0.3, 2.0, 0.2, 120, 0.25))
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_manual_targets(t) |>
+                  add_binary_decisions())""", notes="several targets of one feature, a feature without"),
+    "targets_manual_equal": Case("objectives", RASTER, """
+        t <- data.frame(feature = c("f1", "f3", "f5"), type = c("relative", "absolute", "relative"),
+                        sense = c("=", ">=", "="), target = c(0.3, 1.1, 0.25))
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_manual_targets(t) |>
+                  add_proportion_decisions())"""),
+    "targets_loglinear": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |>
+                  add_loglinear_targets(3, 0.6, 300, 0.2) |> add_binary_decisions())"""),
+    "targets_loglinear_cap": Case("objectives", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |>
+                  add_loglinear_targets(3, 0.6, 300, 0.2, cap_amount = 100, cap_target = 50) |>
+                  add_binary_decisions())"""),
     # --- exact: exactextractr's coverage fractions and sums (the amounts of polygon planning units)
     "exact_shapes": Case("exact", ("features", "shapes"), """
         cov <- exactextractr::coverage_fraction(features[[1]], shapes)
@@ -444,3 +496,52 @@ for _name, _fn in PY.items():
 
 def case_ids(group: str) -> list[str]:
     return [k for k, c in CASES.items() if c.group == group]
+
+
+def _rp():
+    import landschaft as ls
+
+    return ls.prioritize.problem(pu_cost(), features())
+
+
+MANUAL = {"feature": ["f1", "f2", "f4", "f4", "f5"], "type": ["relative", "absolute", "relative", "absolute", "relative"],
+          "sense": [">=", "<=", ">=", "<=", ">="], "target": [0.3, 2.0, 0.2, 120, 0.25]}
+MANUAL_EQ = {"feature": ["f1", "f3", "f5"], "type": ["relative", "absolute", "relative"], "sense": ["=", ">=", "="],
+             "target": [0.3, 1.1, 0.25]}
+
+
+def _negative_table():
+    import landschaft as ls
+
+    t = pu_table()
+    t["f3"] = t["f3"] - 0.01
+    return ls.prioritize.problem(t, FEATURES, cost_column="cost")
+
+
+PY_OBJECTIVES: dict[str, Callable] = {
+    "min_shortfall": lambda: _rp().add_min_shortfall_objective(2500).add_relative_targets(0.4).add_binary_decisions(),
+    "min_shortfall_weights_tiny": lambda: _rp().add_min_shortfall_objective(2500)
+    .add_absolute_targets([1.2, 1e-5, 1, 120, 4]).add_feature_weights([1, 2, 0.5, 3, 1]).add_binary_decisions(),
+    "min_shortfall_tiny": lambda: _rp().add_min_shortfall_objective(2500)
+    .add_absolute_targets([1.2, 1e-5, 1, 120, 4]).add_binary_decisions(),
+    "min_largest_shortfall": lambda: _rp().add_min_largest_shortfall_objective(2500)
+    .add_relative_targets([0.3, 0.4, 0.5, 0.2, 0.35]).add_locked_in_constraints(locked_in())
+    .add_locked_out_constraints(locked_out()).add_binary_decisions(),
+    "max_utility": lambda: _rp().add_max_utility_objective(2500).add_binary_decisions(),
+    "max_utility_weights": lambda: _rp().add_max_utility_objective(2500).add_feature_weights([5, 1, 2, 0.01, 0.5])
+    .add_proportion_decisions(),
+    "max_utility_negative": lambda: _negative_table().add_max_utility_objective(2500).add_binary_decisions(),
+    "max_features": lambda: _rp().add_max_features_objective(2500).add_relative_targets([0.3, 0.4, 0.5, 0.2, 0.35])
+    .add_feature_weights([1, 2, 3, 1, 2]).add_binary_decisions(),
+    "max_cover": lambda: _rp().add_max_cover_objective(800).add_binary_decisions(),
+    "min_penalties": lambda: _rp().add_min_penalties_objective(2500).add_relative_targets(0.2).add_binary_decisions(),
+    "targets_manual": lambda: _rp().add_min_set_objective().add_manual_targets(MANUAL).add_binary_decisions(),
+    "targets_manual_equal": lambda: _rp().add_min_set_objective().add_manual_targets(MANUAL_EQ)
+    .add_proportion_decisions(),
+    "targets_loglinear": lambda: _rp().add_min_set_objective().add_loglinear_targets(3, 0.6, 300, 0.2)
+    .add_binary_decisions(),
+    "targets_loglinear_cap": lambda: _rp().add_min_set_objective()
+    .add_loglinear_targets(3, 0.6, 300, 0.2, cap_amount=100, cap_target=50).add_binary_decisions(),
+}
+for _name, _fn in PY_OBJECTIVES.items():
+    CASES[_name].py = _fn

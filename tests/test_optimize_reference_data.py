@@ -15,7 +15,7 @@ import optimize_cases
 import pytest
 from optimize_reference import case_ids, model, result, solve_gurobi, solve_highs
 
-CASES = [(g, c) for g in ("core", "actions") for c in case_ids(g)]
+CASES = [(g, c) for g in ("core", "objectives", "actions") for c in case_ids(g)]
 IDS = [c for _, c in CASES]
 
 
@@ -42,7 +42,7 @@ def test_reference_case(group, name):
     assert m.A_i.min() >= 0 and m.A_i.max() < nrow and m.A_j.min() >= 0 and m.A_j.max() < ncol
     assert m.modelsense in ("min", "max")
     x = r["solution"]
-    if group == "core":
+    if group in ("core", "objectives"):
         # prioritizr reports the planning-unit columns, which come first
         assert set(m.col_ids) >= {"pu"} and len(m.row_ids) == nrow
         npu = m.col_ids.count("pu")
@@ -74,7 +74,7 @@ def test_same_optimum_highs(group, name):
     if m.genconpow is not None:
         pytest.skip("general power constraints (Gurobi only)")
     obj, _ = solve_highs(m)
-    assert obj == pytest.approx(result(group, name)["objective"][0], rel=1e-6)
+    assert obj == pytest.approx(result(group, name)["objective"][0], rel=1e-5)  # the max objectives' cost tie-break: see test_prioritize_milp
 
 
 @pytest.mark.skipif(not _gurobi_ok(), reason="gurobipy or its licence missing")
@@ -82,7 +82,7 @@ def test_same_optimum_highs(group, name):
 def test_same_optimum_gurobi(group, name):
     m = model(group, name)
     obj, _ = solve_gurobi(m)
-    assert obj == pytest.approx(result(group, name)["objective"][0], rel=1e-6)
+    assert obj == pytest.approx(result(group, name)["objective"][0], rel=1e-5)  # the max objectives' cost tie-break: see test_prioritize_milp
 
 
 def test_raster_inputs_reach_prioritizr_unchanged():
