@@ -6,6 +6,21 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-10-04
+
+### Added
+- `ls.simulate` phase 6, PLUS: `CARS`, the cellular automaton of multi-type random patch seeds
+  (classes compete through growth probability, neighbourhood share and an adaptive coefficient that
+  follows the gap to the demand; random seeds start new patches; a decreasing threshold decides the
+  changes), in C++, written from Liang et al. (2021) (PLUS has no source code); demand from an
+  `AreaDemand` or a projected `Markov` chain, 0/1 conversion matrix and restricted cells; the same
+  maps with any number of threads. `Estimator.importance()`: the contribution of each driver to each
+  class's model (LEAS's driver contributions), by impurity or permutation.
+
+### Changed
+- The xoshiro256** generator of the clean-room allocations moved to `src/cpp/sim/rng.hpp`
+  (`ExpanderPatcher` gives the same maps).
+
 ## [1.12.0] - 2026-10-03
 
 ### Added
