@@ -6,10 +6,14 @@
 #include "opt/actions.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <numeric>
 #include <stdexcept>
 #include <unordered_map>
+
+#include "opt/closure.hpp"
 
 namespace opt::actions {
 
@@ -520,6 +524,13 @@ Compiled equivalent(const Input& in, const Pairs& p, const Settings& s) {
     }
     const bool maximize = s.maximize;
     Builder b;
+    Compiled out;
+    // the closure engine's view: every unit's and action's own term (a minimisation), the pair terms
+    out.node_cost.assign(static_cast<std::size_t>(n + na), 0.0);
+    if (!maximize) {
+        for (i64 i = 0; i < n; ++i) out.node_cost[static_cast<std::size_t>(i)] = in.monitoring_cost[static_cast<std::size_t>(i)];
+        for (i64 a = 0; a < na; ++a) out.node_cost[static_cast<std::size_t>(n + a)] = in.act_cost[static_cast<std::size_t>(a)];
+    }
     // columns: units, actions (the locks as bounds)
     const Boundary bm = boundary_matrix(in);
     const bool units_bnd = !bm.empty() && s.blm != 0;
@@ -554,11 +565,16 @@ Compiled equivalent(const Input& in, const Pairs& p, const Settings& s) {
         for (i64 k = 0; k < np; ++k) {
             const auto q = static_cast<std::size_t>(k);
             if (p.sum_alpha[q] != 0.0)
-                for (i64 j = p.start[q]; j < p.start[q + 1]; ++j)
-                    b.obj[static_cast<std::size_t>(n + p.action[static_cast<std::size_t>(j)])] +=
-                        p.contribution[static_cast<std::size_t>(j)] * p.amount[q];
-            else
+                for (i64 j = p.start[q]; j < p.start[q + 1]; ++j) {
+                    const auto c = static_cast<std::size_t>(n + p.action[static_cast<std::size_t>(j)]);
+                    const double v = p.contribution[static_cast<std::size_t>(j)] * p.amount[q];
+                    b.obj[c] += v;
+                    out.node_cost[c] -= v;
+                }
+            else {
                 b.obj[static_cast<std::size_t>(p.unit[q])] += p.amount[q];
+                out.node_cost[static_cast<std::size_t>(p.unit[q])] -= p.amount[q];
+            }
         }
     // activation, one row per action
     for (i64 a = 0; a < na; ++a) {
@@ -589,13 +605,24 @@ Compiled equivalent(const Input& in, const Pairs& p, const Settings& s) {
                 const i64 col = b.ncol();
                 b.column(maximize ? s.blm * v : -s.blm * v, true);
                 triple(col, r, c);
+                out.prod_a.push_back(r);
+                out.prod_b.push_back(c);
+                out.pen_i.push_back(c);  // blm v w_c (1 - w_r): unit c's boundary term
+                out.pen_j.push_back(r);
+                out.pen_w.push_back(s.blm * v);
             }
     for (const auto& [aa, v] : pair_terms) {
         const double bt = in.blm_actions[static_cast<std::size_t>(in.act_threat[static_cast<std::size_t>(aa.first)])];
         const i64 col = b.ncol();
         b.column(maximize ? bt * v : -bt * v, true);
         triple(col, n + aa.first, n + aa.second);
+        out.prod_a.push_back(n + aa.first);
+        out.prod_b.push_back(n + aa.second);
+        out.pen_i.push_back(n + aa.first);
+        out.pen_j.push_back(n + aa.second);
+        out.pen_w.push_back(bt * v);
     }
+    out.side_row0 = b.nrow();
     if (!maximize) {
         const i64 row0 = b.nrow();
         i64 k = 0;
@@ -626,6 +653,13 @@ Compiled equivalent(const Input& in, const Pairs& p, const Settings& s) {
     }
     Compiled c = b.finish(maximize);
     c.n_pairs = np;
+    c.node_cost = std::move(out.node_cost);
+    c.side_row0 = out.side_row0;
+    c.prod_a = std::move(out.prod_a);
+    c.prod_b = std::move(out.prod_b);
+    c.pen_i = std::move(out.pen_i);
+    c.pen_j = std::move(out.pen_j);
+    c.pen_w = std::move(out.pen_w);
     return c;
 }
 
@@ -712,6 +746,253 @@ std::vector<double> connectivity(const Input& in, const std::vector<double>& uni
         if (v != 0) t = t + v;
     }
     return out;
+}
+
+
+namespace {
+
+// HiGHS's MIP continues the engine only up to this many free columns when there is a time limit (it
+// does not look at the clock in its root heuristics on wide models: IDEAS.md, phase 0)
+constexpr i64 kHighsColumns = 100000;
+// the core MIPs: the units and actions whose flip costs the bound least, the others at the best solution's
+// values (a restriction: its solutions are feasible)
+constexpr i64 kCoreMin = 1000, kCoreColumns = 50000;
+
+double gap_of(double upper, double lower) {
+    if (!std::isfinite(upper) || !std::isfinite(lower)) return kInf;
+    const double g = upper - lower;
+    if (g <= 0) return 0.0;
+    return g / std::max(std::abs(upper), 1e-10);
+}
+
+// The full solution of the equivalent model from its units and actions (the products after them).
+std::vector<double> expand(const Compiled& c, std::vector<double> x) {
+    const std::size_t base = x.size();
+    x.resize(static_cast<std::size_t>(c.model.ncol));
+    for (std::size_t k = 0; k < c.prod_a.size(); ++k)
+        x[base + k] = x[static_cast<std::size_t>(c.prod_a[k])] * x[static_cast<std::size_t>(c.prod_b[k])];
+    return x;
+}
+
+// The engine's problem: nodes = the units and actions; requirements = action -> unit; side rows = the
+// equivalent model's rows from side_row0 on (>= rows with a right side <= 0 left out: always met).
+closure::Problem closure_problem(const Input& in, const Compiled& c) {
+    const i64 n = in.n_units, na = in.n_actions(), nn = n + na;
+    const Model& m = c.model;
+    closure::Problem q;
+    q.n = static_cast<int>(nn);
+    q.cost = c.node_cost;
+    q.fixed.assign(static_cast<std::size_t>(nn), -1);
+    for (i64 v = 0; v < nn; ++v) {
+        if (m.lb[static_cast<std::size_t>(v)] > 0.5) q.fixed[static_cast<std::size_t>(v)] = 1;
+        else if (m.ub[static_cast<std::size_t>(v)] < 0.5) q.fixed[static_cast<std::size_t>(v)] = 0;
+    }
+    for (i64 a = 0; a < na; ++a) {
+        q.req_from.push_back(static_cast<int>(n + a));
+        q.req_to.push_back(static_cast<int>(in.act_unit[static_cast<std::size_t>(a)]));
+    }
+    for (std::size_t k = 0; k < c.pen_i.size(); ++k) {
+        q.pen_i.push_back(static_cast<int>(c.pen_i[k]));
+        q.pen_j.push_back(static_cast<int>(c.pen_j[k]));
+        q.pen_w.push_back(c.pen_w[k]);
+    }
+    std::vector<std::vector<std::pair<int, double>>> by(static_cast<std::size_t>(nn));
+    for (i64 r = c.side_row0; r < m.nrow; ++r) {
+        const auto rr = static_cast<std::size_t>(r);
+        const bool geq = c.sense[rr] == kGe;
+        if (geq && c.rhs[rr] <= 0) continue;
+        const int row = q.m++;
+        q.rhs.push_back(c.rhs[rr]);
+        q.geq.push_back(geq ? 1 : 0);
+        for (i64 k = m.start[rr]; k < m.start[rr + 1]; ++k) {
+            const i64 col = m.index[static_cast<std::size_t>(k)];
+            const double v = m.value[static_cast<std::size_t>(k)];
+            if (v != 0.0) by[static_cast<std::size_t>(col)].emplace_back(row, v);
+        }
+    }
+    q.col_start.assign(1, 0);
+    for (const auto& col : by) {
+        for (const auto& [row, v] : col) {
+            q.col_row.push_back(row);
+            q.col_val.push_back(v);
+        }
+        q.col_start.push_back(static_cast<i64>(q.col_row.size()));
+    }
+    return q;
+}
+
+}  // namespace
+
+SolveResult solve(const Input& in, const Pairs& p, const Settings& s, const SolveOptions& o, bool engine) {
+    using Clock = std::chrono::steady_clock;
+    const Clock::time_point t0 = Clock::now();
+    auto elapsed = [&] { return std::chrono::duration<double>(Clock::now() - t0).count(); };
+    const i64 n = in.n_units, na = in.n_actions(), nn = n + na;
+    Compiled c = equivalent(in, p, s);
+    SolveResult res;
+    if (c.model.ncol == 0) {  // the full model (response curves, or coefficients the substitution cannot take)
+        const Compiled full = compile(in, p, s, true, true);
+        res = solve_highs(full.model, o);
+        if (res.has_solution) {
+            std::vector<double> x(static_cast<std::size_t>(nn + p.size()));
+            for (i64 v = 0; v < nn; ++v) x[static_cast<std::size_t>(v)] = std::round(res.x[static_cast<std::size_t>(v)]);
+            for (i64 k = 0; k < p.size(); ++k)
+                x[static_cast<std::size_t>(nn + k)] = res.x[static_cast<std::size_t>(nn + k)];
+            res.x = std::move(x);
+        }
+        res.seconds = elapsed();
+        return res;
+    }
+    const Model& m = c.model;
+    const double sign = s.maximize ? -1.0 : 1.0;  // the engine minimises
+    bool usable = engine;
+    for (const double w : c.pen_w) usable = usable && w >= 0;
+    std::vector<double> best;  // units and actions
+    double best_obj = kInf, bound = -kInf;  // the engine's sense (a minimisation)
+    std::vector<std::int8_t> fixable;
+    std::vector<double> flip, centre;
+    std::string status;
+    if (usable) {
+        closure::Options eo;
+        eo.gap = o.gap;
+        eo.time_limit = std::isfinite(o.time_limit) ? o.time_limit : -1.0;
+        eo.threads = std::max(1, o.threads);
+        eo.verbose = o.verbose;
+        std::vector<std::uint8_t> init;
+        if (!o.start.empty()) {
+            if (static_cast<i64>(o.start.size()) < nn) throw std::invalid_argument("the start needs the units and actions");
+            init.resize(static_cast<std::size_t>(nn));
+            for (i64 v = 0; v < nn; ++v) init[static_cast<std::size_t>(v)] = o.start[static_cast<std::size_t>(v)] > 0.5;
+        }
+        const closure::Result er = closure::solve(closure_problem(in, c), eo, init);
+        if (er.status == "infeasible") {
+            res.status = "infeasible";
+            res.seconds = elapsed();
+            return res;
+        }
+        bound = er.bound;
+        if (std::isfinite(er.objective)) {
+            best_obj = er.objective;
+            best.assign(er.z.begin(), er.z.end());
+        }
+        fixable = er.fixable;
+        flip = er.flip;
+        centre.assign(er.centre_z.begin(), er.centre_z.end());
+        status = er.status;
+    }
+    if (best.empty() || gap_of(best_obj, bound) > o.gap) {
+        double left = o.time_limit - elapsed();
+        Model mm = m;
+        i64 free_cols = mm.ncol;
+        if (!fixable.empty())
+            for (i64 v = 0; v < nn; ++v) {
+                const std::int8_t f = fixable[static_cast<std::size_t>(v)];
+                if (f < 0 || (!best.empty() && best[static_cast<std::size_t>(v)] != f)) continue;  // keep the start
+                mm.lb[static_cast<std::size_t>(v)] = mm.ub[static_cast<std::size_t>(v)] = f;
+                --free_cols;
+            }
+        // core MIPs on HiGHS, for a better solution (the bound stays the engine's): free the units and
+        // actions where the best solution and the inner minimum at the best multipliers differ, and those
+        // whose flip costs the bound least (the near ties of the Lagrangian), the others at their value in
+        // the inner minimum; a twentieth of the free columns first, doubled while the gap stays open
+        // HiGHS may stop at any solution within the gap of the engine's bound (in the model's sense)
+        auto target = [&] {
+            if (!std::isfinite(bound)) return -kInf;
+            const double b = bound, g = std::min(o.gap, 0.5);
+            const double t = (b >= 0 ? b / (1 - g) : b / (1 + g)) + 1e-9 * std::max(1.0, std::abs(b));
+            return sign * t;
+        };
+        i64 size = std::max(kCoreMin, free_cols / 20);
+        while (!flip.empty() && !best.empty() && size <= kCoreColumns && left > 0 && gap_of(best_obj, bound) > o.gap) {
+            std::vector<std::pair<double, i64>> order;
+            i64 differ = 0;
+            for (i64 v = 0; v < nn; ++v) {
+                const auto q = static_cast<std::size_t>(v);
+                if (mm.lb[q] >= mm.ub[q]) continue;
+                if (best[q] != centre[q]) {
+                    order.emplace_back(-1.0, v);
+                    ++differ;
+                } else {
+                    order.emplace_back(flip[q], v);
+                }
+            }
+            const auto keep = static_cast<std::size_t>(std::max(size, differ));
+            if (keep >= order.size()) break;  // no smaller than the whole model
+            std::sort(order.begin(), order.end());
+            // the best solution differs from the inner minimum only inside the core: it is the core's start
+            Model core = mm;
+            for (std::size_t k = keep; k < order.size(); ++k) {
+                const auto q = static_cast<std::size_t>(order[k].second);
+                core.lb[q] = core.ub[q] = centre[q];
+            }
+            SolveOptions co = o;
+            co.time_limit = std::isfinite(left) ? 0.5 * left : 60.0;
+            co.start = expand(c, best);
+            co.objective_target = target();
+            const SolveResult cr = solve_highs(core, co);
+            if (o.verbose)
+                std::fprintf(stderr, "multi-action: core MIP of %lld columns: %s, %.10g, %.2f s\n",
+                             static_cast<long long>(keep), cr.status.c_str(), cr.objective, cr.seconds);
+            if (cr.has_solution && sign * cr.objective < best_obj) {
+                best_obj = sign * cr.objective;
+                best.assign(cr.x.begin(), cr.x.begin() + nn);
+                for (double& x : best) x = std::round(x);
+            }
+            if (cr.status != "optimal" && cr.status != "target") break;
+            size = 2 * static_cast<i64>(keep);
+            left = o.time_limit - elapsed();
+        }
+        left = o.time_limit - elapsed();
+        if (o.verbose)
+            std::fprintf(stderr, "multi-action: %lld of %lld columns left free for HiGHS\n",
+                         static_cast<long long>(free_cols), static_cast<long long>(mm.ncol));
+        if (gap_of(best_obj, bound) <= o.gap) {
+            status = "optimal";
+        } else
+        if (left > 0 && (!std::isfinite(o.time_limit) || free_cols <= kHighsColumns || best.empty())) {
+            SolveOptions ho = o;
+            ho.time_limit = left;
+            ho.objective_target = target();
+            ho.start.clear();
+            if (!best.empty()) ho.start = expand(c, best);
+            const SolveResult hr = solve_highs(mm, ho);
+            if (hr.has_solution) {
+                const double v = sign * hr.objective;
+                if (v < best_obj) {
+                    best_obj = v;
+                    best.assign(hr.x.begin(), hr.x.begin() + nn);
+                    for (double& x : best) x = std::round(x);
+                }
+            }
+            // HiGHS's bound holds for the model with the fixings: the optimum is above it or is the engine's
+            // solution, which no fixed node can improve on
+            if (std::isfinite(hr.bound)) {
+                const double hb = sign * hr.bound;
+                bound = std::max(bound, fixable.empty() ? hb : std::min(hb, best_obj));
+            }
+            if (hr.status == "infeasible" && best.empty()) {
+                res.status = "infeasible";
+                res.seconds = elapsed();
+                return res;
+            }
+            status = gap_of(best_obj, bound) <= o.gap ? "optimal" : hr.status;
+        } else if (!status.empty() && status != "optimal") {
+            status = "time_limit";  // out of time, or too wide for HiGHS's MIP to keep the limit
+        }
+    }
+    res.has_solution = !best.empty();
+    res.bound = sign * bound;
+    res.gap = gap_of(best_obj, bound);
+    res.status = res.has_solution ? (res.gap <= o.gap ? "optimal" : status) : (status.empty() ? "no_solution" : status);
+    if (res.has_solution) {
+        res.objective = sign * best_obj;
+        std::vector<double> x(best);
+        const std::vector<double> local = local_benefit(p, n, x);
+        x.insert(x.end(), local.begin(), local.end());
+        res.x = std::move(x);
+    }
+    res.seconds = elapsed();
+    return res;
 }
 
 }  // namespace opt::actions

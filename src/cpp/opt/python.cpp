@@ -433,6 +433,29 @@ void register_python(py::module_& m) {
         },
         py::arg("data"), py::arg("settings"), "The equivalent model for solving (curve 1), or None.");
     m.def(
+        "opt_actions_solve",
+        [](const py::dict& data, const py::dict& settings, double gap, double time_limit, int threads, bool verbose,
+           bool engine, const py::object& initial) {
+            const actions::Input in = actions_input(data);
+            const actions::Pairs p = actions::pairs(in);
+            const actions::Settings st = actions_settings(settings);
+            opt::SolveOptions o;
+            o.gap = gap;
+            o.time_limit = time_limit;
+            o.threads = threads;
+            o.verbose = verbose;
+            if (!initial.is_none()) o.start = vec<double>(initial.cast<Doubles>());
+            opt::SolveResult r;
+            {
+                py::gil_scoped_release release;
+                r = actions::solve(in, p, st, o, engine);
+            }
+            return result_dict(std::move(r));
+        },
+        py::arg("data"), py::arg("settings"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),
+        py::arg("verbose"), py::arg("engine") = true, py::arg("initial") = py::none(),
+        "Solve a multi-action problem: the closure engine, then HiGHS (x: units, actions, pair benefits).");
+    m.def(
         "opt_actions_local_benefit",
         [](const py::dict& data, const Doubles& x) {
             const actions::Input in = actions_input(data);

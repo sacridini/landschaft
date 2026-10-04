@@ -90,6 +90,14 @@ struct Compiled {
     std::vector<double> rhs;
     i64 n_pairs = 0;
     i64 first_pow = -1;  // curve != 1: the first column of b^curve
+    // equivalent() only: the closure engine's view (opt/closure.hpp) of the model, a minimisation of
+    // every unit's and action's own term plus w z_i (1 - z_j) for the boundary pairs, with the targets
+    // or the budget from side_row0 on; every column after the units and actions is the product of two
+    std::vector<double> node_cost;
+    std::vector<i64> pen_i, pen_j;
+    std::vector<double> pen_w;
+    std::vector<i64> prod_a, prod_b;
+    i64 side_row0 = 0;
 };
 
 Compiled compile(const Input& in, const Pairs& p, const Settings& s, bool disaggregate, bool curves);
@@ -98,6 +106,14 @@ Compiled compile(const Input& in, const Pairs& p, const Settings& s, bool disagg
 // a negative coefficient or a pair's coefficients summing to more than 1). Columns: units, actions,
 // then the boundary's y and p columns.
 Compiled equivalent(const Input& in, const Pairs& p, const Settings& s);
+
+// Solves the problem (curve 1): the equivalent model on the closure engine (Lagrangian bound, repaired
+// selections), then, while the gap is wider than asked, on HiGHS's MIP from the engine's solution, the
+// units and actions the bound proves fixed at their value (with a time limit only when at most 1e5
+// columns are left free). x: the units, then the actions. Without the equivalent model (a coefficient
+// < 0 or summing to more than 1 in a pair) or with engine false, HiGHS on the equivalent or the full
+// model.
+SolveResult solve(const Input& in, const Pairs& p, const Settings& s, const SolveOptions& o, bool engine = true);
 
 // Every pair's benefit (b) for a solution of units and actions: min(1, sum of its actions'
 // contributions) or the unit's value.

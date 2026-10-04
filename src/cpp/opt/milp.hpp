@@ -47,10 +47,11 @@ struct SolveOptions {
     bool verbose = false;                 // HiGHS's log on the console
     bool relaxation = false;              // solve the LP relaxation only
     std::vector<double> start;            // a solution to start from (empty: none)
+    double objective_target = -kInf;     // MIP: stop at a solution better than it (HiGHS's objective_target)
 };
 
 struct SolveResult {
-    // "optimal" (within the gap), "time_limit", "infeasible", "unbounded",
+    // "optimal" (within the gap), "time_limit", "target" (objective_target reached), "infeasible", "unbounded",
     // "infeasible_or_unbounded" or "error: <HiGHS's status>"
     std::string status;
     bool has_solution = false;

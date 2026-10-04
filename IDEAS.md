@@ -1764,14 +1764,31 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
 * **Integração** (2026-10-04): o branch `prioritize-milp` foi rebaseado sobre o `main` (depois do `ls.simulate`
   completo), suíte inteira com 3350 testes passando, **versão 1.21.0** publicada (fases 1-4 e a fase 5 até aqui).
   O trabalho segue na worktree `landschaft-prioritize`, agora a partir desse `main`.
+* **Parte 3** (2026-10-04): modelo multi-action em C++ (`src/cpp/opt/actions.cpp`): pares de resposta,
+  benefícios (`getPotentialBenefit`/`getSolutionBenefit`), custos, penalidade de conectividade, o `compile()`
+  (ainda bit a bit nos 6 casos, mesmas somas na mesma ordem), o modelo equivalente e as curvas 2/3 em formulação
+  linear por partes. Em 10⁵ unidades: `problem()` 1,5 s -> 0,03 s, `compile()` 3 s -> 0,1 s.
+* **Parte 4** (2026-10-04): **motor de fecho** (`src/cpp/opt/closure.cpp`, "closure engine"): nós (unidades e
+  ações) com requisitos z_ação <= z_unidade, termos de par >= 0 (fronteira das unidades e das ações da mesma
+  ameaça) e poucas linhas laterais (metas >= ou orçamento <=). Relaxação lagrangiana das linhas laterais: o
+  subproblema é um problema de fecho com termos de par, resolvido exato (forma fechada por unidade quando os
+  requisitos são estrelas e não há pares; corte mínimo com arcos infinitos nos requisitos, o Boykov-Kolmogorov
+  do motor de cortes, quando há) e por isso o limite é o da relaxação linear; multiplicadores pelo método de
+  feixe (o do motor de cortes, agora em `opt/bundle.hpp`); limite arredondado para cima com custos inteiros.
+  Cada solução interna é reparada (orçamento, metas por razão custo/cobertura com os multiplicadores como
+  pesos, adições que melhoram, cortes do que não se paga). Depois, se o gap pedido não fecha: **MIPs de núcleo**
+  no HiGHS (as unidades e ações onde a melhor solução e o mínimo interno diferem, mais os quase empates do
+  lagrangiano, menor custo de inversão primeiro; um vigésimo das colunas livres, dobrando enquanto o gap fica
+  aberto; o resto no valor do mínimo interno, então a melhor solução é o início), com `objective_target` do
+  HiGHS no limite do motor; por fim o MIP inteiro, com as colunas fixadas pelo limite (inverter custa mais que
+  o gap). Benchmark da fase 0 (10 feições, 3 ameaças): min custo 10⁵ gap 1% **0,7 s** (HiGHS só 57 s, Gurobi
+  3 s), gap 0 **6 s** provado ótimo (Gurobi 13 s; HiGHS só não fecha em 300 s); 10⁴ gap 0 5,5 s (HiGHS só 70 s,
+  Gurobi 0,95 s: o HiGHS leva 5 s num núcleo de 400 colunas simétrico); max benefício 10⁵ gap 1% 0,2 s (Gurobi
+  1,6 s); com fronteira (blm 1, blm_actions 0,5) 10⁴ gap 1% 0,18 s (Gurobi 7,5 s). Com fronteira e gap 0 o
+  limite da relaxação é fraco e o HiGHS não fecha (Gurobi 9 s em 10³, 99 s em 10⁴): pendência para a fase 9.
 
 ### Próximos passos (retomar daqui)
 1. **Fase 5, resto**:
-   * montagem do modelo multi-action em **C++** (`_pairs`, linhas de benefício, ativação, variáveis de borda y e
-     p: hoje laços Python por par, 4,7 s em 10⁵ unidades), com o `compile()` ainda bit a bit nos 6 casos;
-   * **distância para o Gurobi em 10⁵** (59 s contra 8,4 s): motor próprio para o multi-action (a estrutura
-     depois da eliminação dos b é cobertura com custo de abertura por unidade: relaxação lagrangiana das metas
-     como no motor de cortes, ou o motor de cobertura com as linhas x_ik <= w_i) e as curvas 2/3 em escala;
    * **entrada por rasters** (uma camada por feição e por ameaça, custos de monitoramento e de ação por raster
      ou constante: a extensão do prioripy), no padrão `ls.load_*` de entrada simples;
    * **dependências direcionais** (fluxo montante-jusante, extensão do prioripy), testadas contra uma

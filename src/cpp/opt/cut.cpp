@@ -9,6 +9,7 @@
 #include <limits>
 #include <stdexcept>
 
+#include "opt/bundle.hpp"
 #include "opt/maxflow.hpp"
 #include "opt/milp.hpp"
 
@@ -141,106 +142,16 @@ Result solve(const marxan::Data& d, const Options& o, const std::vector<int>& in
         }
     }
 
-    // box-step bundle (opt/wide.cpp's): master LP max t s.t. t <= L_j + g_j'(y - y_j), y >= 0 in a box
-    struct Cut {
-        double value;
-        std::vector<double> y, g;
-    };
-    std::vector<Cut> cuts;
+    // the multipliers by the box-step bundle method (opt/bundle.hpp)
     std::vector<double> g;
-    std::vector<double> centre = y;
-    double centre_value = lagrangian(centre, g);
-    std::vector<double> centre_g = g;
-    double bound = centre_value;
-    cuts.push_back({centre_value, centre, g});
-    double scale = 0;
-    for (const double v : y) scale = std::max(scale, std::abs(v));
-    double box = scale > 0 ? 0.5 * scale : 1.0;
-    const double box_min = 1e-12 * std::max(1.0, scale);
-    std::string why = "evaluations";
-    std::vector<double> history;
-    while (evaluations < o.max_evaluations) {
-        if (relative_gap(best, bound) <= o.gap) {
-            why = "gap";
-            break;
-        }
-        if (Clock::now() >= deadline) {
-            why = "time";
-            break;
-        }
-        if (box <= box_min) {
-            why = "box";
-            break;
-        }
-        Model master;
-        master.ncol = m + 1;
-        master.maximize = true;
-        master.obj.assign(static_cast<std::size_t>(m + 1), 0.0);
-        master.obj[m] = 1.0;
-        for (int k = 0; k < m; ++k) {
-            master.lb.push_back(std::max(0.0, centre[k] - box));
-            master.ub.push_back(centre[k] + box);
-        }
-        master.lb.push_back(-kInf);
-        master.ub.push_back(kInf);
-        master.integer.assign(static_cast<std::size_t>(m + 1), 0);
-        master.start.push_back(0);
-        for (const Cut& ct : cuts) {
-            double rhs = ct.value;
-            for (int k = 0; k < m; ++k) {
-                rhs -= ct.g[k] * ct.y[k];
-                if (ct.g[k] != 0.0) {
-                    master.index.push_back(k);
-                    master.value.push_back(-ct.g[k]);
-                }
-            }
-            master.index.push_back(m);
-            master.value.push_back(1.0);
-            master.start.push_back(static_cast<i64>(master.index.size()));
-            master.row_lo.push_back(-kInf);
-            master.row_hi.push_back(rhs);
-        }
-        master.nrow = static_cast<i64>(master.row_lo.size());
-        SolveOptions so;
-        so.threads = 1;
-        const SolveResult mr = solve_highs(master, so);
-        if (mr.status != "optimal") {
-            why = "master " + mr.status;
-            break;
-        }
-        std::vector<double> trial(mr.x.begin(), mr.x.begin() + m);
-        for (double& v : trial) v = std::max(0.0, v);
-        const double predicted = mr.x[static_cast<std::size_t>(m)] - centre_value;
-        if (predicted <= 1e-10 * std::max(1.0, std::abs(centre_value))) {
-            why = "converged";
-            break;
-        }
-        const double value = lagrangian(trial, g);
-        bound = std::max(bound, value);
-        cuts.push_back({value, trial, g});
-        if (value >= centre_value + 0.1 * predicted) {  // serious step
-            centre = trial;
-            centre_value = value;
-            centre_g = g;
-            box *= 2.0;
-        } else {
-            box *= 0.5;
-        }
-        if (cuts.size() > static_cast<std::size_t>(std::max(200, 4 * m))) {
-            std::vector<Cut> kept;
-            kept.push_back({centre_value, centre, centre_g});
-            kept.insert(kept.end(), cuts.end() - static_cast<std::ptrdiff_t>(2 * m), cuts.end());
-            cuts = std::move(kept);
-        }
-        history.push_back(bound);
-        if (history.size() > 30 && bound - history[history.size() - 31] <= 1e-6 * std::max(1.0, std::abs(bound))) {
-            why = "stalled";
-            break;
-        }
-    }
+    const BundleResult br = bundle_maximize(
+        y, lagrangian, [&](double bound) { return relative_gap(best, bound) <= o.gap; }, evaluations,
+        o.max_evaluations, deadline);
+    double bound = br.bound;
+    const std::string& why = br.why;
     // primal search: the cuts of the best multipliers scaled up (more units in, less to repair)
     const double bound_value = bound;
-    std::vector<double> best_y = centre;
+    std::vector<double> best_y = br.centre;
     for (const double theta : {1.02, 1.05, 1.1, 1.15, 1.2, 1.3, 1.4, 1.5, 1.75, 2.0, 2.5, 3.0}) {
         if (relative_gap(best, bound) <= o.gap || Clock::now() >= deadline) break;
         std::vector<double> yt(best_y);

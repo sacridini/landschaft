@@ -154,3 +154,105 @@ def test_targets_above_the_maximum_are_capped():
         p = d.problem("minimizeCosts")
     top = d.potential_benefit()["maximum.recovery.benefit"].iloc[0]
     assert p.data.features["target_recovery"].iloc[0] == top - 0.1
+
+
+# ----------------------------------------------------------------------------- the closure engine
+
+def _grid_data(side=12, seed=3, boundary=False, blm_actions=0.0, locks=False):
+    """A random multi-action problem on a side x side grid: 5 features, 3 threats."""
+    rng = np.random.default_rng(seed)
+    n = side * side
+    ids = np.arange(1.0, n + 1)
+    feat = rng.random((5, n)) < 0.35
+    thr = rng.random((3, n)) < 0.45
+    fp, fk = np.nonzero(feat.T)
+    tp, tk = np.nonzero(thr.T)
+    status = np.zeros(n)
+    tstatus = np.zeros(tp.size)
+    if locks:
+        status[rng.choice(n, 4, replace=False)] = 3
+        tstatus[rng.choice(tp.size, 3, replace=False)] = 2
+    recoverable = (feat & thr.any(axis=0)).sum(axis=1)
+    bnd = None
+    if boundary:
+        g = ids.reshape(side, side)
+        a = np.concatenate([g[:, :-1].ravel(), g[:-1, :].ravel()])
+        b = np.concatenate([g[:, 1:].ravel(), g[1:, :].ravel()])
+        bnd = pd.DataFrame({"id1": a, "id2": b, "boundary": np.ones(a.size)})
+    return ls.prioritize.actions_data(
+        pd.DataFrame({"id": ids, "monitoring_cost": rng.integers(1, 4, n).astype(float), "status": status}),
+        pd.DataFrame({"id": np.arange(1.0, 6.0), "target_recovery": np.floor(0.3 * recoverable),
+                      "target_conservation": np.floor(0.2 * (feat & ~thr.any(axis=0)).sum(axis=1))}),
+        pd.DataFrame({"pu": fp + 1.0, "feature": fk + 1.0, "amount": rng.integers(1, 3, fp.size).astype(float)}),
+        pd.DataFrame({"id": [1.0, 2.0, 3.0], "blm_actions": [blm_actions] * 3}),
+        pd.DataFrame({"pu": tp + 1.0, "threat": tk + 1.0, "amount": rng.random(tp.size).round(2) + 0.01,
+                      "action_cost": rng.integers(1, 6, tp.size).astype(float), "status": tstatus}),
+        None, bnd)
+
+
+ENGINE_CASES = {
+    "mincost": lambda: _grid_data().problem("minimizeCosts"),
+    "mincost_locks": lambda: _grid_data(locks=True).problem("minimizeCosts"),
+    "mincost_blm": lambda: _grid_data(boundary=True, blm_actions=0.5).problem("minimizeCosts", blm=1.0),
+    "maxbenefit": lambda: _grid_data().problem("maximizeBenefits", budget=80),
+    "maxbenefit_blm": lambda: _grid_data(boundary=True, blm_actions=0.25).problem("maximizeBenefits", budget=80,
+                                                                                    blm=0.5),
+}
+
+
+@pytest.mark.parametrize("name", list(ENGINE_CASES))
+def test_engine_finds_the_optimum(name):
+    """The closure engine (then HiGHS from its solution) reaches the optimum of HiGHS alone at gap 0."""
+    p = ENGINE_CASES[name]()
+    ours = p.add_highs_solver(gap=0).solve()
+    alone = p.add_highs_solver(gap=0, engine=False).solve()
+    assert ours.status == alone.status == "optimal"
+    assert ours.objective == pytest.approx(alone.objective, rel=1e-9, abs=1e-9)
+    assert ours.bound == pytest.approx(ours.objective, rel=1e-9, abs=1e-9)
+
+
+@pytest.mark.parametrize("name", list(ENGINE_CASES))
+def test_engine_solutions_are_feasible(name):
+    """At a loose gap the engine's own solution: targets or budget met, actions in monitored units, locks
+    kept, objective as the figures add up and within the gap of its bound."""
+    p = ENGINE_CASES[name]()
+    s = p.add_highs_solver(gap=0.05).solve()
+    assert s.status == "optimal" and s.gap <= 0.05
+    d = p.data
+    at = s.action_table()
+    taken = at.loc[at["solution"] > 0, "pu"].unique()
+    assert (s.monitoring().set_index("id")["solution"].loc[taken] == 1).all()
+    assert (s.units[d.pu["status"].to_numpy() == 3] == 0).all()
+    assert (s.actions[d.dist_threats["status"].to_numpy() == 2] == 1).all()
+    cu, ca = s.cost().iloc[0, 0], s.cost().iloc[0, 1:].sum()
+    if p.model == "minimizeCosts":
+        b = s.benefit()
+        f = d.features
+        assert (b["benefit.recovery"].to_numpy() >= f["target_recovery"].to_numpy() - 1e-3).all()
+        assert (b["benefit.conservation"].to_numpy() >= f["target_conservation"].to_numpy() - 1e-3).all()
+        if p.blm == 0 and (d.threats["blm_actions"] == 0).all():
+            assert cu + ca == pytest.approx(s.objective, rel=1e-9)
+    else:
+        assert cu + ca <= p.budget + 1e-6
+    lo, hi = sorted([s.objective, s.bound])
+    assert (hi - lo) / max(abs(s.objective), 1e-10) <= 0.05 + 1e-12
+
+
+def test_engine_starts_from_a_solution():
+    p = ENGINE_CASES["mincost"]().add_highs_solver(gap=0)
+    first = p.solve()
+    again = p.solve(start=first)
+    assert again.objective == pytest.approx(first.objective)
+    with pytest.raises(ValueError, match="start needs"):
+        p.solve(start=np.zeros(3))
+
+
+def test_engine_keeps_a_time_limit():
+    import time
+
+    p = _grid_data(side=40, seed=7, boundary=True, blm_actions=0.5).problem("minimizeCosts", blm=1.0)
+    t0 = time.perf_counter()
+    s = p.add_highs_solver(gap=0, time_limit=2).solve()
+    assert time.perf_counter() - t0 < 10
+    assert s.status in ("optimal", "time_limit")
+    assert np.isfinite(s.objective) and s.bound <= s.objective + 1e-9

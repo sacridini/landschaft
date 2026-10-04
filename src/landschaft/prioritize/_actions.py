@@ -536,10 +536,11 @@ class ActionsProblem:
         return compile_actions(self)
 
     def add_highs_solver(self, gap: float = 0.0, time_limit: float | None = None, n_threads: int | None = None,
-                         verbose: bool = False) -> ActionsProblem:
-        """Solve on HiGHS to a relative ``gap`` (prioriactions's ``gap_limit``, default 0)."""
+                         verbose: bool = False, engine: bool = True) -> ActionsProblem:
+        """Solve on HiGHS to a relative ``gap`` (prioriactions's ``gap_limit``, default 0), behind
+        landschaft's closure engine (``engine=False``: HiGHS's MIP alone; see :meth:`solve`)."""
         return replace(self, solver=("highs", {"gap": gap, "time_limit": time_limit, "n_threads": n_threads,
-                                               "verbose": verbose}))
+                                               "verbose": verbose, "engine": engine}))
 
     def add_gurobi_solver(self, gap: float = 0.0, time_limit: float | None = None, n_threads: int | None = None,
                           verbose: bool = False) -> ActionsProblem:
@@ -547,22 +548,45 @@ class ActionsProblem:
         return replace(self, solver=("gurobi", {"gap": gap, "time_limit": time_limit, "n_threads": n_threads,
                                                 "verbose": verbose}))
 
-    def solve(self) -> ActionsSolution:
-        from .. import _core
+    def solve(self, start=None) -> ActionsSolution:
+        """Solve the problem.
+
+        On HiGHS (the default), the equivalent model (activation one row per action, the benefit
+        columns substituted) first goes to landschaft's closure engine (a Lagrangian bound as strong as
+        the linear relaxation, by a closed form or minimum cuts, and repaired selections), then, while
+        the gap is wider than asked, to HiGHS's MIP from its solution with the units and actions the
+        bound proves fixed. ``start``: a solution to start from (an :class:`ActionsSolution` or the
+        units then the actions, 0/1)."""
+        from .. import _core, _threads
         from ._milp_solve import solve_model
 
         d = self.data
         n, na = len(d.pu), len(d.dist_threats)
         arrays = _arrays(d)
         s = _settings(self)
-        c = _core.opt_actions_equivalent(arrays, s) if self.curve == 1 else None
-        if c is not None:  # benefit columns substituted, activation per action, locks as bounds
-            r = solve_model(_optimization_problem(c, s["maximize"]), self.solver[0], self.solver[1])
-            if r["has_solution"]:
-                wx = np.round(np.asarray(r["x"], dtype=np.float64)[:n + na])
-                r["x"] = np.concatenate([wx, _core.opt_actions_local_benefit(arrays, wx)])
+        solver, opts = self.solver
+        init = None
+        if start is not None:
+            init = (np.concatenate([start.units, start.actions]) if isinstance(start, ActionsSolution)
+                    else np.asarray(start, dtype=np.float64).ravel())
+            if init.size != n + na:
+                raise ValueError(f"start needs {n + na} values (the units, then the actions)")
+        if solver == "highs":
+            tl = opts.get("time_limit")
+            r = dict(_core.opt_actions_solve(
+                arrays, s, float(opts.get("gap", 0.0)), math.inf if tl is None else float(tl),
+                _threads.resolve(opts.get("n_threads")), bool(opts.get("verbose", False)),
+                bool(opts.get("engine", True)), init))
+            r["solver"] = "highs"
         else:
-            r = solve_model(compile_actions(self, disaggregate=True, curves=True), self.solver[0], self.solver[1])
+            c = _core.opt_actions_equivalent(arrays, s) if self.curve == 1 else None
+            if c is not None:  # benefit columns substituted, activation per action, locks as bounds
+                r = solve_model(_optimization_problem(c, s["maximize"]), solver, opts)
+                if r["has_solution"]:
+                    wx = np.round(np.asarray(r["x"], dtype=np.float64)[:n + na])
+                    r["x"] = np.concatenate([wx, _core.opt_actions_local_benefit(arrays, wx)])
+            else:
+                r = solve_model(compile_actions(self, disaggregate=True, curves=True), solver, opts)
         if not r["has_solution"]:
             raise RuntimeError(f"no solution ({r['solver']}: {r['status']})")
         return self._solution(np.asarray(r["x"], dtype=np.float64), r)

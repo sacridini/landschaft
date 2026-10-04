@@ -114,6 +114,7 @@ SolveResult solve_highs(const Model& model, const SolveOptions& options) {
                                                                       : "choose"));
     if (std::isfinite(options.time_limit)) set(h, "time_limit", options.time_limit);
     if (options.relaxation) set(h, "solve_relaxation", true);
+    if (std::isfinite(options.objective_target)) set(h, "objective_target", options.objective_target);
 
     if (h.passModel(highs_lp(model)) == HighsStatus::kError) {
         // say what HiGHS objects to
@@ -164,6 +165,7 @@ SolveResult solve_highs(const Model& model, const SolveOptions& options) {
     switch (ms) {
         case HighsModelStatus::kOptimal: r.status = "optimal"; break;
         case HighsModelStatus::kTimeLimit: r.status = "time_limit"; break;
+        case HighsModelStatus::kObjectiveTarget: r.status = "target"; break;
         case HighsModelStatus::kInterrupt: r.status = timed_out ? "time_limit" : "error: interrupted"; break;
         case HighsModelStatus::kInfeasible: r.status = "infeasible"; break;
         case HighsModelStatus::kUnbounded: r.status = "unbounded"; break;

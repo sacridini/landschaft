@@ -6,6 +6,18 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- Multi-action planning solves on an own closure engine behind `add_highs_solver()`: a Lagrangian
+  bound as strong as the linear relaxation (each action needs its unit: closed form per unit, or a
+  minimum cut with boundary penalties), repaired selections, and core MIPs on HiGHS over the
+  Lagrangian's near ties. At 10^5 units the 1% gap takes 0.7 s (HiGHS alone 57 s, Gurobi 3 s) and the
+  proven optimum 6 s (Gurobi 13 s). `ActionsProblem.solve(start=...)` takes a solution to start from;
+  `add_highs_solver(engine=False)` runs HiGHS's MIP alone.
+
+### Changed
+- The multi-action model, its figures and the equivalent model for solving are built in C++:
+  `problem()` and `compile()` at 10^5 units from 4.5 s to 0.15 s.
+
 ## [1.21.0] - 2026-10-04
 
 ### Added
