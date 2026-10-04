@@ -1833,6 +1833,17 @@ sim.supply; sim.shortfall; sim.trajectory()
    - **7c. Cenários e réplicas:** `S.scenarios(model, start, years, replicates=..., {...})` em paralelo
      (o `r.futures.parallelpga`), `probability(classe, ano)`, `metrics([...])` com `lsm`/`mspa`/`HabitatGraph`
      por ano e cenário, `ls.plot` com slider e Sankey.
+     **Feita** (1.16.0): `scenarios(model ou Projection, start, drivers, scenarios={nome: Model | dict de peças
+     | função}, replicates=, seed=, steps=, years=, keep=, n_workers=, n_threads=)` → `Ensemble`: as rodadas em
+     threads (o guarda de threads é por thread; cada rodada com `n_threads // n_workers`), réplica r com a
+     semente `seed + r` em todos os cenários (números aleatórios comuns: os cenários diferem pelas peças, não
+     pelos sorteios), mesmos mapas com qualquer número de workers; mapas guardados como índice de classe
+     `int16` (`keep=` escolhe os anos), `maps(cenário, réplica)`, `probability(classe, year=, scenario=)`,
+     `change_probability`, `cover`, `metrics` (nomes do `ls.landscape_metrics` ou funções do mapa, para
+     MSPA/`HabitatGraph`), `to_dataset`, `steps` de todas as rodadas. `ls.plot` de `Simulation` e
+     `Projection` (mapas com slider de passo/ano, células por classe, Sankey do início ao fim, a checagem) e de
+     `Ensemble` (probabilidade de mudança no último ano por cenário, cobertura média). O `r.futures.
+     parallelpga` fica coberto pelo `scenarios` (réplicas do `PatchGrowing` em paralelo).
 8. Validação: similaridade fuzzy, três mapas em várias resoluções, figure of merit, kappa, error budget.
 9. Calibração orientada a padrões.
 10. Tutorial, capítulo do Learn, benchmarks contra lulcc, CLUMondo, FUTURES e Dinamica.

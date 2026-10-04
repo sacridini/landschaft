@@ -191,6 +191,12 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.presets
 
+## Scenarios and replicates
+
+::: landschaft.simulate.scenarios
+
+::: landschaft.simulate.Ensemble
+
 ## Example data
 
 ::: landschaft.simulate.example_data

@@ -360,3 +360,98 @@ def _least_cost_path(res, opts, title):
     panels.append(_summary({"path length (cells)": res.path_length, "cells to restore": res.rest_pixels,
                             "cost": res.expense, "mean distance of the restored cells": res.avg_distance}))
     return panels
+
+
+# --- land change simulations ---------------------------------------------------------------------------
+
+
+def _class_flows(a, b) -> pd.DataFrame:
+    """Cells of each class in map a (rows) going to each class in map b (columns)."""
+    a, b = np.asarray(a, dtype=float).ravel(), np.asarray(b, dtype=float).ravel()
+    ok = ~(np.isnan(a) | np.isnan(b))
+    t = pd.crosstab(a[ok], b[ok])
+    t.index = [f"{v:g}" for v in t.index]
+    t.columns = [f"{v:g}" for v in t.columns]
+    return t
+
+
+def _land_maps(maps, dim, opts, title):
+    """A class map per step or year (a slider over them), or the last one as a chart without a georeference."""
+    from ._core import _is_geo_raster, _map, _Panel, _plain_array_chart
+
+    if _is_geo_raster(maps):
+        return _map([("land use", maps)], {**opts, "categorical": True if opts.get("categorical") is None
+                                           else opts["categorical"]}, title)
+    last = maps.isel({dim: -1})
+    return [_Panel("chart", _plain_array_chart(np.asarray(last), title or f"land use, {dim} {last[dim].item()}"))]
+
+
+def _cover_lines(maps, dim, title):
+    from . import _charts
+    from ._core import _Panel
+
+    v = maps.values.reshape(maps.shape[0], -1)
+    classes = sorted(np.unique(v[~np.isnan(v)]))
+    series = {f"{c:g}": (v == c).sum(axis=1) for c in classes}
+    return _Panel("chart", _charts.lines(maps[dim].values, series, title, xlabel=dim, ylabel="cells"), "cover")
+
+
+@register("Simulation")
+def _simulation(sim, opts, title):
+    """The maps (a slider over the steps), the cells of each class per step, the flows first -> last."""
+    from . import _charts
+    from ._core import _Panel
+
+    maps = sim.maps
+    panels = _land_maps(maps, "step", opts, title or "Simulated land use")
+    panels.append(_cover_lines(maps, "step", "Cells of each class"))
+    panels.append(_Panel("chart", _charts.sankey(_class_flows(maps.values[0], maps.values[-1]),
+                                                 "Classes from the start to the last step", unit="cells",
+                                                 left="start", right=f"step {maps.shape[0] - 1}"), "flows"))
+    return panels
+
+
+@register("Projection")
+def _projection(proj, opts, title):
+    """The projected maps (a slider over the years), cover per year, flows from the later map, the check."""
+    from . import _charts
+    from ._core import _Panel
+
+    maps = proj.maps
+    y = maps["year"].values
+    panels = _land_maps(maps, "year", opts, title or f"Projected land use, {y[0]}-{y[-1]}")
+    panels.append(_cover_lines(maps, "year", "Cells of each class"))
+    if maps.shape[0] > 1:
+        panels.append(_Panel("chart", _charts.sankey(_class_flows(maps.values[0], maps.values[-1]),
+                                                     f"Classes, {y[0]} -> {y[-1]}", unit="cells", left=str(y[0]),
+                                                     right=str(y[-1])), "flows"))
+    if proj.validation is not None:
+        v = proj.validation
+        panels.append(_summary({"preset": proj.settings["preset"], "seed": proj.settings["seed"],
+                                "figure of merit": round(v["figure_of_merit"], 4),
+                                "agreement": round(v["overall"], 4), "hits": v["hits"], "misses": v["misses"],
+                                "false alarms": v["false_alarms"], "wrong hits": v["wrong_hits"]},
+                               "Check on the observed period"))
+    return panels
+
+
+@register("Ensemble")
+def _ensemble(ens, opts, title):
+    """The probability of change by the last year (a slider over the scenarios) and the mean cover."""
+    from . import _charts
+    from ._core import _is_geo_raster, _map, _Panel, _plain_array_chart
+
+    panels = []
+    p = ens.change_probability().isel(year=-1)
+    if _is_geo_raster(p):
+        panels += _map([("probability of change", p)], {**opts, "categorical": False, "cmap": opts.get("cmap")
+                                                        or "magma", "vmin": 0.0, "vmax": 1.0},
+                       title or f"Probability of change by {ens.years[-1]}")
+    else:
+        panels.append(_Panel("chart", _plain_array_chart(np.asarray(p.isel(scenario=0)),
+                                                         title or "probability of change")))
+    cover = ens.cover().groupby(["scenario", "year"]).mean(numeric_only=True).drop(columns="replicate")
+    series = {f"{s}: {c:g}": cover.loc[s][c].to_numpy() for s in ens.scenarios for c in ens.classes}
+    panels.append(_Panel("chart", _charts.lines(ens.years, series, "Cells of each class (mean of the replicates)",
+                                                xlabel="year", ylabel="cells"), "cover"))
+    return panels

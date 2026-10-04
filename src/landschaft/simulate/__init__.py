@@ -39,6 +39,7 @@ from ._difference import (
     sample_to_population,
 )
 from ._dynamic import distance_to, share_of
+from ._ensemble import Ensemble, scenarios
 from ._estimator import Estimator, RasterPotential
 from ._examples import example_data
 from ._futures import (
@@ -72,6 +73,7 @@ __all__ = [
     "Changes",
     "DevelopmentDemand",
     "DevelopmentPotential",
+    "Ensemble",
     "Estimator",
     "ExpanderPatcher",
     "Flooding",
@@ -114,6 +116,7 @@ __all__ = [
     "presets",
     "run",
     "sample_to_population",
+    "scenarios",
     "share_of",
     "weights_of_evidence",
 ]
