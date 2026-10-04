@@ -308,6 +308,7 @@ class CLUMondo:
     # ------------------------------------------------------------------ simulation
 
     def simulate(self, model, landscape, drivers=None, *, seed=None, nodata=None):
+        from ._dynamic import current_map, with_dynamic
         from ._glm import LogisticRegression
         from ._landsystems import LandSystemStack
         from ._model import Simulation, _as_maps
@@ -359,7 +360,11 @@ class CLUMondo:
         base, last = None, None
         for step in range(1, demand.steps + 1):
             d_step = _at_step(drivers, step)
-            if base is None or d_step is not last:  # drivers given per step: recomputed when they change
+            if model.dynamic:  # dynamic variables: recomputed from the map of every step
+                lmap = current_map(maps[-1], land.template)
+                base = self._base_suitability(model.potential, lr, with_dynamic(model.dynamic, d_step, lmap), lmap,
+                                              systems, region, shape)
+            elif base is None or d_step is not last:  # drivers given per step: recomputed when they change
                 base = self._base_suitability(model.potential, lr, d_step, landscape, systems, region, shape)
                 last = d_step
             suit = base.copy()

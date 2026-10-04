@@ -196,11 +196,15 @@ class CARS:
 
     def simulate(self, model, landscape, drivers=None, *, seed=None, nodata=None):
         from ._demand import AreaDemand
+        from ._dynamic import current_map, with_dynamic
         from ._markov import Markov
         from ._model import Simulation, _as_maps
+        from ._regional import Regional
 
-        if not isinstance(model.demand, (AreaDemand, Markov)):
-            raise TypeError("CARS takes an AreaDemand or a Markov chain as demand")
+        regional = isinstance(model.demand, Regional)
+        parts = list(model.demand.demands.values()) if regional else [model.demand]
+        if not all(isinstance(d, (AreaDemand, Markov)) for d in parts):
+            raise TypeError("CARS takes an AreaDemand or a Markov chain as demand (or a Regional of them)")
         self._check_rules(model.rules)
         land = read_map(landscape, nodata)
         shape = land.shape
@@ -218,14 +222,31 @@ class CARS:
         flat = values.ravel()
         for j, c in enumerate(classes):
             index[flat == c] = j
-        counts = np.bincount(index[index >= 0], minlength=len(classes)).astype(np.float64)
-        ncell = int((~nan).sum())
-        table = self._demand(model.demand, classes, counts, ncell)
-        prob, missing = self._probability(model.potential, landscape, drivers, classes, shape)
-        grows = [c for c in missing if (table[1:, classes.index(c)] > table[:-1, classes.index(c)]).any()]
-        if grows:
-            raise ValueError(f"the potential gives no growth probability for classes {grows}, "
-                             "whose demand grows")
+        region = model.demand.index(shape).ravel() if regional else None
+        tables = []
+        for k, d in enumerate(parts):
+            inside = index >= 0 if region is None else (index >= 0) & (region == k)
+            counts = np.bincount(index[inside], minlength=len(classes)).astype(np.float64)
+            try:
+                tables.append(self._demand(d, classes, counts, int(inside.sum())))
+            except ValueError as e:
+                if not regional:
+                    raise
+                raise ValueError(f"region {model.demand.ids[k]}: {e}") from None
+        if len({t.shape[0] for t in tables}) > 1:
+            raise ValueError("the regions' demands have different numbers of steps")
+        table = np.stack(tables, axis=1)  # (steps + 1, regions, classes)
+
+        def probability(drv, lmap):
+            p, missing = self._probability(model.potential, lmap, drv, classes, shape)
+            grows = [c for c in missing
+                     if (table[1:, :, classes.index(c)] > table[:-1, :, classes.index(c)]).any()]
+            if grows:
+                raise ValueError(f"the potential gives no growth probability for classes {grows}, "
+                                 "whose demand grows")
+            return p
+
+        prob = None if model.dynamic else probability(drivers, landscape)
         allowed = np.ones((len(classes), len(classes)), dtype=np.uint8)
         fixed = None
         if model.rules is not None:
@@ -246,21 +267,27 @@ class CARS:
         if seed is None:
             seed = int(np.random.default_rng().integers(1, 2**31 - 1))
         current = index.reshape(shape)
+        rmap = None if region is None else region.reshape(shape)
         codes = np.asarray(classes, dtype=np.float64)
         maps = [values.copy()]
         rows = []
+        out = values.copy()
         for step in range(1, table.shape[0]):
-            r = _core.sim_cars(current, fixed, prob, weights, mu, allowed, table[step].astype(np.int64),
+            if model.dynamic:
+                lmap = current_map(out, land.template)
+                prob = probability(with_dynamic(model.dynamic, drivers, lmap), lmap)
+            r = _core.sim_cars(current, fixed, rmap, prob, weights, mu, allowed, table[step].astype(np.int64),
                                int(self.window), float(self.decay), float(self.step_size), int(self.max_iter),
                                (int(seed) + step * 0x9E3779B97F4A7C15) & 0xFFFFFFFFFFFFFFFF)
             current = np.asarray(r["landscape"], dtype=np.int32)
             out = np.where(current >= 0, codes[np.maximum(current, 0)], np.nan)
             maps.append(out)
             last = np.asarray(r["trace"])[-1]
-            gap = int(np.abs(table[step] - last).sum())
+            gap = int(np.abs(table[step].ravel() - last).sum())
+            cells = np.bincount(current[current >= 0], minlength=len(classes))
             rows.append({"step": step, "iterations": int(r["iterations"]), "converged": bool(r["converged"]),
                          "decays": int(r["decays"]), "gap": gap,
-                         **{f"cells_{c:g}": int(v) for c, v in zip(classes, last)}})
+                         **{f"cells_{c:g}": int(v) for c, v in zip(classes, cells)}})
             if not r["converged"]:
                 warnings.warn(f"step {step}: CARS stopped after {self.max_iter} iterations {gap} cells away "
                               "from the demand (too few cells can take the classes short of it)", stacklevel=4)

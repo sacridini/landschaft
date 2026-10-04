@@ -125,6 +125,14 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.Ordered
 
+## Dynamic variables and regions
+
+::: landschaft.simulate.distance_to
+
+::: landschaft.simulate.share_of
+
+::: landschaft.simulate.Regional
+
 ## Land systems (CLUMondo)
 
 ::: landschaft.simulate.CLUMondo

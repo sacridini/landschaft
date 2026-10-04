@@ -576,13 +576,16 @@ py::dict sim_patches(const IArray& landscape, const py::list& transitions, doubl
     return out;
 }
 
-py::dict sim_cars(const IArray& landscape, const py::object& fixed, const DArray& probability, const DArray& weights,
+py::dict sim_cars(const IArray& landscape, const py::object& fixed, const py::object& region, const DArray& probability,
+                  const DArray& weights,
                   const DArray& seeds, const py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>& allowed,
                   const py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>& demand, int window,
                   double decay, double step, i64 max_iter, std::uint64_t seed) {
     if (landscape.ndim() != 2) throw std::invalid_argument("the landscape must be 2-D");
     const i64 ny = landscape.shape(0), nx = landscape.shape(1), n = ny * nx;
-    const auto k = static_cast<int>(demand.size());
+    if (demand.ndim() != 2) throw std::invalid_argument("the demand must be (regions, classes)");
+    const auto nreg = static_cast<int>(demand.shape(0));
+    const auto k = static_cast<int>(demand.shape(1));
     if (probability.ndim() != 2 || probability.shape(0) != k || probability.shape(1) != n)
         throw std::invalid_argument("the probabilities must be (classes, cells)");
     if (weights.size() != k || seeds.size() != k || allowed.size() != static_cast<i64>(k) * k)
@@ -594,6 +597,13 @@ py::dict sim_cars(const IArray& landscape, const py::object& fixed, const DArray
         if (fx.size() != n) throw std::invalid_argument("the fixed cells differ in size from the landscape");
         fptr = fx.data();
     }
+    IArray rg;
+    const int* rptr = nullptr;
+    if (!region.is_none()) {
+        rg = py::cast<IArray>(region);
+        if (rg.size() != n) throw std::invalid_argument("the regions differ in size from the landscape");
+        rptr = rg.data();
+    }
     sim::CarsSettings s;
     s.window = window;
     s.decay = decay;
@@ -603,7 +613,7 @@ py::dict sim_cars(const IArray& landscape, const py::object& fixed, const DArray
     sim::CarsResult r;
     {
         py::gil_scoped_release release;
-        r = sim::cars_run(ny, nx, k, landscape.data(), fptr, probability.data(), weights.data(), seeds.data(),
+        r = sim::cars_run(ny, nx, k, landscape.data(), fptr, rptr, nreg, probability.data(), weights.data(), seeds.data(),
                           allowed.data(),
                           demand.data(), s);
     }
@@ -614,12 +624,13 @@ py::dict sim_cars(const IArray& landscape, const py::object& fixed, const DArray
     out["iterations"] = r.iterations;
     out["converged"] = r.converged;
     out["decays"] = r.decays;
-    const auto rows = static_cast<i64>(r.trace.size()) / std::max(k, 1);
-    py::array_t<std::int64_t> trace({rows, static_cast<i64>(k)});
+    const i64 m = static_cast<i64>(nreg) * k;
+    const auto rows = static_cast<i64>(r.trace.size()) / std::max<i64>(m, 1);
+    py::array_t<std::int64_t> trace({rows, m});
     std::copy(r.trace.begin(), r.trace.end(), trace.mutable_data());
     out["trace"] = trace;
     out["trace_decays"] = to_array(r.trace_decays);
-    py::array_t<double> td({rows - 1, static_cast<i64>(k)});
+    py::array_t<double> td({rows - 1, m});
     std::copy(r.trace_d.begin(), r.trace_d.end(), td.mutable_data());
     out["trace_d"] = td;
     return out;
@@ -687,7 +698,8 @@ void register_python(py::module_& m) {
     m.def("sim_patches", &sim_patches, py::arg("landscape"), py::arg("transitions"), py::arg("prune_factor") = 10.0,
           py::arg("win_rows") = 3, py::arg("win_cols") = 3, py::arg("seed") = 1,
           "Expander and Patcher (Soares-Filho et al. 2002): allocation of the changes of each transition.");
-    m.def("sim_cars", &sim_cars, py::arg("landscape"), py::arg("fixed"), py::arg("probability"), py::arg("weights"),
+    m.def("sim_cars", &sim_cars, py::arg("landscape"), py::arg("fixed"), py::arg("region"), py::arg("probability"),
+          py::arg("weights"),
           py::arg("seeds"), py::arg("allowed"), py::arg("demand"), py::arg("window") = 3, py::arg("decay") = 0.9,
           py::arg("step") = 500.0, py::arg("max_iter") = 5000, py::arg("seed") = 1,
           "CARS, PLUS's cellular automaton of multi-type random patch seeds (Liang et al. 2021).");

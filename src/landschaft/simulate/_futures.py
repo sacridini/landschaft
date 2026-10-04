@@ -654,6 +654,8 @@ class PatchGrowing:
     def simulate(self, model, landscape, drivers=None, *, seed=None, nodata=None):
         from ._model import Simulation, _as_maps
 
+        if model.dynamic:
+            raise ValueError("PatchGrowing updates its development pressure itself: it takes no dynamic variables")
         land = read_map(landscape, nodata)
         shape = land.shape
         dev = land.as_float()

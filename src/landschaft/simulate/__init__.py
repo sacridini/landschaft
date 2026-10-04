@@ -37,6 +37,7 @@ from ._difference import (
     overall_difference,
     sample_to_population,
 )
+from ._dynamic import distance_to, share_of
 from ._estimator import Estimator, RasterPotential
 from ._examples import example_data
 from ._futures import (
@@ -55,6 +56,7 @@ from ._mce import MultiCriteria
 from ._model import Model, Simulation
 from ._patches import ExpanderPatcher
 from ._plus import CARS
+from ._regional import Regional
 from ._rules import Neighbourhood, Rules
 from ._woe import WeightsOfEvidence, weights_of_evidence
 
@@ -81,6 +83,7 @@ __all__ = [
     "Ordered",
     "PatchGrowing",
     "RasterPotential",
+    "Regional",
     "Roles",
     "Rules",
     "ServiceDemand",
@@ -95,11 +98,13 @@ __all__ = [
     "development_pressure",
     "difference_components",
     "difference_resolutions",
+    "distance_to",
     "example_data",
     "mad",
     "memberships",
     "overall_difference",
     "patch_library",
     "sample_to_population",
+    "share_of",
     "weights_of_evidence",
 ]

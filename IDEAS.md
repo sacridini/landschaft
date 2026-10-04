@@ -1778,7 +1778,37 @@ sim.supply; sim.shortfall; sim.trajectory()
    - Fora: o MOP (programação multiobjetivo da demanda) do artigo; demandas otimizadas vêm do `ls.prioritize`
      ou de tabelas.
 7. Laço temporal completo: variáveis dinâmicas, demanda por região, vizinhança por rede (`ls.cost`),
-   `presets`, `run` / `report` / `redo`, cenários e réplicas em paralelo.
+   `presets`, `run` / `report` / `redo`, cenários e réplicas em paralelo. Dividida em três entregas (cada uma
+   com versão, commit e push):
+   - **7a. Variáveis dinâmicas e regiões:** `Model(..., dynamic={nome: peça})` recalcula essas variáveis a
+     partir do mapa de cada passo e refaz o potencial (CLUE, Ordered, ExpanderPatcher, CARS, CLUMondo; o
+     FUTURES já tem a pressão de desenvolvimento própria). Peças: `distance_to(classes)` (distância euclidiana
+     exata, a transformada de Felzenszwalb do `nlm`), `distance_to(classes, cost=Transition)` (custo acumulado
+     do `ls.cost` = vizinhança por rede), `share_of(classes, window)` (fração na janela) e qualquer função do
+     mapa; cada peça é chamável sozinha (para ajustar o potencial com os mesmos valores no mapa inicial).
+     `Regional(regions, {região: demanda})` embrulha qualquer demanda (`AreaDemand`, `Markov`, taxas) por
+     região: CLUE e Ordered alocam região a região (uma região = o caminho bit a bit do lulcc), CARS com
+     demanda e coeficiente adaptativo por (região, classe) em C++, ExpanderPatcher com as taxas de cada região
+     (probabilidade zerada fora dela, como a regionalização do Dinamica); `Regional.from_maps` (demanda
+     interpolada por região) e `Regional.markov` (cadeia por região).
+     **Feita** (1.14.0): `Model(dynamic=...)`, `distance_to` (euclidiana exata ou custo acumulado do
+     `ls.cost`; sem células da classe: a diagonal do mapa ou `inf`), `share_of` (média focal como a
+     `Neighbourhood`, sem dado fora da média) e `Regional` em CLUE, Ordered, CARS (C++: demanda, desvios e D por
+     região e classe; células fora das regiões ficam como estão) e ExpanderPatcher; CLUMondo aceita variáveis
+     dinâmicas e recusa `Regional` (uma região só, como o manual), o FUTURES recusa as duas (tem pressão e
+     sub-regiões próprias). Uma região cobrindo o mapa dá os mesmos mapas que o modelo sem regiões (CLUE com o
+     gerador do R e CARS); os casos bit a bit do lulcc e do CLUMondo seguem iguais. Testes: distâncias contra o
+     `distance_transform_edt` do scipy e o `acc_cost`, fração contra a convolução, o potencial de cada passo
+     recebe a distância do mapa do início do passo (CLUE, Ordered, CARS, ExpanderPatcher, CLUMondo), demanda de
+     cada região atendida, transições só nas regiões que as têm.
+   - **7b. Presets e uma chamada:** `S.presets.clue_s / ordered / dinamica / plus / futures / clumondo /
+     molusce` (o `WoeManager` e o simulador CA do MOLUSCE ficaram da fase 2), `S.run(t0, t1, drivers,
+     until=..., seed=...)` (padrão estilo Dinamica: Markov + WoE + Expander/Patcher com tamanhos e isometria
+     medidos pelo `lsm` nas mudanças observadas; valida t0 -> t1 antes de projetar), `report`, `settings`,
+     `redo(...)`, anos em vez de passos, saída `xarray.Dataset` com dimensão `year`.
+   - **7c. Cenários e réplicas:** `S.scenarios(model, start, years, replicates=..., {...})` em paralelo
+     (o `r.futures.parallelpga`), `probability(classe, ano)`, `metrics([...])` com `lsm`/`mspa`/`HabitatGraph`
+     por ano e cenário, `ls.plot` com slider e Sankey.
 8. Validação: similaridade fuzzy, três mapas em várias resoluções, figure of merit, kappa, error budget.
 9. Calibração orientada a padrões.
 10. Tutorial, capítulo do Learn, benchmarks contra lulcc, CLUMondo, FUTURES e Dinamica.

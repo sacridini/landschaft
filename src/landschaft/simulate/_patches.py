@@ -158,22 +158,33 @@ class ExpanderPatcher:
         return float(value) / area
 
     def simulate(self, model, landscape, drivers=None, *, seed=None, nodata=None):
+        from ._dynamic import with_dynamic
         from ._model import Simulation, _as_maps
+        from ._regional import Regional
 
         land = read_map(landscape, nodata)
         shape = land.shape
         values = land.as_float()
-        rates = self._rates(model.demand)
-        transitions = [(f, t) for f in rates.index for t in rates.columns
-                       if f != t and rates.loc[f, t] > 0]
+        if isinstance(model.demand, Regional):
+            ridx = model.demand.index(shape)
+            regions = [(rid, ridx == k, self._rates(d)) for k, (rid, d) in enumerate(model.demand.demands.items())]
+        else:
+            regions = [(None, None, self._rates(model.demand))]
+        plan = []
+        for rid, inside, rates in regions:
+            trs = [(f, t) for f in rates.index for t in rates.columns if f != t and rates.loc[f, t] > 0]
+            plan.append((rid, inside, rates, trs))
+        transitions = list(dict.fromkeys(tr for *_, trs in plan for tr in trs))
         if not transitions:
             raise ValueError("the demand has no transitions")
         steps = self.steps if self.steps is not None else getattr(model.demand, "steps", None)
         if steps is None:
             raise ValueError("give the steps (ExpanderPatcher(steps=...))")
-        share = _per_transition(self.expansion, transitions, "expansion share")
-        e_par = _per_transition(self.expander, transitions, "expander parameters")
-        p_par = _per_transition(self.patcher, transitions, "patcher parameters")
+        share = dict(zip(transitions, _per_transition(self.expansion, transitions, "expansion share")))
+        e_par = dict(zip(transitions, _per_transition(self.expander, transitions, "expander parameters")))
+        p_par = dict(zip(transitions, _per_transition(self.patcher, transitions, "patcher parameters")))
+        if model.dynamic and isinstance(model.potential, dict):
+            raise ValueError("dynamic variables need a potential computed from drivers, not given maps")
         if seed is None:
             seed = int(np.random.default_rng().integers(1, 2**31 - 1))
         nan = np.isnan(values)
@@ -184,31 +195,49 @@ class ExpanderPatcher:
         maps = [values.copy()]
         rows = []
         for step in range(1, int(steps) + 1):
-            cur_map = np.where(nan, np.nan, current.astype(np.float64))
-            probs = self._probability(model.potential, _like(land, cur_map), drivers, transitions, shape)
-            specs = []
-            for k, (f, t) in enumerate(transitions):
-                n = math.floor(rates.loc[f, t] * float(np.sum(current == f)) + 0.5)
-                ne = math.floor(n * float(share[k]) + 0.5)
-                me, ve, ie = e_par[k]
-                mp, vp, ip = p_par[k]
-                specs.append({"from": int(f), "to": int(t), "probability": probs[k].ravel().astype(np.float64),
-                              "expand": ne, "patch": n - ne,
-                              "expander": (self._cells(me, land), self._cells(ve, land) * self._cells(1, land), ie),
-                              "patcher": (self._cells(mp, land), self._cells(vp, land) * self._cells(1, land), ip)})
-            r = _core.sim_patches(current, specs, float(self.prune_factor), int(self.window[0]),
-                                  int(self.window[1]), (int(seed) + step * 0x9E3779B9) & 0xFFFFFFFFFFFFFFFF)
-            current = np.asarray(r["landscape"], dtype=np.int32)
-            maps.append(np.where(nan, np.nan, current.astype(np.float64)))
+            cur_map = _like(land, np.where(nan, np.nan, current.astype(np.float64)))
+            drv = with_dynamic(model.dynamic, drivers, cur_map)
+            probs = dict(zip(transitions, self._probability(model.potential, cur_map, drv, transitions, shape)))
             row = {"step": step}
-            for k, (f, t) in enumerate(transitions):
-                req = specs[k]["expand"] + specs[k]["patch"]
-                done = int(r["expanded"][k] + r["patched"][k])
-                row.update({f"requested_{f:g}_{t:g}": req, f"expanded_{f:g}_{t:g}": int(r["expanded"][k]),
-                            f"patched_{f:g}_{t:g}": int(r["patched"][k]), f"patches_{f:g}_{t:g}": int(r["patches"][k])})
-                if done < req:
-                    warnings.warn(f"step {step}: {f:g} -> {t:g} made {done} of {req} changes "
-                                  "(too few cells with probability)", stacklevel=4)
+            for tr in transitions:
+                f, t = tr
+                for key in ("requested", "expanded", "patched", "patches"):
+                    row[f"{key}_{f:g}_{t:g}"] = 0
+            for k, (_rid, inside, rates, trs) in enumerate(plan):
+                if not trs:
+                    continue
+                specs = []
+                for f, t in trs:
+                    origin = current == f if inside is None else (current == f) & inside
+                    n = math.floor(rates.loc[f, t] * float(np.sum(origin)) + 0.5)
+                    ne = math.floor(n * float(share[(f, t)]) + 0.5)
+                    me, ve, ie = e_par[(f, t)]
+                    mp, vp, ip = p_par[(f, t)]
+                    p = probs[(f, t)].ravel().astype(np.float64)
+                    if inside is not None:
+                        p = np.where(inside.ravel(), p, 0.0)
+                    specs.append({"from": int(f), "to": int(t), "probability": p, "expand": ne, "patch": n - ne,
+                                  "expander": (self._cells(me, land), self._cells(ve, land) * self._cells(1, land),
+                                               ie),
+                                  "patcher": (self._cells(mp, land), self._cells(vp, land) * self._cells(1, land),
+                                              ip)})
+                sub = (int(seed) + step * 0x9E3779B9 + k * 0x632BE59BD9B4E019) & 0xFFFFFFFFFFFFFFFF
+                r = _core.sim_patches(current, specs, float(self.prune_factor), int(self.window[0]),
+                                      int(self.window[1]), sub if inside is not None else
+                                      (int(seed) + step * 0x9E3779B9) & 0xFFFFFFFFFFFFFFFF)
+                current = np.asarray(r["landscape"], dtype=np.int32)
+                for j, (f, t) in enumerate(trs):
+                    req = specs[j]["expand"] + specs[j]["patch"]
+                    done = int(r["expanded"][j] + r["patched"][j])
+                    row[f"requested_{f:g}_{t:g}"] += req
+                    row[f"expanded_{f:g}_{t:g}"] += int(r["expanded"][j])
+                    row[f"patched_{f:g}_{t:g}"] += int(r["patched"][j])
+                    row[f"patches_{f:g}_{t:g}"] += int(r["patches"][j])
+                    if done < req:
+                        where = "" if inside is None else f" in region {_rid}"
+                        warnings.warn(f"step {step}: {f:g} -> {t:g} made {done} of {req} changes{where} "
+                                      "(too few cells with probability)", stacklevel=4)
+            maps.append(np.where(nan, np.nan, current.astype(np.float64)))
             rows.append(row)
         return Simulation(_as_maps(np.stack(maps), land.template, "landuse"), pd.DataFrame(rows).set_index("step"),
                           int(seed))

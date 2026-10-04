@@ -47,17 +47,21 @@ struct CarsResult {
     std::int64_t iterations = 0;
     bool converged = false;
     std::int64_t decays = 0;                  // l at the end
-    std::vector<std::int64_t> trace;          // (iteration, class) cells, iteration 0 = the start
+    std::vector<std::int64_t> trace;          // (iteration, region x class) cells, iteration 0 = the start
     std::vector<std::int64_t> trace_decays;   // l after each iteration
-    std::vector<double> trace_d;              // (iteration, class) D after each iteration
+    std::vector<double> trace_d;              // (iteration, region x class) D after each iteration
 };
 
 // land: class index of each cell (0 .. k-1), -1 for cells outside the model
 // (no data, classes left out); fixed: cells that keep their class (may be
-// null); prob: (k, cells) growth probabilities; weights, seeds (mu): k;
-// allowed: (k, k) row the current class; demand: cells of each class.
+// null); region: region index of each cell (0 .. nreg - 1; -1 outside, the
+// cell keeps its class; null: one region); prob: (k, cells) growth
+// probabilities; weights, seeds (mu): k; allowed: (k, k) row the current
+// class; demand: (nreg, k) cells of each class in each region. Demand, gaps
+// and D are per region and class; trace and trace_d are (iteration,
+// nreg x k).
 CarsResult cars_run(std::int64_t ny, std::int64_t nx, int k, const int* land, const std::uint8_t* fixed,
-                    const double* prob, const double* weights, const double* seeds, const std::uint8_t* allowed,
+                    const int* region, int nreg, const double* prob, const double* weights, const double* seeds, const std::uint8_t* allowed,
                     const std::int64_t* demand, const CarsSettings& s);
 
 }  // namespace sim

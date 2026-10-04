@@ -170,7 +170,7 @@ def test_adaptive_coefficient():
     prob[0] = 0.5
     prob[1] = 0.9
     allowed = np.array([[1, 1], [1, 1]], np.uint8)
-    r = _core.sim_cars(land, None, prob, np.ones(2), np.full(2, 0.1), allowed, np.array([150, 250]), 3, 0.9,
+    r = _core.sim_cars(land, None, None, prob, np.ones(2), np.full(2, 0.1), allowed, np.array([[150, 250]]), 3, 0.9,
                        5.0, 200, 1)
     assert r["converged"] and r["trace"].shape[1] == 2
     assert (r["trace"][0] == [100, 300]).all() and (r["trace"][-1] == [150, 250]).all()

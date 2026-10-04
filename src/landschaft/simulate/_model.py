@@ -152,6 +152,20 @@ class Simulation:
         return f"Simulation({self.maps.shape[0] - 1} steps, seed={self.seed})"
 
 
+def _merge_info(infos: list[dict]) -> dict:
+    """The allocation's report over the regions: passes and differences at their largest, all converged."""
+    out = {}
+    for k in infos[0]:
+        v = [i[k] for i in infos]
+        if isinstance(v[0], (bool, np.bool_)):
+            out[k] = bool(all(v))
+        elif k == "mean_diff":
+            out[k] = float(np.mean(v))
+        else:
+            out[k] = max(v)
+    return out
+
+
 def _as_maps(stack: np.ndarray, t, name: str) -> xr.DataArray:
     """``(step, y, x)`` maps on the template's grid."""
     if t is None:
@@ -185,6 +199,11 @@ class Model:
     rules
         :class:`Rules` (allowed conversions, elasticities, restrictions,
         neighbourhood, history).
+    dynamic
+        ``{name: piece}``: drivers computed again from the map at the start
+        of every step (:func:`distance_to`, :func:`share_of` or any function
+        of the map), replacing the drivers of the same name; the potential is
+        predicted again at every step.
 
     Examples
     --------
@@ -202,11 +221,12 @@ class Model:
     15
     """
 
-    def __init__(self, potential, demand, allocation, rules: Rules | None = None):
+    def __init__(self, potential, demand, allocation, rules: Rules | None = None, dynamic: dict | None = None):
         self.potential = potential
         self.demand = demand
         self.allocation = allocation
         self.rules = rules or Rules()
+        self.dynamic = dict(dynamic) if dynamic else None
 
     @threaded
     def run(self, landscape, drivers=None, *, seed: int | None = None, nodata=None) -> Simulation:
@@ -231,6 +251,9 @@ class Model:
         """
         if hasattr(self.allocation, "simulate"):  # allocations with their own yearly loop (CLUMondo)
             return self.allocation.simulate(self, landscape, drivers, seed=seed, nodata=nodata)
+        from ._dynamic import current_map, with_dynamic
+        from ._regional import Regional
+
         land = read_map(landscape, nodata)
         values = land.as_float().ravel()
         cells = np.flatnonzero(~np.isnan(values))
@@ -238,14 +261,22 @@ class Model:
         found = {_class_value(c) for c in _classes([land])}
         if not found <= set(classes):
             raise ValueError(f"the landscape has classes without demand: {sorted(found - set(classes))}")
-        prob_da = self.potential.predict(drivers, landscape=landscape) if drivers is not None \
-            else self.potential.predict(landscape=landscape)
-        pclasses = [_class_value(c) for c in prob_da[prob_da.dims[0]].values]
-        missing = set(classes) - set(pclasses)
-        if missing:
-            raise ValueError(f"the potential gives no suitability for classes {sorted(missing)}")
-        flat = prob_da.values.reshape(prob_da.shape[0], -1)
-        prob = np.stack([flat[pclasses.index(c)][cells] for c in classes], axis=1)
+
+        def suitability(drv, lmap):
+            p = self.potential.predict(drv, landscape=lmap) if drv is not None                 else self.potential.predict(landscape=lmap)
+            pclasses = [_class_value(c) for c in p[p.dims[0]].values]
+            missing = set(classes) - set(pclasses)
+            if missing:
+                raise ValueError(f"the potential gives no suitability for classes {sorted(missing)}")
+            flat = p.values.reshape(p.shape[0], -1)
+            return np.stack([flat[pclasses.index(c)][cells] for c in classes], axis=1)
+
+        prob = None if self.dynamic else suitability(drivers, landscape)
+        regional = isinstance(self.demand, Regional)
+        groups = [(None, np.arange(cells.size))]
+        if regional:
+            ridx = self.demand.index(land.shape).ravel()[cells]
+            groups = [(rid, np.flatnonzero(ridx == k)) for k, rid in enumerate(self.demand.ids)]
         if seed is None:
             seed = int(np.random.default_rng().integers(1, 2**31 - 1))
         rng = _core.RRandom(int(seed))
@@ -259,7 +290,9 @@ class Model:
         rows = []
         current = values.reshape(land.shape).copy()
         for step in range(1, self.demand.steps + 1):
-            d = self.demand.at(step, classes)
+            if self.dynamic:
+                lmap = current_map(current, land.template)
+                prob = suitability(with_dynamic(self.dynamic, drivers, lmap), lmap)
             tprob = prob.copy()
             if getattr(self.allocation, "uses_elasticity", False):
                 for j, c in enumerate(classes):
@@ -267,15 +300,23 @@ class Model:
                     tprob[own, j] = tprob[own, j] + elas[j]
             if nb is not None:
                 tprob = tprob * nb.allow(current, classes)[cells]
-            if rules is not None:
-                cd = d - self.demand.at(step - 1, classes)
-                tprob = tprob * allow_matrix(x0, hist, classes, cd, rules)
-            auto = auto_convert(x0, tprob, classes, mask)
-            fixed = ~np.isnan(auto)
-            x0 = np.where(fixed, auto, x0)
-            tprob[fixed] = np.nan
-            x1, info = self.allocation.allocate(tprob, x0, d, classes, rng)
-            x1 = np.asarray(x1, dtype=np.float64)
+            x1 = x0.copy()
+            infos = []
+            for rid, g in groups:
+                d = self.demand.at(step, classes, region=rid) if regional else self.demand.at(step, classes)
+                tp, xg = tprob[g], x0[g]
+                if rules is not None:
+                    prev = self.demand.at(step - 1, classes, region=rid) if regional                         else self.demand.at(step - 1, classes)
+                    tp = tp * allow_matrix(xg, hist[g], classes, d - prev, rules)
+                auto = auto_convert(xg, tp, classes, mask[g])
+                fixed = ~np.isnan(auto)
+                xg = np.where(fixed, auto, xg)
+                x0[g] = xg
+                tp[fixed] = np.nan
+                xr_, info = self.allocation.allocate(tp, xg, d, classes, rng)
+                x1[g] = np.asarray(xr_, dtype=np.float64)
+                infos.append(info)
+            info = infos[0] if len(infos) == 1 else _merge_info(infos)
             hist = np.where(x0 == x1, hist + 1, 0)
             out = np.full(values.size, np.nan)
             out[cells] = x1

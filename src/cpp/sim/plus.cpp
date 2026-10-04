@@ -40,22 +40,23 @@ constexpr double kTwoPi = 6.283185307179586;
 
 class Cars {
 public:
-    Cars(std::int64_t ny, std::int64_t nx, int k, const int* land, const std::uint8_t* fixed, const double* prob,
-         const double* weights, const double* seeds, const std::uint8_t* allowed, const std::int64_t* demand,
-         const CarsSettings& s)
-        : ny_(ny), nx_(nx), n_(ny * nx), k_(k), land_(land, land + ny * nx), prob_(prob), w_(weights, weights + k),
-          mu_(seeds, seeds + k),
-          allowed_(allowed, allowed + static_cast<std::size_t>(k) * k), demand_(demand, demand + k), s_(s),
+    Cars(std::int64_t ny, std::int64_t nx, int k, const int* land, const std::uint8_t* fixed, const int* region,
+         int nreg, const double* prob, const double* weights, const double* seeds, const std::uint8_t* allowed,
+         const std::int64_t* demand, const CarsSettings& s)
+        : ny_(ny), nx_(nx), n_(ny * nx), k_(k), m_(static_cast<std::size_t>(nreg) * k), land_(land, land + ny * nx),
+          region_(region ? std::vector<int>(region, region + ny * nx) : std::vector<int>(ny * nx, 0)), prob_(prob),
+          w_(weights, weights + k), mu_(seeds, seeds + k),
+          allowed_(allowed, allowed + static_cast<std::size_t>(k) * k), demand_(demand, demand + m_), s_(s),
           half_(s.window / 2), denom_(static_cast<double>(s.window) * s.window - 1) {
-        count_.assign(static_cast<std::size_t>(k), 0);
+        count_.assign(m_, 0);
         for (std::int64_t i = 0; i < n_; ++i)
-            if (land_[i] >= 0) ++count_[land_[i]];
+            if (land_[i] >= 0 && region_[i] >= 0) ++count_[slot(i, land_[i])];
         any_target_.assign(static_cast<std::size_t>(k), 0);
         for (int a = 0; a < k; ++a)
             for (int b = 0; b < k; ++b)
                 if (a != b && allowed_[static_cast<std::size_t>(a) * k + b]) any_target_[a] = 1;
         for (std::int64_t i = 0; i < n_; ++i)
-            if (land_[i] >= 0 && !(fixed && fixed[i])) cells_.push_back(i);
+            if (land_[i] >= 0 && region_[i] >= 0 && !(fixed && fixed[i])) cells_.push_back(i);
         nb_.assign(static_cast<std::size_t>(n_) * k, 0);
         lsm::parallel_for(n_ * s.window * s.window >= (1 << 18), ny_, [&](std::int64_t r) {
             for (std::int64_t c = 0; c < nx_; ++c) {
@@ -69,9 +70,9 @@ public:
 
     CarsResult run() {
         CarsResult res;
-        std::vector<double> d(static_cast<std::size_t>(k_), 1.0);
-        std::vector<std::int64_t> g2(static_cast<std::size_t>(k_)), g1(static_cast<std::size_t>(k_));
-        for (int c = 0; c < k_; ++c) g1[c] = demand_[c] - count_[c];
+        std::vector<double> d(m_, 1.0);
+        std::vector<std::int64_t> g2(m_), g1(m_);
+        for (std::size_t c = 0; c < m_; ++c) g1[c] = demand_[c] - count_[c];
         res.trace.insert(res.trace.end(), count_.begin(), count_.end());
         std::int64_t gap = total(g1);
         std::int64_t l = 0;
@@ -91,13 +92,14 @@ public:
             old_class.clear();
             for (const auto& [key, q] : todo) {
                 const int c = proposal[q];
-                if (count_[c] >= demand_[c]) continue;  // the class has its demand
                 const std::int64_t i = cells_[q];
+                const std::size_t to_slot = slot(i, c), from_slot = slot(i, land_[i]);
+                if (count_[to_slot] >= demand_[to_slot]) continue;  // the class has its demand
+                if (count_[from_slot] <= demand_[from_slot]) continue;  // nor does it lose cells below it
                 const int from = land_[i];
-                if (count_[from] <= demand_[from]) continue;  // nor does it lose cells below it
                 land_[i] = c;
-                ++count_[c];
-                --count_[from];
+                ++count_[to_slot];
+                --count_[from_slot];
                 changed.push_back(i);
                 old_class.push_back(from);
             }
@@ -111,11 +113,11 @@ public:
             }
             ++it;
             g2 = g1;
-            for (int c = 0; c < k_; ++c) g1[c] = demand_[c] - count_[c];
+            for (std::size_t c = 0; c < m_; ++c) g1[c] = demand_[c] - count_[c];
             const std::int64_t gap_now = total(g1);
             if (static_cast<double>(gap - gap_now) < s_.step) ++l;  // Eq. 6
             gap = gap_now;
-            for (int c = 0; c < k_; ++c) {  // Eq. 4
+            for (std::size_t c = 0; c < m_; ++c) {  // Eq. 4
                 const double a = static_cast<double>(g1[c]), b = static_cast<double>(g2[c]);
                 if (std::abs(a) <= std::abs(b)) continue;
                 if (0 > b && b > a) d[c] *= b / a;
@@ -133,6 +135,8 @@ public:
     }
 
 private:
+    std::size_t slot(std::int64_t i, int c) const { return static_cast<std::size_t>(region_[i]) * k_ + c; }
+
     template <typename F>
     void neighbours(std::int64_t i, F&& f) const {
         const std::int64_t r = i / nx_, c = i % nx_;
@@ -168,6 +172,7 @@ private:
             if (!any_target_[cur]) return;
             const CellRandom rnd(s_.seed, it, i);
             const std::uint16_t* nb = &nb_[static_cast<std::size_t>(i) * k_];
+            const double* dr = &d[slot(i, 0)];
             double op[64];
             std::vector<double> big;
             double* o = op;
@@ -182,10 +187,10 @@ private:
                 if (p > 0) {
                     const double omega = nb[c] / denom_ * w_[c];
                     if (omega > 0) {
-                        v = p * omega * d[c];
+                        v = p * omega * dr[c];
                     } else {
                         const double r = rnd.uniform(static_cast<std::uint64_t>(c) + 1);
-                        if (r < p) v = p * (r * mu_[c]) * d[c];
+                        if (r < p) v = p * (r * mu_[c]) * dr[c];
                     }
                 }
                 o[c] = v;
@@ -210,7 +215,8 @@ private:
 
     std::int64_t ny_, nx_, n_;
     int k_;
-    std::vector<int> land_;
+    std::size_t m_;  // regions x classes
+    std::vector<int> land_, region_;
     const double* prob_;
     std::vector<double> w_, mu_;
     std::vector<std::uint8_t> allowed_;
@@ -227,7 +233,7 @@ private:
 }  // namespace
 
 CarsResult cars_run(std::int64_t ny, std::int64_t nx, int k, const int* land, const std::uint8_t* fixed,
-                    const double* prob, const double* weights, const double* seeds, const std::uint8_t* allowed,
+                    const int* region, int nreg, const double* prob, const double* weights, const double* seeds, const std::uint8_t* allowed,
                     const std::int64_t* demand, const CarsSettings& s) {
     if (k < 1) throw std::invalid_argument("CARS needs at least one class");
     if (s.window < 3 || s.window % 2 == 0 || s.window > 255)
@@ -235,9 +241,12 @@ CarsResult cars_run(std::int64_t ny, std::int64_t nx, int k, const int* land, co
     if (!(s.decay > 0 && s.decay <= 1)) throw std::invalid_argument("the decay must be in (0, 1]");
     for (int c = 0; c < k; ++c)
         if (!(seeds[c] >= 0 && seeds[c] <= 1)) throw std::invalid_argument("the patch generation thresholds must be in [0, 1]");
-    for (std::int64_t i = 0; i < ny * nx; ++i)
+    if (nreg < 1) throw std::invalid_argument("CARS needs at least one region");
+    for (std::int64_t i = 0; i < ny * nx; ++i) {
         if (land[i] >= k) throw std::invalid_argument("a cell has a class index out of range");
-    Cars c(ny, nx, k, land, fixed, prob, weights, seeds, allowed, demand, s);
+        if (region && region[i] >= nreg) throw std::invalid_argument("a cell has a region index out of range");
+    }
+    Cars c(ny, nx, k, land, fixed, region, nreg, prob, weights, seeds, allowed, demand, s);
     return c.run();
 }
 
