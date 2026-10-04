@@ -116,14 +116,24 @@ def _highs_or_cut(m: OptimizationProblem, gap: float, time_limit: float, threads
     models on HiGHS behind the covering and wide engines."""
     import time
 
-    from ._milp_anneal import cut_applies, solve_cut
+    from ._milp_anneal import closure_model, cut_applies, solve_closure, solve_cut
 
     mm = cut_applies(m, n_units)
-    if mm is None:
-        return _highs(m, gap, time_limit, threads, presolve, verbose, start, n_units=n_units)
     t0 = time.perf_counter()
-    r = solve_cut(m, n_units, mm, gap, time_limit, verbose, start)
-    if r["status"] in ("optimal", "infeasible") or m.ncol > CUT_HIGHS_COLUMNS:
+    if mm is not None:
+        r = solve_cut(m, n_units, mm, gap, time_limit, verbose, start)
+    else:
+        # budgeted minimisations with pair terms (min penalties...): the closure engine
+        cm = closure_model(m, n_units) if n_units is not None and m.ncol > n_units else None
+        if cm is None:
+            return _highs(m, gap, time_limit, threads, presolve, verbose, start, n_units=n_units)
+        r = solve_closure(m, n_units, cm, gap, time_limit, threads, verbose, start)
+        if not r["has_solution"] and r["status"] != "infeasible":  # no selection repaired: HiGHS alone
+            left = time_limit - (time.perf_counter() - t0)
+            if left <= 0:
+                return r
+            return _highs(m, gap, left, threads, presolve, verbose, start, n_units=n_units)
+    if r["status"] in ("optimal", "infeasible") or m.ncol > CUT_HIGHS_COLUMNS or not r["has_solution"]:
         if r["status"] not in ("optimal", "infeasible", "time_limit"):
             r["status"] = "heuristic"
         return r

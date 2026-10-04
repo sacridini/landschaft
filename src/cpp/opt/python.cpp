@@ -8,6 +8,7 @@
 #include <pybind11/stl.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -15,6 +16,7 @@
 #include <vector>
 
 #include "opt/actions.hpp"
+#include "opt/closure.hpp"
 #include "opt/cover.hpp"
 #include "opt/cut.hpp"
 #include "opt/eval.hpp"
@@ -536,6 +538,56 @@ void register_python(py::module_& m) {
           },
           py::arg("start"), py::arg("index"), py::arg("value"), py::arg("nrow"), py::arg("targets"),
           py::arg("selected"), "prioritizr's rcpp_ferrier_score: (start, index, value) of the scores.");
+    m.def(
+        "opt_solve_closure",
+        [](const Doubles& cost, const py::array_t<std::int8_t, py::array::c_style | py::array::forcecast>& fixed,
+           const IntArr& req_from, const IntArr& req_to, const IntArr& pen_i, const IntArr& pen_j, const Doubles& pen_w,
+           const Doubles& rhs, const Bytes& geq, const Ints& col_start, const IntArr& col_row, const Doubles& col_val,
+           double gap, double time_limit, int threads, bool verbose, const py::object& initial) {
+            closure::Problem q;
+            q.n = static_cast<int>(cost.size());
+            q.cost = vec<double>(cost);
+            q.fixed.assign(fixed.data(), fixed.data() + fixed.size());
+            q.req_from.assign(req_from.data(), req_from.data() + req_from.size());
+            q.req_to.assign(req_to.data(), req_to.data() + req_to.size());
+            q.pen_i.assign(pen_i.data(), pen_i.data() + pen_i.size());
+            q.pen_j.assign(pen_j.data(), pen_j.data() + pen_j.size());
+            q.pen_w = vec<double>(pen_w);
+            q.m = static_cast<int>(rhs.size());
+            q.rhs = vec<double>(rhs);
+            q.geq = vec<std::uint8_t>(geq);
+            q.col_start = vec<i64>(col_start);
+            q.col_row.assign(col_row.data(), col_row.data() + col_row.size());
+            q.col_val = vec<double>(col_val);
+            closure::Options o;
+            o.gap = gap;
+            o.time_limit = std::isfinite(time_limit) ? time_limit : -1.0;
+            o.threads = std::max(1, threads);
+            o.verbose = verbose;
+            std::vector<std::uint8_t> init;
+            if (!initial.is_none()) {
+                const Doubles a = initial.cast<Doubles>();
+                for (py::ssize_t k = 0; k < a.size(); ++k) init.push_back(a.data()[k] > 0.5);
+            }
+            closure::Result r;
+            {
+                py::gil_scoped_release release;
+                r = closure::solve(q, o, init);
+            }
+            py::dict out;
+            out["status"] = r.status;
+            out["z"] = to_array(std::vector<double>(r.z.begin(), r.z.end()));
+            out["objective"] = r.objective;
+            out["bound"] = r.bound;
+            out["gap"] = r.gap;
+            out["evaluations"] = r.evaluations;
+            out["seconds"] = r.seconds;
+            return out;
+        },
+        py::arg("cost"), py::arg("fixed"), py::arg("req_from"), py::arg("req_to"), py::arg("pen_i"), py::arg("pen_j"),
+        py::arg("pen_w"), py::arg("rhs"), py::arg("geq"), py::arg("col_start"), py::arg("col_row"), py::arg("col_val"),
+        py::arg("gap"), py::arg("time_limit"), py::arg("threads"), py::arg("verbose"), py::arg("initial") = py::none(),
+        "The closure engine (opt/closure.hpp): Lagrangian bound by closed forms or minimum cuts, repaired selections.");
     m.def("opt_solve_highs", &py_solve_highs, py::arg("start"), py::arg("index"), py::arg("value"), py::arg("obj"),
           py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"),
           py::arg("maximize"), py::arg("offset"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),

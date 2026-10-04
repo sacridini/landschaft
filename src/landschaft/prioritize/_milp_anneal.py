@@ -225,6 +225,98 @@ def cut_applies(m: OptimizationProblem, n: int | None) -> dict | None:
     return mm
 
 
+def closure_model(m: OptimizationProblem, n: int) -> dict | None:
+    """The model as the closure engine's problem (opt/closure.hpp), or None: binary units, pair columns
+    of boundary or connectivity terms that are penalties (each q x_i x_j with q <= 0: w = -q/2 on both
+    directions, -w on both units' costs), and rows on the units alone with coefficients >= 0, '>='
+    (targets) or '<=' (budgets). For min penalties and other budgeted minimisations with pair terms."""
+    if n is None or n <= 0 or m.modelsense != "min":
+        return None
+    vt = np.asarray(m.vtype)
+    if not (vt[:n] == "B").all():
+        return None
+    a = m.A.tocsr()
+    a.sort_indices()
+    nnz = np.diff(a.indptr)
+    row = np.repeat(np.arange(a.shape[0]), nnz)
+    col, val = a.indices, a.data
+    sense = np.asarray(m.sense)
+    pair_row = np.zeros(a.shape[0], dtype=bool)
+    pair_row[row[col >= n]] = True
+    pi = pj = np.zeros(0, dtype=np.int64)
+    q = np.zeros(0)
+    if m.ncol > n:
+        rr = np.flatnonzero(pair_row)
+        le = (sense[rr] == "<=") & (nnz[rr] == 2) & (m.rhs[rr] == 0)
+        ge = (sense[rr] == ">=") & (nnz[rr] == 3) & (m.rhs[rr] == -1)
+        if not (le | ge).all():
+            return None
+        on_pair = pair_row[row]
+        if not np.where(col >= n, val == 1.0, val == -1.0)[on_pair].all():
+            return None
+        first = a.indptr[rr[le]]
+        unit, pcol = col[first], col[first + 1]
+        if (unit >= n).any() or (pcol < n).any():
+            return None
+        order = np.lexsort((unit, pcol))
+        unit, pcol = unit[order], pcol[order]
+        cols, counts = np.unique(pcol, return_counts=True)
+        if (counts != 2).any() or cols.size != m.ncol - n or (unit[0::2] == unit[1::2]).any():
+            return None
+        pi, pj = unit[0::2], unit[1::2]
+        q = m.obj[cols]
+        if (q > 0).any() or (m.lb[cols] > 0).any() or (m.ub[cols] < 1).any():
+            return None
+    side = np.flatnonzero(~pair_row)
+    s_sense = sense[side]
+    if not np.isin(s_sense, (">=", "<=")).all():
+        return None
+    f = a[side][:, :n].tocsr()
+    if f.nnz and (f.data < 0).any():
+        return None
+    rhs = m.rhs[side]
+    keep = (s_sense == "<=") | (rhs > 0)  # '>=' rows with rhs <= 0 are always met
+    f = f[np.flatnonzero(keep)]
+    f.eliminate_zeros()
+    by_unit = f.T.tocsr()
+    by_unit.sort_indices()
+    w = -q / 2
+    cost = np.asarray(m.obj[:n], dtype=np.float64).copy()
+    np.add.at(cost, pi, -w)
+    np.add.at(cost, pj, -w)
+    fixed = np.full(n, -1, dtype=np.int8)
+    fixed[m.lb[:n] >= 0.5] = 1
+    fixed[m.ub[:n] <= 0.5] = 0
+    return {"cost": cost, "fixed": fixed, "pen_i": np.concatenate([pi, pj]).astype(np.int32),
+            "pen_j": np.concatenate([pj, pi]).astype(np.int32), "pen_w": np.concatenate([w, w]),
+            "rhs": np.asarray(rhs[keep], dtype=np.float64), "geq": (s_sense[keep] == ">=").astype(np.uint8),
+            "col_start": by_unit.indptr.astype(np.int64), "col_row": by_unit.indices.astype(np.int32),
+            "col_val": by_unit.data.astype(np.float64), "pi": pi, "pj": pj}
+
+
+def solve_closure(m: OptimizationProblem, n: int, cm: dict, gap: float, time_limit: float, threads: int,
+                  verbose: bool, start: np.ndarray | None = None) -> dict:
+    """The closure engine on a model in its form (see :func:`closure_model`)."""
+    from .. import _core
+
+    empty = np.zeros(0, dtype=np.int32)
+    out = _core.opt_solve_closure(
+        cm["cost"], cm["fixed"], empty, empty, cm["pen_i"], cm["pen_j"], cm["pen_w"], cm["rhs"], cm["geq"],
+        cm["col_start"], cm["col_row"], cm["col_val"], float(gap), float(time_limit), int(threads), bool(verbose),
+        None if start is None else np.asarray(start, dtype=np.float64)[:n])
+    if out["status"] in ("infeasible", "no_solution"):
+        return {"status": out["status"].replace("no_solution", "time_limit"), "has_solution": False, "x": None,
+                "objective": math.nan, "bound": float(out["bound"]), "gap": math.nan, "nodes": 0,
+                "seconds": out["seconds"]}
+    full = _pair_values(m, n, np.asarray(out["z"], dtype=np.float64), cm["pi"], cm["pj"])
+    obj = float(m.obj @ full)
+    bound = float(out["bound"])
+    g = obj - bound
+    gp = 0.0 if g <= 0 else g / max(abs(obj), 1e-10)
+    return {"status": "optimal" if gp <= gap else out["status"], "has_solution": True, "x": full, "objective": obj,
+            "bound": bound, "gap": gp, "nodes": 0, "seconds": out["seconds"], "evaluations": out["evaluations"]}
+
+
 def solve_cut(m: OptimizationProblem, n: int, mm: dict, gap: float, time_limit: float, verbose: bool,
               start: np.ndarray | None = None) -> dict:
     """The cut engine (opt/cut.cpp) on a model in Marxan's form."""
