@@ -6,6 +6,19 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-10-04
+
+### Added
+- `ls.simulate` phase 10, documentation: the course chapter "Simulating land change" (demand,
+  transition potential, allocation, validation against persistence, calibration by patterns,
+  scenarios), the tutorial "Land change simulation" (Sibuyan Island from the change analysis to
+  scenarios with replicates), the land change tables of the benchmarks and accuracy page, and
+  `tools/benchmark_simulate.py` (against lulcc, MOLUSCE and Dinamica EGO).
+
+### Fixed
+- Docstrings of `ls.simulate` that the documentation build could not parse (notes after the
+  parameters).
+
 ## [1.19.0] - 2026-10-04
 
 ### Added
