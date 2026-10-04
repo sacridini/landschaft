@@ -1761,6 +1761,37 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   (ou no objetivo). Benchmark da fase 0 (10 feições, 3 ameaças, gap 1%): 10⁴ unidades no HiGHS de 28,8 s para
   **1,3 s** (Gurobi 0,9 s); 10⁵ **59 s** (na fase 0 o HiGHS não dava solução; Gurobi 8,4 s). Montagem do
   modelo em 10⁵: 4,7 s em Python (laços por par; a portar para C++).
+* **Integração** (2026-10-04): o branch `prioritize-milp` foi rebaseado sobre o `main` (depois do `ls.simulate`
+  completo), suíte inteira com 3350 testes passando, **versão 1.21.0** publicada (fases 1-4 e a fase 5 até aqui).
+  O trabalho segue na worktree `landschaft-prioritize`, agora a partir desse `main`.
+
+### Próximos passos (retomar daqui)
+1. **Fase 5, resto**:
+   * montagem do modelo multi-action em **C++** (`_pairs`, linhas de benefício, ativação, variáveis de borda y e
+     p: hoje laços Python por par, 4,7 s em 10⁵ unidades), com o `compile()` ainda bit a bit nos 6 casos;
+   * **distância para o Gurobi em 10⁵** (59 s contra 8,4 s): motor próprio para o multi-action (a estrutura
+     depois da eliminação dos b é cobertura com custo de abertura por unidade: relaxação lagrangiana das metas
+     como no motor de cortes, ou o motor de cobertura com as linhas x_ik <= w_i) e as curvas 2/3 em escala;
+   * **entrada por rasters** (uma camada por feição e por ameaça, custos de monitoramento e de ação por raster
+     ou constante: a extensão do prioripy), no padrão `ls.load_*` de entrada simples;
+   * **dependências direcionais** (fluxo montante-jusante, extensão do prioripy), testadas contra uma
+     formulação de referência escrita à parte;
+   * portfólios no multi-action (cortes no-good nas unidades e ações, como no `Problem`);
+   * checagem no Linux (WSL) e registro de "Fase 5 completa".
+2. **Fase 6, avaliação**: resumo (custo, unidades, perímetro), cobertura de metas, replacement importance
+   (re-solves em paralelo), Ferrier (2000), rank importance (Jung et al. 2021), ProxIRR (Baisero et al. 2021),
+   frequência de seleção em portfólios, métricas de paisagem da solução (`ls.lsm`, MSPA); cada uma contra as
+   `eval_*` do prioritizr na mesma solução.
+3. **Fase 7, calibração e trade-offs**: calibração de BLM e de pesos (joelho da curva), frente de Pareto custo x
+   déficit, solução iterativa acoplável aos passos do `ls.simulate` (agora completo).
+4. **Fase 8, integração**: transformações de feição do Zonation (condição, retenção, kernels, impactos), SAR,
+   feições do `ls.sdm`, comparação Zonation x MILP no mesmo orçamento, gráficos do `ls.plot` e relatório offline.
+5. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
+   mais as pendências trazidas das fases anteriores: contiguidade e corredores por cortes de separadores de
+   nós em rodadas, limite fraco do max_features (cortes), objetivos filogenéticos em 10⁶ (LP que não converge
+   em 30 s), fluxos dinâmicos e reparo em paralelo no motor de cortes.
+6. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
+   prioritizr/prioriactions/prioripy (tabela R <-> Python).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
