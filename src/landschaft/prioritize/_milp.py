@@ -84,6 +84,7 @@ class Units:
     feature_names: tuple[str, ...]
     template: object  # raster: the cost DataArray; table: the DataFrame
     index: np.ndarray  # raster: flat cell of each unit; table: row of each unit
+    features: object = None  # the feature rasters (raster and polygon units), for a Zonation start
 
     @property
     def n(self) -> int:
@@ -190,7 +191,7 @@ def _raster_units(cost: xr.DataArray, features, n_threads: int | None = None) ->
     rij = sp.csr_matrix((value, index, start), shape=(len(layers), cells.size))
     rij.has_sorted_indices = True
     names = tuple(n for n, _ in layers)
-    return Units("raster", c[cells], rij, totals, names, cost, cells)
+    return Units("raster", c[cells], rij, totals, names, cost, cells, features)
 
 
 def exact_sums(raster: xr.DataArray, geometries, n_threads: int | None = None) -> np.ndarray:
@@ -321,7 +322,7 @@ def _vector_units(x, features, cost_column: str) -> Units:
         f"feature_{k + 1}" for k in range(f.shape[0]))
     m = full[:, rows].tocsr()
     m.sort_indices()
-    return Units("table", cost[rows], m, totals, names, x, rows)
+    return Units("table", cost[rows], m, totals, names, x, rows, features)
 
 
 def _table_units(x: pd.DataFrame, features, cost_column: str, rij) -> Units:
@@ -499,17 +500,113 @@ class Problem:
     # --- solve
     def solve(self, start=None):
         """Solve the problem on its solver (HiGHS unless another was added): a
-        :class:`~landschaft.prioritize.Solution`. ``start``: a solution to
-        start from (one value per planning unit)."""
+        :class:`~landschaft.prioritize.Solution`.
+
+        Parameters
+        ----------
+        start
+            A solution to start from: one value per planning unit, or a
+            Zonation ranking to build one from: ``"zonation"`` (Zonation's
+            CAZ2 on the problem's features, with the cost raster if the units
+            are cells), a :class:`~landschaft.prioritize.ZonationResult` or a
+            rank raster. The units go in from the highest rank down until
+            every target is met (locked-in units always, locked-out never);
+            the solver then drops those not needed and goes on from there.
+        """
         from ._milp_solve import make_solution, solve_model
 
         m = self.compile()
         if start is not None:
-            start = np.asarray(start, dtype=np.float64).ravel()
-            if start.size != m.ncol:
-                raise ValueError(f"the start solution must have one value per planning unit ({m.ncol})")
+            start = self._start(start, m)
         r = solve_model(m, self.solver[0], self.solver[1], start)
         return make_solution(self.units, m, r)
+
+    def _start(self, start, m: OptimizationProblem) -> np.ndarray:
+        from ._zonation import ZonationResult
+
+        if isinstance(start, str):
+            if start != "zonation":
+                raise ValueError(f"unknown start {start!r} (a solution, 'zonation' or a Zonation result)")
+            start = _zonation_rank(self.units)
+        if isinstance(start, ZonationResult):
+            start = start.rank
+        if isinstance(start, xr.DataArray) and start.ndim >= 2:
+            return _start_from_rank(m, _unit_ranks(self.units, start))
+        start = np.asarray(start, dtype=np.float64).ravel()
+        if start.size != m.ncol:
+            raise ValueError(f"the start solution must have one value per planning unit ({m.ncol})")
+        return start
+
+
+def _zonation_rank(u: Units) -> xr.DataArray:
+    """Zonation's CAZ2 ranking of the problem's features (with the cost raster for cell units)."""
+    from ._zonation import zonation
+
+    if u.features is None:
+        raise ValueError("a Zonation start needs feature rasters (raster or polygon planning units)")
+    layers = [f for _, f in _layers(u.features)]
+    return zonation(layers, cost=u.template if u.kind == "raster" else None).rank
+
+
+def _unit_ranks(u: Units, rank: xr.DataArray) -> np.ndarray:
+    """The rank of every planning unit: its cell's, or a polygon's mean over the cells it covers."""
+    if rank.ndim == 3 and rank.shape[0] == 1:
+        rank = rank[0]
+    if rank.ndim != 2:
+        raise ValueError("the rank raster must have one band")
+    if u.kind == "raster":
+        if rank.shape != u.template.shape:
+            raise ValueError(f"the rank raster ({rank.shape}) is not on the planning units' grid "
+                             f"({u.template.shape})")
+        return np.asarray(rank.values, dtype=np.float64).ravel()[u.index]
+    if not hasattr(u.template, "geometry"):
+        raise ValueError("a rank raster needs raster or polygon planning units")
+    geoms = u.template.iloc[u.index]
+    crs = rank.rio.crs
+    if geoms.crs is not None and crs is not None and geoms.crs != crs:
+        from .._vector import to_crs
+
+        geoms = to_crs(geoms, crs)
+    v = np.asarray(rank.values, dtype=np.float64)
+    ok = np.isfinite(v)
+    stack = xr.DataArray(np.stack([np.where(ok, v, 0.0), ok.astype(np.float64)]), dims=("band", *rank.dims),
+                         coords={**{d: rank[d] for d in rank.dims if d in rank.coords}, "band": ["rank", "n"]})
+    if crs is not None:
+        stack = stack.rio.write_crs(crs)
+    from ..io import _transform
+
+    stack = stack.rio.write_transform(_transform(rank))
+    sums = exact_sums(stack, geoms.geometry.values)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(sums[:, 1] > 0, sums[:, 0] / sums[:, 1], np.nan)
+
+
+def _start_from_rank(m: OptimizationProblem, rank: np.ndarray) -> np.ndarray:
+    """Units from the highest rank down (ties: unit order) until every row is met; locked-in units
+    first, locked-out never. Units without a rank come last."""
+    if m.modelsense != "min" or any(s != ">=" for s in m.sense):
+        raise ValueError("a start from a ranking needs a minimum set problem")
+    x = np.where(m.lb > 0, m.lb, 0.0)
+    act = m.A @ x
+    need = np.flatnonzero(act < m.rhs)
+    if need.size:
+        r = np.where(np.isfinite(rank), rank, -np.inf)
+        order = np.argsort(-r, kind="stable")
+        order = order[(m.ub[order] > x[order])]
+        # every row's amounts in rank order (positions in `order`): the first position that meets it
+        gain = sp.csr_matrix(m.A[need][:, order].multiply((m.ub - x)[order]))
+        gain.sort_indices()
+        reach = 0
+        for i, t in enumerate(m.rhs[need]):
+            row = slice(gain.indptr[i], gain.indptr[i + 1])
+            cum = np.cumsum(gain.data[row]) + act[need[i]]
+            hit = np.flatnonzero(cum >= t - 1e-9 * max(1.0, abs(t)))
+            if not hit.size:
+                raise ValueError("the targets cannot be met by the planning units")
+            reach = max(reach, int(gain.indices[row][hit[0]]))
+        take = order[: reach + 1]
+        x[take] = m.ub[take]
+    return x
 
 
 def problem(x, features=None, *, cost_column: str | None = None, rij=None) -> Problem:

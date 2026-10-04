@@ -160,14 +160,14 @@ def _wide_cover(n=20000, m=10, seed=3):
     return a, cost, rhs
 
 
-def _cover(a, cost, rhs, method, gap=0.0, threads=1, time_limit=math.inf, integer=True):
+def _cover(a, cost, rhs, method, gap=0.0, threads=1, time_limit=math.inf, integer=True, initial=None):
     n = cost.size
     return _core.opt_solve_highs(
         start=a.indptr.astype(np.int64), index=a.indices.astype(np.int64), value=a.data, obj=cost,
         lb=np.zeros(n), ub=np.ones(n), row_lo=rhs, row_hi=np.full(rhs.size, np.inf),
         integer=np.full(n, int(integer), dtype=np.uint8), maximize=False, offset=0.0, gap=gap,
-        time_limit=time_limit, threads=threads, presolve="choose", verbose=False, relaxation=False, initial=None,
-        method=method)
+        time_limit=time_limit, threads=threads, presolve="choose", verbose=False, relaxation=False,
+        initial=initial, method=method)
 
 
 def test_covering_same_bits_on_any_threads():
@@ -291,3 +291,73 @@ def test_raster_features_by_blocks(monkeypatch):
         assert np.array_equal(u.totals, ref.totals)
         assert np.array_equal(u.rij.indptr, ref.rij.indptr) and np.array_equal(u.rij.indices, ref.rij.indices)
         assert np.array_equal(u.rij.data, ref.rij.data)
+
+
+# ----------------------------------------------------------------------------- start solutions
+
+def test_covering_takes_the_start_solution():
+    """A feasible start is trimmed and kept when cheaper (here: no time for anything else); an
+    infeasible one is ignored."""
+    a, cost, rhs = _wide_cover()
+    every = np.ones(cost.size)
+    r = _cover(a, cost, rhs, "covering", time_limit=0.0, initial=every)
+    assert r["status"] == "time_limit" and r["has_solution"]
+    x = r["x"]
+    assert set(np.unique(x)) <= {0.0, 1.0} and (a @ x >= rhs * (1 - 1e-9)).all()
+    assert r["objective"] == pytest.approx(cost @ x) and r["objective"] < cost.sum()
+    r = _cover(a, cost, rhs, "covering", time_limit=0.0, initial=np.zeros(cost.size))  # infeasible start
+    assert not r["has_solution"]
+    with pytest.raises(ValueError, match="one value per column"):
+        _cover(a, cost, rhs, "covering", initial=np.ones(3))
+
+
+def _minset(p, target=0.3):
+    return p.add_min_set_objective().add_relative_targets(target).add_binary_decisions()
+
+
+def test_zonation_start():
+    """Starts from Zonation's ranking: feasible, and the same optimum."""
+    from landschaft.prioritize import _milp
+
+    cost, feats = optimize_cases.pu_cost(), optimize_cases.features()
+    p = _minset(ls.prioritize.problem(cost, feats)).add_highs_solver(gap=0)
+    best = p.solve()
+    res = ls.prioritize.zonation([feats[k] for k in range(feats.shape[0])], cost=cost)
+    m = p.compile()
+    x = _milp._start_from_rank(m, _milp._unit_ranks(p.units, res.rank))
+    assert set(np.unique(x)) <= {0.0, 1.0} and (m.A @ x >= m.rhs).all()
+    # from the top of the ranking down: every unit taken outranks every unit left (ties aside)
+    r = res.rank.values.ravel()[p.units.index]
+    assert r[x == 1].min() >= r[x == 0].max()
+    for start in ("zonation", res, res.rank):
+        sol = p.solve(start=start)
+        assert sol.status == "optimal" and sol.objective == pytest.approx(best.objective, rel=1e-9)
+    # locked units are honoured
+    li, lo = optimize_cases.locked_in(), optimize_cases.locked_out()
+    q = p.add_locked_in_constraints(li).add_locked_out_constraints(lo)
+    mq = q.compile()
+    xq = _milp._start_from_rank(mq, _milp._unit_ranks(q.units, res.rank))
+    assert (xq[mq.lb > 0] == 1).all() and (xq[mq.ub == 0] == 0).all() and (mq.A @ xq >= mq.rhs).all()
+    assert q.solve(start="zonation").objective == pytest.approx(q.solve().objective, rel=1e-9)
+
+
+def test_zonation_start_polygons_and_errors():
+    hexes = ls.prioritize.h3_units(optimize_cases.pu_cost(), 9)
+    p = _minset(ls.prioritize.problem(hexes, optimize_cases.features(), cost_column="cost"), 0.2)
+    p = p.add_highs_solver(gap=0)
+    assert p.solve(start="zonation").objective == pytest.approx(p.solve().objective, rel=1e-9)
+    t = _minset(optimize_cases.CASES["minset_table"].py().add_relative_targets(0.3))
+    with pytest.raises(ValueError, match="needs feature rasters"):
+        t.solve(start="zonation")
+    with pytest.raises(ValueError, match="unknown start"):
+        p.solve(start="gurobi")
+    with pytest.raises(ValueError, match="one value per planning unit"):
+        p.solve(start=[1, 0])
+
+
+def test_covering_keeps_the_time_limit_on_wide_models():
+    """Gap 0 on 3e5 units: HiGHS's MIP root would ignore a 1 s limit for seconds; it is not called."""
+    a, cost, rhs = _wide_cover(n=300_000, m=30, seed=5)
+    r = _cover(a, cost, rhs, "covering", gap=0.0, threads=4, time_limit=1.0)
+    assert r["has_solution"] and r["seconds"] < 1.5
+    assert r["status"] in ("optimal", "time_limit") and r["gap"] < 1e-3

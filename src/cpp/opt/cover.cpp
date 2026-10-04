@@ -29,6 +29,7 @@ using Clock = std::chrono::steady_clock;
 constexpr double kFeasTol = 1e-9;   // row activity vs right-hand side (relative to max(1, |rhs|))
 constexpr double kDualTol = 1e-7;   // reduced costs (HiGHS's dual feasibility tolerance)
 constexpr int kMaxSiftRounds = 500;
+constexpr i64 kWideMip = 100000;    // columns above which HiGHS's MIP ignores the time limit for seconds
 
 // The model after presolve, by columns, with the map back to the original.
 struct Reduced {
@@ -513,6 +514,38 @@ std::vector<double> round_and_trim(const Reduced& p, std::vector<double> x) {
     return x;
 }
 
+// The caller's start solution on the reduced model, or nothing when it does not fit it: within the
+// bounds, integral where it must be (to 1e-6, then rounded) and meeting every kept row. The columns
+// presolve fixed are in no row or forced by their bounds, so they take their fixed value: the start
+// stays feasible and gets no worse.
+std::vector<double> start_solution(const Reduced& p, const std::vector<double>& start) {
+    if (start.empty()) return {};
+    std::vector<double> x(static_cast<std::size_t>(p.ncol));
+    for (i64 j = 0; j < p.ncol; ++j) {
+        double v = start[p.col_of[j]];
+        if (!std::isfinite(v)) return {};
+        if (p.integer[j]) {
+            if (std::abs(v - std::round(v)) > 1e-6) return {};
+            v = std::round(v);
+        }
+        const double tol = 1e-9 * std::max(1.0, std::abs(v));
+        if (v < p.lb[j] - tol || v > p.ub[j] + tol) return {};
+        x[j] = std::clamp(v, p.lb[j], p.ub[j]);
+    }
+    std::vector<double> act(static_cast<std::size_t>(p.nrow), 0.0);
+    for (i64 j = 0; j < p.ncol; ++j)
+        for (i64 k = p.col_start[j]; k < p.col_start[j + 1]; ++k) act[p.row_index[k]] += p.value[k] * x[j];
+    for (i64 r = 0; r < p.nrow; ++r)
+        if (act[r] < p.rhs[r] - row_tol(p.rhs[r])) return {};
+    return x;
+}
+
+double objective_of(const Reduced& p, const std::vector<double>& x) {
+    double obj = 0.0;
+    for (i64 j = 0; j < p.ncol; ++j) obj += p.c[j] * x[j];
+    return obj;
+}
+
 double relative_gap(double upper, double lower) {
     if (!std::isfinite(upper) || !std::isfinite(lower)) return kInf;
     const double g = upper - lower;
@@ -525,6 +558,8 @@ double relative_gap(double upper, double lower) {
 SolveResult solve_covering(const Model& model, const SolveOptions& options) {
     model.check();
     if (!is_covering(model)) throw std::invalid_argument("not a covering model");
+    if (!options.start.empty() && options.start.size() != static_cast<std::size_t>(model.ncol))
+        throw std::invalid_argument("the start solution must have one value per column");
     const auto t0 = Clock::now();
     const bool timed = std::isfinite(options.time_limit);
     const auto deadline = timed ? t0 + std::chrono::duration_cast<Clock::duration>(
@@ -545,6 +580,20 @@ SolveResult solve_covering(const Model& model, const SolveOptions& options) {
         return x;
     };
 
+    // the caller's start (trimmed: units not needed dropped, the most expensive first) when it beats `x`
+    const std::vector<double> given = [&] {
+        std::vector<double> g = start_solution(p, options.start);
+        return !g.empty() && p.nonnegative ? round_and_trim(p, std::move(g)) : g;
+    }();
+    auto take_start = [&](std::vector<double>& x, double& obj) {
+        if (given.empty()) return;
+        const double g = objective_of(p, given);
+        if (g < obj) {
+            x = given;
+            obj = g;
+        }
+    };
+
     Sifting lp(p, std::max(1, options.threads));
     lp.verbose = options.verbose;
     lp.run(deadline);
@@ -559,10 +608,14 @@ SolveResult solve_covering(const Model& model, const SolveOptions& options) {
                        std::any_of(p.integer.begin(), p.integer.end(), [](std::uint8_t t) { return t != 0; });
     if (!lp.optimal) {  // out of time: the working LP's solution is feasible, the bound the best Lagrangian one
         res.status = "time_limit";
+        std::vector<double> xr;
+        double obj = kInf;
         if (!std::isnan(lp.lp_objective) && (!any_integer || p.nonnegative)) {
-            const std::vector<double> xr = any_integer ? round_and_trim(p, lp.x) : lp.x;
-            double obj = 0.0;
-            for (i64 j = 0; j < p.ncol; ++j) obj += p.c[j] * xr[j];
+            xr = any_integer ? round_and_trim(p, lp.x) : lp.x;
+            obj = objective_of(p, xr);
+        }
+        take_start(xr, obj);
+        if (!xr.empty()) {
             res.has_solution = true;
             res.x = full(xr);
             res.objective = obj + p.offset;
@@ -587,9 +640,9 @@ SolveResult solve_covering(const Model& model, const SolveOptions& options) {
     double best_obj = kInf;
     if (p.nonnegative) {
         best = round_and_trim(p, lp.x);
-        best_obj = 0.0;
-        for (i64 j = 0; j < p.ncol; ++j) best_obj += p.c[j] * best[j];
+        best_obj = objective_of(p, best);
     }
+    take_start(best, best_obj);
     double bound = lower;
     bool mip_optimal = false;  // HiGHS proved the gap (by its own tolerances)
     if (relative_gap(best_obj + p.offset, bound + p.offset) > options.gap) {
@@ -642,8 +695,12 @@ SolveResult solve_covering(const Model& model, const SolveOptions& options) {
         o.start = start;
         o.time_limit = timed ? std::chrono::duration<double>(deadline - Clock::now()).count() : kInf;
         // HiGHS's own presolve stalls on very wide models (and does not look at the time there)
-        if (sub.ncol > 100000) o.presolve = Presolve::off;
-        if (o.time_limit > 0) {
+        if (sub.ncol > kWideMip) o.presolve = Presolve::off;
+        // and so does its MIP's root (feasibility jump, randomized rounding: no interrupt reaches them;
+        // a 1 s limit took 2.5 s at 2e5 columns, 6 s at 4e5, 20 s at 1e6): with a time limit, a wider
+        // sub-model is not sent to it, and the gap asked for is not proven in time
+        const bool fits = !timed || sub.ncol <= kWideMip;
+        if (o.time_limit > 0 && fits) {
             const SolveResult mip = solve_highs(sub, o);
             res.nodes = mip.nodes;
             if (mip.has_solution && mip.objective < best_obj) {

@@ -109,7 +109,10 @@ class Solution(Saveable):
         The objective of the solution, the solver's bound on the optimum and
         their relative gap.
     status
-        ``"optimal"`` (within the gap asked for), ``"time_limit"``, ...
+        ``"optimal"`` (within the gap asked for), ``"time_limit"`` (the gap
+        asked for not reached within the time limit: with a limit, models too
+        wide for HiGHS's MIP to keep it stop at the engine's own solution,
+        before the limit), ``"infeasible"``, ...
     solver, seconds
         The solver used and the time it took.
     """

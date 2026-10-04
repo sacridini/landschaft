@@ -21,9 +21,13 @@
 // 3. integer columns: a basic LP solution has at most as many fractional
 //    columns as rows; they are rounded up (A >= 0 keeps the rows met), and then the
 //    selected columns that are not needed are dropped, the most expensive
-//    first;
+//    first; a start solution given by the caller (options.start), if it is
+//    feasible, is trimmed the same way and replaces it when cheaper;
 // 4. if the gap between that solution and the LP bound is wider than asked
-//    for, HiGHS's MIP goes on from it with the time left.
+//    for, HiGHS's MIP goes on from it with the time left (with a time limit,
+//    only when the columns left after reduced-cost fixing are at most 1e5:
+//    on wider models HiGHS's root heuristics ignore any interrupt for
+//    seconds to minutes).
 //
 // Every step is deterministic: the result does not depend on the threads.
 #pragma once

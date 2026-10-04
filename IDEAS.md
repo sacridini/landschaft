@@ -1484,7 +1484,26 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   uma soma sequencial em double (os mesmos bits com qualquer bloco, chunk ou número de threads; testado).
   30 feições x 4·10⁶ células (48 mi de valores): 1,05 s contra 4,1 s, pico de memória em Python 0,3 GB contra
   4,3 GB (a pilha não é mais copiada em float64; fica só a matriz esparsa).
-* **Falta na fase 1**: warm start pelo Zonation.
+* **Parte 6**: soluções iniciais. `solve(start=...)` aceita um vetor, `"zonation"` (CAZ2 do Zonation nas feições
+  do problema, com o raster de custo se as unidades são células), um `ZonationResult` ou um raster de rank: as
+  unidades entram do maior rank para baixo até todas as metas serem atingidas (locked in sempre, locked out
+  nunca; polígonos/H3 pelo rank médio ponderado pela cobertura exata). **O motor de cobertura ignorava o
+  `start`** (só o HiGHS puro o recebia): agora ele é projetado no modelo reduzido (as colunas fixadas pelo
+  presolve estão em nenhuma linha ou forçadas pelos limites), conferido, podado (unidades desnecessárias saem,
+  as mais caras primeiro) e usado quando é mais barato que o LP arredondado.
+  * **Resultado honesto**: no min set o início do Zonation não ajuda: 10⁶ células, 30 feições, CAZ2 com custo
+    em 0,8 s, solução podada 774 mil contra 655 mil do LP arredondado (gap 10⁻⁵). Serve quando o LP não termina
+    no tempo e, depois, nas penalidades (fase 3), em que a relaxação é fraca.
+  * **Limite de tempo não era respeitado**: gap 0 com limite de 5 s em 10⁶ unidades levava 21 s. Depois da
+    fixação por custo reduzido sobravam 931 mil colunas e o MIP do HiGHS passava ~20 s na raiz sem nó nem
+    iteração de LP: a **Feasibility Jump** (18 s; o "user termination" dela não olha o nosso callback) e, com ela
+    desligada, o **randomized rounding** (25 s; roda mesmo com `mip_heuristic_effort=0`); a detecção de
+    simetria soma mais ~7 s. Nenhum interrupt chega a esses passos. Atraso de um limite de 1 s: 0,1-0,3 s até
+    10⁵ colunas, 1,5 s em 2·10⁵, 5 s em 4·10⁵, 20 s em 10⁶. Regra: **com limite de tempo, submodelo com mais de
+    10⁵ colunas não vai ao MIP do HiGHS** (fica a solução do motor, status `time_limit`: o gap pedido não é
+    provado no tempo); sem limite, vai. Agora: 1,7 s para limites de 2, 5 e 10 s. **Vale para as fases 2-3**:
+    objetivos que não são de cobertura vão hoje direto ao HiGHS e terão o mesmo problema em modelos largos.
+* **Fase 1 completa** (falta só a revisão final e o teste no Linux).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
