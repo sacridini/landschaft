@@ -40,6 +40,10 @@ HighsInt to_highs(i64 v, const char* what) {
     return static_cast<HighsInt>(v);
 }
 
+std::string model_size(const Model& m) {
+    return std::to_string(m.nrow) + " rows, " + std::to_string(m.ncol) + " columns";
+}
+
 HighsLp highs_lp(const Model& m) {
     HighsLp lp;
     lp.num_col_ = to_highs(m.ncol, "columns");
@@ -86,6 +90,8 @@ void set(Highs& h, const std::string& name, const T& value) {
 
 }  // namespace
 
+void use_highs_threads(int threads) { use_threads(threads); }
+
 SolveResult solve_highs(const Model& model, const SolveOptions& options) {
     model.check();
     if (options.threads < 1) throw std::invalid_argument("threads must be at least 1");
@@ -109,7 +115,23 @@ SolveResult solve_highs(const Model& model, const SolveOptions& options) {
     if (std::isfinite(options.time_limit)) set(h, "time_limit", options.time_limit);
     if (options.relaxation) set(h, "solve_relaxation", true);
 
-    if (h.passModel(highs_lp(model)) == HighsStatus::kError) throw std::runtime_error("HiGHS rejected the model");
+    if (h.passModel(highs_lp(model)) == HighsStatus::kError) {
+        // say what HiGHS objects to
+        std::string why;
+        for (i64 j = 0; j < model.ncol && why.empty(); ++j) {
+            if (std::isnan(model.obj[j]) || std::isinf(model.obj[j])) why = "objective of column " + std::to_string(j);
+            else if (std::isnan(model.lb[j]) || std::isnan(model.ub[j]) || model.lb[j] > model.ub[j])
+                why = "bounds of column " + std::to_string(j) + ": [" + std::to_string(model.lb[j]) + ", " +
+                      std::to_string(model.ub[j]) + "]";
+        }
+        for (i64 r = 0; r < model.nrow && why.empty(); ++r)
+            if (std::isnan(model.row_lo[r]) || std::isnan(model.row_hi[r]) || model.row_lo[r] > model.row_hi[r])
+                why = "bounds of row " + std::to_string(r) + ": [" + std::to_string(model.row_lo[r]) + ", " +
+                      std::to_string(model.row_hi[r]) + "]";
+        for (std::size_t k = 0; k < model.value.size() && why.empty(); ++k)
+            if (!std::isfinite(model.value[k])) why = "a coefficient of row-wise entry " + std::to_string(k);
+        throw std::runtime_error("HiGHS rejected the model (" + model_size(model) + (why.empty() ? "" : "; " + why) + ")");
+    }
     if (!options.start.empty()) {
         HighsSolution s;
         s.col_value = options.start;

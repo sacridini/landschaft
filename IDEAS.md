@@ -1522,6 +1522,39 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     (0,01 x custo / custo total) e o Gurobi para dentro das tolerâncias dele, em ótimos diferentes no prioritizr
     (8,998077) e no gurobipy (8,998085) no `max_features`; o HiGHS acha 8,998091, viável. Teste: o nosso ótimo
     é o da referência ou melhor, até 1e-5 relativo.
+* **Parte 2**: motor próprio para os **modelos largos com orçamento** (`opt/wide.cpp`; os objetivos que não
+  são de cobertura iam direto ao MIP do HiGHS, que com 10⁵ unidades levou 266 s com limite de 30 s, sem
+  solução). Sifting genérico (qualquer sentido de linha; as colunas auxiliares sempre no conjunto de trabalho),
+  com: (a) duais iniciais por um **bundle no Lagrangiano** generalizado (sinais dos duais pelo sentido da linha;
+  colunas auxiliares com limite infinito viram restrições do mestre; no máximo 40% do tempo restante); (b) **LP
+  restrito a quente**: uma instância do HiGHS de rodada em rodada (`addCols`/`deleteCols`/`changeRowsBounds`),
+  sem presolve; (c) arredondamentos: para baixo; para cima e poda (unidades desnecessárias saem, as que mais
+  pesam no orçamento primeiro); o mesmo a partir do **LP mais barato** (auxiliares nos valores do LP, orçamento
+  aberto, gasto mínimo: o ótimo do LP pode gastar todo o orçamento, as unidades não têm custo no min_shortfall);
+  **mergulho** nas binárias auxiliares (metas atingidas, feições presentes) ordenadas pelo valor no LP, as k
+  primeiras fixadas em 1, busca binária no maior k que cabe; guloso pelo custo reduzido; (d) fixação por custo
+  reduzido e MIP do HiGHS só até 10⁵ colunas com limite de tempo. Sem tempo para o LP: a solução do LP
+  restrito (ou as unidades no limite inferior) arredondada, com o Lagrangiano como limite.
+  * O que pesou, medido: o presolve do HiGHS nos LPs restritos (24 s por LP com 60 mil colunas no
+    min_shortfall 10⁶; sem ele, 0,2 s), um conjunto de trabalho pequeno demais (468 rodadas oscilando; com 5 mil
+    colunas e corte suave, 3), os duais da amostra (dezenas de milhares de unidades no limite errado; com o
+    bundle, uma rodada) e LPs degenerados resolvidos do zero (o min_largest_shortfall só tem custo na coluna do
+    maior déficit; a quente, 2,3 s em vez de esgotar o tempo).
+  * O mestre do bundle devolve duais com erro de tolerância do lado proibido (-1e-10 numa linha `>=`): projetar
+    nos sinais, senão o Lagrangiano multiplica pelo limite infinito da linha (NaN).
+  * Benchmark (30 feições gaussianas, orçamento 10% do custo, gap 10%, limite 30 s; i5-13600K):
+
+| objetivo | 10⁵: landschaft | 10⁵: Gurobi | 10⁶: landschaft | 10⁶: Gurobi |
+|---|---|---|---|---|
+| min_shortfall | 0,6 s, gap 0,7% | 0,8 s, 0,4% | 1,1 s, 0,035% | 13,9 s, 0,043% |
+| min_largest_shortfall | 1,0 s, 1,2% | 1,2 s, 1,9% | 3,4 s, 0,087% | sem solução útil |
+| max_utility | 0,2 s, 3e-5 | 0,9 s, 1,4% | 1,2 s, 4e-6 | 8,0 s, 3e-6 |
+| max_features | 30 s, 25 feições (limite 28,2) | 10 s, 24 (limite 26,4) | 20 s, 25 | nenhuma |
+| max_cover | 0,1 s, 30/30 | 0,8 s, 30 | 0,8 s, 30 | 6,7 s, 29 |
+
+  * **Lacuna que fica**: o limite do max_features é o do LP (28,2), mais fraco que o do Gurobi com cortes
+    (26,4): a solução é melhor, mas o gap de 10% não é provado. Cortes de cobertura/mochila no LP seriam o
+    caminho (fase 4).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

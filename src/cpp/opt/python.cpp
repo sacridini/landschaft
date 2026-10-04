@@ -15,6 +15,7 @@
 #include "opt/cover.hpp"
 #include "opt/features.hpp"
 #include "opt/milp.hpp"
+#include "opt/wide.hpp"
 
 namespace py = pybind11;
 
@@ -83,7 +84,7 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
                         const Doubles& lb, const Doubles& ub, const Doubles& row_lo, const Doubles& row_hi,
                         const Bytes& integer, bool maximize, double offset, double gap, double time_limit,
                         int threads, const std::string& presolve, bool verbose, bool relaxation,
-                        const py::object& initial, const std::string& method) {
+                        const py::object& initial, const std::string& method, std::int64_t n_units) {
     const opt::Model m = model_of(start, index, value, obj, lb, ub, row_lo, row_hi, integer, maximize, offset);
     opt::SolveOptions o;
     o.gap = gap;
@@ -93,13 +94,18 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
     o.verbose = verbose;
     o.relaxation = relaxation;
     if (!initial.is_none()) o.start = vec<double>(initial.cast<Doubles>());
-    if (method != "highs" && method != "covering") throw std::invalid_argument("method must be 'highs' or 'covering'");
+    if (method != "highs" && method != "covering" && method != "wide")
+        throw std::invalid_argument("method must be 'highs', 'covering' or 'wide'");
     if (method == "covering" && !opt::is_covering(m))
         throw std::invalid_argument("not a covering model (a minimisation with only >= rows and finite bounds)");
+    if (method == "wide" && !opt::is_wide(m, n_units))
+        throw std::invalid_argument("not a wide model (n_units units with finite bounds, few other columns)");
     opt::SolveResult r;
     {
         py::gil_scoped_release release;
-        r = method == "covering" ? opt::solve_covering(m, o) : opt::solve_highs(m, o);
+        r = method == "covering" ? opt::solve_covering(m, o)
+            : method == "wide"   ? opt::solve_wide(m, n_units, o)
+                                 : opt::solve_highs(m, o);
     }
     return result_dict(std::move(r));
 }
@@ -139,9 +145,10 @@ void register_python(py::module_& m) {
           py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"),
           py::arg("maximize"), py::arg("offset"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),
           py::arg("presolve"), py::arg("verbose"), py::arg("relaxation"), py::arg("initial"),
-          py::arg("method") = "highs",
-          "Solve a model (rows in CSR) on HiGHS ('highs') or with the covering engine ('covering': sifted LP, "
-          "rounding, then HiGHS): status, has_solution, x, objective, bound, gap, nodes, seconds.");
+          py::arg("method") = "highs", py::arg("n_units") = -1,
+          "Solve a model (rows in CSR) on HiGHS ('highs'), with the covering engine ('covering': sifted LP, "
+          "rounding, then HiGHS) or the wide engine ('wide': the first n_units columns are the planning units): "
+          "status, has_solution, x, objective, bound, gap, nodes, seconds.");
 }
 
 }  // namespace opt

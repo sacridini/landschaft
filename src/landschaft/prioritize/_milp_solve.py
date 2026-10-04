@@ -21,11 +21,20 @@ def _is_covering(m: OptimizationProblem) -> bool:
             and bool(np.isfinite(m.ub).all()))
 
 
+def _method(m: OptimizationProblem, n_units: int | None) -> str:
+    if _is_covering(m):
+        return "covering"
+    if n_units is not None and n_units > 0 and m.ncol - n_units <= 20000 and bool(
+            np.isfinite(m.lb[:n_units]).all() and np.isfinite(m.ub[:n_units]).all()):
+        return "wide"
+    return "highs"
+
+
 def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, presolve: str, verbose: bool,
-           start: np.ndarray | None, relaxation: bool = False) -> dict:
-    """HiGHS; covering models go through landschaft's own engine first (a sifted LP from a bundle method
-    on the dual, rounding, then HiGHS's MIP only if the gap is still too wide), which keeps HiGHS off the
-    wide models it stalls on."""
+           start: np.ndarray | None, relaxation: bool = False, n_units: int | None = None) -> dict:
+    """HiGHS, behind landschaft's own engines: covering models (min set) and wide models with a budget
+    (min shortfall, max utility, ...) get a sifted LP, rounding and a greedy step, and HiGHS's MIP only
+    if the gap is still too wide and the model narrow enough for it to keep the time limit."""
     from .. import _core
 
     lo, hi = m.row_bounds()
@@ -35,7 +44,7 @@ def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, 
         ub=m.ub, row_lo=lo, row_hi=hi, integer=np.isin(np.asarray(m.vtype), ("B", "I")).astype(np.uint8),
         maximize=m.modelsense == "max", offset=0.0, gap=gap, time_limit=time_limit, threads=threads,
         presolve=presolve, verbose=verbose, relaxation=relaxation, initial=start,
-        method="covering" if _is_covering(m) else "highs")
+        method=_method(m, n_units), n_units=-1 if n_units is None else int(n_units))
 
 
 def _gurobi(m: OptimizationProblem, gap: float, time_limit: float, threads: int, verbose: bool,
@@ -69,7 +78,8 @@ def _gurobi(m: OptimizationProblem, gap: float, time_limit: float, threads: int,
                 "nodes": int(g.NodeCount) if mip else 0, "seconds": g.Runtime}
 
 
-def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.ndarray | None = None) -> dict:
+def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.ndarray | None = None,
+                n_units: int | None = None) -> dict:
     """Solve a compiled model on a solver; the result's status, solution and bounds."""
     from .. import _threads
 
@@ -79,7 +89,7 @@ def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.nd
     threads = _threads.resolve(options.get("n_threads"))
     verbose = bool(options.get("verbose", False))
     if solver == "highs":
-        r = _highs(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start)
+        r = _highs(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start, n_units=n_units)
     elif solver == "gurobi":
         r = _gurobi(m, gap, time_limit, threads, verbose, start)
     else:

@@ -579,7 +579,7 @@ class Problem:
         m, targets = compile_problem(self)
         if start is not None:
             start = self._start(start, m)
-        r = solve_model(m, self.solver[0], self.solver[1], start)
+        r = solve_model(m, self.solver[0], self.solver[1], start, n_units=self.units.n)
         return make_solution(self.units, m, r, targets)
 
     def _start(self, start, m: OptimizationProblem) -> np.ndarray:

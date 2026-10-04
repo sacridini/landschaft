@@ -191,6 +191,7 @@ add_library(optcore STATIC
     src/cpp/opt/cover.cpp
     src/cpp/opt/features.cpp
     src/cpp/opt/milp.cpp
+    src/cpp/opt/wide.cpp
 )
 target_include_directories(optcore PUBLIC src/cpp)
 target_include_directories(optcore SYSTEM PRIVATE ${highs_SOURCE_DIR}/highs ${highs_BINARY_DIR})

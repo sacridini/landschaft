@@ -68,4 +68,7 @@ struct SolveResult {
 // in the same thread replaces it.
 SolveResult solve_highs(const Model& model, const SolveOptions& options);
 
+// Makes HiGHS's scheduler of the calling thread use `threads` threads (for code that calls HiGHS itself).
+void use_highs_threads(int threads);
+
 }  // namespace opt

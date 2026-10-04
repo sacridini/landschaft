@@ -430,3 +430,54 @@ def test_coverage_by_target():
     sol = optimize_cases.CASES["max_utility"].py().solve()
     assert list(sol.coverage.columns) == ["feature", "total_amount", "absolute_held", "relative_held"]
     assert sol.cost <= 2500
+
+
+# ----------------------------------------------------------------------------- wide models with a budget
+
+def _wide_problem(n=200, nf=12, seed=4):
+    """A raster of n x n units (wider than the sifting's working set) with gaussian features."""
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:n, 0:n] / n
+    f = np.stack([np.exp(-((xx - rng.uniform()) ** 2 + (yy - rng.uniform()) ** 2) / rng.uniform(0.005, 0.05))
+                  for _ in range(nf)])
+    f[f < 0.05] = 0
+    cost = optimize_cases.grid(rng.uniform(1, 10, (n, n)))
+    feats = optimize_cases.grid(f, names=[f"s{k}" for k in range(nf)])
+    return ls.prioritize.problem(cost, feats), float(np.sum(cost.values))
+
+
+@pytest.mark.parametrize("objective", ["min_shortfall", "min_largest_shortfall", "max_utility", "max_features",
+                                       "max_cover"])
+def test_wide_engine_same_bits_and_within_budget(objective):
+    p, total = _wide_problem()
+    budget = 0.1 * total if objective != "max_cover" else 0.002 * total
+    p = getattr(p, f"add_{objective}_objective")(budget)
+    if objective not in ("max_utility", "max_cover"):
+        p = p.add_relative_targets(0.3)
+    a = p.add_highs_solver(gap=0.01, n_threads=1).solve()
+    b = p.add_highs_solver(gap=0.01, n_threads=4).solve()
+    assert np.array_equal(a.values, b.values) and a.objective == b.objective and a.bound == b.bound
+    assert a.status == "optimal" and a.gap <= 0.01 and a.cost <= budget * (1 + 1e-9)
+    assert set(np.unique(a.values)) <= {0.0, 1.0}
+
+
+def test_wide_engine_lp_is_highs_lp():
+    """Proportion decisions: the sifted LP is HiGHS's LP on the whole model."""
+    p, total = _wide_problem(n=120)
+    p = p.add_min_shortfall_objective(0.1 * total).add_relative_targets(0.3).add_proportion_decisions()
+    sol = p.add_highs_solver(gap=0).solve()
+    m = p.compile()
+    lo, hi = m.row_bounds()
+    a = m.A
+    r = _core.opt_solve_highs(
+        start=a.indptr.astype(np.int64), index=a.indices.astype(np.int64), value=a.data, obj=m.obj, lb=m.lb,
+        ub=m.ub, row_lo=lo, row_hi=hi, integer=np.zeros(m.ncol, np.uint8), maximize=False, offset=0.0, gap=0.0,
+        time_limit=math.inf, threads=1, presolve="choose", verbose=False, relaxation=False, initial=None)
+    assert sol.objective == pytest.approx(r["objective"], rel=1e-7)
+
+
+def test_wide_engine_keeps_the_time_limit():
+    p, total = _wide_problem(n=500, nf=30)
+    sol = p.add_max_features_objective(0.1 * total).add_relative_targets(0.3).add_highs_solver(
+        gap=0.0, time_limit=2.0).solve()
+    assert sol.seconds < 3.0 and sol.status in ("optimal", "time_limit")
