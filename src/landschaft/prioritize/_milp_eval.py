@@ -405,6 +405,19 @@ def eval_replacement_importance(p, solution, rescale: bool = True, n_threads: in
         r = _solve_values(model(lo, hi), solver, one, u.n)
         return float(r["objective"]) if r["has_solution"] else math.inf
 
+    if solver == "highs" and not any(sp_[0] == "penalty" and sp_[1] in ("boundary", "connectivity", "asym_connectivity")
+                                     for sp_ in p.spatial):
+        # the arrays made once: every re-solve is then the C++ call alone (no GIL), in parallel
+        from ._milp_solve import Prepared
+
+        prep = Prepared(m, u.n)
+
+        def alt(i):  # noqa: F811
+            lo, hi = lb.copy(), ub.copy()
+            lo[i] = hi[i] = 0.0
+            r = prep.solve(lo, hi, one)
+            return float(r["objective"]) if r["has_solution"] else math.inf
+
     with ThreadPoolExecutor(max_workers=threads) as ex:
         objs = np.array(list(ex.map(alt, sel)))
     out = objs - float(base["objective"])

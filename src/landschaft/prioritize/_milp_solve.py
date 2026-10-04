@@ -47,6 +47,32 @@ def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, 
         method=_method(m, n_units), n_units=-1 if n_units is None else int(n_units))
 
 
+class Prepared:
+    """A model's arrays for HiGHS, made once, to solve it again and again with other bounds (the
+    replacement and rank importance): the GIL-free C++ call is then all a solve costs."""
+
+    def __init__(self, m: OptimizationProblem, n_units: int | None = None):
+        lo, hi = m.row_bounds()
+        a = m.A
+        self.kw = dict(start=a.indptr.astype(np.int64), index=a.indices.astype(np.int64), value=a.data, obj=m.obj,
+                       row_lo=lo, row_hi=hi, integer=np.isin(np.asarray(m.vtype), ("B", "I")).astype(np.uint8),
+                       maximize=m.modelsense == "max", offset=0.0)
+        self.method = _method(m, n_units)
+        self.n_units = -1 if n_units is None else int(n_units)
+        self.lb, self.ub = m.lb, m.ub
+
+    def solve(self, lb: np.ndarray, ub: np.ndarray, options: dict, start: np.ndarray | None = None) -> dict:
+        from .. import _core, _threads
+
+        gap = float(options.get("gap", 0.1))
+        tl = options.get("time_limit")
+        return _core.opt_solve_highs(
+            **self.kw, lb=lb, ub=ub, gap=gap, time_limit=math.inf if tl is None else float(tl),
+            threads=_threads.resolve(options.get("n_threads")), presolve=options.get("presolve", "choose"),
+            verbose=bool(options.get("verbose", False)), relaxation=False, initial=start, method=self.method,
+            n_units=self.n_units)
+
+
 def _gurobi(m: OptimizationProblem, gap: float, time_limit: float, threads: int, verbose: bool,
             start: np.ndarray | None) -> dict:
     try:

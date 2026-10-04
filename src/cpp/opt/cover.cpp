@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <numeric>
+#include <queue>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -125,6 +126,88 @@ Reduced presolve(const Model& m) {
         }
     }
     return p;
+}
+
+// Bound fixing: with binary columns, costs >= 0 and coefficients >= 0, a greedy cover of the rows left
+// costs U >= the optimum, so a column dearer than U is in no optimal solution: fixed at 0. Cheap when
+// the rows are short of little (re-solves with most units fixed: the replacement importance), and
+// skipped when the greedy cover would take more than max_picks columns.
+void prune_by_bound(Reduced& p, i64 max_picks = 1000) {
+    if (p.infeasible || p.nrow == 0 || p.ncol == 0 || !p.nonnegative) return;
+    for (i64 j = 0; j < p.ncol; ++j)
+        if (p.c[j] < 0 || !p.integer[j] || p.lb[j] != 0.0 || p.ub[j] != 1.0) return;
+    std::vector<double> left(p.rhs);
+    auto unmet = [&](i64 r) { return left[r] > row_tol(p.rhs[r]); };
+    auto key = [&](i64 j) {
+        double cover = 0;
+        for (i64 k = p.col_start[j]; k < p.col_start[j + 1]; ++k) {
+            const i64 r = p.row_index[k];
+            if (unmet(r)) cover += std::min(p.value[k], left[r]) / std::max(p.rhs[r], 1e-300);
+        }
+        return cover > 0 ? p.c[j] / cover : kInf;
+    };
+    using Item = std::pair<double, i64>;
+    std::priority_queue<Item, std::vector<Item>, std::greater<Item>> heap;
+    for (i64 j = 0; j < p.ncol; ++j) {
+        const double k = key(j);
+        if (std::isfinite(k)) heap.push({k, j});
+    }
+    i64 open = 0;
+    for (i64 r = 0; r < p.nrow; ++r) open += unmet(r);
+    double bound = 0;
+    i64 picks = 0;
+    std::vector<std::uint8_t> taken(static_cast<std::size_t>(p.ncol), 0);
+    while (open > 0) {
+        if (heap.empty() || ++picks > max_picks) return;
+        const i64 j = heap.top().second;
+        heap.pop();
+        if (taken[j]) continue;
+        const double k = key(j);
+        if (!std::isfinite(k)) continue;
+        if (!heap.empty() && k > heap.top().first * (1 + 1e-12)) {
+            heap.push({k, j});
+            continue;
+        }
+        taken[j] = 1;
+        bound += p.c[j];
+        for (i64 q = p.col_start[j]; q < p.col_start[j + 1]; ++q) {
+            const i64 r = p.row_index[q];
+            const bool was = unmet(r);
+            left[r] -= p.value[q];
+            if (was && !unmet(r)) --open;
+        }
+    }
+    const double cut = bound * (1 + 1e-9) + 1e-12;
+    i64 keep = 0;
+    for (i64 j = 0; j < p.ncol; ++j) keep += p.c[j] <= cut;
+    if (keep == p.ncol) return;
+    // rebuild without the columns above the bound (fixed at 0)
+    Reduced q;
+    q.nrow = p.nrow;
+    q.rhs = p.rhs;
+    q.row_of = p.row_of;
+    q.nonnegative = p.nonnegative;
+    q.offset = p.offset;
+    q.x_fixed = p.x_fixed;
+    q.col_start.push_back(0);
+    for (i64 j = 0; j < p.ncol; ++j) {
+        if (p.c[j] > cut) {
+            q.x_fixed[static_cast<std::size_t>(p.col_of[j])] = 0.0;
+            continue;
+        }
+        for (i64 k = p.col_start[j]; k < p.col_start[j + 1]; ++k) {
+            q.row_index.push_back(p.row_index[k]);
+            q.value.push_back(p.value[k]);
+        }
+        q.col_start.push_back(static_cast<i64>(q.row_index.size()));
+        q.col_of.push_back(p.col_of[j]);
+        q.c.push_back(p.c[j]);
+        q.lb.push_back(p.lb[j]);
+        q.ub.push_back(p.ub[j]);
+        q.integer.push_back(p.integer[j]);
+        ++q.ncol;
+    }
+    p = std::move(q);
 }
 
 enum class At : std::uint8_t { lower, upper, work };
@@ -568,7 +651,9 @@ SolveResult solve_covering(const Model& model, const SolveOptions& options) {
     auto seconds = [&] { return std::chrono::duration<double>(Clock::now() - t0).count(); };
 
     SolveResult res;
-    const Reduced p = presolve(model);
+    Reduced pr = presolve(model);
+    prune_by_bound(pr);
+    const Reduced& p = pr;
     if (p.infeasible) {
         res.status = "infeasible";
         res.seconds = seconds();
