@@ -18,8 +18,8 @@ from optimize_reference import case_ids, model, result
 import landschaft as ls
 from landschaft import _core
 
-PY_CASES = [(g, c) for g in ("core", "objectives") for c in case_ids(g) if optimize_cases.CASES[c].py is not None]
-ALL = [(g, c) for g in ("core", "objectives", "actions") for c in case_ids(g)]
+PY_CASES = [(g, c) for g in ("core", "objectives", "spatial") for c in case_ids(g) if optimize_cases.CASES[c].py is not None]
+ALL = [(g, c) for g in ("core", "objectives", "spatial", "actions") for c in case_ids(g)]
 
 
 def _solve_stored(m, gap=0.0, time_limit=math.inf, presolve="choose", start=None, relaxation=False):
@@ -84,7 +84,7 @@ def test_solve_reaches_prioritizr_optimum(group, name):
     ref = result(group, name)
     assert sol.status == "optimal"
     _assert_reference_optimum(sol.objective, ref["objective"][0], "max" if p.objective[0].startswith("max") else "min")
-    if p.objective[0] == "min_set":
+    if p.objective[0] == "min_set" and not any(sp[0] == "penalty" for sp in p.spatial):
         assert sol.cost == pytest.approx(ref["objective"][0], rel=1e-9)
     if p.objective[0] in ("min_set", "min_penalties"):
         assert sol.coverage["met"].all()
@@ -537,3 +537,37 @@ def test_subregional_targets_with_tables_and_other_targets():
     assert sol.coverage["met"].all() and list(sol.coverage["region"][5:]) == ["north", "south"]
     with pytest.raises(ValueError, match="unknown regions"):
         p.add_subregional_targets("zone", {"region": ["east"], "feature": ["f1"], "target": [0.1]}).compile()
+
+
+# ----------------------------------------------------------------------------- penalties and constraints
+
+def test_spatial_errors():
+    import scipy.sparse as sp
+
+    p = ls.prioritize.problem(optimize_cases.pu_cost(), optimize_cases.features()).add_min_set_objective() \
+        .add_relative_targets(0.3)
+    with pytest.raises(ValueError, match="edge_factor"):
+        p.add_boundary_penalties(1, edge_factor=1.5)
+    with pytest.raises(ValueError, match="sense"):
+        p.add_linear_constraints(1, ">", optimize_cases.penalty_raster())
+    with pytest.raises(ValueError, match="every unit"):
+        p.add_connectivity_penalties(1, sp.eye(10)).compile()
+    asym = sp.random(180, 180, density=0.02, random_state=1, format="csc")
+    with pytest.raises(ValueError, match="symmetric"):
+        p.add_connectivity_penalties(1, asym).compile()
+    with pytest.raises(TypeError, match="column name"):
+        p.add_linear_penalties(1, "cost").compile()
+    t = ls.prioritize.problem(optimize_cases.pu_table(), optimize_cases.FEATURES, cost_column="cost") \
+        .add_min_set_objective().add_relative_targets(0.3)
+    with pytest.raises(ValueError, match="need data"):
+        t.add_boundary_penalties(1).compile()
+
+
+def test_penalties_follow_the_order_added():
+    """Penalties add their columns in the order added; a zero penalty adds nothing (as prioritizr)."""
+    p = optimize_cases.CASES["boundary_raster"].py()
+    m = p.compile()
+    assert m.col_ids.count("b") > 0 and set(m.row_ids[-3:]) <= {"b1", "b2", "b3"}
+    z = ls.prioritize.problem(optimize_cases.pu_cost(), optimize_cases.features()).add_min_set_objective() \
+        .add_relative_targets(0.3).add_boundary_penalties(0.0).compile()
+    assert "b" not in z.col_ids

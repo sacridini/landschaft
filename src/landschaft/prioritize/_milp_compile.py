@@ -445,10 +445,6 @@ def compile_problem(p):
         rows.append(np.asarray(r, dtype=np.int64))
         cols.append(np.asarray(c, dtype=np.int64))
         vals.append(np.asarray(v, dtype=np.float64))
-    r, c, v = np.concatenate(rows), np.concatenate(cols), np.concatenate(vals)
-    keep = v != 0.0  # prioritizr pushes zero costs and 0 = -1/target for targets <= 1e-5: no entry here
-    A = sp.csr_matrix((v[keep], (r[keep], c[keep])), shape=(nrow, ncol))
-    A.sort_indices()
 
     obj_v = np.concatenate(obj)
     if p.weights is not None:
@@ -465,7 +461,23 @@ def compile_problem(p):
                 w = w * d
             obj_v[weight_cols:weight_cols + w.size] = w
     lb_v, ub_v = np.concatenate(lb), np.concatenate(ub)
-    # locked units (constraints come last in prioritizr's compile)
+    modelsense = "max" if kind.startswith("max") else "min"
+    # penalties, then constraints, each in the order they were added (prioritizr's compile)
+    from ._milp_spatial import Builder, apply_constraint, apply_penalty
+
+    b = Builder(nrow, ncol, rows, cols, vals, obj_v, lb_v, ub_v, vtype,
+                sense, [np.asarray(x, dtype=np.float64) for x in rhs], row_ids, col_ids, modelsense, n)
+    for spec in p.spatial:
+        if spec[0] == "penalty":
+            apply_penalty(b, u, spec[1:])
+    for spec in p.spatial:
+        if spec[0] == "constraint":
+            apply_constraint(b, u, spec[1:])
+    A = b.matrix()
+    obj_v, lb_v, ub_v = b.obj, b.lb, b.ub
+    vtype, sense, row_ids, col_ids = b.vtype, b.sense, b.row_ids, b.col_ids
+    rhs = b.rhs
+    # locked units (bounds only: their place among the constraints does not matter)
     li, lo = p._mask(p.locked_in), p._mask(p.locked_out)
     if (li & lo).any():
         raise ValueError(f"{int((li & lo).sum())} planning units are both locked in and locked out")
@@ -473,5 +485,5 @@ def compile_problem(p):
     ub_v[:n][lo] = 0.0
     return OptimizationProblem(
         A=A, obj=obj_v, lb=lb_v, ub=ub_v, rhs=np.concatenate([np.asarray(x, dtype=np.float64) for x in rhs]),
-        sense=tuple(sense), vtype=tuple(vtype), modelsense="max" if kind.startswith("max") else "min",
+        sense=tuple(sense), vtype=tuple(vtype), modelsense=modelsense,
         row_ids=tuple(row_ids), col_ids=tuple(col_ids)), t

@@ -29,7 +29,7 @@ from itertools import pairwise
 
 import numpy as np
 
-GROUPS: list[str] = ["core", "objectives", "actions", "exact"]
+GROUPS: list[str] = ["core", "objectives", "spatial", "actions", "exact"]
 
 NY, NX = 12, 15
 RES = 100.0
@@ -283,10 +283,87 @@ def pa_boundary():
     return pd.DataFrame({"id1": a, "id2": b, "boundary": np.ones(a.size)})
 
 
+# --- spatial: unit x unit data as triplets (i, j, x; 1-based) over the rows of pu_table
+
+def _triplets(i, j, x):
+    import pandas as pd
+
+    return pd.DataFrame({"i": np.asarray(i, dtype=np.float64) + 1, "j": np.asarray(j, dtype=np.float64) + 1,
+                         "x": np.asarray(x, dtype=np.float64)})
+
+
+def bnd_table():
+    """A boundary matrix of pu_table's units: their raster neighbours with lengths of 7 decimals (round(, 6)
+    applies), perimeters on the diagonal."""
+    cells = _units()
+    rng = np.random.default_rng(31)
+    pos = {c: k for k, c in enumerate(cells)}
+    i, j, x = [], [], []
+    for k, c in enumerate(cells):
+        r, q = divmod(int(c), NX)
+        for rr, qq in ((r + 1, q), (r, q + 1)):
+            if rr < NY and qq < NX and rr * NX + qq in pos:
+                v = round(float(rng.uniform(0.5, 2.0)), 7)
+                m = pos[rr * NX + qq]
+                i += [k, m]
+                j += [m, k]
+                x += [v, v]
+        i.append(k)
+        j.append(k)
+        x.append(round(float(rng.uniform(4.0, 9.0)), 7))
+    return _triplets(i, j, x)
+
+
+def conn_table():
+    """Symmetric connectivity among pu_table's units, a few on the diagonal."""
+    n = _units().size
+    rng = np.random.default_rng(32)
+    i, j, x = [], [], []
+    for k in range(n):
+        for step in (1, 7):
+            m = k + step
+            if m < n and rng.random() < 0.6:
+                v = float(rng.uniform(0.1, 3.0))
+                i += [k, m]
+                j += [m, k]
+                x += [v, v]
+        if rng.random() < 0.1:
+            i.append(k)
+            j.append(k)
+            x.append(float(rng.uniform(0.1, 1.0)))
+    return _triplets(i, j, x)
+
+
+def asym_table():
+    """Asymmetric connectivity among pu_table's units (rows: sources), a few on the diagonal."""
+    n = _units().size
+    rng = np.random.default_rng(33)
+    i, j, x = [], [], []
+    for k in range(n):
+        for step in (1, -3, 9):
+            m = k + step
+            if 0 <= m < n and rng.random() < 0.5:
+                i.append(k)
+                j.append(m)
+                x.append(float(rng.uniform(0.1, 3.0)))
+        if rng.random() < 0.1:
+            i.append(k)
+            j.append(k)
+            x.append(float(rng.uniform(0.1, 1.0)))
+    return _triplets(i, j, x)
+
+
+def penalty_raster():
+    """Values for linear penalties and constraints on the grid (NaN outside the planning units' area)."""
+    v = 1.0 + 4.0 * smooth_field(41)
+    v[0, 0] = np.nan
+    return grid(v)
+
+
 INPUTS = {f.__name__: f for f in (
     pu_cost, features, shapes, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
     pu_polygons_partial, pa_pu, pa_features, pa_dist_features, pa_threats, pa_dist_threats, pa_sensitivity,
-    pa_boundary)}
+    pa_boundary, bnd_table, conn_table, asym_table, penalty_raster)}
 
 
 def build_input(name: str):
@@ -425,6 +502,55 @@ CASES: dict[str, Case] = {
         reference(problem(pu_cost, features) |> add_max_phylo_end_objective(2500, tr) |>
                   add_relative_targets(0.3) |> add_binary_decisions())""",
                                   notes="tips in the features' order: prioritizr itself"),
+    # --- spatial: boundary, connectivity, linear penalties and constraints (prioritizr's)
+    "boundary_raster": Case("spatial", RASTER, """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_boundary_penalties(0.5) |> add_binary_decisions())"""),
+    "boundary_raster_edge_max": Case("spatial", (*RASTER, "locked_in"), """
+        reference(problem(pu_cost, features) |> add_max_utility_objective(2500) |>
+                  add_boundary_penalties(0.002, edge_factor = 0.3) |> add_locked_in_constraints(locked_in) |>
+                  add_binary_decisions())""", notes="a maximisation: the penalty's sign turns"),
+    "boundary_polygons": Case("spatial", ("pu_polygons_partial", "features"), """
+        reference(problem(pu_polygons_partial, features, cost_column = "cost") |> add_min_set_objective() |>
+                  add_relative_targets(0.3) |> add_boundary_penalties(0.2, edge_factor = 0.75) |>
+                  add_binary_decisions())""", notes="terra's sharedPaths and perim"),
+    "boundary_matrix": Case("spatial", ("pu_table", "bnd_table"), """
+        bm <- Matrix::sparseMatrix(i = bnd_table$i, j = bnd_table$j, x = bnd_table$x, dims = rep(nrow(pu_table), 2))
+        reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |> add_min_set_objective() |>
+                  add_relative_targets(0.3) |> add_boundary_penalties(3, data = bm) |> add_binary_decisions())"""),
+    "connectivity": Case("spatial", ("pu_table", "conn_table"), """
+        cm <- Matrix::sparseMatrix(i = conn_table$i, j = conn_table$j, x = conn_table$x, dims = rep(nrow(pu_table), 2))
+        reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |> add_min_set_objective() |>
+                  add_relative_targets(0.3) |> add_connectivity_penalties(5, data = cm) |> add_binary_decisions())"""),
+    "connectivity_max": Case("spatial", ("pu_table", "conn_table"), """
+        cm <- Matrix::sparseMatrix(i = conn_table$i, j = conn_table$j, x = conn_table$x, dims = rep(nrow(pu_table), 2))
+        reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |>
+                  add_max_features_objective(2500) |> add_relative_targets(0.3) |>
+                  add_connectivity_penalties(0.01, data = cm) |> add_binary_decisions())"""),
+    "asym_connectivity": Case("spatial", ("pu_table", "asym_table"), """
+        am <- Matrix::sparseMatrix(i = asym_table$i, j = asym_table$j, x = asym_table$x, dims = rep(nrow(pu_table), 2))
+        reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |> add_min_set_objective() |>
+                  add_relative_targets(0.3) |> add_asym_connectivity_penalties(4, data = am) |> add_binary_decisions())"""),
+    "asym_connectivity_max": Case("spatial", ("pu_table", "asym_table"), """
+        am <- Matrix::sparseMatrix(i = asym_table$i, j = asym_table$j, x = asym_table$x, dims = rep(nrow(pu_table), 2))
+        reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |>
+                  add_max_utility_objective(2500) |> add_asym_connectivity_penalties(0.05, data = am) |>
+                  add_binary_decisions())"""),
+    "linear_penalties": Case("spatial", (*RASTER, "penalty_raster"), """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_linear_penalties(7.5, data = penalty_raster) |> add_binary_decisions())"""),
+    "linear_constraints": Case("spatial", (*RASTER, "penalty_raster"), """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_linear_constraints(250, "<=", data = penalty_raster) |> add_binary_decisions())"""),
+    "spatial_combined": Case("spatial", ("pu_table", "bnd_table", "conn_table"), """
+        bm <- Matrix::sparseMatrix(i = bnd_table$i, j = bnd_table$j, x = bnd_table$x, dims = rep(nrow(pu_table), 2))
+        cm <- Matrix::sparseMatrix(i = conn_table$i, j = conn_table$j, x = conn_table$x, dims = rep(nrow(pu_table), 2))
+        reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |>
+                  add_min_shortfall_objective(2500) |> add_relative_targets(0.3) |>
+                  add_linear_constraints(30, ">=", data = "f4") |> add_connectivity_penalties(0.02, data = cm) |>
+                  add_linear_penalties(0.001, data = "f1") |> add_boundary_penalties(0.001, data = bm) |>
+                  add_linear_constraints(2, "<=", data = "f2") |> add_locked_in_constraints("locked_in") |>
+                  add_binary_decisions())""", notes="penalties and constraints in the order added"),
     # --- exact: exactextractr's coverage fractions and sums (the amounts of polygon planning units)
     "exact_shapes": Case("exact", ("features", "shapes"), """
         cov <- exactextractr::coverage_fraction(features[[1]], shapes)
@@ -582,4 +708,49 @@ PY_OBJECTIVES.update({
     .add_binary_decisions(),
 })
 for _name, _fn in PY_OBJECTIVES.items():
+    CASES[_name].py = _fn
+
+
+def _matrix(t, n):
+    import scipy.sparse as sp
+
+    return sp.csc_matrix((t["x"].to_numpy(), (t["i"].to_numpy(dtype=np.int64) - 1, t["j"].to_numpy(dtype=np.int64) - 1)),
+                         shape=(n, n))
+
+
+def _tp():
+    import landschaft as ls
+
+    return ls.prioritize.problem(pu_table(), FEATURES, cost_column="cost")
+
+
+PY_SPATIAL: dict[str, Callable] = {
+    "boundary_raster": lambda: _rp().add_min_set_objective().add_relative_targets(0.3).add_boundary_penalties(0.5)
+    .add_binary_decisions(),
+    "boundary_raster_edge_max": lambda: _rp().add_max_utility_objective(2500)
+    .add_boundary_penalties(0.002, edge_factor=0.3).add_locked_in_constraints(locked_in()).add_binary_decisions(),
+    "boundary_polygons": lambda: _polygon_problem(pu_polygons_partial()).add_relative_targets(0.3)
+    .add_boundary_penalties(0.2, edge_factor=0.75).add_binary_decisions(),
+    "boundary_matrix": lambda: _tp().add_min_set_objective().add_relative_targets(0.3)
+    .add_boundary_penalties(3, data=_matrix(bnd_table(), len(pu_table()))).add_binary_decisions(),
+    "connectivity": lambda: _tp().add_min_set_objective().add_relative_targets(0.3)
+    .add_connectivity_penalties(5, data=_matrix(conn_table(), len(pu_table()))).add_binary_decisions(),
+    "connectivity_max": lambda: _tp().add_max_features_objective(2500).add_relative_targets(0.3)
+    .add_connectivity_penalties(0.01, data=_matrix(conn_table(), len(pu_table()))).add_binary_decisions(),
+    "asym_connectivity": lambda: _tp().add_min_set_objective().add_relative_targets(0.3)
+    .add_asym_connectivity_penalties(4, data=_matrix(asym_table(), len(pu_table()))).add_binary_decisions(),
+    "asym_connectivity_max": lambda: _tp().add_max_utility_objective(2500)
+    .add_asym_connectivity_penalties(0.05, data=_matrix(asym_table(), len(pu_table()))).add_binary_decisions(),
+    "linear_penalties": lambda: _rp().add_min_set_objective().add_relative_targets(0.3)
+    .add_linear_penalties(7.5, data=penalty_raster()).add_binary_decisions(),
+    "linear_constraints": lambda: _rp().add_min_set_objective().add_relative_targets(0.3)
+    .add_linear_constraints(250, "<=", data=penalty_raster()).add_binary_decisions(),
+    "spatial_combined": lambda: _tp().add_min_shortfall_objective(2500).add_relative_targets(0.3)
+    .add_linear_constraints(30, ">=", data="f4")
+    .add_connectivity_penalties(0.02, data=_matrix(conn_table(), len(pu_table())))
+    .add_linear_penalties(0.001, data="f1")
+    .add_boundary_penalties(0.001, data=_matrix(bnd_table(), len(pu_table())))
+    .add_linear_constraints(2, "<=", data="f2").add_locked_in_constraints("locked_in").add_binary_decisions(),
+}
+for _name, _fn in PY_SPATIAL.items():
     CASES[_name].py = _fn

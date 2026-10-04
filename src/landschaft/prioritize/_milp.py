@@ -381,6 +381,7 @@ class Problem:
     solver: tuple = ("highs", {})
     weights: object = None
     subregional: tuple | None = None
+    spatial: tuple = ()  # ("penalty" | "constraint", kind, ...) in the order added
 
     def __repr__(self) -> str:
         u = self.units
@@ -530,6 +531,43 @@ class Problem:
         if a.size != n:
             raise ValueError(f"expected one target or {n} (one per feature), got {a.size}")
         return a
+
+    # --- spatial and linear penalties (prioritizr's names; a penalty is added to the objective, weighed
+    # against it: a cost to minimise, a loss in the objectives that maximise)
+    def _add(self, *spec) -> Problem:
+        return self._with(spatial=(*self.spatial, spec))
+
+    def add_boundary_penalties(self, penalty: float, edge_factor: float = 0.5, data=None) -> Problem:
+        """Penalise the boundary of the selection (more compact solutions): ``penalty`` per unit of
+        exposed boundary length. ``edge_factor``: the share of the boundary at the edge of the study
+        area (not shared with another planning unit) that counts. ``data``: a boundary matrix of every
+        unit (shared lengths, every unit's perimeter on the diagonal); by default from the planning
+        units' raster grid or polygons."""
+        if not 0 <= edge_factor <= 1:
+            raise ValueError("edge_factor must be from 0 to 1")
+        return self._add("penalty", "boundary", float(penalty), float(edge_factor), data)
+
+    def add_connectivity_penalties(self, penalty: float, data) -> Problem:
+        """Reward selecting connected units: ``penalty`` x the connectivity of every pair selected
+        together (a symmetric matrix of every unit; the diagonal rewards a unit alone)."""
+        return self._add("penalty", "connectivity", float(penalty), data)
+
+    def add_asym_connectivity_penalties(self, penalty: float, data) -> Problem:
+        """Penalise asymmetric connections that the selection breaks: ``penalty`` x the connectivity
+        from a selected unit to one not selected (a matrix of every unit, rows the sources)."""
+        return self._add("penalty", "asym_connectivity", float(penalty), data)
+
+    def add_linear_penalties(self, penalty: float, data) -> Problem:
+        """Penalise selecting units by a value of each (``penalty`` x value): a raster on the units'
+        grid, a column name, or one value per unit."""
+        return self._add("penalty", "linear", float(penalty), data)
+
+    def add_linear_constraints(self, threshold: float, sense: str, data) -> Problem:
+        """The sum over the selected units of a value of each (as :meth:`add_linear_penalties`) must
+        be ``>=``, ``<=`` or ``=`` the ``threshold``."""
+        if sense not in (">=", "<=", "="):
+            raise ValueError("sense must be '>=', '<=' or '='")
+        return self._add("constraint", "linear", float(threshold), sense, data)
 
     # --- constraints
     def add_locked_in_constraints(self, locked) -> Problem:

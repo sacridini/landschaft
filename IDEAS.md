@@ -1585,6 +1585,21 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   relativas. A tabela de cobertura ganha a coluna `region`.
 * **Fase 2 completa** (2026-10-04).
 
+### Andamento da fase 3
+* **Parte 1**: penalidades de fronteira (do raster: vizinhos de 4 direções com `xres`/`yres` do terra, diagonal
+  2 (xres + yres); dos polígonos: comprimento compartilhado e perímetro do shapely arredondados a 8 casas, como o
+  `sharedPaths`/`perim` do terra; ou uma matriz de todas as unidades, com o `round(, 6)` do R), de conectividade
+  simétrica (triângulo inferior com a diagonal) e assimétrica (matriz inteira), penalidades e restrições
+  lineares (raster, coluna ou valores por unidade). Montador incremental (`_milp_spatial.py`): penalidades e
+  depois restrições, cada uma na ordem em que foi adicionada, como o `compile()`; colunas `b`/`c`/`ac` e linhas
+  1-2-3 da linearização do produto x_i x_j como o prioritizr (a terceira só quando o sinal pede). Grupo
+  `spatial` (11 casos, inclusive objetivos de maximização e a ordem de 5 penalidades e restrições misturadas):
+  **modelo bit a bit**.
+  * O `round()` do R (>= 4.0) não é o `np.round`: escolhe entre os dois candidatos decimais o mais próximo do
+    valor (par no empate); o `np.round` arredonda x * 10^d e erra por 1e-6 em valores de 7 casas (`r_round`).
+  * Com gap 0 a borda fica lenta mesmo pequena (166 unidades: 25 s no HiGHS puro, igual pelo motor largo); a
+    escala da borda é a fase 4 (motor `anneal`, heurísticas).
+
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
   prioritizr e o prioriactions, e o Marxan entra depois como referência do motor `anneal` (verificar a
