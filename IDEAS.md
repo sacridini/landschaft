@@ -1853,6 +1853,8 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   do `ls.simulate.Rules`. Falhas de passo propagam (nada engolido, ao contrário do prioripy). Grupo `calibrate`
   do harness (3 casos, Gurobi gap 0 com `force = TRUE, run_checks = FALSE` como no tutorial): os ótimos da
   hierárquica (9 limiares), da combinada (5 penalidades) e da frente (4 orçamentos) iguais aos do prioritizr.
+  Linux (WSL): 369 passam, 0 falham. Versão **1.24.0** (a classe virou `TradeOffs`: o `ls.plot` registra os
+  gráficos pelo nome da classe e o `ls.simulate` já tem `Calibration`).
 
 ### Próximos passos (retomar daqui)
 1. **Fase 8, integração**: transformações de feição do Zonation (condição, retenção, kernels, impactos), SAR,

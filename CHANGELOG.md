@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-10-04
+
 ### Added
 - Calibrating trade-offs (prioritizr's tutorial): `calibrate_penalty` (blended approach; by default
   penalties around Cohon's), `calibrate_budget` (hierarchical approach: the least penalty within cost
