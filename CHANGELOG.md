@@ -6,6 +6,15 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.prioritize.coarsen(cost, features, factor)` and `refine(selection, like)`: solve a continental
+  problem on blocks of cells and bring the selection back to the fine grid.
+
+### Changed
+- The covering engine fixes the units dearer than a greedy cover of what is left to cover (exact), and
+  the replacement importance re-solves on arrays prepared once: 10^5 units with 12,929 selected in 143 s
+  (was 192 s). A min set problem of 10^7 cells solves to optimality in 60 s.
+
 ## [1.25.0] - 2026-10-04
 
 ### Added

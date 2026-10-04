@@ -1880,16 +1880,33 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   * `eval_boundary_summary` sem `data` para polígonos.
   * Windows: suíte inteira 3407 passam; Linux (WSL): 374 passam, 0 falham. Versão **1.25.0**.
 
+### Andamento da fase 9 (escala e desempenho)
+* **Fase 9 completa** (2026-10-04), com o que se mostrou valer a pena:
+  * **Re-soluções**: o motor de cobertura fixa em 0 as colunas mais caras que uma cobertura gulosa do que
+    falta cobrir (exato com colunas binárias, custos e quantidades >= 0; a gulosa desiste em 1000 escolhas),
+    e o replacement importance prepara os arrays do modelo uma vez (`_milp_solve.Prepared`): cada re-solução é
+    só a chamada C++ sem GIL. 10⁵ unidades, 12.929 selecionadas: 192 s -> 143 s (~50 ms por re-solução, a maior
+    parte no aquecimento do LP largo do motor; a escala em 19 threads fica em ~5x). Tentado e descartado: o
+    subproblema dos déficits em Python (77 s em 10⁴ contra 2,4 s: a gulosa e o fatiamento esparso sob o GIL).
+  * **Contiguidade por cortes de separadores em rodadas: tentada e descartada.** Mais fraca que a formulação de
+    fluxo do prioritizr: em 166 unidades o limite foi de 1590 a 1603 em 13 rodadas (ótimo 1646, o fluxo resolve
+    exato); em 10³ unidades, 60 s: cortes 72% de gap, fluxo 33%. Precisa de cortes dentro do branch-and-bound
+    (lazy/user cuts), que o HiGHS 1.15 não tem; fica como pendência (B&B próprio ou uma versão futura do HiGHS).
+  * **LPs enormes**: o LP do conjunto mínimo com decisões de proporção em 10⁶ unidades resolve exato em 0,95 s
+    por sifting: o PDLP não é necessário.
+  * **Escala continental**: conjunto mínimo em 10⁷ células (5 feições) ótimo em 60 s. `coarsen(cost, features,
+    factor)` / `refine(selection, like)`: blocos de células (somas das células com custo) e a seleção de volta à
+    grade fina; em 10⁷ com fator 10: 0,2 s, custo 21% maior (o preço dos blocos). O H3 já existia (`h3_units`).
+  * Ficam abertos (pesquisa, não bloqueiam): limite fraco do max_features (cortes), filogenéticos em 10⁶ (LP que
+    não converge em 30 s), multi-action com fronteira em gap 0, núcleo simétrico de 10⁴ no multi-action,
+    contiguidade/corredores (acima), fluxos dinâmicos e reparo em paralelo no motor de cortes.
+
 ### Próximos passos (retomar daqui)
-1. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
-   mais as pendências trazidas das fases anteriores: contiguidade e corredores por cortes de separadores de
-   nós em rodadas, limite fraco do max_features (cortes), objetivos filogenéticos em 10⁶ (LP que não converge
-   em 30 s), fluxos dinâmicos e reparo em paralelo no motor de cortes; multi-action com fronteira e gap 0
-   (limite fraco: o HiGHS não fecha; Gurobi 99 s em 10⁴) e o núcleo simétrico de 10⁴ (5 s no HiGHS contra 1 s
-   no Gurobi); replacement importance incremental (só o déficit das feições da unidade, em vez do problema
-   inteiro: hoje ~0,3 s por re-solução em 10⁵, 192 s em 19 threads).
-2. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
+1. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
    prioritizr/prioriactions/prioripy (tabela R <-> Python).
+2. **Pendências de pesquisa** (da fase 9): contiguidade e corredores com cortes dentro do B&B, limite do
+   max_features, filogenéticos em 10⁶, multi-action com fronteira em gap 0 e o núcleo simétrico, fluxos
+   dinâmicos e reparo paralelo no motor de cortes; replacement importance sem o aquecimento do LP largo.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

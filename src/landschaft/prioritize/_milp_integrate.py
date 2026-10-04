@@ -12,7 +12,8 @@ import xarray as xr
 
 from .._save import Saveable
 
-__all__ = ["PrioritizationReport", "ZonationComparison", "compare_zonation", "report", "sdm_features"]
+__all__ = ["PrioritizationReport", "ZonationComparison", "coarsen", "compare_zonation", "refine", "report",
+           "sdm_features"]
 
 
 @dataclass
@@ -220,4 +221,54 @@ def sdm_features(results, env, *, threshold=None, ensemble: str = "weighted") ->
     except Exception:  # noqa: BLE001 - no georeferencing
         pass
     out.name = "features"
+    return out
+
+
+def _block_sum(da: xr.DataArray, factor: int) -> xr.DataArray:
+    count = da.notnull().coarsen(y=factor, x=factor, boundary="pad").sum()
+    out = da.coarsen(y=factor, x=factor, boundary="pad").sum(skipna=True).where(count > 0)
+    try:
+        if da.rio.crs is not None:
+            out = out.rio.write_crs(da.rio.crs)
+    except Exception:  # noqa: BLE001 - no georeferencing
+        pass
+    return out
+
+
+def coarsen(cost: xr.DataArray, features, factor: int):
+    """A problem's rasters on blocks of ``factor`` x ``factor`` cells (for continental problems: solve
+    the coarse problem, then :func:`refine` the selection): every block's cost and amounts are the sums
+    of its cells' with a cost (the fine planning units; a block without any has none), so the refined
+    selection holds what the coarse one does. Returns (cost, features)."""
+    from ._milp import _layers
+
+    if int(factor) != factor or factor < 1:
+        raise ValueError("factor must be a whole number >= 1")
+    factor = int(factor)
+    c = cost.squeeze("band", drop=True) if cost.ndim == 3 else cost
+    layers = _layers(features)
+    stack = xr.concat([f.drop_vars([v for v in f.coords if v not in f.dims], errors="ignore") for _, f in layers],
+                      dim="band").assign_coords(band=[n for n, _ in layers])
+    stack = stack.where(np.isfinite(np.asarray(c.values, dtype=np.float64)))  # the planning units' amounts only
+    return _block_sum(c, factor), _block_sum(stack, factor)
+
+
+def refine(selection, like: xr.DataArray) -> xr.DataArray:
+    """A selection on coarse blocks (a :class:`Solution` of a :func:`coarsen`-ed problem, or its selection
+    raster) back on the fine grid of ``like`` (the fine cost raster): every cell takes its block's value,
+    NaN where ``like`` has none."""
+    from ._milp_solve import Solution
+
+    sel = selection.selection if isinstance(selection, Solution) else selection
+    sel = sel.squeeze("band", drop=True) if sel.ndim == 3 else sel
+    fine = like.squeeze("band", drop=True) if like.ndim == 3 else like
+    fy, fx = fine.shape
+    cy, cx = sel.shape
+    factor_y, factor_x = -(-fy // cy), -(-fx // cx)
+    if cy * factor_y < fy or cx * factor_x < fx or (cy - 1) * factor_y >= fy or (cx - 1) * factor_x >= fx:
+        raise ValueError("the selection is not a coarsened version of this grid")
+    v = np.kron(np.asarray(sel.values, dtype=np.float64), np.ones((factor_y, factor_x)))[:fy, :fx]
+    v = np.where(np.isfinite(np.asarray(fine.values, dtype=np.float64)), v, np.nan)
+    out = fine.copy(data=v)
+    out.name = "solution"
     return out

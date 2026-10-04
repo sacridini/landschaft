@@ -49,7 +49,8 @@ from ._milp_eval import (eval_asym_connectivity_summary, eval_boundary_summary, 
                          eval_cost_summary, eval_extinction_risk, eval_feature_representation_summary,
                          eval_ferrier_importance, eval_landscape_metrics, eval_mspa, eval_n_summary, eval_rank_importance, eval_rare_richness_importance,
                          eval_replacement_importance, eval_target_coverage_summary)
-from ._milp_integrate import PrioritizationReport, ZonationComparison, compare_zonation, report, sdm_features
+from ._milp_integrate import (PrioritizationReport, ZonationComparison, coarsen, compare_zonation, refine, report,
+                              sdm_features)
 from ._milp_matrices import (adjacency_matrix, boundary_matrix, connectivity_matrix, decay_connectivity,
                              proximity_matrix, unit_points)
 from ._milp_portfolio import Portfolio
@@ -58,7 +59,7 @@ from ._postprocess import AreaStatistics
 from ._project import read_project, run_project
 from ._zonation import RULES, ZonationResult, zonation, zonation_features
 
-__all__ = ["PrioritizationReport", "ZonationComparison", "compare_zonation", "report", "sdm_features", "TradeOffs", "calibrate", "calibrate_budget", "calibrate_penalty", "cohon_penalty", "iterative_solve",
+__all__ = ["PrioritizationReport", "ZonationComparison", "coarsen", "compare_zonation", "refine", "report", "sdm_features", "TradeOffs", "calibrate", "calibrate_budget", "calibrate_penalty", "cohon_penalty", "iterative_solve",
            "knee_point", "pareto_front", "protected_cells", "topsis", "ActionsData", "ActionsPortfolio", "ActionsProblem", "ActionsSolution", "actions_data", "actions_raster_data", "eval_asym_connectivity_summary", "eval_boundary_summary",
            "eval_connectivity_summary", "eval_cost_summary", "eval_feature_representation_summary",
            "eval_extinction_risk", "eval_ferrier_importance", "eval_landscape_metrics", "eval_mspa", "eval_n_summary", "eval_rank_importance", "eval_rare_richness_importance",

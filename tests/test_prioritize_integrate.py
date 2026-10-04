@@ -154,3 +154,22 @@ def test_actions_plots():
     assert any(pn.kind == "map" for pn in ls.plot(s, show=False).panels)
     port = d.problem("minimizeCosts").add_cuts_portfolio(2).add_highs_solver(gap=0.01).solve()
     assert ls.plot(port, show=False).panels
+
+
+def test_coarsen_and_refine():
+    cost, feats = oc.pu_cost(), oc.features()
+    c, f = P.coarsen(cost, feats, 3)
+    assert c.shape == (4, 5) and f.shape == (5, 4, 5)
+    assert np.nansum(c.values) == pytest.approx(np.nansum(cost.values))
+    held_by_units = np.nansum(np.where(np.isfinite(cost.values), feats.values, np.nan), axis=(1, 2))
+    np.testing.assert_allclose(np.nansum(f.values, axis=(1, 2)), held_by_units)
+    assert np.isnan(c.values[0, 0])  # the top-left block has no cell with a cost
+    sol = P.problem(c, f).add_min_set_objective().add_relative_targets(0.3).add_binary_decisions().solve()
+    fine = P.refine(sol, cost)
+    assert fine.shape == cost.shape
+    assert (np.isnan(fine.values) == np.isnan(cost.values)).all()
+    # the fine selection holds what the coarse one does (block sums)
+    held_fine = np.nansum(np.nan_to_num(feats.values) * np.nan_to_num(fine.values), axis=(1, 2))
+    np.testing.assert_allclose(held_fine, sol.coverage["absolute_held"].to_numpy(), rtol=1e-9)
+    with pytest.raises(ValueError, match="factor"):
+        P.coarsen(cost, feats, 0)
