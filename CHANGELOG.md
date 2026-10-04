@@ -6,6 +6,17 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-10-04
+
+### Added
+- `ls.simulate` phase 8b: `fuzzy_similarity` (Hagen 2003, as Dinamica EGO's
+  `CalcReciprocalSimilarityMap`: exponential or constant decay in a square window, two-way where both
+  maps have a class), `differences` and `similarity_of_differences` (Dinamica's validation of the
+  observed against the simulated change, per window), the same maps and means as Dinamica EGO 8;
+  `futures_validation_grid` (per tile or region); `validate` gathering every comparison (three
+  maps at several resolutions, fuzzy similarity, kappas, error budget, disagreement, landscape
+  metrics side by side) into a `Validation` with `summary()` and a plot; `Projection.validate()`.
+
 ## [1.17.0] - 2026-10-04
 
 ### Added
