@@ -6,6 +6,23 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-10-04
+
+### Added
+- `ls.simulate` phase 7b, presets and one-call projections:
+  - `MolusceWoE` and `MolusceCA`: MOLUSCE's weights of evidence (bins, persistence codes) and its
+    cellular automaton simulator, bit for bit with MOLUSCE 5.3.0 patched (`tools/molusce_fixed.patch`:
+    the confidence from the two largest weights; 255 for cells without any weight, which numpy 2
+    refuses as -1);
+  - `presets`: `clue_s`, `ordered`, `clumondo`, `futures` (the pieces assembled) and `dinamica`,
+    `plus`, `molusce` (everything fitted from two maps; `observed_patches` measures the Expander's
+    share and the patch sizes of each transition);
+  - `run(t0, t1, drivers, until=..., preset=...)`: fit with a step per year, simulate the observed
+    period and compare it with the later map (`agreement`: overall agreement, figure of merit,
+    quantity per class), project; `Projection` with `maps` by year, `report`, `settings`, `redo`,
+    `to_dataset`;
+  - `Estimator(stratify=True)`: the sample drawn from presences and absences separately.
+
 ## [1.14.0] - 2026-10-04
 
 ### Added
