@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-10-04
+
 ### Added
 - `ls.prioritize.zonation_features(features, condition=..., connectivity=..., retention=..., impact=...)`:
   Zonation 5's feature transforms (condition, connectivity kernels, interactions, matrix connectivity,

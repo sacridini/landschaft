@@ -1878,6 +1878,7 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     `Solution`, `Portfolio`, `TradeOffs`, `ZonationComparison`, `ActionsSolution`, `ActionsPortfolio`,
     `PrioritizationReport`.
   * `eval_boundary_summary` sem `data` para polígonos.
+  * Windows: suíte inteira 3407 passam; Linux (WSL): 374 passam, 0 falham. Versão **1.25.0**.
 
 ### Próximos passos (retomar daqui)
 1. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
