@@ -159,6 +159,12 @@ actions::Settings actions_settings(const py::dict& d) {
     s.segments = d["segments"].cast<int>();
     s.step = d["step"].cast<double>();
     s.budget = d["budget"].cast<double>();
+    if (d.contains("dep_from")) {
+        s.dep_from = vec<i64>(d["dep_from"].cast<Ints>());
+        s.dep_to = vec<i64>(d["dep_to"].cast<Ints>());
+        s.dep_weight = vec<double>(d["dep_weight"].cast<Doubles>());
+        s.dep_hard = vec<std::uint8_t>(d["dep_hard"].cast<Bytes>());
+    }
     return s;
 }
 

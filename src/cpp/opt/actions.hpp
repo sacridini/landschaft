@@ -80,6 +80,12 @@ struct Settings {
     int segments = 1;
     double step = 0.0;  // the pieces' length (round(1 / segments, 1)); 0: 1 / segments
     double budget = 0.0;
+    // directional dependencies between units (upstream -> downstream; an extension of prioriactions,
+    // after prioripy): monitoring dep_to without dep_from costs dep_weight (max(0, w_to - w_from) in the
+    // objective), or is forbidden (dep_hard: w_to <= w_from)
+    std::vector<i64> dep_from, dep_to;
+    std::vector<double> dep_weight;
+    std::vector<std::uint8_t> dep_hard;
 };
 
 enum Sense : std::int8_t { kLe = 0, kGe = 1, kEq = 2 };
@@ -97,6 +103,8 @@ struct Compiled {
     std::vector<i64> pen_i, pen_j;
     std::vector<double> pen_w;
     std::vector<i64> prod_a, prod_b;
+    std::vector<std::uint8_t> prod_neg;  // the column is x_a (1 - x_b) instead of x_a x_b
+    std::vector<i64> req_from, req_to;   // unit requirements (hard dependencies) besides action -> unit
     i64 side_row0 = 0;
 };
 

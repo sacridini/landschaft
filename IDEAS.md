@@ -1796,10 +1796,19 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   `boundary_matrix`. `ActionsSolution.maps()`: pilha (monitoring, uma banda por ameaça), também no `ls.save`.
   Testado contra as tabelas montadas à mão (modelo idêntico).
 
+* **Parte 6** (2026-10-04): `ActionsProblem.add_directional_dependencies(flow, penalty=1, hard=False)`
+  (`source_pu`, `target_pu`, `strength`): como no prioripy, max(0, w_alvo - w_origem) x strength x penalty no
+  objetivo (coluna d >= w_alvo - w_origem); `hard=True` vira restrição w_alvo <= w_origem. Ficam depois do
+  modelo do prioriactions no `compile()` (o resto inalterado). No motor de fecho: termo de par (suave) ou
+  requisito entre unidades (rígido: os requisitos deixam de ser estrelas e o subproblema vai para o corte
+  mínimo). **Correção do prioripy**: lá a penalidade entra na expressão de custo que limita o orçamento do
+  `maximizeBenefits`; aqui só no objetivo (como o `blm` do prioriactions). Testado contra **enumeração
+  exaustiva** escrita à parte (6 unidades, as definições de benefício do prioriactions; min custo e max
+  benefício, suave e rígido, 3 sementes) no motor e no HiGHS só. 10⁵ unidades com fluxo em grade, gap 1%:
+  suave 1 s, rígido 5,5 s (Gurobi 6 s e 8 s).
+
 ### Próximos passos (retomar daqui)
 1. **Fase 5, resto**:
-   * **dependências direcionais** (fluxo montante-jusante, extensão do prioripy), testadas contra uma
-     formulação de referência escrita à parte;
    * portfólios no multi-action (cortes no-good nas unidades e ações, como no `Problem`);
    * checagem no Linux (WSL) e registro de "Fase 5 completa".
 2. **Fase 6, avaliação**: resumo (custo, unidades, perímetro), cobertura de metas, replacement importance

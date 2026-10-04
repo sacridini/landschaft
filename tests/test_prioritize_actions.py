@@ -361,3 +361,108 @@ def test_raster_solution_saves(tmp_path):
     assert "maps.tif" in names and "monitoring.csv" in names
     back = ls.load_raster(tmp_path / "sol" / "maps.tif")
     np.testing.assert_array_equal(np.nan_to_num(back.values, nan=-1), np.nan_to_num(s.maps().values, nan=-1))
+
+
+# ----------------------------------------------------------------------------- directional dependencies
+
+def _tiny(seed):
+    """6 units in a line (a river: unit k flows into k + 1), 2 features, 2 threats of amount 1."""
+    rng = np.random.default_rng(seed)
+    n = 6
+    feat = rng.random((2, n)) < 0.7
+    thr = rng.random((2, n)) < 0.5
+    fk, fp = np.nonzero(feat)
+    tk, tp = np.nonzero(thr)
+    data = ls.prioritize.actions_data(
+        pd.DataFrame({"id": np.arange(1.0, n + 1), "monitoring_cost": rng.integers(1, 4, n).astype(float)}),
+        pd.DataFrame({"id": [1.0, 2.0], "target_recovery": [1.0, 1.0], "target_conservation": [1.0, 0.0]}),
+        pd.DataFrame({"pu": fp + 1.0, "feature": fk + 1.0, "amount": rng.integers(1, 3, fp.size).astype(float)}),
+        pd.DataFrame({"id": [1.0, 2.0]}),
+        pd.DataFrame({"pu": tp + 1.0, "threat": tk + 1.0, "amount": 1.0,
+                      "action_cost": rng.integers(1, 4, tp.size).astype(float), "status": 0.0}))
+    flow = pd.DataFrame({"source_pu": np.arange(1.0, n), "target_pu": np.arange(2.0, n + 1),
+                         "strength": rng.integers(1, 4, n - 1).astype(float)})
+    return data, flow
+
+
+def _brute_force(data, flow, model, penalty, hard, budget=0.0):
+    """The optimum by enumeration, from the definitions: a feature's recovery in a unit is its amount x
+    the share of the unit's threats (all harm it, amount 1, default response) acted on; its conservation
+    the amount in monitored units without threats; an action needs its unit monitored."""
+    import itertools
+
+    pu, df, dt = data.pu, data.dist_features, data.dist_threats
+    n, na = len(pu), len(dt)
+    unit_of = dt["internal_pu"].to_numpy()
+    nthr = np.bincount(unit_of, minlength=n)
+    cost_u, cost_a = pu["monitoring_cost"].to_numpy(), dt["action_cost"].to_numpy()
+    src = flow["source_pu"].to_numpy(dtype=np.int64) - 1
+    dst = flow["target_pu"].to_numpy(dtype=np.int64) - 1
+    w = flow["strength"].to_numpy() * penalty
+    feats = data.features
+    best = None
+    for bits in itertools.product((0, 1), repeat=n + na):
+        z = np.asarray(bits, dtype=float)
+        units, acts = z[:n], z[n:]
+        if (acts > units[unit_of]).any():
+            continue
+        broken = (units[dst] > 0) & (units[src] == 0)
+        if hard and broken.any():
+            continue
+        done = np.bincount(unit_of, weights=acts, minlength=n)
+        rec, con = np.zeros(len(feats)), np.zeros(len(feats))
+        for f, u, a in zip(df["internal_feature"], df["internal_pu"], df["amount"]):
+            if nthr[u]:
+                rec[f] += a * done[u] / nthr[u]
+            else:
+                con[f] += a * units[u]
+        cost = cost_u @ units + cost_a @ acts
+        pen = 0.0 if hard else float(w @ broken)
+        if model == "minimizeCosts":
+            if (rec < feats["target_recovery"].to_numpy() - 1e-9).any() or (
+                    con < feats["target_conservation"].to_numpy() - 1e-9).any():
+                continue
+            value = cost + pen
+        else:
+            if cost > budget + 1e-9:
+                continue
+            value = -(rec.sum() + con.sum() - pen)
+        best = value if best is None else min(best, value)
+    return best if model == "minimizeCosts" else -best
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3])
+@pytest.mark.parametrize("model", ["minimizeCosts", "maximizeBenefits"])
+@pytest.mark.parametrize("hard", [False, True])
+def test_dependencies_against_enumeration(seed, model, hard):
+    data, flow = _tiny(seed)
+    budget = 8.0
+    p = data.problem(model, budget=budget).add_directional_dependencies(flow, penalty=2.0, hard=hard)
+    want = _brute_force(p.data, flow, model, 2.0, hard, p.budget)
+    for engine in (True, False):
+        s = p.add_highs_solver(gap=0, engine=engine).solve()
+        assert s.status == "optimal"
+        assert s.objective == pytest.approx(want, abs=1e-6)
+    # the figures add up to the objective
+    if model == "minimizeCosts":
+        assert s.cost().sum(axis=1).iloc[0] + s.dependency_penalty() == pytest.approx(s.objective, abs=1e-6)
+    if hard:
+        src = flow["source_pu"].to_numpy(dtype=np.int64) - 1
+        dst = flow["target_pu"].to_numpy(dtype=np.int64) - 1
+        assert not ((s.units[dst] > 0) & (s.units[src] == 0)).any()
+        assert s.dependency_penalty() == 0
+
+
+def test_dependencies_in_the_model():
+    data, flow = _tiny(1)
+    p = data.problem("minimizeCosts")
+    base = p.compile()
+    soft = p.add_directional_dependencies(flow, penalty=2.0).compile()
+    hard = p.add_directional_dependencies(flow, hard=True).compile()
+    k = len(flow)
+    assert soft.ncol == base.ncol + k and soft.nrow == base.nrow + k  # d >= w_to - w_from, weighted
+    assert hard.ncol == base.ncol and hard.nrow == base.nrow + k  # w_to - w_from <= 0
+    np.testing.assert_array_equal(soft.obj[base.ncol:], 2.0 * flow["strength"].to_numpy())
+    assert (base.A != soft.A[:base.nrow, :base.ncol]).nnz == 0  # prioriactions's model first, unchanged
+    with pytest.raises(ValueError, match="do not exist"):
+        p.add_directional_dependencies(pd.DataFrame({"source_pu": [99.0], "target_pu": [1.0]}))

@@ -490,9 +490,15 @@ _SENSES = np.array(["<=", ">=", "="], dtype=object)
 
 
 def _settings(p: ActionsProblem) -> dict:
-    return {"maximize": p.model == "maximizeBenefits", "blm": float(p.blm), "curve": int(p.curve),
-            "segments": int(p.segments), "step": float(r_round(np.array([1 / p.segments]), 1)[0]),
-            "budget": float(p.budget)}
+    s = {"maximize": p.model == "maximizeBenefits", "blm": float(p.blm), "curve": int(p.curve),
+         "segments": int(p.segments), "step": float(r_round(np.array([1 / p.segments]), 1)[0]),
+         "budget": float(p.budget)}
+    if p.dependencies:
+        s["dep_from"] = np.concatenate([d[0] for d in p.dependencies])
+        s["dep_to"] = np.concatenate([d[1] for d in p.dependencies])
+        s["dep_weight"] = np.concatenate([d[2] for d in p.dependencies])
+        s["dep_hard"] = np.concatenate([np.full(d[0].size, d[3], dtype=np.uint8) for d in p.dependencies])
+    return s
 
 
 def _optimization_problem(c: dict, maximize: bool) -> OptimizationProblem:
@@ -530,11 +536,43 @@ class ActionsProblem:
     curve: int = 1
     segments: int = 3
     solver: tuple = ("highs", {"gap": 0.0})
+    # directional dependencies: (source unit positions, target unit positions, weights, hard)
+    dependencies: tuple = ()
 
     def compile(self) -> OptimizationProblem:
         """prioriactions's model (``getModelInfo()``'s matrices), bit for bit; with ``curve`` 2 or 3 the
         power constraints are not in it (Gurobi's general constraints in prioriactions)."""
         return compile_actions(self)
+
+    def add_directional_dependencies(self, flow: pd.DataFrame, penalty: float = 1.0,
+                                     hard: bool = False) -> ActionsProblem:
+        """Dependencies between planning units, such as upstream and downstream along a river (an
+        extension of prioriactions, after prioripy): monitoring a ``target_pu`` without its
+        ``source_pu`` adds ``strength`` x ``penalty`` to the cost (or takes it from the benefit), or,
+        with ``hard``, is not allowed.
+
+        Parameters
+        ----------
+        flow
+            ``source_pu``, ``target_pu`` (the units' ids) and optionally ``strength`` (default 1).
+        penalty
+            Multiplies every dependency's strength.
+        hard
+            Make the dependencies constraints: a target is monitored only with its source.
+        """
+        flow = pd.DataFrame(flow)
+        _require(flow, "flow", ("source_pu", "target_pu"))
+        ids = pd.Series(np.arange(len(self.data.pu)), index=self.data.pu["id"].to_numpy())
+        src = ids.reindex(flow["source_pu"].to_numpy()).to_numpy()
+        dst = ids.reindex(flow["target_pu"].to_numpy()).to_numpy()
+        if np.isnan(src).any() or np.isnan(dst).any():
+            raise ValueError("flow refers to planning units that do not exist")
+        strength = flow["strength"].to_numpy(np.float64) if "strength" in flow else np.ones(len(flow))
+        w = strength * float(penalty)
+        if not hard and (~np.isfinite(w) | (w < 0)).any():
+            raise ValueError("strength x penalty must be finite and >= 0")
+        dep = (src.astype(np.int64), dst.astype(np.int64), w, bool(hard))
+        return replace(self, dependencies=self.dependencies + (dep,))
 
     def add_highs_solver(self, gap: float = 0.0, time_limit: float | None = None, n_threads: int | None = None,
                          verbose: bool = False, engine: bool = True) -> ActionsProblem:
@@ -610,7 +648,7 @@ class ActionsProblem:
             data=d, units=np.round(x[:n]), actions=np.round(x[n:n + na]), local_benefit=table,
             objective=float(r.get("objective", math.nan)), bound=float(r.get("bound", math.nan)),
             gap=float(r.get("gap", math.nan)), status=r.get("status", ""), solver=r.get("solver", ""),
-            seconds=float(r.get("seconds", 0.0)), blm=self.blm, x=x)
+            seconds=float(r.get("seconds", 0.0)), blm=self.blm, x=x, dependencies=self.dependencies)
 
 
 @dataclass
@@ -641,6 +679,7 @@ class ActionsSolution(Saveable):
     seconds: float = 0.0
     blm: float = 0.0
     x: np.ndarray = field(default=None, repr=False)
+    dependencies: tuple = field(default=(), repr=False)
 
     def maps(self):
         """The monitored cells and every threat's actions as rasters (band ``monitoring``, then the threats'
@@ -648,6 +687,15 @@ class ActionsSolution(Saveable):
         from ._actions_raster import solution_maps
 
         return solution_maps(self.data, self.units, self.actions)
+
+    def dependency_penalty(self) -> float:
+        """The directional dependencies' penalty: the weights of the targets monitored without their
+        sources (0 without soft dependencies)."""
+        total = 0.0
+        for src, dst, w, hard in self.dependencies:
+            if not hard:
+                total += float(np.sum(w * ((self.units[dst] > 0.5) & (self.units[src] < 0.5))))
+        return total
 
     def monitoring(self) -> pd.DataFrame:
         """``id`` and ``solution`` of every planning unit."""

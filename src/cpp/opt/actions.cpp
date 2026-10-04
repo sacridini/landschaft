@@ -313,6 +313,49 @@ Benefit benefit(const Input& in, const Pairs& p, const std::vector<double>& solu
     return b;
 }
 
+namespace {
+
+// The directional dependencies: a column d >= w_to - w_from (0 <= d <= 1) weighted in the objective, or
+// the row w_to - w_from <= 0 when hard. out (the equivalent model): the engine's view of them.
+void add_dependencies(Builder& b, const Settings& s, Compiled* out, i64 n_units) {
+    const std::size_t nd = s.dep_from.size();
+    if (s.dep_to.size() != nd || s.dep_weight.size() != nd || s.dep_hard.size() != nd)
+        throw std::invalid_argument("dependencies: one source, target, weight and hardness each");
+    for (std::size_t k = 0; k < nd; ++k) {
+        const i64 u = s.dep_from[k], v = s.dep_to[k];
+        if (u < 0 || u >= n_units || v < 0 || v >= n_units) throw std::invalid_argument("dependencies: unit ids");
+        if (!(s.dep_weight[k] >= 0) && !s.dep_hard[k])
+            throw std::invalid_argument("dependencies: weights must be >= 0");
+        if (s.dep_hard[k]) {
+            const i64 r = b.nrow();
+            b.entry(r, v, 1.0);
+            b.entry(r, u, -1.0);
+            b.row(0.0, kLe);
+            if (out) {
+                out->req_from.push_back(v);
+                out->req_to.push_back(u);
+            }
+            continue;
+        }
+        const i64 col = b.ncol(), r = b.nrow();
+        b.column(s.maximize ? -s.dep_weight[k] : s.dep_weight[k], false);
+        b.entry(r, col, 1.0);
+        b.entry(r, v, -1.0);
+        b.entry(r, u, 1.0);
+        b.row(0.0, kGe);
+        if (out) {
+            out->prod_a.push_back(v);
+            out->prod_b.push_back(u);
+            out->prod_neg.push_back(1);
+            out->pen_i.push_back(v);
+            out->pen_j.push_back(u);
+            out->pen_w.push_back(s.dep_weight[k]);
+        }
+    }
+}
+
+}  // namespace
+
 Compiled compile(const Input& in, const Pairs& p, const Settings& s, bool disaggregate, bool curves) {
     const i64 n = in.n_units, na = in.n_actions(), nf = in.n_features, np = p.size();
     Builder b;
@@ -504,6 +547,7 @@ Compiled compile(const Input& in, const Pairs& p, const Settings& s, bool disagg
             }
         }
     }
+    add_dependencies(b, s, nullptr, n);
     Compiled c = b.finish(maximize);
     c.n_pairs = out.n_pairs;
     c.first_pow = out.first_pow;
@@ -607,6 +651,7 @@ Compiled equivalent(const Input& in, const Pairs& p, const Settings& s) {
                 triple(col, r, c);
                 out.prod_a.push_back(r);
                 out.prod_b.push_back(c);
+                out.prod_neg.push_back(0);
                 out.pen_i.push_back(c);  // blm v w_c (1 - w_r): unit c's boundary term
                 out.pen_j.push_back(r);
                 out.pen_w.push_back(s.blm * v);
@@ -618,10 +663,12 @@ Compiled equivalent(const Input& in, const Pairs& p, const Settings& s) {
         triple(col, n + aa.first, n + aa.second);
         out.prod_a.push_back(n + aa.first);
         out.prod_b.push_back(n + aa.second);
+        out.prod_neg.push_back(0);
         out.pen_i.push_back(n + aa.first);
         out.pen_j.push_back(n + aa.second);
         out.pen_w.push_back(bt * v);
     }
+    add_dependencies(b, s, &out, n);
     out.side_row0 = b.nrow();
     if (!maximize) {
         const i64 row0 = b.nrow();
@@ -657,6 +704,9 @@ Compiled equivalent(const Input& in, const Pairs& p, const Settings& s) {
     c.side_row0 = out.side_row0;
     c.prod_a = std::move(out.prod_a);
     c.prod_b = std::move(out.prod_b);
+    c.prod_neg = std::move(out.prod_neg);
+    c.req_from = std::move(out.req_from);
+    c.req_to = std::move(out.req_to);
     c.pen_i = std::move(out.pen_i);
     c.pen_j = std::move(out.pen_j);
     c.pen_w = std::move(out.pen_w);
@@ -770,7 +820,10 @@ std::vector<double> expand(const Compiled& c, std::vector<double> x) {
     const std::size_t base = x.size();
     x.resize(static_cast<std::size_t>(c.model.ncol));
     for (std::size_t k = 0; k < c.prod_a.size(); ++k)
-        x[base + k] = x[static_cast<std::size_t>(c.prod_a[k])] * x[static_cast<std::size_t>(c.prod_b[k])];
+    {
+        const double a = x[static_cast<std::size_t>(c.prod_a[k])], b = x[static_cast<std::size_t>(c.prod_b[k])];
+        x[base + k] = c.prod_neg[k] ? a * (1 - b) : a * b;
+    }
     return x;
 }
 
@@ -790,6 +843,10 @@ closure::Problem closure_problem(const Input& in, const Compiled& c) {
     for (i64 a = 0; a < na; ++a) {
         q.req_from.push_back(static_cast<int>(n + a));
         q.req_to.push_back(static_cast<int>(in.act_unit[static_cast<std::size_t>(a)]));
+    }
+    for (std::size_t k = 0; k < c.req_from.size(); ++k) {
+        q.req_from.push_back(static_cast<int>(c.req_from[k]));
+        q.req_to.push_back(static_cast<int>(c.req_to[k]));
     }
     for (std::size_t k = 0; k < c.pen_i.size(); ++k) {
         q.pen_i.push_back(static_cast<int>(c.pen_i[k]));

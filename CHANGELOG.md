@@ -18,6 +18,11 @@ in a new major version.
   and per threat; action costs as numbers or rasters per threat; relative or absolute recovery and
   conservation targets; locked cells; the grid's boundary), and `ActionsSolution.maps()` with the
   monitored cells and every threat's actions as rasters (also written by `ls.save`).
+- `ActionsProblem.add_directional_dependencies(flow, penalty, hard=False)`: upstream-downstream
+  dependencies between planning units (after prioripy): monitoring a target unit without its source
+  costs `strength x penalty`, or is not allowed with `hard=True`; on the closure engine as pair terms or
+  requirements (10^5 units with a river-like flow at 1% gap in 1 s soft, 5.5 s hard; Gurobi 6 s and
+  8 s). Unlike prioripy, the penalty is not counted in the budget of `maximizeBenefits`.
 
 ### Changed
 - The multi-action model, its figures and the equivalent model for solving are built in C++:
