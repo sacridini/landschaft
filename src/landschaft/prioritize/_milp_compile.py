@@ -20,12 +20,22 @@ import pandas as pd
 import scipy.sparse as sp
 
 # objectives whose model has no targets (prioritizr warns and ignores them)
-NO_TARGETS = ("max_utility", "max_cover")
+NO_TARGETS = ("max_utility", "max_cover", "min_extinction_risk")
 # objectives whose model ignores feature weights (prioritizr warns)
 NO_WEIGHTS = ("min_set", "min_largest_shortfall")
 PHYLO = ("max_phylo_div", "max_phylo_end")
 BUDGETED = ("min_shortfall", "min_largest_shortfall", "max_utility", "max_features", "max_cover", "min_penalties",
-            *PHYLO)
+            "min_extinction_risk", *PHYLO)
+
+
+def sar_lines(z: float, segments: int) -> tuple[np.ndarray, np.ndarray]:
+    """The chords of g(r) = r^z through r_j = (j / segments)^(1 / z), j = 0..segments (equal steps of g):
+    intercepts c_k and slopes s_k. g is concave, so the interpolation is the least of the lines."""
+    j = np.arange(segments + 1, dtype=np.float64)
+    r = (j / segments) ** (1.0 / z)
+    g = j / segments
+    s = np.diff(g) / np.diff(r)
+    return g[:-1] - s * r[:-1], s
 
 
 @dataclass(frozen=True)
@@ -431,6 +441,44 @@ def compile_problem(p):
         col_ids += ["spp_met"] * nt + ["branch_met"] * ne
         row_ids = ["spp_target"] * nt + ["budget"] + ["branch_target"] * ne
         nrow_extra, ncol_extra, weight_cols = 1 + ne, nt + ne, n
+    elif kind == "min_extinction_risk":
+        # risk_f >= 1 - (c_k + s_k amount_f / total_f) for every chord k of the species-area curve
+        # (amount_f / total_f)^z: the least risk is 1 - the piecewise-linear r^z (Pereira & Daily 2006);
+        # the amounts as in max utility, then the risks
+        z_all, segments = np.broadcast_to(np.asarray(p.objective[2], dtype=np.float64), (nf,)), int(p.objective[3])
+        pos = u.rij.copy()
+        pos.data = np.maximum(pos.data, 0.0)
+        abund = np.array([_sum(pos.data[pos.indptr[i]:pos.indptr[i + 1]]) for i in range(nf)])
+        scale = 0.01 / _sum(cost)  # the cheaper of equal risks
+        obj = [cost * scale, np.zeros(nt), np.ones(nt)]
+        lb.append(np.zeros(2 * nt))
+        ub.append(np.concatenate([abund, np.ones(nt)]))
+        vtype += ["C"] * (2 * nt)
+        extra_rows.append((np.arange(nt), n + np.arange(nt), -np.ones(nt)))
+        sar_r, sar_c, sar_v, sar_rhs = [], [], [], []
+        row = nt
+        for f in range(nt):
+            tot = float(u.totals[f])
+            c_k, s_k = sar_lines(float(z_all[f]), segments)
+            for k in range(segments):
+                if tot > 0:
+                    sar_r += [row, row]
+                    sar_c += [n + f, n + nt + f]
+                    sar_v += [s_k[k] / tot, 1.0]
+                    sar_rhs.append(1.0 - c_k[k])
+                else:  # a feature with nothing: no risk to reduce
+                    sar_r.append(row)
+                    sar_c.append(n + nt + f)
+                    sar_v.append(1.0)
+                    sar_rhs.append(0.0)
+                row += 1
+        extra_rows.append((np.array(sar_r), np.array(sar_c), np.array(sar_v)))
+        budget_row(nt + nt * segments)
+        sense = ["="] * nt + [">="] * (nt * segments) + ["<="]
+        rhs = [np.zeros(nt), np.array(sar_rhs), budget]
+        col_ids += ["amount"] * nt + ["extinction_risk"] * nt
+        row_ids = ["spp_amount"] * nt + ["extinction_risk"] * (nt * segments) + ["budget"]
+        nrow_extra, ncol_extra, weight_cols = nt * segments + 1, 2 * nt, n + nt
     elif kind == "min_penalties":
         sense, rhs = [*t.sense, "<="], [t.value, budget]
         budget_row(nt)

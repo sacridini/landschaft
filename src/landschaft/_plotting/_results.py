@@ -510,3 +510,166 @@ def _calibration(cal, opts, title):
     panels.append(_summary({**{k: v for k, v in cal.best.items()}, "loss": round(cal.loss, 6),
                             "evaluations": len(h), "method": cal.settings.get("method")}, "Best settings"))
     return panels
+
+
+# ----------------------------------------------------------------------------- ls.prioritize (optimization)
+
+_SELECTION = {"cmap": {0: "#d9d9d9", 1: "#1a9850"}, "labels": {0: "not selected", 1: "selected"},
+              "categorical": True}
+
+
+def _selection_panels(sel, opts, title):
+    """A selection (raster, polygons or a table) on a map; a table without geometry gives nothing."""
+    from ._core import _is_geo_raster, _is_vector, _map
+
+    if _is_geo_raster(sel):
+        v = np.asarray(sel.values, dtype=np.float64)
+        binary = np.isin(v[np.isfinite(v)], (0.0, 1.0)).all()
+        o = {**opts, **(_SELECTION if binary else {"cmap": opts.get("cmap") or "greens", "categorical": False,
+                                                   "vmin": 0.0, "vmax": 1.0})}
+        return _map([(title, sel)], o, title)
+    if _is_vector(sel):
+        return _map([(title, sel, {"column": "solution"})], opts, title)
+    return []
+
+
+def _coverage_chart(coverage: pd.DataFrame, title="Targets"):
+    from . import _charts
+    from ._core import _Panel
+
+    series = {"held": coverage["relative_held"].to_numpy()}
+    if "relative_target" in coverage:
+        series["target"] = coverage["relative_target"].to_numpy()
+    return _Panel("chart", _charts.bars(list(coverage["feature"]), series, title, ylabel="share of the feature"),
+                  title)
+
+
+@register("Solution")
+def _prio_solution(sol, opts, title):
+    """The selection, the targets' coverage and the solution's figures."""
+    panels = _selection_panels(sol.selection, opts, title or "Selected planning units")
+    panels.append(_coverage_chart(sol.coverage, "Representation of the features"))
+    met = sol.coverage["met"] if "met" in sol.coverage else None
+    extra = {"targets met": f"{int(met.sum())} of {len(met)}"} if met is not None else {}
+    panels.append(_summary({"objective": sol.objective, "cost": sol.cost,
+                            "units selected": float(np.nansum(sol.values)), **extra, "status": sol.status,
+                            "gap": sol.gap, "solver": sol.solver, "seconds": sol.seconds}))
+    return panels
+
+
+@register("Portfolio")
+def _prio_portfolio(port, opts, title):
+    """How often every unit is selected, and the solutions' objectives."""
+    from . import _charts
+    from ._core import _is_geo_raster, _map, _Panel
+
+    panels = []
+    freq = port.frequency
+    if _is_geo_raster(freq):
+        panels += _map([("selection frequency", freq)], {**opts, "cmap": opts.get("cmap") or "greens",
+                                                       "categorical": False, "vmin": 0.0, "vmax": 1.0},
+                       title or "Selection frequency")
+    s = port.summary
+    panels.append(_Panel("chart", _charts.bars(list(s["solution"]), {"objective": s["objective"].to_numpy()},
+                                               "Objective of each solution"), "objectives"))
+    return panels
+
+
+@register("TradeOffs")
+def _prio_tradeoffs(t, opts, title):
+    """Cost against the criterion traded off, the candidates TOPSIS and the knee choose marked."""
+    from . import _charts
+    from ._core import _Panel
+
+    tab = t.table
+    crit = t.criterion
+    go = _charts._go()
+    fig = _charts.figure(title or f"Cost against {crit}", xaxis_title=crit, yaxis_title="cost")
+    order = np.argsort(tab[crit].to_numpy(), kind="stable")
+    fig.add_trace(go.Scatter(x=tab[crit].to_numpy()[order], y=tab["cost"].to_numpy()[order], mode="lines+markers",
+                             name="candidates", text=[f"value {v:g}" for v in tab["value"].to_numpy()[order]],
+                             marker={"color": "#7f7f7f"}))
+    for col, colour in (("topsis", "#e03030"), ("knee", "#377eb8")):
+        pick = tab[tab[col]]
+        fig.add_trace(go.Scatter(x=pick[crit], y=pick["cost"], mode="markers", name=col,
+                                 marker={"color": colour, "size": 13, "symbol": "circle-open",
+                                         "line": {"width": 3}}))
+    panels = [_Panel("chart", fig, "trade-off")]
+    best = tab[tab["topsis"]].iloc[0]
+    panels.append(_summary({"candidates": len(tab), "TOPSIS: value": best["value"], "TOPSIS: cost": best["cost"],
+                            f"TOPSIS: {crit}": best[crit]}, "Choice"))
+    return panels
+
+
+@register("ZonationComparison")
+def _prio_zonation_comparison(c, opts, title):
+    """The two selections side by side, every feature's share held by each, and their figures."""
+    from . import _charts
+    from ._core import _map, _Panel
+
+    panels = _map([("milp", c.selection.sel(band="milp")), ("zonation", c.selection.sel(band="zonation"))],
+                  {**opts, **_SELECTION}, title or "Optimization and Zonation at the same cost")
+    t = c.table
+    panels.append(_Panel("chart", _charts.bars(list(t["feature"]), {"optimization": t["milp"].to_numpy(),
+                                                                     "zonation": t["zonation"].to_numpy()},
+                                               "Share of every feature held", ylabel="share"), "features"))
+    panels.append(_Panel("chart", _charts.table_chart(c.summary.round(4), "Figures"), "figures"))
+    return panels
+
+
+@register("ActionsSolution")
+def _prio_actions(sol, opts, title):
+    """The monitored units and the actions (maps, for problems from rasters), and the benefits."""
+    from . import _charts
+    from ._core import _map, _Panel
+
+    panels = []
+    if sol.data.grid is not None:
+        m = sol.maps()
+        panels += _map([(str(b), m.sel(band=b)) for b in m["band"].values], {**opts, **_SELECTION},
+                       title or "Monitoring and actions")
+    b = sol.benefit()
+    panels.append(_Panel("chart", _charts.bars([str(f) for f in b["feature"]],
+                                               {"conservation": b["benefit.conservation"].to_numpy(),
+                                                "recovery": b["benefit.recovery"].to_numpy()},
+                                               "Benefit of every feature", stacked=True), "benefits"))
+    cost = sol.cost()
+    panels.append(_summary({"objective": sol.objective, **{k: float(cost[k].iloc[0]) for k in cost.columns},
+                            "status": sol.status, "gap": sol.gap, "seconds": sol.seconds}))
+    return panels
+
+
+@register("ActionsPortfolio")
+def _prio_actions_portfolio(port, opts, title):
+    """How often every unit is monitored and every action taken, and the solutions' objectives."""
+    from . import _charts
+    from ._core import _map, _Panel
+
+    panels = []
+    if port.solutions[0].data.grid is not None:
+        m = port.maps()
+        panels += _map([(str(b), m.sel(band=b)) for b in m["band"].values],
+                       {**opts, "cmap": opts.get("cmap") or "greens", "categorical": False, "vmin": 0.0,
+                        "vmax": 1.0}, title or "How often monitored or acted on")
+    s = port.summary
+    panels.append(_Panel("chart", _charts.bars(list(s["solution"]), {"objective": s["objective"].to_numpy()},
+                                               "Objective of each solution"), "objectives"))
+    return panels
+
+
+@register("PrioritizationReport")
+def _prio_report(rep, opts, title):
+    """A solution with its figures, the importance of the selected units and the comparison with Zonation."""
+    from . import _charts
+    from ._core import _is_geo_raster, _map, _Panel
+
+    panels = _prio_solution(rep.solution, opts, title or rep.title)
+    for name, frame in rep.tables.items():
+        panels.append(_Panel("chart", _charts.table_chart(frame.round(6), name), name))
+    for name, da in rep.maps.items():
+        if _is_geo_raster(da):
+            panels += _map([(name, da)], {**opts, "cmap": opts.get("cmap") or "viridis", "categorical": False},
+                           name)
+    if rep.comparison is not None:
+        panels += _prio_zonation_comparison(rep.comparison, opts, None)
+    return panels

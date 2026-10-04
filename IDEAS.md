@@ -1856,17 +1856,38 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   Linux (WSL): 369 passam, 0 falham. Versão **1.24.0** (a classe virou `TradeOffs`: o `ls.plot` registra os
   gráficos pelo nome da classe e o `ls.simulate` já tem `Calibration`).
 
+### Andamento da fase 8 (integração)
+* **Fase 8 completa** (2026-10-04): `_milp_integrate.py` e mais:
+  * `zonation_features(...)`: o `zonation()` com uma saída interna antes do ranking (`_transform_only`): as
+    camadas transformadas (condição, kernels, interações, conectividade por matriz, retenção, impactos) vezes
+    a soma absoluta original de cada feição, de volta às unidades da feição; carregam a quantização do Zonation
+    (16 bits: ~1e-5 do máximo da feição). Os nomes vêm das bandas da pilha.
+  * **SAR** (extensão nossa): `add_min_extinction_risk_objective(budget, z, segments)`, risco_f >=
+    1 - (c_k + s_k quantidade_f / total_f) para as cordas de r^z por r_j = (j / K)^(1/z) (degraus iguais de r^z;
+    a interpolação é o mínimo das cordas porque r^z é côncava); desempate de custo 0,01 x custo / custo total
+    como no max utility; testado contra **enumeração** (11 unidades, 3 feições, z por feição).
+    `eval_extinction_risk` (1 - r^z exato e a soma).
+  * `compare_zonation(p, solution, zonation=None)`: o ranking do Zonation (CAZ2 nas feições e custos do
+    problema) cortado no custo da solução (travadas primeiro, maior rank primeiro), representação e metas das
+    duas, mapas. No caso de teste: MILP atinge as 5 metas, o Zonation no mesmo custo perde uma (f4) mas guarda
+    mais em média.
+  * `sdm_features(results, env, threshold)` (ensemble ou modelo; limiar número ou o max TSS do `SDMResult`).
+  * `report(p, solution)` -> `PrioritizationReport` (resumos, representação, metas, irreplaceability de Ferrier
+    ou riqueza ponderada pela raridade, risco SAR, comparação com o Zonation); `ls.plot(report).save(
+    "relatorio.html")` = página offline. Gráficos registrados no `ls.plot` (`_plotting/_results.py`):
+    `Solution`, `Portfolio`, `TradeOffs`, `ZonationComparison`, `ActionsSolution`, `ActionsPortfolio`,
+    `PrioritizationReport`.
+  * `eval_boundary_summary` sem `data` para polígonos.
+
 ### Próximos passos (retomar daqui)
-1. **Fase 8, integração**: transformações de feição do Zonation (condição, retenção, kernels, impactos), SAR,
-   feições do `ls.sdm`, comparação Zonation x MILP no mesmo orçamento, gráficos do `ls.plot` e relatório offline.
-2. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
+1. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
    mais as pendências trazidas das fases anteriores: contiguidade e corredores por cortes de separadores de
    nós em rodadas, limite fraco do max_features (cortes), objetivos filogenéticos em 10⁶ (LP que não converge
    em 30 s), fluxos dinâmicos e reparo em paralelo no motor de cortes; multi-action com fronteira e gap 0
    (limite fraco: o HiGHS não fecha; Gurobi 99 s em 10⁴) e o núcleo simétrico de 10⁴ (5 s no HiGHS contra 1 s
    no Gurobi); replacement importance incremental (só o déficit das feições da unidade, em vez do problema
    inteiro: hoje ~0,3 s por re-solução em 10⁵, 192 s em 19 threads).
-3. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
+2. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
    prioritizr/prioriactions/prioripy (tabela R <-> Python).
 
 ### Decisões

@@ -439,6 +439,21 @@ class Problem:
         length divided by the total amount of the features below it (Rosauer et al. 2009)."""
         return self._with(objective=("max_phylo_end", _budget(budget), tree))
 
+    def add_min_extinction_risk_objective(self, budget: float, z=0.25, segments: int = 16) -> Problem:
+        """Minimum extinction risk (our extension): within the budget, the least sum over the features
+        (weighted) of the risk the species-area relationship gives, 1 - (held / total)^z (Pereira &
+        Daily 2006; z = 0.25 by default, one value or one per feature), as a piecewise-linear function
+        through ``segments`` + 1 points of the curve (exact at them, slightly above in between). No
+        targets."""
+        z = np.asarray(z, dtype=np.float64)
+        if (z <= 0).any() or (z > 1).any() or not np.isfinite(z).all():
+            raise ValueError("z must be in (0, 1]")
+        if int(segments) != segments or segments < 1:
+            raise ValueError("segments must be a whole number >= 1")
+        if z.size not in (1, len(self.units.feature_names)):
+            raise ValueError("z: one value or one per feature")
+        return self._with(objective=("min_extinction_risk", _budget(budget), z.copy(), int(segments)))
+
     def add_min_penalties_objective(self, budget: float) -> Problem:
         """Minimum penalties: meet the targets within the budget with the least penalties (the
         penalties come in a later phase: until then any solution that meets them is optimal)."""

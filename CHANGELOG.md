@@ -6,6 +6,22 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.prioritize.zonation_features(features, condition=..., connectivity=..., retention=..., impact=...)`:
+  Zonation 5's feature transforms (condition, connectivity kernels, interactions, matrix connectivity,
+  retention, impacts) without the ranking, back in the features' units, for an optimization problem.
+- `add_min_extinction_risk_objective(budget, z=0.25, segments=16)`: the least species-area extinction
+  risk, 1 - (held / total)^z, within a budget (a piecewise-linear objective), and
+  `eval_extinction_risk(problem, solution, z)`.
+- `compare_zonation(problem, solution)`: a Zonation ranking cut at the optimization solution's cost,
+  feature by feature and on maps (`ZonationComparison`).
+- `sdm_features(results, env, threshold=None)`: features from `ls.sdm` predictions.
+- `report(problem, solution)`: the solution, its summaries, representation, targets, irreplaceability
+  and (optionally) extinction risk and the Zonation comparison in one object; `ls.plot(report)` draws
+  it and `.save("report.html")` writes a page that works offline. `ls.plot` also draws solutions,
+  portfolios, trade-offs, multi-action solutions and portfolios and Zonation comparisons.
+- `eval_boundary_summary` measures polygon planning units without a boundary matrix.
+
 ## [1.24.0] - 2026-10-04
 
 ### Added

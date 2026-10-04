@@ -20,7 +20,7 @@ import xarray as xr
 
 __all__ = ["eval_asym_connectivity_summary", "eval_boundary_summary", "eval_connectivity_summary",
            "eval_cost_summary", "eval_feature_representation_summary", "eval_ferrier_importance",
-           "eval_landscape_metrics", "eval_mspa", "eval_n_summary", "eval_rank_importance", "eval_rare_richness_importance",
+           "eval_extinction_risk", "eval_landscape_metrics", "eval_mspa", "eval_n_summary", "eval_rank_importance", "eval_rare_richness_importance",
            "eval_replacement_importance", "eval_target_coverage_summary"]
 
 
@@ -150,7 +150,7 @@ def eval_boundary_summary(p, solution, edge_factor: float = 0.5, data=None) -> p
         raise ValueError("edge_factor must be between 0 and 1")
     u = p.units
     if data is None:
-        if u.kind == "table":
+        if u.kind == "table" and not hasattr(u.template, "geometry"):
             raise ValueError("table planning units need the boundary matrix (data)")
         bm = _csc(boundary_matrix(u.template))
         bm = _csc(bm[u.index][:, u.index]) if bm.shape[0] != u.n else bm
@@ -274,6 +274,19 @@ def eval_target_coverage_summary(p, solution, include_sense: bool = False) -> pd
     if t.region is not None and (t.region >= 0).any():
         df.insert(1, "region", list(t.region_label))
     return df
+
+
+def eval_extinction_risk(p, solution, z=0.25) -> pd.DataFrame:
+    """Every feature's extinction risk by the species-area relationship, 1 - (held / total)^z (z = 0.25
+    by default, one value or one per feature), and their sum (the expected number of features lost)."""
+    rep = eval_feature_representation_summary(p, solution)
+    z = np.broadcast_to(np.asarray(z, dtype=np.float64), (len(rep),))
+    rel = np.clip(np.nan_to_num(rep["relative_held"].to_numpy(dtype=np.float64)), 0.0, 1.0)
+    risk = 1.0 - rel ** z
+    out = pd.DataFrame({"feature": rep["feature"], "relative_held": rel, "z": z, "extinction_risk": risk})
+    total = pd.DataFrame({"feature": ["overall"], "relative_held": [np.nan], "z": [np.nan],
+                          "extinction_risk": [float(np.sum(risk))]})
+    return pd.concat([out, total], ignore_index=True)
 
 
 # ----------------------------------------------------------------------------- importance

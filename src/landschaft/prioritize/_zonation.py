@@ -630,6 +630,52 @@ def zonation(
             src.close()
 
 
+def zonation_features(features, *, names=None, condition=None, renormalize=False, connectivity=None,
+                      self_multiply=False, interaction=None, interaction2=None, matrix_connectivity=None,
+                      matrices: dict | None = None, retention=None, impact_groups=None, impact=None,
+                      cumulative_impact=None, bits: int = 16, nodata=None, n_threads: int | None = None):
+    """The features as Zonation 5 transforms them before ranking (condition, connectivity kernels,
+    interactions, matrix connectivity, retention, impacts: see :func:`zonation` for each), back in the
+    features' own units, for an optimization problem (``problem(cost, zonation_features(...))``).
+
+    The values carry Zonation's quantization (``bits`` 16: a relative error of about 1e-5 of the
+    feature's largest value). Returns a stack (band = the features' names), NaN outside the data."""
+    if bits not in (8, 16):
+        raise ValueError("bits must be 8 or 16")
+    import xarray as xr
+
+    if names is None and isinstance(features, xr.DataArray) and features.ndim == 3 and features.dims[0] in features.coords:
+        names = [str(v) for v in features[features.dims[0]].values]  # the stack's own layer names
+    weights = None
+    rule, rule_param, abf_z, weight_groups, group_weights, groups, thresholds = "CAZ2", None, None, None, None, None, None
+    zero_mode, keep_zeros, extract, cost, cost_in_ranking, hierarchic_mask = "all", None, None, None, True, None
+    analysis_area, area, solution, max_iterations, ranking_error = None, 0, None, 500, 0.01
+    smoothing_factor, stop_on_plateau, curves_interval, seed = 0.0, False, 0.0001, None
+    preprocessing, transformed, impact_bins, storage = False, False, None, None
+    name, param = _parse_rule(rule, rule_param)
+    a = dict(locals())
+    a["_transform_only"] = True
+    with _threads.limit(n_threads):
+        src = _inputs.open_features(features, nodata)
+        try:
+            layers, grid = _run(src, name, param, a)
+        finally:
+            src.close()
+    keys = list(layers)
+    stack = np.stack([layers[k] for k in keys])
+    first = _raster(stack[0].astype(np.float32), grid)
+    da = xr.DataArray(stack, dims=("band", *first.dims),
+                      coords={"band": keys, **{k: v for k, v in first.coords.items() if k in first.dims}})
+    try:
+        if first.rio.crs is not None:
+            da = da.rio.write_crs(first.rio.crs)
+        da = da.rio.write_transform(first.rio.transform())
+    except Exception:  # noqa: BLE001 - no georeferencing
+        pass
+    da.name = "features"
+    return da
+
+
 def _storage(path) -> str:
     """The directory for the temporary files ("": in memory)."""
     if path is None:
@@ -802,6 +848,17 @@ def _run(src, name, param, a) -> ZonationResult:
             imp = dataclasses.replace(imp, sources=read_sources(imp.sources))
         imp_out = _impacts.run(data, kept, cells, src.grid, groups, ib, imp, a["cumulative_impact"],
                                read_full, read_packed)
+    if a.get("_transform_only"):  # zonation_features(): the transformed features, in their units
+        scale = np.asarray(data.layer_scale)
+        dsum = np.asarray(data.orig_abs_sums)
+        out = {}
+        for k, i in enumerate(kept):
+            q = np.asarray(data.layer(k, False, -1.0))
+            v = np.where(q >= 0, q.astype(np.float64) * scale[k] * dsum[k], np.nan)
+            full = np.full(H * W, np.nan)
+            full[cells] = v
+            out[names[i] if names else src.layers[i].name] = full.reshape(H, W)
+        return out, src.grid
     seed = a["seed"]
     if seed is None:
         seed = int(np.random.SeedSequence().generate_state(1)[0])
