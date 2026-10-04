@@ -6,6 +6,18 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-10-04
+
+### Added
+- `ls.simulate` phase 8a, validation: `three_map_comparison` (the reference maps at the start
+  and the end against the simulated end at several resolutions, Pontius et al. 2011) with its
+  table, `agreement_budget()` (misses, hits, wrong hits, false alarms, correct rejections; overall,
+  per class, per transition) and `figure_of_merit()`, bit for bit with lulcc (the per-block
+  equations in C++); MOLUSCE's `compare_maps` (kappa, kappa location and histogram, correctness,
+  Cramer's V, joint information uncertainty, correlation) and `error_budget`, bit for bit; FUTURES'
+  `futures_validation` (quantity and allocation disagreement, kappa, kappa simulation, hits, misses,
+  false alarms, figure of merit), bit for bit with r.futures.validation.
+
 ## [1.16.0] - 2026-10-04
 
 ### Added
