@@ -1506,6 +1506,23 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
 * **Fase 1 completa** (2026-10-04): testes também no Linux (WSL, gcc 13): 84 passam, os do Gurobi e os só de
   Windows pulam. Falta integrar ao `main` (rebase + fast-forward) e a versão.
 
+### Andamento da fase 2
+* Formulações lidas do prioritizr 8.0.6 (commit `b3023f9f` de `C:\Users\eduar\Documents\dev\prioritizr`, que está
+  em 9.0.0.1; a referência é o pacote 8.0.6 instalado no R).
+* **Parte 1** (dc9a554): compilador geral (`_milp_compile.py`): min_shortfall, min_largest_shortfall,
+  max_utility, max_features, max_cover, min_penalties (com orçamento), metas manuais (sentido `>=`/`<=`/`=`,
+  várias por feição ou nenhuma), loglineares (com teto) e pesos das feições. Grupo `objectives` (14 casos):
+  **modelo bit a bit** igual ao `compile()` (matriz comparada em ordem canônica; o prioritizr guarda os
+  coeficientes zero que empilha). Detalhes reproduzidos: `cost_scale = -0.01 / sum(custos)` (soma do Rcpp,
+  double em ordem), `1/meta` só para metas `> 1e-5` no C++ mas `1/meta` com `Inf -> 0` nos pesos padrão do R,
+  `ub` das quantidades no max_utility = soma das partes positivas (`Matrix::rowSums`), `lb = -Inf` com valores
+  negativos, interpolação log-linear do `approx()` do R. O `presolve_check()` do prioritizr recusa pesos
+  efetivos acima de 1e6 (ainda não temos esse aviso).
+  * **O Gurobi não dá o ótimo exato nos objetivos de maximização**: o custo entra só como desempate
+    (0,01 x custo / custo total) e o Gurobi para dentro das tolerâncias dele, em ótimos diferentes no prioritizr
+    (8,998077) e no gurobipy (8,998085) no `max_features`; o HiGHS acha 8,998091, viável. Teste: o nosso ótimo
+    é o da referência ou melhor, até 1e-5 relativo.
+
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
   prioritizr e o prioriactions, e o Marxan entra depois como referência do motor `anneal` (verificar a
