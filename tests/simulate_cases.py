@@ -2374,3 +2374,266 @@ CASES.update({
         notes="MOLUSCE as published, factors without holes (with numpy 2 it fails on a cell without weights): "
               "weights and predictions equal, its confidence (the largest weight before the largest) differs."),
 })
+
+
+# ============================================================================= phase 8a: three-map comparison (lulcc)
+
+GROUPS += ["validation"]
+
+_TMC_FACTORS = (1, 2, 3, 4, 8, 16)
+
+
+def val_synth():
+    """Reference t0, reference t1 and a simulated t1 (classes 1, 2, 3, 4; 37 x 45 cells, sizes that no factor
+    divides), change around two fronts, the same missing corner in the three (numpy's generator, seed 41)."""
+    import xarray as xr
+    from scipy import ndimage
+
+    rng = np.random.default_rng(41)
+    ny, nx = 37, 45
+    t0 = np.ones((ny, nx))
+    t0[ndimage.gaussian_filter(rng.random((ny, nx)), 2) > 0.52] = 2
+    t0[:, 30:] = np.where(rng.random((ny, 15)) < 0.7, 3, t0[:, 30:])
+    t0[30:, :10] = 4
+    t1 = t0.copy()
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    front = (np.hypot(yy - 10, xx - 12) < 9) & (t0 == 1)
+    t1[front & (rng.random((ny, nx)) < 0.6)] = 3
+    t1[(t0 == 2) & (rng.random((ny, nx)) < 0.15)] = 1
+    t1[(t0 == 3) & (rng.random((ny, nx)) < 0.1)] = 4
+    sim = t0.copy()
+    near = (np.hypot(yy - 13, xx - 15) < 9) & (t0 == 1)
+    sim[near & (rng.random((ny, nx)) < 0.55)] = 3
+    sim[(t0 == 2) & (rng.random((ny, nx)) < 0.12)] = 1
+    sim[(t0 == 3) & (rng.random((ny, nx)) < 0.1)] = 2
+    for a in (t0, t1, sim):
+        a[:4, -6:] = np.nan
+    return xr.concat([grid(v) for v in (t0, t1, sim)], dim="band").assign_coords(band=["t0", "t1", "sim"])
+
+
+def val_pie():
+    """Plum Island 1985 and 1999 as the references, 1991 standing in for the simulation."""
+    p = pie()
+    return p.isel(band=[0, 2, 1]).assign_coords(band=["t0", "t1", "sim"])
+
+
+_TMC_R = """
+x <- {inp}_raster
+tmc <- ThreeMapComparison(x = x[[1]], x1 = x[[2]], y1 = x[[3]], factors = c({factors}),
+                          categories = c({cats}), labels = c({labels}))
+ab <- AgreementBudget(tmc)
+fom <- FigureOfMerit(tmc)
+res <- list()
+for (f in seq_along(tmc@factors)) {{
+  res[[paste0("table_", tmc@factors[f])]] <- tmc@tables[[f]]
+  res[[paste0("fom_category_", tmc@factors[f])]] <- unname(fom@category[[f]])
+  res[[paste0("fom_transition_", tmc@factors[f])]] <- unname(fom@transition[[f]])
+}}
+res$fom_overall <- unlist(fom@overall)
+res$budget_overall <- as.matrix(ab@overall)
+for (k in seq_along(ab@category)) res[[paste0("budget_category_", k)]] <- as.matrix(ab@category[[k]])
+for (k in seq_along(ab@transition)) res[[paste0("budget_transition_", k)]] <- as.matrix(ab@transition[[k]])
+res
+"""
+
+
+def _tmc_r(inp, cats, factors):
+    return _TMC_R.format(inp=inp, factors=", ".join(map(str, factors)), cats=", ".join(map(str, cats)),
+                         labels=", ".join(f'"c{c}"' for c in cats))
+
+
+def _tmc_py(maps, cats, factors) -> dict:
+    ls = _ls()
+    tmc = ls.simulate.three_map_comparison(maps[0], maps[1], maps[2], factors=factors, categories=cats)
+    fom = tmc.figure_of_merit()
+    ab = tmc.agreement_budget()
+    budget = ["misses", "hits", "wrong_hits", "false_alarms", "correct_rejections"]
+    out = {}
+    for f in factors:
+        out[f"table_{f}"] = tmc.tables[f]
+        out[f"fom_category_{f}"] = fom["category"].loc[f].to_numpy()
+        out[f"fom_transition_{f}"] = fom["transition"][f].to_numpy()
+    out["fom_overall"] = fom["overall"].to_numpy()
+    out["budget_overall"] = ab[ab.level == "overall"][budget].to_numpy()
+    for k, c in enumerate(cats, start=1):
+        out[f"budget_category_{k}"] = ab[(ab.level == "category") & (ab["from"] == c)][budget].to_numpy()
+    k = 0
+    for c in cats:
+        for d in cats:
+            k += 1
+            sub = ab[(ab.level == "transition") & (ab["from"] == c) & (ab["to"] == d)]
+            out[f"budget_transition_{k}"] = sub[budget[:4]].to_numpy()
+    return out
+
+
+INPUTS.update({"val_synth": val_synth, "val_pie": val_pie})
+
+CASES.update({
+    "tmc_synth": Case("validation", "r", ("val_synth",), r=_tmc_r("val_synth", (1, 2, 3, 4), _TMC_FACTORS),
+                      py=lambda val_synth: _tmc_py(val_synth, (1, 2, 3, 4), _TMC_FACTORS),
+                      notes="lulcc's ThreeMapComparison, AgreementBudget and FigureOfMerit: 4 classes, 6 "
+                            "resolutions, blocks cut at the edges, a missing corner."),
+    "tmc_pie": Case("validation", "r", ("val_pie",), r=_tmc_r("val_pie", (1, 2, 3), (1, 2, 4, 8, 16, 32)),
+                    py=lambda val_pie: _tmc_py(val_pie, (1, 2, 3), (1, 2, 4, 8, 16, 32)),
+                    notes="Plum Island 1985 / 1999 with 1991 as the simulation."),
+})
+
+
+# ----------------------------------------------------------------------------- MOLUSCE: kappa, dependence, error budget
+
+
+def molusce_validation_job(maps) -> Callable:
+    def job(import_module) -> dict:
+        from numpy import ma
+
+        dp = import_module("molusce.algorithms.dataprovider")
+        cm = import_module("molusce.algorithms.models.correlation.model")
+        eb = import_module("molusce.algorithms.models.errorbudget.ebmodel")
+        ref, sim = maps.sel(band="t1").values, maps.sel(band="sim").values
+        ny, nx = ref.shape
+        geo = {"xSize": nx, "ySize": ny, "proj": "", "transform": (0, 30, 0, 0, 0, -30), "units": "m"}
+
+        def raster(a):
+            r = dp.Raster()
+            nan = np.isnan(a)
+            r.create([ma.array(np.where(nan, 0, a).astype(np.uint8), mask=nan)], dict(geo))
+            return r
+
+        rr, sr = raster(ref), raster(sim)
+        dep = cm.DependenceCoef(rr.getBand(1), sr.getBand(1), expand=True)
+        k = dep.kappa(mode="all")
+        plain = cm.DependenceCoef(rr.getBand(1), sr.getBand(1))
+        out = {"coefficients": np.array([plain.correlation(), k["overal"], k["loc"], k["histo"],
+                                         dep.correctness(), plain.cramer(), plain.jiu()], dtype=float)}
+        stat = eb.EBudget(rr, sr).getStat(4, 2)
+        out["budget"] = np.array([[stat[i][key] for key in ("NoNo", "NoMed", "MedMed", "MedPer", "PerPer")]
+                                  for i in sorted(stat)], dtype=float)
+        return out
+    return job
+
+
+def molusce_validation_py(maps) -> dict:
+    ls = _ls()
+    ref, sim = maps.sel(band="t1"), maps.sel(band="sim")
+    c = ls.simulate.compare_maps(ref, sim)
+    eb = ls.simulate.error_budget(ref, sim, iterations=4, scale=2)
+    keys = ["correlation", "kappa", "kappa_location", "kappa_histogram", "correctness", "cramer", "jiu"]
+    return {"coefficients": np.array([c[k] for k in keys]),
+            "budget": eb[["no_no", "no_medium", "medium_medium", "medium_perfect", "perfect_perfect"]].to_numpy()}
+
+
+CASES.update({
+    "molusce_validation_synth": Case(
+        "validation", "molusce", ("val_synth",), job=lambda val_synth: molusce_validation_job(val_synth),
+        py=lambda val_synth: molusce_validation_py(val_synth),
+        notes="MOLUSCE's DependenceCoef (correlation, the three kappas, correctness, Cramer, JIU) and EBudget "
+              "(4 resolutions) of the synthetic reference and simulation."),
+    "molusce_validation_pie": Case(
+        "validation", "molusce", ("val_pie",), job=lambda val_pie: molusce_validation_job(val_pie),
+        py=lambda val_pie: molusce_validation_py(val_pie),
+        notes="The same on Plum Island (1999 against 1991)."),
+})
+
+
+# ----------------------------------------------------------------------------- r.futures.validation
+
+GROUPS += ["futures_validation"]
+
+_FUTVAL_KEYS = ["total_quantity", "total_allocation", "kappa", "kappasimulation", "misses", "hits",
+                "false_alarms", "null_successes", "figure_of_merit", "producer", "user", "initially_developed"]
+
+_FUTVAL_SCRIPT = r"""
+for m in __MAPS__; do r.null map=$m setnull=-1; done
+python3 - <<'PYEOF'
+import builtins, csv, importlib.machinery, importlib.util, os
+builtins.__dict__.setdefault("_", lambda s: s)
+path = os.path.expanduser("~/.grass8/addons/scripts/r.futures.validation")
+loader = importlib.machinery.SourceFileLoader("rfv", path)
+spec = importlib.util.spec_from_loader("rfv", loader)
+mod = importlib.util.module_from_spec(spec)
+loader.exec_module(mod)
+cats, res = mod.compute("reference", "simulated", __ORIGINAL__)
+rows = [("cat_" + str(c), float(c)) for c in cats]
+for i, c in enumerate(cats):
+    rows.append(("quantity_class_" + str(c), float(res["quantity"][i])))
+    rows.append(("allocation_class_" + str(c), float(res["allocation"][i])))
+for k in __KEYS__:
+    v = res.get(k if k != "kappasimulation" else "kappasim")
+    rows.append((k, float("nan") if v is None else float(v)))
+with open(os.path.join(os.environ["OUT"], "results.csv"), "w", newline="") as f:
+    w = csv.writer(f)
+    w.writerow(["key", "value"])
+    for k, v in rows:
+        w.writerow([k, repr(v)])
+PYEOF
+"""
+
+
+def futval_world(classes: int = 2):
+    """Original, reference and simulated maps (0/1 developed, or classes 0-3), 50 x 60, holes (seed 51)."""
+    import xarray as xr
+
+    rng = np.random.default_rng(51 + classes)
+    ny, nx = 50, 60
+    if classes == 2:
+        orig = (rng.random((ny, nx)) < 0.2).astype(float)
+        ref = np.where(orig == 1, 1.0, (rng.random((ny, nx)) < 0.15).astype(float))
+        sim = np.where(orig == 1, 1.0, (rng.random((ny, nx)) < 0.12).astype(float))
+        sim[(ref == 1) & (orig == 0) & (rng.random((ny, nx)) < 0.4)] = 1
+    else:
+        orig = rng.integers(0, classes, (ny, nx)).astype(float)
+        ref = np.where(rng.random((ny, nx)) < 0.2, rng.integers(0, classes, (ny, nx)), orig).astype(float)
+        sim = np.where(rng.random((ny, nx)) < 0.2, rng.integers(0, classes, (ny, nx)), orig).astype(float)
+    orig[:5, :5] = np.nan
+    ref[40:43, 10:20] = np.nan
+    sim[0, :] = np.nan
+    return xr.concat([grid(v) for v in (orig, ref, sim)], dim="band").assign_coords(
+        band=["original", "reference", "simulated"])
+
+
+def _futval_job(world, use_original=True):
+    import xarray as xr  # noqa: F401
+
+    names = ["reference", "simulated"] + (["original"] if use_original else [])
+    rasters = {n: world.sel(band=n).fillna(-1).astype("int32") for n in names}
+    script = (_FUTVAL_SCRIPT.replace("__MAPS__", " ".join(names))
+              .replace("__ORIGINAL__", '"original"' if use_original else "None")
+              .replace("__KEYS__", repr(_FUTVAL_KEYS)))
+    return {"rasters": rasters, "script": script, "outputs": ["results.csv"]}
+
+
+def _futval_py(world, use_original=True) -> dict:
+    ls = _ls()
+    r = ls.simulate.futures_validation(world.sel(band="reference"), world.sel(band="simulated"),
+                                       world.sel(band="original") if use_original else None)
+    keys, values = [], []
+    for c in r["classes"]:
+        keys.append(f"cat_{c}")
+        values.append(float(c))
+    for i, c in enumerate(r["classes"]):
+        keys += [f"quantity_class_{c}", f"allocation_class_{c}"]
+        values += [float(r["quantity"][i]), float(r["allocation"][i])]
+    for k in _FUTVAL_KEYS:
+        v = r.get(k)
+        keys.append(k)
+        values.append(float("nan") if v is None else float(v))
+    return {"results.csv/key": keys, "results.csv/value": np.array(values)}
+
+
+INPUTS.update({"futval_binary": futval_world, "futval_classes": lambda: futval_world(4)})
+
+CASES.update({
+    "futval_binary": Case("futures_validation", "grass", ("futval_binary",),
+                          job=lambda futval_binary: _futval_job(futval_binary),
+                          py=lambda futval_binary: _futval_py(futval_binary),
+                          notes="r.futures.validation's compute(): developed 0/1 with the original map (hits, "
+                                "misses, figure of merit, kappa simulation), holes in each map."),
+    "futval_classes": Case("futures_validation", "grass", ("futval_classes",),
+                           job=lambda futval_classes: _futval_job(futval_classes),
+                           py=lambda futval_classes: _futval_py(futval_classes),
+                           notes="Four classes with the original: quantity, allocation, kappa, kappa simulation."),
+    "futval_no_original": Case("futures_validation", "grass", ("futval_classes",),
+                               job=lambda futval_classes: _futval_job(futval_classes, False),
+                               py=lambda futval_classes: _futval_py(futval_classes, False),
+                               notes="Without the original: quantity, allocation and kappa only."),
+})

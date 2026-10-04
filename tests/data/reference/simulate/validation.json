@@ -1,0 +1,489 @@
+{
+ "arrays": {
+  "molusce_validation_pie/budget": {
+   "dim": [
+    4,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "molusce_validation_pie/coefficients": {
+   "kind": "vector"
+  },
+  "molusce_validation_synth/budget": {
+   "dim": [
+    4,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "molusce_validation_synth/coefficients": {
+   "kind": "vector"
+  },
+  "tmc_pie/budget_category_1": {
+   "dim": [
+    6,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_category_2": {
+   "dim": [
+    6,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_category_3": {
+   "dim": [
+    6,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_overall": {
+   "dim": [
+    6,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_transition_1": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_transition_2": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_transition_3": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_transition_4": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_transition_5": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_transition_6": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_transition_7": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_transition_8": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/budget_transition_9": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/fom_category_1": {
+   "kind": "vector"
+  },
+  "tmc_pie/fom_category_16": {
+   "kind": "vector"
+  },
+  "tmc_pie/fom_category_2": {
+   "kind": "vector"
+  },
+  "tmc_pie/fom_category_32": {
+   "kind": "vector"
+  },
+  "tmc_pie/fom_category_4": {
+   "kind": "vector"
+  },
+  "tmc_pie/fom_category_8": {
+   "kind": "vector"
+  },
+  "tmc_pie/fom_overall": {
+   "kind": "vector"
+  },
+  "tmc_pie/fom_transition_1": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/fom_transition_16": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/fom_transition_2": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/fom_transition_32": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/fom_transition_4": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/fom_transition_8": {
+   "dim": [
+    3,
+    3
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/table_1": {
+   "dim": [
+    16,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/table_16": {
+   "dim": [
+    16,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/table_2": {
+   "dim": [
+    16,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/table_32": {
+   "dim": [
+    16,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/table_4": {
+   "dim": [
+    16,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_pie/table_8": {
+   "dim": [
+    16,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_category_1": {
+   "dim": [
+    6,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_category_2": {
+   "dim": [
+    6,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_category_3": {
+   "dim": [
+    6,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_category_4": {
+   "dim": [
+    6,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_overall": {
+   "dim": [
+    6,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_1": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_10": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_11": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_12": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_13": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_14": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_15": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_16": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_2": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_3": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_4": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_5": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_6": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_7": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_8": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/budget_transition_9": {
+   "dim": [
+    6,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/fom_category_1": {
+   "kind": "vector"
+  },
+  "tmc_synth/fom_category_16": {
+   "kind": "vector"
+  },
+  "tmc_synth/fom_category_2": {
+   "kind": "vector"
+  },
+  "tmc_synth/fom_category_3": {
+   "kind": "vector"
+  },
+  "tmc_synth/fom_category_4": {
+   "kind": "vector"
+  },
+  "tmc_synth/fom_category_8": {
+   "kind": "vector"
+  },
+  "tmc_synth/fom_overall": {
+   "kind": "vector"
+  },
+  "tmc_synth/fom_transition_1": {
+   "dim": [
+    4,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/fom_transition_16": {
+   "dim": [
+    4,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/fom_transition_2": {
+   "dim": [
+    4,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/fom_transition_3": {
+   "dim": [
+    4,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/fom_transition_4": {
+   "dim": [
+    4,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/fom_transition_8": {
+   "dim": [
+    4,
+    4
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/table_1": {
+   "dim": [
+    25,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/table_16": {
+   "dim": [
+    25,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/table_2": {
+   "dim": [
+    25,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/table_3": {
+   "dim": [
+    25,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/table_4": {
+   "dim": [
+    25,
+    5
+   ],
+   "kind": "matrix"
+  },
+  "tmc_synth/table_8": {
+   "dim": [
+    25,
+    5
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "molusce": {
+   "molusce": "5.3.0"
+  },
+  "r": {
+   "r": "R version 4.4.2 (2024-10-31 ucrt)",
+   "versions": {
+    "MuMIn": "1.48.19",
+    "OpenLand": "1.0.5",
+    "diffeR": "0.0.8",
+    "lme4": "2.0.1",
+    "lulcc": "1.0.4",
+    "raster": "3.6.31",
+    "terra": "1.9.50"
+   }
+  }
+ }
+}

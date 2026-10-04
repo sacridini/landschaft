@@ -181,6 +181,18 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.calibrate_patches
 
+## Validation
+
+::: landschaft.simulate.three_map_comparison
+
+::: landschaft.simulate.ThreeMapComparison
+
+::: landschaft.simulate.compare_maps
+
+::: landschaft.simulate.error_budget
+
+::: landschaft.simulate.futures_validation
+
 ## Presets and one-call projection
 
 ::: landschaft.simulate.run

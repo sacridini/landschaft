@@ -1845,6 +1845,42 @@ sim.supply; sim.shortfall; sim.trajectory()
      `Ensemble` (probabilidade de mudança no último ano por cenário, cobertura média). O `r.futures.
      parallelpga` fica coberto pelo `scenarios` (réplicas do `PatchGrowing` em paralelo).
 8. Validação: similaridade fuzzy, três mapas em várias resoluções, figure of merit, kappa, error budget.
+   Dividida em duas entregas (cada uma com versão, commit e push):
+   - **8a. Pontius e MOLUSCE (bit a bit):** `ThreeMapComparison` do lulcc (referência t0, referência t1 e
+     simulado t1 em várias resoluções; agregação do `raster` 3.6-31 em blocos a partir do canto superior
+     esquerdo com `expand=TRUE`, soma em double, bloco todo sem dado = NA; equações 1-7 de Pontius et al. 2011,
+     a tabela de três dimensões e seus totais com as somas de 80 bits do R: `sum`, `rowSums`), `AgreementBudget`
+     (acertos, faltas, acertos de classe errada, falsos alarmes, persistência correta; geral, por classe, por
+     transição) e `FigureOfMerit` (equações 9-11); o `DependenceCoef` do MOLUSCE (correlação, acerto, V de
+     Cramér, JIU, kappa, kappa de localização e de histograma) e o `ErrorBudget` (`ebmodel.py`).
+     **Feita** (1.17.0): `three_map_comparison` → `ThreeMapComparison` (`tables`, `table(f)`,
+     `agreement_budget()`, `figure_of_merit()`), `compare_maps`, `error_budget`. Bit a bit, na primeira
+     tentativa, com o lulcc 1.0.4 (raster 3.6-31, R 4.4.2) em 2 casos (sintético de 4 classes com 6 resoluções
+     e blocos cortados na borda; Plum Island com 6 resoluções: tabelas, orçamento geral/por classe/por
+     transição, figure of merit) e com o MOLUSCE 5.3.0 em 2 casos (coeficientes e error budget de 4
+     resoluções). As equações 1-7 e as regras 1-4 por bloco num kernel C++ (`src/cpp/sim/validation.cpp`:
+     doubles na ordem de operações do lulcc, cada célula da tabela somada em 80 bits na ordem dos blocos;
+     4 M células, 5 classes, 4 resoluções: 3,6 s, contra 17,5 s da versão numpy linha a linha); o `rowSums` do
+     R em `sim_r_rowsums`.
+     Também o `futures_validation` (o `compute` do `r.futures.validation`: discordância de quantidade e de
+     alocação, kappa, kappa simulation, acertos/faltas/falsos alarmes e figure of merit para mapas 0/1) bit a
+     bit em 3 casos (chamando o `compute` do módulo no GRASS, pois a saída json arredonda a 6 casas); o
+     `gridvalidation` (o mesmo por bloco ou sub-região) fica para a 8b.
+     - Fatos: o `aggregate(fun = sum)` do `raster` soma em double na ordem das linhas do bloco, blocos a partir
+       do canto superior esquerdo, `expand=TRUE` completa com NA, bloco todo NA vira NA; o `np.sum` de um bloco
+       de um array 2-D (os laços do `EBudget` do MOLUSCE) é a soma por pares do numpy sobre o bloco achatado em
+       ordem C, igual a `sum(axis=-1)` dos blocos copiados contíguos (é como o `error_budget` vetoriza sem
+       mudar os bits).
+     - Forma correta (sem patch: os casos usam o mesmo `NA` nos três mapas): o lulcc toma as células com valor
+       em t0 e, onde t1 ou a simulação não têm valor, desalinha os vetores dos blocos; aqui as células sem
+       valor em qualquer um dos três mapas saem dos três.
+     - Escolha nossa: no MOLUSCE o kappa e o acerto usam a tabela cruzada sobre as classes dos dois mapas
+       (como a validação dele) e o Cramér e o JIU a tabela das classes de cada mapa (como o diálogo de
+       correlação).
+   - **8b. Similaridade e uma chamada:** similaridade fuzzy de Hagen-Zanker (2003) em várias janelas com
+     decaimento e a versão recíproca do Dinamica (`CalcReciprocalSimilarityMap`, caixa-preta), o
+     `r.futures.validation` / `gridvalidation` (GRASS), `S.validate(t0, t1_obs, t1_sim)` juntando tudo com as
+     métricas do `lsm`/`mspa` lado a lado; o `run` passa a usá-lo.
 9. Calibração orientada a padrões.
 10. Tutorial, capítulo do Learn, benchmarks contra lulcc, CLUMondo, FUTURES e Dinamica.
 

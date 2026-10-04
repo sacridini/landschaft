@@ -62,6 +62,13 @@ from ._plus import CARS
 from ._regional import Regional
 from ._rules import Neighbourhood, Rules
 from ._run import Projection, agreement, run
+from ._validation import (
+    ThreeMapComparison,
+    compare_maps,
+    error_budget,
+    futures_validation,
+    three_map_comparison,
+)
 from ._woe import WeightsOfEvidence, weights_of_evidence
 
 __all__ = [
@@ -98,17 +105,21 @@ __all__ = [
     "Simulation",
     "Succession",
     "Supply",
+    "ThreeMapComparison",
     "WeightsOfEvidence",
     "agreement",
     "calibrate_patches",
     "changes",
+    "compare_maps",
     "composite_matrix",
     "crosstab",
     "development_pressure",
     "difference_components",
     "difference_resolutions",
     "distance_to",
+    "error_budget",
     "example_data",
+    "futures_validation",
     "mad",
     "memberships",
     "overall_difference",
@@ -118,5 +129,6 @@ __all__ = [
     "sample_to_population",
     "scenarios",
     "share_of",
+    "three_map_comparison",
     "weights_of_evidence",
 ]

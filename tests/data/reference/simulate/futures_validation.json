@@ -1,0 +1,100 @@
+{
+ "arrays": {
+  "futval_binary/results.csv/key": {
+   "kind": "text",
+   "values": [
+    "cat_0",
+    "cat_1",
+    "quantity_class_0",
+    "allocation_class_0",
+    "quantity_class_1",
+    "allocation_class_1",
+    "total_quantity",
+    "total_allocation",
+    "kappa",
+    "kappasimulation",
+    "misses",
+    "hits",
+    "false_alarms",
+    "null_successes",
+    "figure_of_merit",
+    "producer",
+    "user",
+    "initially_developed"
+   ]
+  },
+  "futval_binary/results.csv/value": {
+   "kind": "vector"
+  },
+  "futval_classes/results.csv/key": {
+   "kind": "text",
+   "values": [
+    "cat_0",
+    "cat_1",
+    "cat_2",
+    "cat_3",
+    "quantity_class_0",
+    "allocation_class_0",
+    "quantity_class_1",
+    "allocation_class_1",
+    "quantity_class_2",
+    "allocation_class_2",
+    "quantity_class_3",
+    "allocation_class_3",
+    "total_quantity",
+    "total_allocation",
+    "kappa",
+    "kappasimulation",
+    "misses",
+    "hits",
+    "false_alarms",
+    "null_successes",
+    "figure_of_merit",
+    "producer",
+    "user",
+    "initially_developed"
+   ]
+  },
+  "futval_classes/results.csv/value": {
+   "kind": "vector"
+  },
+  "futval_no_original/results.csv/key": {
+   "kind": "text",
+   "values": [
+    "cat_0",
+    "cat_1",
+    "cat_2",
+    "cat_3",
+    "quantity_class_0",
+    "allocation_class_0",
+    "quantity_class_1",
+    "allocation_class_1",
+    "quantity_class_2",
+    "allocation_class_2",
+    "quantity_class_3",
+    "allocation_class_3",
+    "total_quantity",
+    "total_allocation",
+    "kappa",
+    "kappasimulation",
+    "misses",
+    "hits",
+    "false_alarms",
+    "null_successes",
+    "figure_of_merit",
+    "producer",
+    "user",
+    "initially_developed"
+   ]
+  },
+  "futval_no_original/results.csv/value": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "grass": {
+   "addons": "r.futures (OSGeo/grass-addons, grass8 branch)",
+   "grass": "GRASS GIS 8.3.2"
+  }
+ }
+}

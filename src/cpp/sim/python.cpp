@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "lsm/rmath.hpp"
 #include "sim/change.hpp"
 #include "sim/clues.hpp"
 #include "sim/clumondo.hpp"
@@ -20,6 +21,7 @@
 #include "sim/plus.hpp"
 #include "sim/rglm.hpp"
 #include "sim/rng.hpp"
+#include "sim/validation.hpp"
 #include "sim/woe.hpp"
 
 namespace py = pybind11;
@@ -576,6 +578,39 @@ py::dict sim_patches(const IArray& landscape, const py::list& transitions, doubl
     return out;
 }
 
+py::array_t<double> sim_tmc_table(const DArray& x, const DArray& x1, const DArray& y1, const DArray& w) {
+    if (x.ndim() != 2 || x1.ndim() != 2 || y1.ndim() != 2) throw std::invalid_argument("(classes, blocks) counts");
+    const int n = static_cast<int>(x.shape(0));
+    const i64 blocks = x.shape(1);
+    if (n < 2 || n > 64) throw std::invalid_argument("the comparison takes 2 to 64 classes");
+    if (x1.shape(0) != n || y1.shape(0) != n || x1.shape(1) != blocks || y1.shape(1) != blocks || w.size() != blocks)
+        throw std::invalid_argument("the counts and weights differ in size");
+    std::vector<double> t;
+    {
+        py::gil_scoped_release release;
+        t = sim::tmc_table(n, blocks, x.data(), x1.data(), y1.data(), w.data());
+    }
+    const i64 N = n + 1;
+    py::array_t<double> out({N * N, N});
+    std::copy(t.begin(), t.end(), out.mutable_data());
+    return out;
+}
+
+// R's rowSums(x, na.rm): each row added up in R's 80-bit LDOUBLE, column by column.
+py::array_t<double> sim_r_rowsums(const DArray& x, bool na_rm) {
+    if (x.ndim() != 2) throw std::invalid_argument("rowSums needs a matrix");
+    const i64 rows = x.shape(0), cols = x.shape(1);
+    const double* v = x.data();
+    py::array_t<double> out(rows);
+    double* o = out.mutable_data();
+    {
+        py::gil_scoped_release release;
+        for (i64 r = 0; r < rows; ++r)
+            o[r] = lsm::sum_of(0, cols, [&](i64 c) { return v[r * cols + c]; }, na_rm);
+    }
+    return out;
+}
+
 py::dict sim_cars(const IArray& landscape, const py::object& fixed, const py::object& region, const DArray& probability,
                   const DArray& weights,
                   const DArray& seeds, const py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>& allowed,
@@ -703,6 +738,10 @@ void register_python(py::module_& m) {
           py::arg("seeds"), py::arg("allowed"), py::arg("demand"), py::arg("window") = 3, py::arg("decay") = 0.9,
           py::arg("step") = 500.0, py::arg("max_iter") = 5000, py::arg("seed") = 1,
           "CARS, PLUS's cellular automaton of multi-type random patch seeds (Liang et al. 2021).");
+    m.def("sim_tmc_table", &sim_tmc_table, py::arg("x"), py::arg("x1"), py::arg("y1"), py::arg("w"),
+          "lulcc's ThreeMapComparison table (Rules 1-4) of one resolution from the class counts per block.");
+    m.def("sim_r_rowsums", &sim_r_rowsums, py::arg("x"), py::arg("na_rm") = false,
+          "R's rowSums (80-bit accumulation; na_rm skips NaN).");
     m.def("sim_futures_mfilter", &sim_futures_mfilter, py::arg("input"), py::arg("matrix"),
           "r.mfilter as r.futures.devpressure runs it (edges keep their values, nulls give null).");
 }
