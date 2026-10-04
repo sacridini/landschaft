@@ -1474,8 +1474,13 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   `RasterView` do exactextract (no polígono menor que uma célula as duas grades diferem em alguns ulps). Polígonos
   noutro CRS são reprojetados para o dos rasters só para as somas. `compile()` dos casos `minset_polygons` e
   `minset_polygons_partial` bit a bit igual ao do prioritizr.
-* **Falta na fase 1**: unidades H3, matriz de feições em C++ lida em blocos (hoje a pilha vai inteira para a
-  memória em float64), warm start pelo Zonation.
+* **Parte 4**: `ls.prioritize.h3_units(cost, resolution)`: os hexágonos H3 que cobrem o raster de custo
+  (`contain="overlap"`), no CRS do raster (os seis vértices reprojetados), com o custo somado pela cobertura
+  exata; entram no `problem()` como polígonos (extensão nossa: o prioritizr não tem H3). Montagem dos arrays dos
+  polígonos vetorizada (`shapely.get_parts`): 4·10⁶ células, 10 feições, 377 mil hexágonos (resolução 9):
+  `h3_units` 4,4 s, `problem` 1,4 s, solução 0,5 s (antes 75 s no total, quase tudo em Python).
+* **Falta na fase 1**: matriz de feições em C++ lida em blocos (hoje a pilha vai inteira para a memória em
+  float64), warm start pelo Zonation.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

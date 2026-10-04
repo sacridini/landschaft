@@ -261,3 +261,18 @@ def test_polygon_units():
     np.testing.assert_allclose(b.toarray(), a.toarray(), rtol=1e-5, atol=1e-6)
     with pytest.raises(ValueError, match="no cost column"):
         ls.prioritize.problem(gdf, feats, cost_column="price")
+
+
+def test_h3_units():
+    """H3 hexagons over the cost raster: they tile it, so their costs add up to the raster's."""
+    cost = optimize_cases.pu_cost()
+    hexes = ls.prioritize.h3_units(cost, 9)
+    assert hexes.crs == cost.rio.crs and list(hexes.columns) == ["h3", "cost", "geometry"]
+    assert hexes["h3"].is_unique and (hexes["cost"] > 0).all()
+    assert hexes["cost"].sum() == pytest.approx(float(np.nansum(cost.values)), rel=1e-5)
+    sol = ls.prioritize.problem(hexes, optimize_cases.features(), cost_column="cost").add_min_set_objective() \
+        .add_relative_targets(0.2).add_binary_decisions().add_highs_solver(gap=0).solve()
+    assert sol.status == "optimal" and sol.coverage["met"].all()
+    assert list(sol.selection["h3"]) == list(hexes["h3"])
+    with pytest.raises(ValueError, match="from 0 to 15"):
+        ls.prioritize.h3_units(cost, 16)

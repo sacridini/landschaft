@@ -23,7 +23,7 @@ import pandas as pd
 import scipy.sparse as sp
 import xarray as xr
 
-__all__ = ["OptimizationProblem", "Problem", "problem"]
+__all__ = ["OptimizationProblem", "Problem", "h3_units", "problem"]
 
 
 # ----------------------------------------------------------------------------- compiled model
@@ -158,14 +158,95 @@ def exact_sums(raster: xr.DataArray, geometries, n_threads: int | None = None) -
         raise ValueError("the features' raster must be north-up")
     dx, dy = t.a, -t.e
     grid = (t.c, t.f - ny * dy, t.c + nx * dx, t.f, dx, dy)
-    geoms = [g if g.geom_type == "MultiPolygon" else shapely.MultiPolygon([g]) for g in geometries]
-    if any(g.geom_type != "MultiPolygon" for g in geoms):
+    geoms = np.asarray(geometries, dtype=object)
+    kinds = shapely.get_type_id(geoms)
+    if not np.isin(kinds, (3, 6)).all():  # Polygon, MultiPolygon
         raise TypeError("planning units must be polygons")
-    _, xy, (ring_off, poly_off, feat_off) = shapely.to_ragged_array(geoms)
+    # every polygon of every feature, in order: rings and polygons as shapely's ragged arrays
+    parts, owner = shapely.get_parts(geoms, return_index=True)
+    feat_off = np.concatenate([[0], np.cumsum(np.bincount(owner, minlength=geoms.size))])
+    if parts.size:
+        _, xy, (ring_off, poly_off) = shapely.to_ragged_array(parts)
+    else:
+        xy, ring_off, poly_off = np.zeros((0, 2)), np.zeros(1, np.int64), np.zeros(1, np.int64)
     return _core.io_exact_sums(
         np.ascontiguousarray(r.values, dtype=np.float64), grid, np.ascontiguousarray(xy, dtype=np.float64),
         ring_off.astype(np.int64), poly_off.astype(np.int64), feat_off.astype(np.int64),
         n_threads=_threads.resolve(n_threads))
+
+
+def h3_units(cost: xr.DataArray, resolution: int, n_threads: int | None = None):
+    """H3 hexagons as planning units: the hexagons of an H3 ``resolution``
+    that cover a cost raster, with their cost.
+
+    Pass them to :func:`problem` as polygons (``cost_column="cost"``): the
+    features' amounts are then summed over every hexagon like any polygon's.
+
+    Parameters
+    ----------
+    cost
+        The cost raster (with a CRS). Every hexagon that covers a cell with a
+        cost is a planning unit; its cost is the sum of the costs of the cells
+        it covers, each weighted by the exact share of the cell inside it.
+    resolution
+        The H3 resolution (0-15; 7 is about 5 km², 8 about 0.7 km²).
+    n_threads
+        Threads for the sums (default: all cores but one).
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        One hexagon per row (in the raster's CRS, its six vertices
+        reprojected): ``h3`` (the cell's index) and ``cost``.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> hexes = ls.prioritize.h3_units(cost, 8)                   # doctest: +SKIP
+    >>> p = ls.prioritize.problem(hexes, features, cost_column="cost")  # doctest: +SKIP
+    """
+    import geopandas as gpd
+    import shapely
+
+    from .._vector import transform_xy
+    from ..bio._grids import _require_h3
+    from ..io import _transform
+
+    h3 = _require_h3()
+    if cost.ndim == 3 and cost.sizes.get("band", 1) == 1:
+        cost = cost.squeeze("band", drop=True)
+    if cost.ndim != 2:
+        raise ValueError("the cost raster must have one band")
+    crs = cost.rio.crs
+    if crs is None:
+        raise ValueError("the cost raster has no CRS")
+    if not 0 <= int(resolution) <= 15:
+        raise ValueError("resolution must be from 0 to 15")
+    # the raster's footprint (its edges densified) in longitude / latitude
+    t = _transform(cost)
+    ny, nx = cost.shape
+    k = np.linspace(0.0, 1.0, 65)
+    cols = np.concatenate([k * nx, np.full(k.size, nx), (1 - k) * nx, np.zeros(k.size)])
+    rows = np.concatenate([np.zeros(k.size), k * ny, np.full(k.size, ny), (1 - k) * ny])
+    x = t.c + cols * t.a + rows * t.b
+    y = t.f + cols * t.d + rows * t.e
+    lon, lat = transform_xy(x, y, crs, "EPSG:4326")
+    shape = h3.LatLngPoly(list(zip(lat.tolist(), lon.tolist())))
+    cells = sorted(h3.h3shape_to_cells_experimental(shape, int(resolution), contain="overlap"))
+    if not cells:
+        raise ValueError("no H3 cell covers the raster")
+    rings = [h3.cell_to_boundary(c) for c in cells]  # (lat, lng) pairs
+    hexes = shapely.polygons([[(b, a) for a, b in r] for r in rings])
+    gdf = gpd.GeoDataFrame({"h3": cells}, geometry=hexes, crs="EPSG:4326").to_crs(crs)
+    values = cost.values.astype(np.float64)
+    stack = xr.DataArray(np.stack([values, np.isfinite(values).astype(np.float64)]), dims=("band", *cost.dims),
+                         coords={**{d: cost[d] for d in cost.dims}, "band": ["cost", "valid"]})
+    stack = stack.rio.write_transform(t).rio.write_crs(crs)
+    sums = exact_sums(stack, gdf.geometry.values, n_threads=n_threads)
+    keep = sums[:, 1] > 0
+    out = gdf.loc[keep].reset_index(drop=True)
+    out.insert(1, "cost", sums[keep, 0])
+    return out
 
 
 def _vector_units(x, features, cost_column: str) -> Units:

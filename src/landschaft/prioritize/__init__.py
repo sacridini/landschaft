@@ -38,7 +38,7 @@ Gurobi::
 
 from ._connectivity import Interaction, Kernel, convolve
 from ._impacts import CumulativeScenario, ImpactScenario, ImpactSource, Pressure
-from ._milp import OptimizationProblem, Problem, problem
+from ._milp import OptimizationProblem, Problem, h3_units, problem
 from ._milp_solve import Solution
 from ._postprocess import AreaStatistics
 from ._project import read_project, run_project
@@ -46,4 +46,4 @@ from ._zonation import RULES, ZonationResult, zonation
 
 __all__ = ["AreaStatistics", "CumulativeScenario", "ImpactScenario", "ImpactSource", "Interaction", "Kernel",
            "OptimizationProblem", "Pressure", "Problem", "RULES", "Solution", "ZonationResult", "convolve",
-           "problem", "read_project", "run_project", "zonation"]
+           "h3_units", "problem", "read_project", "run_project", "zonation"]
