@@ -584,3 +584,95 @@ def test_contiguity_gives_one_patch():
         sel = np.flatnonzero(sol.values > 0.5)
         adj = adjacency_matrix(p.units)[sel][:, sel]
         assert connected_components(adj, directed=False)[0] == 1, name
+
+
+# ----------------------------------------------------------------------------- matrices (prioritizr's)
+
+@pytest.mark.parametrize("name", ["boundary", "adjacency", "adjacency8", "connectivity", "proximity"])
+def test_matrices_raster_are_prioritizr(name):
+    ref = result("matrices", "matrices_raster")[name]
+    cost, pr = optimize_cases.pu_cost(), optimize_cases.penalty_raster()
+    m = {"boundary": lambda: ls.prioritize.boundary_matrix(cost),
+         "adjacency": lambda: ls.prioritize.adjacency_matrix(cost),
+         "adjacency8": lambda: ls.prioritize.adjacency_matrix(cost, directions=8),
+         "connectivity": lambda: ls.prioritize.connectivity_matrix(cost, pr),
+         "proximity": lambda: ls.prioritize.proximity_matrix(cost, 150)}[name]()
+    np.testing.assert_array_equal(m.toarray(), ref)
+
+
+@pytest.mark.parametrize("name", ["boundary", "adjacency", "connectivity", "connectivity_raster", "proximity",
+                                  "shapes_boundary", "shapes_adjacency"])
+def test_matrices_polygons_are_prioritizr(name):
+    ref = result("matrices", "matrices_polygons")[name]
+    g, shapes = optimize_cases.pu_polygons_partial(), optimize_cases.shapes()
+    m = {"boundary": lambda: ls.prioritize.boundary_matrix(g),
+         "adjacency": lambda: ls.prioritize.adjacency_matrix(g),
+         "connectivity": lambda: ls.prioritize.connectivity_matrix(g, "cost"),
+         "connectivity_raster": lambda: ls.prioritize.connectivity_matrix(g, optimize_cases.penalty_raster()),
+         "proximity": lambda: ls.prioritize.proximity_matrix(g, 120),
+         "shapes_boundary": lambda: ls.prioritize.boundary_matrix(shapes),
+         "shapes_adjacency": lambda: ls.prioritize.adjacency_matrix(shapes)}[name]()
+    np.testing.assert_array_equal(m.toarray(), ref)
+
+
+# ----------------------------------------------------------------------------- corridors and distances
+
+def _terminals(cells):
+    t = np.zeros((optimize_cases.NY, optimize_cases.NX))
+    for r, c in cells:
+        t[r, c] = 1.0
+    return optimize_cases.grid(t)
+
+
+def _joined(p, sol, cells, directions=4) -> bool:
+    from scipy.sparse.csgraph import connected_components
+
+    adj = ls.prioritize.adjacency_matrix(p.units.template, directions=directions)
+    adj = adj[p.units.index][:, p.units.index]
+    sel = np.flatnonzero(sol.values > 0.5)
+    _, lab = connected_components(adj[sel][:, sel], directed=False)
+    unit = {int(c): k for k, c in enumerate(p.units.index)}
+    ks = [unit[r * optimize_cases.NX + c] for r, c in cells]
+    where = {int(u): lab[k] for k, u in enumerate(sel)}
+    return all(k in where for k in ks) and len({where[k] for k in ks}) == 1
+
+
+def test_corridors_join_the_terminals():
+    cost, feats = optimize_cases.pu_cost(), optimize_cases.features()
+    a, b, c = (3, 0), (11, 14), (5, 13)
+    p = ls.prioritize.problem(cost, feats).add_min_set_objective().add_relative_targets(0.1)
+    # any feasible solution joins them: a loose gap, a time limit
+    sol = p.add_corridor_constraints(_terminals([a, b])).add_highs_solver(gap=0.1, time_limit=20).solve()
+    assert _joined(p, sol, [a, b])
+    # two networks; resistance from an ls.cost Transition (its 8-direction connections are the edges)
+    tr = ls.cost.transition(optimize_cases.penalty_raster().values, "mean", 8, extent=(0, 1500, 0, 1200))
+    q = p.add_corridor_constraints([_terminals([a, b]), _terminals([c, (11, 5)])], resistance=tr, penalty=0.5)
+    sol2 = q.add_highs_solver(gap=0.1, time_limit=20).solve()
+    assert _joined(q, sol2, [a, b], 8) and _joined(q, sol2, [c, (11, 5)], 8)
+    sel = sol2.values > 0.5
+    assert all(sel[np.searchsorted(p.units.index, r * optimize_cases.NX + q_)] for r, q_ in (a, b, c, (11, 5)))
+    m = q.compile()
+    assert m.col_ids.count("flow") > 0 and "corridor_flow" in m.row_ids
+    # a maximisation: the resistance is subtracted
+    mx = p.add_max_utility_objective(2500).add_corridor_constraints(
+        _terminals([a, b]), resistance=optimize_cases.penalty_raster(), penalty=0.01)
+    mm = mx.compile()
+    assert (mm.obj[np.array(mm.col_ids) == "flow"] <= 0).all()
+    with pytest.raises(ValueError, match="at least two"):
+        p.add_corridor_constraints(_terminals([a])).compile()
+
+
+def test_decay_connectivity_from_cost_distances():
+    g = optimize_cases.pu_polygons()
+    pts = ls.prioritize.unit_points(g)
+    r = np.ones((12, 15))
+    tr = ls.cost.geo_correction(ls.cost.transition(r, "mean", 8, extent=(0, 1500, 0, 1200)))
+    d = ls.cost.cost_distance(tr, pts)
+    c = ls.prioritize.decay_connectivity(d, median=300.0, min_probability=0.01)
+    assert c.shape == (len(g), len(g)) and (c.diagonal() == 0).all()
+    k = np.unravel_index(np.argmin(np.where(np.eye(len(g)) > 0, np.inf, d)), d.shape)
+    assert c[k] == pytest.approx(np.exp(-np.log(2) * d[k] / 300.0))
+    assert abs(c - c.T).max() == 0
+    sol = ls.prioritize.problem(g, optimize_cases.features(), cost_column="cost").add_min_set_objective() \
+        .add_relative_targets(0.3).add_connectivity_penalties(10.0, c).add_highs_solver(gap=0.01, time_limit=30).solve()
+    assert sol.coverage["met"].all()

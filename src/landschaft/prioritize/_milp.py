@@ -583,6 +583,32 @@ class Problem:
             raise ValueError("k must be a whole number >= 0")
         return self._add("constraint", "neighbors", int(k), bool(clamp), data)
 
+    def add_feature_contiguity_constraints(self, data=None) -> Problem:
+        """Every feature's units (where it is counted towards its targets) must form one contiguous
+        patch (the expanded formulation: a column per feature and unit). ``data``: an adjacency matrix
+        of every unit for all features, a list of one per feature, or None (as
+        :meth:`add_contiguity_constraints`)."""
+        return self._add("constraint", "feature_contiguity", data)
+
+    def add_corridor_constraints(self, terminals, resistance=None, penalty: float = 1.0, data=None) -> Problem:
+        """Corridors (an extension, after prioripy): the terminal units of every network are selected
+        and joined by selected units (a flow from the first terminal to each of the others).
+
+        Parameters
+        ----------
+        terminals
+            The terminals of one network (a raster on the units' grid, a column name or one value per
+            unit; > 0 marks a terminal), or a list of networks.
+        resistance
+            Optional: values per unit (as ``terminals``; an edge gets the mean of its two units) or an
+            ``ls.cost`` :class:`~landschaft.cost.Transition` (raster units; its connections are the
+            edges, each with the reciprocal of its conductance). The flow's ``penalty`` x resistance
+            is added to the objective, so corridors run through low resistance.
+        data
+            An adjacency matrix of every unit (default: as :meth:`add_contiguity_constraints`).
+        """
+        return self._add("constraint", "corridors", terminals, resistance, float(penalty), data)
+
     # --- constraints
     def add_locked_in_constraints(self, locked) -> Problem:
         """Planning units that must be selected: a raster (1 = locked), a column name, a boolean

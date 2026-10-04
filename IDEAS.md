@@ -1605,6 +1605,23 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   (cada unidade aponta para no máximo um vizinho de índice maior e há pares = selecionadas - 1: uma árvore,
   logo um só fragmento; conferido com componentes conexos). Vizinhos: k limitado ao número de vizinhos
   (`clamp`). 5 casos, **modelo bit a bit**.
+* **Parte 3**: **formulação expandida** (colunas y por feição e unidade depois das unidades, y <= x, metas
+  sobre y, linhas e colunas do objetivo deslocadas) e `add_feature_contiguity_constraints` (a contiguidade sobre
+  as colunas y de cada feição; uma matriz para todas ou uma por feição). 2 casos (2 feições: com 5 o Gurobi
+  passou de 13 min no gap 0), **modelo bit a bit**.
+* **Parte 4**: funções de matriz do prioritizr sobre todas as unidades (`ls.prioritize.boundary_matrix`,
+  `adjacency_matrix` com 4 ou 8 direções, `connectivity_matrix` (fronteira x média de um raster ou coluna; com
+  polígonos, a média do `exact_extract`: soma e cobertura arredondadas a float e divididas em float, como o
+  `RasterStats::mean`), `proximity_matrix`), **bit a bit** com as do R (12 matrizes, raster e polígonos). Ponte
+  para as distâncias do landschaft: `unit_points` (centros das células ou ponto interno dos polígonos) para o
+  `ls.cost.cost_distance`/`commute_distance` (ou resistências efetivas do `ls.circuit`) e
+  `decay_connectivity(d, median)` (exp(-ln 2 d / mediana), a probabilidade de dispersão do Conefor, truncada).
+  **Corredores** (extensão do prioripy): `add_corridor_constraints(terminals, resistance, penalty)`, fluxo de uma
+  mercadoria do primeiro terminal aos outros (capacidade K x nas duas pontas), resistência por unidade (média
+  da aresta) ou uma `Transition` do `ls.cost` (as conexões dela são as arestas, resistência = 1/condutância),
+  com peso explícito (o prioripy somava a resistência ao objetivo sem escala). Testado: terminais ligados.
+  Relaxação fraca (big-M = K): 166 unidades a gap 10% em 20 s; formulações mais fortes ficam na fase 4.
+* **Fase 3 completa** (2026-10-04).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

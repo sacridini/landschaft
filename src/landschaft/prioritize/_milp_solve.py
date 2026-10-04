@@ -176,7 +176,7 @@ def coverage_table(u: Units, values: np.ndarray, targets=None, m: OptimizationPr
                              "absolute_held": held, "relative_held": rel})
     f = targets.feature
     # the target rows' amounts (their region's units only, for sub-regional targets)
-    held = m.A[:targets.n, :u.n] @ values if m is not None else (u.rij @ values)[f]
+    held = targets.matrix @ values if targets.matrix is not None else (u.rij @ values)[f]
     target = targets.value
     total = targets.total if targets.total is not None else u.totals[f]
     sense = np.asarray(targets.sense)

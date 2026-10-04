@@ -29,7 +29,7 @@ from itertools import pairwise
 
 import numpy as np
 
-GROUPS: list[str] = ["core", "objectives", "spatial", "actions", "exact"]
+GROUPS: list[str] = ["core", "objectives", "spatial", "matrices", "actions", "exact"]
 
 NY, NX = 12, 15
 RES = 100.0
@@ -586,6 +586,28 @@ CASES: dict[str, Case] = {
         reference(problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |>
                   add_max_utility_objective(2500) |> add_neighbor_constraints(5, data = am) |> add_binary_decisions())""",
                              notes="k = 5 clamped to the units with fewer neighbours"),
+    "feature_contiguity_raster": Case("spatial", RASTER, """
+        reference(problem(pu_cost, features[[2:3]]) |> add_min_set_objective() |> add_relative_targets(0.2) |>
+                  add_feature_contiguity_constraints() |> add_binary_decisions())""",
+                                      notes="the expanded formulation; two features (Gurobi is slow at gap 0)"),
+    "feature_contiguity_matrix": Case("spatial", ("pu_table", "adj_table"), """
+        am <- Matrix::sparseMatrix(i = adj_table$i, j = adj_table$j, x = adj_table$x, dims = rep(nrow(pu_table), 2))
+        reference(problem(pu_table, features = c("f2", "f3"), cost_column = "cost") |>
+                  add_max_features_objective(800) |> add_relative_targets(0.15) |>
+                  add_feature_contiguity_constraints(data = am) |> add_binary_decisions())"""),
+    # --- matrices: prioritizr's boundary, adjacency, connectivity and proximity matrices (dense)
+    "matrices_raster": Case("matrices", ("pu_cost", "penalty_raster"), """
+        list(boundary = as.matrix(boundary_matrix(pu_cost)), adjacency = as.matrix(adjacency_matrix(pu_cost)),
+             adjacency8 = as.matrix(adjacency_matrix(pu_cost, directions = 8)),
+             connectivity = as.matrix(connectivity_matrix(pu_cost, penalty_raster)),
+             proximity = as.matrix(proximity_matrix(pu_cost, 150)))"""),
+    "matrices_polygons": Case("matrices", ("pu_polygons_partial", "shapes", "penalty_raster"), """
+        list(boundary = as.matrix(boundary_matrix(pu_polygons_partial)),
+             adjacency = as.matrix(adjacency_matrix(pu_polygons_partial)),
+             connectivity = as.matrix(connectivity_matrix(pu_polygons_partial, "cost")),
+             connectivity_raster = as.matrix(connectivity_matrix(pu_polygons_partial, penalty_raster)),
+             proximity = as.matrix(proximity_matrix(pu_polygons_partial, 120)),
+             shapes_boundary = as.matrix(boundary_matrix(shapes)), shapes_adjacency = as.matrix(adjacency_matrix(shapes)))"""),
     # --- exact: exactextractr's coverage fractions and sums (the amounts of polygon planning units)
     "exact_shapes": Case("exact", ("features", "shapes"), """
         cov <- exactextractr::coverage_fraction(features[[1]], shapes)
@@ -753,6 +775,12 @@ def _matrix(t, n):
                          shape=(n, n))
 
 
+def ls_problem(*args, **kw):
+    import landschaft as ls
+
+    return ls.prioritize.problem(*args, **kw)
+
+
 def _tp():
     import landschaft as ls
 
@@ -801,6 +829,16 @@ PY_SPATIAL.update({
     .add_neighbors_constraints(2).add_binary_decisions(),
     "neighbors_matrix": lambda: _tp().add_max_utility_objective(2500)
     .add_neighbors_constraints(5, data=_matrix(adj_table(), len(pu_table()))).add_binary_decisions(),
+})
+for _name, _fn in PY_SPATIAL.items():
+    CASES[_name].py = _fn
+
+PY_SPATIAL.update({
+    "feature_contiguity_raster": lambda: ls_problem(pu_cost(), features().isel(band=[1, 2])).add_min_set_objective()
+    .add_relative_targets(0.2).add_feature_contiguity_constraints().add_binary_decisions(),
+    "feature_contiguity_matrix": lambda: ls_problem(pu_table(), ["f2", "f3"], cost_column="cost")
+    .add_max_features_objective(800).add_relative_targets(0.15)
+    .add_feature_contiguity_constraints(data=_matrix(adj_table(), len(pu_table()))).add_binary_decisions(),
 })
 for _name, _fn in PY_SPATIAL.items():
     CASES[_name].py = _fn

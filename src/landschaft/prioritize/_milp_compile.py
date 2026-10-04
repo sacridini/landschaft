@@ -40,6 +40,7 @@ class Targets:
     total: np.ndarray | None = None
     region: np.ndarray | None = None
     region_label: tuple | None = None
+    matrix: object = None  # the targets' amounts in the planning units (targets x units), once compiled
 
     @property
     def n(self) -> int:
@@ -322,6 +323,9 @@ def compile_problem(p):
         keep = (r < 0) | (unit_codes[rij.indices] == r)
         rij.data[~keep] = 0.0
         rij.eliminate_zeros()
+    import dataclasses
+
+    t = dataclasses.replace(t, matrix=sp.csr_matrix(rij))
     blocks = [sp.coo_matrix(rij)]  # (rows, cols) placed on a grid below
     extra_rows: list[tuple] = []  # (row, col, value) triplets of the objective
     obj = [np.zeros(n)]
@@ -462,11 +466,38 @@ def compile_problem(p):
             obj_v[weight_cols:weight_cols + w.size] = w
     lb_v, ub_v = np.concatenate(lb), np.concatenate(ub)
     modelsense = "max" if kind.startswith("max") else "min"
+    if any(sp_[0] == "constraint" and sp_[1] == "feature_contiguity" for sp_ in p.spatial):
+        # the expanded formulation (rcpp_add_rij_data without compression): a column per feature and
+        # unit (y_fj <= x_j, feature-major) after the units, nf x n rows y_fj - x_j <= 0 first, and the
+        # targets on the y columns; the objective's rows and columns move after them
+        if u.rij.nnz and float(u.rij.data.min()) < 0:
+            raise ValueError("the expanded formulation (feature contiguity) needs non-negative feature data")
+        ny_ = nf * n
+        # the targets' entries (rows 0..nt-1, unit columns) go to their feature's y columns
+        cols = [n + t.feature[rows[0]] * n + cols[0]] + [np.where(c >= n, c + ny_, c) for c in cols[1:]]
+        rows = [r + ny_ for r in rows]
+        link_r = np.repeat(np.arange(ny_), 2)
+        link_c = np.column_stack([np.tile(np.arange(n), nf), n + np.arange(ny_)]).ravel()
+        link_v = np.tile([-1.0, 1.0], ny_)
+        rows.insert(0, link_r)
+        cols.insert(0, link_c)
+        vals.insert(0, link_v)
+        obj_v = np.concatenate([obj_v[:n], np.zeros(ny_), obj_v[n:]])
+        lb_v = np.concatenate([lb_v[:n], np.tile(lb_v[:n], nf), lb_v[n:]])
+        ub_v = np.concatenate([ub_v[:n], np.tile(ub_v[:n], nf), ub_v[n:]])
+        vtype = vtype[:n] + vtype[:n] * nf + vtype[n:]
+        col_ids = col_ids[:n] + ["pu_ijz"] * ny_ + col_ids[n:]
+        row_ids = ["pu_ijz"] * ny_ + row_ids
+        sense = ["<="] * ny_ + sense
+        rhs = [np.zeros(ny_)] + rhs
+        nrow += ny_
+        ncol += ny_
     # penalties, then constraints, each in the order they were added (prioritizr's compile)
     from ._milp_spatial import Builder, apply_constraint, apply_penalty
 
     b = Builder(nrow, ncol, rows, cols, vals, obj_v, lb_v, ub_v, vtype,
                 sense, [np.asarray(x, dtype=np.float64) for x in rhs], row_ids, col_ids, modelsense, n)
+    b.n_features = nf
     for spec in p.spatial:
         if spec[0] == "penalty":
             apply_penalty(b, u, spec[1:])

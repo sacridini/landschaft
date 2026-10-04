@@ -30,6 +30,7 @@ class Builder:
         self.row_ids, self.col_ids = list(row_ids), list(col_ids)
         self.modelsense = modelsense
         self.n = n_units
+        self.n_features = 0
 
     def add_columns(self, obj, lb, ub, vtype, col_id) -> int:
         """New columns; their first index."""
@@ -137,64 +138,19 @@ def _r_round(m: sp.csc_matrix, digits: int) -> sp.csc_matrix:
 
 # ----------------------------------------------------------------------------- boundary
 
-def _raster_boundary(u) -> sp.csc_matrix:
-    """prioritizr's boundary_matrix of the cost raster, cut to the planning units: neighbours above and
-    below share xres, left and right yres (terra's res: the extent over the cells), and the diagonal
-    holds every cell's perimeter, 2 (xres + yres)."""
-    from ..io import _transform
-
-    t = _transform(u.template)
-    ny, nx = u.template.shape
-    xmin, xmax = t.c, t.c + nx * t.a
-    ymax, ymin = t.f, t.f + ny * t.e
-    xres, yres = (xmax - xmin) / nx, (ymax - ymin) / ny
-    unit = np.full(ny * nx, -1, dtype=np.int64)
-    unit[u.index] = np.arange(u.n)
-    grid = unit.reshape(ny, nx)
-    pairs = []
-    for a, b, length in ((grid[:-1, :], grid[1:, :], xres), (grid[:, :-1], grid[:, 1:], yres)):
-        a, b = a.ravel(), b.ravel()
-        ok = (a >= 0) & (b >= 0)
-        pairs.append((a[ok], b[ok], np.full(int(ok.sum()), length)))
-    i = np.concatenate([p[0] for p in pairs] + [p[1] for p in pairs] + [np.arange(u.n)])
-    j = np.concatenate([p[1] for p in pairs] + [p[0] for p in pairs] + [np.arange(u.n)])
-    x = np.concatenate([p[2] for p in pairs] * 2 + [np.full(u.n, (xres + yres) * 2)])
-    m = sp.csc_matrix((x, (i, j)), shape=(u.n, u.n))
-    m.sort_indices()
-    return m
-
-
-def _polygon_boundary(u) -> sp.csc_matrix:
-    """prioritizr's boundary_matrix of polygons, cut to the planning units: the length of the paths
-    two polygons share (terra's sharedPaths) and every polygon's perimeter on the diagonal, rounded
-    to 8 decimals."""
-    import shapely
-
-    geoms = np.asarray(u.template.geometry.values, dtype=object)
-    n = geoms.size
-    tree = shapely.STRtree(geoms)
-    left, right = tree.query(geoms, predicate="intersects")
-    keep = left < right
-    left, right = left[keep], right[keep]
-    bounds = shapely.boundary(geoms)
-    shared = shapely.intersection(bounds[left], bounds[right])
-    length = np.round(shapely.length(shared), 8)
-    perim = np.round(shapely.length(geoms), 8)
-    i = np.concatenate([left, right, np.arange(n)])
-    j = np.concatenate([right, left, np.arange(n)])
-    x = np.concatenate([length, length, perim])
-    m = sp.csc_matrix((x, (i, j)), shape=(n, n))
+def _cut(u, m: sp.csc_matrix) -> sp.csc_matrix:
     m = m[u.index][:, u.index].tocsc()
+    m.eliminate_zeros()
     m.sort_indices()
     return m
 
 
 def boundary_matrix(u) -> sp.csc_matrix:
     """The planning units' boundary matrix (prioritizr's boundary_matrix of the planning-unit data)."""
-    if u.kind == "raster":
-        return _raster_boundary(u)
-    if hasattr(u.template, "geometry"):
-        return _polygon_boundary(u)
+    from . import _milp_matrices as mx
+
+    if u.kind == "raster" or hasattr(u.template, "geometry"):
+        return _cut(u, mx.boundary_matrix(u.template))
     raise ValueError("boundary penalties of tables need data: a boundary matrix of every unit")
 
 
@@ -339,39 +295,12 @@ def _apply_linear_constraint(b: Builder, u, threshold: float, sense: str, data) 
 # ----------------------------------------------------------------------------- adjacency
 
 def adjacency_matrix(u) -> sp.csc_matrix:
-    """prioritizr's adjacency_matrix of the planning-unit data, cut to the planning units: raster cells
-    with a cost that share an edge (4 directions); polygons that intersect (touching at a corner
-    included), 1 for each pair."""
-    if u.kind == "raster":
-        ny, nx = u.template.shape
-        unit = np.full(ny * nx, -1, dtype=np.int64)
-        unit[u.index] = np.arange(u.n)
-        grid = unit.reshape(ny, nx)
-        i, j = [], []
-        for a, b in ((grid[:-1, :], grid[1:, :]), (grid[:, :-1], grid[:, 1:])):
-            a, b = a.ravel(), b.ravel()
-            ok = (a >= 0) & (b >= 0)
-            i += [a[ok], b[ok]]
-            j += [b[ok], a[ok]]
-        i, j = np.concatenate(i), np.concatenate(j)
-        m = sp.csc_matrix((np.ones(i.size), (i, j)), shape=(u.n, u.n))
-    elif hasattr(u.template, "geometry"):
-        import shapely
+    """prioritizr's adjacency_matrix of the planning-unit data, cut to the planning units."""
+    from . import _milp_matrices as mx
 
-        geoms = np.asarray(u.template.geometry.values, dtype=object)
-        left, right = shapely.STRtree(geoms).query(geoms, predicate="intersects")
-        keep = left != right
-        n = geoms.size
-        m = sp.csc_matrix((np.ones(int(keep.sum())), (left[keep], right[keep])), shape=(n, n))
-        m.data[:] = 1.0
-        m = m[u.index][:, u.index].tocsc()
-    else:
-        raise ValueError("constraints on neighbouring units of tables need data: an adjacency matrix of every unit")
-    m.sum_duplicates()
-    m.data[:] = 1.0
-    m.eliminate_zeros()
-    m.sort_indices()
-    return m
+    if u.kind == "raster" or hasattr(u.template, "geometry"):
+        return _cut(u, mx.adjacency_matrix(u.template))
+    raise ValueError("constraints on neighbouring units of tables need data: an adjacency matrix of every unit")
 
 
 def _adjacency(u, data) -> sp.csc_matrix:
@@ -433,6 +362,142 @@ def _apply_neighbors(b: Builder, u, k: int, clamp: bool, data) -> None:
     b.add_rows(r, c, v, [">="] * b.n, [0.0] * b.n, "n")
 
 
+def _apply_feature_contiguity(b: Builder, u, data) -> None:
+    """rcpp_apply_feature_contiguity_constraints (one zone, the expanded formulation): every feature's
+    units (its y columns, the units where it counts) form one contiguous patch, as
+    add_contiguity_constraints on the y columns; ``data``: one adjacency matrix for every feature, a
+    list of one per feature, or None (the default adjacency)."""
+    nf = b.n_features
+    if isinstance(data, (list, tuple)):
+        if len(data) != nf:
+            raise ValueError(f"feature contiguity data: one matrix per feature ({nf})")
+        mats = [_adjacency(u, d) for d in data]
+    else:
+        m = _adjacency(u, data)
+        mats = [m] * nf
+    n = b.n
+    pis, pjs = [], []
+    for f in range(nf):
+        low = sp.tril(mats[f], k=-1).tocsc()
+        low.eliminate_zeros()
+        low.sort_indices()
+        pj = np.repeat(np.arange(low.shape[1]), np.diff(low.indptr))
+        pi = low.indices.astype(np.int64)
+        keep = low.data > 1.0e-15
+        pis.append(n + f * n + pi[keep])
+        pjs.append(n + f * n + pj[keep])
+    sizes = [x.size for x in pis]
+    total = int(sum(sizes))
+    first = b.add_columns(np.zeros(total), 0.0, 1.0, b.vtype[0], "fc")
+    starts = first + np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(np.int64)
+    # fc1 for every feature, then fc2 for every feature, then fc3 for every feature
+    r1, c1, v1 = [], [], []
+    row = 0
+    for f in range(nf):
+        k = sizes[f]
+        var = starts[f] + np.arange(k)
+        r1.append(row + np.repeat(np.arange(k), 2))
+        c1.append(np.column_stack([var, pis[f]]).ravel())
+        v1.append(np.tile([1.0, -1.0], k))
+        row += k
+    n1 = row
+    r2, c2, v2 = [], [], []
+    for f in range(nf):
+        k = sizes[f]
+        if not k:
+            continue
+        var = starts[f] + np.arange(k)
+        pj = pjs[f]
+        new = np.ones(k, dtype=bool)
+        new[1:] = pj[1:] != pj[:-1]
+        group = np.cumsum(new) - 1
+        ng = int(new.sum())
+        r2.append(np.concatenate([np.arange(ng), group]) + row)
+        c2.append(np.concatenate([pj[new], var]))
+        v2.append(np.concatenate([-np.ones(ng), np.ones(k)]))
+        row += ng
+    n2 = row - n1
+    r3, c3, v3 = [], [], []
+    for f in range(nf):
+        k = sizes[f]
+        var = starts[f] + np.arange(k)
+        r3.append(np.full(n + k, row))
+        c3.append(np.concatenate([n + f * n + np.arange(n), var]))
+        v3.append(np.concatenate([-np.ones(n), np.ones(k)]))
+        row += 1
+    cat = lambda parts: np.concatenate(parts) if parts else np.zeros(0)  # noqa: E731
+    b.add_rows(cat(r1 + r2 + r3).astype(np.int64), cat(c1 + c2 + c3).astype(np.int64), cat(v1 + v2 + v3),
+               ["<="] * (n1 + n2) + ["="] * nf, [0.0] * (n1 + n2) + [-1.0] * nf,
+               ["fc1"] * n1 + ["fc2"] * n2 + ["fc3"] * nf)
+
+
+def _corridor_edges(u, data, resistance):
+    """The corridor's edges (i > j, by column) and their resistance (None: no penalty)."""
+    if resistance is not None and hasattr(resistance, "to_sparse"):  # an ls.cost Transition
+        if u.kind != "raster":
+            raise TypeError("a Transition as resistance needs raster planning units")
+        if not resistance.symmetric:
+            raise ValueError("corridors need a symmetric Transition")
+        t = resistance.to_sparse().tocsc()
+        if t.shape != (u.template.size, u.template.size):
+            raise ValueError("the Transition must be on the planning units' grid")
+        t = t[u.index][:, u.index]
+        low = sp.tril(t, k=-1).tocsc()
+        low.eliminate_zeros()
+        low.sort_indices()
+        pj = np.repeat(np.arange(low.shape[1]), np.diff(low.indptr))
+        res = 1.0 / low.data if resistance.matrix_values == "conductance" else low.data.copy()
+        return low.indices.astype(np.int64), pj.astype(np.int64), res
+    low = sp.tril(_adjacency(u, data), k=-1).tocsc()
+    low.eliminate_zeros()
+    low.sort_indices()
+    pi = low.indices.astype(np.int64)
+    pj = np.repeat(np.arange(low.shape[1]), np.diff(low.indptr)).astype(np.int64)
+    if resistance is None:
+        return pi, pj, None
+    r = unit_values(u, resistance, "corridor resistance")[u.index]
+    return pi, pj, (r[pi] + r[pj]) / 2.0
+
+
+def _apply_corridors(b: Builder, u, terminals, resistance, penalty: float, data) -> None:
+    """Corridors (an extension, after prioripy's): every network's terminal units are selected and
+    joined through selected units. A single-commodity flow on the edges between units, both ways: the
+    first terminal sends one unit of flow to each of the K others, flows <= K x at both ends, and with
+    a resistance, ``penalty`` x resistance x flow added to the objective (subtracted when it is
+    maximised)."""
+    nets = terminals if isinstance(terminals, (list, tuple)) else [terminals]
+    pi, pj, res = _corridor_edges(u, data, resistance)
+    ne = pi.size
+    for net in nets:
+        mask = unit_values(u, net, "corridor terminals")[u.index] > 0
+        term = np.flatnonzero(mask)
+        if term.size < 2:
+            raise ValueError("a corridor network needs at least two terminal planning units")
+        k = float(term.size - 1)
+        sign = 1.0 if b.modelsense == "min" else -1.0
+        cost = np.zeros(ne) if res is None else sign * penalty * res
+        first = b.add_columns(np.concatenate([cost, cost]), 0.0, k, "C", "flow")
+        fwd = first + np.arange(ne)  # pi -> pj
+        bwd = first + ne + np.arange(ne)  # pj -> pi
+        # capacities: f - K x <= 0 at both ends, both directions
+        rows = np.repeat(np.arange(4 * ne), 2)
+        f = np.concatenate([fwd, fwd, bwd, bwd])
+        x = np.concatenate([pi, pj, pi, pj])
+        cols = np.column_stack([f, x]).ravel()
+        vals = np.tile([1.0, -k], 4 * ne)
+        # balance: out - in = K at the source, -1 at the other terminals, 0 elsewhere
+        br = 4 * ne + np.concatenate([pi, pj, pj, pi])
+        bc = np.concatenate([fwd, bwd, fwd, bwd])
+        bv = np.concatenate([np.ones(ne), np.ones(ne), -np.ones(ne), -np.ones(ne)])
+        rhs = np.zeros(b.n)
+        rhs[term[0]] = k
+        rhs[term[1:]] = -1.0
+        b.add_rows(np.concatenate([rows, br]), np.concatenate([cols, bc]), np.concatenate([vals, bv]),
+                   ["<="] * (4 * ne) + ["="] * b.n, np.concatenate([np.zeros(4 * ne), rhs]),
+                   ["corridor_capacity"] * (4 * ne) + ["corridor_flow"] * b.n)
+        b.lb[term] = 1.0
+
+
 # ----------------------------------------------------------------------------- dispatch
 
 def apply_penalty(b: Builder, u, spec) -> None:
@@ -457,5 +522,9 @@ def apply_constraint(b: Builder, u, spec) -> None:
         _apply_contiguity(b, u, *spec[1:])
     elif kind == "neighbors":
         _apply_neighbors(b, u, *spec[1:])
+    elif kind == "feature_contiguity":
+        _apply_feature_contiguity(b, u, *spec[1:])
+    elif kind == "corridors":
+        _apply_corridors(b, u, *spec[1:])
     else:
         raise ValueError(f"unknown constraint {kind!r}")

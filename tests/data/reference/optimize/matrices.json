@@ -1,0 +1,100 @@
+{
+ "arrays": {
+  "matrices_polygons/adjacency": {
+   "dim": [
+    16,
+    16
+   ],
+   "kind": "matrix"
+  },
+  "matrices_polygons/boundary": {
+   "dim": [
+    16,
+    16
+   ],
+   "kind": "matrix"
+  },
+  "matrices_polygons/connectivity": {
+   "dim": [
+    16,
+    16
+   ],
+   "kind": "matrix"
+  },
+  "matrices_polygons/connectivity_raster": {
+   "dim": [
+    16,
+    16
+   ],
+   "kind": "matrix"
+  },
+  "matrices_polygons/proximity": {
+   "dim": [
+    16,
+    16
+   ],
+   "kind": "matrix"
+  },
+  "matrices_polygons/shapes_adjacency": {
+   "dim": [
+    8,
+    8
+   ],
+   "kind": "matrix"
+  },
+  "matrices_polygons/shapes_boundary": {
+   "dim": [
+    8,
+    8
+   ],
+   "kind": "matrix"
+  },
+  "matrices_raster/adjacency": {
+   "dim": [
+    180,
+    180
+   ],
+   "kind": "matrix"
+  },
+  "matrices_raster/adjacency8": {
+   "dim": [
+    180,
+    180
+   ],
+   "kind": "matrix"
+  },
+  "matrices_raster/boundary": {
+   "dim": [
+    180,
+    180
+   ],
+   "kind": "matrix"
+  },
+  "matrices_raster/connectivity": {
+   "dim": [
+    180,
+    180
+   ],
+   "kind": "matrix"
+  },
+  "matrices_raster/proximity": {
+   "dim": [
+    180,
+    180
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "r": {
+   "Matrix": "1.7.1",
+   "exactextractr": "0.10.0",
+   "gurobi": "12.0.3",
+   "prioriactions": "0.5.0",
+   "prioritizr": "8.0.6",
+   "sf": "1.0.19",
+   "terra": "1.9.50"
+  },
+  "r_version": "R version 4.4.2 (2024-10-31 ucrt)"
+ }
+}

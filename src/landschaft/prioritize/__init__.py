@@ -39,11 +39,14 @@ Gurobi::
 from ._connectivity import Interaction, Kernel, convolve
 from ._impacts import CumulativeScenario, ImpactScenario, ImpactSource, Pressure
 from ._milp import OptimizationProblem, Problem, h3_units, problem
+from ._milp_matrices import (adjacency_matrix, boundary_matrix, connectivity_matrix, decay_connectivity,
+                             proximity_matrix, unit_points)
 from ._milp_solve import Solution
 from ._postprocess import AreaStatistics
 from ._project import read_project, run_project
 from ._zonation import RULES, ZonationResult, zonation
 
-__all__ = ["AreaStatistics", "CumulativeScenario", "ImpactScenario", "ImpactSource", "Interaction", "Kernel",
+__all__ = ["adjacency_matrix", "boundary_matrix", "connectivity_matrix", "decay_connectivity", "proximity_matrix",
+           "unit_points", "AreaStatistics", "CumulativeScenario", "ImpactScenario", "ImpactSource", "Interaction", "Kernel",
            "OptimizationProblem", "Pressure", "Problem", "RULES", "Solution", "ZonationResult", "convolve",
            "h3_units", "problem", "read_project", "run_project", "zonation"]
