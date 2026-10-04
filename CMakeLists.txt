@@ -232,8 +232,20 @@ target_include_directories(simcore PUBLIC src/cpp)
 target_link_libraries(simcore PUBLIC lsmcore nlmcore)
 set_target_properties(simcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Raster values by zone and at points (ls.zonal_stats, ls.extract), ls.reclassify, GDAL's warp
-# kernel (ls.reproject); GDAL's polygon rasterizer (lsm/rasterize.cpp).
+# kernel (ls.reproject); GDAL's polygon rasterizer (lsm/rasterize.cpp); exactextract's exact cell
+# coverage of polygons (src/cpp/io/exact, Apache-2.0).
 add_library(iocore STATIC
+    src/cpp/io/exact.cpp
+    src/cpp/io/exact/box.cpp
+    src/cpp/io/exact/cell.cpp
+    src/cpp/io/exact/coordinate.cpp
+    src/cpp/io/exact/coverage.cpp
+    src/cpp/io/exact/grid.cpp
+    src/cpp/io/exact/measures.cpp
+    src/cpp/io/exact/perimeter_distance.cpp
+    src/cpp/io/exact/side.cpp
+    src/cpp/io/exact/traversal.cpp
+    src/cpp/io/exact/traversal_areas.cpp
     src/cpp/io/reclass.cpp
     src/cpp/io/warp.cpp
     src/cpp/io/zonal.cpp

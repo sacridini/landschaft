@@ -1,0 +1,47 @@
+{
+ "arrays": {
+  "exact_shapes/coverage_1": {
+   "kind": "vector"
+  },
+  "exact_shapes/coverage_2": {
+   "kind": "vector"
+  },
+  "exact_shapes/coverage_3": {
+   "kind": "vector"
+  },
+  "exact_shapes/coverage_4": {
+   "kind": "vector"
+  },
+  "exact_shapes/coverage_5": {
+   "kind": "vector"
+  },
+  "exact_shapes/coverage_6": {
+   "kind": "vector"
+  },
+  "exact_shapes/coverage_7": {
+   "kind": "vector"
+  },
+  "exact_shapes/coverage_8": {
+   "kind": "vector"
+  },
+  "exact_shapes/sum": {
+   "dim": [
+    8,
+    5
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "r": {
+   "Matrix": "1.7.1",
+   "exactextractr": "0.10.0",
+   "gurobi": "12.0.3",
+   "prioriactions": "0.5.0",
+   "prioritizr": "8.0.6",
+   "sf": "1.0.19",
+   "terra": "1.9.50"
+  },
+  "r_version": "R version 4.4.2 (2024-10-31 ucrt)"
+ }
+}

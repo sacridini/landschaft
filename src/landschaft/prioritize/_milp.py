@@ -142,6 +142,56 @@ def _raster_units(cost: xr.DataArray, features) -> Units:
     return Units("raster", c[cells], _rij(values[:, cells]), totals, names, cost, cells)
 
 
+def exact_sums(raster: xr.DataArray, geometries, n_threads: int | None = None) -> np.ndarray:
+    """Coverage-weighted sums of every layer over every (multi)polygon: features x layers, as
+    exactextractr's ``exact_extract(fun = "sum")`` gives them, bit for bit (exactextract's exact cell
+    coverage, float results)."""
+    import shapely
+
+    from .. import _core, _threads
+    from ..io import _transform
+
+    r = _stack(raster)
+    t = _transform(r)
+    ny, nx = r.shape[-2:]
+    if t.b != 0 or t.d != 0 or t.e >= 0:
+        raise ValueError("the features' raster must be north-up")
+    dx, dy = t.a, -t.e
+    grid = (t.c, t.f - ny * dy, t.c + nx * dx, t.f, dx, dy)
+    geoms = [g if g.geom_type == "MultiPolygon" else shapely.MultiPolygon([g]) for g in geometries]
+    if any(g.geom_type != "MultiPolygon" for g in geoms):
+        raise TypeError("planning units must be polygons")
+    _, xy, (ring_off, poly_off, feat_off) = shapely.to_ragged_array(geoms)
+    return _core.io_exact_sums(
+        np.ascontiguousarray(r.values, dtype=np.float64), grid, np.ascontiguousarray(xy, dtype=np.float64),
+        ring_off.astype(np.int64), poly_off.astype(np.int64), feat_off.astype(np.int64),
+        n_threads=_threads.resolve(n_threads))
+
+
+def _vector_units(x, features, cost_column: str) -> Units:
+    if cost_column not in x.columns:
+        raise ValueError(f"no cost column {cost_column!r}")
+    cost = x[cost_column].to_numpy(dtype=np.float64)
+    rows = np.flatnonzero(np.isfinite(cost))
+    f = _stack(features)
+    geoms = x
+    crs = f.rio.crs
+    if x.crs is not None and crs is not None and x.crs != crs:  # the amounts in the rasters' CRS
+        from .._vector import to_crs
+
+        geoms = to_crs(x, crs)
+    amounts = exact_sums(f, geoms.geometry.values).T  # features x units
+    amounts[np.abs(amounts) < 1e-10] = 0.0  # prioritizr's fast_extract
+    full = _rij(amounts)
+    # Matrix's rowSums over every unit: in double, in unit order
+    totals = np.array([_sequential_sum(full.getrow(i).data) for i in range(full.shape[0])])
+    names = tuple(str(b) for b in f["band"].values) if "band" in f.coords else tuple(
+        f"feature_{k + 1}" for k in range(f.shape[0]))
+    m = full[:, rows].tocsr()
+    m.sort_indices()
+    return Units("table", cost[rows], m, totals, names, x, rows)
+
+
 def _table_units(x: pd.DataFrame, features, cost_column: str, rij) -> Units:
     if cost_column not in x.columns:
         raise ValueError(f"no cost column {cost_column!r}")
@@ -337,13 +387,15 @@ def problem(x, features=None, *, cost_column: str | None = None, rij=None) -> Pr
     ----------
     x
         The planning units and their cost: a raster (the cells with a cost are
-        the planning units) or a table with a ``cost_column`` (the rows with a
-        cost are the planning units).
+        the planning units), polygons (a GeoDataFrame) or a table, both with a
+        ``cost_column`` (the rows with a cost are the planning units).
     features
         With a raster: the features' rasters on the same grid (a ``(band, y,
-        x)`` DataArray, a Dataset or a list of rasters). With a table: the
-        names of its feature columns, or, with ``rij``, a table of the
-        features (``id``, ``name``).
+        x)`` DataArray, a Dataset or a list of rasters). With polygons: the
+        features' rasters, summed over every polygon weighted by the exact
+        share of every cell it covers (as exactextractr, which prioritizr
+        uses). With a table: the names of its feature columns, or, with
+        ``rij``, a table of the features (``id``, ``name``).
     cost_column
         The cost column of a table.
     rij
@@ -369,6 +421,8 @@ def problem(x, features=None, *, cost_column: str | None = None, rij=None) -> Pr
         rasters = isinstance(features, (xr.DataArray, xr.Dataset)) or (
             isinstance(features, list) and bool(features) and isinstance(features[0], xr.DataArray))
         if rasters:
-            raise NotImplementedError("polygon planning units with raster features are not supported yet")
+            if not hasattr(x, "geometry"):
+                raise TypeError("raster features need raster or polygon planning units")
+            return Problem(_vector_units(x, features, cost_column))
         return Problem(_table_units(x, features, cost_column, rij))
     raise TypeError("x must be a raster DataArray or a table (DataFrame) of planning units")

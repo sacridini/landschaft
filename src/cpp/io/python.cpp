@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/exact.hpp"
 #include "io/io.hpp"
 #include "io/warp.hpp"
 
@@ -471,6 +472,69 @@ void register_python(py::module_& m) {
         py::arg("values"), py::arg("has_nodata"), py::arg("nodata"), py::arg("geotransform"), py::arg("x"),
         py::arg("y"), py::arg("bilinear"), py::arg("row0") = 0, py::arg("ny_total") = -1,
         "Values of every band at points: (n, bands); values may be the rows [row0, row0 + ny) of the grid.");
+    // exactextractr's exact_extract(fun = "sum") and coverage fractions (io/exact.hpp)
+    using F64 = py::array_t<double, py::array::c_style | py::array::forcecast>;
+    using I64 = py::array_t<i64, py::array::c_style | py::array::forcecast>;
+    auto exact_features = [](const F64& xy, const I64& ring_offsets, const I64& polygon_offsets,
+                             const I64& feature_offsets) {
+        if (xy.ndim() != 2 || xy.shape(1) != 2) throw std::invalid_argument("xy must be (n, 2)");
+        const double* c = xy.data();
+        const i64* ro = ring_offsets.data();
+        const i64* po = polygon_offsets.data();
+        const i64* fo = feature_offsets.data();
+        const i64 nf = static_cast<i64>(feature_offsets.size()) - 1;
+        std::vector<std::vector<exactextract::Polygon>> features(static_cast<std::size_t>(std::max<i64>(nf, 0)));
+        for (i64 f = 0; f < nf; ++f) {
+            for (i64 p = fo[f]; p < fo[f + 1]; ++p) {
+                exactextract::Polygon poly;
+                for (i64 r = po[p]; r < po[p + 1]; ++r) {
+                    exactextract::Ring ring;
+                    for (i64 k = ro[r]; k < ro[r + 1]; ++k) ring.push_back({c[2 * k], c[2 * k + 1]});
+                    poly.rings.push_back(std::move(ring));
+                }
+                features[static_cast<std::size_t>(f)].push_back(std::move(poly));
+            }
+        }
+        return features;
+    };
+    auto exact_grid = [](const std::array<double, 6>& g, i64 rows, i64 cols) {
+        return ExactGrid{g[0], g[1], g[2], g[3], g[4], g[5], rows, cols};
+    };
+    m.def(
+        "io_exact_sums",
+        [exact_features, exact_grid](const F64& values, const std::array<double, 6>& grid, const F64& xy,
+                                     const I64& ring_offsets, const I64& polygon_offsets, const I64& feature_offsets,
+                                     i64 max_cells, int n_threads) {
+            if (values.ndim() != 3) throw std::invalid_argument("values must be (layers, rows, cols)");
+            const auto features = exact_features(xy, ring_offsets, polygon_offsets, feature_offsets);
+            const ExactGrid g = exact_grid(grid, values.shape(1), values.shape(2));
+            const i64 layers = values.shape(0);
+            std::vector<double> out;
+            {
+                py::gil_scoped_release release;
+                out = exact_sums(values.data(), layers, g, features, max_cells, n_threads > 0 ? n_threads : 1);
+            }
+            return to_array(std::move(out), {static_cast<i64>(features.size()), layers});
+        },
+        py::arg("values"), py::arg("grid"), py::arg("xy"), py::arg("ring_offsets"), py::arg("polygon_offsets"),
+        py::arg("feature_offsets"), py::arg("max_cells") = 30000000, py::arg("n_threads") = 0,
+        "exactextractr's exact_extract(fun = 'sum'): features x layers. grid: xmin, ymin, xmax, ymax, dx, dy.");
+    m.def(
+        "io_exact_coverage",
+        [exact_features, exact_grid](const std::array<double, 6>& grid, i64 rows, i64 cols, const F64& xy,
+                                     const I64& ring_offsets, const I64& polygon_offsets) {
+            const i64 np = static_cast<i64>(polygon_offsets.size()) - 1;
+            I64 fo(std::vector<py::ssize_t>{2});
+            fo.mutable_data()[0] = 0;
+            fo.mutable_data()[1] = np;
+            const auto features = exact_features(xy, ring_offsets, polygon_offsets, fo);
+            ExactCoverage c = exact_coverage(exact_grid(grid, rows, cols), features[0]);
+            std::vector<double> frac(c.fraction.begin(), c.fraction.end());
+            return py::make_tuple(c.row0, c.col0, to_array(std::move(frac), {c.rows, c.cols}));
+        },
+        py::arg("grid"), py::arg("rows"), py::arg("cols"), py::arg("xy"), py::arg("ring_offsets"),
+        py::arg("polygon_offsets"),
+        "The covered fraction (float) of every cell of a (multi)polygon's window: row0, col0, fractions.");
 }
 
 }  // namespace lsio

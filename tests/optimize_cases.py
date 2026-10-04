@@ -29,7 +29,7 @@ from itertools import pairwise
 
 import numpy as np
 
-GROUPS: list[str] = ["core", "actions"]
+GROUPS: list[str] = ["core", "actions", "exact"]
 
 NY, NX = 12, 15
 RES = 100.0
@@ -175,6 +175,31 @@ def pu_polygons_partial():
     return _polygons(np.array([0, 3.5, 7.25, 11.6, 15]) * RES, np.array([0, 2.3, 6.5, 9.75, 12]) * RES)
 
 
+def shapes():
+    """Polygons that exercise the exact cell coverage: a triangle, a hole, a multipolygon, a concave star,
+    one smaller than a cell, one partly outside the grid, one on cell edges, a rotated square."""
+    import geopandas as gpd
+    from shapely.affinity import rotate
+    from shapely.geometry import MultiPolygon, Polygon, box
+
+    r = RES
+    star = Polygon([(7.5 * r + 3.2 * r * np.cos(a) * (1 if k % 2 == 0 else 0.45),
+                     6.1 * r + 3.2 * r * np.sin(a) * (1 if k % 2 == 0 else 0.45))
+                    for k, a in enumerate(np.linspace(0, 2 * np.pi, 11)[:-1])])
+    geoms = [
+        Polygon([(0.3 * r, 0.2 * r), (6.7 * r, 1.1 * r), (2.9 * r, 7.45 * r)]),
+        Polygon([(1 * r, 8 * r), (6.3 * r, 8 * r), (6.3 * r, 11.6 * r), (1 * r, 11.6 * r)],
+                [[(2.2 * r, 9.1 * r), (4.75 * r, 9.1 * r), (3.3 * r, 10.9 * r)]]),
+        MultiPolygon([box(9.2 * r, 0.4 * r, 10.9 * r, 2.3 * r), box(12.1 * r, 1.05 * r, 14.6 * r, 3.95 * r)]),
+        star,
+        box(11.3 * r, 9.2 * r, 11.7 * r, 9.9 * r),
+        box(13.4 * r, 7.3 * r, 17.8 * r, 13.9 * r),
+        box(8 * r, 9 * r, 10 * r, 12 * r),
+        rotate(box(2 * r, 3 * r, 5 * r, 6 * r), 27, origin="centroid"),
+    ]
+    return gpd.GeoDataFrame({"id": np.arange(1.0, len(geoms) + 1)}, geometry=geoms, crs="EPSG:32723")
+
+
 # --- prioriactions: a 10 x 10 grid of units, 4 features, 2 threats
 
 PA_SIDE = 10
@@ -259,7 +284,7 @@ def pa_boundary():
 
 
 INPUTS = {f.__name__: f for f in (
-    pu_cost, features, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
+    pu_cost, features, shapes, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
     pu_polygons_partial, pa_pu, pa_features, pa_dist_features, pa_threats, pa_dist_threats, pa_sensitivity,
     pa_boundary)}
 
@@ -323,6 +348,16 @@ CASES: dict[str, Case] = {
         reference(problem(pu_polygons_partial, features, cost_column = "cost") |> add_min_set_objective() |>
                   add_relative_targets(0.3) |> add_binary_decisions())""",
                                     notes="amounts weighted by the covered fraction (exactextractr)"),
+    # --- exact: exactextractr's coverage fractions and sums (the amounts of polygon planning units)
+    "exact_shapes": Case("exact", ("features", "shapes"), """
+        cov <- exactextractr::coverage_fraction(features[[1]], shapes)
+        out <- list(sum = as.matrix(exactextractr::exact_extract(features, shapes, fun = "sum", progress = FALSE)))
+        for (k in seq_along(cov)) {
+          v <- cov[[k]]
+          if (!inherits(v, "SpatRaster")) v <- terra::rast(v)
+          out[[paste0("coverage_", k)]] <- terra::values(v, mat = FALSE)
+        }
+        out""", notes="coverage_k: the fraction of every cell of the whole grid (NA outside the feature's window)"),
     # --- actions: prioriactions
     "actions_mincost": Case("actions", PA, """
         actions_reference(prioriactions::problem(pa_data(), model_type = "minimizeCosts"))"""),
@@ -371,6 +406,12 @@ def _rij():
                                  rij=rij_table()).add_min_set_objective()
 
 
+def _polygon_problem(gdf):
+    import landschaft as ls
+
+    return ls.prioritize.problem(gdf, features(), cost_column="cost").add_min_set_objective()
+
+
 def _table_na_cost():
     t = pu_table()
     t.loc[[2, 49, 50, 119], "cost"] = np.nan
@@ -393,6 +434,9 @@ PY: dict[str, Callable] = {
     "minset_table_na_cost": lambda: _table_na_cost().add_relative_targets(0.3).add_binary_decisions(),
     "minset_raster_locked_proportion": lambda: _raster().add_relative_targets(0.3)
     .add_locked_in_constraints(locked_in()).add_locked_out_constraints(locked_out()).add_proportion_decisions(),
+    "minset_polygons": lambda: _polygon_problem(pu_polygons()).add_relative_targets(0.3).add_binary_decisions(),
+    "minset_polygons_partial": lambda: _polygon_problem(pu_polygons_partial()).add_relative_targets(0.3)
+    .add_binary_decisions(),
 }
 for _name, _fn in PY.items():
     CASES[_name].py = _fn

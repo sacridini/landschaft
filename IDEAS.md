@@ -1031,6 +1031,7 @@ Todos os módulos planejados são plenamente viáveis e compatíveis com a licen
 | **prioritizr** 8.0.6 / **prioriactions** 0.5.0 | **GPL-3 / GPL >= 2** (R + C++) | **100% compatível**. Formulações reimplementadas em C++; os pacotes são a referência de paridade. |
 | **prioripy** 0.11.11 | **MIT** (do próprio autor) | **100% compatível**. Ponto de partida da API; o núcleo é reescrito. |
 | **HiGHS** (solver MILP/LP) | **MIT** (C++) | **100% compatível**. Solver padrão; pode ser embutido no `_core`. |
+| **exactextract** (cobertura exata de células por polígonos, usada pelo exactextractr do prioritizr) | **Apache-2.0** (C++, ISciences) | **Compatível com a GPL-3**. Porte em `src/cpp/io/exact` (sem GEOS), com o `LICENSE` original na pasta. |
 | **Gurobi** | Comercial (licença acadêmica gratuita) | Só **opcional** em tempo de execução (gurobipy); nunca obrigatório nem embutido. |
 | **Marxan** (simulated annealing) | Algoritmo publicado (Ball et al. 2009); licença do código do Marxan 4 a verificar | Referência do motor `anneal`: porte com paridade se a licença for compatível, senão **clean-room** pelo artigo. |
 
@@ -1456,6 +1457,25 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
 * Contiguidade: fraca nos dois (sem lazy constraints no HiGHS); formulação mais forte e cortes em rodadas.
 * O `n_threads` vai para o paralelismo nosso (instâncias, subproblemas, re-solves), com 1 thread do HiGHS por
   instância; threads dentro do HiGHS só para um MIP grande e único.
+
+### Andamento da fase 1
+* **Parte 1** (2768b72): HiGHS 1.15.1 embutido (`FetchContent`, estático, fixado por hash), relógio nosso,
+  soluções iniciais, agendador por thread; `ls.prioritize.problem()` com os `add_*` do prioritizr (min set, metas
+  relativas/absolutas, locked in/out, decisões binárias/proporção/semicontínuas, HiGHS/Gurobi); `compile()` bit
+  a bit igual ao do prioritizr (raster, tabela, rij) e o mesmo ótimo.
+* **Parte 2** (b41599c): motor de cobertura para min set largo (presolve próprio, relaxação por duais quase
+  ótimos + bundle + sifting no HiGHS, arredondamento com poda, fixação por custo reduzido, MIP do HiGHS só se o
+  gap pedido não for atingido). 30 feições: 10⁵ unidades em 0,44 s, 10⁶ em 1,7 s com gap 0,002% (Gurobi 20 s).
+* **Parte 3**: unidades em **polígonos** com feições em raster: somas ponderadas pela fração exata de cada
+  célula coberta, como o `exact_extract(fun = "sum")` do exactextractr 0.10.0 (que o prioritizr usa), bit a bit
+  (frações e somas; caso `exact_shapes`: triângulo, buraco, multipolígono, estrela côncava, polígono menor que
+  uma célula, parte fora da grade, sobre as bordas das células, quadrado girado). Porte do exactextract em
+  `src/cpp/io/exact` sem GEOS; os valores são lidos pela janela da grade e alinhados à grade da cobertura como o
+  `RasterView` do exactextract (no polígono menor que uma célula as duas grades diferem em alguns ulps). Polígonos
+  noutro CRS são reprojetados para o dos rasters só para as somas. `compile()` dos casos `minset_polygons` e
+  `minset_polygons_partial` bit a bit igual ao do prioritizr.
+* **Falta na fase 1**: unidades H3, matriz de feições em C++ lida em blocos (hoje a pilha vai inteira para a
+  memória em float64), warm start pelo Zonation.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

@@ -15,7 +15,7 @@ import optimize_cases
 import pytest
 from optimize_reference import case_ids, model, result, solve_gurobi, solve_highs
 
-CASES = [(g, c) for g in optimize_cases.GROUPS for c in case_ids(g)]
+CASES = [(g, c) for g in ("core", "actions") for c in case_ids(g)]
 IDS = [c for _, c in CASES]
 
 

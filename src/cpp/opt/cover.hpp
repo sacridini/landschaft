@@ -18,8 +18,8 @@
 //    duals (OpenMP, fixed blocks) and the ones whose bound breaks optimality
 //    join the working set, until none does: then the solution is optimal for
 //    the whole LP and its objective a valid lower bound;
-// 3. integer columns: a basic LP solution has at most one fractional column
-//    per row; they are rounded up (A >= 0 keeps the rows met), and then the
+// 3. integer columns: a basic LP solution has at most as many fractional
+//    columns as rows; they are rounded up (A >= 0 keeps the rows met), and then the
 //    selected columns that are not needed are dropped, the most expensive
 //    first;
 // 4. if the gap between that solution and the LP bound is wider than asked

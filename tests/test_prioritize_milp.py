@@ -19,7 +19,7 @@ import landschaft as ls
 from landschaft import _core
 
 PY_CASES = [c for c in case_ids("core") if optimize_cases.CASES[c].py is not None]
-ALL = [(g, c) for g in optimize_cases.GROUPS for c in case_ids(g)]
+ALL = [(g, c) for g in ("core", "actions") for c in case_ids(g)]
 
 
 def _solve_stored(m, gap=0.0, time_limit=math.inf, presolve="choose", start=None, relaxation=False):
@@ -215,3 +215,49 @@ def test_covering_infeasible_and_time_limit():
     assert _cover(a, cost, bad, "covering")["status"] == "infeasible"
     r = _cover(a, cost, rhs, "covering", time_limit=0.0)
     assert r["status"] == "time_limit" and r["seconds"] < 5
+
+
+# ----------------------------------------------------------------------------- exact cell coverage (exactextract)
+
+def _ragged(geoms):
+    import shapely
+
+    mp = [g if g.geom_type == "MultiPolygon" else shapely.MultiPolygon([g]) for g in geoms]
+    _, xy, (ring, poly, feat) = shapely.to_ragged_array(mp)
+    return xy, ring.astype(np.int64), poly.astype(np.int64), feat.astype(np.int64)
+
+
+def test_exact_coverage_is_exactextract():
+    """Covered fractions and coverage-weighted sums as exactextractr 0.10.0, bit for bit."""
+    ref = result("exact", "exact_shapes")
+    f = optimize_cases.features()
+    ny, nx = f.shape[1:]
+    grid = (0.0, 0.0, nx * optimize_cases.RES, ny * optimize_cases.RES, optimize_cases.RES, optimize_cases.RES)
+    shapes = optimize_cases.shapes()
+    for k, g in enumerate(shapes.geometry.values, start=1):
+        xy, ring, poly, _ = _ragged([g])
+        row0, col0, frac = _core.io_exact_coverage(grid, ny, nx, xy, ring, poly)
+        full = np.zeros((ny, nx))
+        full[row0:row0 + frac.shape[0], col0:col0 + frac.shape[1]] = frac
+        want = np.nan_to_num(ref[f"coverage_{k}"].reshape(ny, nx), nan=0.0)
+        np.testing.assert_array_equal(full, want, err_msg=f"shape {k}")
+    xy, ring, poly, feat = _ragged(shapes.geometry.values)
+    sums = _core.io_exact_sums(np.ascontiguousarray(f.values, dtype=np.float64), grid, xy, ring, poly, feat)
+    np.testing.assert_array_equal(sums, ref["sum"])
+    one = _core.io_exact_sums(np.ascontiguousarray(f.values, dtype=np.float64), grid, xy, ring, poly, feat,
+                              n_threads=1)
+    assert np.array_equal(one, sums)
+
+
+def test_polygon_units():
+    """Polygon planning units: the solution is a copy of their table; other CRSs are reprojected."""
+    gdf = optimize_cases.pu_polygons_partial()
+    sol = optimize_cases.CASES["minset_polygons_partial"].py().solve()
+    assert list(sol.selection.columns) == [*gdf.columns, "solution"]
+    assert sol.selection.crs == gdf.crs and set(np.unique(sol.values)) <= {0.0, 1.0}
+    feats = optimize_cases.features()
+    a = ls.prioritize.problem(gdf, feats, cost_column="cost").units.rij
+    b = ls.prioritize.problem(gdf.to_crs("EPSG:4326"), feats, cost_column="cost").units.rij
+    np.testing.assert_allclose(b.toarray(), a.toarray(), rtol=1e-5, atol=1e-6)
+    with pytest.raises(ValueError, match="no cost column"):
+        ls.prioritize.problem(gdf, feats, cost_column="price")
