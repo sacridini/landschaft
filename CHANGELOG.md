@@ -6,6 +6,27 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-10-05
+
+### Added
+- `ls.prioritize.example_data(name)`: **Serra Verde**, an imaginary coastal region of 60 x 90 cells of 1 km
+  (4825 planning units) with land cost, eight features from widespread to rare, protected areas, cities,
+  habitat condition, regions, carbon, corridor terminals, deforestation and fire threats, elevation, rivers
+  and roads. Every public function of the optimization side has a runnable example on it.
+- Learn: "Conservation priorities" is now a part of ten chapters (12.1 to 12.10): why prioritize, key
+  concepts, ranking with Zonation, optimization and solvers, spatial design, trade-offs and alternatives,
+  evaluation, management actions, ranking and optimization together, and the planning process (good
+  practices, mistakes, recipes, a prioritizr / prioriactions / Marxan / Zonation correspondence), with
+  figures of Serra Verde and runnable code throughout. 33 new glossary terms.
+- Tutorial "Optimized conservation plans": a complete plan for Serra Verde, from the gap analysis to the
+  report.
+
+### Changed
+- Minimisations with a budget row and pair terms (minimum penalties with boundary or connectivity
+  penalties) go to the closure engine before HiGHS's MIP: 2400 units, more than 150 s -> 12 s at a 10 % gap.
+- `pareto_front` without `budgets` spaces them above the cost of the locked-in units (which every budget
+  includes) instead of from a tenth of the plan's cost, which made problems with reserves infeasible.
+
 ## [1.26.0] - 2026-10-04
 
 ### Added
