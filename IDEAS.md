@@ -1555,6 +1555,27 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   * **Lacuna que fica**: o limite do max_features é o do LP (28,2), mais fraco que o do Gurobi com cortes
     (26,4): a solução é melhor, mas o gap de 10% não é provado. Cortes de cobertura/mochila no LP seriam o
     caminho (fase 4).
+* **Parte 3**: `add_max_phylo_div_objective` / `add_max_phylo_end_objective` (árvore do `ls.bio` ou texto
+  Newick; arestas na ordem *cladewise* do `read.tree` do ape, a matriz de ramos do `branch_matrix()`, os
+  comprimentos do phylo_end divididos pela abundância abaixo de cada ramo, `Matrix::colSums`, e reescalados
+  para o menor ser 1). Modelo bit a bit (4 casos).
+  * **Bug do prioritizr 8.0.6** (confirmado no R): os dois objetivos reordenam a matriz de ramos com
+    `match(tip.label, feature_names)`, a permutação inversa; com as pontas em outra ordem que as feições (e não
+    uma simples troca de pares) os ramos ficam ligados às feições erradas (na árvore `((f2,f3),f1)` com feições
+    f1, f2, f3, o ramo da ponta f2 exige `met_f3`). Implementado só o certo (`match(feature_names, tip.label)`);
+    referência: as funções do prioritizr com esse `match` trocado (`add_max_phylo_*_objective_fixed` em
+    `tools/optimize_reference.R`); com as pontas na ordem das feições, o prioritizr original.
+  * Motor largo, ajustes medidos nos filogenéticos (muitas binárias auxiliares, Lagrangiano pouco suave): o
+    bundle para ao estagnar (melhora < 1e-4 relativa em 50 iterações; antes ia a 1000 iterações, 8 s); a
+    partição inicial só põe unidades no limite superior enquanto o orçamento comporta (antes estourava o
+    orçamento, o LP restrito ficava inviável e 200 mil unidades entravam no LP); as unidades do limite
+    superior contra o custo reduzido entram no conjunto de trabalho com teto e as demais esperam (movê-las
+    para o limite inferior fora do LP quebrava a monotonia do sifting); o mergulho ordena só as binárias das
+    metas (os ramos seguem delas). 10⁵ unidades, 30 feições, árvore aleatória: div 5,0 s (72,1; Gurobi 5,0 s,
+    70,5), end 4,0 s (1.794; Gurobi 1,1 s, 1.707). 10⁶: dentro do limite de 30 s, div 64,9 e end 1.650 (o
+    Gurobi não acha solução), mas com limites fracos (220 e 2.740): o LP não converge a tempo, o sifting fica
+    com centenas de milhares de violações por rodada (duais degenerados). Melhorar na fase 4 (estabilização
+    dos duais do sifting, bundle com caixa adaptativa).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

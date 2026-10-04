@@ -23,7 +23,9 @@ import scipy.sparse as sp
 NO_TARGETS = ("max_utility", "max_cover")
 # objectives whose model ignores feature weights (prioritizr warns)
 NO_WEIGHTS = ("min_set", "min_largest_shortfall")
-BUDGETED = ("min_shortfall", "min_largest_shortfall", "max_utility", "max_features", "max_cover", "min_penalties")
+PHYLO = ("max_phylo_div", "max_phylo_end")
+BUDGETED = ("min_shortfall", "min_largest_shortfall", "max_utility", "max_features", "max_cover", "min_penalties",
+            *PHYLO)
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,70 @@ class Targets:
 def _sum(v: np.ndarray) -> float:
     """A sum in order, in double (Rcpp's sum(), Matrix's rowSums over a row)."""
     return float(np.cumsum(v, dtype=np.float64)[-1]) if v.size else 0.0
+
+
+def tree_branches(tree, names: tuple[str, ...]) -> tuple[sp.csr_matrix, np.ndarray]:
+    """A phylogeny's branches as ape orders them (``read.tree``'s cladewise order: depth first, children
+    in the order given; the root's own length left out) and the branch matrix (prioritizr's
+    ``branch_matrix()``): 1 where a feature's tip lies below a branch, one row per feature, in the
+    problem's order. ``tree``: an ``ls.bio`` tree or a Newick string; its tips must be the features."""
+    if isinstance(tree, str):
+        from ..bio import read_tree
+
+        tree = read_tree(tree, format="newick")
+    children = tree.children
+    tips: list[int] = []
+    edges: list[tuple[int, int]] = []  # (parent node, child node)
+    stack = [tree.root]
+    while stack:
+        node = stack.pop()
+        if not children[node]:
+            tips.append(node)
+        for c in reversed(children[node]):
+            stack.append(c)
+    # edges in preorder: the edge to a node right before the edges below it
+    order: list[int] = []
+    stack = [tree.root]
+    while stack:
+        node = stack.pop()
+        order.append(node)
+        stack.extend(reversed(children[node]))
+    edge_of = {}
+    for node in order:
+        if node != tree.root:
+            edge_of[node] = len(edges)
+            edges.append((int(tree.parent[node]), node))
+    labels = [tree.names[t] for t in tips]
+    if len(labels) != len(names) or set(labels) != set(names):
+        raise ValueError("the tree's tips must be the problem's features")
+    tip_of = {tree.names[t]: t for t in tips}
+    rows, cols = [], []
+    for f, name in enumerate(names):  # the features' order (prioritizr reorders by the inverse permutation)
+        node = tip_of[name]
+        while node != tree.root:
+            rows.append(f)
+            cols.append(edge_of[node])
+            node = int(tree.parent[node])
+    bm = sp.csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(len(names), len(edges)))
+    bm.sort_indices()
+    lengths = np.array([tree.length[c] for _, c in edges], dtype=np.float64)
+    return bm, lengths
+
+
+def endemism_lengths(bm: sp.csr_matrix, lengths: np.ndarray, totals: np.ndarray) -> np.ndarray:
+    """add_max_phylo_end_objective's branch lengths: each divided by the total amount of the features
+    below it (Matrix::colSums, in feature order), then all scaled up so that the shortest is 1 if it
+    was shorter."""
+    cc = bm.tocsc()
+    cc.sort_indices()
+    out = lengths.copy()
+    for e in range(cc.shape[1]):
+        f = cc.indices[cc.indptr[e]:cc.indptr[e + 1]]
+        out[e] = out[e] * (1 / _sum(totals[f]))
+    m = float(out.min())
+    if m < 1:
+        out = out * (1 / m)
+    return out
 
 
 def loglinear(x: np.ndarray, x1: float, y1: float, x2: float, y2: float) -> np.ndarray:
@@ -208,6 +274,33 @@ def compile_problem(p):
             row_ids = ["spp_target"] * nt + ["budget"]
         budget_row(nt)
         nrow_extra, ncol_extra, weight_cols = 1, nt, n
+    elif kind in PHYLO:
+        bm, lengths = tree_branches(p.objective[2], u.feature_names)
+        if kind == "max_phylo_end":
+            lengths = endemism_lengths(bm, lengths, u.totals)
+        ne = lengths.size
+        scale = (-0.01 * float(lengths.min())) / _sum(cost)
+        obj = [cost * scale, np.zeros(nt), lengths]
+        lb.append(np.zeros(nt + ne))
+        ub.append(np.ones(nt + ne))
+        vtype += ["B"] * (nt + ne)
+        extra_rows.append((np.arange(nt), n + np.arange(nt), -1.0 * t.value))
+        budget_row(nt)
+        # a branch is met when a target of a feature below it is: sum of those targets' columns - branch >= 0
+        below = sp.csr_matrix(bm[t.feature]).tocsc()  # targets x branches
+        below.sort_indices()
+        br_rows, br_cols = [], []
+        for e in range(ne):
+            ts = below.indices[below.indptr[e]:below.indptr[e + 1]]
+            br_rows += [nt + 1 + e] * (ts.size + 1)
+            br_cols += [*(n + ts), n + nt + e]
+        br_vals = np.ones(len(br_rows))
+        br_vals[np.cumsum([below.indptr[e + 1] - below.indptr[e] + 1 for e in range(ne)]) - 1] = -1.0
+        extra_rows.append((np.array(br_rows), np.array(br_cols), br_vals))
+        sense, rhs = [*t.sense, "<=", *([">="] * ne)], [np.zeros(nt), budget, np.zeros(ne)]
+        col_ids += ["spp_met"] * nt + ["branch_met"] * ne
+        row_ids = ["spp_target"] * nt + ["budget"] + ["branch_target"] * ne
+        nrow_extra, ncol_extra, weight_cols = 1 + ne, nt + ne, n
     elif kind == "min_penalties":
         sense, rhs = [*t.sense, "<="], [t.value, budget]
         budget_row(nt)

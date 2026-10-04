@@ -143,6 +143,20 @@ actions_reference <- function(m) {
        solution = s$data$sol)
 }
 
+# prioritizr 8.0.6's phylogenetic objectives with their bug fixed: they order the branch matrix by
+# match(tip.label, feature_names), the inverse permutation, so with tips in another order than the
+# features (and not a mere swap) branches go to the wrong features. The fixed versions use
+# match(feature_names, tip.label); everything else is prioritizr's code.
+fix_phylo <- function(f) {
+  src <- deparse(f)
+  bad <- "match(tr$tip.label, y$feature_names())"
+  stopifnot(any(grepl(bad, src, fixed = TRUE)))
+  src <- gsub(bad, "match(y$feature_names(), tr$tip.label)", src, fixed = TRUE)
+  eval(parse(text = src), envir = asNamespace("prioritizr"))
+}
+add_max_phylo_div_objective_fixed <- fix_phylo(prioritizr::add_max_phylo_div_objective)
+add_max_phylo_end_objective_fixed <- fix_phylo(prioritizr::add_max_phylo_end_objective)
+
 pa_data <- function(pu = pa_pu, features = pa_features, dist_features = pa_dist_features, threats = pa_threats,
                     dist_threats = pa_dist_threats, sensitivity = pa_sensitivity, boundary = pa_boundary) {
   prioriactions::inputData(pu = pu, features = features, dist_features = dist_features, threats = threats,

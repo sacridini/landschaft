@@ -321,8 +321,13 @@ struct Sifting {
         double box = scale > 0 ? 0.5 * scale : 1.0;
         const double box_min = 1e-12 * std::max(1.0, scale);
         int it = 0;
+        std::string why = "box or iterations";
+        std::vector<double> history;  // the best value after each iteration
         for (; it < 1000 && box > box_min; ++it) {
-            if (Clock::now() >= deadline) break;
+            if (Clock::now() >= deadline) {
+                why = "time";
+                break;
+            }
             // master LP: max t  s.t.  t - g_k'y <= L_k - g_k'y_k, the box around the best point, the
             // signs of y, and A_j'y <= c_j (ub_j = inf) / A_j'y >= c_j (lb_j = -inf)
             Model master;
@@ -366,13 +371,19 @@ struct Sifting {
             SolveOptions o;
             o.threads = 1;
             const SolveResult mr = solve_highs(master, o);
-            if (mr.status != "optimal") break;
+            if (mr.status != "optimal") {
+                why = "master " + mr.status;
+                break;
+            }
             // HiGHS's point may leave the bounds by its tolerance: a dual of the wrong sign would meet an
             // infinite row bound in the Lagrangian
             std::vector<double> trial(mr.x.begin(), mr.x.begin() + m);
             for (i64 r = 0; r < m; ++r) trial[r] = std::clamp(trial[r], dual_lo(r), dual_hi(r));
             const double predicted = mr.x[static_cast<std::size_t>(m)] - best_value;
-            if (predicted <= 1e-10 * std::max(1.0, std::abs(best_value))) break;
+            if (predicted <= 1e-10 * std::max(1.0, std::abs(best_value))) {
+                why = "converged";
+                break;
+            }
             const double value = lagrangian_at(trial, g);
             cuts.push_back({value, trial, g});
             if (value >= best_value + 0.1 * predicted) {  // serious step
@@ -389,10 +400,20 @@ struct Sifting {
                 kept.insert(kept.end(), cuts.end() - static_cast<std::ptrdiff_t>(2 * m), cuts.end());
                 cuts = std::move(kept);
             }
+            // stalled (a non-smooth Lagrangian, as with a phylogeny's many binary columns): the sifting does
+            // the rest faster
+            history.push_back(best_value);
+            if (history.size() > 50 &&
+                best_value - history[history.size() - 51] <= 1e-4 * std::max(1.0, std::abs(best_value))) {
+                why = "stalled";
+                break;
+            }
         }
         y = best;
         lagrangian = std::max(lagrangian, best_value);
-        if (w.verbose) std::fprintf(stderr, "wide bundle: %d iterations, %zu cuts, L = %.12g\n", it, cuts.size(), best_value);
+        if (w.verbose)
+            std::fprintf(stderr, "wide bundle: %d iterations, %zu cuts, L = %.12g (%s, box %.3g)\n", it, cuts.size(),
+                         best_value, why.c_str(), box);
     }
 
     void price() {
@@ -509,8 +530,37 @@ struct Sifting {
                 const double da = std::abs(d[a]), db = std::abs(d[b]);
                 return da < db || (da == db && a < b);
             });
-            for (i64 j = 0; j < n; ++j) at[j] = d[j] < 0 ? At::upper : At::lower;
+            std::fill(at.begin(), at.end(), At::lower);
             for (i64 k = 0; k < size; ++k) at[order[k]] = At::work;
+            // the others at the bound their reduced cost points to; the upper one only while the rows of
+            // units only (the budget) hold, the most attractive first: duals not yet optimal would otherwise
+            // send far too many units there and make the restricted LP infeasible
+            std::vector<std::pair<double, i64>> up;
+            for (i64 j = 0; j < n; ++j) {
+                if (at[j] == At::work) continue;
+                at[j] = At::lower;
+                if (d[j] < 0) up.emplace_back(d[j], j);
+            }
+            std::sort(up.begin(), up.end());
+            std::vector<double> act(static_cast<std::size_t>(w.nrow), 0.0);
+            for (i64 j = 0; j < n; ++j) {
+                const double v = at[j] == At::work ? 0.0 : w.m.lb[j];  // working units are free: count none
+                if (v != 0.0)
+                    for (i64 k = w.col_start[j]; k < w.col_start[j + 1]; ++k) act[w.row_index[k]] += w.value[k] * v;
+            }
+            for (const auto& [dj, j] : up) {
+                const double step = w.m.ub[j] - w.m.lb[j];
+                bool fits = true;
+                for (i64 k = w.col_start[j]; k < w.col_start[j + 1] && fits; ++k) {
+                    const i64 r = w.row_index[k];
+                    if (w.row_other[r]) continue;
+                    const double a = act[r] + w.value[k] * step;
+                    fits = a <= w.m.row_hi[r] + row_tol(w.m.row_hi[r]) && a >= w.m.row_lo[r] - row_tol(w.m.row_lo[r]);
+                }
+                if (!fits) continue;
+                at[j] = At::upper;
+                for (i64 k = w.col_start[j]; k < w.col_start[j + 1]; ++k) act[w.row_index[k]] += w.value[k] * step;
+            }
         }
         i64 widen = size;
         for (int round = 0; round < kMaxSiftRounds; ++round) {
@@ -522,40 +572,43 @@ struct Sifting {
             const bool feasible = solve_restricted(left);
             if (out_of_time) return;
             if (!feasible) {
-                // room: every unit at its upper bound and the cheapest at the lower one join the working set
-                std::vector<std::pair<double, i64>> lower;
-                bool moved = false;
+                // room: units at their upper bound (the least attractive first) and at the lower one (the
+                // most attractive first) join the working set, `widen` of each, doubling every time
+                std::vector<std::pair<double, i64>> lower, upper;
                 for (i64 j = 0; j < n; ++j) {
-                    if (at[j] == At::upper) {
-                        at[j] = At::work;
-                        moved = true;
-                    } else if (at[j] == At::lower) {
-                        lower.emplace_back(d.empty() ? w.c[j] : d[j], j);
-                    }
+                    const double dj = d.empty() ? w.c[j] : d[j];
+                    if (at[j] == At::upper) upper.emplace_back(-dj, j);
+                    else if (at[j] == At::lower) lower.emplace_back(dj, j);
                 }
-                if (lower.empty() && !moved) {
+                if (lower.empty() && upper.empty()) {
                     infeasible = true;
                     return;
                 }
-                const std::size_t add = std::min(lower.size(), static_cast<std::size_t>(widen));
-                std::partial_sort(lower.begin(), lower.begin() + static_cast<std::ptrdiff_t>(add), lower.end());
-                for (std::size_t k = 0; k < add; ++k) at[lower[k].second] = At::work;
+                for (auto* side : {&lower, &upper}) {
+                    const std::size_t add = std::min(side->size(), static_cast<std::size_t>(widen));
+                    std::partial_sort(side->begin(), side->begin() + static_cast<std::ptrdiff_t>(add), side->end());
+                    for (std::size_t k = 0; k < add; ++k) at[(*side)[k].second] = At::work;
+                }
                 widen *= 2;
                 continue;
             }
             lp_objective = 0.0;
             for (i64 j = 0; j < w.ncol; ++j) lp_objective += w.c[j] * x[j];
             price();
-            std::vector<std::pair<double, i64>> raise;
-            bool wrong = false;
+            std::vector<std::pair<double, i64>> raise, wrong_up;
             for (i64 j = 0; j < n; ++j) {
                 const double tol = kDualTol * std::max(1.0, std::abs(w.c[j]));
-                if (at[j] == At::lower && d[j] < -tol) {
-                    raise.emplace_back(d[j], j);
-                } else if (at[j] == At::upper && d[j] > tol) {
-                    at[j] = At::work;
-                    wrong = true;
-                }
+                if (at[j] == At::lower && d[j] < -tol) raise.emplace_back(d[j], j);
+                else if (at[j] == At::upper && d[j] > tol) wrong_up.emplace_back(-d[j], j);
+            }
+            // units at the upper bound against their reduced cost: the worst join the working set (as many
+            // as the lower ones may), the others wait at their bound for a later round (moving them outside
+            // the LP would break the monotone decrease of the restricted LP's objective)
+            const bool wrong = !wrong_up.empty();
+            {
+                const std::size_t take = std::min(wrong_up.size(), static_cast<std::size_t>(4 * size));
+                std::partial_sort(wrong_up.begin(), wrong_up.begin() + static_cast<std::ptrdiff_t>(take), wrong_up.end());
+                for (std::size_t k = 0; k < take; ++k) at[wrong_up[k].second] = At::work;
             }
             if (w.verbose) {
                 i64 nw = 0;
@@ -834,9 +887,17 @@ SolveResult solve_wide(const Model& model, i64 n_units, const SolveOptions& opti
     // binary other columns (targets met, features present): a dive. They are ranked by their LP value
     // (then their objective, then column); the first k are fixed at 1, the others at 0, and the cheapest
     // LP for that is rounded up and trimmed; a binary search finds the largest k that fits
+    // (only those in rows with units: the targets' flags; the branches of a phylogeny follow from them)
+    std::vector<std::uint8_t> row_units(static_cast<std::size_t>(w.nrow), 0);
+    for (i64 j = 0; j < w.n; ++j)
+        for (i64 k = w.col_start[j]; k < w.col_start[j + 1]; ++k) row_units[w.row_index[k]] = 1;
     std::vector<i64> flags;
-    for (i64 j = w.n; j < w.ncol; ++j)
-        if (model.integer[j] && model.lb[j] == 0.0 && model.ub[j] == 1.0) flags.push_back(j);
+    for (i64 j = w.n; j < w.ncol; ++j) {
+        if (!model.integer[j] || model.lb[j] != 0.0 || model.ub[j] != 1.0) continue;
+        bool in_unit_row = false;
+        for (i64 k = w.col_start[j]; k < w.col_start[j + 1] && !in_unit_row; ++k) in_unit_row = row_units[w.row_index[k]];
+        if (in_unit_row) flags.push_back(j);
+    }
     if (lp_done && !flags.empty() && relative_gap(best_obj, lower) > options.gap && time_left() > 0) {
         std::stable_sort(flags.begin(), flags.end(), [&](i64 a, i64 b) {
             if (lp.x[a] != lp.x[b]) return lp.x[a] > lp.x[b];

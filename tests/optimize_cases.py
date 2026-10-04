@@ -298,6 +298,11 @@ def build_input(name: str):
 RASTER = ("pu_cost", "features")
 PA = ("pa_pu", "pa_features", "pa_dist_features", "pa_threats", "pa_dist_threats", "pa_sensitivity", "pa_boundary")
 
+
+# phylogenies of the five features: tips in their order, and in another (a 5-cycle, not a swap)
+TREE_ORDERED = "(((f1:1.5,f2:0.5):1,f3:2):0.75,(f4:1.25,f5:3):0.5);"
+TREE_SHUFFLED = "(((f3:1.5,f1:0.5):1,f5:2):0.75,(f2:1.25,f4:3):0.5);"
+
 CASES: dict[str, Case] = {
     # --- core: planning units, min set, targets, locks, decisions
     "minset_raster_relative": Case("core", RASTER, """
@@ -400,6 +405,26 @@ CASES: dict[str, Case] = {
         reference(problem(pu_cost, features) |> add_min_set_objective() |>
                   add_loglinear_targets(3, 0.6, 300, 0.2, cap_amount = 100, cap_target = 50) |>
                   add_binary_decisions())"""),
+    "max_phylo_div": Case("objectives", RASTER, f"""
+        tr <- ape::read.tree(text = "{TREE_ORDERED}")
+        reference(problem(pu_cost, features) |> add_max_phylo_div_objective(2500, tr) |>
+                  add_relative_targets(0.3) |> add_binary_decisions())""",
+                          notes="tips in the features' order: prioritizr itself"),
+    "max_phylo_div_shuffled": Case("objectives", RASTER, f"""
+        tr <- ape::read.tree(text = "{TREE_SHUFFLED}")
+        reference(problem(pu_cost, features) |> add_max_phylo_div_objective_fixed(2500, tr) |>
+                  add_relative_targets(c(0.3, 0.4, 0.5, 0.2, 0.35)) |> add_feature_weights(c(1, 2, 1, 3, 1)) |>
+                  add_binary_decisions())""", notes="tips in another order: prioritizr with its bug fixed"),
+    "max_phylo_end": Case("objectives", RASTER, f"""
+        tr <- ape::read.tree(text = "{TREE_SHUFFLED}")
+        reference(problem(pu_cost, features) |> add_max_phylo_end_objective_fixed(2500, tr) |>
+                  add_relative_targets(0.3) |> add_binary_decisions())""",
+                          notes="prioritizr with its tip-order bug fixed"),
+    "max_phylo_end_ordered": Case("objectives", RASTER, f"""
+        tr <- ape::read.tree(text = "{TREE_ORDERED}")
+        reference(problem(pu_cost, features) |> add_max_phylo_end_objective(2500, tr) |>
+                  add_relative_targets(0.3) |> add_binary_decisions())""",
+                                  notes="tips in the features' order: prioritizr itself"),
     # --- exact: exactextractr's coverage fractions and sums (the amounts of polygon planning units)
     "exact_shapes": Case("exact", ("features", "shapes"), """
         cov <- exactextractr::coverage_fraction(features[[1]], shapes)
@@ -543,5 +568,18 @@ PY_OBJECTIVES: dict[str, Callable] = {
     "targets_loglinear_cap": lambda: _rp().add_min_set_objective()
     .add_loglinear_targets(3, 0.6, 300, 0.2, cap_amount=100, cap_target=50).add_binary_decisions(),
 }
+for _name, _fn in PY_OBJECTIVES.items():
+    CASES[_name].py = _fn
+
+PY_OBJECTIVES.update({
+    "max_phylo_div": lambda: _rp().add_max_phylo_div_objective(2500, TREE_ORDERED).add_relative_targets(0.3)
+    .add_binary_decisions(),
+    "max_phylo_div_shuffled": lambda: _rp().add_max_phylo_div_objective(2500, TREE_SHUFFLED)
+    .add_relative_targets([0.3, 0.4, 0.5, 0.2, 0.35]).add_feature_weights([1, 2, 1, 3, 1]).add_binary_decisions(),
+    "max_phylo_end": lambda: _rp().add_max_phylo_end_objective(2500, TREE_SHUFFLED).add_relative_targets(0.3)
+    .add_binary_decisions(),
+    "max_phylo_end_ordered": lambda: _rp().add_max_phylo_end_objective(2500, TREE_ORDERED).add_relative_targets(0.3)
+    .add_binary_decisions(),
+})
 for _name, _fn in PY_OBJECTIVES.items():
     CASES[_name].py = _fn

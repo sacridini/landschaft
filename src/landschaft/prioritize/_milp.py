@@ -416,6 +416,17 @@ class Problem:
         weighted); no targets."""
         return self._with(objective=("max_cover", _budget(budget)))
 
+    def add_max_phylo_div_objective(self, budget: float, tree) -> Problem:
+        """Maximum phylogenetic diversity: within the budget, the most total length of the branches
+        of a phylogeny with a target met below them (Faith 1992). ``tree``: an ``ls.bio`` tree
+        (:func:`landschaft.bio.read_tree`) or a Newick string, whose tips are the features."""
+        return self._with(objective=("max_phylo_div", _budget(budget), tree))
+
+    def add_max_phylo_end_objective(self, budget: float, tree) -> Problem:
+        """Maximum phylogenetic endemism: as :meth:`add_max_phylo_div_objective`, every branch's
+        length divided by the total amount of the features below it (Rosauer et al. 2009)."""
+        return self._with(objective=("max_phylo_end", _budget(budget), tree))
+
     def add_min_penalties_objective(self, budget: float) -> Problem:
         """Minimum penalties: meet the targets within the budget with the least penalties (the
         penalties come in a later phase: until then any solution that meets them is optimal)."""
