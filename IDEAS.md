@@ -1655,6 +1655,45 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     varredura e a contagem das feições faltantes reusa o índice `i` da varredura: **nunca termina** quando acha
     uma unidade para adicionar (confirmado: travou o executável); aqui, varre tudo e adiciona a melhor.
   * Armadilha do harness: o `pandas.read_csv` padrão não arredonda corretamente; `float_precision="round_trip"`.
+* **Parte 3**: solver `anneal` no `Problem` (`add_anneal_solver`, `_milp_anneal.py`): o recozimento do Marxan
+  (o porte da parte 2) sobre o modelo compilado de mínimo conjunto. **Conversão exata e genérica**, lida do
+  próprio modelo: colunas das unidades = custos; cada coluna de par (b = x_i x_j linearizada pelas linhas
+  b <= x_i, b <= x_j, b >= x_i + x_j - 1) com objetivo q vira fronteira -q/2 do Marxan entre as duas unidades
+  e +q/2 no custo de cada uma (q x_i x_j = q/2 (x_i + x_j) - q/2 (x_i + x_j - 2 x_i x_j)); linhas `>=` só
+  nas unidades = feições (metas, metas sub-regionais, `add_linear_constraints(">=")`); limites das colunas =
+  travas. Daí a penalidade de fronteira do prioritizr ser a do Marxan com BLM = penalidade e fronteira fixa =
+  borda exposta x `edge_factor` (testado contra o `ls.prioritize.marxan` com todas as unidades travadas no
+  ótimo: o Score é o objetivo), e conectividade simétrica e assimétrica também entrarem. Fora (erro
+  explicativo): maximizações, decisões não binárias, linhas `<=`/`=`, contiguidade, corredores, portfólios.
+  * Extensões do motor (só no `anneal`; o `marxan()` segue com paridade): penalidades das feições por guloso
+    ordenado (o `computePenalties` do Marxan varre todas as unidades a cada unidade adicionada: O(n²) por
+    feição, inviável em 10⁶); **reparo** por execução (guloso de déficit por unidade de pontuação, unidades
+    que baixam a pontuação primeiro; depois poda das unidades dispensáveis enquanto a pontuação cai, metas
+    sempre atendidas); **agenda por tempo** com `time_limit` (as quedas de temperatura espalhadas pela fatia
+    de tempo de cada execução: com a agenda por iterações, o corte no limite deixava a reserva quente, 40% pior
+    em 10⁶); SPF por execução (`spf=(1, 2)`: as execuções alternam, a melhor vence); correção: com todas as
+    unidades travadas o laço do recozimento do Marxan nunca termina (sorteia até achar uma livre): aqui,
+    sem recozimento.
+  * **SPF**: com o reparo, SPF baixo é melhor (alto deixa a paisagem acidentada): nos 6 casos de referência
+    (166 unidades, 3 sementes) o pior caso ficou 1,3% acima do ótimo com SPF 1 e 4-38% com SPF >= 2 ou a agenda
+    adaptativa; SPF 1 falhou só em `boundary_polygons` (4,4%; o reparo guloso), que `(1, 2)` resolve (pior caso
+    1,5%).
+  * Limite inferior: a relaxação linear sem os termos de corte das fronteiras (cada um >= min(0, fronteira) x
+    (x_i + x_j)), pelo motor de cobertura: válido mas fraco (35% abaixo nos casos de fronteira). Status
+    `"optimal"` só com gap fechado; senão `"heuristic"`.
+  * **Benchmark** (borda, penalidade 0,5, 30 feições, metas 30%; i5-13600K, 11 threads; ótimo pelo Gurobi):
+
+    | unidades | Gurobi (gap 1%) | HiGHS | anneal |
+    |---:|---|---|---|
+    | 10⁴ | 9.591 em 0,9 s | 9.613 em 2,5 s | 9.632 em 10 s (+0,4%); 9.920 em 0,6 s com 10⁶ iterações |
+    | 10⁵ | 97.020 em 19 s | sem solução (fase 0) | 98.385 em 30 s (+1,4%); 97.837 em 60 s (+0,8%) |
+    | 10⁶ | 975.958 em 289 s | sem resposta (fase 0) | 1.015.526 em 120 s (+4,1%) |
+
+    O Marxan é o Marxan: muito atrás do Gurobi, mas dá solução viável no tempo pedido onde o HiGHS não dá
+    nenhuma. **Próximo passo para fronteira em escala**: relaxação lagrangiana das metas, cujo subproblema
+    (custos unitários + fronteiras >= 0) é um **corte mínimo** s-t exato (submodular; fronteira e conectividade
+    simétrica dão fronteiras >= 0): limite inferior forte (>= LP) e soluções primais reparáveis por iteração,
+    com fluxo máximo próprio (Boykov-Kolmogorov ou push-relabel, clean-room pelo artigo).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

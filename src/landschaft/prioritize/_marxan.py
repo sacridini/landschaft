@@ -3,7 +3,7 @@
 annealing, iterative improvement and the greedy heuristics on Marxan's
 objective, ported to C++ (``opt/marxan``) with the same runs, unit by unit, as
 the Marxan executable built with gcc for the same seed (see
-``src/cpp/opt/marxan.hpp`` for what is supported and the one correction)."""
+``src/cpp/opt/marxan.hpp`` for what is supported and the corrections)."""
 
 from __future__ import annotations
 

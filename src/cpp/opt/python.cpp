@@ -166,6 +166,11 @@ void register_python(py::module_& m) {
             get("connectivity_in", o.connectivity_in);
             get("seed", o.seed);
             get("threads", o.threads);
+            get("time_limit", o.time_limit);
+            get("fast_penalties", o.fast_penalties);
+            get("repair", o.repair);
+            get("time_schedule", o.time_schedule);
+            get("spf_scale", o.spf_scale);
             marxan::Result r;
             {
                 py::gil_scoped_release release;
@@ -196,6 +201,7 @@ void register_python(py::module_& m) {
             out["penalty"] = to_array(std::move(r.penalty));
             out["target"] = to_array(std::move(r.target));
             out["unmet"] = r.unmet;
+            out["timed_out"] = r.timed_out;
             out["best"] = r.best;
             out["solutions"] = sol;
             out["score"] = to_array(std::move(total));

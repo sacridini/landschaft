@@ -701,6 +701,56 @@ class Problem:
         return self._with(solver=("gurobi", {"gap": gap, "time_limit": time_limit, "n_threads": n_threads,
                                              "verbose": verbose}))
 
+    def add_anneal_solver(self, num_reps: int = 10, num_iters: int | None = None, start_temp: float = -1.0,
+                          cool_fac: float = 0.0, num_temp: int = 10_000, spf=(1.0, 2.0), itimp_type: int = 0,
+                          time_limit: float | None = None, seed: int = 1, n_threads: int | None = None) -> Problem:
+        """Solve on Marxan's simulated annealing (:func:`~landschaft.prioritize.marxan`'s engine), for
+        minimum-set problems that are hard for a MILP solver: boundary, connectivity and linear penalties,
+        targets, locked units and other ``">="`` rows on the planning units, binary decisions.
+
+        The problem is Marxan's exactly (prioritizr's boundary penalty is Marxan's BLM, its edge factor
+        Marxan's fixed boundaries); every run of annealing and iterative improvement is then repaired to
+        meet every target and trimmed of the units the targets do not need, and the solution is the run
+        with the lowest objective. Its ``bound`` is the linear relaxation without the boundary terms
+        (a lower bound on the optimum) and ``status`` is ``"optimal"`` only when the gap closes,
+        ``"heuristic"`` otherwise (``"time_limit"`` if the annealing was cut short).
+
+        Parameters
+        ----------
+        num_reps
+            Runs (in parallel), from different random reserves.
+        num_iters
+            Annealing iterations per run (default: 1000 per planning unit, at least a million); with a
+            ``time_limit``, the runs take as many as fit (the schedule spread over their share of it).
+        start_temp, cool_fac, num_temp
+            Marxan's schedule: ``start_temp`` < 0 for Connolly's (the default) or the adaptive (-2)
+            one, else the initial temperature and its cooling factor; ``num_temp`` temperature
+            decreases.
+        spf
+            Every feature's penalty factor during the annealing (Marxan's SPF): a shortfall costs
+            ``spf`` x the cost of meeting the target alone. Low values let the annealing roam and the
+            repair meets the targets anyway; several values: the runs take them in turn (run ``r`` the
+            ``r % len(spf)``-th), the best run wins.
+        itimp_type
+            Marxan's iterative improvement after the annealing (0 normal, 3 twice).
+        time_limit
+            Seconds for the runs: every run's annealing gets its share (the runs in waves of
+            ``n_threads``) and cools over it, then improvement and repair.
+        seed
+            The same seed gives the same solution on any number of threads.
+        n_threads
+            Runs in parallel (default: all cores but one).
+        """
+        if num_reps < 1:
+            raise ValueError("num_reps must be at least 1")
+        if itimp_type not in (0, 3):
+            raise ValueError("itimp_type must be 0 or 3")
+        return self._with(solver=("anneal", {
+            "num_reps": int(num_reps), "num_iters": None if num_iters is None else int(num_iters),
+            "start_temp": float(start_temp), "cool_fac": float(cool_fac), "num_temp": int(num_temp),
+            "spf": tuple(float(v) for v in np.atleast_1d(spf)), "itimp_type": int(itimp_type), "time_limit": time_limit, "seed": int(seed),
+            "n_threads": n_threads}))
+
     # --- compile
     def compile(self) -> OptimizationProblem:
         """The model prioritizr's ``compile()`` gives for this problem."""
@@ -731,6 +781,8 @@ class Problem:
         if self.portfolio is not None:
             if start is not None:
                 raise ValueError("a start solution and a portfolio cannot be combined")
+            if self.solver[0] == "anneal":
+                raise ValueError("portfolios need the HiGHS or the Gurobi solver")
             from ._milp_portfolio import solve_portfolio
 
             return solve_portfolio(self, m, targets)
@@ -751,8 +803,11 @@ class Problem:
         if isinstance(start, xr.DataArray) and start.ndim >= 2:
             return _start_from_rank(m, _unit_ranks(self.units, start))
         start = np.asarray(start, dtype=np.float64).ravel()
+        n = self.units.n
+        if start.size == n and m.ncol > n:  # the other columns from the units: the solver completes them
+            start = np.concatenate([start, np.zeros(m.ncol - n)])
         if start.size != m.ncol:
-            raise ValueError(f"the start solution must have one value per planning unit ({m.ncol})")
+            raise ValueError(f"the start solution must have one value per planning unit ({n})")
         return start
 
 

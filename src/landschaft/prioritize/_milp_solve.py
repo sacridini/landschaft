@@ -92,6 +92,12 @@ def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.nd
         r = _highs(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start, n_units=n_units)
     elif solver == "gurobi":
         r = _gurobi(m, gap, time_limit, threads, verbose, start)
+    elif solver == "anneal":
+        from ._milp_anneal import solve_anneal
+
+        if n_units is None:
+            raise ValueError("the anneal solver needs the number of planning units")
+        r = solve_anneal(m, n_units, options, start)
     else:
         raise ValueError(f"unknown solver {solver!r}")
     r["solver"] = solver

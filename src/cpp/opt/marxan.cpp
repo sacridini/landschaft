@@ -9,7 +9,9 @@
 #include "opt/marxan.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cfloat>
+#include <chrono>
 #include <cmath>
 #include <random>
 #include <stdexcept>
@@ -330,6 +332,147 @@ int compute_penalties(const Model& m, std::vector<Species>& spec, Rng& rng) {
     return badspecies;
 }
 
+// the units of every feature (the transpose of the units' features)
+struct ByFeature {
+    std::vector<std::int64_t> start;
+    std::vector<int> unit;
+    std::vector<double> amount;
+};
+
+ByFeature by_feature(const Data& d) {
+    ByFeature f;
+    f.start.assign(static_cast<std::size_t>(d.nsp) + 1, 0);
+    for (int isp : d.spindex) f.start[static_cast<std::size_t>(isp) + 1]++;
+    for (int i = 0; i < d.nsp; ++i) f.start[i + 1] += f.start[i];
+    f.unit.resize(d.spindex.size());
+    f.amount.resize(d.spindex.size());
+    std::vector<std::int64_t> at(f.start.begin(), f.start.end() - 1);
+    for (int ipu = 0; ipu < d.npu; ++ipu)
+        for (std::int64_t ism = d.offset[ipu]; ism < d.offset[ipu + 1]; ++ism) {
+            const std::int64_t k = at[d.spindex[ism]]++;
+            f.unit[k] = ipu;
+            f.amount[k] = d.amount[ism];
+        }
+    return f;
+}
+
+// landschaft's penalties (Options::fast_penalties): the locked-in units' amounts first, then the available
+// units in order of amount per unit value (Marxan's computePlanningUnitValue) until the target is met; the
+// penalty is the value of the units added. A target that cannot be met scales it as Marxan does.
+int fast_penalties(const Model& m, const ByFeature& f, std::vector<Species>& spec, int threads) {
+    const Data& d = m.d;
+    std::vector<double> value(static_cast<std::size_t>(d.npu));
+    for (int j = 0; j < d.npu; ++j) {
+        value[j] = m.unit_value(j);
+        if (!(value[j] > 0)) value[j] = kDelta;
+    }
+    int bad = 0;
+#pragma omp parallel for schedule(dynamic, 1) num_threads(threads > 0 ? threads : 1) reduction(+ : bad)
+    for (int i = 0; i < d.nsp; ++i) {
+        Species& s = spec[i];
+        double held = 0;
+        std::vector<std::int64_t> cand;
+        for (std::int64_t k = f.start[i]; k < f.start[i + 1]; ++k) {
+            const int st = d.status[f.unit[k]];
+            if (st == 2) held += f.amount[k];
+            else if (st != 3 && f.amount[k] > 0) cand.push_back(k);
+        }
+        s.penalty = 0;
+        if (held >= s.target) continue;
+        std::sort(cand.begin(), cand.end(), [&](std::int64_t a, std::int64_t b) {
+            const double ra = f.amount[a] / value[f.unit[a]], rb = f.amount[b] / value[f.unit[b]];
+            return ra > rb || (ra == rb && a < b);
+        });
+        for (const std::int64_t k : cand) {
+            if (held >= s.target) break;
+            held += f.amount[k];
+            s.penalty += value[f.unit[k]];
+        }
+        if (held < s.target) {
+            s.penalty *= s.target / (held == 0 ? kDelta : held);
+            bad++;
+        }
+    }
+    return bad;
+}
+
+double target_tolerance(const Species& s) { return 1e-10 * std::max(1.0, std::abs(s.target)); }
+
+// Options::repair: every target met (if it can be), then no unit that the targets do not need and the score
+// is better without
+void repair(const Model& m, const ByFeature& f, std::vector<int>& R, std::vector<Species>& spec, Score& reserve) {
+    const Data& d = m.d;
+    species_amounts(d, spec, R);  // afresh: the annealing's running sums drift
+    reserve_value(m, R, spec, reserve);
+    Score change;
+    std::vector<int> stamp(static_cast<std::size_t>(d.npu), -1);
+    std::vector<int> cand;
+    for (int round = 0;; ++round) {
+        cand.clear();
+        for (int i = 0; i < d.nsp; ++i) {
+            const Species& s = spec[i];
+            if (!(s.target - s.amount > target_tolerance(s))) continue;
+            for (std::int64_t k = f.start[i]; k < f.start[i + 1]; ++k) {
+                const int j = f.unit[k];
+                if (R[j] == 0 && f.amount[k] > 0 && stamp[j] != round) {
+                    stamp[j] = round;
+                    cand.push_back(j);
+                }
+            }
+        }
+        if (cand.empty()) break;  // met, or nothing left to add
+        int best = -1;
+        bool best_free = false;
+        double best_key = 0;
+        for (const int j : cand) {
+            double gain = 0;
+            for (std::int64_t ism = d.offset[j]; ism < d.offset[j + 1]; ++ism) {
+                const Species& s = spec[d.spindex[ism]];
+                const double shortfall = s.target - s.amount;
+                if (shortfall > target_tolerance(s) && d.amount[ism] > 0)
+                    gain += std::min(d.amount[ism], shortfall) / s.target;
+            }
+            if (!(gain > 0)) continue;
+            const double delta = d.cost[j] + m.connection_cost2(j, R, 1, 1, m.cm);
+            const bool free = delta <= 0;
+            const double key = free ? gain : gain / delta;
+            if (best < 0 || (free && !best_free) || (free == best_free && key > best_key)) {
+                best = j;
+                best_free = free;
+                best_key = key;
+            }
+        }
+        if (best < 0) break;
+        change_score(m, best, R, spec, 1, change, reserve, 0, 0, 0, 0);
+        do_change(m, best, R, reserve, change, spec, 1);
+    }
+    // drop units in order of what dropping them saves, while the targets stay met
+    for (bool dropped = true; dropped;) {
+        dropped = false;
+        std::vector<std::pair<double, int>> order;
+        for (int j = 0; j < d.npu; ++j)
+            if (R[j] == 1) {
+                const double delta = -d.cost[j] + m.connection_cost2(j, R, -1, 1, m.cm);
+                if (delta < 0) order.emplace_back(delta, j);
+            }
+        std::sort(order.begin(), order.end());
+        for (const auto& [saving, j] : order) {
+            bool keeps = true;
+            for (std::int64_t ism = d.offset[j]; ism < d.offset[j + 1] && keeps; ++ism) {
+                const Species& s = spec[d.spindex[ism]];
+                if (d.amount[ism] > 0 && s.amount - d.amount[ism] < s.target - target_tolerance(s)) keeps = false;
+            }
+            if (!keeps) continue;
+            if (-d.cost[j] + m.connection_cost2(j, R, -1, 1, m.cm) >= 0) continue;  // its neighbours changed
+            change_score(m, j, R, spec, -1, change, reserve, 0, 0, 0, 0);
+            do_change(m, j, R, reserve, change, spec, -1);
+            dropped = true;
+        }
+    }
+    species_amounts(d, spec, R);
+    reserve_value(m, R, spec, reserve);
+}
+
 struct Anneal {
     long titns;
     long long iterations;
@@ -390,20 +533,55 @@ void reduce_temperature(Anneal& a) {
     a.sum2 = 0;
 }
 
+using Clock = std::chrono::steady_clock;
+
+struct Deadline {
+    bool timed = false;
+    Clock::time_point at{};
+    std::atomic<bool>* hit = nullptr;
+    bool passed() const {
+        if (!timed) return false;
+        if (Clock::now() < at) return false;
+        hit->store(true);
+        return true;
+    }
+};
+
+// run_seconds > 0 (landschaft's, Options::time_schedule): the schedule's temperature decreases spread over
+// the run's seconds instead of its iterations, as many iterations as fit
 void thermal_annealing(const Model& m, std::vector<int>& R, std::vector<Species>& spec, Score& reserve, Anneal& a,
-                       double costthresh, const Options& o, Rng& rng) {
+                       double costthresh, const Options& o, Rng& rng, const Deadline& deadline, double run_seconds) {
     const Data& d = m.d;
     Score change;
     const double rThreshold = costthresh;
     costthresh = rThreshold * o.start_dec_mult;
     double rTemperature = 1;
-    for (long long itime = 1; itime <= a.iterations; ++itime) {
+    const bool timed = run_seconds > 0;
+    const Clock::time_point t0 = Clock::now();
+    long step = 0, target_step = 0;
+    long long since = 0;
+    double frac = 0;
+    for (long long itime = 1; timed || itime <= a.iterations; ++itime) {
+        if ((itime & 1023) == 0) {
+            if (deadline.passed()) break;
+            if (timed) {
+                frac = std::chrono::duration<double>(Clock::now() - t0).count() / run_seconds;
+                if (frac >= 1) break;
+                target_step = static_cast<long>(frac * static_cast<double>(a.titns));
+            }
+        }
         int ipu = static_cast<int>(rng.uniform_int(0, d.npu - 1));
         while (R[ipu] > 1) ipu = static_cast<int>(rng.uniform_int(0, d.npu - 1));
         const int itemp = R[ipu] == 1 ? -1 : 1;
         change_score(m, ipu, R, spec, itemp, change, reserve, costthresh, o.tpf1, o.tpf2,
-                     (double)itime / (double)a.iterations);
-        if (itime % a.tlen == 0) {
+                     timed ? frac : (double)itime / (double)a.iterations);
+        ++since;
+        if (timed ? step < target_step : itime % a.tlen == 0) {
+            if (timed) {
+                ++step;
+                a.tlen = static_cast<long>(std::max<long long>(2, since));
+                since = 0;
+            }
             rTemperature = rTemperature * a.tcool;
             if (rTemperature > o.start_dec_thresh) costthresh = rThreshold * o.start_dec_mult;
             else if (rTemperature < o.end_dec_thresh) costthresh = rThreshold * o.end_dec_mult;
@@ -517,7 +695,9 @@ Result solve(const Data& d, const Options& o) {
 
     Rng global(o.seed);
     Result res;
-    res.unmet = compute_penalties(m, spec, global);
+    ByFeature f;
+    if (o.fast_penalties || o.repair) f = by_feature(d);
+    res.unmet = o.fast_penalties ? fast_penalties(m, f, spec, o.threads) : compute_penalties(m, spec, global);
     for (const Species& s : spec) {
         res.penalty.push_back(s.penalty);
         res.target.push_back(s.target);
@@ -538,6 +718,21 @@ Result solve(const Data& d, const Options& o) {
         if (a0.tlen < 1) throw std::invalid_argument("fewer iterations than temperature decreases");
     }
 
+    std::atomic<bool> hit{false};
+    Deadline deadline;
+    if (o.time_limit >= 0) {
+        deadline.timed = true;
+        deadline.at = Clock::now() + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(o.time_limit));
+        deadline.hit = &hit;
+    }
+    double run_seconds = 0;  // Options::time_schedule: the runs in waves of `threads`, each its share
+    if (o.time_schedule && deadline.timed) {
+        const long threads = std::max(1, o.threads);
+        const long waves = (o.repeats + threads - 1) / threads;
+        const double left = std::chrono::duration<double>(deadline.at - Clock::now()).count();
+        run_seconds = std::max(1e-3, 0.85 * left / static_cast<double>(std::max(1L, waves)));
+    }
+    const bool any_free = std::any_of(d.status.begin(), d.status.end(), [](int st) { return st < 2; });
     std::vector<std::uint32_t> seeds(static_cast<std::size_t>(o.repeats));
     for (auto& s : seeds) s = global.raw();
     res.runs.resize(static_cast<std::size_t>(o.repeats));
@@ -547,8 +742,10 @@ Result solve(const Data& d, const Options& o) {
         Anneal a = a0;
         std::vector<int> R(static_cast<std::size_t>(d.npu));
         std::vector<Species> sp = spec;
+        if (!o.spf_scale.empty())
+            for (Species& s : sp) s.spf *= o.spf_scale[static_cast<std::size_t>(r) % o.spf_scale.size()];
         Score reserve;
-        const bool annealing = a.type != 0;
+        const bool annealing = a.type != 0 && any_free;  // Marxan's loop never ends with every unit locked
         if (annealing) {
             if (a.type == 2) connolly(m, R, sp, a, o.prop, rng);
             if (a.type == 3) adaptive(m, R, sp, a, o.prop, rng);
@@ -557,12 +754,13 @@ Result solve(const Data& d, const Options& o) {
         initialise_reserve(o.prop, d, R, rng);
         species_amounts(d, sp, R);
         reserve_value(m, R, sp, reserve);
-        if (annealing) thermal_annealing(m, R, sp, reserve, a, o.costthresh, o, rng);
+        if (annealing) thermal_annealing(m, R, sp, reserve, a, o.costthresh, o, rng, deadline, run_seconds);
         if (heuristic_on) heuristics(m, R, sp, reserve, o.costthresh, o, rng);
         if (itimp_on) {
             iterative_improvement(m, R, sp, reserve, o.costthresh, o, rng);
             if (o.itimptype == 3) iterative_improvement(m, R, sp, reserve, o.costthresh, o, rng);
         }
+        if (o.repair) repair(m, f, R, sp, reserve);
         Run& run = res.runs[static_cast<std::size_t>(r)];
         run.R = R;
         run.incremental = reserve;
@@ -598,6 +796,7 @@ Result solve(const Data& d, const Options& o) {
             if (R[i] == 1 || R[i] == 2) conn += m.connection_cost2(i, R, 1, 0, 1);
         run.connectivity = conn;
     }
+    res.timed_out = hit.load();
     res.best = 0;
     for (std::size_t r = 1; r < res.runs.size(); ++r)
         if (res.runs[r].score.total < res.runs[static_cast<std::size_t>(res.best)].score.total) res.best = static_cast<int>(r);

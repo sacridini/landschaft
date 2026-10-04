@@ -20,10 +20,12 @@
 // boundaries ("connectivity edge" or "in"). Not: clumping or separation
 // targets, probabilities, asymmetric connectivity, user penalties.
 //
-// One correction (implemented only in its correct form): Marxan's Connolly
+// Two corrections (implemented only in their correct form): Marxan's Connolly
 // and adaptive initialisations score random reserves with the features'
 // amounts of a different reserve (in the first run, memory readSpecies leaves
-// uninitialised); here the amounts are those of the reserve scored.
+// uninitialised); here the amounts are those of the reserve scored. With every
+// unit locked, Marxan's annealing draws units until it finds a free one and
+// never ends; here there is no annealing then.
 #pragma once
 
 #include <cstdint>
@@ -63,6 +65,23 @@ struct Options {
     std::uint32_t seed = 0;
     int threads = 1;
     double start_dec_thresh = 0.7, end_dec_thresh = 0.3, start_dec_mult = 3.0, end_dec_mult = 1.0;
+    // seconds for all the runs (not Marxan's: annealing stops at the deadline and the run goes on with
+    // the iterative improvement; without a limit, the runs are Marxan's)
+    double time_limit = -1.0;
+    // landschaft's, for the anneal solver of ls.prioritize (off: Marxan's runs):
+    // every feature's penalty from a greedy cover of its target in order of amount per unit value (sorted
+    // once, not Marxan's scan of every unit for every unit added: O(units log units) a feature)
+    bool fast_penalties = false;
+    // after every run, add units until every target is met (the most of the shortfalls per unit of score
+    // first, units that lower the score before any), then drop the units the targets do not need while
+    // that lowers the score
+    bool repair = false;
+    // with a time limit, every run's annealing gets its share of the limit (the runs in waves of
+    // `threads`) and spreads the schedule's temperature decreases over it, as many iterations as fit
+    // (`iterations` then only sizes Connolly's sample of changes)
+    bool time_schedule = false;
+    // run r multiplies every feature's SPF by spf_scale[r % size] (empty: Marxan's, all 1)
+    std::vector<double> spf_scale;
 };
 
 struct Score {
@@ -82,6 +101,7 @@ struct Run {
 };
 
 struct Result {
+    bool timed_out = false;
     std::vector<double> penalty;  // per feature
     std::vector<double> target;   // per feature, after the proportion targets
     int unmet = 0;                // features that cannot meet their target
