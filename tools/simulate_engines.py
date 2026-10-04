@@ -19,7 +19,10 @@ giving a dict ``key -> numpy array or list of str``:
   script;
 - ``molusce``: the MOLUSCE QGIS plugin's algorithms (``LANDSCHAFT_MOLUSCE``,
   default ``~/Documents/dev/qgis_molusce/src``) imported with stubs for the
-  QGIS / Qt modules they name; the job is a function of the imported package.
+  QGIS / Qt modules they name; the job is a function of the imported package;
+- ``molusce_fixed``: the same with ``tools/molusce_fixed.patch`` applied
+  (``LANDSCHAFT_MOLUSCE_FIXED``, default ``~/Documents/dev/qgis_molusce_fixed/src``:
+  the WoE prediction's confidence from the two largest weights).
 
 The R packages (lulcc, OpenLand, diffeR) run through
 ``tools/simulate_reference.R`` in ``make_reference_simulate.py``.
@@ -47,6 +50,8 @@ CLUMONDO_2017 = Path(os.environ.get("LANDSCHAFT_CLUMONDO_2017", DEV / "CLUMondo"
 DINAMICA = Path(os.environ.get("LANDSCHAFT_DINAMICA",
                                DEV / "dinamica_ego" / "install" / "DinamicaConsole8.exe"))
 MOLUSCE = Path(os.environ.get("LANDSCHAFT_MOLUSCE", DEV / "qgis_molusce" / "src"))
+# MOLUSCE with tools/molusce_fixed.patch applied
+MOLUSCE_FIXED = Path(os.environ.get("LANDSCHAFT_MOLUSCE_FIXED", DEV / "qgis_molusce_fixed" / "src"))
 
 
 # ----------------------------------------------------------------------------- files
@@ -333,13 +338,19 @@ def molusce_version() -> str:
     return "unknown"
 
 
-def run_molusce(job, tmp: Path) -> dict:
+def run_molusce(job, tmp: Path, root: Path = MOLUSCE) -> dict:
     """Call ``job(import_module)`` with MOLUSCE's algorithms importable; it returns the result dict."""
-    if not MOLUSCE.is_dir():
-        raise FileNotFoundError(f"MOLUSCE sources not found at {MOLUSCE} (set LANDSCHAFT_MOLUSCE)")
+    if not root.is_dir():
+        raise FileNotFoundError(f"MOLUSCE sources not found at {root} (set LANDSCHAFT_MOLUSCE / _FIXED)")
     _qgis_stubs()
-    if str(MOLUSCE) not in sys.path:
-        sys.path.insert(0, str(MOLUSCE))
+    loaded = sys.modules.get("molusce")
+    if loaded is not None and Path(loaded.__file__).parent.parent != root:  # the other copy: forget it
+        for name in [n for n in sys.modules if n == "molusce" or n.startswith("molusce.")]:
+            del sys.modules[name]
+    for other in (MOLUSCE, MOLUSCE_FIXED):
+        while str(other) in sys.path:
+            sys.path.remove(str(other))
+    sys.path.insert(0, str(root))
     return job(importlib.import_module)
 
 
@@ -357,4 +368,5 @@ ENGINES = {
     "wsl_python": run_wsl_python,
     "dinamica": run_dinamica,
     "molusce": run_molusce,
+    "molusce_fixed": lambda job, tmp: run_molusce(job, tmp, MOLUSCE_FIXED),
 }

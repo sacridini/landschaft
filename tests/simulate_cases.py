@@ -2250,3 +2250,127 @@ CASES.update({
         py=lambda patches_blobs, patches_blobs_prob: _patch_py(patches_blobs, patches_blobs_prob, "Patcher", 507),
         notes="Dinamica EGO's Patcher, one-cell patches, 12 calls: where the seeds fall (statistical)."),
 })
+
+
+# ============================================================================= phase 7b: MOLUSCE's WoE and simulator
+
+GROUPS += ["molusce"]
+
+_MOL_BINS = {"dist": [90.0, 300.0, 600.0], "slope": [5.0, 12.0]}
+
+
+def molusce_world(holes: bool = True):
+    """Two maps (classes 1, 2, 3; 45 x 60 cells) with change driven by the distance to class 2, a soil type
+    (with holes) and a slope; a missing corner in both maps (numpy's generator, seed 23)."""
+    import xarray as xr
+    from scipy import ndimage
+
+    rng = np.random.default_rng(23)
+    ny, nx = 45, 60
+    t0 = np.ones((ny, nx))
+    t0[5:15, 8:20] = 2
+    t0[30:40, 35:50] = 2
+    t0[ndimage.gaussian_filter(rng.random((ny, nx)), 2) > 0.53] = 3
+    dist = ndimage.distance_transform_edt(t0 != 2) * 30.0
+    soil = np.floor(np.linspace(0, 3.999, nx))[None, :] + np.zeros((ny, 1))
+    if holes:
+        soil[20:24, 10:14] = np.nan
+    g = ndimage.gaussian_filter(rng.random((ny, nx)), 3)
+    slope = (g - g.min()) / (g.max() - g.min()) * 30
+    p = np.exp(-dist / 200) * (0.5 + 0.2 * (soil == 1)) * (1 - slope / 40)
+    t1 = t0.copy()
+    t1[(t0 == 1) & (rng.random((ny, nx)) < np.nan_to_num(p))] = 2
+    t1[(t0 == 3) & (rng.random((ny, nx)) < 0.08)] = 1
+    t1[(t0 == 1) & (rng.random((ny, nx)) < 0.02)] = 3
+    for a in (t0, t1):
+        a[:3, :4] = np.nan
+    bands = {"t0": t0, "t1": t1, "dist": dist, "soil": soil, "slope": slope}
+    return xr.concat([grid(v) for v in bands.values()], dim="band").assign_coords(band=list(bands))
+
+
+def molusce_job(world, iterations=3, seed=7) -> Callable:
+    def job(import_module) -> dict:
+        from numpy import ma
+
+        dp = import_module("molusce.algorithms.dataprovider")
+        aa = import_module("molusce.algorithms.models.area_analysis.manager")
+        wm = import_module("molusce.algorithms.models.woe.manager")
+        ct = import_module("molusce.algorithms.models.crosstabs.manager")
+        sim = import_module("molusce.algorithms.models.simulator.sim")
+        ny, nx = world.shape[1:]
+        geo = {"xSize": nx, "ySize": ny, "proj": "", "transform": (0, 30, 0, 0, 0, -30), "units": "m"}
+
+        def raster(a, dtype):
+            r = dp.Raster()
+            nan = np.isnan(a)
+            r.create([ma.array(np.where(nan, 0, a).astype(dtype), mask=nan)], dict(geo))
+            return r
+
+        t0 = raster(world.sel(band="t0").values, np.uint8)
+        t1 = raster(world.sel(band="t1").values, np.uint8)
+        names = ["dist", "soil", "slope"]
+        factors = [raster(world.sel(band=k).values, np.float64) for k in names]
+        analyst = aa.AreaAnalyst(t0, t1)
+        bins = {i: ([list(_MOL_BINS[k])] if k in _MOL_BINS else None) for i, k in enumerate(names)}
+        model = wm.WoeManager(factors, analyst, bins=bins)
+        model.train()
+        cats = [float(c) for c in analyst.categories]
+        m = len(cats)
+        out = {}
+        for code, per in model.weights.items():
+            for k, w in per.items():
+                out[f"w_{code}_{names[k]}"] = np.asarray(w[1], dtype=float)
+        pred = model.getPrediction(t1).getBand(1)
+        conf = model.getConfidence().getBand(1)
+        p = ma.filled(pred.astype(float), np.nan)
+        out["prediction"] = np.where((p == 255) | np.isnan(p), np.nan, np.asarray(cats)[np.nan_to_num(p).astype(int) % m])
+        out["confidence"] = ma.filled(conf.astype(float), np.nan)
+        cross = ct.CrossTableManager(t0, t1)
+        s = sim.Simulator(t1, factors, model, cross)
+        s.setIterationCount(1)
+        np.random.seed(seed)
+        for k in range(1, iterations + 1):
+            s.simN()
+            out[f"map{k}"] = ma.filled(s.getState().getBand(1).astype(float), np.nan)
+        return out
+    return job
+
+
+def molusce_py(world, iterations=3, seed=7) -> dict:
+    import pandas as pd
+
+    import landschaft as ls
+
+    S = ls.simulate
+    t0, t1 = world.sel(band="t0"), world.sel(band="t1")
+    drivers = {k: world.sel(band=k) for k in ("dist", "soil", "slope")}
+    woe = S.MolusceWoE(bins=_MOL_BINS).fit(t0, t1, drivers)
+    out = {}
+    for code, per in woe.weights.items():
+        for k, (_c, w) in per.items():
+            out[f"w_{code}_{k}"] = w
+    out["prediction"], out["confidence"] = woe.prediction(t1)
+    a, b = t0.values.ravel(), t1.values.ravel()
+    ok = ~(np.isnan(a) | np.isnan(b))
+    cross = pd.crosstab(a[ok], b[ok])
+    sim = S.Model(woe, cross, S.MolusceCA(iterations=iterations)).run(t1, seed=seed)
+    for k in range(1, iterations + 1):
+        out[f"map{k}"] = sim.maps.values[k]
+    return out
+
+
+INPUTS.update({"molusce_world": molusce_world, "molusce_world_full": lambda: molusce_world(holes=False)})
+
+CASES.update({
+    "molusce_fixed": Case(
+        "molusce", "molusce_fixed", ("molusce_world",), job=lambda molusce_world: molusce_job(molusce_world),
+        py=lambda molusce_world: molusce_py(molusce_world),
+        notes="MOLUSCE's WoeManager (bins, a categorical factor with holes, persistence codes) and Simulator, "
+              "3 iterations, numpy.random.seed(7); tools/molusce_fixed.patch (second largest weight; 255 for no "
+              "transition, as numpy < 2 stored the -1)."),
+    "molusce_original": Case(
+        "molusce", "molusce", ("molusce_world_full",), job=lambda molusce_world_full: molusce_job(molusce_world_full),
+        py=lambda molusce_world_full: molusce_py(molusce_world_full),
+        notes="MOLUSCE as published, factors without holes (with numpy 2 it fails on a cell without weights): "
+              "weights and predictions equal, its confidence (the largest weight before the largest) differs."),
+})

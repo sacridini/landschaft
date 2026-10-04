@@ -1,0 +1,190 @@
+{
+ "arrays": {
+  "molusce_fixed/confidence": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_fixed/map1": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_fixed/map2": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_fixed/map3": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_fixed/prediction": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_fixed/w_0_dist": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_0_slope": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_0_soil": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_1_dist": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_1_slope": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_1_soil": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_2_dist": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_2_slope": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_2_soil": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_4_dist": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_4_slope": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_4_soil": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_6_dist": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_6_slope": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_6_soil": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_8_dist": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_8_slope": {
+   "kind": "vector"
+  },
+  "molusce_fixed/w_8_soil": {
+   "kind": "vector"
+  },
+  "molusce_original/confidence": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_original/map1": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_original/map2": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_original/map3": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_original/prediction": {
+   "dim": [
+    45,
+    60
+   ],
+   "kind": "matrix"
+  },
+  "molusce_original/w_0_dist": {
+   "kind": "vector"
+  },
+  "molusce_original/w_0_slope": {
+   "kind": "vector"
+  },
+  "molusce_original/w_0_soil": {
+   "kind": "vector"
+  },
+  "molusce_original/w_1_dist": {
+   "kind": "vector"
+  },
+  "molusce_original/w_1_slope": {
+   "kind": "vector"
+  },
+  "molusce_original/w_1_soil": {
+   "kind": "vector"
+  },
+  "molusce_original/w_2_dist": {
+   "kind": "vector"
+  },
+  "molusce_original/w_2_slope": {
+   "kind": "vector"
+  },
+  "molusce_original/w_2_soil": {
+   "kind": "vector"
+  },
+  "molusce_original/w_4_dist": {
+   "kind": "vector"
+  },
+  "molusce_original/w_4_slope": {
+   "kind": "vector"
+  },
+  "molusce_original/w_4_soil": {
+   "kind": "vector"
+  },
+  "molusce_original/w_6_dist": {
+   "kind": "vector"
+  },
+  "molusce_original/w_6_slope": {
+   "kind": "vector"
+  },
+  "molusce_original/w_6_soil": {
+   "kind": "vector"
+  },
+  "molusce_original/w_8_dist": {
+   "kind": "vector"
+  },
+  "molusce_original/w_8_slope": {
+   "kind": "vector"
+  },
+  "molusce_original/w_8_soil": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "molusce": {
+   "molusce": "5.3.0"
+  },
+  "molusce_fixed": {
+   "molusce_fixed": "5.3.0"
+  }
+ }
+}

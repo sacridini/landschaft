@@ -159,6 +159,12 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.CARS
 
+## MOLUSCE
+
+::: landschaft.simulate.MolusceWoE
+
+::: landschaft.simulate.MolusceCA
+
 ## Urban growth (FUTURES)
 
 ::: landschaft.simulate.PatchGrowing
@@ -174,6 +180,16 @@ sim.development                                                # step in which e
 ::: landschaft.simulate.patch_library
 
 ::: landschaft.simulate.calibrate_patches
+
+## Presets and one-call projection
+
+::: landschaft.simulate.run
+
+::: landschaft.simulate.Projection
+
+::: landschaft.simulate.agreement
+
+::: landschaft.simulate.presets
 
 ## Example data
 

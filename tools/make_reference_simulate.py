@@ -101,8 +101,8 @@ def engine_versions(engine: str) -> dict:
         return {"clumondo": "CLUMondo_may_2017.exe (DataverseNL doi 10.34894/XZCPQY)"}
     if engine == "dinamica":
         return {"dinamica": simulate_engines.dinamica_version()}
-    if engine == "molusce":
-        return {"molusce": simulate_engines.molusce_version()}
+    if engine in ("molusce", "molusce_fixed"):
+        return {engine: simulate_engines.molusce_version()}
     if engine in ("grass", "wsl_python"):
         proc = simulate_engines._wsl("grass --version 2>/dev/null | head -1", 120)
         return {"grass": proc.stdout.strip(), "addons": "r.futures (OSGeo/grass-addons, grass8 branch)"}

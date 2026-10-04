@@ -1806,6 +1806,30 @@ sim.supply; sim.shortfall; sim.trajectory()
      until=..., seed=...)` (padrão estilo Dinamica: Markov + WoE + Expander/Patcher com tamanhos e isometria
      medidos pelo `lsm` nas mudanças observadas; valida t0 -> t1 antes de projetar), `report`, `settings`,
      `redo(...)`, anos em vez de passos, saída `xarray.Dataset` com dimensão `year`.
+     **Feita** (1.15.0): `MolusceWoE` + `MolusceCA` (o `WoeManager` e o `Simulator`) bit a bit com o MOLUSCE
+     5.3.0 corrigido (motor `molusce_fixed`, `tools/molusce_fixed.patch` em `dev/qgis_molusce_fixed`): pesos,
+     previsão, confiança e 3 iterações com `numpy.random.seed(7)`, na primeira tentativa (fatores com faixas e
+     categóricos com buracos, códigos de persistência, máscaras que se acumulam fator a fator); `presets`
+     (`clue_s`, `ordered`, `clumondo`, `futures` montam as peças; `dinamica`, `plus` e `molusce` ajustam tudo
+     de dois mapas), `observed_patches` (manchas de cada transição observada: expansões que tocam a classe de
+     destino em t0 e manchas novas, 8 vizinhos; fração, média e variância dos tamanhos), `run` (ajuste em
+     t0 -> t1 com um passo por ano, simulação do período observado e `agreement` com t1, projeção a partir de t1
+     até `until`; anos lidos da coordenada `year`/`time`/`band`; o MOLUSCE anda um período observado por
+     passo), `Projection` (`maps` com dimensão `year`, `calibration`, `validation`, `report`, `settings`,
+     `redo`, `to_dataset`), `agreement` (acerto global, figure of merit com acertos de classe errada, falta e
+     sobra de cada classe; a validação completa vem na fase 8), `Estimator(stratify=True)`.
+     - Corrigidos (patch do MOLUSCE): a confiança do WoE usa como "segundo" o maior peso visto antes do maior
+       (depende da ordem das classes; o LR e a MLP do próprio MOLUSCE usam a diferença entre os dois maiores):
+       aqui os dois maiores (1489 de 2700 células diferem; os mapas, em 78 a 167 células por iteração); com o
+       numpy 2 o `prediction[r, c] = -1` (célula sem peso em nenhuma transição, ex.: buraco num fator) quebra
+       ("out of bounds for uint8"; o numpy antigo guardava 255): o patch guarda 255.
+     - Diferenças de forma (sem efeito nos casos): o MOLUSCE guarda os fatores em 8 bits (categorias inteiras
+       fora de 0-255 dão a volta, frações são truncadas): aqui categorias inteiras com seu valor e frações
+       exigem faixas; o simulador recodifica as transições pelas classes do mapa corrente (se uma classe some,
+       os códigos deixam de bater com os do modelo): aqui as classes do ajuste.
+     - O preset `plus` modela só as classes que se expandiram (LEAS) e amostra estratificado (uma expansão rara
+       some numa amostra de 5 % das células); `dinamica` mede a fração do Expander e os tamanhos nas mudanças
+       observadas, a isometria não é medível (padrão 1,5; a calibração da fase 9 a ajusta).
    - **7c. Cenários e réplicas:** `S.scenarios(model, start, years, replicates=..., {...})` em paralelo
      (o `r.futures.parallelpga`), `probability(classe, ano)`, `metrics([...])` com `lsm`/`mspa`/`HabitatGraph`
      por ano e cenário, `ls.plot` com slider e Sankey.

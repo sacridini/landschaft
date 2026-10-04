@@ -1,0 +1,13 @@
+--- a/molusce/algorithms/models/woe/manager.py
++++ b/molusce/algorithms/models/woe/manager.py
+@@ -251,7 +251,9 @@
+                             ]  # The weight in the (r,c)-pixel
+                             if w > currMax:
+                                 indexMax, oldMax, currMax = code, currMax, w
+-                        prediction[r, c] = indexMax
++                            elif w > oldMax:  # landschaft fix: the second largest weight
++                                oldMax = w
++                        prediction[r, c] = indexMax if indexMax >= 0 else 255  # landschaft fix: numpy 2 refuses -1
+                         confidence[r, c] = int(
+                             100 * (sigmoid(currMax) - sigmoid(oldMax))
+                         )

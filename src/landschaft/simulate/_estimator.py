@@ -50,6 +50,10 @@ class Estimator:
     sample
         Cells to train each model on: ``None`` (all), an ``int`` (at most this
         many, drawn at random) or a fraction in (0, 1).
+    stratify
+        Draw ``sample`` from the presences and the absences separately, in
+        their proportions (at least one of each): rare changes keep their
+        cells.
     balance
         Draw as many absences as presences (after ``sample``).
     seed
@@ -68,14 +72,15 @@ class Estimator:
     ('class', 'y', 'x')
     """
 
-    def __init__(self, estimator, *, target: str = "presence", classes=None, sample=None, balance: bool = False,
-                 seed=None):
+    def __init__(self, estimator, *, target: str = "presence", classes=None, sample=None, stratify: bool = False,
+                 balance: bool = False, seed=None):
         if target not in ("presence", "expansion"):
             raise ValueError("target must be 'presence' or 'expansion'")
         self.estimator = estimator
         self.target = target
         self.classes = None if classes is None else [_class_value(c) for c in classes]
         self.sample = sample
+        self.stratify = bool(stratify)
         self.balance = bool(balance)
         self.seed = seed
         self.models: dict = {}
@@ -83,7 +88,16 @@ class Estimator:
         self._train: dict = {}
 
     def _draw(self, idx: np.ndarray, y: np.ndarray, rng) -> np.ndarray:
-        if self.sample is not None:
+        if self.sample is not None and self.stratify:
+            frac = min(1.0, (int(self.sample) / idx.size) if self.sample >= 1 else float(self.sample))
+            keep = []
+            for v in (0, 1):
+                group = np.flatnonzero(y == v)
+                m = min(group.size, max(1, round(frac * group.size)))
+                keep.append(rng.choice(group, size=m, replace=False))
+            pick = np.sort(np.concatenate(keep))
+            idx, y = idx[pick], y[pick]
+        elif self.sample is not None:
             n = int(self.sample) if self.sample >= 1 else round(self.sample * idx.size)
             if n < idx.size:
                 pick = rng.choice(idx.size, size=n, replace=False)

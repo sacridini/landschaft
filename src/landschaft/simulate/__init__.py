@@ -24,6 +24,7 @@ Typical use::
     ls.simulate.Markov.from_maps(lu[0], lu[2], steps=14).multi     # rates per year
 """
 
+from . import presets
 from ._allocation import CLUE, Ordered
 from ._change import Changes, IntensityAnalysis, changes, crosstab
 from ._clumondo import CLUMondo, NeighbourhoodEffect, ServiceDemand, Supply
@@ -54,10 +55,12 @@ from ._landsystems import Cap, LandSystemStack, Roles, Succession
 from ._markov import Markov
 from ._mce import MultiCriteria
 from ._model import Model, Simulation
+from ._molusce import MolusceCA, MolusceWoE
 from ._patches import ExpanderPatcher
 from ._plus import CARS
 from ._regional import Regional
 from ._rules import Neighbourhood, Rules
+from ._run import Projection, agreement, run
 from ._woe import WeightsOfEvidence, weights_of_evidence
 
 __all__ = [
@@ -77,11 +80,14 @@ __all__ = [
     "LogisticRegression",
     "Markov",
     "Model",
+    "MolusceCA",
+    "MolusceWoE",
     "MultiCriteria",
     "Neighbourhood",
     "NeighbourhoodEffect",
     "Ordered",
     "PatchGrowing",
+    "Projection",
     "RasterPotential",
     "Regional",
     "Roles",
@@ -91,6 +97,7 @@ __all__ = [
     "Succession",
     "Supply",
     "WeightsOfEvidence",
+    "agreement",
     "calibrate_patches",
     "changes",
     "composite_matrix",
@@ -104,6 +111,8 @@ __all__ = [
     "memberships",
     "overall_difference",
     "patch_library",
+    "presets",
+    "run",
     "sample_to_population",
     "share_of",
     "weights_of_evidence",
