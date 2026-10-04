@@ -102,6 +102,25 @@ def marxan(pu: pd.DataFrame, spec: pd.DataFrame, puvspr: pd.DataFrame, bound: pd
     Returns
     -------
     MarxanResult
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> pu = p.units
+    >>> import numpy as np, pandas as pd
+    >>> rij = pu.rij.tocoo()
+    >>> res = P.marxan(pd.DataFrame({"id": np.arange(1, pu.n + 1), "cost": pu.cost, "status": 0}),
+    ...                pd.DataFrame({"id": np.arange(1, 7), "prop": 0.2, "spf": 10.0}),
+    ...                pd.DataFrame({"species": rij.row + 1, "pu": rij.col + 1, "amount": rij.data}),
+    ...                num_reps=4, num_iters=20000, seed=1)
+    >>> len(res.summary)
+    4
+    >>> list(res.solutions.columns[:3])
+    ['planning_unit', 'solution_1', 'solution_2']
     """
     from .. import _core, _threads
 

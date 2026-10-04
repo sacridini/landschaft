@@ -639,7 +639,20 @@ def zonation_features(features, *, names=None, condition=None, renormalize=False
     features' own units, for an optimization problem (``problem(cost, zonation_features(...))``).
 
     The values carry Zonation's quantization (``bits`` 16: a relative error of about 1e-5 of the
-    feature's largest value). Returns a stack (band = the features' names), NaN outside the data."""
+    feature's largest value). Returns a stack (band = the features' names), NaN outside the data.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> protected = ls.load_raster(P.example_data("protected"))
+    >>> condition = 1 - 0.5 * protected.fillna(0)
+    >>> z = P.zonation_features(features, condition=[condition] * 6)
+    >>> z.shape
+    (6, 40, 60)
+    """
     if bits not in (8, 16):
         raise ValueError("bits must be 8 or 16")
     import xarray as xr

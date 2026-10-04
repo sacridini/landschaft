@@ -4,6 +4,7 @@ how much of every feature each keeps."""
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -67,9 +68,29 @@ def compare_zonation(p, solution=None, zonation=None, rule: str = "CAZ2", n_thre
                      **zonation_kw) -> ZonationComparison:
     """Compare an optimization solution of ``p`` (solved if not given) with a Zonation ranking of the
     same features and costs (run with ``rule`` and ``zonation_kw`` if not given: a
-    :class:`ZonationResult` or a rank raster) cut at the solution's cost. Raster planning units."""
-    from ._milp_eval import _values, eval_boundary_summary, eval_feature_representation_summary
-    from ._zonation import ZonationResult, zonation as run_zonation
+    :class:`ZonationResult` or a rank raster) cut at the solution's cost. Raster planning units.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> c = P.compare_zonation(p, sol)
+    >>> c.summary["method"].tolist()
+    ['milp', 'zonation']
+    >>> bool(c.table["milp_met"].all())
+    True
+    """
+    from ._milp_eval import (
+        _values,
+        eval_boundary_summary,
+        eval_feature_representation_summary,
+    )
+    from ._zonation import ZonationResult
+    from ._zonation import zonation as run_zonation
 
     u = p.units
     if u.kind != "raster":
@@ -110,11 +131,9 @@ def compare_zonation(p, solution=None, zonation=None, rule: str = "CAZ2", n_thre
     out[1, u.index] = z
     sel = xr.DataArray(out.reshape((2, *t.shape)), dims=("band", *t.dims),
                        coords={"band": ["milp", "zonation"], **{k: v for k, v in t.coords.items() if k in t.dims}})
-    try:
+    with contextlib.suppress(Exception):  # no georeferencing
         if t.rio.crs is not None:
             sel = sel.rio.write_crs(t.rio.crs)
-    except Exception:  # noqa: BLE001 - no georeferencing
-        pass
     sel.name = "selection"
     return ZonationComparison(table, pd.DataFrame(rows), sel, sol, zonation)
 
@@ -145,11 +164,32 @@ def report(p, solution=None, *, importance: bool = True, zonation: bool = False,
     boundary (raster and polygon units), the features' representation and the targets' coverage; with
     ``importance`` the Ferrier irreplaceability of the selected units (problems with one target per
     feature) or else their rarity-weighted richness; with ``extinction_z`` the species-area extinction
-    risk; with ``zonation`` the comparison with a Zonation ranking at the same cost (raster units)."""
+    risk; with ``zonation`` the comparison with a Zonation ranking at the same cost (raster units).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> r = P.report(p, sol)
+    >>> sorted(r.tables)
+    ['representation', 'summary', 'targets']
+    >>> page = ls.plot(r, show=False).save("report.html")
+    """
     from ._milp_compile import NO_TARGETS
-    from ._milp_eval import (eval_boundary_summary, eval_cost_summary, eval_extinction_risk,
-                             eval_feature_representation_summary, eval_ferrier_importance, eval_n_summary,
-                             eval_rare_richness_importance, eval_target_coverage_summary)
+    from ._milp_eval import (
+        eval_boundary_summary,
+        eval_cost_summary,
+        eval_extinction_risk,
+        eval_feature_representation_summary,
+        eval_ferrier_importance,
+        eval_n_summary,
+        eval_rare_richness_importance,
+        eval_target_coverage_summary,
+    )
 
     sol = p.solve() if solution is None else solution
     u = p.units
@@ -189,7 +229,20 @@ def sdm_features(results, env, *, threshold=None, ensemble: str = "weighted") ->
         The predictors (as for :func:`landschaft.sdm.predict`).
     threshold
         ``None``: the suitability (0-1) is the amount; a number, or ``"max_tss"`` (every model's
-        maximum-TSS threshold, their mean for an ensemble): presence (1) or absence (0)."""
+        maximum-TSS threshold, their mean for an ensemble): presence (1) or absence (0).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> from sklearn.linear_model import LogisticRegression
+    >>> occ = ls.load_table(ls.sdm.example_data("bradypus"))
+    >>> env = ls.load_raster(ls.sdm.example_data("bioclim"))
+    >>> data = ls.sdm.prepare(occ, env, clean=False, background=500, seed=1)
+    >>> res = ls.sdm.fit(data, {"glm": LogisticRegression(max_iter=1000)})
+    >>> f = ls.prioritize.sdm_features({"bradypus": res}, env, threshold="max_tss")
+    >>> [str(b) for b in f.band.values]
+    ['bradypus']
+    """
     from .. import sdm
 
     items = list(results.items()) if isinstance(results, dict) else [
@@ -214,12 +267,10 @@ def sdm_features(results, env, *, threshold=None, ensemble: str = "weighted") ->
         layers.append(v)
         names.append(str(name))
     out = xr.concat(layers, dim="band").assign_coords(band=names)
-    try:
+    with contextlib.suppress(Exception):  # no georeferencing
         crs = layers[0].rio.crs
         if crs is not None:
             out = out.rio.write_crs(crs)
-    except Exception:  # noqa: BLE001 - no georeferencing
-        pass
     out.name = "features"
     return out
 
@@ -249,11 +300,9 @@ def _block_sum(da: xr.DataArray, factor: int) -> xr.DataArray:
     coords[ydim] = centres(da[ydim].values)
     coords[xdim] = centres(da[xdim].values)
     out = xr.DataArray(total, dims=da.dims, coords=coords, name=da.name)
-    try:
+    with contextlib.suppress(Exception):  # no georeferencing
         if da.rio.crs is not None:
             out = out.rio.write_crs(da.rio.crs)
-    except Exception:  # noqa: BLE001 - no georeferencing
-        pass
     return out
 
 
@@ -261,7 +310,18 @@ def coarsen(cost: xr.DataArray, features, factor: int):
     """A problem's rasters on blocks of ``factor`` x ``factor`` cells (for continental problems: solve
     the coarse problem, then :func:`refine` the selection): every block's cost and amounts are the sums
     of its cells' with a cost (the fine planning units; a block without any has none), so the refined
-    selection holds what the coarse one does. Returns (cost, features)."""
+    selection holds what the coarse one does. Returns (cost, features).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> c, f = P.coarsen(cost, features, 4)
+    >>> c.shape, f.shape
+    ((10, 15), (6, 10, 15))
+    """
     from ._milp import _layers
 
     if int(factor) != factor or factor < 1:
@@ -278,7 +338,20 @@ def coarsen(cost: xr.DataArray, features, factor: int):
 def refine(selection, like: xr.DataArray) -> xr.DataArray:
     """A selection on coarse blocks (a :class:`Solution` of a :func:`coarsen`-ed problem, or its selection
     raster) back on the fine grid of ``like`` (the fine cost raster): every cell takes its block's value,
-    NaN where ``like`` has none."""
+    NaN where ``like`` has none.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> c, f = P.coarsen(cost, features, 4)
+    >>> coarse = P.problem(c, f).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions().solve()
+    >>> fine = P.refine(coarse, cost)
+    >>> fine.shape
+    (40, 60)
+    """
     from ._milp_solve import Solution
 
     sel = selection.selection if isinstance(selection, Solution) else selection

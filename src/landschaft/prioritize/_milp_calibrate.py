@@ -57,7 +57,14 @@ class TradeOffs(Saveable):
 def topsis(decision, weights=None, impacts=None) -> pd.DataFrame:
     """TOPSIS (as R's ``topsis`` package): the alternatives (rows of ``decision``) scored by their
     closeness to the ideal (``impacts``: "+" larger is better, "-" smaller is better, per column; equal
-    ``weights`` by default). Returns ``score`` (0-1, larger is better) and ``rank`` (1 = best)."""
+    ``weights`` by default). Returns ``score`` (0-1, larger is better) and ``rank`` (1 = best).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ls.prioritize.topsis([[1.0, 9.0], [4.0, 4.0], [9.0, 1.0]], impacts=["-", "-"])["rank"].tolist()
+    [2.5, 1.0, 2.5]
+    """
     d = np.asarray(decision, dtype=np.float64)
     if d.ndim != 2 or d.shape[0] < 1:
         raise ValueError("decision must be a matrix: alternatives x criteria")
@@ -83,7 +90,14 @@ def topsis(decision, weights=None, impacts=None) -> pd.DataFrame:
 
 def knee_point(x, y) -> int:
     """The knee (elbow) of a trade-off curve: the point farthest from the straight line between its
-    ends, both axes scaled to 0-1 (the points in the order of x). Returns its position."""
+    ends, both axes scaled to 0-1 (the points in the order of x). Returns its position.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ls.prioritize.knee_point([0, 1, 2, 3, 4, 5], [10, 4, 2, 1.5, 1.2, 1.0])
+    2
+    """
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
     if x.size != y.size or x.size < 1:
@@ -120,8 +134,12 @@ def _with_penalty(p, penalty: str, value: float, data=None, edge_factor: float =
 
 
 def _criterion(p, sol, penalty: str, data=None, edge_factor: float = 0.5) -> float:
-    from ._milp_eval import (_values, eval_asym_connectivity_summary, eval_boundary_summary,
-                             eval_connectivity_summary)
+    from ._milp_eval import (
+        _values,
+        eval_asym_connectivity_summary,
+        eval_boundary_summary,
+        eval_connectivity_summary,
+    )
 
     if penalty == "boundary":
         return float(eval_boundary_summary(p, sol, edge_factor=edge_factor, data=data)["boundary"].iloc[0])
@@ -185,7 +203,22 @@ def cohon_penalty(p, penalty: str = "boundary", data=None, edge_factor: float = 
     """The penalty of Cohon et al. (1979): the trade-off rate between the solution with the least cost
     (``p`` as given, a min set problem without the penalty) and the one with the least penalty
     (min penalties within a budget above every unit's cost): |cost difference / criterion difference|,
-    rounded to 5 decimals. Returns (penalty, a table of the two ideal solutions' cost and criterion)."""
+    rounded to 5 decimals. Returns (penalty, a table of the two ideal solutions' cost and criterion).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> c, f = P.coarsen(cost, features, 3)
+    >>> p = P.problem(c, f).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> value, ideals = P.cohon_penalty(p.add_highs_solver(gap=0.05))
+    >>> value > 0
+    True
+    >>> list(ideals.columns)
+    ['solution', 'cost', 'boundary']
+    """
     if p.objective is None or p.objective[0] != "min_set":
         raise ValueError("cohon_penalty needs a min set problem (without the penalty)")
     solver, opts = p.solver
@@ -209,7 +242,23 @@ def calibrate_penalty(p, penalty: str = "boundary", values=None, n: int = 9, dat
     """The blended approach: the problem solved with a range of penalty weights (``values``; default
     ``n`` values evenly spaced in log scale over 1/100 to 100 times the Cohon et al. penalty), every
     candidate's cost and criterion (boundary length, connectivity, ...), and the candidates TOPSIS and the
-    knee of the curve choose. ``p``: the problem without the penalty. Solves in parallel."""
+    knee of the curve choose. ``p``: the problem without the penalty. Solves in parallel.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> cal = P.calibrate_penalty(p, "boundary", values=[0.001, 0.01, 0.1])
+    >>> cal.table[["value", "status"]]
+       value   status
+    0  0.001  optimal
+    1  0.010  optimal
+    2  0.100  optimal
+    >>> best = cal.best("topsis")
+    """
     if values is None:
         c, _ = cohon_penalty(p, penalty, data, edge_factor)
         if c <= 0:
@@ -229,7 +278,22 @@ def calibrate_budget(p, penalty: str = "boundary", thresholds=None, inflation=No
     """The hierarchical approach: the least cost solution first (``p``, a min set problem without the
     penalty, solved to optimality), then the least penalty within cost thresholds above its cost
     (``thresholds``, or the cost x (1 + ``inflation``); default inflation 1e-5 to 4 in 9 steps, the
-    thresholds rounded up as in prioritizr's tutorial). Solves in parallel."""
+    thresholds rounded up as in prioritizr's tutorial). Solves in parallel.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> c, f = P.coarsen(cost, features, 3)
+    >>> p = P.problem(c, f).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> cal = P.calibrate_budget(p.add_highs_solver(gap=0.05), "boundary", inflation=[0.1, 0.5, 1.0])
+    >>> len(cal.table)
+    3
+    >>> bool((cal.table["cost"] <= cal.table["value"] + 1e-6).all())
+    True
+    """
     if p.objective is None or p.objective[0] != "min_set":
         raise ValueError("calibrate_budget needs a min set problem (without the penalty)")
     if thresholds is None:
@@ -252,7 +316,23 @@ def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> 
     shortfall objective: the sum of the shortfalls as shares of their targets) within budgets from a tenth of the least-cost solution's cost up to it
     (``n`` steps) or the ``budgets`` given. ``p``: a problem with targets (its objective is replaced).
     The table adds ``met`` (targets met) and ``efficient`` (no other candidate is cheaper and not
-    worse, or better and not dearer)."""
+    worse, or better and not dearer).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> front = P.pareto_front(p, n=4)
+    >>> front.table[["met", "efficient"]]
+       met  efficient
+    0    0       True
+    1    1       True
+    2    2       True
+    3    6       True
+    """
     from ._milp_eval import eval_target_coverage_summary
 
     if p.targets is None and p.subregional is None:
@@ -282,7 +362,23 @@ def calibrate(make, values, criterion, name: str = "criterion", n_threads: int |
     """Any trade-off parameter: ``make(value)`` gives the problem for every value (a feature's weight,
     a target, a penalty of any kind...), ``criterion(problem, solution)`` the quantity traded off
     against the cost (smaller is better). The candidates' table as :func:`calibrate_penalty`'s (TOPSIS,
-    knee), solved in parallel."""
+    knee), solved in parallel.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> def make(w):
+    ...     return P.problem(cost, features).add_max_utility_objective(5000).add_feature_weights([w, 1, 1, 1, 1, 1])
+    >>> def lost(q, s):
+    ...     rep = P.eval_feature_representation_summary(q, s)
+    ...     return 1 - rep["relative_held"].iloc[1]
+    >>> cal = P.calibrate(make, [1, 10], lost, name="wetland_plant_lost")
+    >>> list(cal.table.columns[:3])
+    ['value', 'cost', 'wetland_plant_lost']
+    """
     values = list(values)
     if not values:
         raise ValueError("no values")
@@ -298,7 +394,23 @@ def iterative_solve(p, update, steps: int, lock_previous: bool = False):
     problem (for instance from the landscape a ``ls.simulate`` step leaves, with the solution's cells
     protected by :func:`protected_cells` in the simulation's rules), or ``None`` to stop. With
     ``lock_previous``, every solution's units stay selected in the next problem (protected areas that
-    accumulate). Returns the solutions and a table (step, cost, units, status)."""
+    accumulate). Returns the solutions and a table (step, cost, units, status).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> def update(step, sol, q):
+    ...     return q.add_relative_targets(0.2 + 0.05 * (step + 1))
+    >>> sols, table = P.iterative_solve(p, update, 3, lock_previous=True)
+    >>> table["step"].tolist()
+    [0, 1, 2]
+    >>> bool(table["cost"].is_monotonic_increasing)
+    True
+    """
     if int(steps) != steps or steps < 1:
         raise ValueError("steps must be a whole number >= 1")
     sols, rows = [], []
@@ -322,7 +434,20 @@ def iterative_solve(p, update, steps: int, lock_previous: bool = False):
 
 
 def protected_cells(solution):
-    """The selected cells of a raster solution as a boolean raster (for ``ls.simulate``'s restrictions)."""
+    """The selected cells of a raster solution as a boolean raster (for ``ls.simulate``'s restrictions).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> mask = P.protected_cells(sol)
+    >>> mask.dtype.name
+    'bool'
+    """
     sel = solution.selection
     if not hasattr(sel, "dims") or sel.ndim < 2:
         raise ValueError("protected_cells needs a solution on raster planning units")

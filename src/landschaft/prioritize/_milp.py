@@ -937,11 +937,17 @@ def problem(x, features=None, *, cost_column: str | None = None, rij=None) -> Pr
     Examples
     --------
     >>> import landschaft as ls
+    >>> cost = ls.load_raster(ls.prioritize.example_data("cost"))
+    >>> features = ls.load_raster(ls.prioritize.example_data("features"))
     >>> p = (ls.prioritize.problem(cost, features)
     ...        .add_min_set_objective()
     ...        .add_relative_targets(0.3)
     ...        .add_binary_decisions())
-    >>> sol = p.solve()  # doctest: +SKIP
+    >>> sol = p.solve()
+    >>> sol.status
+    'optimal'
+    >>> bool(sol.coverage["met"].all())
+    True
     """
     if isinstance(x, xr.DataArray):
         if features is None:

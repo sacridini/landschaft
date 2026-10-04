@@ -54,9 +54,10 @@ class Prepared:
     def __init__(self, m: OptimizationProblem, n_units: int | None = None):
         lo, hi = m.row_bounds()
         a = m.A
-        self.kw = dict(start=a.indptr.astype(np.int64), index=a.indices.astype(np.int64), value=a.data, obj=m.obj,
-                       row_lo=lo, row_hi=hi, integer=np.isin(np.asarray(m.vtype), ("B", "I")).astype(np.uint8),
-                       maximize=m.modelsense == "max", offset=0.0)
+        self.kw = {"start": a.indptr.astype(np.int64), "index": a.indices.astype(np.int64), "value": a.data,
+                   "obj": m.obj, "row_lo": lo, "row_hi": hi,
+                   "integer": np.isin(np.asarray(m.vtype), ("B", "I")).astype(np.uint8),
+                   "maximize": m.modelsense == "max", "offset": 0.0}
         self.method = _method(m, n_units)
         self.n_units = -1 if n_units is None else int(n_units)
         self.lb, self.ub = m.lb, m.ub

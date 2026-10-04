@@ -44,6 +44,13 @@ MODELS = {"minimizeCosts": "minimizeCosts", "min_costs": "minimizeCosts", "maxim
           "max_benefits": "maximizeBenefits"}
 
 
+def _ids(values, most: int = 20) -> str:
+    """Ids for a warning, at most ``most`` of them (prioriactions lists every one)."""
+    v = [f"{x:g}" for x in np.asarray(values)[:most]]
+    more = len(values) - len(v)
+    return " ".join(v) + (f" ... ({len(values)} in total)" if more > 0 else "")
+
+
 def _warn(msg: str) -> None:
     warnings.warn(msg, UserWarning, stacklevel=3)
 
@@ -182,6 +189,26 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
     no feature are dropped with a warning; numbers are rounded to 3 decimals (R's ``round``). With no
     ``status`` in ``dist_threats`` the actions are free (prioriactions resets the units' status there
     instead), and the actions in locked-out units are locked out.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> import landschaft as ls
+    >>> pu = pd.DataFrame({"id": [1, 2, 3, 4], "monitoring_cost": [2.0, 1.0, 3.0, 1.0]})
+    >>> features = pd.DataFrame({"id": [1, 2], "target_recovery": [1.0, 0.5]})
+    >>> dist_features = pd.DataFrame({"pu": [1, 2, 3, 3, 4], "feature": [1, 1, 1, 2, 2], "amount": 1.0})
+    >>> threats = pd.DataFrame({"id": [1]})
+    >>> dist_threats = pd.DataFrame({"pu": [1, 2, 3, 4], "threat": 1, "amount": 1.0, "action_cost": [1.0, 4.0, 2.0, 1.0]})
+    >>> d = ls.prioritize.actions_data(pu, features, dist_features, threats, dist_threats)
+    >>> sol = d.problem("minimizeCosts").solve()
+    >>> sol.objective
+    5.0
+    >>> sol.action_table()
+       pu  threat  solution
+    0   1       1       1.0
+    1   2       1       0.0
+    2   3       1       0.0
+    3   4       1       1.0
     """
     pu = pd.DataFrame(pu).copy()
     features = pd.DataFrame(features).copy()
@@ -306,7 +333,7 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
         raise ValueError("argument to pu has negative monitoring cost data")
     empty_pu = np.setdiff1d(pu["id"].unique(), dist_features["pu"].unique())
     if empty_pu.size:
-        _warn("The following pu's do not contain features: " + " ".join(f"{v:g}" for v in empty_pu))
+        _warn("The following pu's do not contain features: " + _ids(empty_pu))
     missing_f = np.setdiff1d(features["id"].unique(), dist_features["feature"].unique())
     if missing_f.size:
         _warn("The following features are not represented (it'll not be considered in the model): "

@@ -64,7 +64,20 @@ def boundary_matrix(x) -> sp.csc_matrix:
     """The length of the boundary every two units share, and every unit's perimeter on the diagonal
     (prioritizr's ``boundary_matrix()``): raster cells with data share ``xres`` with the cells above
     and below and ``yres`` with those left and right, perimeter ``2 (xres + yres)``; polygons share
-    the length of their common paths, perimeters their own, rounded to 8 decimals."""
+    the length of their common paths, perimeters their own, rounded to 8 decimals.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> bm = P.boundary_matrix(cost)
+    >>> bm.shape
+    (2400, 2400)
+    >>> float(bm[100, 100])
+    4000.0
+    """
     if isinstance(x, xr.DataArray):
         include, ny, nx = _raster_cells(x)
         xres, yres = _res(x)
@@ -95,7 +108,18 @@ def boundary_matrix(x) -> sp.csc_matrix:
 def adjacency_matrix(x, directions: int = 4) -> sp.csc_matrix:
     """1 for every two adjacent units (prioritizr's ``adjacency_matrix()``): raster cells with data
     that share an edge (``directions`` 4) or also a corner (8); polygons that intersect, touching at
-    a corner included."""
+    a corner included.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> adj = P.adjacency_matrix(cost)
+    >>> int(adj.sum(axis=1).max())
+    4
+    """
     if isinstance(x, xr.DataArray):
         if directions not in (4, 8):
             raise ValueError("directions must be 4 or 8")
@@ -129,7 +153,18 @@ def adjacency_matrix(x, directions: int = 4) -> sp.csc_matrix:
 def connectivity_matrix(x, y) -> sp.csc_matrix:
     """Connectivity between adjacent units (prioritizr's ``connectivity_matrix()``): the length of
     their shared boundary times the mean of ``y`` in the two (``y``: a raster on the units' grid; with
-    polygons a raster summed over each, or a column name)."""
+    polygons a raster summed over each, or a column name).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> cm = P.connectivity_matrix(cost, features[0])
+    >>> cm.shape
+    (2400, 2400)
+    """
     bm = boundary_matrix(x)
     n = bm.shape[0]
     if isinstance(x, xr.DataArray):
@@ -172,7 +207,20 @@ def exact_means(raster: xr.DataArray, geometries) -> np.ndarray:
 
 def proximity_matrix(x, distance: float) -> sp.csc_matrix:
     """1 for every two units within ``distance`` of each other (prioritizr's ``proximity_matrix()``):
-    raster cell centres, or polygons by their nearest points."""
+    raster cell centres, or polygons by their nearest points.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> pm = P.proximity_matrix(cost, 1500)
+    >>> pm.shape
+    (2400, 2400)
+    >>> int(pm.getrow(500).nnz)
+    8
+    """
     import shapely
 
     if isinstance(x, xr.DataArray):
@@ -191,7 +239,18 @@ def proximity_matrix(x, distance: float) -> sp.csc_matrix:
 def unit_points(x) -> np.ndarray:
     """A point per unit, (n, 2) coordinates: raster cell centres (every cell), or a point inside every
     polygon (shapely's point on surface), to measure distances between units with
-    :func:`landschaft.cost.cost_distance` or :func:`landschaft.cost.commute_distance`."""
+    :func:`landschaft.cost.cost_distance` or :func:`landschaft.cost.commute_distance`.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> pts = P.unit_points(cost)
+    >>> pts.shape
+    (2400, 2)
+    """
     if isinstance(x, xr.DataArray):
         from ..io import _transform
 
@@ -212,7 +271,22 @@ def decay_connectivity(distances, median: float, min_probability: float = 0.001)
 
     ``distances``: units x units (every unit), e.g. least-cost distances from
     :func:`landschaft.cost.cost_distance` between :func:`unit_points`, commute distances, effective
-    resistances (:mod:`landschaft.circuit`) or Euclidean ones."""
+    resistances (:mod:`landschaft.circuit`) or Euclidean ones.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> from scipy.spatial.distance import cdist
+    >>> pts = P.unit_points(cost)
+    >>> dc = P.decay_connectivity(cdist(pts, pts), median=3000)
+    >>> dc.shape
+    (2400, 2400)
+    >>> round(float(dc[0, 1]), 3)
+    0.794
+    """
     d = np.asarray(distances.toarray() if sp.issparse(distances) else distances, dtype=np.float64)
     if d.ndim != 2 or d.shape[0] != d.shape[1]:
         raise ValueError("distances must be a square matrix of units")

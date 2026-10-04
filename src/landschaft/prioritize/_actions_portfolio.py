@@ -93,7 +93,13 @@ def _with_objective_row(m, value: float, pool_gap: float):
 
 def solve_actions_portfolio(p) -> ActionsPortfolio:
     from .. import _core
-    from ._actions import _arrays, _optimization_problem, _pairs, _settings, compile_actions
+    from ._actions import (
+        _arrays,
+        _optimization_problem,
+        _pairs,
+        _settings,
+        compile_actions,
+    )
     from ._milp_portfolio import _permuted
     from ._milp_solve import solve_model
 

@@ -18,10 +18,22 @@ import pandas as pd
 import scipy.sparse as sp
 import xarray as xr
 
-__all__ = ["eval_asym_connectivity_summary", "eval_boundary_summary", "eval_connectivity_summary",
-           "eval_cost_summary", "eval_feature_representation_summary", "eval_ferrier_importance",
-           "eval_extinction_risk", "eval_landscape_metrics", "eval_mspa", "eval_n_summary", "eval_rank_importance", "eval_rare_richness_importance",
-           "eval_replacement_importance", "eval_target_coverage_summary"]
+__all__ = [
+    "eval_asym_connectivity_summary",
+    "eval_boundary_summary",
+    "eval_connectivity_summary",
+    "eval_cost_summary",
+    "eval_extinction_risk",
+    "eval_feature_representation_summary",
+    "eval_ferrier_importance",
+    "eval_landscape_metrics",
+    "eval_mspa",
+    "eval_n_summary",
+    "eval_rank_importance",
+    "eval_rare_richness_importance",
+    "eval_replacement_importance",
+    "eval_target_coverage_summary",
+]
 
 
 # ----------------------------------------------------------------------------- inputs and outputs
@@ -126,12 +138,37 @@ def _rescale(x: np.ndarray, lo: float = 0.01, hi: float = 1.0) -> np.ndarray:
 # ----------------------------------------------------------------------------- summaries
 
 def eval_n_summary(p, solution) -> pd.DataFrame:
-    """The number of selected planning units (the sum of the solution's values)."""
+    """The number of selected planning units (the sum of the solution's values).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> P.eval_n_summary(p, sol)
+       summary      n
+    0  overall  169.0
+    """
     return pd.DataFrame({"summary": ["overall"], "n": [_r_sum(_values(p, solution))]})
 
 
 def eval_cost_summary(p, solution) -> pd.DataFrame:
-    """The solution's total cost."""
+    """The solution's total cost.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> round(P.eval_cost_summary(p, sol)["cost"].item(), 1) == round(sol.cost, 1)
+    True
+    """
     s = _values(p, solution)
     return pd.DataFrame({"summary": ["overall"], "cost": [_r_sum(p.units.cost * s)]})
 
@@ -141,7 +178,20 @@ def eval_boundary_summary(p, solution, edge_factor: float = 0.5, data=None) -> p
     ``edge_factor`` x the selected units' edges on the outside of the planning units.
 
     ``data``: the boundary matrix (every unit's shared lengths and its perimeter on the diagonal;
-    default :func:`boundary_matrix` of the planning units)."""
+    default :func:`boundary_matrix` of the planning units).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> P.eval_boundary_summary(p, sol)
+       summary  boundary
+    0  overall  300500.0
+    """
     from .. import _core
     from ._milp_matrices import boundary_matrix
     from ._milp_spatial import r_round
@@ -197,12 +247,40 @@ def _connectivity(p, solution, data, asym: bool) -> float:
 
 def eval_connectivity_summary(p, solution, data) -> pd.DataFrame:
     """The connectivity among the selected units: the sum of ``data[i, j]`` x the solution's values of
-    units i and j (a symmetric matrix over the units)."""
+    units i and j (a symmetric matrix over the units).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> cm = P.connectivity_matrix(cost, features[0])
+    >>> round(P.eval_connectivity_summary(p, sol, cm)["connectivity"].item(), 2)
+    100117.0
+    """
     return pd.DataFrame({"summary": ["overall"], "connectivity": [_connectivity(p, solution, data, False)]})
 
 
 def eval_asym_connectivity_summary(p, solution, data) -> pd.DataFrame:
-    """As :func:`eval_connectivity_summary` for an asymmetric matrix (its diagonal counted once)."""
+    """As :func:`eval_connectivity_summary` for an asymmetric matrix (its diagonal counted once).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> import scipy.sparse as sp
+    >>> cm = P.connectivity_matrix(cost, features[0])
+    >>> asym = sp.triu(cm).tocsr()
+    >>> round(P.eval_asym_connectivity_summary(p, sol, asym)["asym_connectivity"].item(), 2)
+    50058.5
+    """
     return pd.DataFrame({"summary": ["overall"], "asym_connectivity": [_connectivity(p, solution, data, True)]})
 
 
@@ -220,7 +298,26 @@ def _held(p, s: np.ndarray) -> np.ndarray:
 
 
 def eval_feature_representation_summary(p, solution) -> pd.DataFrame:
-    """Every feature's total amount and the amount the solution holds, absolute and relative."""
+    """Every feature's total amount and the amount the solution holds, absolute and relative.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> rep = P.eval_feature_representation_summary(p, sol)
+    >>> rep[["feature", "relative_held"]].round(3)
+                   feature  relative_held
+    0          forest_bird          0.200
+    1        wetland_plant          0.201
+    2  grassland_butterfly          0.201
+    3         large_mammal          0.200
+    4            amphibian          0.202
+    5        endemic_snail          0.217
+    """
     u = p.units
     held = _held(p, _values(p, solution))
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -231,7 +328,20 @@ def eval_feature_representation_summary(p, solution) -> pd.DataFrame:
 
 def eval_target_coverage_summary(p, solution, include_sense: bool = False) -> pd.DataFrame:
     """Every target's feature, whether it is met, the feature's total, and the target, the amount held
-    and the shortfall, absolute and relative (shares of the total; 0 when the total is 0)."""
+    and the shortfall, absolute and relative (shares of the total; 0 when the total is 0).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> cov = P.eval_target_coverage_summary(p, sol)
+    >>> bool(cov["met"].all())
+    True
+    """
     from .. import _core
     from ._milp_compile import NO_TARGETS, compile_problem
 
@@ -278,7 +388,20 @@ def eval_target_coverage_summary(p, solution, include_sense: bool = False) -> pd
 
 def eval_extinction_risk(p, solution, z=0.25) -> pd.DataFrame:
     """Every feature's extinction risk by the species-area relationship, 1 - (held / total)^z (z = 0.25
-    by default, one value or one per feature), and their sum (the expected number of features lost)."""
+    by default, one value or one per feature), and their sum (the expected number of features lost).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> risk = P.eval_extinction_risk(p, sol)
+    >>> round(float(risk["extinction_risk"].iloc[-1]), 3)
+    1.97
+    """
     rep = eval_feature_representation_summary(p, solution)
     z = np.broadcast_to(np.asarray(z, dtype=np.float64), (len(rep),))
     rel = np.clip(np.nan_to_num(rep["relative_held"].to_numpy(dtype=np.float64)), 0.0, 1.0)
@@ -303,7 +426,22 @@ def eval_ferrier_importance(p, solution):
     (prioritizr's version: the problem needs one ">=" target per feature, amounts >= 0).
 
     Returns a raster with a band per feature and ``total`` (or the units' table with those columns): 0
-    for the units not selected."""
+    for the units not selected.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> fi = P.eval_ferrier_importance(p, sol)
+    >>> [str(b) for b in fi.band.values][-2:]
+    ['endemic_snail', 'total']
+    >>> float(fi.sel(band="total").max()) > 0
+    True
+    """
     from .. import _core
     from ._milp_compile import NO_TARGETS, compile_problem
 
@@ -337,7 +475,20 @@ def eval_ferrier_importance(p, solution):
 
 def eval_rare_richness_importance(p, solution, rescale: bool = True):
     """The rarity-weighted richness of the selected units (Albuquerque & Beier 2015): the sum over the
-    features of the unit's amount / the feature's largest amount / its total, rescaled to 0.01-1."""
+    features of the unit's amount / the feature's largest amount / its total, rescaled to 0.01-1.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> rwr = P.eval_rare_richness_importance(p, sol)
+    >>> float(rwr.max())
+    1.0
+    """
     u = p.units
     s = _values(p, solution)
     sel = _selected(s)
@@ -371,7 +522,20 @@ def eval_replacement_importance(p, solution, rescale: bool = True, n_threads: in
     """The replacement cost of every selected unit (Cabeza & Moilanen 2006): how much the objective
     worsens when the unit is left out and the problem solved again with the other selected units kept
     (infinite when nothing can replace it), rescaled to 0.01-1. One solve per selected unit, in parallel
-    (``n_threads``, default all cores but one)."""
+    (``n_threads``, default all cores but one).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> rc = P.eval_replacement_importance(p, sol)
+    >>> float(rc.max())
+    1.0
+    """
     from concurrent.futures import ThreadPoolExecutor
 
     from .. import _threads
@@ -412,7 +576,7 @@ def eval_replacement_importance(p, solution, rescale: bool = True, n_threads: in
 
         prep = Prepared(m, u.n)
 
-        def alt(i):  # noqa: F811
+        def alt(i):
             lo, hi = lb.copy(), ub.copy()
             lo[i] = hi[i] = 0.0
             r = prep.solve(lo, hi, one)
@@ -448,7 +612,24 @@ def eval_rank_importance(p, solution, n: int | None = None, budgets=None, rescal
     the locked-in units' cost and the solution's, or the ``budgets`` themselves.
 
     Returns the per-unit ranks (a raster or the units' table) and a table of every budget's objective,
-    status and gap."""
+    status and gap.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> ranks, steps = P.eval_rank_importance(p, sol, n=4)
+    >>> steps[["budget", "status"]].round(1)
+       budget   status
+    0  1182.8  optimal
+    1  2365.6  optimal
+    2  3548.4  optimal
+    3  4731.2  optimal
+    """
     from ._milp import OptimizationProblem
     from ._milp_compile import compile_problem
 
@@ -530,7 +711,21 @@ def _selection_map(solution) -> xr.DataArray:
 def eval_landscape_metrics(solution, level: str | None = "class", metric=None, **kw) -> pd.DataFrame:
     """Landscape metrics of a raster solution (:func:`landschaft.lsm.landscape_metrics` of the map of
     the selected cells: class 1 selected, 0 not, outside the planning units no data): e.g. the number,
-    sizes and shapes of the selected patches. Class-level and patch-level rows of the selected class only."""
+    sizes and shapes of the selected patches. Class-level and patch-level rows of the selected class only.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> P.eval_landscape_metrics(sol, metric=["np", "ca"])[["metric", "value"]]
+      metric    value
+    0     ca  16900.0
+    1     np     29.0
+    """
     from .. import lsm
 
     m = _selection_map(solution)
@@ -543,7 +738,20 @@ def eval_landscape_metrics(solution, level: str | None = "class", metric=None, *
 def eval_mspa(solution, **kw):
     """MSPA (:func:`landschaft.mspa`) of a raster solution: the selected cells as foreground, the other
     planning units as background, the cells outside them missing. Returns (the MSPA map, its class
-    areas)."""
+    areas).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> P = ls.prioritize
+    >>> cost = ls.load_raster(P.example_data("cost"))
+    >>> features = ls.load_raster(P.example_data("features"))
+    >>> p = P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+    >>> sol = p.solve()
+    >>> mspa, areas = P.eval_mspa(sol)
+    >>> int(areas.loc["Core", "pixels"]) >= 0
+    True
+    """
     import landschaft as ls
 
     m = _selection_map(solution)

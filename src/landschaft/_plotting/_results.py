@@ -549,7 +549,7 @@ def _prio_solution(sol, opts, title):
     """The selection, the targets' coverage and the solution's figures."""
     panels = _selection_panels(sol.selection, opts, title or "Selected planning units")
     panels.append(_coverage_chart(sol.coverage, "Representation of the features"))
-    met = sol.coverage["met"] if "met" in sol.coverage else None
+    met = sol.coverage.get("met")
     extra = {"targets met": f"{int(met.sum())} of {len(met)}"} if met is not None else {}
     panels.append(_summary({"objective": sol.objective, "cost": sol.cost,
                             "units selected": float(np.nansum(sol.values)), **extra, "status": sol.status,
