@@ -140,7 +140,11 @@ actions_reference <- function(m) {
   s <- prioriactions::solve(m, solver = "gurobi", gap_limit = 0, cores = 1, output_file = FALSE,
                             verbose = FALSE)
   list(model = m, objective = s$data$objval, status = s$data$status, gap = s$data$gap,
-       solution = s$data$sol)
+       solution = s$data$sol, cost = prioriactions::getCost(s), benefit = prioriactions::getSolutionBenefit(s),
+       local = prioriactions::getSolutionBenefit(s, type = "local"),
+       potential = prioriactions::getPotentialBenefit(m$ConservationClass),
+       connectivity = prioriactions::getConnectivityPenalty(s), actions = prioriactions::getActions(s),
+       actions_long = prioriactions::getActions(s, format = "large"))
 }
 
 # prioritizr 8.0.6's phylogenetic objectives with their bug fixed: they order the branch matrix by

@@ -36,6 +36,7 @@ Gurobi::
     sol.coverage                  # targets met per feature
 """
 
+from ._actions import ActionsData, ActionsProblem, ActionsSolution, actions_data
 from ._connectivity import Interaction, Kernel, convolve
 from ._impacts import CumulativeScenario, ImpactScenario, ImpactSource, Pressure
 from ._marxan import MarxanResult, marxan
@@ -48,7 +49,7 @@ from ._postprocess import AreaStatistics
 from ._project import read_project, run_project
 from ._zonation import RULES, ZonationResult, zonation
 
-__all__ = ["adjacency_matrix", "boundary_matrix", "connectivity_matrix", "decay_connectivity", "proximity_matrix",
+__all__ = ["ActionsData", "ActionsProblem", "ActionsSolution", "actions_data", "adjacency_matrix", "boundary_matrix", "connectivity_matrix", "decay_connectivity", "proximity_matrix",
            "unit_points", "Portfolio", "MarxanResult", "marxan", "AreaStatistics", "CumulativeScenario", "ImpactScenario", "ImpactSource", "Interaction", "Kernel",
            "OptimizationProblem", "Pressure", "Problem", "RULES", "Solution", "ZonationResult", "convolve",
            "h3_units", "problem", "read_project", "run_project", "zonation"]

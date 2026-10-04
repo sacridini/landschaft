@@ -1732,6 +1732,29 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
 * **Fase 4 completa** (2026-10-04): portfólios, porte do Marxan, solver `anneal`, motor de cortes. Linux (WSL,
   gcc 13): 296 passam, 0 falham (112 pulados: as checagens das referências com highspy/gurobipy, só no ambiente de desenvolvimento).
 
+### Andamento da fase 5
+* **Parte 1**: porte do **prioriactions 0.5.0** (GPL >= 2; código em `C:\Users\eduar\Documents\dev\prioriactions`)
+  em `_actions.py`: `ls.prioritize.actions_data(pu, features, dist_features, threats, dist_threats, sensitivity,
+  boundary)` (as checagens, padrões, arredondamentos a 3 casas com o `round` do R e ids internos do
+  `inputData()`), `ActionsData.problem(model, budget, blm, curve, segments)` (o `problem()` com o presolve:
+  metas acima do máximo viram máximo - 0,1 com aviso; orçamento abaixo das travas, travas + 0,1),
+  `compile()` **bit a bit** contra o `getModelInfo` nos 6 casos (benefício por par feição x unidade com as
+  curvas de resposta delta1-4, ativação, travas, objetivo com as variáveis de borda y e p, metas de recuperação
+  e conservação ou orçamento), `solve()` no HiGHS ou Gurobi com **o ótimo do Gurobi** nos 6, e as figuras da
+  solução iguais às do prioriactions **na solução dele**: `cost()` (`getCost`), `benefit()`
+  (`getSolutionBenefit`), `local_benefit`, `potential_benefit()` (`getPotentialBenefit`),
+  `connectivity_penalty()` (`getConnectivityPenalty`), `action_summary()` (`getActions`, largo e longo).
+  * **Curvas 2 e 3**: o prioriactions usa as restrições gerais de potência do Gurobi com `FuncPieces = 1`,
+    `FuncPieceLength = round(1/segments, 1)` (pontos sobre a curva); aqui a mesma função linear por partes
+    em formulação incremental com binárias por segmento, em qualquer solver: ótimo igual ao do Gurobi
+    (94 no caso cúbico).
+  * **Bugs do prioriactions** (só a forma correta): (1) sem `status` em `dist_threats`, o `inputData` zera o
+    status das **unidades** (`pu$status <- 0`) em vez de criar o das ações; aqui as ações ficam livres e as
+    das unidades travadas fora ficam fora; (2) o benefício máximo e o da solução por **conservação** contam
+    unidades em vez da quantidade da feição nelas (o modelo usa a quantidade); aqui a quantidade (iguais
+    quando as quantidades são 1, como nos casos de referência); (3) a checagem de orçamento das travas do
+    `maximizeBenefits` indexa as unidades pelo **id** e não pela posição.
+
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
   prioritizr e o prioriactions, e o Marxan entra depois como referência do motor `anneal` (verificar a

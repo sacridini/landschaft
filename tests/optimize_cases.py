@@ -866,3 +866,44 @@ PY_SPATIAL.update({
 })
 for _name, _fn in PY_SPATIAL.items():
     CASES[_name].py = _fn
+
+
+# ----------------------------------------------------------------------------- prioriactions in Python
+
+def pa_python_data(**tables):
+    from landschaft.prioritize import actions_data
+
+    t = {"pu": pa_pu(), "features": pa_features(), "dist_features": pa_dist_features(), "threats": pa_threats(),
+         "dist_threats": pa_dist_threats(), "sensitivity": pa_sensitivity(), "boundary": pa_boundary()}
+    t.update(tables)
+    return actions_data(**t)
+
+
+def _pa_blm_threats():
+    t = pa_threats()
+    t["blm_actions"] = [0.5, 0.25]
+    return t
+
+
+def _pa_conservation_features():
+    f = pa_features()
+    f["target_conservation"] = [3.0, 2.0, 4.0, 1.0]
+    return f
+
+
+def _pa_curve_sensitivity():
+    s = pa_sensitivity()
+    s["a"], s["b"], s["c"], s["d"] = 0.0, 1.0, 0.0, 1.0  # not prioriactions's names (delta1-4): ignored
+    return s
+
+
+PY_ACTIONS: dict[str, Callable] = {
+    "actions_mincost": lambda: pa_python_data().problem("minimizeCosts"),
+    "actions_mincost_blm": lambda: pa_python_data(threats=_pa_blm_threats()).problem("minimizeCosts", blm=1),
+    "actions_mincost_conservation": lambda: pa_python_data(features=_pa_conservation_features())
+    .problem("minimizeCosts"),
+    "actions_maxbenefit": lambda: pa_python_data().problem("maximizeBenefits", budget=60),
+    "actions_maxbenefit_blm": lambda: pa_python_data().problem("maximizeBenefits", budget=60, blm=0.5),
+    "actions_mincost_curve3": lambda: pa_python_data(sensitivity=_pa_curve_sensitivity())
+    .problem("minimizeCosts", curve=3, segments=3),
+}
