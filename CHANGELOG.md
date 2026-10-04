@@ -6,6 +6,18 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- Evaluation of solutions (prioritizr 8.0.6's `eval_*`), bit for bit with prioritizr: `eval_n_summary`,
+  `eval_cost_summary`, `eval_boundary_summary`, `eval_connectivity_summary`,
+  `eval_asym_connectivity_summary`, `eval_feature_representation_summary`,
+  `eval_target_coverage_summary`, `eval_ferrier_importance` (with R's `pnorm` in C++) and
+  `eval_rare_richness_importance`; `eval_replacement_importance` (re-solves in parallel: 1,300 selected
+  units of 10^4 in 2.4 s) and `eval_rank_importance` (the same optima as prioritizr's on Gurobi). Also
+  `eval_landscape_metrics` and `eval_mspa` of a raster solution (landscape metrics and MSPA of the
+  selected cells). They take a `Solution`, its selection or plain values.
+- `ls.prioritize.problem(cost, ls.load_raster([...]))`: the features as a `RasterCollection`, read
+  block by block.
+
 ## [1.22.0] - 2026-10-04
 
 ### Added

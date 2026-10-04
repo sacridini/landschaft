@@ -1,0 +1,396 @@
+{
+ "arrays": {
+  "eval_rank/budgets": {
+   "kind": "vector"
+  },
+  "eval_rank/objective": {
+   "kind": "vector"
+  },
+  "eval_rank/rank": {
+   "kind": "vector"
+  },
+  "eval_rank/solution": {
+   "kind": "vector"
+  },
+  "eval_raster/boundary/boundary": {
+   "kind": "vector"
+  },
+  "eval_raster/boundary/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_raster/boundary_edge/boundary": {
+   "kind": "vector"
+  },
+  "eval_raster/boundary_edge/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_raster/cost/cost": {
+   "kind": "vector"
+  },
+  "eval_raster/cost/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_raster/coverage/absolute_held": {
+   "kind": "vector"
+  },
+  "eval_raster/coverage/absolute_shortfall": {
+   "kind": "vector"
+  },
+  "eval_raster/coverage/absolute_target": {
+   "kind": "vector"
+  },
+  "eval_raster/coverage/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5"
+   ]
+  },
+  "eval_raster/coverage/met": {
+   "kind": "vector"
+  },
+  "eval_raster/coverage/relative_held": {
+   "kind": "vector"
+  },
+  "eval_raster/coverage/relative_shortfall": {
+   "kind": "vector"
+  },
+  "eval_raster/coverage/relative_target": {
+   "kind": "vector"
+  },
+  "eval_raster/coverage/total_amount": {
+   "kind": "vector"
+  },
+  "eval_raster/ferrier/f1": {
+   "dim": [
+    12,
+    15
+   ],
+   "kind": "raster"
+  },
+  "eval_raster/ferrier/f2": {
+   "dim": [
+    12,
+    15
+   ],
+   "kind": "raster"
+  },
+  "eval_raster/ferrier/f3": {
+   "dim": [
+    12,
+    15
+   ],
+   "kind": "raster"
+  },
+  "eval_raster/ferrier/f4": {
+   "dim": [
+    12,
+    15
+   ],
+   "kind": "raster"
+  },
+  "eval_raster/ferrier/f5": {
+   "dim": [
+    12,
+    15
+   ],
+   "kind": "raster"
+  },
+  "eval_raster/ferrier/total": {
+   "dim": [
+    12,
+    15
+   ],
+   "kind": "raster"
+  },
+  "eval_raster/n/n": {
+   "kind": "vector"
+  },
+  "eval_raster/n/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_raster/rare/rwr": {
+   "dim": [
+    12,
+    15
+   ],
+   "kind": "raster"
+  },
+  "eval_raster/rare_raw/rwr": {
+   "dim": [
+    12,
+    15
+   ],
+   "kind": "raster"
+  },
+  "eval_raster/representation/absolute_held": {
+   "kind": "vector"
+  },
+  "eval_raster/representation/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5"
+   ]
+  },
+  "eval_raster/representation/relative_held": {
+   "kind": "vector"
+  },
+  "eval_raster/representation/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "overall",
+    "overall",
+    "overall",
+    "overall"
+   ]
+  },
+  "eval_raster/representation/total_amount": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/boundary/boundary": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/boundary/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_raster_proportion/cost/cost": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/cost/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_raster_proportion/coverage/absolute_held": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/coverage/absolute_shortfall": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/coverage/absolute_target": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/coverage/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5"
+   ]
+  },
+  "eval_raster_proportion/coverage/met": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/coverage/relative_held": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/coverage/relative_shortfall": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/coverage/relative_target": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/coverage/total_amount": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/n/n": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/n/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_raster_proportion/representation/absolute_held": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/representation/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5"
+   ]
+  },
+  "eval_raster_proportion/representation/relative_held": {
+   "kind": "vector"
+  },
+  "eval_raster_proportion/representation/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "overall",
+    "overall",
+    "overall",
+    "overall"
+   ]
+  },
+  "eval_raster_proportion/representation/total_amount": {
+   "kind": "vector"
+  },
+  "eval_replacement/rc": {
+   "kind": "vector"
+  },
+  "eval_replacement/rc_scaled": {
+   "kind": "vector"
+  },
+  "eval_replacement/solution": {
+   "kind": "vector"
+  },
+  "eval_replacement_max/rc": {
+   "kind": "vector"
+  },
+  "eval_replacement_max/solution": {
+   "kind": "vector"
+  },
+  "eval_table/asym/asym_connectivity": {
+   "kind": "vector"
+  },
+  "eval_table/asym/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_table/boundary/boundary": {
+   "kind": "vector"
+  },
+  "eval_table/boundary/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_table/connectivity/connectivity": {
+   "kind": "vector"
+  },
+  "eval_table/connectivity/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_table/cost/cost": {
+   "kind": "vector"
+  },
+  "eval_table/cost/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_table/coverage/absolute_held": {
+   "kind": "vector"
+  },
+  "eval_table/coverage/absolute_shortfall": {
+   "kind": "vector"
+  },
+  "eval_table/coverage/absolute_target": {
+   "kind": "vector"
+  },
+  "eval_table/coverage/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f4",
+    "f4",
+    "f5"
+   ]
+  },
+  "eval_table/coverage/met": {
+   "kind": "vector"
+  },
+  "eval_table/coverage/relative_held": {
+   "kind": "vector"
+  },
+  "eval_table/coverage/relative_shortfall": {
+   "kind": "vector"
+  },
+  "eval_table/coverage/relative_target": {
+   "kind": "vector"
+  },
+  "eval_table/coverage/total_amount": {
+   "kind": "vector"
+  },
+  "eval_table/n/n": {
+   "kind": "vector"
+  },
+  "eval_table/n/summary": {
+   "kind": "text",
+   "values": [
+    "overall"
+   ]
+  },
+  "eval_table/representation/absolute_held": {
+   "kind": "vector"
+  },
+  "eval_table/representation/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5"
+   ]
+  },
+  "eval_table/representation/relative_held": {
+   "kind": "vector"
+  },
+  "eval_table/representation/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "overall",
+    "overall",
+    "overall",
+    "overall"
+   ]
+  },
+  "eval_table/representation/total_amount": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "r": {
+   "Matrix": "1.7.1",
+   "exactextractr": "0.10.0",
+   "gurobi": "12.0.3",
+   "prioriactions": "0.5.0",
+   "prioritizr": "8.0.6",
+   "sf": "1.0.19",
+   "terra": "1.9.50"
+  },
+  "r_version": "R version 4.4.2 (2024-10-31 ucrt)"
+ }
+}

@@ -17,6 +17,7 @@
 #include "opt/actions.hpp"
 #include "opt/cover.hpp"
 #include "opt/cut.hpp"
+#include "opt/eval.hpp"
 #include "opt/features.hpp"
 #include "opt/marxan.hpp"
 #include "opt/maxflow.hpp"
@@ -182,6 +183,21 @@ py::dict compiled_dict(actions::Compiled&& c) {
     out["n_pairs"] = c.n_pairs;
     out["first_pow"] = c.first_pow;
     return out;
+}
+
+opt::eval::Csc csc_of(const Ints& start, const Ints& index, const Doubles& value, i64 nrow, i64 ncol) {
+    opt::eval::Csc m;
+    m.nrow = nrow;
+    m.ncol = ncol;
+    m.start = vec<i64>(start);
+    m.index = vec<i64>(index);
+    m.value = vec<double>(value);
+    if (static_cast<i64>(m.start.size()) != ncol + 1 || m.index.size() != m.value.size() ||
+        m.start.back() != static_cast<i64>(m.index.size()))
+        throw std::invalid_argument("inconsistent compressed columns");
+    for (const i64 r : m.index)
+        if (r < 0 || r >= nrow) throw std::invalid_argument("row index out of range");
+    return m;
 }
 
 }  // namespace
@@ -484,6 +500,42 @@ void register_python(py::module_& m) {
             return to_array(actions::connectivity(actions_input(data), vec<double>(units), vec<double>(acts)));
         },
         py::arg("data"), py::arg("units"), py::arg("actions"), "(units, every threat's actions' boundary).");
+    m.def("opt_eval_pnorm", [](const Doubles& x) {
+        std::vector<double> v = vec<double>(x);
+        for (double& e : v) e = eval::pnorm(e);
+        return to_array(std::move(v));
+    }, py::arg("x"), "R's pnorm (lower tail, mean 0, sd 1).");
+    m.def("opt_eval_accumulate", [](const Doubles& x) { return eval::accumulate(x.data(), x.size()); },
+          py::arg("x"), "Armadillo's accumulate (two interleaved partial sums).");
+    m.def("opt_eval_boundary",
+          [](double edge_factor, const Ints& start, const Ints& index, const Doubles& value, const Doubles& exposed,
+             const Doubles& total, const Doubles& solution) {
+              const i64 n = static_cast<i64>(total.size());
+              return eval::boundary(edge_factor, csc_of(start, index, value, n, n), vec<double>(exposed),
+                                    vec<double>(total), vec<double>(solution));
+          },
+          py::arg("edge_factor"), py::arg("start"), py::arg("index"), py::arg("value"), py::arg("exposed"),
+          py::arg("total"), py::arg("solution"), "prioritizr's rcpp_boundary (one zone).");
+    m.def("opt_eval_connectivity",
+          [](const Ints& start, const Ints& index, const Doubles& value, const Doubles& solution, bool asym) {
+              const i64 n = static_cast<i64>(solution.size());
+              const eval::Csc d = csc_of(start, index, value, n, n);
+              const std::vector<double> s = vec<double>(solution);
+              return asym ? eval::asym_connectivity(d, s) : eval::connectivity(d, s);
+          },
+          py::arg("start"), py::arg("index"), py::arg("value"), py::arg("solution"), py::arg("asym"),
+          "prioritizr's rcpp_connectivity / rcpp_asym_connectivity (one zone).");
+    m.def("opt_eval_ferrier",
+          [](const Ints& start, const Ints& index, const Doubles& value, i64 nrow, const Doubles& targets,
+             const Bytes& selected) {
+              const i64 ncol = static_cast<i64>(selected.size());
+              eval::Csc r = eval::ferrier_score(csc_of(start, index, value, nrow, ncol), vec<double>(targets),
+                                                vec<std::uint8_t>(selected));
+              return py::make_tuple(to_array(std::move(r.start)), to_array(std::move(r.index)),
+                                    to_array(std::move(r.value)));
+          },
+          py::arg("start"), py::arg("index"), py::arg("value"), py::arg("nrow"), py::arg("targets"),
+          py::arg("selected"), "prioritizr's rcpp_ferrier_score: (start, index, value) of the scores.");
     m.def("opt_solve_highs", &py_solve_highs, py::arg("start"), py::arg("index"), py::arg("value"), py::arg("obj"),
           py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"),
           py::arg("maximize"), py::arg("offset"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),

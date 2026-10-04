@@ -29,7 +29,7 @@ from itertools import pairwise
 
 import numpy as np
 
-GROUPS: list[str] = ["core", "objectives", "spatial", "matrices", "portfolio", "actions", "exact"]
+GROUPS: list[str] = ["core", "objectives", "spatial", "matrices", "portfolio", "actions", "exact", "eval"]
 
 NY, NX = 12, 15
 RES = 100.0
@@ -376,10 +376,36 @@ def adj_table():
     return _triplets(i, j, np.ones(len(i)))
 
 
+def _solution_values(fractional: bool = False) -> np.ndarray:
+    """A fixed solution on the planning units (cell order): 1 where a smooth field is high, or shares."""
+    v = smooth_field(500).ravel()[_units()]
+    if fractional:
+        return np.round(np.clip((v - 0.35) * 3, 0, 1), 2)
+    return (v > np.quantile(v, 0.55)).astype(np.float64)
+
+
+def sol_raster():
+    out = np.full(NY * NX, np.nan)
+    out[_units()] = _solution_values()
+    return grid(out.reshape(NY, NX))
+
+
+def solp_raster():
+    out = np.full(NY * NX, np.nan)
+    out[_units()] = _solution_values(True)
+    return grid(out.reshape(NY, NX))
+
+
+def sol_table():
+    import pandas as pd
+
+    return pd.DataFrame({"solution_1": _solution_values()})
+
+
 INPUTS = {f.__name__: f for f in (
     pu_cost, features, shapes, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
     pu_polygons_partial, pa_pu, pa_features, pa_dist_features, pa_threats, pa_dist_threats, pa_sensitivity,
-    pa_boundary, bnd_table, conn_table, asym_table, penalty_raster, adj_table)}
+    pa_boundary, bnd_table, conn_table, asym_table, penalty_raster, adj_table, sol_raster, solp_raster, sol_table)}
 
 
 def build_input(name: str):
@@ -662,6 +688,64 @@ CASES: dict[str, Case] = {
         actions_reference(prioriactions::problem(pa_data(sensitivity = sens), model_type = "minimizeCosts",
                                                  curve = 3, segments = 3))""",
                                    notes="power curve: Gurobi general constraints (genconpow)"),
+    # --- eval: prioritizr's evaluation of solutions (summaries and importance)
+    "eval_raster": Case("eval", (*RASTER, "sol_raster"), """
+        p <- problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+          add_binary_decisions()
+        list(n = eval_n_summary(p, sol_raster), cost = eval_cost_summary(p, sol_raster),
+             boundary = eval_boundary_summary(p, sol_raster),
+             boundary_edge = eval_boundary_summary(p, sol_raster, edge_factor = 0.3),
+             representation = eval_feature_representation_summary(p, sol_raster),
+             coverage = eval_target_coverage_summary(p, sol_raster),
+             ferrier = eval_ferrier_importance(p, sol_raster),
+             rare = eval_rare_richness_importance(p, sol_raster),
+             rare_raw = eval_rare_richness_importance(p, sol_raster, rescale = FALSE))"""),
+    "eval_raster_proportion": Case("eval", (*RASTER, "solp_raster"), """
+        p <- problem(pu_cost, features) |> add_min_set_objective() |>
+          add_absolute_targets(c(1.2, 0.9, 1, 120, 4)) |> add_proportion_decisions()
+        list(n = eval_n_summary(p, solp_raster), cost = eval_cost_summary(p, solp_raster),
+             boundary = eval_boundary_summary(p, solp_raster),
+             representation = eval_feature_representation_summary(p, solp_raster),
+             coverage = eval_target_coverage_summary(p, solp_raster))""", notes="shares of units"),
+    "eval_table": Case("eval", ("pu_table", "bnd_table", "conn_table", "asym_table", "sol_table"), """
+        bm <- Matrix::sparseMatrix(i = bnd_table$i, j = bnd_table$j, x = bnd_table$x, dims = rep(nrow(pu_table), 2))
+        cm <- Matrix::sparseMatrix(i = conn_table$i, j = conn_table$j, x = conn_table$x, dims = rep(nrow(pu_table), 2))
+        am <- Matrix::sparseMatrix(i = asym_table$i, j = asym_table$j, x = asym_table$x, dims = rep(nrow(pu_table), 2))
+        t <- data.frame(feature = c("f1", "f2", "f4", "f4", "f5"),
+                        type = c("relative", "absolute", "relative", "absolute", "relative"),
+                        sense = c(">=", "<=", "=", "<=", ">="), target = c(0.3, 2.0, 0.2, 120, 0.25))
+        p <- problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |> add_min_set_objective() |>
+          add_manual_targets(t) |> add_binary_decisions()
+        list(n = eval_n_summary(p, sol_table), cost = eval_cost_summary(p, sol_table),
+             boundary = eval_boundary_summary(p, sol_table, data = bm),
+             connectivity = eval_connectivity_summary(p, sol_table, data = cm),
+             asym = eval_asym_connectivity_summary(p, sol_table, data = am),
+             representation = eval_feature_representation_summary(p, sol_table),
+             coverage = eval_target_coverage_summary(p, sol_table))"""),
+    "eval_replacement": Case("eval", RASTER, """
+        p <- problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+          add_binary_decisions() |> add_gurobi_solver(gap = 0, threads = 1, verbose = FALSE)
+        s <- solve(p)
+        list(solution = solution_values(s, p),
+             rc = values(eval_replacement_importance(p, s, rescale = FALSE), mat = FALSE),
+             rc_scaled = values(eval_replacement_importance(p, s), mat = FALSE))"""),
+    "eval_replacement_max": Case("eval", ("pu_table", "bnd_table"), """
+        bm <- Matrix::sparseMatrix(i = bnd_table$i, j = bnd_table$j, x = bnd_table$x, dims = rep(nrow(pu_table), 2))
+        p <- problem(pu_table, features = paste0("f", 1:5), cost_column = "cost") |>
+          add_max_utility_objective(1500) |> add_boundary_penalties(0.001, data = bm) |> add_binary_decisions() |>
+          add_gurobi_solver(gap = 0, threads = 1, verbose = FALSE)
+        s <- solve(p)
+        list(solution = s$solution_1,
+             rc = eval_replacement_importance(p, s[, "solution_1", drop = FALSE], rescale = FALSE)$rc)""",
+                                 notes="a maximisation: the differences change sign"),
+    "eval_rank": Case("eval", RASTER, """
+        p <- problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+          add_binary_decisions() |> add_gurobi_solver(gap = 0, threads = 1, verbose = FALSE)
+        s <- solve(p)
+        r <- eval_rank_importance(p, s, n = 4, rescale = FALSE)
+        list(solution = solution_values(s, p), rank = values(r, mat = FALSE), budgets = attr(r, "budgets"),
+             objective = attr(r, "objective"))""",
+                      notes="min set: budgets for the min shortfall objective, units locked in rank by rank"),
 }
 
 

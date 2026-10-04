@@ -192,6 +192,7 @@ add_library(optcore STATIC
     src/cpp/opt/closure.cpp
     src/cpp/opt/cover.cpp
     src/cpp/opt/cut.cpp
+    src/cpp/opt/eval.cpp
     src/cpp/opt/features.cpp
     src/cpp/opt/marxan.cpp
     src/cpp/opt/maxflow.cpp
@@ -201,6 +202,8 @@ add_library(optcore STATIC
 target_include_directories(optcore PUBLIC src/cpp)
 target_include_directories(optcore SYSTEM PRIVATE ${highs_SOURCE_DIR}/highs ${highs_BINARY_DIR})
 target_link_libraries(optcore PRIVATE highs)
+# R's x87 exp (lsm/rmath.hpp) in the evaluation's pnorm
+target_link_libraries(optcore PUBLIC lsmcore)
 set_target_properties(optcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Species distribution modelling: thinning, background sampling, partitions, evaluation, MaxNet.
 add_library(sdmcore STATIC

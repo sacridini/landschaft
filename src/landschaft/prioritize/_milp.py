@@ -127,6 +127,12 @@ def _stack(features) -> xr.DataArray:
 
 def _layers(features) -> list[tuple[str, xr.DataArray]]:
     """The features as named 2-D rasters, without copying them into one stack."""
+    from ..collection import RasterCollection
+
+    if isinstance(features, RasterCollection):  # ls.load_raster([...]): a lazy stack, read block by block
+        if not features.same_grid:
+            raise ValueError("the feature rasters must share a grid")
+        return _layers(features.to_stack())
     if isinstance(features, xr.Dataset):
         return [(str(k), v) for k, v in features.data_vars.items()]
     if isinstance(features, xr.DataArray):

@@ -1816,22 +1816,40 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
 * **Fase 5 completa** (2026-10-04): Linux (WSL, gcc 13), testes do `ls.prioritize` MILP e multi-action:
   352 passam, 0 falham (112 pulados: checagens das referências com highspy/gurobipy). Versão **1.22.0**.
 
+### Andamento da fase 6 (avaliação)
+* **Fase 6 completa** (2026-10-04): `src/landschaft/prioritize/_milp_eval.py` + `src/cpp/opt/eval.cpp`, as
+  `eval_*` do prioritizr 8.0.6 (lidas no commit `b3023f9f`). Grupo `eval` do harness (6 casos: raster binário e
+  em proporções, tabela com metas manuais `>=`/`<=`/`=` e matrizes de fronteira, conectividade e assimétrica,
+  replacement em min set e em max utility com fronteira, rank com n = 4). **Bit a bit**: n, custo, fronteira
+  (com e sem `edge_factor`), conectividade, assimétrica, representação, cobertura de metas, Ferrier e riqueza
+  ponderada pela raridade; replacement e rank: os mesmos ótimos (tolerância 1e-9) e os mesmos ranks.
+  Fatos da paridade: `sum`/`colSums` do R = soma de 80 bits (`r_sum`); `rij %*% s` do Matrix (CHOLMOD) e o
+  `colSums` do Matrix em matriz densa = soma em ordem em double; `arma::accu` de matriz esparsa = duas somas
+  intercaladas (`arrayops::accumulate`), e as entradas que viram 0 saem antes; `accu(rij.row(i))` em ordem;
+  `pnorm` do R (nmath 4.4.2, Cody) com o `exp` x87 do mingw (`lsm::r_exp`); o `seq(length.out)` do R; a
+  checagem de perímetros do `eval_boundary_summary` é aviso (`verify`), não erro. Mais `eval_landscape_metrics`
+  (métricas do `ls.lsm` da classe selecionada) e `eval_mspa` (seleção = primeiro plano, o resto das unidades
+  fundo). A frequência de seleção dos portfólios já estava (`Portfolio.frequency`, `ActionsPortfolio`).
+  `problem()` aceita `RasterCollection` (`ls.load_raster([...])`, lido em blocos pelo `to_stack()`).
+  Desempenho: 10⁵ células com 12.929 selecionadas: Ferrier 0,12 s, fronteira 0,2 s, rank (10 orçamentos)
+  1 s, replacement 192 s (uma re-solução do motor de cobertura por unidade, em paralelo; o prioritizr faria
+  12.929 resoluções no Gurobi).
+  * **ProxIRR** (Baisero et al.) não existe no prioritizr 8.0.6 nem há implementação de referência à mão: fica
+    para a fase 8 (clean-room pelo artigo, se pedido).
+
 ### Próximos passos (retomar daqui)
-1. **Fase 6, avaliação**: resumo (custo, unidades, perímetro), cobertura de metas, replacement importance
-   (re-solves em paralelo), Ferrier (2000), rank importance (Jung et al. 2021), ProxIRR (Baisero et al. 2021),
-   frequência de seleção em portfólios, métricas de paisagem da solução (`ls.lsm`, MSPA); cada uma contra as
-   `eval_*` do prioritizr na mesma solução.
-2. **Fase 7, calibração e trade-offs**: calibração de BLM e de pesos (joelho da curva), frente de Pareto custo x
+1. **Fase 7, calibração e trade-offs**: calibração de BLM e de pesos (joelho da curva), frente de Pareto custo x
    déficit, solução iterativa acoplável aos passos do `ls.simulate` (agora completo).
-3. **Fase 8, integração**: transformações de feição do Zonation (condição, retenção, kernels, impactos), SAR,
+2. **Fase 8, integração**: transformações de feição do Zonation (condição, retenção, kernels, impactos), SAR,
    feições do `ls.sdm`, comparação Zonation x MILP no mesmo orçamento, gráficos do `ls.plot` e relatório offline.
-4. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
+3. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
    mais as pendências trazidas das fases anteriores: contiguidade e corredores por cortes de separadores de
    nós em rodadas, limite fraco do max_features (cortes), objetivos filogenéticos em 10⁶ (LP que não converge
    em 30 s), fluxos dinâmicos e reparo em paralelo no motor de cortes; multi-action com fronteira e gap 0
    (limite fraco: o HiGHS não fecha; Gurobi 99 s em 10⁴) e o núcleo simétrico de 10⁴ (5 s no HiGHS contra 1 s
-   no Gurobi).
-5. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
+   no Gurobi); replacement importance incremental (só o déficit das feições da unidade, em vez do problema
+   inteiro: hoje ~0,3 s por re-solução em 10⁵, 192 s em 19 threads).
+4. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
    prioritizr/prioriactions/prioripy (tabela R <-> Python).
 
 ### Decisões
