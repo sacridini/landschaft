@@ -1717,6 +1717,20 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     Onde o HiGHS não dava solução nenhuma (10⁵ e 10⁶ na fase 0) e o `anneal` ficava 1-4% acima. Melhorias
     possíveis: fluxos dinâmicos (reusar o grafo residual entre avaliações: só as capacidades terminais
     mudam, Kohli e Torr), reparo em paralelo, poda com trocas.
+* **Presolve e decomposição (itens 1 e 2 da camada própria), revistos**: a eliminação de unidades **dominadas**
+  (mesmas feições ou menos, custo maior ou igual) **não é válida** com metas de quantidade: se a dominante já
+  está na solução, a dominada ainda pode ser necessária para completar a meta (só vale em cobertura 0/1 com
+  meta 1); fundir unidades idênticas também não (ambas podem entrar). As reduções válidas (travadas, feições
+  já atendidas pelas travadas, unidades sem feição de custo >= 0 no mínimo conjunto) os motores de cobertura e
+  de cortes já fazem por construção (colunas fixadas, linhas satisfeitas). A decomposição em componentes
+  independentes não muda a escala: o motor de cobertura resolve 10⁶ unidades inteiras e o de cortes também.
+  Ficam fora, com esta justificativa.
+* **Formulações mais fortes para contiguidade e corredores**: adiadas para a fase 9 (escala). No benchmark da
+  fase 0 o Gurobi também para em gap 1,2% em 10³ unidades de contiguidade: a lacuna é da formulação do
+  prioritizr (fluxo com big-M), não do HiGHS; o caminho é a contiguidade por cortes de separadores de nós em
+  rodadas (o HiGHS não tem lazy constraints), resolvendo o modelo sem as linhas de fluxo.
+* **Fase 4 completa** (2026-10-04): portfólios, porte do Marxan, solver `anneal`, motor de cortes. Linux (WSL,
+  gcc 13): 296 passam, 0 falham (112 pulados: as checagens das referências com highspy/gurobipy, só no ambiente de desenvolvimento).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
