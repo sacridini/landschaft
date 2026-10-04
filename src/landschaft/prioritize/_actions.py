@@ -77,6 +77,7 @@ class ActionsData:
     dist_threats: pd.DataFrame
     sensitivity: pd.DataFrame
     boundary: pd.DataFrame | None = None
+    grid: object = field(default=None, repr=False, compare=False)  # (template raster, flat cell of every unit)
 
     @property
     def n_units(self) -> int:
@@ -641,6 +642,13 @@ class ActionsSolution(Saveable):
     blm: float = 0.0
     x: np.ndarray = field(default=None, repr=False)
 
+    def maps(self):
+        """The monitored cells and every threat's actions as rasters (band ``monitoring``, then the threats'
+        names; NaN outside the planning units), for problems from :func:`actions_raster_data`."""
+        from ._actions_raster import solution_maps
+
+        return solution_maps(self.data, self.units, self.actions)
+
     def monitoring(self) -> pd.DataFrame:
         """``id`` and ``solution`` of every planning unit."""
         return pd.DataFrame({"id": self.data.pu["id"].to_numpy(), "solution": self.units})
@@ -711,5 +719,6 @@ class ActionsSolution(Saveable):
         return _benefit(self.data, np.concatenate([self.units, self.actions]))
 
     def _save_items(self) -> dict:
-        return {"monitoring": self.monitoring(), "actions": self.action_table(), "local_benefit": self.local_benefit,
+        maps = {"maps": self.maps()} if self.data.grid is not None else {}
+        return {**maps, "monitoring": self.monitoring(), "actions": self.action_table(), "local_benefit": self.local_benefit,
                 "cost": self.cost(), "benefit": self.benefit(), "objective": self.objective, "status": self.status}

@@ -1787,10 +1787,17 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   1,6 s); com fronteira (blm 1, blm_actions 0,5) 10⁴ gap 1% 0,18 s (Gurobi 7,5 s). Com fronteira e gap 0 o
   limite da relaxação é fraco e o HiGHS não fecha (Gurobi 9 s em 10³, 99 s em 10⁴): pendência para a fase 9.
 
+* **Parte 5** (2026-10-04): `ls.prioritize.actions_raster_data(monitoring_cost, features, threats,
+  action_cost, target_recovery=, target_conservation=, relative=True, sensitivity=, blm_actions=, locked_in=,
+  locked_out=, boundary=)`: unidades = células com custo de monitoramento (ordem das células), uma camada por
+  feição e por ameaça (ameaça presente onde > 0, intensidade = valor), custo de ação número ou raster por
+  ameaça (sequência, mapeamento por nome ou pilha), metas relativas como fração da quantidade da feição onde
+  alguma ameaça a afeta (recuperação) ou onde nenhuma afeta (conservação), fronteira da grade pelo
+  `boundary_matrix`. `ActionsSolution.maps()`: pilha (monitoring, uma banda por ameaça), também no `ls.save`.
+  Testado contra as tabelas montadas à mão (modelo idêntico).
+
 ### Próximos passos (retomar daqui)
 1. **Fase 5, resto**:
-   * **entrada por rasters** (uma camada por feição e por ameaça, custos de monitoramento e de ação por raster
-     ou constante: a extensão do prioripy), no padrão `ls.load_*` de entrada simples;
    * **dependências direcionais** (fluxo montante-jusante, extensão do prioripy), testadas contra uma
      formulação de referência escrita à parte;
    * portfólios no multi-action (cortes no-good nas unidades e ações, como no `Problem`);

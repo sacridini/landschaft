@@ -256,3 +256,108 @@ def test_engine_keeps_a_time_limit():
     assert time.perf_counter() - t0 < 10
     assert s.status in ("optimal", "time_limit")
     assert np.isfinite(s.objective) and s.bound <= s.objective + 1e-9
+
+
+# ----------------------------------------------------------------------------- raster inputs
+
+def _rasters(seed=11, ny=9, nx=8):
+    rng = np.random.default_rng(seed)
+    cost = rng.integers(1, 4, (ny, nx)).astype(float)
+    cost[0, :3] = np.nan  # not planning units
+    feats = np.where(rng.random((3, ny, nx)) < 0.4, rng.integers(1, 4, (3, ny, nx)), 0).astype(float)
+    feats[1, 4, 4] = np.nan  # NaN = 0
+    thr = np.where(rng.random((2, ny, nx)) < 0.5, rng.random((2, ny, nx)).round(2) + 0.01, 0.0)
+    acost = rng.integers(1, 6, (ny, nx)).astype(float)
+    return (optimize_cases.grid(cost), optimize_cases.grid(feats, names=["sp1", "sp2", "sp3"]),
+            optimize_cases.grid(thr, names=["fire", "cattle"]), optimize_cases.grid(acost))
+
+
+def _tables_of(cost, feats, thr, acost, fire_cost):
+    """The same problem as tables, by hand: units = cells with a cost, in cell order."""
+    c = cost.values.ravel()
+    cells = np.flatnonzero(np.isfinite(c))
+    pu = pd.DataFrame({"id": np.arange(1.0, cells.size + 1), "monitoring_cost": c[cells]})
+    f = np.nan_to_num(feats.values.reshape(3, -1)[:, cells])
+    fk, fp = np.nonzero(f)
+    df = pd.DataFrame({"pu": fp + 1.0, "feature": fk + 1.0, "amount": f[fk, fp]})
+    t = thr.values.reshape(2, -1)[:, cells]
+    tk, tp = np.nonzero(t)
+    cost_t = np.where(tk == 0, fire_cost, acost.values.ravel()[cells][tp])
+    dt = pd.DataFrame({"pu": tp + 1.0, "threat": tk + 1.0, "amount": t[tk, tp], "action_cost": cost_t,
+                       "status": 0.0}).sort_values(["pu", "threat"]).reset_index(drop=True)
+    return pu, df, dt
+
+
+def test_raster_inputs_are_the_tables():
+    cost, feats, thr, acost = _rasters()
+    d = ls.prioritize.actions_raster_data(cost, feats, thr, {"fire": 2.0, "cattle": acost},
+                                          target_recovery=[3, 2, 4], target_conservation=1, relative=False)
+    pu, df, dt = _tables_of(cost, feats, thr, acost, 2.0)
+    fe = pd.DataFrame({"id": [1.0, 2.0, 3.0], "name": ["sp1", "sp2", "sp3"], "target_recovery": [3.0, 2.0, 4.0],
+                       "target_conservation": 1.0})
+    th = pd.DataFrame({"id": [1.0, 2.0], "name": ["fire", "cattle"], "blm_actions": 0.0})
+    ref = ls.prioritize.actions_data(pu, fe, df, th, dt)
+    a, b = d.problem("minimizeCosts").compile(), ref.problem("minimizeCosts").compile()
+    assert (a.A != b.A).nnz == 0
+    for key in ("obj", "rhs", "lb", "ub"):
+        np.testing.assert_array_equal(getattr(a, key), getattr(b, key))
+    assert list(d.features["name"]) == ["sp1", "sp2", "sp3"] and list(d.threats["name"]) == ["fire", "cattle"]
+
+
+def test_raster_relative_targets():
+    cost, feats, thr, acost = _rasters()
+    d = ls.prioritize.actions_raster_data(cost, feats, thr, 1.0, target_recovery=0.5, target_conservation=0.25)
+    pu, df, dt = _tables_of(cost, feats, thr, acost, 1.0)
+    dt["action_cost"] = 1.0
+    threatened = df["pu"].isin(dt["pu"])  # every threat harms every feature
+    rec = df[threatened].groupby("feature")["amount"].sum().reindex([1.0, 2.0, 3.0], fill_value=0).to_numpy()
+    con = df[~threatened].groupby("feature")["amount"].sum().reindex([1.0, 2.0, 3.0], fill_value=0).to_numpy()
+    np.testing.assert_allclose(d.features["target_recovery"].to_numpy(), 0.5 * rec)
+    np.testing.assert_allclose(d.features["target_conservation"].to_numpy(), 0.25 * con)
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        ls.prioritize.actions_raster_data(cost, feats, thr, 1.0, target_recovery=30)
+
+
+def test_raster_solution_maps():
+    cost, feats, thr, acost = _rasters()
+    d = ls.prioritize.actions_raster_data(cost, feats, thr, acost, target_recovery=0.4, boundary=True,
+                                          blm_actions=[0.5, 0.0])
+    # the boundary: every pair of edge-sharing units once, and the units' perimeters
+    b = d.boundary
+    off = b[b["id1"] != b["id2"]]
+    assert len(off) == 9 * 7 + 8 * 8 - 6  # 4-neighbour edges, less the 6 touching the 3 cells without a cost
+    s = d.problem("minimizeCosts", blm=0.1).add_highs_solver(gap=0).solve()
+    m = s.maps()
+    assert list(m["band"].values) == ["monitoring", "fire", "cattle"]
+    mon = m.sel(band="monitoring").values
+    assert np.isnan(mon[0, :3]).all() and np.isfinite(mon.ravel()[np.isfinite(cost.values.ravel())]).all()
+    acted = (np.nan_to_num(m.sel(band="fire").values) + np.nan_to_num(m.sel(band="cattle").values)) > 0
+    assert (mon[acted] == 1).all()  # an action needs its cell monitored
+    assert np.nansum(m.sel(band=["fire", "cattle"]).values) == s.actions.sum()
+    assert np.nansum(mon) == s.units.sum()
+
+
+def test_raster_inputs_checked():
+    cost, feats, thr, acost = _rasters()
+    holes = acost.copy(data=np.where(thr.values[1] > 0, np.nan, acost.values))
+    with pytest.raises(ValueError, match="no value in cells where the threat occurs"):
+        ls.prioritize.actions_raster_data(cost, feats, thr, [1.0, holes])
+    with pytest.raises(ValueError, match="no value for"):
+        ls.prioritize.actions_raster_data(cost, feats, thr, {"fire": 1.0})
+    with pytest.raises(ValueError, match="maps need"):
+        _problem("actions_mincost").add_highs_solver(gap=0).solve().maps()
+    locked = cost.copy(data=np.zeros(cost.shape))
+    locked.values[5, 5] = 1
+    d = ls.prioritize.actions_raster_data(cost, feats, thr, 1.0, target_recovery=0.2, locked_out=locked)
+    assert d.pu.loc[d.pu["status"] == 3].shape[0] == 1
+
+
+def test_raster_solution_saves(tmp_path):
+    cost, feats, thr, acost = _rasters()
+    d = ls.prioritize.actions_raster_data(cost, feats, thr, 1.0, target_recovery=0.3)
+    s = d.problem("minimizeCosts").add_highs_solver(gap=0).solve()
+    ls.save(s, tmp_path / "sol")
+    names = sorted(p.name for p in (tmp_path / "sol").iterdir())
+    assert "maps.tif" in names and "monitoring.csv" in names
+    back = ls.load_raster(tmp_path / "sol" / "maps.tif")
+    np.testing.assert_array_equal(np.nan_to_num(back.values, nan=-1), np.nan_to_num(s.maps().values, nan=-1))

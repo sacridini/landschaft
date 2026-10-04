@@ -13,6 +13,11 @@ in a new major version.
   Lagrangian's near ties. At 10^5 units the 1% gap takes 0.7 s (HiGHS alone 57 s, Gurobi 3 s) and the
   proven optimum 6 s (Gurobi 13 s). `ActionsProblem.solve(start=...)` takes a solution to start from;
   `add_highs_solver(engine=False)` runs HiGHS's MIP alone.
+- `ls.prioritize.actions_raster_data(monitoring_cost, features, threats, action_cost, ...)`: multi-action
+  problems from rasters (the cells with a monitoring cost are the planning units; one layer per feature
+  and per threat; action costs as numbers or rasters per threat; relative or absolute recovery and
+  conservation targets; locked cells; the grid's boundary), and `ActionsSolution.maps()` with the
+  monitored cells and every threat's actions as rasters (also written by `ls.save`).
 
 ### Changed
 - The multi-action model, its figures and the equivalent model for solving are built in C++:
