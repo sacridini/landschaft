@@ -372,7 +372,38 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
                        dist_threats=dist_threats, sensitivity=sensitivity, boundary=boundary)
 
 
-# ----------------------------------------------------------------------------- the response to the actions
+# ----------------------------------------------------------------------------- the model (C++: opt/actions.cpp)
+
+def _arrays(d: ActionsData) -> dict:
+    """The inputs as the C++ side takes them (internal ids)."""
+    i64 = np.int64
+    sens = d.sensitivity
+    out = {
+        "n_units": len(d.pu), "n_features": len(d.features), "n_threats": len(d.threats),
+        "monitoring_cost": d.pu["monitoring_cost"].to_numpy(np.float64),
+        "unit_status": d.pu["status"].to_numpy(np.float64),
+        "target_recovery": d.features["target_recovery"].to_numpy(np.float64),
+        "target_conservation": d.features["target_conservation"].to_numpy(np.float64),
+        "df_unit": d.dist_features["internal_pu"].to_numpy(i64),
+        "df_feature": d.dist_features["internal_feature"].to_numpy(i64),
+        "df_amount": d.dist_features["amount"].to_numpy(np.float64),
+        "blm_actions": d.threats["blm_actions"].to_numpy(np.float64),
+        "act_unit": d.dist_threats["internal_pu"].to_numpy(i64),
+        "act_threat": d.dist_threats["internal_threat"].to_numpy(i64),
+        "act_amount": d.dist_threats["amount"].to_numpy(np.float64),
+        "act_cost": d.dist_threats["action_cost"].to_numpy(np.float64),
+        "act_status": d.dist_threats["status"].to_numpy(np.float64),
+        "sens_feature": sens["internal_feature"].to_numpy(i64),
+        "sens_threat": sens["internal_threat"].to_numpy(i64),
+        "sens_delta": np.concatenate([sens[f"delta{k}"].to_numpy(np.float64) for k in range(1, 5)]),
+        "has_boundary": d.boundary is not None,
+    }
+    if d.boundary is not None:
+        out["bnd_id1"] = d.boundary["internal_id1"].to_numpy(i64)
+        out["bnd_id2"] = d.boundary["internal_id2"].to_numpy(i64)
+        out["bnd_value"] = d.boundary["boundary"].to_numpy(np.float64)
+    return out
+
 
 @dataclass(frozen=True)
 class _Pairs:
@@ -393,108 +424,27 @@ class _Pairs:
 
 
 def _pairs(d: ActionsData) -> _Pairs:
-    nf, n = len(d.features), len(d.pu)
-    df = d.dist_features
-    order = np.lexsort((df["internal_pu"].to_numpy(), df["internal_feature"].to_numpy()))
-    feature = df["internal_feature"].to_numpy(dtype=np.int64)[order]
-    unit = df["internal_pu"].to_numpy(dtype=np.int64)[order]
-    amount = df["amount"].to_numpy(dtype=np.float64)[order]
-    dt = d.dist_threats
-    nt = len(d.threats)
-    # the threats of every unit, in the threats' order
-    t_unit = dt["internal_pu"].to_numpy(dtype=np.int64)
-    t_threat = dt["internal_threat"].to_numpy(dtype=np.int64)
-    by_unit = sp.csr_matrix((np.arange(1, len(dt) + 1, dtype=np.float64), (t_unit, t_threat)), shape=(n, nt))
-    by_unit.sort_indices()
-    sens = d.sensitivity
-    sf = sens["internal_feature"].to_numpy(dtype=np.int64)
-    st = sens["internal_threat"].to_numpy(dtype=np.int64)
-    params = np.zeros((4, nf, nt))
-    harms = np.zeros((nf, nt), dtype=bool)
-    for k, name in enumerate(("delta1", "delta2", "delta3", "delta4")):
-        params[k, sf, st] = sens[name].to_numpy(dtype=np.float64)  # later rows win, as arma's assignment
-    harms[sf, st] = True
-    intensity = dt["amount"].to_numpy(dtype=np.float64)
-    status = dt["status"].to_numpy(dtype=np.float64)
-    starts = [0]
-    actions, coefs, contribs, astatus = [], [], [], []
-    threatened = np.zeros(feature.size, dtype=bool)
-    sum_alpha = np.zeros(feature.size)
-    indptr, indices, data = by_unit.indptr, by_unit.indices, by_unit.data
-    for k in range(feature.size):
-        s, i = feature[k], unit[k]
-        lo, hi = indptr[i], indptr[i + 1]
-        ts = indices[lo:hi]
-        acts = data[lo:hi].astype(np.int64) - 1
-        alphas, rows = [], []
-        total = 0.0
-        for t, a in zip(ts, acts):
-            if not harms[s, t]:
-                continue
-            threatened[k] = True
-            x = intensity[a]
-            pa, pb, pc, pd_ = params[0, s, t], params[1, s, t], params[2, s, t], params[3, s, t]
-            if x <= pa:
-                var, const = 0.0, pd_
-            elif x >= pb:
-                var, const = pd_ - pc, pc
-            else:
-                var = ((pa - x) * (pc - pd_)) / (pb - pa)
-                const = (pc * (x - pa) - pd_ * (x - pb)) / (pb - pa)
-            alpha = 1 - const
-            total = total + alpha
-            alphas.append(alpha)
-            rows.append((a, var))
-        sum_alpha[k] = total
-        if total != 0.0:
-            for (a, var), alpha in zip(rows, alphas):
-                actions.append(a)
-                coefs.append(-1 * (var * alpha) / total)
-                contribs.append((var * alpha) / total)
-                astatus.append(status[a])
-        starts.append(len(actions))
-    return _Pairs(feature=feature, unit=unit, amount=amount, threatened=threatened, sum_alpha=sum_alpha,
-                  start=np.asarray(starts, dtype=np.int64), action=np.asarray(actions, dtype=np.int64),
-                  coef=np.asarray(coefs, dtype=np.float64), contribution=np.asarray(contribs, dtype=np.float64),
-                  action_status=np.asarray(astatus, dtype=np.float64))
+    from .. import _core
+
+    r = dict(_core.opt_actions_pairs(_arrays(d)))
+    r["threatened"] = r["threatened"].astype(bool)
+    return _Pairs(**r)
 
 
 def _benefit(d: ActionsData, solution: np.ndarray | None) -> pd.DataFrame:
     """rcpp_stats_benefit: the most benefit (solution None) or a solution's (units then actions)."""
-    p = _pairs(d)
-    nf = len(d.features)
-    unit_status = d.pu["status"].to_numpy()
-    dist = np.bincount(p.feature, minlength=nf).astype(np.float64)
-    dist_threatened = np.zeros(nf)
-    max_cons, max_rec = np.zeros(nf), np.zeros(nf)
-    sol_cons, sol_rec = np.zeros(nf), np.zeros(nf)
-    n = len(d.pu)
-    for k in range(p.feature.size):
-        s, i = p.feature[k], p.unit[k]
-        if unit_status[i] == 3:
-            continue
-        if p.threatened[k]:
-            dist_threatened[s] += 1
-        if p.sum_alpha[k] != 0.0:
-            for j in range(p.start[k], p.start[k + 1]):
-                if p.action_status[j] == 3:
-                    continue
-                v = p.contribution[j] * p.amount[k]
-                max_rec[s] = max_rec[s] + v
-                if solution is not None:
-                    sol_rec[s] = sol_rec[s] + solution[n + p.action[j]] * v
-        else:
-            max_cons[s] = max_cons[s] + p.amount[k]
-            if solution is not None:
-                sol_cons[s] = sol_cons[s] + solution[i] * p.amount[k]
+    from .. import _core
+
+    b = _core.opt_actions_benefit(_arrays(d), None if solution is None else np.asarray(solution, np.float64))
     ids = d.features["id"].to_numpy()
+    cons, rec = b["conservation"], b["recovery"]
     if solution is not None:
-        return pd.DataFrame({"feature": ids, "benefit.conservation": r_round(sol_cons, 4),
-                             "benefit.recovery": r_round(sol_rec, 4), "benefit.total": r_round(sol_rec + sol_cons, 4)})
-    return pd.DataFrame({"feature": ids, "dist": dist, "dist_threatened": dist_threatened,
-                         "maximum.conservation.benefit": r_round(max_cons, 4),
-                         "maximum.recovery.benefit": r_round(max_rec, 4),
-                         "maximum.benefit": r_round(max_rec + max_cons, 4)})
+        return pd.DataFrame({"feature": ids, "benefit.conservation": r_round(cons, 4),
+                             "benefit.recovery": r_round(rec, 4), "benefit.total": r_round(rec + cons, 4)})
+    return pd.DataFrame({"feature": ids, "dist": b["dist"], "dist_threatened": b["dist_threatened"],
+                         "maximum.conservation.benefit": r_round(cons, 4),
+                         "maximum.recovery.benefit": r_round(rec, 4),
+                         "maximum.benefit": r_round(rec + cons, 4)})
 
 
 def _presolve_targets(d: ActionsData) -> ActionsData:
@@ -515,20 +465,10 @@ def _presolve_targets(d: ActionsData) -> ActionsData:
 
 def _costs(d: ActionsData, units: np.ndarray, actions: np.ndarray) -> tuple[float, np.ndarray]:
     """rcpp_stats_costs_units / _actions: the monitoring cost and every threat's actions' cost."""
-    c = d.pu["monitoring_cost"].to_numpy(dtype=np.float64)
-    cu = 0.0
-    for i in range(c.size):
-        cu = cu + c[i] * units[i]
-    dt = d.dist_threats
-    per_action = dt["action_cost"].to_numpy(dtype=np.float64) * actions
-    nt = len(d.threats)
-    by_threat = np.zeros(nt)
-    t = dt["internal_threat"].to_numpy(dtype=np.int64)
-    u = dt["internal_pu"].to_numpy(dtype=np.int64)
-    for a in np.lexsort((u, t)):  # every threat's column, units ascending
-        if per_action[a] != 0:
-            by_threat[t[a]] = by_threat[t[a]] + per_action[a]
-    return cu, by_threat
+    from .. import _core
+
+    c = _core.opt_actions_costs(_arrays(d), np.asarray(units, np.float64), np.asarray(actions, np.float64))
+    return float(c[0]), c[1:]
 
 
 def _presolve_budget(d: ActionsData, budget: float) -> float:
@@ -545,385 +485,35 @@ def _presolve_budget(d: ActionsData, budget: float) -> float:
     return budget
 
 
-# ----------------------------------------------------------------------------- the model
-
-class _Builder:
-    def __init__(self) -> None:
-        self.i: list = []
-        self.j: list = []
-        self.x: list = []
-        self.rhs: list = []
-        self.sense: list = []
-        self.obj: list = []
-        self.lb: list = []
-        self.ub: list = []
-        self.vtype: list = []
-
-    def entries(self, i, j, x) -> None:
-        self.i.append(np.asarray(i, dtype=np.int64).ravel())
-        self.j.append(np.asarray(j, dtype=np.int64).ravel())
-        self.x.append(np.asarray(x, dtype=np.float64).ravel())
-
-    def rows(self, rhs, sense) -> None:
-        rhs = np.asarray(rhs, dtype=np.float64).ravel()
-        self.rhs.append(rhs)
-        self.sense.append(np.full(rhs.size, sense, dtype=object) if isinstance(sense, str) else
-                          np.asarray(sense, dtype=object))
-
-    def columns(self, obj, vtype: str, lb=0.0, ub=1.0) -> None:
-        obj = np.asarray(obj, dtype=np.float64).ravel()
-        self.obj.append(obj)
-        self.lb.append(np.full(obj.size, lb))
-        self.ub.append(np.full(obj.size, ub))
-        self.vtype.append(np.full(obj.size, vtype, dtype=object))
-
-    @property
-    def nrow(self) -> int:
-        return int(sum(r.size for r in self.rhs))
-
-    @property
-    def ncol(self) -> int:
-        return int(sum(o.size for o in self.obj))
+_SENSES = np.array(["<=", ">=", "="], dtype=object)
 
 
-def _boundary_matrix(d: ActionsData) -> sp.csc_matrix | None:
-    """create_boundary_matrix_extended: both directions, unless the pair is already there (then only id1,
-    id2 changes)."""
-    if d.boundary is None or not len(d.boundary):
-        return None
-    n = len(d.pu)
-    vals: dict = {}
-    for a, b, v in zip(d.boundary["internal_id1"].to_numpy(dtype=np.int64),
-                       d.boundary["internal_id2"].to_numpy(dtype=np.int64),
-                       d.boundary["boundary"].to_numpy(dtype=np.float64)):
-        if vals.get((a, b), 0.0) == 0.0:
-            vals[(a, b)] = v
-            vals[(b, a)] = v
-        else:
-            vals[(a, b)] = v
-    keys = [(k, v) for k, v in vals.items() if v != 0.0]  # arma keeps no zeros
-    if not keys:
-        return sp.csc_matrix((n, n))
-    r = np.array([k[0] for k, _ in keys])
-    c = np.array([k[1] for k, _ in keys])
-    v = np.array([v for _, v in keys])
-    m = sp.csc_matrix((v, (r, c)), shape=(n, n))
-    m.sort_indices()
-    return m
+def _settings(p: ActionsProblem) -> dict:
+    return {"maximize": p.model == "maximizeBenefits", "blm": float(p.blm), "curve": int(p.curve),
+            "segments": int(p.segments), "step": float(r_round(np.array([1 / p.segments]), 1)[0]),
+            "budget": float(p.budget)}
 
 
-@dataclass(frozen=True)
-class ActionsModel:
-    """A compiled multi-action model and what the solution needs to read it."""
-
-    model: OptimizationProblem
-    n_units: int
-    n_actions: int
-    n_pairs: int
-    # curve != 1: y = x^a for the benefit columns xvar -> yvar (Gurobi's genconpow in prioriactions)
-    xvar: np.ndarray
-    yvar: np.ndarray
-    curve: int
-    segments: int
-
-
-def compile_actions(p: ActionsProblem, disaggregate: bool = False) -> ActionsModel:
-    """The model; with disaggregate, the activation rows one per action (x_ik <= w_i: the same integer
-    solutions, a much tighter linear relaxation) instead of prioriactions's one per unit."""
-    d = p.data
-    n, na = len(d.pu), len(d.dist_threats)
-    nf, nt = len(d.features), len(d.threats)
-    pairs = _pairs(d)
-    npairs = pairs.feature.size
-    b = _Builder()
-    # --- benefit rows: b_is - sum coef x_ik <= 0, or b_is - w_i <= 0 (no harmful threat with a response)
-    row0 = 0
-    for k in range(npairs):
-        r = row0 + k
-        col = n + na + k
-        ii, jj, xx = [r], [col], [1.0]
-        if pairs.sum_alpha[k] != 0.0:
-            lo, hi = pairs.start[k], pairs.start[k + 1]
-            ii += [r] * (hi - lo)
-            jj += list(n + pairs.action[lo:hi])
-            xx += list(pairs.coef[lo:hi])
-        else:
-            ii.append(r)
-            jj.append(pairs.unit[k])
-            xx.append(-1.0)
-        b.entries(ii, jj, xx)
-    b.rows(np.zeros(npairs), "<=")
-    # --- activation rows: sum_k x_ik - |K_i| w_i <= 0, one per unit
-    dt = d.dist_threats
-    t_unit = dt["internal_pu"].to_numpy(dtype=np.int64)
-    t_threat = dt["internal_threat"].to_numpy(dtype=np.int64)
-    row0 = b.nrow
-    order = np.lexsort((t_threat, t_unit))
-    counts = np.bincount(t_unit, minlength=n)
-    starts = np.concatenate([[0], np.cumsum(counts)])
-    if disaggregate:
-        b.entries(np.repeat(row0 + np.arange(na), 2), np.column_stack([n + np.arange(na), t_unit]).ravel(),
-                  np.tile([1.0, -1.0], na))
-        b.rows(np.zeros(na), "<=")
-    else:
-        for i in range(n):
-            acts = order[starts[i]:starts[i + 1]]
-            b.entries([row0 + i] * (acts.size + 1), list(n + acts) + [i], [1.0] * acts.size + [-1.0 * acts.size])
-        b.rows(np.zeros(n), "<=")
-    # --- locks: units, then actions
-    us = d.pu["status"].to_numpy()
-    locked = np.flatnonzero(us != 0)
-    row0 = b.nrow
-    b.entries(row0 + np.arange(locked.size), locked, np.ones(locked.size))
-    b.rows(np.where(us[locked] == 2, 1.0, 0.0), "=")
-    st = dt["status"].to_numpy()
-    locked = np.flatnonzero(st != 0)
-    row0 = b.nrow
-    b.entries(row0 + np.arange(locked.size), n + locked, np.ones(locked.size))
-    b.rows(np.where(st[locked] == 2, 1.0, 0.0), "=")
-    # --- objective
-    maximize = p.model == "maximizeBenefits"
-    bm = _boundary_matrix(d)
-    blm = p.blm
-    conn_units = np.zeros(n)
-    if bm is not None and blm != 0:
-        z = bm.T.tocsc()  # z.begin(): by column, rows ascending
-        z.sort_indices()
-        for c in range(n):
-            for k in range(z.indptr[c], z.indptr[c + 1]):
-                if z.indices[k] != c:
-                    conn_units[c] = conn_units[c] + z.data[k]
-    unit_cost = d.pu["monitoring_cost"].to_numpy(dtype=np.float64)
-    b.columns(-blm * conn_units if maximize else blm * conn_units + unit_cost, "B")
-    blm_actions = d.threats["blm_actions"].to_numpy(dtype=np.float64)
-    action_cost = dt["action_cost"].to_numpy(dtype=np.float64)
-    conn_actions = np.zeros(na)
-    # every threat's units ascending (arma's column of dist_threats_extended)
-    by_threat = [np.sort(t_unit[t_threat == t]) for t in range(nt)]
-    act_of = {(int(u), int(t)): a for a, (u, t) in enumerate(zip(t_unit, t_threat))}
-    pair_terms = []  # (action a, action of the other unit, value)
-    for a in range(na):
-        t = t_threat[a]
-        if bm is not None and blm_actions[t] != 0:
-            u1 = t_unit[a]
-            for u2 in by_threat[t]:
-                v = bm[u1, u2]
-                if u1 != u2 and v != 0:
-                    conn_actions[a] = conn_actions[a] + v
-                    pair_terms.append((a, act_of[(int(u2), int(t))], v))
-    bt = blm_actions[t_threat]
-    b.columns(-bt * conn_actions if maximize else bt * conn_actions + action_cost, "B")
-    curve = p.curve
-    if maximize and curve == 1:
-        b.columns(pairs.amount, "C")
-    else:
-        b.columns(np.zeros(npairs), "C")
-    first_pow = b.ncol
-    if curve != 1:
-        if maximize:
-            row = b.nrow  # prioriactions puts explicit zeros here (the next row's index)
-            b.entries(np.full(npairs, row), first_pow + np.arange(npairs), np.zeros(npairs))
-            b.columns(pairs.amount, "C")
-        else:
-            b.columns(np.zeros(npairs), "C")
-    # y[i1, i2]: every directed pair of the boundary matrix (z = M', by column, rows ascending)
-    if bm is not None and blm != 0:
-        z = bm.T.tocsc()
-        z.sort_indices()
-        col = b.ncol
-        row = b.nrow
-        objs, ii, jj, xx, rhs, sense = [], [], [], [], [], []
-        for c in range(n):
-            for k in range(z.indptr[c], z.indptr[c + 1]):
-                r = z.indices[k]
-                if r == c:
-                    continue
-                v = z.data[k]
-                objs.append(blm * (1 * v) if maximize else blm * (-1 * v))
-                ii += [row, row, row + 1, row + 1, row + 2, row + 2, row + 2]
-                jj += [col, r, col, c, col, r, c]
-                xx += [1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0]
-                rhs += [0.0, 0.0, -1.0]
-                sense += ["<=", "<=", ">="]
-                row += 3
-                col += 1
-        if objs:
-            b.columns(objs, "B")
-            b.entries(ii, jj, xx)
-            b.rows(rhs, sense)
-    # p[i1, i2, k]: the boundary between two units' actions against the same threat
-    if pair_terms:
-        col = b.ncol
-        row = b.nrow
-        objs, ii, jj, xx, rhs, sense = [], [], [], [], [], []
-        for a1, a2, v in pair_terms:
-            objs.append(blm_actions[t_threat[a1]] * (v if maximize else -1 * v))
-            ii += [row, row, row + 1, row + 1, row + 2, row + 2, row + 2]
-            jj += [col, n + a1, col, n + a2, col, n + a1, n + a2]
-            xx += [1.0, -1.0, 1.0, -1.0, 1.0, -1.0, -1.0]
-            rhs += [0.0, 0.0, -1.0]
-            sense += ["<=", "<=", ">="]
-            row += 3
-            col += 1
-        b.columns(objs, "B")
-        b.entries(ii, jj, xx)
-        b.rows(rhs, sense)
-    # --- targets (two rows per feature: conservation, recovery) or the budget
-    if not maximize:
-        row0 = b.nrow
-        tcol = n + na + (0 if curve == 1 else npairs)
-        tr = d.features["target_recovery"].to_numpy(dtype=np.float64)
-        tc = d.features["target_conservation"].to_numpy(dtype=np.float64)
-        rhs = []
-        for s in range(nf):
-            ks = np.flatnonzero(pairs.feature == s)
-            rec = pairs.threatened[ks]
-            r = row0 + 2 * s
-            b.entries(np.where(rec, r + 1, r), tcol + ks, pairs.amount[ks])
-            if not (~rec).any():
-                b.entries([r], [1], [0.0])
-            rhs.append(tc[s] if (~rec).any() else 0.0)
-            if not rec.any():
-                b.entries([r + 1], [1], [0.0])
-            rhs.append(tr[s] if rec.any() else 0.0)
-        b.rows(rhs, ">=")
-    else:
-        row = b.nrow
-        b.entries(np.full(n + na, row), np.arange(n + na), np.concatenate([unit_cost, action_cost]))
-        b.rows([p.budget], "<=")
-    nrow, ncol = b.nrow, b.ncol
-    i = np.concatenate(b.i) if b.i else np.zeros(0, np.int64)
-    j = np.concatenate(b.j) if b.j else np.zeros(0, np.int64)
-    x = np.concatenate(b.x) if b.x else np.zeros(0)
-    a = sp.csr_matrix((x, (i, j)), shape=(nrow, ncol))  # duplicates summed (Matrix::sparseMatrix)
-    a.sort_indices()
-    m = OptimizationProblem(
-        A=a, obj=np.concatenate(b.obj), lb=np.concatenate(b.lb), ub=np.concatenate(b.ub),
-        rhs=np.concatenate(b.rhs), sense=tuple(np.concatenate(b.sense)), vtype=tuple(np.concatenate(b.vtype)),
-        modelsense="max" if maximize else "min", row_ids=("",) * nrow, col_ids=("",) * ncol)
-    xvar = n + na + np.arange(npairs) if curve != 1 else np.zeros(0, np.int64)
-    yvar = first_pow + np.arange(npairs) if curve != 1 else np.zeros(0, np.int64)
-    return ActionsModel(model=m, n_units=n, n_actions=na, n_pairs=npairs, xvar=xvar, yvar=yvar, curve=curve,
-                        segments=p.segments)
-
-
-def _eliminate_benefits(am: ActionsModel, pairs: _Pairs):
-    """The model without the benefit columns b (linear curve) when every b equals its row's right side at
-    an optimum: b_is = sum_k coef x_ik (recovery; the coefficients >= 0 and summing to at most 1, so the
-    bound b <= 1 never binds) or b_is = w_i (conservation). Substituted into the targets (or the
-    objective), and the benefit rows dropped: the same optimum, (units + actions) columns fewer. Returns
-    (model, expand) with expand(x) the full solution of the original columns, or None."""
-    m = am.model
-    n, na, npairs = am.n_units, am.n_actions, am.n_pairs
-    if pairs.contribution.size and (pairs.contribution < 0).any():
-        return None
-    sums = np.zeros(npairs)
-    k_of = np.repeat(np.arange(npairs), np.diff(pairs.start))
-    np.add.at(sums, k_of, pairs.contribution)
-    if (sums > 1.0 + 1e-12).any():
-        return None
-    # b = E [w; x]
-    rec = pairs.sum_alpha != 0.0
-    rows = np.concatenate([k_of, np.flatnonzero(~rec)])
-    cols = np.concatenate([n + pairs.action, pairs.unit[~rec]])
-    vals = np.concatenate([pairs.contribution, np.ones(int((~rec).sum()))])
-    E = sp.csr_matrix((vals, (rows, cols)), shape=(npairs, n + na))
-    b0 = n + na
-    keep_cols = np.concatenate([np.arange(b0), np.arange(b0 + npairs, m.ncol)])
-    A = m.A.tocsc()
-    Ab = A[:, b0:b0 + npairs]
-    Ao = A[:, keep_cols]
-    # the benefit rows are the first npairs rows; the others get Ab E on the unit and action columns
-    other = np.arange(npairs, m.nrow)
-    sub = (Ab[other] @ E).tocsc()
-    sub.resize((other.size, keep_cols.size))
-    A2 = (Ao[other] + sub).tocsr()
-    A2.sort_indices()
-    obj2 = m.obj[keep_cols].copy()
-    obj2[:n + na] += E.T @ m.obj[b0:b0 + npairs]
-    lb2, ub2 = m.lb[keep_cols], m.ub[keep_cols]
-    sense = tuple(np.asarray(m.sense, dtype=object)[other])
-    out = OptimizationProblem(A=A2, obj=obj2, lb=lb2, ub=ub2, rhs=m.rhs[other], sense=sense,
-                              vtype=tuple(np.asarray(m.vtype, dtype=object)[keep_cols]), modelsense=m.modelsense,
-                              row_ids=tuple(np.asarray(m.row_ids, dtype=object)[other]),
-                              col_ids=tuple(np.asarray(m.col_ids, dtype=object)[keep_cols]))
-
-    def expand(x: np.ndarray) -> np.ndarray:
-        full = np.zeros(m.ncol)
-        full[keep_cols] = x
-        wx = np.round(x[:n + na])
-        full[:n + na] = wx
-        full[b0:b0 + npairs] = np.minimum(1.0, E @ wx)
-        return full
-
-    return out, expand
-
-
-def _with_curves(am: ActionsModel) -> OptimizationProblem:
-    """The model with y = x^curve as the piecewise-linear function Gurobi uses in prioriactions (FuncPieces
-    1, FuncPieceLength round(1 / segments, 1), points on the curve), written as an incremental formulation:
-    x = sum d_k, 0 <= d_k <= L_k, d_k >= L_k z_k, d_{k+1} <= L_{k+1} z_k (z binary), y = sum slope_k d_k."""
-    m = am.model
-    if am.curve == 1:
-        return m
-    step = float(r_round(np.array([1 / am.segments]), 1)[0])
-    pts = [0.0]
-    while pts[-1] + step < 1.0 - 1e-12:
-        pts.append(pts[-1] + step)
-    pts.append(1.0)
-    pts = np.asarray(pts)
-    lengths = np.diff(pts)
-    slopes = np.diff(pts ** am.curve) / lengths
-    K = lengths.size
-    npairs = am.xvar.size
-    ncol0 = m.ncol
-    # new columns: d (npairs x K, continuous), z (npairs x (K - 1), binary)
-    dcol = ncol0 + np.arange(npairs * K).reshape(npairs, K)
-    zcol = ncol0 + npairs * K + np.arange(npairs * (K - 1)).reshape(npairs, K - 1)
-    rows_i, rows_j, rows_x, rhs, sense = [], [], [], [], []
-    r = m.nrow
-    for q in range(npairs):
-        # x - sum d = 0
-        rows_i += [r] * (K + 1)
-        rows_j += [am.xvar[q], *dcol[q]]
-        rows_x += [1.0] + [-1.0] * K
-        rhs.append(0.0)
-        sense.append("=")
-        r += 1
-        # y - sum slope d = 0
-        rows_i += [r] * (K + 1)
-        rows_j += [am.yvar[q], *dcol[q]]
-        rows_x += [1.0] + list(-slopes)
-        rhs.append(0.0)
-        sense.append("=")
-        r += 1
-        for k in range(K - 1):
-            # d_k - L_k z_k >= 0 ; d_{k+1} - L_{k+1} z_k <= 0
-            rows_i += [r, r]
-            rows_j += [dcol[q, k], zcol[q, k]]
-            rows_x += [1.0, -lengths[k]]
-            rhs.append(0.0)
-            sense.append(">=")
-            r += 1
-            rows_i += [r, r]
-            rows_j += [dcol[q, k + 1], zcol[q, k]]
-            rows_x += [1.0, -lengths[k + 1]]
-            rhs.append(0.0)
-            sense.append("<=")
-            r += 1
-    nnew = npairs * K + npairs * (K - 1)
-    a = m.A.tocoo()
-    i = np.concatenate([a.row, rows_i])
-    j = np.concatenate([a.col, rows_j])
-    x = np.concatenate([a.data, rows_x])
-    A = sp.csr_matrix((x, (i, j)), shape=(r, ncol0 + nnew))
-    ub_d = np.tile(lengths, npairs)
+def _optimization_problem(c: dict, maximize: bool) -> OptimizationProblem:
+    nrow, ncol = c["rhs"].size, c["obj"].size
+    a = sp.csr_matrix((c["value"], c["index"], c["start"]), shape=(nrow, ncol))
     return OptimizationProblem(
-        A=A, obj=np.concatenate([m.obj, np.zeros(nnew)]),
-        lb=np.concatenate([m.lb, np.zeros(nnew)]), ub=np.concatenate([m.ub, ub_d, np.ones(npairs * (K - 1))]),
-        rhs=np.concatenate([m.rhs, rhs]), sense=m.sense + tuple(sense),
-        vtype=m.vtype + ("C",) * (npairs * K) + ("B",) * (npairs * (K - 1)), modelsense=m.modelsense,
-        row_ids=m.row_ids + ("curve",) * (r - m.nrow), col_ids=m.col_ids + ("curve",) * nnew)
+        A=a, obj=c["obj"], lb=c["lb"], ub=c["ub"], rhs=c["rhs"], sense=tuple(_SENSES[c["sense"]]),
+        vtype=tuple(np.where(c["integer"] != 0, "B", "C").astype(object)), modelsense="max" if maximize else "min",
+        row_ids=("",) * nrow, col_ids=("",) * ncol)
+
+
+def compile_actions(p: ActionsProblem, disaggregate: bool = False, curves: bool = False) -> OptimizationProblem:
+    """prioriactions's model; with disaggregate, the activation rows one per action (x_ik <= w_i: the same
+    integer solutions, a much tighter linear relaxation) instead of one per unit; with curves, the response
+    curve (curve 2, 3) as the piecewise-linear function Gurobi uses in prioriactions (FuncPieces 1,
+    FuncPieceLength round(1 / segments, 1), points on the curve), in an incremental formulation with a
+    binary per piece."""
+    from .. import _core
+
+    s = _settings(p)
+    c = _core.opt_actions_compile(_arrays(p.data), s, disaggregate, curves)
+    return _optimization_problem(c, s["maximize"])
 
 
 # ----------------------------------------------------------------------------- problem and solution
@@ -942,8 +532,8 @@ class ActionsProblem:
 
     def compile(self) -> OptimizationProblem:
         """prioriactions's model (``getModelInfo()``'s matrices), bit for bit; with ``curve`` 2 or 3 the
-        power constraints are not in it (see :meth:`compile_curves`)."""
-        return compile_actions(self).model
+        power constraints are not in it (Gurobi's general constraints in prioriactions)."""
+        return compile_actions(self)
 
     def add_highs_solver(self, gap: float = 0.0, time_limit: float | None = None, n_threads: int | None = None,
                          verbose: bool = False) -> ActionsProblem:
@@ -958,17 +548,21 @@ class ActionsProblem:
                                                 "verbose": verbose}))
 
     def solve(self) -> ActionsSolution:
+        from .. import _core
         from ._milp_solve import solve_model
 
-        am = compile_actions(self, disaggregate=True)
-        reduced = _eliminate_benefits(am, _pairs(self.data)) if am.curve == 1 else None
-        if reduced is not None:
-            m, expand = reduced
-            r = solve_model(m, self.solver[0], self.solver[1])
+        d = self.data
+        n, na = len(d.pu), len(d.dist_threats)
+        arrays = _arrays(d)
+        s = _settings(self)
+        c = _core.opt_actions_equivalent(arrays, s) if self.curve == 1 else None
+        if c is not None:  # benefit columns substituted, activation per action, locks as bounds
+            r = solve_model(_optimization_problem(c, s["maximize"]), self.solver[0], self.solver[1])
             if r["has_solution"]:
-                r["x"] = expand(np.asarray(r["x"], dtype=np.float64))
+                wx = np.round(np.asarray(r["x"], dtype=np.float64)[:n + na])
+                r["x"] = np.concatenate([wx, _core.opt_actions_local_benefit(arrays, wx)])
         else:
-            r = solve_model(_with_curves(am), self.solver[0], self.solver[1])
+            r = solve_model(compile_actions(self, disaggregate=True, curves=True), self.solver[0], self.solver[1])
         if not r["has_solution"]:
             raise RuntimeError(f"no solution ({r['solver']}: {r['status']})")
         return self._solution(np.asarray(r["x"], dtype=np.float64), r)
@@ -1043,53 +637,15 @@ class ActionsSolution(Saveable):
     def connectivity_penalty(self) -> pd.DataFrame | None:
         """The boundary of the monitored units and of every threat's actions (``getConnectivityPenalty()``;
         None without boundary data)."""
-        bm = _boundary_matrix(self.data)
-        if bm is None:
-            return None
+        from .. import _core
+
         d = self.data
-        n = len(d.pu)
-        sol = self.units
-        z = bm.T.tocsc()
-        z.sort_indices()
-        conn = np.zeros(n)
-        for c in range(n):
-            for k in range(z.indptr[c], z.indptr[c + 1]):
-                if z.indices[k] != c:
-                    conn[c] = conn[c] + z.data[k]
-        acc = conn * sol
-        for c in range(n):
-            for k in range(z.indptr[c], z.indptr[c + 1]):
-                r = z.indices[k]
-                if r != c and sol[r] > 0.99 and sol[c] > 0.99:
-                    acc[r] = acc[r] + (-1 * z.data[k])
-        units = 0.0
-        for v in acc:
-            units = units + v
-        dt = d.dist_threats
-        t_unit = dt["internal_pu"].to_numpy(dtype=np.int64)
-        t_threat = dt["internal_threat"].to_numpy(dtype=np.int64)
-        nt = len(d.threats)
-        act_of = {(int(u), int(t)): a for a, (u, t) in enumerate(zip(t_unit, t_threat))}
-        by_threat = [np.sort(t_unit[t_threat == t]) for t in range(nt)]
-        sa = self.actions
-        per_action = np.zeros(len(dt))
-        for a in range(len(dt)):
-            t, u1 = t_threat[a], t_unit[a]
-            total = 0.0
-            acc_a = 0.0
-            for u2 in by_threat[t]:
-                v = bm[u1, u2]
-                if u1 != u2 and v != 0:
-                    total = total + v
-                    if sa[a] > 0.99 and sa[act_of[(int(u2), int(t))]] > 0.99:
-                        acc_a = acc_a + (-1 * v)
-            per_action[a] = acc_a + total * sa[a]
-        threats = np.zeros(nt)
-        for a in np.lexsort((t_unit, t_threat)):
-            if per_action[a] != 0:
-                threats[t_threat[a]] = threats[t_threat[a]] + per_action[a]
-        out = {"units": [float(r_round(np.array([units]), 3)[0])]}
-        for tid, v in zip(d.threats["id"].to_numpy(), r_round(threats, 3)):
+        if d.boundary is None or not len(d.boundary):
+            return None
+        c = _core.opt_actions_connectivity(_arrays(d), np.asarray(self.units, np.float64),
+                                           np.asarray(self.actions, np.float64))
+        out = {"units": [float(r_round(np.array([c[0]]), 3)[0])]}
+        for tid, v in zip(d.threats["id"].to_numpy(), r_round(c[1:], 3)):
             out[f"threat_{tid:g}"] = [float(v)]
         return pd.DataFrame(out)
 

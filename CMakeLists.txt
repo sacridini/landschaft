@@ -188,6 +188,7 @@ unset(BUILD_SHARED_LIBS)
 # MILP prioritization (prioritizr / prioriactions): the model compiler, our own
 # presolve and heuristics, and the calls to HiGHS.
 add_library(optcore STATIC
+    src/cpp/opt/actions.cpp
     src/cpp/opt/cover.cpp
     src/cpp/opt/cut.cpp
     src/cpp/opt/features.cpp

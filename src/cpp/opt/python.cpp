@@ -14,6 +14,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "opt/actions.hpp"
 #include "opt/cover.hpp"
 #include "opt/cut.hpp"
 #include "opt/features.hpp"
@@ -27,6 +28,7 @@ namespace py = pybind11;
 namespace {
 
 using opt::i64;
+namespace actions = opt::actions;
 using Doubles = py::array_t<double, py::array::c_style | py::array::forcecast>;
 using Ints = py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>;
 using Bytes = py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>;
@@ -113,6 +115,67 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
                                  : opt::solve_highs(m, o);
     }
     return result_dict(std::move(r));
+}
+
+// The inputs of a multi-action problem from a dict of arrays (the tables' columns, internal ids).
+actions::Input actions_input(const py::dict& d) {
+    actions::Input in;
+    auto dbl = [&](const char* k) { return vec<double>(d[k].cast<Doubles>()); };
+    auto ints = [&](const char* k) { return vec<i64>(d[k].cast<Ints>()); };
+    in.n_units = d["n_units"].cast<int>();
+    in.n_features = d["n_features"].cast<int>();
+    in.n_threats = d["n_threats"].cast<int>();
+    in.monitoring_cost = dbl("monitoring_cost");
+    in.unit_status = dbl("unit_status");
+    in.target_recovery = dbl("target_recovery");
+    in.target_conservation = dbl("target_conservation");
+    in.df_unit = ints("df_unit");
+    in.df_feature = ints("df_feature");
+    in.df_amount = dbl("df_amount");
+    in.blm_actions = dbl("blm_actions");
+    in.act_unit = ints("act_unit");
+    in.act_threat = ints("act_threat");
+    in.act_amount = dbl("act_amount");
+    in.act_cost = dbl("act_cost");
+    in.act_status = dbl("act_status");
+    in.sens_feature = ints("sens_feature");
+    in.sens_threat = ints("sens_threat");
+    in.sens_delta = dbl("sens_delta");
+    in.has_boundary = d["has_boundary"].cast<bool>();
+    if (in.has_boundary) {
+        in.bnd_id1 = ints("bnd_id1");
+        in.bnd_id2 = ints("bnd_id2");
+        in.bnd_value = dbl("bnd_value");
+    }
+    in.check();
+    return in;
+}
+
+actions::Settings actions_settings(const py::dict& d) {
+    actions::Settings s;
+    s.maximize = d["maximize"].cast<bool>();
+    s.blm = d["blm"].cast<double>();
+    s.curve = d["curve"].cast<int>();
+    s.segments = d["segments"].cast<int>();
+    s.step = d["step"].cast<double>();
+    s.budget = d["budget"].cast<double>();
+    return s;
+}
+
+py::dict compiled_dict(actions::Compiled&& c) {
+    py::dict out;
+    out["start"] = to_array(std::move(c.model.start));
+    out["index"] = to_array(std::move(c.model.index));
+    out["value"] = to_array(std::move(c.model.value));
+    out["obj"] = to_array(std::move(c.model.obj));
+    out["lb"] = to_array(std::move(c.model.lb));
+    out["ub"] = to_array(std::move(c.model.ub));
+    out["integer"] = to_array(std::move(c.model.integer));
+    out["rhs"] = to_array(std::move(c.rhs));
+    out["sense"] = to_array(std::move(c.sense));
+    out["n_pairs"] = c.n_pairs;
+    out["first_pow"] = c.first_pow;
+    return out;
 }
 
 }  // namespace
@@ -315,6 +378,83 @@ void register_python(py::module_& m) {
             return out;
         },
         "The cut engine (Lagrangian bound by minimum cuts, repaired selections) on Marxan's problem at BLM 1.");
+    m.def(
+        "opt_actions_pairs",
+        [](const py::dict& data) {
+            const actions::Input in = actions_input(data);
+            actions::Pairs p = actions::pairs(in);
+            py::dict out;
+            out["feature"] = to_array(std::move(p.feature));
+            out["unit"] = to_array(std::move(p.unit));
+            out["amount"] = to_array(std::move(p.amount));
+            out["threatened"] = to_array(std::move(p.threatened));
+            out["sum_alpha"] = to_array(std::move(p.sum_alpha));
+            out["start"] = to_array(std::move(p.start));
+            out["action"] = to_array(std::move(p.action));
+            out["coef"] = to_array(std::move(p.coef));
+            out["contribution"] = to_array(std::move(p.contribution));
+            out["action_status"] = to_array(std::move(p.action_status));
+            return out;
+        },
+        py::arg("data"), "Every (feature, unit) pair of a multi-action problem and its actions' coefficients.");
+    m.def(
+        "opt_actions_benefit",
+        [](const py::dict& data, const py::object& solution) {
+            const actions::Input in = actions_input(data);
+            const actions::Pairs p = actions::pairs(in);
+            std::vector<double> sol;
+            if (!solution.is_none()) sol = vec<double>(solution.cast<Doubles>());
+            actions::Benefit b = actions::benefit(in, p, sol);
+            py::dict out;
+            out["dist"] = to_array(std::move(b.dist));
+            out["dist_threatened"] = to_array(std::move(b.dist_threatened));
+            out["conservation"] = to_array(std::move(b.conservation));
+            out["recovery"] = to_array(std::move(b.recovery));
+            return out;
+        },
+        py::arg("data"), py::arg("solution"), "The most benefit of every feature, or a solution's (units, actions).");
+    m.def(
+        "opt_actions_compile",
+        [](const py::dict& data, const py::dict& settings, bool disaggregate, bool curves) {
+            const actions::Input in = actions_input(data);
+            const actions::Pairs p = actions::pairs(in);
+            return compiled_dict(actions::compile(in, p, actions_settings(settings), disaggregate, curves));
+        },
+        py::arg("data"), py::arg("settings"), py::arg("disaggregate") = false, py::arg("curves") = false,
+        "prioriactions's model (rows in CSR, sense 0 <=, 1 >=, 2 =).");
+    m.def(
+        "opt_actions_equivalent",
+        [](const py::dict& data, const py::dict& settings) -> py::object {
+            const actions::Input in = actions_input(data);
+            const actions::Pairs p = actions::pairs(in);
+            actions::Compiled c = actions::equivalent(in, p, actions_settings(settings));
+            if (c.model.nrow == 0 && c.model.ncol == 0) return py::none();
+            return compiled_dict(std::move(c));
+        },
+        py::arg("data"), py::arg("settings"), "The equivalent model for solving (curve 1), or None.");
+    m.def(
+        "opt_actions_local_benefit",
+        [](const py::dict& data, const Doubles& x) {
+            const actions::Input in = actions_input(data);
+            const actions::Pairs p = actions::pairs(in);
+            std::vector<double> xv = vec<double>(x);
+            if (static_cast<i64>(xv.size()) < in.n_units + in.n_actions())
+                throw std::invalid_argument("x needs the units and the actions");
+            return to_array(actions::local_benefit(p, in.n_units, xv));
+        },
+        py::arg("data"), py::arg("x"), "Every pair's benefit for a solution (units, then actions).");
+    m.def(
+        "opt_actions_costs",
+        [](const py::dict& data, const Doubles& units, const Doubles& acts) {
+            return to_array(actions::costs(actions_input(data), vec<double>(units), vec<double>(acts)));
+        },
+        py::arg("data"), py::arg("units"), py::arg("actions"), "(monitoring, every threat's actions' cost).");
+    m.def(
+        "opt_actions_connectivity",
+        [](const py::dict& data, const Doubles& units, const Doubles& acts) {
+            return to_array(actions::connectivity(actions_input(data), vec<double>(units), vec<double>(acts)));
+        },
+        py::arg("data"), py::arg("units"), py::arg("actions"), "(units, every threat's actions' boundary).");
     m.def("opt_solve_highs", &py_solve_highs, py::arg("start"), py::arg("index"), py::arg("value"), py::arg("obj"),
           py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"),
           py::arg("maximize"), py::arg("offset"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),
