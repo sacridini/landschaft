@@ -1576,6 +1576,14 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     Gurobi não acha solução), mas com limites fracos (220 e 2.740): o LP não converge a tempo, o sifting fica
     com centenas de milhares de violações por rodada (duais degenerados). Melhorar na fase 4 (estabilização
     dos duais do sifting, bundle com caixa adaptativa).
+* **Parte 4**: `add_subregional_targets(regions, targets)` (extensão nossa, do prioripy; o prioritizr não tem):
+  metas de uma feição dentro de uma região (raster de regiões na grade das unidades; coluna ou valores por
+  linha nas tabelas e polígonos), somadas às outras metas; relativas sobre o total da feição na região inteira,
+  unidades com e sem custo, como as outras metas relativas (raster: soma em double na ordem das células, lida
+  em blocos; tabelas de colunas: o `sum()` do R, como o `colSums`; rij e polígonos: double na ordem das
+  linhas). Testado bit a bit contra o caminho do prioritizr: as feições cortadas por região com metas
+  relativas. A tabela de cobertura ganha a coluna `region`.
+* **Fase 2 completa** (2026-10-04).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

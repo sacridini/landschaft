@@ -481,3 +481,59 @@ def test_wide_engine_keeps_the_time_limit():
     sol = p.add_max_features_objective(0.1 * total).add_relative_targets(0.3).add_highs_solver(
         gap=0.0, time_limit=2.0).solve()
     assert sol.seconds < 3.0 and sol.status in ("optimal", "time_limit")
+
+
+# ----------------------------------------------------------------------------- sub-regional targets
+
+def _regions():
+    """Three regions across the grid (NaN: no region)."""
+    ny, nx = optimize_cases.NY, optimize_cases.NX
+    r = np.ones((ny, nx))
+    r[:, 5:10] = 2.0
+    r[:, 10:] = 3.0
+    r[0, :3] = np.nan
+    return optimize_cases.grid(r)
+
+
+def test_subregional_targets_are_features_split_by_region():
+    """Sub-regional targets give the rows, bit for bit, of the features cut by the regions with relative
+    targets (prioritizr's way): every region's total over all its cells, in cell order."""
+    cost, feats, reg = optimize_cases.pu_cost(), optimize_cases.features(), _regions()
+    shares = {1.0: 0.3, 2.0: 0.4, 3.0: 0.25}
+    rows = [(r, f, s) for r, s in shares.items() for f in ("f1", "f4")]
+    t = {"region": [r for r, _, _ in rows], "feature": [f for _, f, _ in rows], "target": [s for _, _, s in rows]}
+    ours = ls.prioritize.problem(cost, feats).add_min_set_objective().add_subregional_targets(reg, t) \
+        .add_binary_decisions().compile()
+    rv = reg.values
+    split = np.stack([np.where(rv == r, feats.sel(band=f).values, np.nan) for r, f, _ in rows])
+    want = ls.prioritize.problem(cost, optimize_cases.grid(split, names=[f"s{k}" for k in range(len(rows))])) \
+        .add_min_set_objective().add_relative_targets([s for _, _, s in rows]).add_binary_decisions().compile()
+    assert (ours.A != want.A).nnz == 0 and np.array_equal(ours.A.data, want.A.data)
+    np.testing.assert_array_equal(ours.rhs, want.rhs)
+    sol = ls.prioritize.problem(cost, feats).add_min_set_objective().add_subregional_targets(reg, t) \
+        .add_highs_solver(gap=0).solve()
+    c = sol.coverage
+    assert list(c["region"]) == [r for r, _, _ in rows] and c["met"].all()
+
+
+def test_subregional_targets_with_tables_and_other_targets():
+    """Tables: a column of regions; sub-regional targets add to the others; absolute and senses."""
+    t = optimize_cases.pu_table()
+    t["zone"] = np.where(np.arange(len(t)) % 3 == 0, "north", "south")
+    p = ls.prioritize.problem(t, optimize_cases.FEATURES, cost_column="cost").add_min_set_objective() \
+        .add_relative_targets(0.2).add_subregional_targets(
+            "zone", {"region": ["north", "south"], "feature": ["f2", "f2"], "type": ["absolute", "relative"],
+                     "target": [0.4, 0.3], "sense": [">=", ">="]})
+    m = p.compile()
+    assert m.nrow == 5 + 2
+    north = (t["zone"].to_numpy() == "north")[p.units.index]
+    row = m.A[5].toarray().ravel()
+    assert (row[~north] == 0).all() and np.array_equal(row[north], t["f2"].to_numpy()[p.units.index][north])
+    assert m.rhs[5] == 0.4
+    # R's colSums of the column cut by the region (80-bit accumulation), as the tables' other totals
+    south = np.where(t["zone"].to_numpy() == "south", t["f2"].to_numpy(), 0.0)
+    assert m.rhs[6] == float(_core.nlm_r_sum(south)) * 0.3
+    sol = p.add_highs_solver(gap=0).solve()
+    assert sol.coverage["met"].all() and list(sol.coverage["region"][5:]) == ["north", "south"]
+    with pytest.raises(ValueError, match="unknown regions"):
+        p.add_subregional_targets("zone", {"region": ["east"], "feature": ["f1"], "target": [0.1]}).compile()

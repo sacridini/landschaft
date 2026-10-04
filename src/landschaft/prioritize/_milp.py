@@ -85,6 +85,8 @@ class Units:
     template: object  # raster: the cost DataArray; table: the DataFrame
     index: np.ndarray  # raster: flat cell of each unit; table: row of each unit
     features: object = None  # the feature rasters (raster and polygon units), for a Zonation start
+    all_rij: object = None  # tables and polygons: features x every row, cost or not (sub-regional totals)
+    r_sums: bool = False  # totals are R's sum() (tables of feature columns: colSums), not a double sum
 
     @property
     def n(self) -> int:
@@ -322,7 +324,7 @@ def _vector_units(x, features, cost_column: str) -> Units:
         f"feature_{k + 1}" for k in range(f.shape[0]))
     m = full[:, rows].tocsr()
     m.sort_indices()
-    return Units("table", cost[rows], m, totals, names, x, rows, features)
+    return Units("table", cost[rows], m, totals, names, x, rows, features, full)
 
 
 def _table_units(x: pd.DataFrame, features, cost_column: str, rij) -> Units:
@@ -337,7 +339,8 @@ def _table_units(x: pd.DataFrame, features, cost_column: str, rij) -> Units:
             raise ValueError(f"no feature columns {missing}")
         amounts = x[names].to_numpy(dtype=np.float64).T
         totals = np.array([_r_sum(np.nan_to_num(a, nan=0.0)) for a in amounts])  # R's colSums
-        return Units("table", cost[rows], _rij(amounts[:, rows]), totals, tuple(names), x, rows)
+        return Units("table", cost[rows], _rij(amounts[:, rows]), totals, tuple(names), x, rows,
+                     all_rij=_rij(amounts), r_sums=True)
     # Marxan-style tables: features (id, name) and rij (pu, species, amount)
     spec = features
     if not isinstance(spec, pd.DataFrame) or not {"id", "name"} <= set(spec.columns):
@@ -360,7 +363,7 @@ def _table_units(x: pd.DataFrame, features, cost_column: str, rij) -> Units:
     m = full[:, rows].tocsr()
     m.eliminate_zeros()
     m.sort_indices()
-    return Units("table", cost[rows], m, totals, tuple(str(n) for n in spec["name"]), x, rows)
+    return Units("table", cost[rows], m, totals, tuple(str(n) for n in spec["name"]), x, rows, all_rij=full)
 
 
 # ----------------------------------------------------------------------------- problem
@@ -377,6 +380,7 @@ class Problem:
     decisions: tuple = ("binary",)
     solver: tuple = ("highs", {})
     weights: object = None
+    subregional: tuple | None = None
 
     def __repr__(self) -> str:
         u = self.units
@@ -455,6 +459,32 @@ class Problem:
         if not np.isfinite(t["target"].to_numpy(dtype=np.float64)).all():
             raise ValueError("targets must be finite")
         return self._with(targets=("manual", t.reset_index(drop=True).copy()))
+
+    def add_subregional_targets(self, regions, targets: pd.DataFrame) -> Problem:
+        """Targets within sub-regions (an extension: prioritizr has none), added to the other
+        targets: one row per target, ``region``, ``feature`` (name), ``target``, optionally ``type``
+        (``"relative"``, the default, or ``"absolute"``) and ``sense`` (``">="``, ``"<="``, ``"="``).
+        A relative target is a share of the feature's total in the region, over every unit with or
+        without a cost, as the other relative targets are.
+
+        Parameters
+        ----------
+        regions
+            The region of every unit: with raster units, a raster on their grid (NaN: no region);
+            with tables and polygons, a column name or one value per row (missing: no region).
+        targets
+            The targets (a DataFrame or a dict of columns).
+        """
+        t = pd.DataFrame(targets)
+        for col in ("region", "feature", "target"):
+            if col not in t.columns:
+                raise ValueError(f"the targets table needs a {col!r} column")
+        extra = set(t.columns) - {"region", "feature", "type", "target", "sense"}
+        if extra:
+            raise ValueError(f"unknown columns in the targets table: {sorted(extra)}")
+        if not np.isfinite(t["target"].to_numpy(dtype=np.float64)).all():
+            raise ValueError("targets must be finite")
+        return self._with(subregional=(regions, t.reset_index(drop=True).copy()))
 
     def add_loglinear_targets(self, lower_bound_amount: float, lower_bound_target: float,
                               upper_bound_amount: float, upper_bound_target: float,

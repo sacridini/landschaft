@@ -30,15 +30,129 @@ BUDGETED = ("min_shortfall", "min_largest_shortfall", "max_utility", "max_featur
 
 @dataclass(frozen=True)
 class Targets:
-    """The targets as the model's rows: feature (0-based), sense and amount of each."""
+    """The targets as the model's rows: feature (0-based), sense and amount of each, the total that
+    relative targets are shares of, and, for sub-regional targets, the region (code, -1: the whole
+    problem) and its label."""
 
     feature: np.ndarray
     sense: tuple[str, ...]
     value: np.ndarray
+    total: np.ndarray | None = None
+    region: np.ndarray | None = None
+    region_label: tuple | None = None
 
     @property
     def n(self) -> int:
         return self.feature.size
+
+
+def _concat(a: Targets | None, b: Targets) -> Targets:
+    if a is None:
+        return b
+    n = a.n
+    ra = a.region if a.region is not None else np.full(n, -1, dtype=np.int64)
+    rb = b.region if b.region is not None else np.full(b.n, -1, dtype=np.int64)
+    la = a.region_label if a.region_label is not None else (None,) * n
+    lb = b.region_label if b.region_label is not None else (None,) * b.n
+    return Targets(np.concatenate([a.feature, b.feature]), a.sense + b.sense, np.concatenate([a.value, b.value]),
+                   np.concatenate([a.total, b.total]), np.concatenate([ra, rb]), la + lb)
+
+
+def region_codes(u, regions) -> tuple[np.ndarray, list]:
+    """The region of every unit, planning unit or not (raster: every cell; tables and polygons: every
+    row), as codes into the sorted region ids (-1: none), and the ids."""
+    import xarray as xr
+
+    if u.kind == "raster":
+        if isinstance(regions, xr.DataArray):
+            v = np.asarray(regions.squeeze().values, dtype=np.float64)
+        else:
+            v = np.asarray(regions, dtype=np.float64)
+        if v.shape != u.template.shape:
+            raise ValueError(f"the regions ({v.shape}) must be on the planning units' grid ({u.template.shape})")
+        v = v.ravel()
+        ok = np.isfinite(v)
+        ids = np.unique(v[ok])
+        codes = np.full(v.size, -1, dtype=np.int64)
+        codes[ok] = np.searchsorted(ids, v[ok])
+        return codes, ids.tolist()
+    col = u.template[regions] if isinstance(regions, str) else pd.Series(np.asarray(regions))
+    if len(col) != len(u.template):
+        raise ValueError("the regions need one value per row of the planning units' table")
+    ok = col.notna().to_numpy()
+    vals = col[ok].to_numpy()
+    ids = sorted(set(vals.tolist()))
+    index = {r: k for k, r in enumerate(ids)}
+    codes = np.full(len(col), -1, dtype=np.int64)
+    codes[ok] = [index[r] for r in vals]
+    return codes, ids
+
+
+def region_totals(u, codes: np.ndarray, nreg: int, features: np.ndarray) -> np.ndarray:
+    """Every feature's total in every region (features x regions), over all units with or without a
+    cost, added in unit order (np.add.at), as the problem's totals are."""
+    out = np.zeros((len(u.feature_names), nreg))
+    need = np.unique(features)
+    if u.kind != "raster":
+        a = u.all_rij
+        for f in need:
+            lo, hi = a.indptr[f], a.indptr[f + 1]
+            c = codes[a.indices[lo:hi]]
+            v = a.data[lo:hi]
+            keep = (c >= 0) & np.isfinite(v)
+            if u.r_sums:  # as R's colSums of the column cut by the region
+                from ._milp import _r_sum
+
+                for r in range(nreg):
+                    out[f, r] = _r_sum(v[keep & (c == r)])
+            else:
+                np.add.at(out[f], c[keep], v[keep])
+        return out
+    from ._milp import BLOCK_BYTES, _layers
+
+    layers = _layers(u.features)
+    ny, nx = u.template.shape
+    step = max(1, BLOCK_BYTES // (8 * nx))
+    for f in need:
+        da = layers[f][1]
+        for y0 in range(0, ny, step):
+            y1 = min(ny, y0 + step)
+            v = np.asarray(da.data[y0:y1], dtype=np.float64)
+            if hasattr(v, "compute"):
+                v = np.asarray(v.compute(), dtype=np.float64)
+            v = v.ravel()
+            c = codes[y0 * nx:y1 * nx]
+            keep = (c >= 0) & np.isfinite(v)
+            np.add.at(out[f], c[keep], v[keep])
+    return out
+
+
+def resolve_subregional(u, spec, names: tuple[str, ...]) -> Targets:
+    regions, t = spec
+    codes, ids = region_codes(u, regions)
+    numeric = all(isinstance(r, (int, float, np.integer, np.floating)) for r in ids)
+    index = {(float(r) if numeric else str(r)): k for k, r in enumerate(ids)}
+    findex = {n: k for k, n in enumerate(names)}
+    missing = sorted(set(map(str, t["feature"])) - set(findex))
+    if missing:
+        raise ValueError(f"unknown features in the targets: {missing}")
+    want = [float(r) if numeric else str(r) for r in t["region"]]
+    unknown = sorted({str(r) for r in want if r not in index})
+    if unknown:
+        raise ValueError(f"unknown regions in the targets: {unknown}")
+    region = np.array([index[r] for r in want], dtype=np.int64)
+    feature = np.array([findex[str(f)] for f in t["feature"]], dtype=np.int64)
+    target = t["target"].to_numpy(dtype=np.float64)
+    kinds = t["type"].astype(str).to_numpy() if "type" in t.columns else np.full(len(t), "relative")
+    if not np.isin(kinds, ("relative", "absolute")).all():
+        raise ValueError("target types must be 'relative' or 'absolute'")
+    sense = tuple(t["sense"].astype(str)) if "sense" in t.columns else (">=",) * len(t)
+    if not set(sense) <= {">=", "<=", "="}:
+        raise ValueError("target senses must be '>=', '<=' or '='")
+    tot = region_totals(u, codes, len(ids), feature)[feature, region]
+    value = np.where(kinds == "relative", tot * target, target)
+    unit_codes = codes[u.index]
+    return Targets(feature, sense, value, tot, region, tuple(ids[k] for k in region)), unit_codes
 
 
 def _sum(v: np.ndarray) -> float:
@@ -134,16 +248,16 @@ def resolve_targets(spec, names: tuple[str, ...], totals: np.ndarray) -> Targets
     kind = spec[0]
     nf = len(names)
     if kind == "relative":
-        return Targets(np.arange(nf), (">=",) * nf, totals * spec[1])
+        return Targets(np.arange(nf), (">=",) * nf, totals * spec[1], totals.copy())
     if kind == "absolute":
-        return Targets(np.arange(nf), (">=",) * nf, np.asarray(spec[1], dtype=np.float64).copy())
+        return Targets(np.arange(nf), (">=",) * nf, np.asarray(spec[1], dtype=np.float64).copy(), totals.copy())
     if kind == "loglinear":
         lo_a, lo_t, hi_a, hi_t, cap_a, cap_t, abundances = spec[1]
         a = totals if abundances is None else abundances
         value = a * loglinear(a, lo_a, lo_t, hi_a, hi_t)
         if cap_a is not None:
             value[a >= cap_a] = cap_t
-        return Targets(np.arange(nf), (">=",) * nf, value)
+        return Targets(np.arange(nf), (">=",) * nf, value, totals.copy())
     if kind == "manual":
         t: pd.DataFrame = spec[1]
         index = {n: k for k, n in enumerate(names)}
@@ -159,7 +273,7 @@ def resolve_targets(spec, names: tuple[str, ...], totals: np.ndarray) -> Targets
         if not set(sense) <= {">=", "<=", "="}:
             raise ValueError("target senses must be '>=', '<=' or '='")
         value = np.where(kinds == "relative", totals[feature] * target, target)
-        return Targets(feature, sense, value)
+        return Targets(feature, sense, value, totals[feature])
     raise ValueError(f"unknown targets {kind!r}")
 
 
@@ -177,11 +291,15 @@ def compile_problem(p):
         if p.targets is not None:
             warnings.warn(f"targets are ignored by the {kind} objective", UserWarning, stacklevel=3)
         # the "fake" targets prioritizr's compile() makes: one per feature
-        t = Targets(np.arange(nf), ("?",) * nf, np.zeros(nf))
+        t = Targets(np.arange(nf), ("?",) * nf, np.zeros(nf), u.totals.copy())
     else:
-        if p.targets is None:
+        if p.targets is None and p.subregional is None:
             raise ValueError(f"the {kind} objective needs targets (add_relative_targets, add_absolute_targets, ...)")
-        t = resolve_targets(p.targets, u.feature_names, u.totals)
+        t = resolve_targets(p.targets, u.feature_names, u.totals) if p.targets is not None else None
+    unit_codes = None
+    if p.subregional is not None and kind not in NO_TARGETS:
+        sub, unit_codes = resolve_subregional(u, p.subregional, u.feature_names)
+        t = _concat(t, sub)
     nt = t.n
     cost = u.cost
 
@@ -196,6 +314,14 @@ def compile_problem(p):
 
     # the targets' rows (the features' amounts) and the objective's rows and columns
     rij = u.rij[t.feature] if not np.array_equal(t.feature, np.arange(nf)) else u.rij
+    if t.region is not None and (t.region >= 0).any():
+        # a sub-regional target: its feature's amounts in the units of its region only
+        rij = sp.csr_matrix(rij, copy=True)
+        row = np.repeat(np.arange(t.n), np.diff(rij.indptr))
+        r = t.region[row]
+        keep = (r < 0) | (unit_codes[rij.indices] == r)
+        rij.data[~keep] = 0.0
+        rij.eliminate_zeros()
     blocks = [sp.coo_matrix(rij)]  # (rows, cols) placed on a grid below
     extra_rows: list[tuple] = []  # (row, col, value) triplets of the objective
     obj = [np.zeros(n)]

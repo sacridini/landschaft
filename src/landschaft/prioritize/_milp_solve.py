@@ -166,7 +166,7 @@ def _selection(u: Units, values: np.ndarray):
     return t
 
 
-def coverage_table(u: Units, values: np.ndarray, targets=None) -> pd.DataFrame:
+def coverage_table(u: Units, values: np.ndarray, targets=None, m: OptimizationProblem | None = None) -> pd.DataFrame:
     """prioritizr's target coverage summary: one row per target (per feature, without targets)."""
     if targets is None or targets.sense[:1] == ("?",):  # objectives without targets
         held = u.rij @ values
@@ -175,9 +175,10 @@ def coverage_table(u: Units, values: np.ndarray, targets=None) -> pd.DataFrame:
         return pd.DataFrame({"feature": list(u.feature_names), "total_amount": u.totals,
                              "absolute_held": held, "relative_held": rel})
     f = targets.feature
-    held = (u.rij @ values)[f]
+    # the target rows' amounts (their region's units only, for sub-regional targets)
+    held = m.A[:targets.n, :u.n] @ values if m is not None else (u.rij @ values)[f]
     target = targets.value
-    total = u.totals[f]
+    total = targets.total if targets.total is not None else u.totals[f]
     sense = np.asarray(targets.sense)
     shortfall = np.where(sense == ">=", np.maximum(target - held, 0.0),
                          np.where(sense == "<=", np.maximum(held - target, 0.0), np.abs(held - target)))
@@ -186,12 +187,15 @@ def coverage_table(u: Units, values: np.ndarray, targets=None) -> pd.DataFrame:
         rel = np.where(total != 0, held / total, np.nan)
         rel_target = np.where(total != 0, target / total, np.nan)
         rel_short = np.where(total != 0, shortfall / total, np.nan)
-    return pd.DataFrame({
+    out = pd.DataFrame({
         "feature": [u.feature_names[k] for k in f], "sense": sense, "total_amount": total,
         "absolute_target": target, "absolute_held": held, "absolute_shortfall": shortfall,
         "relative_target": rel_target, "relative_held": rel, "relative_shortfall": rel_short,
         "met": shortfall <= tol,
     })
+    if targets.region is not None and (targets.region >= 0).any():
+        out.insert(1, "region", list(targets.region_label))
+    return out
 
 
 def make_solution(u: Units, m: OptimizationProblem, r: dict, targets=None) -> Solution:
@@ -200,6 +204,6 @@ def make_solution(u: Units, m: OptimizationProblem, r: dict, targets=None) -> So
     values = np.asarray(r["x"], dtype=np.float64)[: u.n]
     integer = np.isin(np.asarray(m.vtype[: u.n]), ("B", "I"))
     values = np.where(integer, np.round(values), values)
-    return Solution(selection=_selection(u, values), values=values, coverage=coverage_table(u, values, targets),
+    return Solution(selection=_selection(u, values), values=values, coverage=coverage_table(u, values, targets, m),
                     objective=float(r["objective"]), bound=float(r["bound"]), gap=float(r["gap"]),
                     status=r["status"], solver=r["solver"], seconds=float(r["seconds"]), _cost=u.cost)
