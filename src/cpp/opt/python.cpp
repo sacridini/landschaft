@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "opt/cover.hpp"
+#include "opt/features.hpp"
 #include "opt/milp.hpp"
 
 namespace py = pybind11;
@@ -108,6 +109,32 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
 namespace opt {
 
 void register_python(py::module_& m) {
+    py::class_<FeatureMatrix>(m, "OptFeatureMatrix",
+                              "Features x planning units of raster units, built block by block (opt/features.hpp).")
+        .def(py::init<std::int64_t>(), py::arg("layers"))
+        .def(
+            "add",
+            [](FeatureMatrix& self, const Doubles& values, const Ints& unit, int threads) {
+                if (values.ndim() != 2 || values.shape(0) != self.layers())
+                    throw std::invalid_argument("values must be (layers, cells)");
+                if (unit.ndim() != 1 || unit.shape(0) != values.shape(1))
+                    throw std::invalid_argument("unit must have one entry per cell");
+                py::gil_scoped_release release;
+                self.add(values.data(), values.shape(1), unit.data(), threads);
+            },
+            py::arg("values"), py::arg("unit"), py::arg("threads") = 1,
+            "Add the next cells: values (layers, cells), unit: each cell's planning unit (-1: none).")
+        .def(
+            "finish",
+            [](const FeatureMatrix& self) {
+                std::vector<std::int64_t> start, index;
+                std::vector<double> value;
+                self.csr(start, index, value);
+                std::vector<double> totals = self.totals();
+                return py::make_tuple(to_array(std::move(totals)), to_array(std::move(start)),
+                                      to_array(std::move(index)), to_array(std::move(value)));
+            },
+            "(totals, start, index, value): every layer's total and its amounts in the units (compressed rows).");
     m.def("opt_solve_highs", &py_solve_highs, py::arg("start"), py::arg("index"), py::arg("value"), py::arg("obj"),
           py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"),
           py::arg("maximize"), py::arg("offset"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),

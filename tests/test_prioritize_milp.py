@@ -276,3 +276,18 @@ def test_h3_units():
     assert list(sol.selection["h3"]) == list(hexes["h3"])
     with pytest.raises(ValueError, match="from 0 to 15"):
         ls.prioritize.h3_units(cost, 16)
+
+
+def test_raster_features_by_blocks(monkeypatch):
+    """The features are read in blocks of rows: block size, dask chunks and threads give the same bits."""
+    from landschaft.prioritize import _milp
+
+    cost, feats = optimize_cases.pu_cost(), optimize_cases.features()
+    ref = _milp._raster_units(cost, feats, n_threads=1)
+    monkeypatch.setattr(_milp, "BLOCK_BYTES", 8 * feats.shape[0] * feats.shape[2] * 2 + 7)  # 2 rows
+    for f, threads in ((feats, 4), (feats.chunk({"y": 5, "x": 4}), 3), ([feats[k] for k in range(feats.shape[0])], 2)):
+        u = _milp._raster_units(cost, f, n_threads=threads)
+        assert u.feature_names == ref.feature_names
+        assert np.array_equal(u.totals, ref.totals)
+        assert np.array_equal(u.rij.indptr, ref.rij.indptr) and np.array_equal(u.rij.indices, ref.rij.indices)
+        assert np.array_equal(u.rij.data, ref.rij.data)

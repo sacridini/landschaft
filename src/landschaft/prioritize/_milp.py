@@ -122,24 +122,75 @@ def _stack(features) -> xr.DataArray:
     raise TypeError("features must be a raster DataArray (band, y, x), a Dataset or a list of rasters")
 
 
-def _raster_units(cost: xr.DataArray, features) -> Units:
+def _layers(features) -> list[tuple[str, xr.DataArray]]:
+    """The features as named 2-D rasters, without copying them into one stack."""
+    if isinstance(features, xr.Dataset):
+        return [(str(k), v) for k, v in features.data_vars.items()]
+    if isinstance(features, xr.DataArray):
+        if features.ndim == 2:  # its name, or its band's (a slice of a stack)
+            band = features.coords.get("band")
+            name = features.name or (band.item() if band is not None and band.ndim == 0 else "feature")
+            return [(str(name), features)]
+        if features.ndim != 3:
+            raise ValueError("features must be (band, y, x)")
+        band = features.dims[0]
+        names = features[band].values if band in features.coords else [
+            f"feature_{k + 1}" for k in range(features.shape[0])]
+        return [(str(n), features[k]) for k, n in enumerate(names)]
+    if isinstance(features, Sequence):
+        return [item for f in features for item in _layers(f)]
+    raise TypeError("features must be a raster DataArray (band, y, x), a Dataset or a list of rasters")
+
+
+BLOCK_BYTES = 1 << 26  # rows of the features read at once: about 64 MB of doubles
+
+
+def _raster_units(cost: xr.DataArray, features, n_threads: int | None = None) -> Units:
+    from .. import _core, _threads
+
     if cost.ndim == 3 and cost.sizes.get("band", 1) == 1:
         cost = cost.squeeze("band", drop=True)
     if cost.ndim != 2:
         raise ValueError("the cost raster must have one band")
-    f = _stack(features)
-    if f.shape[-2:] != cost.shape:
-        raise ValueError(f"the features ({f.shape[-2:]}) and the cost ({cost.shape}) must be on the same grid")
-    for dim in ("y", "x"):
-        if dim in cost.coords and dim in f.coords and not np.allclose(cost[dim].values, f[dim].values):
-            raise ValueError("the features and the cost must be on the same grid")
+    layers = _layers(features)
+    if not layers:
+        raise ValueError("no features")
+    for _, f in layers:
+        if f.shape != cost.shape:
+            raise ValueError(f"the features ({f.shape}) and the cost ({cost.shape}) must be on the same grid")
+        for dim in ("y", "x"):
+            if dim in cost.coords and dim in f.coords and not np.allclose(cost[dim].values, f[dim].values):
+                raise ValueError("the features and the cost must be on the same grid")
+    ny, nx = cost.shape
     c = np.asarray(cost.values, dtype=np.float64).ravel()
     cells = np.flatnonzero(np.isfinite(c))
-    values = np.asarray(f.values, dtype=np.float64).reshape(f.shape[0], -1)
-    totals = np.array([_sequential_sum(v[np.isfinite(v)]) for v in values])
-    names = tuple(str(b) for b in f["band"].values) if "band" in f.coords else tuple(
-        f"feature_{k + 1}" for k in range(f.shape[0]))
-    return Units("raster", c[cells], _rij(values[:, cells]), totals, names, cost, cells)
+    unit = np.full(c.size, -1, dtype=np.int64)
+    unit[cells] = np.arange(cells.size)
+    # the features block by block of rows (dask layers computed together)
+    acc = _core.OptFeatureMatrix(len(layers))
+    threads = _threads.resolve(n_threads)
+    step = max(1, BLOCK_BYTES // (8 * nx * len(layers)))
+    lazy = [k for k, (_, f) in enumerate(layers) if f.chunks is not None]
+    block = None
+    for y0 in range(0, ny, step):
+        y1 = min(ny, y0 + step)
+        if block is None or block.shape[1] != (y1 - y0) * nx:
+            block = np.empty((len(layers), (y1 - y0) * nx), dtype=np.float64)
+        rows = [f.data[y0:y1] for _, f in layers]
+        if lazy:
+            import dask
+
+            for k, v in zip(lazy, dask.compute(*[rows[k] for k in lazy])):
+                rows[k] = v
+        for k, v in enumerate(rows):
+            v = np.ma.filled(v.astype(np.float64), np.nan) if np.ma.isMaskedArray(v) else v
+            block[k] = np.asarray(v, dtype=np.float64).ravel()
+        acc.add(block, unit[y0 * nx:y1 * nx], threads)
+    totals, start, index, value = acc.finish()
+    rij = sp.csr_matrix((value, index, start), shape=(len(layers), cells.size))
+    rij.has_sorted_indices = True
+    names = tuple(n for n, _ in layers)
+    return Units("raster", c[cells], rij, totals, names, cost, cells)
 
 
 def exact_sums(raster: xr.DataArray, geometries, n_threads: int | None = None) -> np.ndarray:

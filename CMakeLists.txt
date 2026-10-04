@@ -189,6 +189,7 @@ unset(BUILD_SHARED_LIBS)
 # presolve and heuristics, and the calls to HiGHS.
 add_library(optcore STATIC
     src/cpp/opt/cover.cpp
+    src/cpp/opt/features.cpp
     src/cpp/opt/milp.cpp
 )
 target_include_directories(optcore PUBLIC src/cpp)

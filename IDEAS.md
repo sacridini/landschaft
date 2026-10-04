@@ -1479,8 +1479,12 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   exata; entram no `problem()` como polígonos (extensão nossa: o prioritizr não tem H3). Montagem dos arrays dos
   polígonos vetorizada (`shapely.get_parts`): 4·10⁶ células, 10 feições, 377 mil hexágonos (resolução 9):
   `h3_units` 4,4 s, `problem` 1,4 s, solução 0,5 s (antes 75 s no total, quase tudo em Python).
-* **Falta na fase 1**: matriz de feições em C++ lida em blocos (hoje a pilha vai inteira para a memória em
-  float64), warm start pelo Zonation.
+* **Parte 5**: matriz de feições das unidades em raster montada em C++ (`opt/features.cpp`) a partir de blocos
+  de linhas (~64 MB em double; camadas dask calculadas juntas por bloco), sem juntar a pilha: os totais seguem
+  uma soma sequencial em double (os mesmos bits com qualquer bloco, chunk ou número de threads; testado).
+  30 feições x 4·10⁶ células (48 mi de valores): 1,05 s contra 4,1 s, pico de memória em Python 0,3 GB contra
+  4,3 GB (a pilha não é mais copiada em float64; fica só a matriz esparsa).
+* **Falta na fase 1**: warm start pelo Zonation.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
