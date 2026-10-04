@@ -6,6 +6,38 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.21.0] - 2026-10-04
+
+### Added
+- MILP prioritization in `ls.prioritize` (prioritizr 8.0.6 and prioriactions 0.5.0), with HiGHS 1.15.1
+  built into the extension and Gurobi optional:
+  - `ls.prioritize.problem(cost, features)` on raster cells, polygons, tables or H3 cells
+    (`h3_units`; polygon amounts by an exactextract port, bit for bit with exactextractr) and the
+    prioritizr `add_*` grammar. Objectives: min set, min shortfall, min largest shortfall, max
+    utility, max features, max cover, min penalties, max phylogenetic diversity and endemism. Targets:
+    relative, absolute, manual, loglinear and sub-regional, plus feature weights. Penalties: boundary,
+    connectivity, asymmetric connectivity and linear. Constraints: linear, contiguity, feature
+    contiguity, neighbours and corridors. Locked units, binary, proportion and semi-continuous
+    decisions, and cuts, top, gap and shuffle portfolios. `compile()` gives prioritizr's model bit
+    for bit; `solve(start=...)` accepts a Zonation ranking.
+  - Own engines behind the HiGHS solver: a sifted-LP covering engine (min set at 10^6 units), a
+    Lagrangian wide engine (budgeted objectives), and a cut engine (boundary and connectivity
+    penalties: Lagrangian bound by minimum cuts with an own Boykov-Kolmogorov max-flow; 10^6 units at
+    a proven 0.8% gap in 27 s).
+  - Matrix functions `boundary_matrix`, `adjacency_matrix`, `connectivity_matrix`,
+    `proximity_matrix`, `decay_connectivity` and `unit_points`.
+  - `ls.prioritize.marxan(...)`: a Marxan 4.0.6 port with the same runs unit by unit as the
+    executable; `add_anneal_solver()` runs it on min-set problems with target repair.
+  - Multi-action planning (prioriactions): `actions_data(...)`, `.problem(model, budget, blm, curve,
+    segments)`, `compile()` bit for bit, `solve()` reaching prioriactions's optimum, and the
+    solution's cost, benefits, connectivity penalty and actions as prioriactions computes them.
+
+### Fixed
+- Bugs found in the references are implemented only in their correct form (listed in IDEAS.md):
+  prioritizr's phylogenetic tip order and forbid-solution cut, Marxan's uninitialised amounts,
+  heuristic loop and all-locked hang, and prioriactions's status reset, conservation benefit and
+  budget check.
+
 ## [1.20.0] - 2026-10-04
 
 ### Added
