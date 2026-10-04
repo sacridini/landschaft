@@ -1813,22 +1813,25 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   Gurobi, não no motor de fecho (os cortes têm coeficientes negativos, as linhas laterais do motor não).
   Testado: o portfólio top dá os k melhores valores da enumeração exaustiva (min e max).
 
+* **Fase 5 completa** (2026-10-04): Linux (WSL, gcc 13), testes do `ls.prioritize` MILP e multi-action:
+  352 passam, 0 falham (112 pulados: checagens das referências com highspy/gurobipy). Versão **1.22.0**.
+
 ### Próximos passos (retomar daqui)
-1. **Fase 5, resto**:
-   * checagem no Linux (WSL) e registro de "Fase 5 completa".
-2. **Fase 6, avaliação**: resumo (custo, unidades, perímetro), cobertura de metas, replacement importance
+1. **Fase 6, avaliação**: resumo (custo, unidades, perímetro), cobertura de metas, replacement importance
    (re-solves em paralelo), Ferrier (2000), rank importance (Jung et al. 2021), ProxIRR (Baisero et al. 2021),
    frequência de seleção em portfólios, métricas de paisagem da solução (`ls.lsm`, MSPA); cada uma contra as
    `eval_*` do prioritizr na mesma solução.
-3. **Fase 7, calibração e trade-offs**: calibração de BLM e de pesos (joelho da curva), frente de Pareto custo x
+2. **Fase 7, calibração e trade-offs**: calibração de BLM e de pesos (joelho da curva), frente de Pareto custo x
    déficit, solução iterativa acoplável aos passos do `ls.simulate` (agora completo).
-4. **Fase 8, integração**: transformações de feição do Zonation (condição, retenção, kernels, impactos), SAR,
+3. **Fase 8, integração**: transformações de feição do Zonation (condição, retenção, kernels, impactos), SAR,
    feições do `ls.sdm`, comparação Zonation x MILP no mesmo orçamento, gráficos do `ls.plot` e relatório offline.
-5. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
+4. **Fase 9, escala**: benchmarks continentais, agregação em H3/`match_grid`, LPs enormes por PDLP, perfil;
    mais as pendências trazidas das fases anteriores: contiguidade e corredores por cortes de separadores de
    nós em rodadas, limite fraco do max_features (cortes), objetivos filogenéticos em 10⁶ (LP que não converge
-   em 30 s), fluxos dinâmicos e reparo em paralelo no motor de cortes.
-6. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
+   em 30 s), fluxos dinâmicos e reparo em paralelo no motor de cortes; multi-action com fronteira e gap 0
+   (limite fraco: o HiGHS não fecha; Gurobi 99 s em 10⁴) e o núcleo simétrico de 10⁴ (5 s no HiGHS contra 1 s
+   no Gurobi).
+5. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
    prioritizr/prioriactions/prioripy (tabela R <-> Python).
 
 ### Decisões

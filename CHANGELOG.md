@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-10-04
+
 ### Added
 - Multi-action planning solves on an own closure engine behind `add_highs_solver()`: a Lagrangian
   bound as strong as the linear relaxation (each action needs its unit: closed form per unit, or a
