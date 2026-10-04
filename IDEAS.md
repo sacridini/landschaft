@@ -1503,7 +1503,8 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     10⁵ colunas não vai ao MIP do HiGHS** (fica a solução do motor, status `time_limit`: o gap pedido não é
     provado no tempo); sem limite, vai. Agora: 1,7 s para limites de 2, 5 e 10 s. **Vale para as fases 2-3**:
     objetivos que não são de cobertura vão hoje direto ao HiGHS e terão o mesmo problema em modelos largos.
-* **Fase 1 completa** (falta só a revisão final e o teste no Linux).
+* **Fase 1 completa** (2026-10-04): testes também no Linux (WSL, gcc 13): 84 passam, os do Gurobi e os só de
+  Windows pulam. Falta integrar ao `main` (rebase + fast-forward) e a versão.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
