@@ -1033,7 +1033,7 @@ Todos os módulos planejados são plenamente viáveis e compatíveis com a licen
 | **HiGHS** (solver MILP/LP) | **MIT** (C++) | **100% compatível**. Solver padrão; pode ser embutido no `_core`. |
 | **exactextract** (cobertura exata de células por polígonos, usada pelo exactextractr do prioritizr) | **Apache-2.0** (C++, ISciences) | **Compatível com a GPL-3**. Porte em `src/cpp/io/exact` (sem GEOS), com o `LICENSE` original na pasta. |
 | **Gurobi** | Comercial (licença acadêmica gratuita) | Só **opcional** em tempo de execução (gurobipy); nunca obrigatório nem embutido. |
-| **Marxan** (simulated annealing) | Algoritmo publicado (Ball et al. 2009); licença do código do Marxan 4 a verificar | Referência do motor `anneal`: porte com paridade se a licença for compatível, senão **clean-room** pelo artigo. |
+| **Marxan** 4.0.6 (simulated annealing) | **MIT** (Possingham, Ball, Watts; código em `C:\Users\eduar\Documents\dev\marxan`) | **Compatível**. Porte em `src/cpp/opt/marxan` com paridade contra o executável (gcc). |
 
 ---
 
@@ -1636,6 +1636,25 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     metade da solução anterior, não a solução. Confirmado no R: a 2ª solução repete 2 das 6 unidades da 1ª e a
     3ª já é inviável. Implementado só o corte certo; referência: o mesmo laço no R com
     `add_linear_constraints(sum(s) - 1, "<=", 2 s - 1)`.
+* **Parte 2**: porte do **Marxan 4.0.6** (MIT) em C++ (`opt/marxan`) e `ls.prioritize.marxan(pu, spec, puvspr, bound,
+  ...)` com as opções do `input.dat`: penalidades das feições (cobertura gulosa de cada meta), pontuação e
+  variações, recozimento fixo, de Connolly e adaptativo, melhoria iterativa (tipos 0 e 3), heurísticas 0 e 1,
+  PROP, limiar de custo, metas por proporção e por ocorrência, `CONNECTIVITYIN`, unidades travadas; execuções em
+  paralelo (OpenMP), as mesmas com qualquer número de threads. Fora: aglomeração/separação, probabilidades,
+  conectividade assimétrica, penalidades do usuário (runmodes 3-5), heurísticas 2-7.
+  * **Paridade**: as distribuições do `std::mt19937` são as da libstdc++ escritas à mão (inteiros de Lemire,
+    `generate_canonical` com dois sorteios de 32 bits, `std::shuffle` com duas posições por sorteio), então o
+    resultado não depende da biblioteca do compilador. 8 casos contra o executável compilado com g++ 13.3 no WSL
+    (`tools/make_reference_marxan.py`): **as soluções de cada execução unidade por unidade**, pontuação, custo,
+    penalidade, conectividade, déficit e penalidades das feições **bit a bit** (17 dígitos na versão corrigida; 6
+    dígitos no executável original), nos dois sistemas.
+  * **Bugs do Marxan 4.0.6** (só a forma correta; referência = o executável com o código corrigido):
+    (1) o `readSpecies` não inicializa `amount` e as inicializações de Connolly e adaptativa pontuam reservas
+    aleatórias sem recalcular as quantidades (comportamento indefinido na temperatura inicial): aqui, as
+    quantidades da reserva pontuada; (2) a heurística (`Heuristics`) adiciona a melhor unidade dentro da
+    varredura e a contagem das feições faltantes reusa o índice `i` da varredura: **nunca termina** quando acha
+    uma unidade para adicionar (confirmado: travou o executável); aqui, varre tudo e adiciona a melhor.
+  * Armadilha do harness: o `pandas.read_csv` padrão não arredonda corretamente; `float_precision="round_trip"`.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

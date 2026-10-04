@@ -7,13 +7,16 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "opt/cover.hpp"
 #include "opt/features.hpp"
+#include "opt/marxan.hpp"
 #include "opt/milp.hpp"
 #include "opt/wide.hpp"
 
@@ -115,6 +118,105 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
 namespace opt {
 
 void register_python(py::module_& m) {
+    m.def(
+        "opt_marxan",
+        [](const Doubles& cost, const py::array_t<int, py::array::c_style | py::array::forcecast>& status,
+           const Ints& offset, const py::array_t<int, py::array::c_style | py::array::forcecast>& spindex,
+           const Doubles& amount, const Doubles& target, const Doubles& prop, const Doubles& spf,
+           const py::array_t<int, py::array::c_style | py::array::forcecast>& targetocc, const Doubles& fixedcost,
+           const Ints& nb_start, const py::array_t<int, py::array::c_style | py::array::forcecast>& nb,
+           const Doubles& nb_cost, const py::dict& opts) {
+            marxan::Data d;
+            d.npu = static_cast<int>(cost.size());
+            d.nsp = static_cast<int>(target.size());
+            d.cost = vec<double>(cost);
+            d.status = std::vector<int>(status.data(), status.data() + status.size());
+            d.offset = vec<std::int64_t>(offset);
+            d.spindex = std::vector<int>(spindex.data(), spindex.data() + spindex.size());
+            d.amount = vec<double>(amount);
+            d.target = vec<double>(target);
+            d.prop = vec<double>(prop);
+            d.spf = vec<double>(spf);
+            d.targetocc = std::vector<int>(targetocc.data(), targetocc.data() + targetocc.size());
+            d.fixedcost = vec<double>(fixedcost);
+            d.nb_start = vec<std::int64_t>(nb_start);
+            d.nb = std::vector<int>(nb.data(), nb.data() + nb.size());
+            d.nb_cost = vec<double>(nb_cost);
+            if (static_cast<int>(d.status.size()) != d.npu || static_cast<int>(d.offset.size()) != d.npu + 1 ||
+                static_cast<int>(d.fixedcost.size()) != d.npu || static_cast<int>(d.nb_start.size()) != d.npu + 1)
+                throw std::invalid_argument("inconsistent planning-unit arrays");
+            marxan::Options o;
+            auto get = [&](const char* k, auto& v) {
+                if (opts.contains(k)) v = opts[k].cast<std::decay_t<decltype(v)>>();
+            };
+            get("blm", o.blm);
+            get("prop", o.prop);
+            get("iterations", o.iterations);
+            get("tinit", o.tinit);
+            get("tcool", o.tcool);
+            get("titns", o.titns);
+            get("repeats", o.repeats);
+            get("costthresh", o.costthresh);
+            get("tpf1", o.tpf1);
+            get("tpf2", o.tpf2);
+            get("misslevel", o.misslevel);
+            get("runmode", o.runmode);
+            get("heurtype", o.heurtype);
+            get("itimptype", o.itimptype);
+            get("connectivity_in", o.connectivity_in);
+            get("seed", o.seed);
+            get("threads", o.threads);
+            marxan::Result r;
+            {
+                py::gil_scoped_release release;
+                r = marxan::solve(d, o);
+            }
+            const auto nr = static_cast<py::ssize_t>(r.runs.size());
+            py::array_t<int> sol({nr, static_cast<py::ssize_t>(d.npu)});
+            std::vector<double> total, cst, conn, pen, shortfall, connectivity, mpm, itotal, ipen, iconn, icost;
+            std::vector<std::int64_t> pus, missing;
+            for (py::ssize_t k = 0; k < nr; ++k) {
+                const auto& run = r.runs[static_cast<std::size_t>(k)];
+                std::copy(run.R.begin(), run.R.end(), sol.mutable_data() + k * d.npu);
+                total.push_back(run.score.total);
+                itotal.push_back(run.incremental.total);
+                ipen.push_back(run.incremental.penalty);
+                iconn.push_back(run.incremental.connection);
+                icost.push_back(run.incremental.cost);
+                cst.push_back(run.score.cost);
+                conn.push_back(run.score.connection);
+                pen.push_back(run.score.penalty);
+                shortfall.push_back(run.shortfall);
+                connectivity.push_back(run.connectivity);
+                mpm.push_back(run.min_prop_met);
+                pus.push_back(run.score.pus);
+                missing.push_back(run.missing);
+            }
+            py::dict out;
+            out["penalty"] = to_array(std::move(r.penalty));
+            out["target"] = to_array(std::move(r.target));
+            out["unmet"] = r.unmet;
+            out["best"] = r.best;
+            out["solutions"] = sol;
+            out["score"] = to_array(std::move(total));
+            out["cost"] = to_array(std::move(cst));
+            out["connection"] = to_array(std::move(conn));
+            out["penalty_total"] = to_array(std::move(pen));
+            out["shortfall"] = to_array(std::move(shortfall));
+            out["connectivity"] = to_array(std::move(connectivity));
+            out["mpm"] = to_array(std::move(mpm));
+            out["pus"] = to_array(std::move(pus));
+            out["missing"] = to_array(std::move(missing));
+            out["incremental_score"] = to_array(std::move(itotal));
+            out["incremental_penalty"] = to_array(std::move(ipen));
+            out["incremental_connection"] = to_array(std::move(iconn));
+            out["incremental_cost"] = to_array(std::move(icost));
+            return out;
+        },
+        py::arg("cost"), py::arg("status"), py::arg("offset"), py::arg("spindex"), py::arg("amount"),
+        py::arg("target"), py::arg("prop"), py::arg("spf"), py::arg("targetocc"), py::arg("fixedcost"),
+        py::arg("nb_start"), py::arg("nb"), py::arg("nb_cost"), py::arg("options"),
+        "Marxan 4.0.6's runs (opt/marxan.hpp).");
     py::class_<FeatureMatrix>(m, "OptFeatureMatrix",
                               "Features x planning units of raster units, built block by block (opt/features.hpp).")
         .def(py::init<std::int64_t>(), py::arg("layers"))

@@ -1,0 +1,114 @@
+{
+ "fixed_schedule": {
+  "exe": "original",
+  "notes": "a fixed schedule: Marxan as released",
+  "options": {
+   "num_reps": 4,
+   "num_iters": 100000,
+   "num_temp": 1000,
+   "blm": 0.1,
+   "start_temp": 100.0,
+   "cool_fac": 0.99,
+   "seed": 7
+  }
+ },
+ "fixed_schedule_patched": {
+  "exe": "fixed",
+  "notes": "the same on the corrected executable: identical runs",
+  "options": {
+   "num_reps": 4,
+   "num_iters": 100000,
+   "num_temp": 1000,
+   "blm": 0.1,
+   "start_temp": 100.0,
+   "cool_fac": 0.99,
+   "seed": 7
+  }
+ },
+ "connolly": {
+  "exe": "fixed",
+  "notes": "",
+  "options": {
+   "num_reps": 4,
+   "num_iters": 100000,
+   "num_temp": 1000,
+   "blm": 0.1,
+   "start_temp": -1.0,
+   "seed": 11
+  }
+ },
+ "adaptive_annealing_only": {
+  "exe": "fixed",
+  "notes": "",
+  "options": {
+   "num_reps": 4,
+   "num_iters": 100000,
+   "num_temp": 1000,
+   "blm": 0.1,
+   "start_temp": -2.0,
+   "run_mode": 6,
+   "seed": 13
+  }
+ },
+ "heuristic_richness": {
+  "exe": "fixed",
+  "notes": "",
+  "options": {
+   "num_reps": 4,
+   "num_iters": 100000,
+   "num_temp": 1000,
+   "blm": 0.1,
+   "start_temp": -1.0,
+   "run_mode": 0,
+   "heur_type": 0,
+   "prop": 0.3,
+   "seed": 17
+  }
+ },
+ "heuristic_greedy_threshold": {
+  "exe": "fixed",
+  "notes": "",
+  "options": {
+   "num_reps": 4,
+   "num_iters": 100000,
+   "num_temp": 1000,
+   "blm": 0.1,
+   "start_temp": -1.0,
+   "run_mode": 2,
+   "heur_type": 1,
+   "itimp_type": 3,
+   "cost_thresh": 2000.0,
+   "thresh_pen1": 2.0,
+   "thresh_pen2": 1.0,
+   "seed": 19
+  }
+ },
+ "status_mixed_targets": {
+  "exe": "original",
+  "notes": "locked units, occurrence and proportion targets",
+  "options": {
+   "num_reps": 4,
+   "num_iters": 100000,
+   "num_temp": 1000,
+   "blm": 0.1,
+   "start_temp": 50.0,
+   "cool_fac": 0.98,
+   "misslevel": 0.9,
+   "seed": 23
+  }
+ },
+ "prop_targets_connectivity_in": {
+  "exe": "fixed",
+  "notes": "",
+  "options": {
+   "num_reps": 4,
+   "num_iters": 100000,
+   "num_temp": 1000,
+   "blm": 0.1,
+   "start_temp": -1.0,
+   "connectivity_in": true,
+   "seed": 29
+  }
+ },
+ "_marxan": "Marxan 4.0.6 (github.com/Marxan-source-code/marxan 806a48e), g++ 13.3, WSL Ubuntu 24.04"
+}
