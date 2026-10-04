@@ -29,7 +29,8 @@ from itertools import pairwise
 
 import numpy as np
 
-GROUPS: list[str] = ["core", "objectives", "spatial", "matrices", "portfolio", "actions", "exact", "eval"]
+GROUPS: list[str] = ["core", "objectives", "spatial", "matrices", "portfolio", "actions", "exact", "eval",
+                      "calibrate"]
 
 NY, NX = 12, 15
 RES = 100.0
@@ -746,6 +747,32 @@ CASES: dict[str, Case] = {
         list(solution = solution_values(s, p), rank = values(r, mat = FALSE), budgets = attr(r, "budgets"),
              objective = attr(r, "objective"))""",
                       notes="min set: budgets for the min shortfall objective, units locked in rank by rank"),
+    # --- calibrate: prioritizr's "Calibrating trade-offs" tutorial on Gurobi at gap 0 (optima only)
+    "calibrate_hierarchical": Case("calibrate", RASTER, """
+        g <- function(p) add_gurobi_solver(p, gap = 0, threads = 1, verbose = FALSE)
+        p1 <- problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+          add_binary_decisions() |> g()
+        s1 <- solve(p1)
+        s1_cost <- eval_cost_summary(p1, s1)$cost
+        threshold <- ceiling(s1_cost + (s1_cost * seq(1e-5, 4, length.out = 9)))
+        p2 <- problem(pu_cost, features) |> add_boundary_penalties(penalty = 1) |> add_relative_targets(0.3) |>
+          add_binary_decisions() |> g()
+        obj <- sapply(threshold, function(x) unname(attr(solve(add_min_penalties_objective(p2, budget = x),
+                                                               force = TRUE, run_checks = FALSE), "objective")))
+        list(s1_cost = s1_cost, threshold = threshold, objective = obj)"""),
+    "calibrate_blended": Case("calibrate", RASTER, """
+        pen <- c(0.001, 0.01, 0.1, 1, 10)
+        obj <- sapply(pen, function(v) unname(attr(solve(
+          problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+          add_boundary_penalties(v) |> add_binary_decisions() |>
+          add_gurobi_solver(gap = 0, threads = 1, verbose = FALSE), force = TRUE, run_checks = FALSE), "objective")))
+        list(penalty = pen, objective = obj)"""),
+    "calibrate_pareto": Case("calibrate", RASTER, """
+        b <- c(500, 1000, 2000, 3000)
+        obj <- sapply(b, function(v) unname(attr(solve(
+          problem(pu_cost, features) |> add_min_shortfall_objective(v) |> add_relative_targets(0.3) |>
+          add_binary_decisions() |> add_gurobi_solver(gap = 0, threads = 1, verbose = FALSE)), "objective")))
+        list(budget = b, objective = obj)"""),
 }
 
 
