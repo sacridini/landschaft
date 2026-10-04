@@ -43,7 +43,7 @@ from ._connectivity import Interaction, Kernel, convolve
 from ._impacts import CumulativeScenario, ImpactScenario, ImpactSource, Pressure
 from ._marxan import MarxanResult, marxan
 from ._milp import OptimizationProblem, Problem, h3_units, problem
-from ._milp_calibrate import (Calibration, calibrate, calibrate_budget, calibrate_penalty, cohon_penalty, iterative_solve,
+from ._milp_calibrate import (TradeOffs, calibrate, calibrate_budget, calibrate_penalty, cohon_penalty, iterative_solve,
                               knee_point, pareto_front, protected_cells, topsis)
 from ._milp_eval import (eval_asym_connectivity_summary, eval_boundary_summary, eval_connectivity_summary,
                          eval_cost_summary, eval_feature_representation_summary, eval_ferrier_importance,
@@ -57,7 +57,7 @@ from ._postprocess import AreaStatistics
 from ._project import read_project, run_project
 from ._zonation import RULES, ZonationResult, zonation
 
-__all__ = ["Calibration", "calibrate", "calibrate_budget", "calibrate_penalty", "cohon_penalty", "iterative_solve",
+__all__ = ["TradeOffs", "calibrate", "calibrate_budget", "calibrate_penalty", "cohon_penalty", "iterative_solve",
            "knee_point", "pareto_front", "protected_cells", "topsis", "ActionsData", "ActionsPortfolio", "ActionsProblem", "ActionsSolution", "actions_data", "actions_raster_data", "eval_asym_connectivity_summary", "eval_boundary_summary",
            "eval_connectivity_summary", "eval_cost_summary", "eval_feature_representation_summary",
            "eval_ferrier_importance", "eval_landscape_metrics", "eval_mspa", "eval_n_summary", "eval_rank_importance", "eval_rare_richness_importance",

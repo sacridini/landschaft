@@ -15,14 +15,14 @@ import pandas as pd
 
 from .._save import Saveable
 
-__all__ = ["Calibration", "calibrate", "calibrate_budget", "calibrate_penalty", "cohon_penalty", "iterative_solve",
+__all__ = ["TradeOffs", "calibrate", "calibrate_budget", "calibrate_penalty", "cohon_penalty", "iterative_solve",
            "knee_point", "pareto_front", "protected_cells", "topsis"]
 
 PENALTIES = ("boundary", "connectivity", "asym_connectivity", "linear")
 
 
 @dataclass
-class Calibration(Saveable):
+class TradeOffs(Saveable):
     """Candidate solutions over a trade-off parameter.
 
     Attributes
@@ -40,7 +40,7 @@ class Calibration(Saveable):
     criterion: str = ""
 
     def __repr__(self) -> str:
-        return f"Calibration({len(self.solutions)} candidates; cost vs {self.criterion})"
+        return f"TradeOffs({len(self.solutions)} candidates; cost vs {self.criterion})"
 
     def best(self, method: str = "topsis"):
         """The candidate the method chooses (``"topsis"`` with equal weights, or ``"knee"``)."""
@@ -205,7 +205,7 @@ def cohon_penalty(p, penalty: str = "boundary", data=None, edge_factor: float = 
 
 
 def calibrate_penalty(p, penalty: str = "boundary", values=None, n: int = 9, data=None, edge_factor: float = 0.5,
-                      n_threads: int | None = None) -> Calibration:
+                      n_threads: int | None = None) -> TradeOffs:
     """The blended approach: the problem solved with a range of penalty weights (``values``; default
     ``n`` values evenly spaced in log scale over 1/100 to 100 times the Cohon et al. penalty), every
     candidate's cost and criterion (boundary length, connectivity, ...), and the candidates TOPSIS and the
@@ -221,11 +221,11 @@ def calibrate_penalty(p, penalty: str = "boundary", values=None, n: int = 9, dat
     problems = [_with_penalty(p, penalty, float(v), data, edge_factor) for v in values]
     sols = _solve_all(problems, n_threads)
     crit = [_criterion(p, s, penalty, data, edge_factor) for s in sols]
-    return Calibration(_table(values, sols, penalty, crit), sols, penalty)
+    return TradeOffs(_table(values, sols, penalty, crit), sols, penalty)
 
 
 def calibrate_budget(p, penalty: str = "boundary", thresholds=None, inflation=None, data=None,
-                     edge_factor: float = 0.5, n_threads: int | None = None) -> Calibration:
+                     edge_factor: float = 0.5, n_threads: int | None = None) -> TradeOffs:
     """The hierarchical approach: the least cost solution first (``p``, a min set problem without the
     penalty, solved to optimality), then the least penalty within cost thresholds above its cost
     (``thresholds``, or the cost x (1 + ``inflation``); default inflation 1e-5 to 4 in 9 steps, the
@@ -244,10 +244,10 @@ def calibrate_budget(p, penalty: str = "boundary", thresholds=None, inflation=No
     problems = [pen.add_min_penalties_objective(float(t)) for t in thresholds]
     sols = _solve_all(problems, n_threads)
     crit = [_criterion(p, s, penalty, data, edge_factor) for s in sols]
-    return Calibration(_table(thresholds, sols, penalty, crit), sols, penalty)
+    return TradeOffs(_table(thresholds, sols, penalty, crit), sols, penalty)
 
 
-def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> Calibration:
+def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> TradeOffs:
     """The trade-off between cost and representation: the least total shortfall of the targets (min
     shortfall objective: the sum of the shortfalls as shares of their targets) within budgets from a tenth of the least-cost solution's cost up to it
     (``n`` steps) or the ``budgets`` given. ``p``: a problem with targets (its objective is replaced).
@@ -275,10 +275,10 @@ def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> 
     c, sh = t["cost"].to_numpy(), t["shortfall"].to_numpy()
     t["efficient"] = [not any((c[j] <= c[i] and sh[j] <= sh[i]) and (c[j] < c[i] or sh[j] < sh[i])
                               for j in range(len(t))) for i in range(len(t))]
-    return Calibration(t, sols, "shortfall")
+    return TradeOffs(t, sols, "shortfall")
 
 
-def calibrate(make, values, criterion, name: str = "criterion", n_threads: int | None = None) -> Calibration:
+def calibrate(make, values, criterion, name: str = "criterion", n_threads: int | None = None) -> TradeOffs:
     """Any trade-off parameter: ``make(value)`` gives the problem for every value (a feature's weight,
     a target, a penalty of any kind...), ``criterion(problem, solution)`` the quantity traded off
     against the cost (smaller is better). The candidates' table as :func:`calibrate_penalty`'s (TOPSIS,
@@ -290,7 +290,7 @@ def calibrate(make, values, criterion, name: str = "criterion", n_threads: int |
     sols = _solve_all(problems, n_threads)
     crit = [float(criterion(q, s)) for q, s in zip(problems, sols)]
     vals = np.asarray(values, dtype=np.float64) if all(np.isscalar(v) for v in values) else np.arange(len(values))
-    return Calibration(_table(vals, sols, name, crit), sols, name)
+    return TradeOffs(_table(vals, sols, name, crit), sols, name)
 
 
 def iterative_solve(p, update, steps: int, lock_previous: bool = False):

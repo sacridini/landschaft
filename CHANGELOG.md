@@ -11,7 +11,7 @@ in a new major version.
   penalties around Cohon's), `calibrate_budget` (hierarchical approach: the least penalty within cost
   thresholds), `cohon_penalty` (Cohon et al. 1979), `pareto_front` (cost vs the targets' shortfall) and
   `calibrate(make, values, criterion)` for any parameter (feature weights...), solved in parallel; a
-  `Calibration` table marks the candidates `topsis` (Hwang & Yoon) and `knee_point` choose. The optima
+  `TradeOffs` table marks the candidates `topsis` (Hwang & Yoon) and `knee_point` choose. The optima
   are prioritizr's on Gurobi. `iterative_solve(problem, update, steps)` re-solves as the problem
   changes (e.g. between `ls.simulate` steps; `protected_cells(solution)` gives the simulation's
   restrictions), keeping earlier selections with `lock_previous=True`.

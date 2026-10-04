@@ -1848,7 +1848,7 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   déficits como fração das metas, o objetivo; coluna `efficient`), `calibrate(make, values, criterion)` para
   qualquer parâmetro (pesos de feições), `topsis` (o algoritmo do pacote `topsis` do R, que não está instalado:
   testado contra a definição à mão) e `knee_point` (o ponto mais distante da corda, eixos em 0-1); a tabela
-  `Calibration` marca as escolhas de TOPSIS e do joelho; resoluções em paralelo (uma thread de solver cada).
+  `TradeOffs` marca as escolhas de TOPSIS e do joelho; resoluções em paralelo (uma thread de solver cada).
   `iterative_solve(problem, update, steps, lock_previous)` + `protected_cells(solução)` para as `restrictions`
   do `ls.simulate.Rules`. Falhas de passo propagam (nada engolido, ao contrário do prioripy). Grupo `calibrate`
   do harness (3 casos, Gurobi gap 0 com `force = TRUE, run_checks = FALSE` como no tutorial): os ótimos da
