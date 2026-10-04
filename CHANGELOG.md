@@ -6,6 +6,18 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-10-04
+
+### Added
+- `ls.simulate` phase 7c, scenarios and replicates: `scenarios(model or projection, ...)` runs every
+  scenario (a model, the pieces to replace, or a function of the model) several times in parallel,
+  replicate `r` with seed `seed + r` in every scenario (common random numbers), the same maps with
+  any number of workers; `Ensemble` with `probability(class, year)`, `change_probability`, `cover`,
+  `metrics` (landscape metrics by name, or any function of a map) and `to_dataset`.
+- `ls.plot` of land change simulations: the maps with a slider over the steps or years, the cells
+  of each class, the flows from the first to the last map (`Simulation`, `Projection` with its
+  check), the probability of change and the mean cover per scenario (`Ensemble`).
+
 ## [1.15.0] - 2026-10-04
 
 ### Added
