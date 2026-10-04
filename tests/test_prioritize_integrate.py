@@ -109,6 +109,7 @@ def test_compare_zonation():
 
 
 def test_sdm_features():
+    pytest.importorskip("sklearn")
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
