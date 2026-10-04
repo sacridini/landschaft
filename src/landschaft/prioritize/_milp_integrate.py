@@ -225,8 +225,30 @@ def sdm_features(results, env, *, threshold=None, ensemble: str = "weighted") ->
 
 
 def _block_sum(da: xr.DataArray, factor: int) -> xr.DataArray:
-    count = da.notnull().coarsen(y=factor, x=factor, boundary="pad").sum()
-    out = da.coarsen(y=factor, x=factor, boundary="pad").sum(skipna=True).where(count > 0)
+    """Sums over blocks of factor x factor cells of the last two dimensions (y, x), NaN where a block has
+    no value; the blocks' coordinates are the means of their cells' (the edges padded)."""
+    v = np.asarray(da.values, dtype=np.float64)
+    ny, nx = v.shape[-2:]
+    by, bx = -(-ny // factor), -(-nx // factor)
+    pad = [(0, 0)] * (v.ndim - 2) + [(0, by * factor - ny), (0, bx * factor - nx)]
+    vp = np.pad(v, pad, constant_values=np.nan)
+    blocks = vp.reshape(*v.shape[:-2], by, factor, bx, factor)
+    with np.errstate(invalid="ignore"):
+        total = np.nansum(blocks, axis=(-3, -1))
+        count = np.sum(np.isfinite(blocks), axis=(-3, -1))
+    total = np.where(count > 0, total, np.nan)
+    ydim, xdim = da.dims[-2:]
+
+    def centres(c):
+        c = np.asarray(c, dtype=np.float64)
+        step = c[1] - c[0] if c.size > 1 else 1.0
+        full = np.concatenate([c, c[-1] + step * np.arange(1, -(-c.size // factor) * factor - c.size + 1)])
+        return full.reshape(-1, factor).mean(axis=1)
+
+    coords = {d: da.coords[d].values for d in da.dims[:-2] if d in da.coords}
+    coords[ydim] = centres(da[ydim].values)
+    coords[xdim] = centres(da[xdim].values)
+    out = xr.DataArray(total, dims=da.dims, coords=coords, name=da.name)
     try:
         if da.rio.crs is not None:
             out = out.rio.write_crs(da.rio.crs)
