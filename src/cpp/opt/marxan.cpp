@@ -13,6 +13,7 @@
 #include <cfloat>
 #include <chrono>
 #include <cmath>
+#include <queue>
 #include <random>
 #include <stdexcept>
 #include <utility>
@@ -405,46 +406,76 @@ void repair(const Model& m, const ByFeature& f, std::vector<int>& R, std::vector
     species_amounts(d, spec, R);  // afresh: the annealing's running sums drift
     reserve_value(m, R, spec, reserve);
     Score change;
-    std::vector<int> stamp(static_cast<std::size_t>(d.npu), -1);
-    std::vector<int> cand;
-    for (int round = 0;; ++round) {
-        cand.clear();
-        for (int i = 0; i < d.nsp; ++i) {
-            const Species& s = spec[i];
-            if (!(s.target - s.amount > target_tolerance(s))) continue;
-            for (std::int64_t k = f.start[i]; k < f.start[i + 1]; ++k) {
-                const int j = f.unit[k];
-                if (R[j] == 0 && f.amount[k] > 0 && stamp[j] != round) {
-                    stamp[j] = round;
-                    cand.push_back(j);
-                }
-            }
+    // greedy additions, lazily: a unit's gain only falls as the shortfalls shrink (its stale entry is
+    // re-keyed when it comes up) and its cost only changes when a neighbour comes in (pushed anew then)
+    auto key_of = [&](int j, double& key) {  // 2: lowers the score, 1: raises it, 0: no gain
+        double gain = 0;
+        for (std::int64_t ism = d.offset[j]; ism < d.offset[j + 1]; ++ism) {
+            const Species& s = spec[d.spindex[ism]];
+            const double shortfall = s.target - s.amount;
+            if (shortfall > target_tolerance(s) && d.amount[ism] > 0) gain += std::min(d.amount[ism], shortfall) / s.target;
         }
-        if (cand.empty()) break;  // met, or nothing left to add
-        int best = -1;
-        bool best_free = false;
-        double best_key = 0;
-        for (const int j : cand) {
-            double gain = 0;
-            for (std::int64_t ism = d.offset[j]; ism < d.offset[j + 1]; ++ism) {
-                const Species& s = spec[d.spindex[ism]];
-                const double shortfall = s.target - s.amount;
-                if (shortfall > target_tolerance(s) && d.amount[ism] > 0)
-                    gain += std::min(d.amount[ism], shortfall) / s.target;
-            }
-            if (!(gain > 0)) continue;
-            const double delta = d.cost[j] + m.connection_cost2(j, R, 1, 1, m.cm);
-            const bool free = delta <= 0;
-            const double key = free ? gain : gain / delta;
-            if (best < 0 || (free && !best_free) || (free == best_free && key > best_key)) {
-                best = j;
-                best_free = free;
-                best_key = key;
-            }
+        if (!(gain > 0)) return 0;
+        const double delta = d.cost[j] + m.connection_cost2(j, R, 1, 1, m.cm);
+        key = delta <= 0 ? gain : gain / delta;
+        return delta <= 0 ? 2 : 1;
+    };
+    struct Entry {
+        int cls;
+        double key;
+        int unit;
+    };
+    auto lower = [](const Entry& a, const Entry& b) {
+        if (a.cls != b.cls) return a.cls < b.cls;
+        if (a.key != b.key) return a.key < b.key;
+        return a.unit > b.unit;
+    };
+    std::priority_queue<Entry, std::vector<Entry>, decltype(lower)> heap(lower);
+    int unmet = 0;
+    std::vector<std::uint8_t> seen(static_cast<std::size_t>(d.npu), 0);
+    for (int i = 0; i < d.nsp; ++i) {
+        const Species& s = spec[i];
+        if (!(s.target - s.amount > target_tolerance(s))) continue;
+        ++unmet;
+        for (std::int64_t k = f.start[i]; k < f.start[i + 1]; ++k) {
+            const int j = f.unit[k];
+            if (R[j] != 0 || !(f.amount[k] > 0) || seen[j]) continue;
+            seen[j] = 1;
+            double key = 0;
+            const int cls = key_of(j, key);
+            if (cls) heap.push({cls, key, j});
         }
-        if (best < 0) break;
-        change_score(m, best, R, spec, 1, change, reserve, 0, 0, 0, 0);
-        do_change(m, best, R, reserve, change, spec, 1);
+    }
+    while (unmet > 0 && !heap.empty()) {
+        const Entry e = heap.top();
+        heap.pop();
+        if (R[e.unit] != 0) continue;
+        double key = 0;
+        const int cls = key_of(e.unit, key);
+        if (!cls) continue;
+        const Entry now{cls, key, e.unit};
+        if ((cls != e.cls || key != e.key) && !heap.empty() && lower(now, heap.top())) {
+            heap.push(now);  // stale and no longer the best
+            continue;
+        }
+        const int j = e.unit;
+        for (std::int64_t ism = d.offset[j]; ism < d.offset[j + 1]; ++ism) {
+            const Species& s = spec[d.spindex[ism]];
+            if (s.target - s.amount > target_tolerance(s)) --unmet;  // counted again below if still unmet
+        }
+        change_score(m, j, R, spec, 1, change, reserve, 0, 0, 0, 0);
+        do_change(m, j, R, reserve, change, spec, 1);
+        for (std::int64_t ism = d.offset[j]; ism < d.offset[j + 1]; ++ism) {
+            const Species& s = spec[d.spindex[ism]];
+            if (s.target - s.amount > target_tolerance(s)) ++unmet;
+        }
+        for (std::int64_t k = d.nb_start[j]; k < d.nb_start[j + 1]; ++k) {
+            const int u = d.nb[k];
+            if (R[u] != 0) continue;
+            double ku = 0;
+            const int cu = key_of(u, ku);
+            if (cu) heap.push({cu, ku, u});
+        }
     }
     // drop units in order of what dropping them saves, while the targets stay met
     for (bool dropped = true; dropped;) {
@@ -801,6 +832,32 @@ Result solve(const Data& d, const Options& o) {
     for (std::size_t r = 1; r < res.runs.size(); ++r)
         if (res.runs[r].score.total < res.runs[static_cast<std::size_t>(res.best)].score.total) res.best = static_cast<int>(r);
     return res;
+}
+
+struct Repair::Impl {
+    Model m;
+    ByFeature f;
+    std::vector<Species> spec;
+};
+
+Repair::Repair(const Data& d, double blm) : impl_(new Impl{Model{d, blm, 0}, by_feature(d), {}}) {
+    impl_->spec.resize(static_cast<std::size_t>(d.nsp));
+    for (int i = 0; i < d.nsp; ++i) {
+        Species& s = impl_->spec[i];
+        s.target = std::max(0.0, d.target[i]);
+        s.prop = 0;
+        s.spf = 1;
+        s.targetocc = 0;
+    }
+}
+
+Repair::~Repair() = default;
+
+double Repair::operator()(std::vector<int>& R) const {
+    std::vector<Species> sp = impl_->spec;
+    Score reserve;
+    repair(impl_->m, impl_->f, R, sp, reserve);
+    return reserve.cost + reserve.connection;
 }
 
 }  // namespace opt::marxan

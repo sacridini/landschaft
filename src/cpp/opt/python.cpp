@@ -15,8 +15,10 @@
 #include <vector>
 
 #include "opt/cover.hpp"
+#include "opt/cut.hpp"
 #include "opt/features.hpp"
 #include "opt/marxan.hpp"
+#include "opt/maxflow.hpp"
 #include "opt/milp.hpp"
 #include "opt/wide.hpp"
 
@@ -249,6 +251,70 @@ void register_python(py::module_& m) {
                                       to_array(std::move(index)), to_array(std::move(value)));
             },
             "(totals, start, index, value): every layer's total and its amounts in the units (compressed rows).");
+    using IntArr = py::array_t<int, py::array::c_style | py::array::forcecast>;
+    m.def(
+        "opt_maxflow",
+        [](int n, const IntArr& i, const IntArr& j, const Doubles& cap_ij, const Doubles& cap_ji,
+           const Doubles& source, const Doubles& sink) {
+            MaxFlow g(n, std::vector<int>(i.data(), i.data() + i.size()),
+                      std::vector<int>(j.data(), j.data() + j.size()), vec<double>(cap_ij), vec<double>(cap_ji));
+            double f;
+            py::array_t<std::uint8_t> side(n);
+            {
+                py::gil_scoped_release release;
+                f = g.solve(vec<double>(source), vec<double>(sink));
+            }
+            for (int v = 0; v < n; ++v) side.mutable_data()[v] = g.source_side(v);
+            return py::make_tuple(f, side);
+        },
+        "(flow, source side) of the minimum s-t cut (Boykov-Kolmogorov).");
+    m.def(
+        "opt_solve_cut",
+        [](const Doubles& cost, const IntArr& status, const Ints& offset, const IntArr& spindex, const Doubles& amount,
+           const Doubles& target, const Doubles& fixedcost, const Ints& nb_start, const IntArr& nb,
+           const Doubles& nb_cost, double gap, double time_limit, int max_evaluations, bool verbose,
+           const IntArr& initial) {
+            marxan::Data d;
+            d.npu = static_cast<int>(cost.size());
+            d.nsp = static_cast<int>(target.size());
+            d.cost = vec<double>(cost);
+            d.status = std::vector<int>(status.data(), status.data() + status.size());
+            d.offset = vec<std::int64_t>(offset);
+            d.spindex = std::vector<int>(spindex.data(), spindex.data() + spindex.size());
+            d.amount = vec<double>(amount);
+            d.target = vec<double>(target);
+            d.prop.assign(static_cast<std::size_t>(d.nsp), 0.0);
+            d.spf.assign(static_cast<std::size_t>(d.nsp), 1.0);
+            d.targetocc.assign(static_cast<std::size_t>(d.nsp), 0);
+            d.fixedcost = vec<double>(fixedcost);
+            d.nb_start = vec<std::int64_t>(nb_start);
+            d.nb = std::vector<int>(nb.data(), nb.data() + nb.size());
+            d.nb_cost = vec<double>(nb_cost);
+            if (static_cast<int>(d.status.size()) != d.npu || static_cast<int>(d.offset.size()) != d.npu + 1 ||
+                static_cast<int>(d.fixedcost.size()) != d.npu || static_cast<int>(d.nb_start.size()) != d.npu + 1)
+                throw std::invalid_argument("inconsistent planning-unit arrays");
+            cut::Options o;
+            o.gap = gap;
+            o.time_limit = time_limit;
+            o.max_evaluations = max_evaluations;
+            o.verbose = verbose;
+            std::vector<int> init(initial.data(), initial.data() + initial.size());
+            cut::Result r;
+            {
+                py::gil_scoped_release release;
+                r = cut::solve(d, o, init);
+            }
+            py::dict out;
+            out["status"] = r.status;
+            out["x"] = to_array(std::vector<double>(r.x.begin(), r.x.end()));
+            out["objective"] = r.objective;
+            out["bound"] = r.bound;
+            out["gap"] = r.gap;
+            out["evaluations"] = r.evaluations;
+            out["seconds"] = r.seconds;
+            return out;
+        },
+        "The cut engine (Lagrangian bound by minimum cuts, repaired selections) on Marxan's problem at BLM 1.");
     m.def("opt_solve_highs", &py_solve_highs, py::arg("start"), py::arg("index"), py::arg("value"), py::arg("obj"),
           py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"),
           py::arg("maximize"), py::arg("offset"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),

@@ -209,3 +209,41 @@ def solve_anneal(m: OptimizationProblem, n: int, options: dict, start: np.ndarra
     return {"status": st, "has_solution": True, "x": _pair_values(m, n, best, pi, pj), "objective": best_obj,
             "bound": bound, "gap": gap, "nodes": 0, "seconds": time.perf_counter() - t0,
             "runs": sol.shape[0]}
+
+
+def cut_applies(m: OptimizationProblem, n: int | None) -> dict | None:
+    """The model in Marxan's form if the cut engine solves it (a minimum set with pair terms, all of them
+    boundaries >= 0: boundary penalties, symmetric connectivity rewards); else None."""
+    if n is None or n <= 0 or m.ncol <= n or m.modelsense != "min":
+        return None
+    try:
+        mm = marxan_model(m, n)
+    except ValueError:
+        return None
+    if (mm["bound"] < 0).any():
+        return None
+    return mm
+
+
+def solve_cut(m: OptimizationProblem, n: int, mm: dict, gap: float, time_limit: float, verbose: bool,
+              start: np.ndarray | None = None) -> dict:
+    """The cut engine (opt/cut.cpp) on a model in Marxan's form."""
+    from .. import _core
+
+    nb_start, nb, nb_cost = _neighbours(n, mm["pi"], mm["pj"], mm["bound"])
+    init = np.zeros(0, dtype=np.int32) if start is None else (np.asarray(start)[:n] >= 0.5).astype(np.int32)
+    out = _core.opt_solve_cut(
+        mm["cost"], mm["status"], mm["offset"], mm["spindex"], mm["amount"], mm["target"], np.zeros(n), nb_start,
+        nb, nb_cost, float(gap), -1.0 if not math.isfinite(time_limit) else float(time_limit), 1000, bool(verbose),
+        init)
+    if out["status"] == "infeasible":
+        return {"status": "infeasible", "has_solution": False, "x": None, "objective": math.nan, "bound": math.nan,
+                "gap": math.nan, "nodes": 0, "seconds": out["seconds"]}
+    x = np.asarray(out["x"], dtype=np.float64)
+    full = _pair_values(m, n, x, mm["pi"], mm["pj"])
+    obj = float(m.obj @ full)
+    bound = float(out["bound"])
+    g = obj - bound
+    gp = 0.0 if g <= 0 else g / max(abs(obj), 1e-10)
+    return {"status": "optimal" if gp <= gap else out["status"], "has_solution": True, "x": full, "objective": obj,
+            "bound": bound, "gap": gp, "nodes": 0, "seconds": out["seconds"], "evaluations": out["evaluations"]}

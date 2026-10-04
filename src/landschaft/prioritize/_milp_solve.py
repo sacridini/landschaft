@@ -78,6 +78,46 @@ def _gurobi(m: OptimizationProblem, gap: float, time_limit: float, threads: int,
                 "nodes": int(g.NodeCount) if mip else 0, "seconds": g.Runtime}
 
 
+# models up to this many columns go on to HiGHS's MIP when the cut engine stops short of the gap
+CUT_HIGHS_COLUMNS = 50_000
+
+
+def _highs_or_cut(m: OptimizationProblem, gap: float, time_limit: float, threads: int, presolve: str,
+                  verbose: bool, start: np.ndarray | None, n_units: int | None) -> dict:
+    """Minimum sets with boundary penalties or symmetric connectivity rewards (pair terms >= 0 in
+    Marxan's form) on the cut engine (Lagrangian bound by minimum cuts, repaired selections); on
+    HiGHS's MIP from its solution if the gap is not reached and the model is small enough. Other
+    models on HiGHS behind the covering and wide engines."""
+    import time
+
+    from ._milp_anneal import cut_applies, solve_cut
+
+    mm = cut_applies(m, n_units)
+    if mm is None:
+        return _highs(m, gap, time_limit, threads, presolve, verbose, start, n_units=n_units)
+    t0 = time.perf_counter()
+    r = solve_cut(m, n_units, mm, gap, time_limit, verbose, start)
+    if r["status"] in ("optimal", "infeasible") or m.ncol > CUT_HIGHS_COLUMNS:
+        if r["status"] not in ("optimal", "infeasible", "time_limit"):
+            r["status"] = "heuristic"
+        return r
+    left = time_limit - (time.perf_counter() - t0)
+    if left <= 0:
+        r["status"] = "time_limit"
+        return r
+    h = _highs(m, gap, left, threads, presolve, verbose, r["x"], n_units=n_units)
+    out = dict(h)
+    if not h["has_solution"] or h["objective"] > r["objective"]:
+        out.update({k: r[k] for k in ("has_solution", "x", "objective")})
+    bound = max(r["bound"], h["bound"]) if math.isfinite(h.get("bound", math.nan)) else r["bound"]
+    out["bound"] = bound
+    g = out["objective"] - bound
+    out["gap"] = 0.0 if g <= 0 else g / max(abs(out["objective"]), 1e-10)
+    out["status"] = "optimal" if out["gap"] <= gap else h["status"]
+    out["seconds"] = time.perf_counter() - t0
+    return out
+
+
 def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.ndarray | None = None,
                 n_units: int | None = None) -> dict:
     """Solve a compiled model on a solver; the result's status, solution and bounds."""
@@ -89,7 +129,7 @@ def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.nd
     threads = _threads.resolve(options.get("n_threads"))
     verbose = bool(options.get("verbose", False))
     if solver == "highs":
-        r = _highs(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start, n_units=n_units)
+        r = _highs_or_cut(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start, n_units)
     elif solver == "gurobi":
         r = _gurobi(m, gap, time_limit, threads, verbose, start)
     elif solver == "anneal":

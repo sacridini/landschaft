@@ -1690,10 +1690,33 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
     | 10⁶ | 975.958 em 289 s | sem resposta (fase 0) | 1.015.526 em 120 s (+4,1%) |
 
     O Marxan é o Marxan: muito atrás do Gurobi, mas dá solução viável no tempo pedido onde o HiGHS não dá
-    nenhuma. **Próximo passo para fronteira em escala**: relaxação lagrangiana das metas, cujo subproblema
-    (custos unitários + fronteiras >= 0) é um **corte mínimo** s-t exato (submodular; fronteira e conectividade
-    simétrica dão fronteiras >= 0): limite inferior forte (>= LP) e soluções primais reparáveis por iteração,
-    com fluxo máximo próprio (Boykov-Kolmogorov ou push-relabel, clean-room pelo artigo).
+    nenhuma. A parte 4 resolve a fronteira em escala de outro jeito.
+* **Parte 4**: **motor de cortes** (`opt/cut`, `opt/maxflow`) para mínimo conjunto com termos de par >= 0 na
+  forma do Marxan (penalidades de fronteira, conectividade simétrica e, no mínimo conjunto, a assimétrica: as
+  recompensas dos pares viram fronteiras >= 0). Relaxação lagrangiana das metas: para y >= 0,
+  L(y) = y't + min_x sum (c_i - (A'y)_i) x_i + sum w_ij [x_i != x_j], cujo subproblema é um **corte mínimo s-t
+  exato** (submodular). Max L = a relaxação linear (o subproblema é integral: testado igual ao LP em 4
+  casos), pelo bundle de caixa do motor largo, um fluxo máximo por avaliação. Cada corte é reparado e podado
+  (o reparo do `anneal`, agora guloso preguiçoso com heap: o guloso que varria tudo a cada unidade levava 13 s
+  por avaliação em 10⁵); no fim, os cortes de y* x θ (θ de 1,02 a 3) como busca primal.
+  * Fluxo máximo: Boykov-Kolmogorov escrito do artigo (PAMI 2004: duas árvores, aumento, adoção dos órfãos,
+    heurísticas de distância e carimbo de tempo), capacidades double. Igual ao `scipy` em 150 grafos
+    aleatórios (assimétricos também), o corte com a capacidade do fluxo; grade de 10⁶ em 0,29 s.
+  * **Roteamento**: no `add_highs_solver`, os modelos que a conversão aceita com fronteiras >= 0 vão ao motor
+    de cortes; se o gap pedido não fecha e o modelo tem até 50 mil colunas, o MIP do HiGHS continua da
+    solução dele (com o melhor limite dos dois). Nos casos pequenos de LP fraco (`boundary_raster`:
+    LP 21% abaixo do ótimo) o motor sozinho fica 6% acima; o HiGHS fecha.
+  * **Benchmark** (o da parte 3, gap pedido 1%, limite inferior provado):
+
+    | unidades | Gurobi | motor de cortes |
+    |---:|---|---|
+    | 10⁴ | 9.591 em 0,9 s | 9.610 (gap provado 0,97%) em **0,1 s** |
+    | 10⁵ | 97.020 em 19 s | 97.605 (gap 0,91%) em **1,3 s** |
+    | 10⁶ | 975.958 em 289 s | 980.968 (gap 0,77%) em **27 s** |
+
+    Onde o HiGHS não dava solução nenhuma (10⁵ e 10⁶ na fase 0) e o `anneal` ficava 1-4% acima. Melhorias
+    possíveis: fluxos dinâmicos (reusar o grafo residual entre avaliações: só as capacidades terminais
+    mudam, Kohli e Torr), reparo em paralelo, poda com trocas.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o

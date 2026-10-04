@@ -29,6 +29,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -110,5 +111,22 @@ struct Result {
 };
 
 Result solve(const Data& data, const Options& options);
+
+// landschaft's repair and trim (Options::repair) of one selection R (0/1; 2/3 for locked units) on Marxan's
+// score with BLM `blm` and the features' targets (proportions and occurrences ignored); `data` must
+// outlive it. Calls may run in parallel.
+class Repair {
+public:
+    Repair(const Data& data, double blm);
+    ~Repair();
+    Repair(const Repair&) = delete;
+    Repair& operator=(const Repair&) = delete;
+    // the score after (cost + blm x boundary; every target met if it can be)
+    double operator()(std::vector<int>& R) const;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 }  // namespace opt::marxan
