@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from ._table import default_index
 from ._threads import default_threads
 from .collection import RasterCollection, RasterInfo, expand_sources
 from .io import PathLike, _load_map, write_raster
@@ -392,11 +393,11 @@ def _write_outputs(result, base: Path, table_format: str = "csv") -> tuple[list[
         elif isinstance(value, pd.DataFrame):
             if table_format == "parquet":
                 path = name_for(key, ".parquet")
-                frame = value if isinstance(value.index, pd.RangeIndex) else value.reset_index()
+                frame = value if default_index(value.index) else value.reset_index()
                 frame.to_parquet(path, index=False)
             else:
                 path = name_for(key, ".csv")
-                value.to_csv(path, index=not isinstance(value.index, pd.RangeIndex))
+                value.to_csv(path, index=not default_index(value.index))
             outputs.append(path)
         elif isinstance(value, dict):
             for k, v in value.items():

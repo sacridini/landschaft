@@ -25,6 +25,7 @@ import pandas as pd
 import xarray as xr
 
 from .. import _core
+from .._table import default_index
 from ._maps import read_map
 
 __all__ = ["DevelopmentDemand", "DevelopmentPotential", "Flooding", "PatchGrowing", "calibrate_patches",
@@ -340,8 +341,7 @@ def _population_frame(t) -> pd.DataFrame:
         raise TypeError("the population must be a DataFrame")
     t = t.copy()
     # the default index only: pandas 3 also gives a RangeIndex to evenly spaced times (an index of years)
-    ix = t.index
-    if isinstance(ix, pd.RangeIndex) and ix.name is None and ix.start == 0 and ix.step == 1:
+    if default_index(t.index):
         t = t.set_index(t.columns[0])
     t.columns = [int(c) for c in t.columns]
     return t.astype(np.float64)

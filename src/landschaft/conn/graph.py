@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from .. import _core
+from .._table import default_index
 
 
 def r_sum(values) -> float:
@@ -504,7 +505,7 @@ class HabitatGraph:
             if values["id"].duplicated().any():
                 raise ValueError("the table has several rows per node (several distances): select one")
             values = pd.Series(values[name].to_numpy(), index=values["id"].to_numpy())
-        if isinstance(values, pd.Series) and not isinstance(values.index, pd.RangeIndex):
+        if isinstance(values, pd.Series) and not default_index(values.index):
             return values.reindex(self.ids).to_numpy(dtype=np.float64)
         v = np.asarray(values, dtype=np.float64)
         if v.shape != (self.n_nodes,):

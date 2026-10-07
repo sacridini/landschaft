@@ -16,6 +16,12 @@ __all__ = ["load_table", "write_table"]
 _VECTOR_SUFFIXES = {".gpkg", ".shp", ".geojson", ".fgb", ".kml", ".gml", ".dbf"}
 
 
+def default_index(index) -> bool:
+    """Whether a table's index is pandas's default one (0, 1, 2, ..., no name), not data: pandas 3 also
+    gives a RangeIndex to evenly spaced values (ids 1..n, years), which are data."""
+    return isinstance(index, pd.RangeIndex) and index.name is None and index.start == 0 and index.step == 1
+
+
 def _suffix(path: Path) -> str:
     s = path.suffix.lower()
     if s == ".gz" and len(path.suffixes) > 1:

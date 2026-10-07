@@ -27,7 +27,9 @@ in a new major version.
 - pandas 3: R data frames read from `.rda` / `.rds` files (example data) keep their text columns as objects
   with `None` for NA (pandas 3 inferred its string dtype, NA as NaN), and
   `DevelopmentDemand.from_population` no longer takes evenly spaced times in the index (to which pandas 3
-  gives a `RangeIndex`) for a default index ("no observed population for subregion ...").
+  gives a `RangeIndex`) for a default index ("no observed population for subregion ..."). The same for a
+  graph's per-node values given as a Series indexed by node ids (`HabitatGraph`) and for the tables batch
+  runs write (their index kept): only pandas's default index counts as no index.
 - Tests on Linux: the two simulate test inputs drawn with numpy's `sin`, `cos` and `exp` (whose last bits
   differ between platforms) are stored as drawn on Windows, where the references were made; MOLUSCE's
   correlation, which went through numpy's dgemm on Windows, is compared within a few units in the last
