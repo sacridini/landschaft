@@ -6,6 +6,17 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.28.0] - 2026-10-07
+
+### Added
+- Migration guide "From prioritizr, prioriactions and prioripy" in the API reference: the equivalent of
+  every function, a script side by side in R and Python, what to expect when comparing results
+  (prioritizr 9's rescaled boundary data, dropped tie-break terms and renamed objectives) and what is not
+  available.
+- `Problem.add_max_wtd_sum_objective`, `add_max_n_targets_met_objective` and `add_neighbor_constraints`:
+  prioritizr's newer names for `add_max_utility_objective`, `add_max_features_objective` and
+  `add_neighbors_constraints` (the same models).
+
 ## [1.27.0] - 2026-10-05
 
 ### Added
