@@ -647,11 +647,7 @@ def eval_rank_importance(p, solution, n: int | None = None, budgets=None, rescal
         if int(n) != n or n < 1:
             raise ValueError("n must be a whole number >= 1")
         total_cost = _r_sum(u.cost * s)
-        if p.locked_in is not None or p.locked_out is not None:
-            m0, _ = compile_problem(p)
-            locked = m0.lb[:u.n] * (u.cost * 0 + 1)
-        else:
-            locked = np.zeros(u.n)
+        locked = p._unit_bounds()[0]  # the least share of every unit (locked in, manual bounds)
         min_cost = _r_sum(u.cost * locked)
         budgets = _r_seq(min_cost, total_cost, int(n) + 1)[1:]
     budgets = np.asarray(budgets, dtype=np.float64).ravel()

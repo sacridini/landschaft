@@ -397,6 +397,42 @@ def solp_raster():
     return grid(out.reshape(NY, NX))
 
 
+# --- manual bounded and locked constraints: pu = 1-based index among every unit (raster cell, table row)
+
+def bounds_cells():
+    """Bounds of raster cells: planning units (two locked in by locked_in), a cell without cost
+    (skipped) and a unit listed twice (the last bounds hold)."""
+    import pandas as pd
+
+    cells = _units()
+    pu = cells[[0, 5, 20, 40, 41, 90, 5]] + 1
+    li = np.flatnonzero(np.nan_to_num(locked_in().values).ravel() == 1)[:2] + 1
+    nan_cell = np.flatnonzero(~np.isfinite(_cost()).ravel())[0] + 1
+    pu = np.concatenate([pu, li, [nan_cell]]).astype(np.float64)
+    lower = [0.2, 0.0, 0.5, 0.25, 0.0, 0.1, 0.4, 0.0, 0.3, 0.6]
+    upper = [0.8, 0.3, 0.5, 1.0, 0.0, 0.7, 0.9, 0.5, 0.3, 0.9]
+    return pd.DataFrame({"pu": pu, "lower": lower, "upper": upper})
+
+
+def status_cells():
+    """Statuses of raster cells: some in (1), some out (0), one cell of locked_out locked in again."""
+    import pandas as pd
+
+    cells = _units()
+    lo = np.flatnonzero(np.nan_to_num(locked_out().values).ravel() == 1)[:1]
+    pu = np.concatenate([cells[[3, 30, 77, 120]], cells[[10, 60, 61]], lo]) + 1
+    return pd.DataFrame({"pu": pu.astype(np.float64), "status": [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0]})
+
+
+def bounds_rows():
+    """Bounds of rows of pu_table (some without cost, see the case): within [0, 0.6]."""
+    import pandas as pd
+
+    return pd.DataFrame({"pu": [1.0, 3.0, 8.0, 50.0, 51.0, 100.0, 166.0, 8.0],
+                         "lower": [0.1, 0.2, 0.0, 0.3, 0.0, 0.6, 0.05, 0.25],
+                         "upper": [0.5, 0.6, 0.0, 0.4, 0.2, 0.6, 0.35, 0.45]})
+
+
 def sol_table():
     import pandas as pd
 
@@ -406,7 +442,8 @@ def sol_table():
 INPUTS = {f.__name__: f for f in (
     pu_cost, features, shapes, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
     pu_polygons_partial, pa_pu, pa_features, pa_dist_features, pa_threats, pa_dist_threats, pa_sensitivity,
-    pa_boundary, bnd_table, conn_table, asym_table, penalty_raster, adj_table, sol_raster, solp_raster, sol_table)}
+    pa_boundary, bnd_table, conn_table, asym_table, penalty_raster, adj_table, sol_raster, solp_raster, sol_table,
+    bounds_cells, status_cells, bounds_rows)}
 
 
 def build_input(name: str):
@@ -747,6 +784,36 @@ CASES: dict[str, Case] = {
         list(solution = solution_values(s, p), rank = values(r, mat = FALSE), budgets = attr(r, "budgets"),
              objective = attr(r, "objective"))""",
                       notes="min set: budgets for the min shortfall objective, units locked in rank by rank"),
+    # --- bounds: manual bounded and locked constraints (after locked in / out), through every engine
+    "bounds_raster": Case("bounds", (*RASTER, "locked_in", "bounds_cells"), """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_locked_in_constraints(locked_in) |> add_manual_bounded_constraints(bounds_cells) |>
+                  add_proportion_decisions())""", notes="a unit listed twice, a cell without cost"),
+    "bounds_locked_raster": Case("bounds", (*RASTER, "locked_out", "status_cells"), """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_locked_out_constraints(locked_out) |> add_manual_locked_constraints(status_cells) |>
+                  add_binary_decisions())"""),
+    "bounds_twice": Case("bounds", (*RASTER, "bounds_cells", "status_cells"), """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_manual_bounded_constraints(bounds_cells) |> add_manual_locked_constraints(status_cells) |>
+                  add_proportion_decisions())""", notes="the later constraint wins"),
+    "bounds_table_semicontinuous": Case("bounds", ("pu_table", "bounds_rows"), """
+        t <- pu_table; t$cost[c(3, 50, 51, 120)] <- NA
+        reference(problem(t, features = paste0("f", 1:5), cost_column = "cost") |>
+                  add_min_set_objective() |> add_relative_targets(0.2) |>
+                  add_manual_bounded_constraints(bounds_rows) |> add_semicontinuous_decisions(0.6))""",
+                                        notes="rows without cost skipped"),
+    "bounds_max_utility": Case("bounds", (*RASTER, "status_cells"), """
+        reference(problem(pu_cost, features) |> add_max_utility_objective(2500) |>
+                  add_manual_locked_constraints(status_cells) |> add_binary_decisions())""", notes="wide engine"),
+    "bounds_boundary": Case("bounds", (*RASTER, "status_cells"), """
+        reference(problem(pu_cost, features) |> add_min_set_objective() |> add_relative_targets(0.3) |>
+                  add_boundary_penalties(0.5) |> add_manual_locked_constraints(status_cells) |>
+                  add_binary_decisions())""", notes="cut engine"),
+    "bounds_min_penalties": Case("bounds", (*RASTER, "status_cells"), """
+        reference(problem(pu_cost, features) |> add_min_penalties_objective(4000) |> add_relative_targets(0.2) |>
+                  add_boundary_penalties(0.5) |> add_manual_locked_constraints(status_cells) |>
+                  add_binary_decisions())""", notes="closure engine"),
     # --- calibrate: prioritizr's "Calibrating trade-offs" tutorial on Gurobi at gap 0 (optima only)
     "calibrate_hierarchical": Case("calibrate", RASTER, """
         g <- function(p) add_gurobi_solver(p, gap = 0, threads = 1, verbose = FALSE)
@@ -976,6 +1043,27 @@ PY_SPATIAL.update({
     .add_feature_contiguity_constraints(data=_matrix(adj_table(), len(pu_table()))).add_binary_decisions(),
 })
 for _name, _fn in PY_SPATIAL.items():
+    CASES[_name].py = _fn
+
+
+PY_BOUNDS: dict[str, Callable] = {
+    "bounds_raster": lambda: _rp().add_min_set_objective().add_relative_targets(0.3)
+    .add_locked_in_constraints(locked_in()).add_manual_bounded_constraints(bounds_cells()).add_proportion_decisions(),
+    "bounds_locked_raster": lambda: _rp().add_min_set_objective().add_relative_targets(0.3)
+    .add_locked_out_constraints(locked_out()).add_manual_locked_constraints(status_cells()).add_binary_decisions(),
+    "bounds_twice": lambda: _rp().add_min_set_objective().add_relative_targets(0.3)
+    .add_manual_bounded_constraints(bounds_cells()).add_manual_locked_constraints(status_cells())
+    .add_proportion_decisions(),
+    "bounds_table_semicontinuous": lambda: _table_na_cost().add_relative_targets(0.2)
+    .add_manual_bounded_constraints(bounds_rows()).add_semicontinuous_decisions(0.6),
+    "bounds_max_utility": lambda: _rp().add_max_utility_objective(2500)
+    .add_manual_locked_constraints(status_cells()).add_binary_decisions(),
+    "bounds_boundary": lambda: _rp().add_min_set_objective().add_relative_targets(0.3).add_boundary_penalties(0.5)
+    .add_manual_locked_constraints(status_cells()).add_binary_decisions(),
+    "bounds_min_penalties": lambda: _rp().add_min_penalties_objective(4000).add_relative_targets(0.2)
+    .add_boundary_penalties(0.5).add_manual_locked_constraints(status_cells()).add_binary_decisions(),
+}
+for _name, _fn in PY_BOUNDS.items():
     CASES[_name].py = _fn
 
 

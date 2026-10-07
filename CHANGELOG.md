@@ -49,6 +49,11 @@ in a new major version.
 - HiGHS's MIP kept running up to 20 s past the time limit on wide models (10⁵ columns, 10⁶ non-zeros):
   two changes to its sources (applied at build time by `src/cpp/opt/highs_patch.cmake`) make the central
   rounding's line search and the analytic centre keep the limits.
+- `Problem.add_manual_bounded_constraints` and `add_manual_locked_constraints` (prioritizr 8.0.6's, and
+  prioripy's `add_continuous_bounds`): bounds or a fixed share for given planning units, from prioritizr's
+  table (`pu` among every unit, `lower` / `upper` or `status`) or as values (a number, a raster on the
+  units' grid, a column or one value per unit). The compiled model is prioritizr's bit for bit; bounds
+  outside the decisions' bounds, or shares with binary decisions, are an error.
 
 ## [1.29.0] - 2026-10-07
 

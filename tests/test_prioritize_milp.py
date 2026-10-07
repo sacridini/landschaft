@@ -19,8 +19,8 @@ from optimize_reference import case_ids, model, result
 import landschaft as ls
 from landschaft import _core
 
-PY_CASES = [(g, c) for g in ("core", "objectives", "spatial") for c in case_ids(g) if optimize_cases.CASES[c].py is not None]
-ALL = [(g, c) for g in ("core", "objectives", "spatial", "actions") for c in case_ids(g)]
+PY_CASES = [(g, c) for g in ("core", "objectives", "spatial", "bounds") for c in case_ids(g) if optimize_cases.CASES[c].py is not None]
+ALL = [(g, c) for g in ("core", "objectives", "spatial", "bounds", "actions") for c in case_ids(g)]
 # contiguity: prioritizr's formulation is a restriction (it misses patches); ours is exact (see below)
 EXACT = [(g, c) for g, c in PY_CASES if "contiguity" not in c]
 CONTIGUITY = [(g, c) for g, c in PY_CASES if "contiguity" in c]

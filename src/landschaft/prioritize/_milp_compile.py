@@ -562,6 +562,9 @@ def compile_problem(p):
         raise ValueError(f"{int((li & lo).sum())} planning units are both locked in and locked out")
     lb_v[:n][li] = 1.0
     ub_v[:n][lo] = 0.0
+    if p.bounds:  # manual bounded / locked constraints, in the order added (after the locked units)
+        limit = 1.0 if p.decisions[0] != "semicontinuous" else float(p.decisions[1])
+        p._manual_bounds(lb_v[:n], ub_v[:n], p.decisions[0] == "binary", limit)
     return OptimizationProblem(
         A=A, obj=obj_v, lb=lb_v, ub=ub_v, rhs=np.concatenate([np.asarray(x, dtype=np.float64) for x in rhs]),
         sense=tuple(sense), vtype=tuple(vtype), modelsense=modelsense,

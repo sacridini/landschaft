@@ -132,6 +132,8 @@ ls.plot(ranks)
 |---|---|
 | `add_locked_in_constraints(x)` | `.add_locked_in_constraints(x)` (a raster with 1, a column name, booleans or indices) |
 | `add_locked_out_constraints(x)` | `.add_locked_out_constraints(x)` |
+| `add_manual_locked_constraints(data)` | `.add_manual_locked_constraints(data)` (the same table: `pu`, `status`), or `status=` as a number, raster, column or values |
+| `add_manual_bounded_constraints(data)` | `.add_manual_bounded_constraints(data)` (`pu`, `lower`, `upper`), or `lower=` / `upper=` |
 | `add_linear_constraints(threshold, sense, data)` | `.add_linear_constraints(threshold, sense, data)` |
 | `add_cost_constraints()` (9) | `.add_linear_constraints(threshold, "<=", cost)` |
 | `add_contiguity_constraints(data)` | `.add_contiguity_constraints(data)` (an exact model: see below) |
@@ -205,8 +207,8 @@ solution's pattern), `P.compare_zonation` (a Zonation ranking cut at the solutio
 
 ### Not available
 
-Multiple zones (`zones()`, `add_mandatory_allocation_constraints()`,
-`add_manual_bounded_constraints()`), neighbour penalties (`add_neighbor_penalties()`), the
+Multiple zones (`zones()`, `add_mandatory_allocation_constraints()`, the `zone` column of the
+manual constraints), neighbour penalties (`add_neighbor_penalties()`), the
 weighted-sum and reference-point approaches of `multi_problem()` (9), `presolve_check()` and the target
 methods of 8.1 (`spec_*_targets()`). Open an issue if you need one of them.
 
@@ -319,7 +321,7 @@ prioritizr's models exactly, so some results change (see the next section).
 | `add_corridors(terminals, resistance)` | `.add_corridor_constraints(terminals, resistance, penalty)` |
 | `add_boundary_penalties`, `add_connectivity_penalties`, `add_linear_penalties` | the same (the connectivity penalties now work in every objective) |
 | `add_neighbor_penalties(penalty, data)` | not available |
-| `add_continuous_bounds(upper, lower)` | `.add_proportion_decisions()` or `.add_semicontinuous_decisions(upper_limit)` |
+| `add_continuous_bounds(upper, lower)` | `.add_proportion_decisions().add_manual_bounded_constraints(lower=lower, upper=upper)` |
 | `add_solver("auto")`, `add_highs_solver(gap, time_limit)`, `add_gurobi_solver(...)` | `.add_highs_solver(gap, time_limit)`, `.add_gurobi_solver(...)` |
 | `add_single_portfolio`, `add_top_portfolio`, `add_cuts_portfolio`, `add_gap_portfolio`, `add_shuffle_portfolio`, `add_extra_portfolio` | the same (`add_extra_portfolio` → `add_gap_portfolio`), all on HiGHS as well |
 | `add_actions(...)`, `add_threats(...)`, `add_sensitivity(...)`, `add_multi_action_boundary_penalties(...)` | `P.actions_raster_data(monitoring_cost, features, threats, action_cost, sensitivity=..., blm_actions=...)` |

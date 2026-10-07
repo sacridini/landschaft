@@ -376,6 +376,60 @@ def _table_units(x: pd.DataFrame, features, cost_column: str, rij) -> Units:
     return Units("table", cost[rows], m, totals, tuple(str(n) for n in spec["name"]), x, rows, all_rij=full)
 
 
+# ----------------------------------------------------------------------------- manual bounds
+
+def _check_bounds_table(data, value_cols: tuple[str, ...]) -> pd.DataFrame:
+    """prioritizr's checks of a manual bounded / locked table: ``pu`` whole numbers from 1 (units without
+    cost are skipped), finite values, upper >= lower; ``zone`` only as a single zone."""
+    d = pd.DataFrame(data).copy()
+    what = "manual locked constraints" if value_cols == ("status",) else "manual bounded constraints"
+    if len(d) == 0:
+        raise ValueError(f"{what}: the table is empty")
+    for c in ("pu", *value_cols):
+        if c not in d.columns:
+            raise ValueError(f"{what}: the table needs a {c!r} column")
+        v = pd.to_numeric(d[c], errors="raise").to_numpy(dtype=np.float64)
+        if not np.isfinite(v).all():
+            raise ValueError(f"{what}: {c!r} must be finite")
+        d[c] = v
+    pu = d["pu"].to_numpy()
+    if (pu != np.round(pu)).any() or pu.min() < 1:
+        raise ValueError(f"{what}: 'pu' must hold whole numbers from 1 (1-based unit indices)")
+    if value_cols == ("lower", "upper") and (d["upper"] < d["lower"]).any():
+        raise ValueError(f"{what}: an upper bound is below its lower bound")
+    if "zone" in d.columns and d["zone"].nunique() > 1:
+        raise ValueError(f"{what}: zones are not supported (one zone only)")
+    return d
+
+
+def _bound_values(u, data, what: str) -> np.ndarray:
+    """One value per planning unit (NaN kept): a number, a raster on the units' grid, a column of their
+    table, or values per planning unit or per cell / row."""
+    if data is None:
+        return np.full(u.n, np.nan)
+    if np.ndim(data) == 0 and not isinstance(data, str):
+        return np.full(u.n, float(data))
+    total = u.template.size if u.kind == "raster" else len(u.template)
+    if isinstance(data, str):
+        if u.kind == "raster":
+            raise TypeError(f"{what}: a column name needs table or polygon planning units")
+        v = u.template[data].to_numpy(dtype=np.float64)
+    elif isinstance(data, xr.DataArray):
+        if u.kind != "raster":
+            raise TypeError(f"{what}: a raster needs raster planning units")
+        v = np.asarray(data.squeeze().values, dtype=np.float64)
+        if v.shape != u.template.shape:
+            raise ValueError(f"{what}: the raster must be on the planning units' grid")
+        v = v.ravel()
+    else:
+        v = np.asarray(data, dtype=np.float64).ravel()
+        if v.size == u.n:
+            return v
+    if v.size != total:
+        raise ValueError(f"{what}: one value per planning unit ({u.n}) or per unit ({total}), got {v.size}")
+    return v[u.index]
+
+
 # ----------------------------------------------------------------------------- problem
 
 @dataclass(frozen=True)
@@ -387,6 +441,7 @@ class Problem:
     targets: tuple | None = None
     locked_in: object = None
     locked_out: object = None
+    bounds: tuple = ()  # manual bounded and locked constraints, ("bounded" | "locked", data) in the order added
     decisions: tuple = ("binary",)
     solver: tuple = ("highs", {})
     weights: object = None
@@ -666,6 +721,104 @@ class Problem:
     def add_locked_out_constraints(self, locked) -> Problem:
         """Planning units that must not be selected (as :meth:`add_locked_in_constraints`)."""
         return self._with(locked_out=locked)
+
+    def add_manual_bounded_constraints(self, data: pd.DataFrame | None = None, *, lower=None,
+                                       upper=None) -> Problem:
+        """The selected share of given planning units must lie between a lower and an upper bound
+        (prioritizr's ``add_manual_bounded_constraints``; prioripy's ``add_continuous_bounds``).
+
+        Parameters
+        ----------
+        data
+            prioritizr's table: a ``pu`` column (the 1-based index of the unit among *all* units: the
+            cell of the raster, row-major, or the row of the table, with or without cost; units
+            without cost are skipped), ``lower`` and ``upper``. A unit listed twice keeps its last
+            bounds.
+        lower, upper
+            The same as values instead of a table: a number for every planning unit, a raster on the
+            planning units' grid, a column of their table, or one value per planning unit (or per
+            cell or row). A unit with NaN in both is left alone; a NaN (or a side not given) takes the
+            decisions' own bound (0, or 1 or the semicontinuous limit).
+
+        Notes
+        -----
+        The bounds overwrite the units' bounds in the order the manual constraints were added, after
+        :meth:`add_locked_in_constraints` and :meth:`add_locked_out_constraints`. They must lie within
+        the decisions' bounds, and with binary decisions be 0 or 1 (prioritizr accepts a share there and
+        the solver rounds it): both raise an error when the problem is compiled.
+        """
+        if data is None and lower is None and upper is None:
+            raise ValueError("give a table (data) or lower= / upper=")
+        if data is not None and (lower is not None or upper is not None):
+            raise ValueError("give either a table (data) or lower= / upper=, not both")
+        spec = _check_bounds_table(data, ("lower", "upper")) if data is not None else (lower, upper)
+        return self._with(bounds=(*self.bounds, ("bounded", spec)))
+
+    def add_manual_locked_constraints(self, data: pd.DataFrame | None = None, *, status=None) -> Problem:
+        """Fix the selected share of given planning units (prioritizr's ``add_manual_locked_constraints``):
+        a ``status`` of 1 locks a unit in, 0 out, a share in between (proportion decisions) fixes it.
+
+        Parameters
+        ----------
+        data
+            prioritizr's table: ``pu`` (as in :meth:`add_manual_bounded_constraints`) and ``status``.
+        status
+            The same as values: a number, a raster on the planning units' grid, a column of their table
+            or one value per planning unit; NaN leaves a unit alone.
+        """
+        if (data is None) == (status is None):
+            raise ValueError("give either a table (data) or status=")
+        spec = _check_bounds_table(data, ("status",)) if data is not None else (status, status)
+        return self._with(bounds=(*self.bounds, ("locked", spec)))
+
+    def _manual_bounds(self, lb: np.ndarray, ub: np.ndarray, binary: bool, limit: float) -> None:
+        """Apply the manual bounded and locked constraints to the units' bounds (in place)."""
+        u = self.units
+        for kind, spec in self.bounds:
+            what = f"manual {kind} constraints"
+            if isinstance(spec, pd.DataFrame):
+                total = u.template.size if u.kind == "raster" else len(u.template)
+                pu = spec["pu"].to_numpy(dtype=np.float64)
+                if pu.max(initial=0) > total:
+                    raise ValueError(f"{what}: pu goes up to {int(pu.max())}, but there are {total} units")
+                pos = np.full(total + 1, -1, dtype=np.int64)  # 1-based unit -> planning unit (prioritizr's match)
+                pos[u.index + 1] = np.arange(u.n)
+                j = pos[pu.astype(np.int64)]
+                keep = j >= 0
+                j = j[keep]
+                cols = ("status", "status") if kind == "locked" else ("lower", "upper")
+                lo = spec[cols[0]].to_numpy(dtype=np.float64)[keep]
+                hi = spec[cols[1]].to_numpy(dtype=np.float64)[keep]
+            else:
+                a = _bound_values(u, spec[0], what)
+                b = a if kind == "locked" else _bound_values(u, spec[1], what)
+                keep = ~(np.isnan(a) & np.isnan(b))
+                j = np.flatnonzero(keep)
+                lo = np.where(np.isnan(a[keep]), 0.0, a[keep])
+                hi = np.where(np.isnan(b[keep]), limit, b[keep])
+                if not (np.isfinite(lo).all() and np.isfinite(hi).all()):
+                    raise ValueError(f"{what}: the bounds must be finite")
+                if (hi < lo).any():
+                    raise ValueError(f"{what}: an upper bound is below its lower bound")
+            if lo.size and (lo.min() < 0 or hi.max() > limit):
+                raise ValueError(f"{what}: the bounds must lie within the decisions' bounds [0, {limit:g}]")
+            if binary and lo.size and not (np.isin(lo, (0.0, 1.0)).all() and np.isin(hi, (0.0, 1.0)).all()):
+                raise ValueError(f"{what}: with binary decisions the bounds must be 0 or 1 (use proportion "
+                                 "decisions for shares of units)")
+            # prioritizr's loop: in table order, a unit listed again keeps its last bounds
+            lb[j] = lo
+            ub[j] = hi
+
+    def _unit_bounds(self) -> tuple[np.ndarray, np.ndarray]:
+        """The planning units' bounds as compiled: the decisions', the locked units', the manual ones."""
+        n = self.units.n
+        limit = 1.0 if self.decisions[0] != "semicontinuous" else float(self.decisions[1])
+        lb, ub = np.zeros(n), np.full(n, limit)
+        lb[self._mask(self.locked_in)] = 1.0
+        ub[self._mask(self.locked_out)] = 0.0
+        if self.bounds:
+            self._manual_bounds(lb, ub, self.decisions[0] == "binary", limit)
+        return lb, ub
 
     def _mask(self, locked) -> np.ndarray:
         u = self.units

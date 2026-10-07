@@ -48,9 +48,10 @@ class ZonationComparison(Saveable):
 
 def _zonation_selection(p, rank_values: np.ndarray, budget: float) -> np.ndarray:
     """The units from the highest rank down while their cost fits the budget (locked-in units first,
-    locked-out never)."""
+    locked-out never; manual bounds: a lower bound above 0 locks in, an upper bound of 0 out)."""
     u = p.units
-    li, lo = p._mask(p.locked_in), p._mask(p.locked_out)
+    lb, ub = p._unit_bounds()
+    li, lo = lb > 0, ub == 0
     r = np.where(np.isfinite(rank_values), rank_values, -np.inf)
     order = np.lexsort((np.arange(u.n), -r))  # highest rank first, then the unit order
     order = np.concatenate([order[li[order]], order[~li[order] & ~lo[order]]])

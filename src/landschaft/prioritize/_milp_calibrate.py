@@ -341,7 +341,7 @@ def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> 
         raise ValueError("pareto_front needs targets")
     if budgets is None:
         top = p.add_min_set_objective().solve().cost
-        fixed = 0.0 if p.locked_in is None else float(np.dot(p.units.cost, p._mask(p.locked_in)))
+        fixed = float(np.dot(p.units.cost, p._unit_bounds()[0]))
         budgets = np.linspace(fixed + (top - fixed) / n, top, int(n))  # the locked-in units' cost is spent anyway
     budgets = np.asarray(budgets, dtype=np.float64).ravel()
     problems = [p.add_min_shortfall_objective(float(b)) for b in budgets]
