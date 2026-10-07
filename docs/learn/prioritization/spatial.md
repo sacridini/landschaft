@@ -130,10 +130,11 @@ a single winding network that reaches every feature, at a much higher cost. A co
 (purple): the parks are linked by a chain of cheap blocks, and the rest of the plan stays free.</figcaption>
 </figure>
 
-On these blocks the cost grows from 24.9 million USD with no rule to 27.8 with two neighbours and 31.8 with a
-single network. Contiguity is the most demanding rule: it is practical for small problems, or when the
-features lie close to each other. For a whole region, prefer penalties, and use corridors between a few
-terminals.
+On these blocks the cost grows from 24.9 million USD with no rule to 27.8 with two neighbours and 31.7 with a
+single network. Contiguity is the most demanding rule. Here two minutes give a network but do not prove it
+is the cheapest: its cost is within 17 % of the bound (Gurobi, in ten minutes, finds a network of 30.3 and
+proves it within 4 %). It is practical for small problems, or when the features lie close to each other. For
+a whole region, prefer penalties, and use corridors between a few terminals.
 
 ## Connectivity beyond adjacency
 

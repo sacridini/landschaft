@@ -260,9 +260,18 @@ find hard on their own.
 | multi-action with boundaries | 10⁴ | | 7.5 s | 0.18 s | 1.22 |
 | multi-action with river dependencies (soft / hard) | 10⁵ | | 6 s / 8 s | 1 s / 5.5 s | 1.22 |
 
-Contiguity constraints are the exception: neither HiGHS nor Landschaft has
-cuts inside the branch and bound yet, and Gurobi is faster on them from a few
-thousand units.
+Contiguity constraints are the exception. prioritizr's contiguity model is a
+restriction (it misses some patches, see the
+[migration guide](api/prioritization-migration.md#what-to-expect-when-you-compare-the-results));
+Landschaft solves the exact model, starting from a patch of the restricted one
+and with directed cuts added before the branch and bound. On prioritizr's
+contiguity test problems (166 units, a raster and a table) it proves a gap of
+5 % in 1 to 1.5 s and finds patches as cheap as or cheaper than prioritizr's
+optimum. On larger
+problems the bound stays weak without cuts inside the branch and bound: on
+Serra Verde at 3 km (543 units, 8 features) Landschaft's network after 120 s is
+4.6 % above the best Gurobi finds in 600 s, with a proven gap of 17 % (Gurobi's,
+3.8 %).
 
 ### Species distributions
 

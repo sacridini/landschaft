@@ -1836,8 +1836,8 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   12.929 resoluções no Gurobi).
   * Linux (WSL, gcc 13): 362 passam, 0 falham (o `pnorm` com o `exp` x87 inline dá os mesmos bits). Versão
     **1.23.0**.
-  * **ProxIRR** (Baisero et al.) não existe no prioritizr 8.0.6 nem há implementação de referência à mão: fica
-    para a fase 8 (clean-room pelo artigo, se pedido).
+  * **ProxIRR** (Baisero et al.) não existe no prioritizr 8.0.6. Há referência: o pacote `proxirr` 0.5 do
+    CRAN (MIT); ver "Lacunas em relação ao prioripy".
 
 ### Andamento da fase 7 (calibração e trade-offs)
 * **Fase 7 completa** (2026-10-04): `_milp_calibrate.py`, pelo tutorial "Calibrating trade-offs" do prioritizr:
@@ -1915,7 +1915,7 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   prioripy). Aliases com os nomes do prioritizr 9 e mais novos: `add_max_wtd_sum_objective`,
   `add_max_n_targets_met_objective`, `add_neighbor_constraints` (o modelo continua o do 8.0.6).
 
-### Andamento das pendências de pesquisa (fase 11, iniciada em 2026-10-07; em pausa, sem versão nova)
+### Andamento das pendências de pesquisa (fase 11, iniciada em 2026-10-07)
 * **Contiguidade exata** (feito, commitado, ainda sem release). **Bug do prioritizr (8.0.6 e 9.0)**: a
   formulação do `add_contiguity_constraints` (Önal e Briers 2006 na documentação) só cria uma aresta por par
   vizinho, do maior índice para o menor (`tril` + `sum y_ij <= x_j` por coluna): é uma **restrição**. Toda
@@ -1951,19 +1951,108 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   re-soluções (10⁴ unidades); `max_features`: aperto de coeficientes min(a_i, t_f) nas linhas de meta (sem
   efeito: quantidades por unidade << metas) e heurística gulosa por cobertura (8 metas contra 9 do motor atual e
   10 do Gurobi; 10⁴ unidades, 30 feições, orçamento 10 %: limites 17,7 nosso e 14,5 Gurobi em 120 s).
+* **Documentação e release 1.29.0** (2026-10-07): Learn 12.5 e `docs/benchmarks.md` com os números novos. Serra
+  Verde em blocos de 3 km (543 unidades, 8 feições, metas 20 %), contiguidade, 120 s: rede de 31.683 com gap
+  provado de 17 % (antes, no modelo restrito do prioritizr, 31,8 mil); o Gurobi no modelo exato em 600 s acha
+  30.300 (gap 3,8 %). Fica como pendência: o limite (cortes dentro do B&B) e a parte primal (busca local em
+  manchas) em problemas de centenas de unidades com várias feições.
 * Ambiente: `tests/test_zonal_extract.py` usa `np.long` (numpy 2); com numpy 1.26 a coleta falha (não
   relacionado). A suíte de priorização: 670 passam; `test_covering_keeps_the_time_limit_on_wide_models` falhou
   só sob disputa de CPU (passa sozinho).
 
+### Lacunas em relação ao prioripy (levantamento de 2026-10-04)
+Comparação da API pública inteira do prioripy 0.11.11 com o `ls.prioritize` 1.26.0. Já cobertos por outro
+caminho: condition layer e suavização (`zonation_features`), variável extra no max utility (mais uma feição com
+peso), `calibrate_feature_weight` (`calibrate` + `knee_point`), `eval_irreplaceability` (`Portfolio.frequency`),
+`calc_extinction_risk_features` (`add_min_extinction_risk_objective`), relatórios e mapas (`report`, `ls.plot`),
+`solve_iteratively` (`iterative_solve`), ameaças, sensibilidade e fronteira multi-ação (`actions_data`). Não
+portar: `eval_marginal_loss` e `eval_roi_vulnerability` (fórmulas do próprio prioripy, sem referência; a
+importância já tem replacement, Ferrier e rare richness). Conferido em 2026-10-04: não vêm do plangea, que não
+tem perda marginal, ROI, ameaça nem vulnerabilidade (entraram no commit `6838343` do prioripy). O ROI lembra o
+coeficiente benefício/custo do LP do plangea, e o que o plangea tem de fato entra na seção "Restauração a partir
+do plangea". Entram as três abaixo, sem ordem obrigatória.
+
+1. **Limites por unidade de planejamento** (o `add_continuous_bounds(upper_bounds, lower_bounds)` do
+   prioripy). O prioritizr 8.0.6 tem o mesmo em `add_manual_bounded_constraints(x, data)` e
+   `add_manual_locked_constraints(x, data)`, que ainda não temos: a referência passa a ser o prioritizr, com
+   compilação bitwise (fonte no git `b3023f9f`, `R/add_manual_*_constraints.R` e
+   `src/rcpp_apply_{bounded,locked}_constraints.cpp`).
+   * Semântica do prioritizr: `data` com `pu` (índice nas unidades TOTAIS, inclusive células sem custo; as que
+     não são unidades de planejamento são descartadas pelo `match`), `zone` opcional, `lower`/`upper`
+     (bounded) ou `status` (locked). O C++ só sobrescreve `lb`/`ub` da coluna `(zone - 1) * n_pu + (pu - 1)`,
+     na ordem em que as restrições foram adicionadas (a última vence). Validação: `upper >= lower`, finitos,
+     `pu` inteiro em `[0, n_total]`. Não valida `lower >= 0`, `upper <= 1` nem a coerência com o tipo de
+     decisão (com binárias, `lower = 0,5` vira 1 pela integralidade). Locked com todos os `status` 1 ou 0 vira
+     o mesmo objeto de `add_locked_in/out_constraints`.
+   * API: os nomes do prioritizr aceitando DataFrame (`pu`, `lower`, `upper` / `status`), mais a forma fácil
+     do prioripy pela regra de E/S: `lower=`/`upper=` (ou `status=`) como escalar, raster na grade das
+     unidades, array ou nome de coluna dos polígonos/H3. Com unidades raster, `pu` é o índice da célula na
+     grade inteira, como no prioritizr.
+   * A decidir na implementação: com decisões binárias e limites fracionários, erro claro (é a forma correta;
+     o prioritizr aceita em silêncio) ou arredondamento explícito; `lower < 0` ou `upper` acima do limite das
+     decisões: erro. Ver como os limites passam pelo pré-solve, pelos motores próprios (cobertura, wide, cut,
+     closure, anneal: colunas com `lb > 0` são fixadas como locked in parciais, `ub < 1` entra na escala da
+     coluna) e pelos portfólios de cortes (as no-good cuts supõem colunas 0/1).
+   * Paridade: `compile()` bitwise com o prioritizr nas três decisões (binária, proporção, semicontínua),
+     raster com NA e polígonos; ótimo igual ao do Gurobi em gap 0; o prioriactions não tem equivalente.
+
+2. **Landscape Identification e Landscape Comparison sobre qualquer superfície** (`eval_landscape_identification`
+   e `eval_landscape_comparison` do prioripy). Hoje só existem para o rank do Zonation
+   (`ZonationResult.area_statistics_separate_areas`, `area_statistics_rank_range`, `solution_comparison`, em
+   `_postprocess.py`, com paridade com o Zonation 5) e para a comparação MILP x Zonation (`compare_zonation`).
+   * Generalizar para superfícies do MILP e de fora: `eval_ferrier_importance`, `eval_rank_importance`,
+     `eval_replacement_importance`, `Portfolio.frequency`, um rank do Zonation ou qualquer raster de valores.
+   * Identificação: a fração do topo vira máscara (como o `rank_range_mask`), áreas 8-conexas numeradas em ordem
+     de linhas, áreas abaixo de `min_size` descartadas (o `separate_areas`), mais o `merge_distance` do prioripy
+     (dilatação antes de rotular, rótulos só nas células originais) e a opção de 4-conexidade. Por área:
+     tamanho, importância média, custo e a soma e a fração de cada feição (o `area_statistics`).
+   * Comparação: em cada fração do topo, Jaccard, fração de A coberta por B e as contagens de células; tabela
+     e gráfico registrados no `ls.plot`.
+   * Definir os empates no limiar: o prioripy usa `np.quantile` com `>=` (pode pegar mais células que a fração).
+     Usar a regra do Zonation (fração por posição no rank, empates pela ordem do rank) e documentar.
+   * Paridade: com o rank do Zonation como superfície, identificação e comparação dão os mesmos bits que o
+     pós-processamento do Zonation já portado; o resto contra uma implementação direta à mão (scipy).
+   * Nomes a decidir: `eval_landscape_identification(surface, top_fraction, ...)` e
+     `eval_landscape_comparison(a, b, fractions)` no padrão dos `eval_*`, com a superfície como dado (raster ou
+     resultado de `eval_*`) e o problema opcional (só para as feições e o custo).
+
+3. **ProxIRR** (Baisero, Schuster & Plumptre 2021, "Redefining and Mapping Global Irreplaceability",
+   *Conservation Biology*, doi:10.1111/cobi.13806). Referência: o pacote **`proxirr` 0.5** do CRAN
+   (2025-10-27, MIT, R puro, sem compilação; tarball em
+   `https://cran.r-project.org/src/contrib/proxirr_0.5.tar.gz`). Ainda não está no R lib: instalar para o
+   harness.
+   * Fórmulas (`R/dot_alphabeta.R`), por feição na unidade, com `local` = quantidade na unidade, `global` =
+     total disponível e `target` = meta absoluta: alpha = 0 se `target == 0`; 0 se `triage` e
+     `target > global`; se `target >= global`, 1 quando `local > 0`, senão 0; caso geral
+     `min(1, local / (global - target))`. Beta da unidade = `1 - prod(1 - alpha)`. Gamma = número de feições
+     com alpha == 1 + beta das demais (permite ordenar unidades onde o beta satura em 1). Erros: `local < 0`,
+     `global <= 0`, `target < 0`, `local > global`.
+   * No `ls.prioritize`: `eval_proxirr(p, triage=False)` sobre o problema compilado (`local` da matriz de
+     feições, `global` = os totais que as metas relativas usam, `target` = as metas absolutas do problema,
+     inclusive as sub-regionais e as loglineares), devolvendo alpha por feição (esparso, como a matriz) e beta e
+     gamma por unidade, em raster ou na tabela das unidades. Em C++ (OpenMP por unidade; o produto em ordem
+     fixa das feições, para bits estáveis). Também aceitar um projeto do Marxan (`ls.prioritize.marxan`), como
+     o `marxan_alphas/betas/gammas` do pacote.
+   * Bug do `proxirr` a não portar (só a forma correta, testada contra a referência corrigida no harness):
+     `marxan_alphas` busca os parâmetros da feição por `lalpha[[x]]` com `x` = id da espécie, ou seja por
+     POSIÇÃO na lista e não pelo id: com ids do `spec.dat` que não são 1..n em ordem, cada feição recebe o
+     total e a meta de outra. Também: `marxan_betas/gammas` chamam `.beta/.gamma` sem `na.rm`, e uma espécie
+     ausente do `spec.dat` (alpha NA) derruba a unidade com erro.
+   * Paridade: alpha, beta e gamma bitwise contra o `proxirr` (as funções vetorizadas sobre os mesmos
+     `local/global/target`; o produto do R é sequencial em double), nos exemplos do pacote, em casos com
+     `triage`, metas inalcançáveis e meta zero, e nos problemas do harness (raster com NA, polígonos).
+
 ### Próximos passos (retomar daqui)
-1. Fase 11, o que falta: documentação da contiguidade exata (Learn 12.5 `spatial.md`: os números 31,8 da figura
-   de 3 km podem mudar; `docs/benchmarks.md`: trocar o parágrafo "Contiguity constraints are the exception");
-   CHANGELOG e release (1.29.0). Depois: filogenéticos em 10⁶, multi-action com fronteira em gap 0 e o núcleo
+1. Fase 11, o que falta (a documentação da contiguidade exata saiu na 1.29.0): filogenéticos em 10⁶, multi-action com fronteira em gap 0 e o núcleo
    simétrico, fluxos dinâmicos (Kohli e Torr) e reparo paralelo no motor de cortes, heurística melhor para o
    `max_features` (busca local com trocas de metas).
 2. Depois da fase 11: desempenho das métricas de paisagem e reprojeção (ordem pedida pelo usuário).
-3. Sob pedido: ProxIRR (Baisero et al. 2021, clean-room pelo artigo), zonas do prioritizr,
-   `add_neighbor_penalties`.
+3. **Lacunas em relação ao prioripy** (seção acima): limites por unidade (`add_manual_bounded/locked_constraints`),
+   Landscape Identification/Comparison sobre qualquer superfície e ProxIRR.
+4. **Restauração a partir do plangea** (seção própria, logo abaixo): habitat e vegetação original, problema de
+   restauração com SAR exata, integridade de Beyer e propagação de erros. Os limites por unidade do item 3 são
+   pré-requisito do problema de restauração.
+5. Sob pedido: zonas do prioritizr, `add_neighbor_penalties`.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
@@ -1971,6 +2060,155 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   licença do código do Marxan 4: se for compatível, portar com paridade contra o executável com semente fixa;
   senão, clean-room pelo artigo); o multi-action fica na fase 5; o HiGHS é embutido no `_core` (ver
   "Desenho"), com o `highspy` só para o benchmark da fase 0.
+
+---
+
+## Restauração a partir do plangea (`ls.prioritize`, mais duas ferramentas gerais)
+
+Pedido em 2026-10-04: trazer do plangea o problema de restauração, a integridade ecológica, a preparação de
+habitat e vegetação original, mais uma função geral de propagação de erros. Nada disso existe hoje: o
+`ls.prioritize` escolhe unidades para proteger e não modela quanto de cada pixel convertido restaurar, nem o
+habitat que volta para cada espécie conforme a classe natural restaurada. O `ls.restoration` atual é outra coisa
+(as ferramentas de restauração do GuidosToolbox: ECA, corredores, distância de custo).
+
+### Referência
+* **plangea** (`C:\Users\eduar\Documents\dev\plangea-pkg-dev`), pacote R do IIS (International Institute for
+  Sustainability), DESCRIPTION 0.1.0, **GPL >= 3** (compatível com o landschaft), arquivos de janeiro de 2024.
+  A pasta não é repositório git: não há versão fixa, então copiar o estado usado para o harness (hash dos
+  `R/*.R`) e não mexer na pasta. Não está no CRAN nem instalado; das dependências só o `raster` está no R lib
+  (faltam `Rsymphony`, `qs`, `fmsb`, `doSNOW`, `snow`, `doParallel`, `progress`, `cli`...). O harness chama as
+  funções internas direto com `devtools::load_all` e entradas pequenas, sem o JSON de configuração nem o
+  cache de pastas do `harmonize`.
+* Artigos: Strassburg et al. 2020, "Global priority areas for ecosystem restoration", *Nature* 586:724-729
+  (o modelo); Beyer et al. 2020, "Substantial losses in ecoregion intactness highlight urgency of globally
+  coordinated action", *Conservation Letters* 13:e12692 (a integridade); Brooks et al. 2019, "Measuring
+  terrestrial Area of Habitat (AOH) and its utility for the IUCN Red List", *TREE* 34:977-986 (área de
+  habitat).
+
+### Como o plangea funciona (`R/scen.R`)
+* Decisão contínua por pixel: a fração da área do pixel restaurada (`R`), conservada (`C`) ou convertida (`D`,
+  x negativo com limite inferior). Limite superior = fração restaurável (área antrópica) x `blim` (constantes
+  e rasters modificadores por classe; por sub-região, os limites econométricos).
+* Restrições: meta de área na paisagem (ou de custo de oportunidade) e por sub-região (estados, ecorregiões,
+  com tabela de metas e sentido por zona); combinações de zoneamentos; curva de trade-off em passos da meta.
+* Objetivo (`scen_objective_function`): max Σ (Σ benefícios ponderados / Σ custos) por pixel x área, LP no
+  Rsymphony (ou Gurobi). Benefícios: carbono (`cb`), biodiversidade (`bd`), integridade (`it`), colapso de
+  ecossistemas (`ec`); custo: custo de oportunidade (`oc`). Fatores de escala automáticos 1/10^trunc(log10 max).
+* Não-linearidade por **refresh steps**: a meta é resolvida em n pedaços; depois de cada um, os limites caem
+  pelo que já foi restaurado e `bd`/`ec`/`it` são recalculados com o habitat novo (linearização sucessiva,
+  uma heurística cujo resultado depende de n).
+* `bd` (`multi_calc_bd`, `multi_extinction_slope`): para cada espécie, risco = 1 - (A/Amax)^z (z = 0,25), com
+  A = habitat atual e Amax = habitat potencial; a derivada (diferença finita, δ = 1e-6 em área absoluta)
+  vezes o habitat que o pixel ganha (`prop_restore` das classes naturais adequadas à espécie), somada sobre as
+  espécies cujo range contém o pixel. `ec` (`multi_calc_ec`): o mesmo com as ecorregiões no lugar das espécies
+  (área natural atual e potencial de cada ecorregião).
+* Pós-processamento: tabelas agregadas por cenário e sub-região (com incerteza), redução total do risco de
+  extinção (`multi_exrisk_aggregate`), cenário uniforme (meta espalhada em proporção à área restaurável),
+  escolha de pesos (média/desvio dos desempenhos normalizados), gráficos radar, mapas de gradiente.
+
+### 1. Problema de restauração com SAR exata (no `ls.prioritize`)
+* Generalizar o `add_min_extinction_risk_objective` (hoje: risco de 1 - (mantido/total)^z, linear por partes
+  e convexo) para **habitat de base mais ganho**: A_s = base_s + Σ_i g_si x_i, Amax_s = potencial_s, com o
+  ganho g_si = área do pixel x Σ das frações `prop_restore` das classes naturais adequadas à espécie s no
+  pixel (dentro do range). O risco é convexo e decrescente em A: minimizar a soma ponderada é um LP com uma
+  envoltória linear por partes por espécie, sem binárias, e dá o ótimo exato num único solve (sem os passos
+  do plangea). `ec` = o mesmo com as ecorregiões como "espécies".
+* Decisões contínuas com limite por unidade (pré-requisito: o item 1 das "Lacunas em relação ao prioripy",
+  `add_manual_bounded_constraints` e a forma fácil por raster), e restrições de área por sub-região: um
+  `regions=` no `add_linear_constraints` (uma linha por região, limite e sentido por região, de tabela ou
+  dicionário), em vez de uma chamada por região.
+* Objetivo (**decidido em 2026-10-04**, com o usuário): max dos benefícios ponderados (carbono linear +
+  redução de risco SAR exata + colapso de ecossistemas + integridade linearizada) sujeito à meta de área e a
+  um orçamento de custo opcional; a forma inversa (min custo sujeito a uma redução de risco alvo) também; os
+  trade-offs pelas ferramentas da fase 7 (`pareto_front`, `calibrate`). Motivo: o b/c por pixel do plangea
+  mistura benefícios lineares e derivadas num quociente que não tem versão exata (razão de somas não é
+  linear). Reproduzir também o procedimento do plangea (b/c por pixel, refresh steps, curva em passos)
+  como `method="steps"`, para a paridade e para comparar com o exato (o exato tem de dar benefício >= ao dos
+  passos na mesma área: teste).
+* **`restoration_discount`** (decidido em 2026-10-04, com o usuário): a fração do valor de habitat que a área
+  restaurada NÃO entrega, em [0, 1], padrão 0. O ganho de habitat da espécie s vira
+  g_si x (1 - restoration_discount), aplicado uma vez. Escalar ou um valor por espécie (ou grupo); poderá entrar
+  na propagação de erros (item 4) como parâmetro incerto.
+  * Origem: o `use_restor_weight` do `multi_exrisk_aggregate`, comentário "Using different weight for
+    restored areas (Tom Brooks suggestion)", sem referência no código. Ele multiplica a área restaurada por
+    0,29, ou seja, mantém 29% do valor: equivale a `restoration_discount = 0,71`. Está desligado (padrão
+    `F`, nenhuma chamada passa `TRUE`). O artigo (Strassburg et al. 2020) assume o contrário: as áreas
+    restauradas dentro da AOH "were assumed to become habitat for that species in the long-term" (desconto
+    0); procurado "0.29", "29%" e "discount" no texto: nada.
+  * Bug do plangea (só a forma correta): o desconto fica dentro do laço das combinações de habitat e é
+    reaplicado a cada uma (0,29^k), em vez de uma vez.
+  * Documentar o sentido sem ambiguidade (desconto = o que se perde, não o que fica) e que não se confunde
+    com a taxa de desconto financeira (5%) do custo de oportunidade.
+* Escopo: restauração (`R`) primeiro; conservação (`C`) e conversão (`D`, x negativo) depois; o cenário
+  uniforme como linha de base (`uniform_scenario`), e a redução total do risco de extinção como `eval_*`.
+* Escala: no global a 5 km são milhões de pixels e milhares de espécies, e cada espécie é uma linha com os
+  pixels do seu range: testar os motores próprios (wide, cobertura) e o LP por sifting da fase 9.
+* Paridade: os coeficientes (`bd`, `ec`, o vetor b/c, as metas por sub-região, os limites) contra as funções
+  do plangea; o `method="steps"` contra o laço do `scen` (valores do objetivo e benefícios agregados, não o x:
+  o LP pode ter empates); a redução de risco agregada contra o `multi_exrisk_aggregate` corrigido.
+
+### 2. Integridade ecológica de Beyer et al. 2020 (ferramenta geral)
+* `multi_calc_it`: qualidade q = exp(-γ HFI) a partir da Pegada Humana (HFI), γ = -ln(0,2)/4; integridade do
+  pixel Q = Σ_j (q_i q_j)^z w_ij / Σ_j w_ij numa janela circular de raio n pixels, w = exp(β d) com d em km,
+  β = -0,2, z = 0,5. A derivada de Q em relação à restauração (HFI cai pelos pesos das classes antrópicas
+  convertidas, `hfi_weights`) entra como benefício `it` no problema de restauração.
+* Ferramenta geral do landschaft (fora do `ls.prioritize`, nome a decidir, por exemplo `ls.intactness(hfi,
+  radius, gamma, beta, z)`), em C++ com OpenMP, sobre os kernels focais que já temos; a derivada como opção.
+* Bugs do plangea (só a forma correta, testada contra a referência corrigida): o laço vai de `foc_index` a
+  `nrow - foc_index` e deixa de fora a última linha e a última coluna possíveis, cujos NA viram a média geral;
+  a borda deve usar a janela disponível (o `na.rm` já trata janelas parciais). A derivada perturba só o fator
+  do pixel central e não o mesmo pixel dentro da janela, e ignora o efeito do pixel restaurado na
+  integridade dos vizinhos. **Decidido em 2026-10-04**, com o usuário: a forma correta é a derivada completa
+  da integridade total, Σ_j ∂Q_j/∂x_i (o próprio pixel, inclusive dentro da sua janela, mais todos os
+  vizinhos cuja janela o contém).
+* Paridade: Q (o caminho `aggregate = TRUE`) contra o plangea com a borda corrigida, nos parâmetros padrão e
+  em outros; a derivada contra a referência corrigida e contra diferenças finitas da nossa Q.
+
+### 3. Habitat das espécies e vegetação original (ferramentas gerais de preparação)
+* **Área de habitat** (`harmonize_bd`; Brooks et al. 2019): habitat de cada espécie = range x soma das frações
+  das classes de uso adequadas (tabela espécie -> classes) x área do pixel; habitat potencial = o mesmo com
+  as frações da vegetação original. Espécies sem classe na tabela: todas as naturais (`include_absent_spp`) ou
+  fora. Saída por espécie (atual, potencial) e o mapa de ganho por pixel que o item 1 usa. Lugar a decidir:
+  `ls.sdm` (a seguir dos modelos de distribuição) ou `ls.bio`.
+* **Vegetação original das áreas convertidas** (`harmonize_oa`): a proporção de cada classe natural no uso
+  passado; onde o passado não tem vegetação natural ou a área antrópica atual passa de 95%, as proporções da
+  ecorregião; onde ainda falta, as médias das classes `failsafe_classes_to_fill`. Daí `prop_restore` (para que
+  classe cada pixel volta).
+* Paridade: contra as funções do plangea em rasters pequenos (com NA, espécies sem tabela, pixels que caem no
+  fallback da ecorregião e no failsafe).
+
+### 4. Propagação de erros (ferramenta geral)
+* Função geral do landschaft (nome a decidir, por exemplo `ls.propagate_error`), usável pelo `ls.prioritize`,
+  pelo `accounting`, pelo `ls.simulate` e pelo usuário. Hoje não há nada de incerteza no landschaft.
+* Totais Σ v_i a_i x_i com desvio σ_i por pixel (o `post_aggregate_table_row`): erros independentes
+  (quadrático, sqrt(Σ σ_i² a_i² x_i²)) ou totalmente correlacionados (linear, Σ |σ_i a_i x_i|); correlação
+  parcial como extensão nossa.
+* Produto de duas camadas incertas (`aux_calc_var_sd`): variância exata do produto de independentes
+  (Goodman 1960): x²σ_v² + v²σ_x² + σ_x²σ_v².
+* Parâmetros (método delta): derivadas centrais de uma função qualquer em relação aos parâmetros, combinadas em
+  quadratura ou linearmente (no plangea: γ, β, z da integridade com δ de 0,04, 0,02, 0,1; o z da SAR com
+  desvio 0,1); Monte Carlo com semente fixa como alternativa e para validar.
+* Intervalo: o quantil normal do nível pedido (o plangea fixa 1,96 por `1 + 0,96 x TRUE`).
+* Bugs do plangea (só a forma correta): `multi_exrisk_aggregate` tira a raiz da incerteza acumulada DENTRO do
+  laço das espécies (a cada espécie), em vez de somar os quadrados e tirar a raiz uma vez; `aux_calc_var_sd`
+  usa `0,1 x sd(x_vals)` como padrão do desvio da variável (deveria ser a própria variável) e, na forma
+  quadrática, soma o termo cruzado σ_x σ_v sem elevar ao quadrado. (O bug do `use_restor_weight` está no
+  item 1, no `restoration_discount`.)
+* Paridade: os totais quadrático e linear contra o plangea; o produto e o método delta contra as fórmulas à mão
+  e contra Monte Carlo (convergência); a SAR com incerteza de z contra o `multi_exrisk_aggregate` corrigido.
+
+### Não portar
+O JSON de configuração e o cache de pastas do `harmonize` (a nossa E/S faz isso); o deslocamento
+`b + |min b| + 1` dos benefícios (muda o ranking de forma arbitrária); o "power range collapse" (reescala
+numérica do objetivo); a constante fixa 0,29 do `use_restor_weight` (vira o parâmetro `restoration_discount` do
+item 1, sem valor embutido); os gráficos radar e os PNG (o `ls.plot` cobre).
+A escolha de pesos por média/desvio pode entrar como mais um critério ao lado do `topsis` e do `knee_point`, se
+for barato.
+
+### Ordem sugerida
+3 (dados) -> limites por unidade (lacunas do prioripy, item 1) -> 1 (problema de restauração, primeiro `R`) ->
+2 (integridade, que entra no 1 como benefício) -> 4 (propagação de erros, nas avaliações do 1 e no resto do
+landschaft). Ao fim de cada parte: testes, versão, commit, push.
 
 ---
 
