@@ -1956,6 +1956,43 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   provado de 17 % (antes, no modelo restrito do prioritizr, 31,8 mil); o Gurobi no modelo exato em 600 s acha
   30.300 (gap 3,8 %). Fica como pendência: o limite (cortes dentro do B&B) e a parte primal (busca local em
   manchas) em problemas de centenas de unidades com várias feições.
+* **Pendências da fase 9 trabalhadas** (2026-10-07, versão 1.30.0). Instâncias sintéticas: 30 feições gaussianas
+  (30 % da área), custo 1-10, metas relativas de 30 %, orçamento de 10 % do custo, árvore aleatória:
+  * **Limite de tempo do MIP do HiGHS em modelos largos**: 10⁵ colunas e 10⁶ não zeros passavam 20 s do limite
+    de 30 s. O py-spy nativo no WSL mostrou o culpado: a busca em linha do arredondamento central
+    (`linesearchRounding` -> `tryRoundedPoint` -> análise de conflitos), sem checar limites entre os passos. Dois
+    patches no código do HiGHS 1.15.1, aplicados no build pelo `PATCH_COMMAND` do FetchContent
+    (`src/cpp/opt/highs_patch.cmake`, idempotente, erro se a âncora sumir): `checkLimits()` a cada passo da
+    busca em linha e `time_limit` no IPM do centro analítico. Com `FETCHCONTENT_SOURCE_DIR_HIGHS` o patch não
+    roda. Talvez permita subir o `kWideMip` (10⁵) do motor de cobertura: não medido.
+  * **Filogenéticos em 10⁶**: o LP não convergia porque o sifting ciclava (125 mil unidades com custo reduzido
+    atraente por rodada, 20 mil admitidas, devolvidas na rodada seguinte). O conjunto de trabalho agora dobra
+    enquanto há mais candidatas que a rodada admite: 5 rodadas, 8 s. Depois, **busca local nas metas atingidas**
+    (`_milp_subset.py`, para max_features, phylo_div e phylo_end): o valor de um conjunto S de metas é o das
+    metas mais o dos ramos com uma meta de S abaixo; S é viável quando o mínimo conjunto de S (motor de
+    cobertura, gap 0,5 %) cabe no orçamento; adições e trocas, as de maior valor primeiro, metas atingidas de
+    graça contam. O motor largo fica com 40 % do tempo. phylo_div 10⁵: 47,9 -> 53,7 (Gurobi 300 s: 46,7, limite
+    75,9); 10⁶: 42,4 -> 52,2 em 60 s (o Gurobi não acha solução); phylo_end 10⁵: 841 (Gurobi 30 s: 179). Os
+    limites continuam os do LP (80 para ~54): fechar exige cortes.
+  * **max_features**: a busca local não melhora (10⁴, metas 30 %: 7 metas, o mesmo que o Gurobi em 900 s,
+    limite 11). Nas metas de 20 % o Gurobi provava o gap de 10 % em 2,3 s e nós não (limite do LP 28,74 para 26
+    metas). O objetivo é inteiro mais um desempate de custo em [-0,01, 0]: o limite cai para floor(28,74) = 28
+    (`integral_bound` no `wide.cpp`, para qualquer modelo com colunas não unidades inteiras de coeficiente
+    inteiro e termos das unidades limitados): 0,48 s, gap 7,7 % provado.
+  * **Multi-action com fronteira**: cada par vizinho tinha uma coluna de produto por direção, iguais (3132
+    simetrias que o HiGHS detecta em 10³ unidades); agora uma por par, pesos somados (o motor de fecho mantém os
+    termos dirigidos): 9266 -> 5760 colunas. O gap 0 ainda não fecha em 10³ (limite do HiGHS para em 1152,8, o
+    ótimo do Gurobi é 1156 em 10 s; nossa melhor solução 1160,5 em 120 s): falta força na raiz (cortes).
+    O "núcleo simétrico" de 10⁴ sem fronteira: o motor já tem o limite ótimo (6370) em 0,16 s; os 5 s são o
+    HiGHS achando a solução de 6370 num núcleo de 395 colunas (1926 nós). Correr sementes em paralelo foi
+    descartado sem testar: o resultado dependeria do tempo (a regra é o mesmo resultado em qualquer número de
+    threads).
+  * **Motor de cortes**: perfil em 10⁶ (gap 1 %): fluxos máximos 1,2 s, reparos 15,2 s de 17,6 s. Os fluxos
+    dinâmicos (Kohli e Torr) não pagariam; os reparos agora rodam em `n_threads` threads enquanto o bundle
+    segue, que os vê com 8 avaliações de atraso (constante: mesmo resultado em qualquer número de threads,
+    testado). 17,6 s -> 7,5 s, e gap melhor (0,30 % contra 0,62 %) por caber mais avaliações.
+  * Ficam abertos (pesquisa): limites fortes dos objetivos de metas (cortes ou B&B próprio), contiguidade
+    (limite e manchas, ver a 1.29.0), multi-action com fronteira em gap 0.
 * Ambiente: `tests/test_zonal_extract.py` usa `np.long` (numpy 2); com numpy 1.26 a coleta falha (não
   relacionado). A suíte de priorização: 670 passam; `test_covering_keeps_the_time_limit_on_wide_models` falhou
   só sob disputa de CPU (passa sozinho).
@@ -2092,15 +2129,11 @@ do plangea". Entram as três abaixo, sem ordem obrigatória.
   Registrado no `ls.plot` (mapas de beta e gamma).
 
 ### Próximos passos (retomar daqui)
-1. Fase 11, o que falta (a documentação da contiguidade exata saiu na 1.29.0): filogenéticos em 10⁶, multi-action com fronteira em gap 0 e o núcleo
-   simétrico, fluxos dinâmicos (Kohli e Torr) e reparo paralelo no motor de cortes, heurística melhor para o
-   `max_features` (busca local com trocas de metas).
-2. Depois da fase 11: desempenho das métricas de paisagem e reprojeção (ordem pedida pelo usuário).
-3. **Lacunas em relação ao prioripy**: feitas no branch do worktree (ver "Andamento das lacunas"), falta só
-   integrar em main e lançar a versão.
-4. **Restauração a partir do plangea** (seção própria, logo abaixo): habitat e vegetação original, problema de
-   restauração com SAR exata, integridade de Beyer e propagação de erros. Os limites por unidade do item 3 são
-   pré-requisito do problema de restauração.
+1. Fase 11: feita até onde dava sem cortes no B&B (1.30.0); o que ficou aberto está na lista acima.
+2. Desempenho das métricas de paisagem e da reprojeção (ordem pedida pelo usuário).
+3. **Lacunas em relação ao prioripy**: feitas e integradas (1.30.0).
+4. **Restauração a partir do plangea**: partes 2, 3 e 4 (ferramentas gerais) feitas e integradas (1.30.0); falta
+   a parte 1, o problema de restauração no `ls.prioritize` (os limites por unidade já existem).
 5. Sob pedido: zonas do prioritizr, `add_neighbor_penalties`.
 
 ### Decisões
