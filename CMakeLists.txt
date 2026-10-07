@@ -199,6 +199,7 @@ add_library(optcore STATIC
     src/cpp/opt/marxan.cpp
     src/cpp/opt/maxflow.cpp
     src/cpp/opt/milp.cpp
+    src/cpp/opt/proxirr.cpp
     src/cpp/opt/wide.cpp
 )
 target_include_directories(optcore PUBLIC src/cpp)

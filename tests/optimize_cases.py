@@ -433,6 +433,89 @@ def bounds_rows():
                          "upper": [0.5, 0.6, 0.0, 0.4, 0.2, 0.6, 0.35, 0.45]})
 
 
+# --- ProxIRR (proxirr 0.5): amounts in 1/64 steps (exact in the CSV files proxirr reads)
+
+PROXIRR_TARGETS = (0.0, 0.3, 1.0, 1.2, 0.95)  # shares of each feature's global amount: 0, ..., all, more
+
+
+def _dyadic_features() -> np.ndarray:
+    f = np.nan_to_num(_features(), nan=0.0)
+    return np.round(f * 64.0) / 64.0
+
+
+def proxirr_entries():
+    """Every (planning unit, feature) of the raster: the amount there, the feature's global amount (the
+    whole raster, in cell order) and an absolute target (PROXIRR_TARGETS x global)."""
+    import pandas as pd
+
+    f = _dyadic_features().reshape(5, -1)
+    cells = _units()
+    glob = np.array([float(np.cumsum(f[k], dtype=np.float64)[-1]) for k in range(5)])
+    target = np.array(PROXIRR_TARGETS) * glob
+    pu = np.repeat(np.arange(1, cells.size + 1, dtype=np.float64), 5)
+    feat = np.tile(np.arange(5), cells.size)
+    return pd.DataFrame({"pu": pu, "feature": feat + 1.0, "local": f[feat, np.repeat(cells, 5)],
+                         "global": glob[feat], "target": target[feat]})
+
+
+def proxirr_many():
+    """40 units x 25 features with amounts everywhere: long products (R's prod() in 80 bits)."""
+    import pandas as pd
+
+    rng = np.random.default_rng(17)
+    local = rng.integers(1, 64 * 8, (40, 25)) / 64.0
+    glob = local.sum(axis=0)  # exact (multiples of 1/64)
+    target = glob * rng.uniform(0.2, 0.9, 25)
+    return pd.DataFrame({"pu": np.repeat(np.arange(1.0, 41.0), 25), "local": local.ravel(),
+                         "global": np.tile(glob, 40), "target": np.tile(target, 40)})
+
+
+def _marxan_tables(ids):
+    import pandas as pd
+
+    f = _dyadic_features().reshape(5, -1)[:, _units()]
+    k, u = np.nonzero(f)
+    puvspr = pd.DataFrame({"species": np.asarray(ids, dtype=np.float64)[k], "pu": u + 1.0, "amount": f[k, u]})
+    pu = pd.DataFrame({"id": np.arange(1.0, f.shape[1] + 1), "cost": np.ones(f.shape[1])})
+    return pu, puvspr
+
+
+def marxan_pu():
+    return _marxan_tables(range(1, 6))[0]
+
+
+def marxan_puvspr():
+    return _marxan_tables(range(1, 6))[1]
+
+
+def marxan_spec():
+    import pandas as pd
+
+    return pd.DataFrame({"id": np.arange(1.0, 6.0), "prop": [0.3, 0.5, 1.0, 0.1, 0.25]})
+
+
+def marxan_puvspr_ids():
+    """Ids out of order, a feature (99) missing from spec, a unit (167) without features."""
+    import pandas as pd
+
+    pu, puvspr = _marxan_tables([10, 20, 7, 40, 99])
+    extra = pd.DataFrame({"species": [7.0], "pu": [3.0], "amount": [0.5]})  # 7 twice in unit 3: summed apart
+    return pd.concat([puvspr, extra], ignore_index=True)
+
+
+def marxan_pu_ids():
+    import pandas as pd
+
+    pu = _marxan_tables(range(1, 6))[0]
+    return pd.concat([pu, pd.DataFrame({"id": [167.0], "cost": [1.0]})], ignore_index=True)
+
+
+def marxan_spec_ids():
+    import pandas as pd
+
+    return pd.DataFrame({"id": [10.0, 20.0, 7.0, 40.0], "target": [3.0, 400.0, 0.0, 2.5]})
+
+
 def sol_table():
     import pandas as pd
 
@@ -443,7 +526,8 @@ INPUTS = {f.__name__: f for f in (
     pu_cost, features, shapes, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
     pu_polygons_partial, pa_pu, pa_features, pa_dist_features, pa_threats, pa_dist_threats, pa_sensitivity,
     pa_boundary, bnd_table, conn_table, asym_table, penalty_raster, adj_table, sol_raster, solp_raster, sol_table,
-    bounds_cells, status_cells, bounds_rows)}
+    bounds_cells, status_cells, bounds_rows, proxirr_entries, marxan_pu, marxan_puvspr, marxan_spec,
+    marxan_puvspr_ids, marxan_pu_ids, marxan_spec_ids, proxirr_many)}
 
 
 def build_input(name: str):
@@ -814,6 +898,32 @@ CASES: dict[str, Case] = {
         reference(problem(pu_cost, features) |> add_min_penalties_objective(4000) |> add_relative_targets(0.2) |>
                   add_boundary_penalties(0.5) |> add_manual_locked_constraints(status_cells) |>
                   add_binary_decisions())""", notes="closure engine"),
+    # --- ProxIRR: the CRAN package proxirr 0.5 (alpha, beta, gamma; Marxan projects)
+    "proxirr_entries": Case("proxirr", ("proxirr_entries",), """
+        e <- proxirr_entries
+        per_unit <- function(a, f) sapply(unique(e$pu), function(u) f(a[e$pu == u], na.rm = TRUE))
+        a <- proxirr::alpha(e$local, e$global, e$target)
+        at <- proxirr::alpha(e$local, e$global, e$target, triage = TRUE)
+        list(alpha = a, beta = per_unit(a, proxirr::.beta), gamma = per_unit(a, proxirr::.gamma),
+             alpha_triage = at, beta_triage = per_unit(at, proxirr::.beta),
+             gamma_triage = per_unit(at, proxirr::.gamma))""", notes="targets 0, < global, = global, > global"),
+    "proxirr_many": Case("proxirr", ("proxirr_many",), """
+        e <- proxirr_many
+        a <- proxirr::alpha(e$local, e$global, e$target)
+        list(alpha = a, beta = sapply(unique(e$pu), function(u) proxirr::.beta(a[e$pu == u])),
+             gamma = sapply(unique(e$pu), function(u) proxirr::.gamma(a[e$pu == u])))""",
+                         notes="25 alphas per unit: R's 80-bit product shows"),
+    "proxirr_marxan": Case("proxirr", ("marxan_pu", "marxan_spec", "marxan_puvspr"), """
+        input <- marxan_files(marxan_pu, marxan_spec, marxan_puvspr)
+        f <- proxirr_marxan_fixed(input)
+        list(alpha = proxirr::marxan_alphas(input)$alpha, beta = proxirr::marxan_betas(input)$beta,
+             gamma = proxirr::marxan_gammas(input)$gamma, fixed = f,
+             fixed_triage = proxirr_marxan_fixed(input, triage = TRUE))""",
+                             notes="ids 1..n in order: proxirr itself and the fixed version agree"),
+    "proxirr_marxan_ids": Case("proxirr", ("marxan_pu_ids", "marxan_spec_ids", "marxan_puvspr_ids"), """
+        input <- marxan_files(marxan_pu_ids, marxan_spec_ids, marxan_puvspr_ids)
+        list(fixed = proxirr_marxan_fixed(input), alpha_as_released = proxirr::marxan_alphas(input)$alpha)""",
+                                 notes="proxirr looks features up by position: the fixed version only"),
     # --- calibrate: prioritizr's "Calibrating trade-offs" tutorial on Gurobi at gap 0 (optima only)
     "calibrate_hierarchical": Case("calibrate", RASTER, """
         g <- function(p) add_gurobi_solver(p, gap = 0, threads = 1, verbose = FALSE)

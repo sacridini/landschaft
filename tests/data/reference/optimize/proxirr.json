@@ -1,0 +1,101 @@
+{
+ "arrays": {
+  "proxirr_entries/alpha": {
+   "kind": "vector"
+  },
+  "proxirr_entries/alpha_triage": {
+   "kind": "vector"
+  },
+  "proxirr_entries/beta": {
+   "kind": "vector"
+  },
+  "proxirr_entries/beta_triage": {
+   "kind": "vector"
+  },
+  "proxirr_entries/gamma": {
+   "kind": "vector"
+  },
+  "proxirr_entries/gamma_triage": {
+   "kind": "vector"
+  },
+  "proxirr_many/alpha": {
+   "kind": "vector"
+  },
+  "proxirr_many/beta": {
+   "kind": "vector"
+  },
+  "proxirr_many/gamma": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/alpha": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/beta": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed/alpha": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed/beta": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed/gamma": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed/global": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed/target": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed_triage/alpha": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed_triage/beta": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed_triage/gamma": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed_triage/global": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/fixed_triage/target": {
+   "kind": "vector"
+  },
+  "proxirr_marxan/gamma": {
+   "kind": "vector"
+  },
+  "proxirr_marxan_ids/alpha_as_released": {
+   "kind": "vector"
+  },
+  "proxirr_marxan_ids/fixed/alpha": {
+   "kind": "vector"
+  },
+  "proxirr_marxan_ids/fixed/beta": {
+   "kind": "vector"
+  },
+  "proxirr_marxan_ids/fixed/gamma": {
+   "kind": "vector"
+  },
+  "proxirr_marxan_ids/fixed/global": {
+   "kind": "vector"
+  },
+  "proxirr_marxan_ids/fixed/target": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "r": {
+   "Matrix": "1.7.1",
+   "exactextractr": "0.10.0",
+   "gurobi": "12.0.3",
+   "prioriactions": "0.5.0",
+   "prioritizr": "8.0.6",
+   "proxirr": "0.5",
+   "sf": "1.0.19",
+   "terra": "1.9.50"
+  },
+  "r_version": "R version 4.4.2 (2024-10-31 ucrt)"
+ }
+}

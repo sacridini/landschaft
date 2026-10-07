@@ -61,6 +61,11 @@ in a new major version.
   overlap of two surfaces' top fractions (Jaccard index, comparison maps). The top fraction follows
   Zonation's rule (`position_rank`), so on a Zonation ranking the areas are Zonation's own, bit for bit.
   Both results plot with `ls.plot`.
+- `ls.prioritize.eval_proxirr(p, triage)`: ProxIRR (Baisero et al. 2022), alpha per target and unit,
+  beta and gamma per unit, for every `>=` target of a problem; `eval_proxirr_marxan(pu, spec, puvspr)`
+  for Marxan's tables. The same bits as the CRAN package proxirr 0.5 (its 80-bit `prod()` included), in
+  C++; proxirr's Marxan functions look features up by position instead of id, and stop on a feature
+  missing from the spec: here by id, the feature left out.
 
 ## [1.29.0] - 2026-10-07
 

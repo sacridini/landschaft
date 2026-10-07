@@ -342,7 +342,7 @@ prioritizr's models exactly, so some results change (see the next section).
 | `eval_landscape_identification(prob, importance, top_fraction, min_size, connectivity, merge_distance)` | `P.eval_landscape_identification(surface, top_fraction, min_size=, connectivity=, merge_distance=, problem=p)` (8-connected by default, as Zonation; the top fraction by Zonation's rule, see below) |
 | `eval_landscape_comparison(prob, a, b, thresholds)` | `P.eval_landscape_comparison(a, b, fractions)` |
 | `eval_roi_vulnerability(...)` | the features' sum over the cost, in numpy (below) |
-| `eval_proxirr(...)` | not available |
+| `eval_proxirr(...)` | `P.eval_proxirr(p, triage)`, or `P.eval_proxirr_marxan(pu, spec, puvspr)` for Marxan's tables (the CRAN package proxirr's results, bit for bit) |
 | `calc_extinction_risk_features(...)` | `.add_min_extinction_risk_objective(budget, z)` and `P.eval_extinction_risk(p, s, z)` |
 | `prob.write_raster(path)` | `ls.write_raster(s.selection, path)` or `s.save(folder)` |
 | `prob.plot()`, `prob.explore()` | `ls.plot(s)` |

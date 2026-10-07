@@ -167,6 +167,38 @@ pa_data <- function(pu = pa_pu, features = pa_features, dist_features = pa_dist_
                            dist_threats = dist_threats, sensitivity = sensitivity, boundary = boundary)
 }
 
+# a Marxan project of the tables, for proxirr's marxan_* functions (input.dat, input/*.dat as CSV)
+marxan_files <- function(pu, spec, puvspr) {
+  d <- tempfile("marxan_")
+  dir.create(file.path(d, "input"), recursive = TRUE)
+  dir.create(file.path(d, "output"))
+  w <- function(x, name) utils::write.csv(x, file.path(d, "input", name), row.names = FALSE)
+  w(pu, "pu.dat")
+  w(spec, "spec.dat")
+  w(puvspr, "puvspr.dat")
+  writeLines(c("INPUTDIR input", "OUTPUTDIR output", "SPECNAME spec.dat", "PUNAME pu.dat",
+               "PUVSPRNAME puvspr.dat", "SCENNAME output"), file.path(d, "input.dat"))
+  file.path(d, "input.dat")
+}
+
+# proxirr 0.5's marxan_alphas / marxan_betas / marxan_gammas with their bugs fixed: a feature's
+# parameters are looked up by its id (proxirr: lalpha[[species]], by position in spec), and the NA
+# alphas of features missing from spec are left out of beta and gamma (proxirr: .beta without na.rm
+# stops with an error).
+proxirr_marxan_fixed <- function(input, triage = FALSE) {
+  spec <- proxirr::.marxan_data_reader(input, "spec")
+  puvspr <- proxirr::.marxan_data_reader(input, "puvspr")
+  pu <- proxirr::.marxan_data_reader(input, "pu")
+  lalpha <- lapply(spec$id, function(x) proxirr::.marxan_alpha_parameters(spec, puvspr, x))
+  k <- match(puvspr$species, spec$id)
+  g <- sapply(k, function(i) if (is.na(i)) NA_real_ else lalpha[[i]]$global)
+  t <- sapply(k, function(i) if (is.na(i)) NA_real_ else lalpha[[i]]$target)
+  a <- proxirr::alpha(local = puvspr$amount, global = g, target = t, triage = triage, na.allow = TRUE)
+  list(global = g, target = t, alpha = a,
+       beta = sapply(pu$id, function(x) proxirr::.beta(a[puvspr$pu == x], na.rm = TRUE)),
+       gamma = sapply(pu$id, function(x) proxirr::.gamma(a[puvspr$pu == x], na.rm = TRUE)))
+}
+
 inputs <- lapply(job$inputs, load_input)
 
 for (case in job$cases) {
@@ -183,7 +215,7 @@ for (case in job$cases) {
   dump(case$name, "", result)
 }
 
-pkgs <- c("prioritizr", "prioriactions", "gurobi", "terra", "sf", "exactextractr", "Matrix")
+pkgs <- c("prioritizr", "prioriactions", "gurobi", "terra", "sf", "exactextractr", "Matrix", "proxirr")
 versions <- lapply(pkgs, function(p) tryCatch(as.character(packageVersion(p)), error = function(e) NA))
 names(versions) <- pkgs
 writeLines(toJSON(list(manifest = manifest, versions = versions, r = R.version.string),

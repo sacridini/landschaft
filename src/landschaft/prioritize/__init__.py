@@ -100,6 +100,7 @@ from ._milp_portfolio import Portfolio
 from ._milp_solve import Solution
 from ._postprocess import AreaStatistics
 from ._project import read_project, run_project
+from ._proxirr import ProxIRR, eval_proxirr, eval_proxirr_marxan
 from ._zonation import RULES, ZonationResult, zonation, zonation_features
 
 __all__ = [
@@ -121,6 +122,7 @@ __all__ = [
                               "Portfolio",
                               "Pressure",
                               "PrioritizationReport",
+                              "ProxIRR",
                               "Problem",
                               "Solution",
                               "TradeOffs",
@@ -151,6 +153,8 @@ __all__ = [
                               "eval_landscape_metrics",
                               "eval_mspa",
                               "eval_n_summary",
+                              "eval_proxirr",
+                              "eval_proxirr_marxan",
                               "eval_rank_importance",
                               "eval_rare_richness_importance",
                               "eval_replacement_importance",

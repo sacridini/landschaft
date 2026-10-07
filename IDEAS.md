@@ -2042,13 +2042,62 @@ do plangea". Entram as três abaixo, sem ordem obrigatória.
      `local/global/target`; o produto do R é sequencial em double), nos exemplos do pacote, em casos com
      `triage`, metas inalcançáveis e meta zero, e nos problemas do harness (raster com NA, polígonos).
 
+### Andamento das lacunas em relação ao prioripy (2026-10-07, branch do worktree, sem versão)
+* **Limites por unidade** (feito): `add_manual_bounded_constraints(data | lower=, upper=)` e
+  `add_manual_locked_constraints(data | status=)`. Campo novo `Problem.bounds` (entradas em ordem), aplicado
+  no `compile` depois dos `locked_in/out` (a última vence, como o laço do C++ do prioritizr). Tabela do
+  prioritizr: `pu` 1-based entre TODAS as unidades (célula da grade inteira, linha da tabela com ou sem custo;
+  sem custo descartadas pelo `match`), `pu >= 1` (o `is_count_vector` do prioritizr recusa 0), `upper >= lower`,
+  finitos; `zone` só com um valor. Forma fácil: número, raster na grade, coluna ou valores por unidade de
+  planejamento (ou por célula/linha); NaN nos dois lados = unidade intocada, um lado NaN ou ausente = limite
+  das decisões. Decisões tomadas: com decisões binárias, limites que não são 0/1 dão erro (o prioritizr aceita
+  e a integralidade arredonda); `lower < 0` ou `upper` acima do limite das decisões (1 ou o `upper_limit` do
+  semicontínuo) dão erro; tudo validado no `compile` (as decisões podem vir depois). `Problem._unit_bounds()`
+  (os limites como compilados) passa a alimentar o orçamento mínimo do `eval_rank_importance`, o primeiro
+  orçamento do `pareto_front` e a seleção do `compare_zonation`. Grupo novo de referência **`bounds`** (7 casos):
+  `compile()` bit a bit e ótimo do Gurobi em gap 0 passando pelos motores de cobertura (LP com proporções),
+  largo (max utility), de cortes (borda) e de fechamento (min penalties com borda); semicontínuo em tabela com
+  custos NA; dois manuais seguidos. Testes extras: anneal e portfólio de cortes respeitam os status, LP com
+  proporções entre limites = `linprog`. Observado: o `add_locked_in_constraints` do prioritizr põe `lb = ub = 1`
+  (o nosso só `lb = 1`): igual com binárias e proporções, diferente com semicontínuas de limite < 1 (o
+  prioritizr deixa `x = 1` acima do limite; o nosso fica inviável). Não mexido; nenhum caso da referência
+  cobre isso.
+* **Landscape Identification / Comparison sobre qualquer superfície** (feito, `_landscape.py`):
+  `eval_landscape_identification(surface, top_fraction, min_size=, merge_distance=, connectivity=8,
+  problem= | features=, cost=)` -> `LandscapeAreas` (mapa das áreas, tabela por área: células, valor médio,
+  custo, soma e fração de cada feição; mapa do topo) e `eval_landscape_comparison(a, b, fractions)` ->
+  `LandscapeComparison` (tabela: células de a, b, ambos, só a, só b, nenhum, Jaccard, fração de a em b; mapas
+  com os códigos do `solution_comparison` do Zonation). Superfície: raster, `ZonationResult` (rank),
+  `Portfolio` (frequência), `Solution` (seleção), resultado do Ferrier (banda `total`) ou array 2-D.
+  **Regra do topo** = a do Zonation: `position_rank` (o i-ésimo menor de N recebe float32(i / N), empates pela
+  ordem das células, ordenação estável) e topo = rank >= 1 - f comparado em double. Em um rank do Zonation o
+  `position_rank` devolve o próprio rank bit a bit, então as áreas, tamanhos e médias são as do
+  `area_statistics_separate_areas` / `rank_range` (testado, inclusive com células sem dados). O
+  `solution_comparison` do Zonation compara em float32: os mesmos números quando 1 - f é exato em float32
+  (0,5, 0,25, 0,125; testado), e com outros f pode haver uma célula de diferença na borda (ex.: 600 células,
+  f = 0,1: 59 no rank_range, 60 no float32). Números das áreas como o Zonation (os descartados deixam
+  buracos). `merge_distance` = dilatação antes de rotular, rótulos só nas células do topo (prioripy).
+  Registrados no `ls.plot`. Guia de migração: diferença para o `np.quantile` do prioripy documentada.
+* **ProxIRR** (feito, `_proxirr.py` + `src/cpp/opt/proxirr.cpp`): `eval_proxirr(p, triage)` (alpha esparso
+  metas x unidades, beta e gamma por unidade em raster/tabela; só metas `>=`; global = os totais das metas
+  relativas, região nas sub-regionais) e `eval_proxirr_marxan(pu, spec, puvspr, triage)` (as tabelas do
+  `marxan()`; saídas como `marxan_alphas/betas/gammas`). `proxirr` 0.5 instalado no R lib. Detalhes de bits:
+  o `prod()` do R acumula em LDOUBLE (80 bits): beta = 1 - (double)prod_80(1 - alpha) com o `SoftExtended` do
+  `lsm/extended.hpp`; gamma = contagem de alpha == 1 (inteiro) + beta dos demais; o global dos projetos Marxan
+  é o `sum()` do R (80 bits) na ordem do puvspr. Grupo de referência **`proxirr`** (4 casos): entradas da grade
+  de teste com metas 0, < global, = global, > global (com e sem triage), 25 alphas por unidade (onde o produto
+  em double já difere do R), Marxan com ids 1..n (o proxirr original e o corrigido batem) e com ids fora de
+  ordem + feição fora do spec + unidade sem feições (só o corrigido: `proxirr_marxan_fixed` no harness R,
+  busca por id e `na.rm`). Tudo bit a bit. Decisão: global 0 com local 0 dá alpha 0 (o proxirr para com erro).
+  Registrado no `ls.plot` (mapas de beta e gamma).
+
 ### Próximos passos (retomar daqui)
 1. Fase 11, o que falta (a documentação da contiguidade exata saiu na 1.29.0): filogenéticos em 10⁶, multi-action com fronteira em gap 0 e o núcleo
    simétrico, fluxos dinâmicos (Kohli e Torr) e reparo paralelo no motor de cortes, heurística melhor para o
    `max_features` (busca local com trocas de metas).
 2. Depois da fase 11: desempenho das métricas de paisagem e reprojeção (ordem pedida pelo usuário).
-3. **Lacunas em relação ao prioripy** (seção acima): limites por unidade (`add_manual_bounded/locked_constraints`),
-   Landscape Identification/Comparison sobre qualquer superfície e ProxIRR.
+3. **Lacunas em relação ao prioripy**: feitas no branch do worktree (ver "Andamento das lacunas"), falta só
+   integrar em main e lançar a versão.
 4. **Restauração a partir do plangea** (seção própria, logo abaixo): habitat e vegetação original, problema de
    restauração com SAR exata, integridade de Beyer e propagação de erros. Os limites por unidade do item 3 são
    pré-requisito do problema de restauração.

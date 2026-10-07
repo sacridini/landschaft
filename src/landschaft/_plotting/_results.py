@@ -655,6 +655,23 @@ def _prio_landscape_comparison(res, opts, title):
     return panels
 
 
+@register("ProxIRR")
+def _prio_proxirr(res, opts, title):
+    """Beta and gamma of every planning unit on maps (raster units), and their range."""
+    from ._core import _is_geo_raster, _map
+
+    panels = []
+    if _is_geo_raster(res.beta):
+        panels += _map([("beta", res.beta), ("gamma", res.gamma)],
+                       {**opts, "cmap": opts.get("cmap") or "viridis", "categorical": False},
+                       title or "ProxIRR: irreplaceability")
+    b = np.asarray(res.beta["beta"] if hasattr(res.beta, "columns") else res.beta.values, dtype=np.float64)
+    g = np.asarray(res.gamma["gamma"] if hasattr(res.gamma, "columns") else res.gamma.values, dtype=np.float64)
+    panels.append(_summary({"units": int(np.isfinite(b).sum()), "beta = 1": int((b == 1).sum()),
+                            "beta: mean": float(np.nanmean(b)), "gamma: max": float(np.nanmax(g))}, "ProxIRR"))
+    return panels
+
+
 @register("ActionsSolution")
 def _prio_actions(sol, opts, title):
     """The monitored units and the actions (maps, for problems from rasters), and the benefits."""

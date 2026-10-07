@@ -227,6 +227,18 @@ selection frequency) and what each holds, and the overlap of the top fractions o
 
 ::: landschaft.prioritize.LandscapeComparison
 
+### Irreplaceability (ProxIRR)
+
+ProxIRR (Baisero et al. 2022): for every target, the share of the feature's spare amount a unit
+holds (alpha), and per unit the chance it is needed for at least one feature (beta) and the number of
+features it is essential for plus beta (gamma). The bits are those of the CRAN package proxirr.
+
+::: landschaft.prioritize.eval_proxirr
+
+::: landschaft.prioritize.eval_proxirr_marxan
+
+::: landschaft.prioritize.ProxIRR
+
 ## Calibration and trade-offs
 
 Candidate solutions over a trade-off (a penalty's weight, cost thresholds, budgets, any parameter),

@@ -24,6 +24,7 @@
 #include "opt/marxan.hpp"
 #include "opt/maxflow.hpp"
 #include "opt/milp.hpp"
+#include "opt/proxirr.hpp"
 #include "opt/wide.hpp"
 
 namespace py = pybind11;
@@ -503,6 +504,29 @@ void register_python(py::module_& m) {
             return to_array(actions::connectivity(actions_input(data), vec<double>(units), vec<double>(acts)));
         },
         py::arg("data"), py::arg("units"), py::arg("actions"), "(units, every threat's actions' boundary).");
+    m.def("opt_proxirr_alpha",
+          [](const Doubles& local, const Doubles& global, const Doubles& target, bool triage, int threads) {
+              std::vector<double> a;
+              {
+                  py::gil_scoped_release release;
+                  a = opt::proxirr::alpha(vec<double>(local), vec<double>(global), vec<double>(target), triage,
+                                          threads);
+              }
+              return to_array(std::move(a));
+          },
+          py::arg("local"), py::arg("global_"), py::arg("target"), py::arg("triage"), py::arg("threads"),
+          "proxirr's alpha of every (feature, unit) entry.");
+    m.def("opt_proxirr_beta_gamma",
+          [](const Ints& start, const Doubles& alphas, int threads) {
+              std::vector<double> b, g;
+              {
+                  py::gil_scoped_release release;
+                  opt::proxirr::beta_gamma(vec<i64>(start), vec<double>(alphas), threads, b, g);
+              }
+              return py::make_tuple(to_array(std::move(b)), to_array(std::move(g)));
+          },
+          py::arg("start"), py::arg("alphas"), py::arg("threads"),
+          "proxirr's beta and gamma of every unit from its alphas (start: offsets per unit).");
     m.def("opt_eval_pnorm", [](const Doubles& x) {
         std::vector<double> v = vec<double>(x);
         for (double& e : v) e = eval::pnorm(e);
