@@ -34,6 +34,17 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   nós internos, caixas em 16 bits relativas) reduziriam o tráfego.
 - Rótulos em 64 bits para rasters em memória com mais de 2^31 pixels (hoje esses
   casos ficam para o processamento por tiles).
+- **Medidas de 2026-10-07** (início do item "desempenho", i5-13600K, núcleos P): paisagem inteira é rápida (clc
+  4000² com todas as métricas de um nível: 0,25 s). O lento é a janela móvel: `input` 1000², janela 21×21, todas
+  as métricas de paisagem 7,4 s com 11 threads; uma só (`np`) 1,45 s. Numa thread: ~2 µs fixos por janela mais
+  ~20 ns por célula (janela 21×21: 10 µs). Perfil nativo no Linux (py-spy, `np`): `label_patches` 70 %, o
+  construtor do `Landscape` 12 %, malloc/new 6-9 %. Ideias em ordem: fundir as passadas por célula (a cópia da
+  janela já pode dar os índices densos e o histograma; o construtor refaz min/max, histograma e tabela;
+  `label_strip` inicializa `code` numa passada à parte), reaproveitar os buffers de `StripStats`/`Patches`
+  entre janelas (~35 alocações por janela) e medir o custo de cada métrica na janela
+  (script `window_metric_costs.py` no scratchpad da sessão: refazer). No Windows o py-spy não resolveu os
+  símbolos do `_core` mesmo com o PDB ao lado: perfilar no WSL (venv `~/lsprof` com a wheel e o py-spy,
+  `LD_PRELOAD` da libstdc++ do sistema).
 - Janela móvel: reaproveitar rótulos globais e só corrigir os patches cortados pela
   borda da janela (algoritmo incremental). Hoje cada janela é uma paisagem pequena
   (1000×1000, janela 21×21, 66 métricas: ~7 s; ~73 µs por janela numa thread).
@@ -2130,7 +2141,9 @@ do plangea". Entram as três abaixo, sem ordem obrigatória.
 
 ### Próximos passos (retomar daqui)
 1. Fase 11: feita até onde dava sem cortes no B&B (1.30.0); o que ficou aberto está na lista acima.
-2. Desempenho das métricas de paisagem e da reprojeção (ordem pedida pelo usuário).
+2. Desempenho das métricas de paisagem e da reprojeção (ordem pedida pelo usuário): começado só com medidas
+   (seção "Desempenho e escala", medidas de 2026-10-07); retomar pela janela móvel, depois o cubic em SIMD da
+   reprojeção.
 3. **Lacunas em relação ao prioripy**: feitas e integradas (1.30.0).
 4. **Restauração a partir do plangea**: partes 2, 3 e 4 (ferramentas gerais) feitas e integradas (1.30.0); parte
    1 (o problema de restauração, variante `R`) feita no ramo do worktree, a integrar; abertos: `C`/`D` e o
