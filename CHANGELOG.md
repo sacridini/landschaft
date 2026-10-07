@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.31.0] - 2026-10-07
+
 ### Added
 - `ls.prioritize.restoration_problem(restorable, limit=, cell_area=)`: plangea's restoration problem
   (Strassburg et al. 2020), how much of every converted cell to restore. Benefits: the reduction of the
