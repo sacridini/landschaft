@@ -104,6 +104,14 @@ suit = ls.sdm.predict(res, env)          # ensemble and its uncertainty
 
 ::: landschaft.sdm.importance
 
+## Area of habitat
+
+::: landschaft.sdm.area_of_habitat
+
+::: landschaft.sdm.HabitatAreas
+
+::: landschaft.sdm.cell_area_km2
+
 ## Example data
 
 ::: landschaft.sdm.example_data

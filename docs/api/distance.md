@@ -1,8 +1,9 @@
 # Distance & restoration
 
 Distances to the habitat edge, resistance maps, accumulated costs and
-least-cost paths, the connectivity gain of restoring a corridor, and the
-zones of influence of habitat objects. Tutorial:
+least-cost paths, the connectivity gain of restoring a corridor, the
+zones of influence of habitat objects, and two inputs of restoration plans:
+the original vegetation of converted land and ecological intactness. Tutorial:
 [distance and restoration](../tutorials/distance-restoration.md).
 
 ## Distance to the habitat
@@ -46,3 +47,15 @@ zones of influence of habitat objects. Tutorial:
 ::: landschaft.proximity
 
 ::: landschaft.ProximityResult
+
+## Original vegetation
+
+::: landschaft.original_vegetation
+
+::: landschaft.OriginalVegetation
+
+## Ecological intactness
+
+::: landschaft.intactness
+
+::: landschaft.intactness_gradient

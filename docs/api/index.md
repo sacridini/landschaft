@@ -76,7 +76,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     ---
 
-    Distances, resistance, least-cost paths, corridors, zones of influence.
+    Distances, resistance, least-cost paths, corridors, zones of influence, original vegetation, intactness.
 
 -   :material-compare-horizontal:{ .lg .middle } **[Change detection](change.md)**
 
@@ -119,6 +119,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
     ---
 
     Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation.
+
+-   :material-plus-minus-variant:{ .lg .middle } **[Uncertainty](uncertainty.md)**
+
+    ---
+
+    Totals, products, the delta method, Monte Carlo and confidence intervals.
 
 </div>
 
@@ -381,6 +387,10 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.InfluenceZonesResult`](distance.md#landschaft.InfluenceZonesResult) | Result of `influence_zones` |
 | [`ls.proximity`](distance.md#landschaft.proximity) | Proximity between neighbouring objects (GTB Distance -> Proximity) |
 | [`ls.ProximityResult`](distance.md#landschaft.ProximityResult) | Result of `proximity` |
+| [`ls.original_vegetation`](distance.md#landschaft.original_vegetation) | The original vegetation of converted land, and what restoration brings back |
+| [`ls.OriginalVegetation`](distance.md#landschaft.OriginalVegetation) | Result of `original_vegetation` |
+| [`ls.intactness`](distance.md#landschaft.intactness) | Ecological intactness from the human footprint (Beyer et al. 2020) |
+| [`ls.intactness_gradient`](distance.md#landschaft.intactness_gradient) | What restoring each cell adds to the total ecological intactness |
 
 ### Change detection
 
@@ -571,6 +581,9 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.predict`](sdm.md#landschaft.sdm.predict) | Project fitted models onto rasters of predictors (present or future conditions) |
 | [`ls.response_curves`](sdm.md#landschaft.sdm.response_curves) | How each model's suitability changes along one predictor, the others held at their mean (or median) |
 | [`ls.importance`](sdm.md#landschaft.sdm.importance) | Permutation importance: how much AUC drops when a predictor's values are shuffled |
+| [`ls.area_of_habitat`](sdm.md#landschaft.sdm.area_of_habitat) | Area of habitat of species: their ranges refined by habitats and elevations |
+| [`ls.HabitatAreas`](sdm.md#landschaft.sdm.HabitatAreas) | Result of `area_of_habitat` |
+| [`ls.cell_area_km2`](sdm.md#landschaft.sdm.cell_area_km2) | The area of every cell of a raster's grid in km²: the product of the resolutions in a projected coordinate system (in its linear unit), the cell on the ellipsoid in a geographic one |
 | [`ls.example_data`](sdm.md#landschaft.sdm.example_data) | Path of an example data set for species distribution modelling |
 
 ### Land change simulation
@@ -645,3 +658,15 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.scenarios`](simulate.md#landschaft.simulate.scenarios) | Run a model under several scenarios, several times each, in parallel |
 | [`ls.Ensemble`](simulate.md#landschaft.simulate.Ensemble) | The simulations of `scenarios`: every scenario, replicate and year |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |
+
+### Uncertainty
+
+| Name | Summary |
+|---|---|
+| [`ls.uncertainty.sum_sd`](uncertainty.md#landschaft.uncertainty.sum_sd) | Standard deviation of a total of uncertain values, sum of w_i v_i |
+| [`ls.uncertainty.product_sd`](uncertainty.md#landschaft.uncertainty.product_sd) | Standard deviation of the product of two uncertain values, x v |
+| [`ls.uncertainty.delta_method`](uncertainty.md#landschaft.uncertainty.delta_method) | Uncertainty of a result from the uncertainty of its parameters (delta method) |
+| [`ls.uncertainty.DeltaResult`](uncertainty.md#landschaft.uncertainty.DeltaResult) | Result of `delta_method` |
+| [`ls.uncertainty.monte_carlo`](uncertainty.md#landschaft.uncertainty.monte_carlo) | Uncertainty of a result by drawing its parameters (Monte Carlo) |
+| [`ls.uncertainty.MonteCarloResult`](uncertainty.md#landschaft.uncertainty.MonteCarloResult) | Result of `monte_carlo` |
+| [`ls.uncertainty.interval`](uncertainty.md#landschaft.uncertainty.interval) | The normal confidence interval of a value: value -/+ z sd, z the normal quantile of the level |

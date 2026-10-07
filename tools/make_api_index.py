@@ -32,7 +32,7 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("cost.md", "Grid distances", ":material-routes:",
           "Transitions, cost surfaces, least-cost and random-walk distances and paths."),
          ("distance.md", "Distance & restoration", ":material-map-marker-distance:",
-          "Distances, resistance, least-cost paths, corridors, zones of influence."),
+          "Distances, resistance, least-cost paths, corridors, zones of influence, original vegetation, intactness."),
          ("change.md", "Change detection", ":material-compare-horizontal:",
           "Habitat, fragmentation and landscape-mosaic change between dates."),
          ("batch.md", "Large data & batch", ":material-layers-triple-outline:",
@@ -46,7 +46,9 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("sdm.md", "Species distributions", ":material-map-search-outline:",
           "Clean records, choose predictors and background, spatial folds, fit, evaluate, project."),
          ("simulate.md", "Land change simulation", ":material-timeline-clock-outline:",
-          "Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation.")]
+          "Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation."),
+         ("uncertainty.md", "Uncertainty", ":material-plus-minus-variant:",
+          "Totals, products, the delta method, Monte Carlo and confidence intervals.")]
 
 INTRO = '''# API reference
 
@@ -112,6 +114,8 @@ def prefix(ident: str) -> str:
         return "ls.cost."
     if ".surface." in ident:
         return "ls.surface."
+    if ".uncertainty." in ident:
+        return "ls.uncertainty."
     if ".circuit." in ident and name != "omniscape":
         return "circuit."
     return "ls."

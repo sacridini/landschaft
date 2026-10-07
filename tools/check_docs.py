@@ -91,7 +91,7 @@ def run_page(path: Path) -> list[str]:
 
 def public_objects():
     """(qualified name, object) of the public API: landschaft, landschaft.conn,
-    landschaft.circuit, landschaft.nlm, landschaft.bio, landschaft.cost and the public
+    landschaft.circuit, landschaft.nlm, landschaft.bio, landschaft.cost, ... and the public
     methods of their classes."""
     import inspect
 
@@ -105,10 +105,11 @@ def public_objects():
     import landschaft.sdm
     import landschaft.simulate
     import landschaft.surface
+    import landschaft.uncertainty
 
     seen = set()
     for mod in (landschaft, landschaft.conn, landschaft.circuit, landschaft.nlm, landschaft.bio, landschaft.cost,
-                landschaft.surface, landschaft.prioritize, landschaft.sdm, landschaft.simulate):
+                landschaft.surface, landschaft.prioritize, landschaft.sdm, landschaft.simulate, landschaft.uncertainty):
         for name in getattr(mod, "__all__", []):
             obj = getattr(mod, name)
             if id(obj) in seen or not callable(obj):
