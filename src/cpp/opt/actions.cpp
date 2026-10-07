@@ -640,33 +640,48 @@ Compiled equivalent(const Input& in, const Pairs& p, const Settings& s) {
         b.row(0.0, kLe);
         b.row(-1.0, kGe);
     };
+    // one product column per unordered pair (both directions of a symmetric boundary matrix share it,
+    // their weights added: two columns would be a symmetry of the MIP, 3132 of them at 10^3 units, that
+    // held HiGHS's branch and bound at gap 0); the closure engine keeps every directed term
+    std::unordered_map<i64, std::size_t> pair_col;
+    std::vector<i64> pair_a, pair_b;
+    std::vector<double> pair_w;
+    auto product = [&](i64 u, i64 v, double w) {
+        const i64 lo = std::min(u, v), hi = std::max(u, v);
+        const auto [it, fresh] = pair_col.emplace(lo * (n + na) + hi, pair_w.size());
+        if (fresh) {
+            pair_a.push_back(lo);
+            pair_b.push_back(hi);
+            pair_w.push_back(w);
+        } else {
+            pair_w[it->second] += w;
+        }
+    };
     if (units_bnd)
         for (i64 c = 0; c < n; ++c)
             for (i64 k = bm.start[static_cast<std::size_t>(c)]; k < bm.start[static_cast<std::size_t>(c) + 1]; ++k) {
                 const i64 r = bm.index[static_cast<std::size_t>(k)];
                 if (r == c) continue;
                 const double v = bm.value[static_cast<std::size_t>(k)];
-                const i64 col = b.ncol();
-                b.column(maximize ? s.blm * v : -s.blm * v, true);
-                triple(col, r, c);
-                out.prod_a.push_back(r);
-                out.prod_b.push_back(c);
-                out.prod_neg.push_back(0);
+                product(r, c, s.blm * v);
                 out.pen_i.push_back(c);  // blm v w_c (1 - w_r): unit c's boundary term
                 out.pen_j.push_back(r);
                 out.pen_w.push_back(s.blm * v);
             }
     for (const auto& [aa, v] : pair_terms) {
         const double bt = in.blm_actions[static_cast<std::size_t>(in.act_threat[static_cast<std::size_t>(aa.first)])];
-        const i64 col = b.ncol();
-        b.column(maximize ? bt * v : -bt * v, true);
-        triple(col, n + aa.first, n + aa.second);
-        out.prod_a.push_back(n + aa.first);
-        out.prod_b.push_back(n + aa.second);
-        out.prod_neg.push_back(0);
+        product(n + aa.first, n + aa.second, bt * v);
         out.pen_i.push_back(n + aa.first);
         out.pen_j.push_back(n + aa.second);
         out.pen_w.push_back(bt * v);
+    }
+    for (std::size_t q = 0; q < pair_w.size(); ++q) {
+        const i64 col = b.ncol();
+        b.column(maximize ? pair_w[q] : -pair_w[q], true);
+        triple(col, pair_a[q], pair_b[q]);
+        out.prod_a.push_back(pair_a[q]);
+        out.prod_b.push_back(pair_b[q]);
+        out.prod_neg.push_back(0);
     }
     add_dependencies(b, s, &out, n);
     out.side_row0 = b.nrow();

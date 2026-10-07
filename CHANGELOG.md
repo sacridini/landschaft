@@ -15,6 +15,8 @@ in a new major version.
 - Maximum features: the bound is rounded down to a whole number of targets (the cost tie-break adds
   nothing to a maximisation), which proves gaps the linear relaxation alone does not (10⁴ units, targets
   of 20 %: a 7.7 % gap proven in 0.5 s instead of 10.5 % after 120 s).
+- Multi-action problems with boundary penalties: one product column per pair of neighbours instead of one
+  per direction (the two were a symmetry of the MIP): 38 % fewer columns at 10³ units.
 
 ### Fixed
 - The wide engine's sifting cycled on degenerate LPs (phylogenetic objectives at 10⁶ units: the units let
