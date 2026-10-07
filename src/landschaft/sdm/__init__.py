@@ -37,6 +37,7 @@ from ._folds import (
     spatial_clusters,
 )
 from ._gbif import download_gbif
+from ._habitat import HabitatAreas, area_of_habitat, cell_area_km2
 from ._maxnet import MaxNet
 from ._models import SDMResult, fit, importance, predict, response_curves
 from ._predictors import select_predictors, vif
@@ -46,14 +47,17 @@ from ._thin import thin
 
 __all__ = [
     "Evaluation",
+    "HabitatAreas",
     "MaxNet",
     "SDMData",
     "SDMResult",
     "accessible_area",
+    "area_of_habitat",
     "autocorrelation_range",
     "background",
     "boyce",
     "buffer_folds",
+    "cell_area_km2",
     "checkerboard_folds",
     "clean_occurrences",
     "dataset",

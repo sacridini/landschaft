@@ -227,6 +227,15 @@ target_include_directories(sdmcore PUBLIC src/cpp)
 # R's x87 maths (lsm/rmath.hpp), R's generator (nlm/rng.hpp), mingw's cbrt (cost/geodesic.hpp).
 target_link_libraries(sdmcore PUBLIC lsmcore nlmcore costcore)
 set_target_properties(sdmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Restoration planning inputs (after plangea): original vegetation, area of habitat, ecological intactness.
+add_library(restcore STATIC
+    src/cpp/rest/habitat.cpp
+    src/cpp/rest/intactness.cpp
+)
+target_include_directories(restcore PUBLIC src/cpp)
+# R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp).
+target_link_libraries(restcore PUBLIC lsmcore)
+set_target_properties(restcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Land use change (ls.simulate): cross-tabulation and change counts.
 add_library(simcore STATIC
     src/cpp/sim/change.cpp
@@ -318,6 +327,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(sdmcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(simcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(optcore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(restcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
         if(APPLE)
@@ -343,6 +353,7 @@ if(MSVC)
     target_compile_options(iocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(sdmcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(optcore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(restcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -356,15 +367,16 @@ else()
     target_compile_options(iocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(sdmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(optcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(restcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
 pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
                     src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
                     src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
-                    src/cpp/sim/python.cpp src/cpp/opt/python.cpp)
+                    src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp)
 target_link_libraries(_core PRIVATE eigen_headers)
 target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
-                      iocore sdmcore simcore optcore)
+                      iocore sdmcore simcore optcore restcore)
 if(MSVC)
     target_compile_options(_core PRIVATE /fp:precise)
 else()

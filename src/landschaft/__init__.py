@@ -96,6 +96,7 @@ from . import prioritize
 from . import sdm
 from . import simulate
 from . import surface
+from . import uncertainty
 from .lsm import (
     Landscape,
     SpatialSignatureAnalysis,
@@ -137,6 +138,8 @@ from .restoration import (
     restoration_status,
 )
 from .validation import InvalidInputError, validate_fad_input, validate_mspa_input
+from ._vegetation import VEGETATION_SOURCES, OriginalVegetation, original_vegetation
+from .intactness import INTACTNESS_GAMMA, intactness, intactness_gradient
 
 try:
     __version__ = _metadata.version("landschaft")  # single source: pyproject.toml
@@ -170,6 +173,7 @@ __all__ = [
     "GTN_COMPONENTS_COLORMAP",
     "GTN_IMPORTANCE_COLORMAP",
     "HabitatGraph",
+    "INTACTNESS_GAMMA",
     "INFLUENCE_CLASSES",
     "ISOCHRONE_CLASSES",
     "IsochroneResult",
@@ -182,6 +186,7 @@ __all__ = [
     "Landscape",
     "MSPA_CLASSES",
     "MorphologicalChangeResult",
+    "OriginalVegetation",
     "ParcellationResult",
     "ProximityResult",
     "RasterCollection",
@@ -194,6 +199,7 @@ __all__ = [
     "SPA_CLASSES",
     "SPAResult",
     "SimpleChangeResult",
+    "VEGETATION_SOURCES",
     "SpatialEntropyResult",
     "accounting",
     "accounting_colormap",
@@ -206,6 +212,7 @@ __all__ = [
     "sdm",
     "simulate",
     "surface",
+    "uncertainty",
     "batch",
     "clustering_fac",
     "conefor_inputs",
@@ -238,6 +245,8 @@ __all__ = [
     "gtn_importance",
     "gtn_importance_colormap",
     "influence_zones",
+    "intactness",
+    "intactness_gradient",
     "isochrone_map",
     "isochrone_map_ab",
     "landscape_metrics",
@@ -246,6 +255,7 @@ __all__ = [
     "landscape_mosaic_heatmap",
     "landscape_mosaic_stats",
     "least_cost_path",
+    "original_vegetation",
     "list_metrics",
     "lm_colormap",
     "clip",

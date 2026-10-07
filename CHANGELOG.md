@@ -6,6 +6,26 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.original_vegetation(land_cover, natural, anthropic, past=, ecoregions=, failsafe=)`: the natural
+  vegetation of converted land (the anthropic share of each pixel given back to the natural classes in
+  their past proportions, else those of the pixel's ecoregion, else the classes' mean ones) and the
+  vegetation restoration brings back, as plangea prepares them for its restoration model (Strassburg et
+  al. 2020); bit for bit plangea's `harmonize_oa`, with equal ecoregion shares when there are no
+  ecoregion maps (plangea divides the pixel's natural share instead) and no stop on NA in the failsafe.
+- `ls.sdm.area_of_habitat(ranges, land_cover, natural, suitability=, original=, elevation=, ...)`: the
+  area of habitat of species (Brooks et al. 2019) from ranges, habitat classes and elevation limits,
+  current and potential, and the habitat each species gains per unit of a cell restored (a sparse
+  matrix, `gain_map()`); bit for bit plangea's `harmonize_bd`. `ls.sdm.cell_area_km2`.
+- `ls.intactness(hfi, radius)` and `ls.intactness_gradient(hfi, reduction, radius)`: ecological
+  intactness from the human footprint (Beyer et al. 2020), after restoration too, and the complete
+  derivative of the total intactness with respect to restoring each cell (C++, OpenMP); bit for bit
+  plangea's `multi_calc_it`, with the window clipped at the raster's edges (plangea skips the cells near
+  the edges and gives them the mean).
+- `ls.uncertainty`: the standard deviation of totals of uncertain values (quadratic, linear, with a
+  correlation), of products (Goodman's exact variance), the delta method (central or forward
+  differences, a covariance matrix), Monte Carlo with a fixed seed and normal confidence intervals.
+
 ### Changed
 - Maximum features, phylogenetic diversity and phylogenetic endemism on HiGHS: after the wide engine, a
   local search over the set of targets met (additions and swaps, the most valuable first, each priced

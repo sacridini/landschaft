@@ -2197,6 +2197,63 @@ habitat que volta para cada espécie conforme a classe natural restaurada. O `ls
 * Paridade: os totais quadrático e linear contra o plangea; o produto e o método delta contra as fórmulas à mão
   e contra Monte Carlo (convergência); a SAR com incerteza de z contra o `multi_exrisk_aggregate` corrigido.
 
+### Andamento das partes 3, 2 e 4 (2026-10-07; a parte 1 espera os limites por unidade)
+* **Feitas as três ferramentas gerais**, no ramo do worktree (sem versão nova; integração pela sessão
+  principal). Núcleo C++ novo `src/cpp/rest/` (`restcore`: `habitat.cpp`, `intactness.cpp`, ligações
+  `rest_*` no `_core`), com a aritmética do R (somas das classes em sequência, `sum()`/`mean()`/`rowSums()`
+  em LDOUBLE pelo `lsm/rmath.hpp`, `exp`/`^`/`sqrt` do R).
+  * **Parte 3**: `ls.original_vegetation(land_cover, natural, anthropic, past=, ecoregions=, failsafe=,
+    threshold=0.95, restore_to="original"|"current")` (em `_vegetation.py`, no nível de cima, ao lado das
+    ferramentas de restauração; página "Distance & restoration") -> `OriginalVegetation` (`original`,
+    `restore`, `source` 0 passado / 1 ecorregião / 2 failsafe, `anthropic`, `failsafe`). A média do failsafe
+    é sobre os pixels com área antrópica (o `master_index` da restauração) ou sobre toda a terra com
+    `restore_to="current"` (o `master_index` de R + D do plangea). `ls.sdm.area_of_habitat(ranges,
+    land_cover, natural, suitability=, original=, elevation=, elevation_limits=, include_unlisted=,
+    cell_area=)` (em `ls.sdm`: refina as distribuições, um passo depois dos modelos) -> `HabitatAreas`
+    (tabela por espécie: `current`, `potential`, `range_cells`, `classes`, `valid`; `gain` esparsa espécie x
+    células = área da célula x Σ das frações restauradas das classes da espécie, nas células da distribuição
+    com área antrópica; `gain_map()`) e `ls.sdm.cell_area_km2` (projetado: produto das resoluções na unidade
+    do CRS; geográfico: a célula no elipsoide).
+  * **Parte 2**: `ls.intactness(hfi, radius, gamma, beta, z, cell_size=, reduction=, restored=)` e
+    `ls.intactness_gradient(hfi, reduction, radius, ...)` (`intactness.py`; `INTACTNESS_GAMMA` = -ln(0,2)/4,
+    os mesmos bits do R). Raio em células (o `n_pixels`), distâncias em km pela resolução (CRS projetado;
+    em graus, erro pedindo `cell_size`). Derivada completa da integridade total (decidido em 2026-10-04):
+    dT/dx_k = z γ a_k (Q_k + q_k^z Σ_i q_i^z w_ik / W_i), 0 onde a pegada já é 0; duas passadas sobre a
+    janela, OpenMP por linha.
+  * **Parte 4**: módulo `ls.uncertainty` (`uncertainty.py`, página própria na API): `sum_sd` (quadrática,
+    linear, correlação ρ constante: (1-ρ)Σs² + ρ(Σs)²), `product_sd` (variância exata de Goodman, por
+    elemento ou do total), `delta_method` (diferenças centrais ou à frente, matriz de covariância,
+    Jacobiano), `monte_carlo` (normais, semente fixa, quantis), `interval` (quantil normal do nível; o
+    plangea fixa 1,96). Sem os padrões ad hoc do `aux_calc_var_sd` (10 % do desvio): os desvios são dados.
+* **Paridade** (`tools/make_reference_plangea.py` + `tools/plangea_reference.R`; entradas em
+  `tests/plangea_cases.py`, só com números uniformes; referência em `tests/data/reference/plangea/`, com o md5
+  dos `R/*.R` do plangea no JSON). O harness faz `source()` dos arquivos do plangea, troca `aux_save/aux_load`
+  por RDS (falta o `qs`) e roda os `foreach` do `harmonize_bd` em sequência (faltam `snow`/`doSNOW`; o
+  `devtools::load_all` sai). Tudo **bit a bit**: `harmonize_oa` em 4 casos (passado + ecorregião, só
+  ecorregião, sem ecorregião com a forma corrigida, R + D), `harmonize_bd` em 2 (espécies fora da tabela
+  incluídas; excluídas + limites de elevação; inválidas: só água, só classe antrópica), o ganho (o
+  `prop_restore %*% usphab_proc` vezes a área), `multi_calc_it` com a borda corrigida em 4 casos (padrão,
+  outros parâmetros e células de 2 km, com restauração, com NaN), e o `multi_calc_it` original igual ao
+  nosso no interior. A derivada contra diferenças centrais (h = 1e-5) da integridade total corrigida no R:
+  rtol 1e-6. `prop_quad`/`prop_lin` (avaliados do próprio código do `post_aggregate_table_row`) e o
+  `aux_calc_var_sd` corrigido: 1e-14. O `multi_exrisk_aggregate` corrigido (raiz fora do laço) contra o
+  `delta_method` (à frente, 1e-6) sobre as reduções de risco por espécie: valor 1e-12, incerteza 1e-6.
+  Windows: 31 testes novos passam.
+* **Bugs do plangea achados agora** (só a forma correta): (1) sem mapas de ecorregião o `harmonize_oa` dá a
+  cada classe natural a fração natural do pixel dividida pelo número de classes (o comentário diz "flat
+  among natural types"), e quase toda a área convertida do pixel fica sem classe; aqui partes iguais;
+  (2) no failsafe as classes que ele não preenche ficam NA quando a soma era NA, e o `harmonize_oa` para com
+  erro; aqui 0; (3) `harmonize_bd_spid_constr` junta os limites com `c(lower, upper)`: uma espécie que falta
+  só na tabela do limite inferior tem o superior lido como inferior (aqui a tabela tem as duas colunas);
+  (4) a elevação NA vira 0 m (`na_fill = "zero"`); aqui a célula sem elevação fica na distribuição (o limite
+  não pode ser verificado).
+* **Para a parte 1**: o ganho por espécie está pronto (`HabitatAreas.gain`: área por unidade de x da célula,
+  x = fração da célula restaurada, como no plangea); o `bd` do plangea (as inclinações) fica guardado na
+  referência (`<caso>/bd`) para a paridade do `method="steps"`. O z da SAR é um parâmetro só, comum a todas
+  as espécies: a incerteza da redução total de risco deveria ser |d(total)/dz| σ_z (o `delta_method` sobre o
+  total), não a soma quadrática por espécie do plangea, que trata as espécies como independentes; decidir na
+  parte 1 (o teste atual reproduz o plangea corrigido só na raiz).
+
 ### Não portar
 O JSON de configuração e o cache de pastas do `harmonize` (a nossa E/S faz isso); o deslocamento
 `b + |min b| + 1` dos benefícios (muda o ranking de forma arbitrária); o "power range collapse" (reescala
