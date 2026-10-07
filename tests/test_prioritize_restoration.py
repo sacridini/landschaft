@@ -166,6 +166,45 @@ def test_exact_is_the_optimum(case, share):
     assert q.uniform().benefit < sol.benefit
 
 
+def test_z_per_species(ref, case):
+    """z: one number for all species (default plangea's 0.25), one per species or a mapping; the exact
+    optimum with species of different z is still the optimum, and the uncertainty takes a z_sd per
+    species."""
+    arrays, _ = ref
+    _, veg, aoh, p = case
+    names = list(aoh.table["species"])
+    assert np.all(p.benefits[0].z == 0.25)
+    same = P.restoration_problem(veg).add_extinction_risk_benefit(aoh, z=[0.25] * len(names))
+    x = arrays["bd_absent/x_vals"]
+    assert same.evaluate(x).benefit == p.evaluate(x).benefit
+    zmap = {"sp_a": 0.15, "sp_b": 0.4}
+    q = P.restoration_problem(veg).add_extinction_risk_benefit(aoh, z=zmap)
+    arr = P.restoration_problem(veg).add_extinction_risk_benefit(
+        aoh, z=[zmap.get(s, 0.25) for s in names])
+    b = q.benefits[0]
+    assert dict(zip(b.species, b.z)) == {s: zmap.get(s, 0.25) for s in b.species}
+    np.testing.assert_array_equal(arr.benefits[0].z, b.z)
+    r0, r1 = b.current / b.potential, (b.current + b.gain @ x) / b.potential
+    manual = np.sum(np.minimum(r1, 1) ** b.z - np.minimum(r0, 1) ** b.z)
+    assert q.evaluate(x).benefit == pytest.approx(manual, rel=1e-14)
+    target = 0.3 * float(q.upper @ q.area)
+    qq = q.add_area_target(target)
+    sol = qq.solve()
+    assert sol.status == "optimal" and sol.benefit == pytest.approx(_scipy_optimum(qq, target), rel=1e-6)
+    assert sol.benefit >= qq.solve(method="steps", steps=3).benefit - 1e-12
+    one = P.eval_risk_reduction(q, x, z_sd=0.1)
+    per = P.eval_risk_reduction(q, x, z_sd=dict.fromkeys(b.species, 0.1))
+    assert one.sd == pytest.approx(per.sd, rel=1e-15)
+    only_a = P.eval_risk_reduction(q, x, z_sd={"sp_a": 0.1}, method="linear")
+    assert 0 < only_a.sd < one.sd
+    with pytest.raises(ValueError, match="z must be"):
+        p.add_extinction_risk_benefit(aoh, z={"sp_a": 1.2}, name="bad")
+    with pytest.raises(ValueError, match="no species"):
+        p.add_extinction_risk_benefit(aoh, z={"nobody": 0.3}, name="bad")
+    with pytest.raises(ValueError, match="one per species"):
+        p.add_extinction_risk_benefit(aoh, z=[0.2, 0.3], name="bad")
+
+
 def test_min_cost_is_the_inverse_of_max_benefit(case):
     *_, p = case
     rng = np.random.default_rng(3)

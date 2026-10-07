@@ -2394,8 +2394,12 @@ habitat que volta para cada espécie conforme a classe natural restaurada. O `ls
   ecorregião só nos pixels do problema (`master_index`, os que têm área antrópica), deixando de fora a terra
   intacta da ecorregião: a perda fica exagerada (26 % de diferença na camada nos casos de teste). Aqui toda a
   ecorregião conta; o teste mostra a diferença contra o original.
-* **Decisões**: (1) a incerteza de z na redução total do risco é |d total / dz| σ_z (`method="correlated"`,
-  padrão: z é um parâmetro só, comum a todas as espécies); as formas do plangea ficam como `"independent"`
+* **z por espécie** (pedido do usuário em 2026-10-07): `z=` é um número para todas as espécies (padrão 0,25,
+  o do plangea), um valor por espécie (na ordem de `areas.table`) ou um dicionário espécie -> z (as que
+  faltam ficam com 0,25); o mesmo para o `z_sd` do `eval_risk_reduction` (as que faltam: 0). O método exato
+  e o `steps` usam o z de cada espécie (teste contra o SLSQP com z diferentes).
+* **Decisões**: (1) a incerteza de z na redução total do risco é |Σ_s d redução_s / dz_s σ_s|
+  (`method="correlated"`, padrão: os z erram juntos; com um z só, |d total / dz| σ_z); as formas do plangea ficam como `"independent"`
   (quadrática, corrigida) e `"linear"`; (2) os pesos dos benefícios ficam nas unidades de cada um (sem a
   escala automática do plangea, que só o `steps` usa); (3) a intactness entra linearizada em x = 0 no exato
   (recalculada a cada passo no `steps`); (4) o desconto multiplica o ganho uma vez (o 0,29^k do plangea não).

@@ -39,6 +39,7 @@ from ._milp import OptimizationProblem
 __all__ = ["RestorationProblem", "RestorationSolution", "RiskReduction", "ecosystem_areas",
            "eval_risk_reduction", "restoration_problem"]
 
+PLANGEA_Z = 0.25  # plangea's exponent of the species-area relationship
 PLANGEA_DELTA = 1e-6  # plangea's finite difference of the risk (in habitat area), method="steps"
 EXRISK_EPS = 1e-8  # plangea's multi_exrisk_aggregate: an updated habitat this close to 0 is 0
 
@@ -62,6 +63,23 @@ def _grid_values(data, what: str) -> tuple[xr.DataArray | None, np.ndarray]:
     if v.ndim != 2:
         raise ValueError(f"{what}: a 2-D raster or array")
     return None, v
+
+
+def _per_species(values, names: np.ndarray, default: float, what: str) -> np.ndarray:
+    """A number for every species, one per species or a mapping species -> value (default for the others)."""
+    if isinstance(values, Mapping):
+        unknown = set(map(str, values)) - set(names)
+        if unknown:
+            raise ValueError(f"{what}: no species {sorted(unknown)}")
+        out = np.array([float(values.get(s, default)) for s in names])
+    else:
+        v = np.asarray(values, dtype=np.float64)
+        if v.ndim > 1 or (v.ndim == 1 and v.size != names.size):
+            raise ValueError(f"{what}: a number, one per species ({names.size}) or a mapping species -> value")
+        out = np.broadcast_to(v, names.shape).astype(np.float64)
+    if not np.isfinite(out).all():
+        raise ValueError(f"{what}: NaN or infinite")
+    return out
 
 
 def _on_units(p: RestorationProblem, values, what: str) -> np.ndarray:
@@ -92,7 +110,7 @@ class _Risk:
     potential: np.ndarray
     gain: sp.csr_matrix  # species x units: habitat per unit share restored, times (1 - discount)
     hab: sp.csr_matrix  # species x units: the same per unit of the cell's area (plangea's hab_values)
-    z: float
+    z: np.ndarray  # one exponent per species
     discount: np.ndarray
 
 
@@ -137,7 +155,7 @@ class RestorationProblem:
         return int(self.index.size)
 
     # --- benefits
-    def add_extinction_risk_benefit(self, areas, z: float = 0.25, weight: float = 1.0,
+    def add_extinction_risk_benefit(self, areas, z=PLANGEA_Z, weight: float = 1.0,
                                     restoration_discount=0.0, name: str | None = None) -> RestorationProblem:
         """The reduction of the species' extinction risk (or of ecosystems' risk of collapse).
 
@@ -153,7 +171,9 @@ class RestorationProblem:
             original vegetation), on the problem's grid; the species that are not ``valid`` are left
             out.
         z
-            The exponent of the species-area relationship.
+            The exponent of the species-area relationship, in (0, 1): a number for every species
+            (default 0.25, plangea's), one per species (in the order of ``areas.table``) or a mapping
+            species -> z (species left out of it get 0.25).
         weight
             The benefit's weight in the objective.
         restoration_discount
@@ -170,13 +190,11 @@ class RestorationProblem:
             raise ValueError("areas: a HabitatAreas with its gain (area_of_habitat given the original vegetation)")
         if gain.shape[1] != self.shape[0] * self.shape[1]:
             raise ValueError("areas: not on the problem's grid")
-        if not 0 < float(z) < 1:
-            raise ValueError("z must be in (0, 1)")
         names = table["species"].astype(str).to_numpy()
-        if isinstance(restoration_discount, Mapping):
-            d = np.array([float(restoration_discount.get(s, 0.0)) for s in names])
-        else:
-            d = np.broadcast_to(np.asarray(restoration_discount, dtype=np.float64), names.shape).copy()
+        zs = _per_species(z, names, PLANGEA_Z, "z")
+        if (zs <= 0).any() or (zs >= 1).any():
+            raise ValueError("z must be in (0, 1)")
+        d = _per_species(restoration_discount, names, 0.0, "restoration_discount")
         if not np.isfinite(d).all() or (d < 0).any() or (d > 1).any():
             raise ValueError("restoration_discount must be in [0, 1]")
         keep = np.flatnonzero(table["valid"].to_numpy(bool) & (table["potential"].to_numpy(np.float64) > 0))
@@ -190,7 +208,7 @@ class RestorationProblem:
         risk = _Risk(name=self._name(name, "extinction_risk"), weight=float(weight), species=tuple(names[keep]),
                      current=table["current"].to_numpy(np.float64)[keep].copy(),
                      potential=table["potential"].to_numpy(np.float64)[keep].copy(), gain=gd, hab=hab,
-                     z=float(z), discount=d[keep])
+                     z=zs[keep].copy(), discount=d[keep])
         return replace(self, benefits=self.benefits + (risk,))
 
     def add_linear_benefit(self, values, weight: float = 1.0, name: str | None = None,
@@ -925,14 +943,17 @@ def eval_risk_reduction(problem: RestorationProblem, solution, z_sd: float | Non
     solution
         A :class:`RestorationSolution`, or the share restored per unit (or a raster).
     z_sd
-        The standard deviation of z (plangea: 0.1); None: no uncertainty.
+        The standard deviation of z (plangea: 0.1): a number for every species, one per species (in
+        the order of the benefit's species) or a mapping species -> deviation (0 for the others); None:
+        no uncertainty.
     benefit
         The extinction-risk benefit to evaluate (default: the first).
     method
-        How the species' sensitivities to z add up. ``"correlated"`` (the default): z is one number
-        shared by all species, so the total's deviation is |d total / dz| sd (the delta method on the
-        total). ``"independent"`` sums them in quadrature and ``"linear"`` sums their absolute values,
-        plangea's two forms (they treat the species' z as separate parameters).
+        How the species' sensitivities to z add up. ``"correlated"`` (the default): the species' z err
+        together (one z for all of them, or per-species values from one source), so the total's
+        deviation is |sum_s d reduction_s / dz_s sd_s| (the delta method on the total).
+        ``"independent"`` sums them in quadrature and ``"linear"`` sums their absolute values, plangea's
+        two forms (they treat the species' z as separate parameters).
     step
         The forward difference of z (plangea's 1e-6).
 
@@ -969,7 +990,7 @@ def eval_risk_reduction(problem: RestorationProblem, solution, z_sd: float | Non
     after = b.current + gained
     after = np.where(np.abs(after) < EXRISK_EPS, 0.0, after)
 
-    def reduction(z: float) -> np.ndarray:
+    def reduction(z: np.ndarray) -> np.ndarray:
         before = np.maximum(1.0 - (b.current / b.potential) ** z, 0.0)
         aft = np.maximum(1.0 - (after / b.potential) ** z, 0.0)
         return np.nan_to_num(before - aft)
@@ -981,13 +1002,14 @@ def eval_risk_reduction(problem: RestorationProblem, solution, z_sd: float | Non
     total = float(np.sum(red))
     sd = math.nan
     if z_sd is not None:
+        sz = _per_species(z_sd, np.asarray(b.species), 0.0, "z_sd")
         d = (reduction(b.z + step) - red) / step
         if method == "correlated":
-            sd = abs(float(np.sum(d))) * float(z_sd)
+            sd = abs(float(np.sum(d * sz)))
         elif method == "independent":
-            sd = math.sqrt(float(np.sum((d * z_sd) ** 2)))
+            sd = math.sqrt(float(np.sum((d * sz) ** 2)))
         elif method == "linear":
-            sd = float(np.sum(np.abs(d * z_sd)))
+            sd = float(np.sum(np.abs(d * sz)))
         else:
             raise ValueError("method: 'correlated', 'independent' or 'linear'")
     return RiskReduction(table=table, total=total, sd=sd, method=method)
