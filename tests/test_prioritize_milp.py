@@ -111,6 +111,19 @@ def test_problem_is_immutable_and_order_free():
     assert np.array_equal(ma.rhs, mb.rhs) and (ma.A != mb.A).nnz == 0
 
 
+def test_prioritizr_9_names_are_aliases():
+    base = (ls.prioritize.problem(optimize_cases.pu_cost(), optimize_cases.features())
+            .add_relative_targets(0.3).add_binary_decisions())
+    budget = float(np.nansum(optimize_cases.pu_cost().values)) * 0.2
+    pairs = [(base.add_max_wtd_sum_objective(budget), base.add_max_utility_objective(budget)),
+             (base.add_max_n_targets_met_objective(budget), base.add_max_features_objective(budget)),
+             (base.add_min_set_objective().add_neighbor_constraints(2),
+              base.add_min_set_objective().add_neighbors_constraints(2))]
+    for a, b in pairs:
+        ma, mb = a.compile(), b.compile()
+        assert np.array_equal(ma.obj, mb.obj) and np.array_equal(ma.rhs, mb.rhs) and (ma.A != mb.A).nnz == 0
+
+
 def test_errors():
     base = ls.prioritize.problem(optimize_cases.pu_cost(), optimize_cases.features())
     with pytest.raises(ValueError, match="no objective"):

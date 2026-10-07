@@ -1903,12 +1903,24 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   * Windows: suíte inteira 3408 passam; Linux (WSL): 375 passam, 0 falham (o `coarsen` agora sem o
     `coarsen` do xarray, cujo `sum` perdeu o `skipna` na 2026.9). Versão **1.26.0**.
 
+### Andamento da fase 10 (documentação)
+* **Fase 10 completa** (2026-10-07). Parte 1 (1.27.0): `example_data()` (Serra Verde), exemplos executáveis em
+  todas as funções públicas da otimização, seções da página da API. Parte 2 (1.27.0): parte "Conservation
+  priorities" do Learn em dez capítulos, tutorial "Optimized conservation plans", benchmarks e exatidão em
+  `docs/benchmarks.md`. Parte 3 (1.28.0): guia de migração `docs/api/prioritization-migration.md` (prioritizr
+  8/9, prioriactions e prioripy, função por função; roteiro lado a lado R ↔ Python; o que esperar ao comparar
+  resultados: as mudanças do prioritizr 9 (fronteira reescalada para máximo 1, termo de desempate por custo
+  removido, nomes novos); o que não existe (zonas, `add_neighbor_penalties`, `multi_problem` com soma ponderada
+  e ponto de referência, `presolve_check`, `spec_*_targets`); substitutos das avaliações exclusivas do
+  prioripy). Aliases com os nomes do prioritizr 9 e mais novos: `add_max_wtd_sum_objective`,
+  `add_max_n_targets_met_objective`, `add_neighbor_constraints` (o modelo continua o do 8.0.6).
+
 ### Próximos passos (retomar daqui)
-1. **Fase 10, documentação**: tutorial, capítulo do Learn, página de benchmarks, guia de migração do
-   prioritizr/prioriactions/prioripy (tabela R <-> Python).
-2. **Pendências de pesquisa** (da fase 9): contiguidade e corredores com cortes dentro do B&B, limite do
+1. **Pendências de pesquisa** (da fase 9): contiguidade e corredores com cortes dentro do B&B, limite do
    max_features, filogenéticos em 10⁶, multi-action com fronteira em gap 0 e o núcleo simétrico, fluxos
    dinâmicos e reparo paralelo no motor de cortes; replacement importance sem o aquecimento do LP largo.
+2. Sob pedido: ProxIRR (Baisero et al. 2021, clean-room pelo artigo), zonas do prioritizr,
+   `add_neighbor_penalties`.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
@@ -2615,7 +2627,7 @@ ls.sdm.mess(data, fut)
    rigoroso; AVX2 com a mesma ordem de soma). Modelo padrão do `fit`.
 8. **Feito**: capítulo 13 do Learn ("Species distributions"; "From question to tool" virou 14), tutorial
    `docs/tutorials/species-distributions.md`, glossário, leituras, índice da API. Benchmarks contra os pacotes
-   R ficaram nos números dos commits (página de benchmarks: pendente).
+   R na página de benchmarks (`docs/benchmarks.md`, seção do `ls.sdm`).
 Desempenho: o `sample.int(..., prob)` sem reposição do R ficou exato e rápido (sequências de pesos iguais em
 forma fechada + Fenwick: 1 milhão de células e 30 mil sorteios em 0,24 s contra 16-20 s).
 

@@ -199,6 +199,7 @@ nav:
       - Neutral landscape models: api/nlm.md
       - Biodiversity analysis: api/biodiversity.md
       - Spatial prioritization: api/prioritization.md
+      - From prioritizr, prioriactions and prioripy: api/prioritization-migration.md
       - Species distributions: api/sdm.md
       - Land change simulation: api/simulate.md
   - Benchmarks: benchmarks.md

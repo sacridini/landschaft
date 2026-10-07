@@ -269,7 +269,9 @@ Zonation.
 
 Results are the same as the originals': prioritizr and prioriactions models agree row by row, Marxan with
 the same seed gives the same runs, and Zonation 5 the same ranking. That makes it easy to move an existing
-analysis and check it.
+analysis and check it. The
+[migration guide](../../api/prioritization-migration.md) has the full dictionary, function by function,
+for prioritizr, prioriactions and prioripy.
 
 !!! success "Key points"
     - The software works in the middle of a longer process; goals, data and discussion matter more.

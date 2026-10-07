@@ -423,6 +423,16 @@ class Problem:
         """Maximum features: within the budget, the most targets met (weighted)."""
         return self._with(objective=("max_features", _budget(budget)))
 
+    def add_max_wtd_sum_objective(self, budget: float) -> Problem:
+        """:meth:`add_max_utility_objective` under prioritizr 9's name (the model is 8.0.6's, with the
+        small cost term that breaks ties, which prioritizr 9 dropped)."""
+        return self.add_max_utility_objective(budget)
+
+    def add_max_n_targets_met_objective(self, budget: float) -> Problem:
+        """:meth:`add_max_features_objective` under prioritizr 9's name (the model is 8.0.6's, with the
+        small cost term that breaks ties, which prioritizr 9 dropped)."""
+        return self.add_max_features_objective(budget)
+
     def add_max_cover_objective(self, budget: float) -> Problem:
         """Maximum cover: within the budget, the most features held at all (any amount above zero,
         weighted); no targets."""
@@ -604,6 +614,10 @@ class Problem:
         if int(k) != k or k < 0:
             raise ValueError("k must be a whole number >= 0")
         return self._add("constraint", "neighbors", int(k), bool(clamp), data)
+
+    def add_neighbor_constraints(self, k: int, clamp: bool = True, data=None) -> Problem:
+        """:meth:`add_neighbors_constraints` under the name of prioritizr's newer versions."""
+        return self.add_neighbors_constraints(k, clamp, data)
 
     def add_feature_contiguity_constraints(self, data=None) -> Problem:
         """Every feature's units (where it is counted towards its targets) must form one contiguous
