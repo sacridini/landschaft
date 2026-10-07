@@ -2132,8 +2132,9 @@ do plangea". Entram as três abaixo, sem ordem obrigatória.
 1. Fase 11: feita até onde dava sem cortes no B&B (1.30.0); o que ficou aberto está na lista acima.
 2. Desempenho das métricas de paisagem e da reprojeção (ordem pedida pelo usuário).
 3. **Lacunas em relação ao prioripy**: feitas e integradas (1.30.0).
-4. **Restauração a partir do plangea**: partes 2, 3 e 4 (ferramentas gerais) feitas e integradas (1.30.0); falta
-   a parte 1, o problema de restauração no `ls.prioritize` (os limites por unidade já existem).
+4. **Restauração a partir do plangea**: partes 2, 3 e 4 (ferramentas gerais) feitas e integradas (1.30.0); parte
+   1 (o problema de restauração, variante `R`) feita no ramo do worktree, a integrar; abertos: `C`/`D` e o
+   resto listado em "Andamento da parte 1".
 5. Sob pedido: zonas do prioritizr, `add_neighbor_penalties`.
 
 ### Decisões
@@ -2335,6 +2336,73 @@ habitat que volta para cada espécie conforme a classe natural restaurada. O `ls
   as espécies: a incerteza da redução total de risco deveria ser |d(total)/dz| σ_z (o `delta_method` sobre o
   total), não a soma quadrática por espécie do plangea, que trata as espécies como independentes; decidir na
   parte 1 (o teste atual reproduz o plangea corrigido só na raiz).
+
+### Andamento da parte 1 (2026-10-07; ramo do worktree, sem versão nova)
+* **Feita a variante `R` (restauração)**, em `ls.prioritize` (`_restoration.py`), como classe própria ao lado do
+  `ActionsProblem` (a decisão é a fração de cada célula restaurada, os benefícios são não lineares no habitat:
+  não cabe no `Problem` do prioritizr). API: `restoration_problem(restorable, limit=, cell_area=)` (unidades =
+  células com fração restaurável > 0, `restorable` raster ou `OriginalVegetation`; `limit` = o `blim` do
+  plangea, número ou raster) -> `RestorationProblem` imutável com `add_extinction_risk_benefit(areas, z,
+  weight, restoration_discount, name)` (um `HabitatAreas`; só as espécies `valid`), `add_linear_benefit(values,
+  per="area"|"cell")` (carbono), `add_intactness_benefit(hfi, reduction, radius, ...)` (o gradiente da
+  integridade total em x = 0), `add_area_target(target, sense, regions=)` (paisagem ou por região: dicionário
+  ou tabela `region`/`target`/`sense`), `add_budget(budget, cost)`, `add_min_cost_objective(benefit, cost)`,
+  `add_highs_solver(tolerance=1e-7, ...)`/`add_gurobi_solver`, `solve(method="exact"|"steps", steps)`,
+  `evaluate(x)`, `uniform(area)` (o `scen_uniform`) -> `RestorationSolution` (`restored` raster, `values`,
+  `area`, `cost`, tabela `benefits`, `benefit`, `objective`, `bound`, `status`, `method`, `rounds`). Mais
+  `ecosystem_areas(land_cover, natural, anthropic, ecoregions)` (o `ec`: um `HabitatAreas` com as ecorregiões
+  como "espécies", ganho = área da célula nas células com área antrópica) e `eval_risk_reduction(problem,
+  solution, z_sd, method)` -> `RiskReduction` (tabela por espécie, total, desvio).
+* **Método exato** (decidido em 2026-10-04: max dos benefícios ponderados com metas de área e orçamento; a forma
+  inversa também). O benefício 1 - risco = min(r, 1)^z, r = (A + (1 - d) g . x) / P, é côncavo em x.
+  * Primeiro tentado: um LP só com planos tangentes de cada espécie (Kelley), cortes adicionados onde a solução
+    pede. Com o ganho da espécie inteiro em cada corte, 10⁴ células e 100 espécies em 1,4 s (0,2 s por LP no
+    motor largo); com uma coluna de habitat por espécie amarrada por uma linha de igualdade (cortes de 2
+    entradas), 10 vezes mais lento por LP. Em 9 x 10⁴ células e 500 espécies (7,9 milhões de ganhos) não
+    terminou em 15 min: cada corte repete a linha inteira de ganhos. Descartado.
+  * Adotado: **decomposição simplicial**. Os vértices do conjunto de planos vêm de LPs só com as linhas do
+    problema (metas, orçamento) e o gradiente dos benefícios como objetivo (motor largo); o plano é a melhor
+    mistura dos vértices achados (problema mestre pequeno e suave, SLSQP com gradiente exato, do lambda
+    anterior); o limite é o de Frank-Wolfe, F(x) + grad F(x) . (v - x), válido pela concavidade, só com o LP
+    do vértice ótimo (um LP parado no tempo não dá limite). Vértices fora da mistura saem. 10⁴ x 100: 0,38 s;
+    9 x 10⁴ x 500: **0,57 s** (7 vértices), gap 1e-7 provado. Um mestre por Kelley (LPs densos pequenos) levou
+    62 s e depois 3,3 s com tolerância adaptativa: o SLSQP é muito melhor.
+  * **Custo mínimo para um benefício**: bissecção no orçamento (o benefício máximo é côncavo e crescente no
+    orçamento), cada passo um max com orçamento; o limite é o maior orçamento provado insuficiente (limite do
+    max abaixo da meta). 10⁴ x 100: 25 passos, 12 s. A tolerância interna de 0,01 x tol fazia o Frank-Wolfe
+    arrastar (2069 iterações): usa a mesma tolerância.
+  * Testes: o ótimo contra o SLSQP do scipy no problema inteiro (rtol 1e-6), exato >= passos (1, 3, 10) >=
+    uniforme, max com orçamento <-> custo mínimo (o custo volta ao orçamento, rtol 1e-5), metas por região,
+    benefício linear = mochila fracionária gulosa, desconto (1: benefício 0; 0,5 = ganho pela metade; por
+    espécie), intactness = o gradiente, Gurobi = HiGHS.
+* **`method="steps"`** (o procedimento do plangea, para comparação): cada célula com Σ peso x sf x camada / custo
+  (sf = 1 / 10^trunc(log10 max|camada|), uma vez no início), a meta de área em `steps` partes (cada LP com o
+  limite superior reduzido pelo já restaurado), `bd` e intactness recalculados entre as partes (o `bd` com
+  as inclinações por diferença finita δ = 1e-6 em área, vezes a fração de habitat por unidade: a convenção
+  do plangea, sem a área da célula). Só metas de área (sem orçamento nem custo mínimo), como o plangea.
+* **Paridade** (harness do plangea estendido: `scen_objective_function`, `scen_solver` no Gurobi (falta o
+  Rsymphony), `.multi_refresh_vars_update_hab` sem cluster, `multi_calc_ec` com o `harmonize_ec` escrito em RDS):
+  * unidades e limites = `master_index` e as frações antrópicas; o `bd` inicial: rtol 1e-15 (o ganho guardado
+    por km² e dividido de volta);
+  * o laço do `scen` (meta "<=", blim 1, só `bd`, `rescale_ben = FALSE`) em 1, 3 e 4 passos: o x final igual a
+    1e-15 (os LPs têm ótimo único); as camadas `bd` recalculadas no x acumulado do plangea: rtol 1e-7 (a
+    diferença finita com δ = 1e-6 sobre áreas ~20 amplifica as diferenças de último bit das somas de habitat
+    para ~1e-8);
+  * `multi_calc_ec` com as áreas das ecorregiões sobre toda a terra: rtol 1e-7 (a mesma diferença finita);
+  * `multi_exrisk_aggregate` corrigido: total 1e-12, desvio 1e-6 nas formas independente e linear.
+* **Bug do plangea achado agora** (só a forma correta): o `multi_calc_ec` soma a área natural de cada
+  ecorregião só nos pixels do problema (`master_index`, os que têm área antrópica), deixando de fora a terra
+  intacta da ecorregião: a perda fica exagerada (26 % de diferença na camada nos casos de teste). Aqui toda a
+  ecorregião conta; o teste mostra a diferença contra o original.
+* **Decisões**: (1) a incerteza de z na redução total do risco é |d total / dz| σ_z (`method="correlated"`,
+  padrão: z é um parâmetro só, comum a todas as espécies); as formas do plangea ficam como `"independent"`
+  (quadrática, corrigida) e `"linear"`; (2) os pesos dos benefícios ficam nas unidades de cada um (sem a
+  escala automática do plangea, que só o `steps` usa); (3) a intactness entra linearizada em x = 0 no exato
+  (recalculada a cada passo no `steps`); (4) o desconto multiplica o ganho uma vez (o 0,29^k do plangea não).
+* **Ficam abertos**: conservação (`C`) e conversão (`D`, x negativo) e os limites econométricos por sub-região;
+  a curva de trade-off em passos (usar o exato com várias metas); intactness exata (não é côncava em geral);
+  escala global (milhões de células, milhares de espécies) medida só até 9 x 10⁴ x 500; o custo mínimo por
+  bissecção poderia usar interpolação (benefício côncavo no orçamento) em vez do meio.
 
 ### Não portar
 O JSON de configuração e o cache de pastas do `harmonize` (a nossa E/S faz isso); o deslocamento

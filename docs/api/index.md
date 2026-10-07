@@ -548,6 +548,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.ActionsProblem`](prioritization.md#landschaft.prioritize.ActionsProblem) | A multi-action problem (prioriactions's ``problem()``): see `problem` |
 | [`ls.ActionsSolution`](prioritization.md#landschaft.prioritize.ActionsSolution) | A solution of an `ActionsProblem` |
 | [`ls.ActionsPortfolio`](prioritization.md#landschaft.prioritize.ActionsPortfolio) | Several solutions of an `ActionsProblem` (`add_cuts_portfolio` and the others) |
+| [`ls.restoration_problem`](prioritization.md#landschaft.prioritize.restoration_problem) | A restoration problem: how much of every converted cell to restore |
+| [`ls.RestorationProblem`](prioritization.md#landschaft.prioritize.RestorationProblem) | A restoration problem (see `restoration_problem`), built up by its ``add_*`` methods; every method returns a new problem |
+| [`ls.RestorationSolution`](prioritization.md#landschaft.prioritize.RestorationSolution) | A restoration plan |
+| [`ls.ecosystem_areas`](prioritization.md#landschaft.prioritize.ecosystem_areas) | The natural area of every ecosystem (ecoregion) now and before conversion, and what restoring a cell gives it: the input of `add_extinction_risk_benefit` for the risk of ecosystem collapse (plangea's ``ec``) |
+| [`ls.eval_risk_reduction`](prioritization.md#landschaft.prioritize.eval_risk_reduction) | The reduction of the extinction risk a plan brings (plangea's ``multi_exrisk_aggregate``), with the uncertainty of the species-area exponent z |
+| [`ls.RiskReduction`](prioritization.md#landschaft.prioritize.RiskReduction) | Result of `eval_risk_reduction`: per species, its habitat and risk before and after; the total reduction and its standard deviation from the uncertainty of z |
 | [`ls.marxan`](prioritization.md#landschaft.prioritize.marxan) | Run Marxan: ``num_reps`` independent runs of annealing and iterative improvement (or the greedy heuristics) minimising cost + ``blm`` x boundary + penalties for the features' shortfalls |
 | [`ls.MarxanResult`](prioritization.md#landschaft.prioritize.MarxanResult) | The runs of `marxan` |
 

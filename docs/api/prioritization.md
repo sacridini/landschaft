@@ -304,6 +304,28 @@ budget: prioriactions's models (Salgado-Rojas et al. 2020), bit for bit, from ta
 
 ::: landschaft.prioritize.ActionsPortfolio
 
+## Restoration planning
+
+How much of every converted cell to restore, for the most reduction of the species' extinction risk
+(and of the ecosystems' risk of collapse), carbon and ecological intactness within area targets and a
+budget, or the cheapest plan for a benefit: the restoration problem of plangea (Strassburg et al. 2020).
+The species-area curves are concave, so the optimum is found exactly, by linear programs with tangent
+planes of the curves; plangea's own procedure (benefit per cost per cell, the target in steps) is
+`method="steps"`. The inputs come from `ls.original_vegetation`, `ls.sdm.area_of_habitat` and
+`ls.intactness_gradient`.
+
+::: landschaft.prioritize.restoration_problem
+
+::: landschaft.prioritize.RestorationProblem
+
+::: landschaft.prioritize.RestorationSolution
+
+::: landschaft.prioritize.ecosystem_areas
+
+::: landschaft.prioritize.eval_risk_reduction
+
+::: landschaft.prioritize.RiskReduction
+
 ## Simulated annealing
 
 Marxan 4's runs, unit by unit as the program, and its annealing as a solver of any problem
