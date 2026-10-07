@@ -6,6 +6,22 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.prioritize.restoration_problem(restorable, limit=, cell_area=)`: plangea's restoration problem
+  (Strassburg et al. 2020), how much of every converted cell to restore. Benefits: the reduction of the
+  species' extinction risk 1 - (A / P)^z with the habitat restored (`add_extinction_risk_benefit`, from
+  `ls.sdm.area_of_habitat`, with a `restoration_discount`), the risk of ecosystem collapse
+  (`ls.prioritize.ecosystem_areas`), linear benefits such as carbon and ecological intactness by its
+  gradient; area targets in the landscape or per region, a budget, or the cheapest plan for a benefit.
+  The risk curves are concave and the problem is solved to a proven tolerance (simplicial decomposition
+  with the Frank-Wolfe bound; 9 x 10⁴ cells and 500 species in 0.6 s), not by plangea's heuristic of
+  benefit per cost and steps of the target, which is `method="steps"`, the same plans as plangea's loop
+  (to 1e-15). `RestorationProblem.uniform()` is plangea's uniform scenario.
+- `ls.prioritize.eval_risk_reduction(problem, solution, z_sd=)`: the reduction of the extinction risk of
+  a plan, per species and in total (plangea's `multi_exrisk_aggregate`, with its square root after the
+  loop over species), and its standard deviation from the uncertainty of z: by default with z one
+  parameter of every species (|d total / dz| sd), or plangea's two forms (`"independent"`, `"linear"`).
+
 ## [1.30.0] - 2026-10-07
 
 ### Added

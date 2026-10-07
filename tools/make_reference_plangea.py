@@ -141,6 +141,11 @@ def main() -> None:
         for c in cases:
             if c["kind"] == "bd" and c["bd"].get("exrisk"):
                 c["bd"]["x_vals"] = pc.exrisk_x(n_master).tolist()
+                c["bd"]["scen"] = [{"name": k, **v} for k, v in pc.SCEN_CASES.items()]
+        eco_file = write_tif(tmp / "ecoregion_codes.tif", pc.ecoregion_codes())
+        for name, spec in pc.EC_CASES.items():
+            cases.append({"name": name, "kind": "ec", "oa": oa_job(tmp, name + "_oa", pc.OA_CASES["oa_past_er"]),
+                          "domain": spec["domain"], "eco_file": eco_file, "x_vals": pc.ec_x(n_master).tolist()})
         job = {"plangea": args.plangea.joinpath("R").as_posix(), "cases": cases}
         (tmp / "job.json").write_text(json.dumps(job), encoding="utf-8")
         out = tmp / "out"

@@ -173,3 +173,33 @@ def exrisk_x(n: int) -> np.ndarray:
     """The restored shares of bd_absent's master pixels."""
     rng = np.random.default_rng(32)
     return rng.random(n) * 0.5
+
+
+def ecoregion_codes() -> np.ndarray:
+    """Ecoregion codes (9, 11): three zones by columns, every cell coded (multi_calc_ec stops on NA)."""
+    out = np.empty(SHAPE)
+    for j in range(SHAPE[1]):
+        out[:, j] = 1 + min(j * 3 // SHAPE[1], 2)
+    return out
+
+
+def ec_x(n: int) -> np.ndarray:
+    """Restored shares of the master pixels for the ecosystem cases."""
+    rng = np.random.default_rng(33)
+    return rng.random(n) * 0.4
+
+
+# plangea's restoration procedure (scen's loop: benefit per pixel, the area target in steps, bd refreshed
+# between them) on bd_absent: steps and the area target as a share of the restorable area (sense "<=")
+SCEN_CASES = {
+    "scen_1": dict(steps=1, share=0.3),
+    "scen_3": dict(steps=3, share=0.3),
+    "scen_4_60": dict(steps=4, share=0.6),
+}
+
+# the risk of ecosystem collapse (multi_calc_ec): the ecoregions' natural area over plangea's master pixels
+# (its form) or over all the land (the corrected one)
+EC_CASES = {
+    "ec_master": dict(domain="master"),
+    "ec_land": dict(domain="land"),
+}

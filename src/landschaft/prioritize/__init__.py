@@ -101,6 +101,14 @@ from ._milp_solve import Solution
 from ._postprocess import AreaStatistics
 from ._project import read_project, run_project
 from ._proxirr import ProxIRR, eval_proxirr, eval_proxirr_marxan
+from ._restoration import (
+                              RestorationProblem,
+                              RestorationSolution,
+                              RiskReduction,
+                              ecosystem_areas,
+                              eval_risk_reduction,
+                              restoration_problem,
+)
 from ._zonation import RULES, ZonationResult, zonation, zonation_features
 
 __all__ = [
@@ -124,6 +132,9 @@ __all__ = [
                               "PrioritizationReport",
                               "ProxIRR",
                               "Problem",
+                              "RestorationProblem",
+                              "RestorationSolution",
+                              "RiskReduction",
                               "Solution",
                               "TradeOffs",
                               "ZonationComparison",
@@ -141,6 +152,7 @@ __all__ = [
                               "connectivity_matrix",
                               "convolve",
                               "decay_connectivity",
+                              "ecosystem_areas",
                               "eval_asym_connectivity_summary",
                               "eval_boundary_summary",
                               "eval_connectivity_summary",
@@ -158,6 +170,7 @@ __all__ = [
                               "eval_rank_importance",
                               "eval_rare_richness_importance",
                               "eval_replacement_importance",
+                              "eval_risk_reduction",
                               "eval_target_coverage_summary",
                               "example_data",
                               "h3_units",
@@ -172,6 +185,7 @@ __all__ = [
                               "read_project",
                               "refine",
                               "report",
+                              "restoration_problem",
                               "run_project",
                               "sdm_features",
                               "topsis",
