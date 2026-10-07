@@ -235,6 +235,11 @@ methods of 8.1 (`spec_*_targets()`). Open an issue if you need one of them.
   plan use a small gap.
 - **Faster, not different.** Landschaft's own engines (covering, cuts, closure) reach the solutions faster
   than the solver alone and prove the same bounds; the [benchmarks](../benchmarks.md) list the times.
+- **Top fractions count cells by position.** prioripy's landscape identification and comparison take
+  every unit at or above a quantile of the surface, so ties can add units. Landschaft follows Zonation:
+  the cells are ranked by position (ties: the earlier cell in row order ranks lower) and the top
+  fraction is the cells ranked at or above 1 − fraction, which on a Zonation ranking gives Zonation's
+  own areas. The areas are 8-connected by default (prioripy: 4) and keep Zonation's numbers.
 
 To check a migrated analysis, export R's compiled model and compare:
 
@@ -334,8 +339,8 @@ prioritizr's models exactly, so some results change (see the next section).
 | `eval_ferrier_importance` (a simplified ratio) | `P.eval_ferrier_importance`: Ferrier et al.'s index, as prioritizr |
 | `eval_irreplaceability(prob, portfolio)` | `p.add_cuts_portfolio(n).solve().frequency` (flexibility: 1 − frequency) |
 | `eval_marginal_loss(prob, s)` | `P.eval_replacement_importance(p, s)` (the objective's loss, by re-solving) |
-| `eval_landscape_identification(...)` | `P.eval_landscape_metrics(s)`, or `ls.lsm` on a thresholded ranking |
-| `eval_landscape_comparison(a, b)` | `P.compare_zonation(p, s)` for a solution against a ranking; the overlap of two selections in numpy |
+| `eval_landscape_identification(prob, importance, top_fraction, min_size, connectivity, merge_distance)` | `P.eval_landscape_identification(surface, top_fraction, min_size=, connectivity=, merge_distance=, problem=p)` (8-connected by default, as Zonation; the top fraction by Zonation's rule, see below) |
+| `eval_landscape_comparison(prob, a, b, thresholds)` | `P.eval_landscape_comparison(a, b, fractions)` |
 | `eval_roi_vulnerability(...)` | the features' sum over the cost, in numpy (below) |
 | `eval_proxirr(...)` | not available |
 | `calc_extinction_risk_features(...)` | `.add_min_extinction_risk_objective(budget, z)` and `P.eval_extinction_risk(p, s, z)` |

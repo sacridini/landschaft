@@ -210,6 +210,23 @@ They take a `Solution`, its selection or plain values per planning unit.
 
 ::: landschaft.prioritize.eval_mspa
 
+### Areas of a priority surface
+
+The separate areas of the top fraction of any priority surface (a Zonation ranking, an importance, a
+selection frequency) and what each holds, and the overlap of the top fractions of two surfaces
+(Zonation's landscape identification and comparison; on a Zonation ranking, the same areas as
+`ZonationResult.area_statistics_separate_areas`).
+
+::: landschaft.prioritize.eval_landscape_identification
+
+::: landschaft.prioritize.eval_landscape_comparison
+
+::: landschaft.prioritize.position_rank
+
+::: landschaft.prioritize.LandscapeAreas
+
+::: landschaft.prioritize.LandscapeComparison
+
 ## Calibration and trade-offs
 
 Candidate solutions over a trade-off (a penalty's weight, cost thresholds, budgets, any parameter),

@@ -617,6 +617,44 @@ def _prio_zonation_comparison(c, opts, title):
     return panels
 
 
+@register("LandscapeAreas")
+def _prio_landscape_areas(res, opts, title):
+    """The areas of the top fraction of a priority surface on a map, their sizes and what they hold."""
+    from . import _charts
+    from ._core import _is_geo_raster, _map, _Panel
+
+    panels = []
+    if _is_geo_raster(res.areas):
+        panels += _map([("areas", res.areas)], {**opts, "cmap": opts.get("cmap") or "tab20"},
+                       title or f"Areas of the top {res.top_fraction:g}")
+    t = res.table
+    if len(t):
+        panels.append(_Panel("chart", _charts.bars([str(a) for a in t["area"]], {"cells": t["cells"].to_numpy()},
+                                                   "Cells of every area", xlabel="area"), "areas"))
+        panels.append(_Panel("chart", _charts.table_chart(t.round(4), "Areas"), "table"))
+    return panels
+
+
+@register("LandscapeComparison")
+def _prio_landscape_comparison(res, opts, title):
+    """The overlap of two surfaces' top fractions (Jaccard index) and the comparison map of each."""
+    from . import _charts
+    from ._core import _is_geo_raster, _map, _Panel
+
+    t = res.table
+    panels = [_Panel("chart", _charts.lines(t["fraction"].to_numpy(), {"Jaccard": t["jaccard"].to_numpy(),
+                                                                       "share of a in b": t["share_of_a_in_b"]
+                                                                       .to_numpy()},
+                                            title or "Overlap of the top fractions", xlabel="top fraction",
+                                            ylabel="overlap"), "overlap")]
+    if _is_geo_raster(res.maps):
+        cmap = {1: "#1a9850", 2: "#fdae61", 3: "#74add1", 4: "#e0e0e0"}
+        labels = {1: "both", 2: "only a", 3: "only b", 4: "neither"}
+        panels += _map([(f"top {b}", res.maps.sel(band=b)) for b in res.maps["band"].values],
+                       {**opts, "cmap": cmap, "labels": labels, "categorical": True}, "Top cells compared")
+    return panels
+
+
 @register("ActionsSolution")
 def _prio_actions(sol, opts, title):
     """The monitored units and the actions (maps, for problems from rasters), and the benefits."""

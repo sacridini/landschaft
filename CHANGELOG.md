@@ -54,6 +54,13 @@ in a new major version.
   table (`pu` among every unit, `lower` / `upper` or `status`) or as values (a number, a raster on the
   units' grid, a column or one value per unit). The compiled model is prioritizr's bit for bit; bounds
   outside the decisions' bounds, or shares with binary decisions, are an error.
+- `ls.prioritize.eval_landscape_identification` and `eval_landscape_comparison` (prioripy's, after
+  Zonation's landscape identification and comparison) over any priority surface: a ranking, an importance,
+  a selection frequency or a solution. The separate areas of a top fraction (minimum size, merging of
+  nearby areas, 8 or 4 neighbours) with their cells, mean value, cost and the features they hold, and the
+  overlap of two surfaces' top fractions (Jaccard index, comparison maps). The top fraction follows
+  Zonation's rule (`position_rank`), so on a Zonation ranking the areas are Zonation's own, bit for bit.
+  Both results plot with `ls.plot`.
 
 ## [1.29.0] - 2026-10-07
 

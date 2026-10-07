@@ -42,6 +42,13 @@ from ._actions_raster import actions_raster_data
 from ._connectivity import Interaction, Kernel, convolve
 from ._examples import example_data
 from ._impacts import CumulativeScenario, ImpactScenario, ImpactSource, Pressure
+from ._landscape import (
+    LandscapeAreas,
+    LandscapeComparison,
+    eval_landscape_comparison,
+    eval_landscape_identification,
+    position_rank,
+)
 from ._marxan import MarxanResult, marxan
 from ._milp import OptimizationProblem, Problem, h3_units, problem
 from ._milp_calibrate import (
@@ -107,6 +114,8 @@ __all__ = [
                               "ImpactSource",
                               "Interaction",
                               "Kernel",
+                              "LandscapeAreas",
+                              "LandscapeComparison",
                               "MarxanResult",
                               "OptimizationProblem",
                               "Portfolio",
@@ -137,6 +146,8 @@ __all__ = [
                               "eval_extinction_risk",
                               "eval_feature_representation_summary",
                               "eval_ferrier_importance",
+                              "eval_landscape_comparison",
+                              "eval_landscape_identification",
                               "eval_landscape_metrics",
                               "eval_mspa",
                               "eval_n_summary",
@@ -150,6 +161,7 @@ __all__ = [
                               "knee_point",
                               "marxan",
                               "pareto_front",
+                              "position_rank",
                               "problem",
                               "protected_cells",
                               "proximity_matrix",
