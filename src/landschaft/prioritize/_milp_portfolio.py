@@ -75,7 +75,7 @@ def _with_rows(m, a_rows: sp.csr_matrix, sense: list[str], rhs: list[float], ids
     a.sort_indices()
     return OptimizationProblem(A=a, obj=m.obj, lb=m.lb, ub=m.ub, rhs=np.concatenate([m.rhs, rhs]),
                                sense=(*m.sense, *sense), vtype=m.vtype, modelsense=m.modelsense,
-                               row_ids=(*m.row_ids, *ids), col_ids=m.col_ids)
+                               row_ids=(*m.row_ids, *ids), col_ids=m.col_ids, connected=m.connected, corridors=m.corridors)
 
 
 def _cut(values: np.ndarray, n: int, ncol: int) -> tuple[sp.csr_matrix, float]:

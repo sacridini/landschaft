@@ -44,6 +44,10 @@ class OptimizationProblem:
     modelsense: str
     row_ids: tuple[str, ...]
     col_ids: tuple[str, ...]
+    # node sets that must form one patch (contiguity constraints): the solvers separate cuts on them
+    connected: tuple = field(default=(), repr=False, compare=False)
+    # corridor networks: the solvers separate node cuts on them
+    corridors: tuple = field(default=(), repr=False, compare=False)
 
     @property
     def nrow(self) -> int:
@@ -602,9 +606,16 @@ class Problem:
         return self._add("constraint", "linear", float(threshold), sense, data)
 
     def add_contiguity_constraints(self, data=None) -> Problem:
-        """The selected units must form one contiguous patch (prioritizr's formulation: a spanning
-        tree count over the pairs of adjacent units). ``data``: an adjacency matrix of every unit; by
-        default units that share an edge (raster cells, 4 directions) or that touch (polygons)."""
+        """The selected units must form one contiguous patch. ``data``: an adjacency matrix of every
+        unit; by default units that share an edge (raster cells, 4 directions) or that touch (polygons).
+
+        The model is exact: a spanning arborescence of the selected units, with a flow that rules out
+        cycles. prioritizr's formulation (a tree whose edges always run from a unit to one of a lower
+        index) is a restriction: it misses patches in which a unit has no selected neighbour of a higher
+        index, so it can return a costlier patch than the best, or call a feasible problem infeasible.
+        On HiGHS the problem is solved in three steps: a first patch from that restriction, a bound from
+        directed cuts, then the exact MIP from the first patch. Contiguity stays the hardest spatial
+        rule: give it a time limit on more than a few hundred units."""
         return self._add("constraint", "contiguity", data)
 
     def add_neighbors_constraints(self, k: int, clamp: bool = True, data=None) -> Problem:
@@ -621,8 +632,9 @@ class Problem:
 
     def add_feature_contiguity_constraints(self, data=None) -> Problem:
         """Every feature's units (where it is counted towards its targets) must form one contiguous
-        patch (the expanded formulation: a column per feature and unit). ``data``: an adjacency matrix
-        of every unit for all features, a list of one per feature, or None (as
+        patch (the expanded formulation: a column per feature and unit; the exact model of
+        :meth:`add_contiguity_constraints` for every feature). ``data``: an adjacency matrix of every
+        unit for all features, a list of one per feature, or None (as
         :meth:`add_contiguity_constraints`)."""
         return self._add("constraint", "feature_contiguity", data)
 

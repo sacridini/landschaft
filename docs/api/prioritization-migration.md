@@ -134,8 +134,8 @@ ls.plot(ranks)
 | `add_locked_out_constraints(x)` | `.add_locked_out_constraints(x)` |
 | `add_linear_constraints(threshold, sense, data)` | `.add_linear_constraints(threshold, sense, data)` |
 | `add_cost_constraints()` (9) | `.add_linear_constraints(threshold, "<=", cost)` |
-| `add_contiguity_constraints(data)` | `.add_contiguity_constraints(data)` |
-| `add_feature_contiguity_constraints(data)` | `.add_feature_contiguity_constraints(data)` |
+| `add_contiguity_constraints(data)` | `.add_contiguity_constraints(data)` (an exact model: see below) |
+| `add_feature_contiguity_constraints(data)` | `.add_feature_contiguity_constraints(data)` (exact) |
 | `add_neighbors_constraints(k, clamp)` (newer: `add_neighbor_constraints`) | `.add_neighbors_constraints(k, clamp)`, or `.add_neighbor_constraints(k, clamp)` |
 | `add_corridor_constraints()` (removed from prioritizr) | `.add_corridor_constraints(terminals, resistance, penalty)`: a different, working formulation (flows between terminals) |
 
@@ -214,7 +214,14 @@ methods of 8.1 (`spec_*_targets()`). Open an issue if you need one of them.
 
 - **The models are prioritizr 8.0.6's.** `p.compile()` gives the same matrix, objective and bounds as
   R's `compile(p)`, row by row (the test suite checks every objective, target, constraint, penalty and
-  decision against it).
+  decision against it), with one exception below.
+- **Contiguity is exact here.** prioritizr's contiguity constraints (and feature contiguity) build a
+  tree whose edges always run from a unit to one of a lower index. That misses every patch in which a
+  unit has no selected neighbour of a higher index: three units in a line with the middle one first
+  have no feasible patch at all, and on larger problems the "optimal" patch can cost more than the best
+  one. Landschaft uses an exact model (a spanning arborescence with a flow), so its patches are as cheap
+  or cheaper, and a problem prioritizr calls infeasible may have a solution here. The restricted model
+  is still used, as a quick first patch.
 - **prioritizr 9 changed three things.** It rescales the boundary data it computes so that their largest
   value is 1, so a penalty from a prioritizr 9 script corresponds here to that penalty divided by
   `P.boundary_matrix(cost).max()`. It dropped the small cost term that breaks ties in the maximum

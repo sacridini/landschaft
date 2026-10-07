@@ -12,6 +12,8 @@ planning units, as prioritizr's ``planning_unit_indices()``.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import scipy.sparse as sp
 
@@ -31,6 +33,8 @@ class Builder:
         self.modelsense = modelsense
         self.n = n_units
         self.n_features = 0
+        self.connected: list = []  # Connected node sets (contiguity), for the solvers' cuts
+        self.corridors: list = []  # Corridor networks, for the solvers' cuts
 
     def add_columns(self, obj, lb, ub, vtype, col_id) -> int:
         """New columns; their first index."""
@@ -309,38 +313,97 @@ def _adjacency(u, data) -> sp.csc_matrix:
     return unit_matrix(u, data, "adjacency data")
 
 
+@dataclass(frozen=True)
+class Connected:
+    """One set of node columns that must form one patch, as compiled by :func:`_add_connected`: the
+    columns of its roots, arcs (both directions of every edge) and flows, and the arcs' local tail
+    and head (positions in ``nodes``). The solvers separate cuts on it."""
+
+    nodes: np.ndarray
+    root: int
+    arc: int
+    tail: np.ndarray
+    head: np.ndarray
+
+
+@dataclass(frozen=True)
+class Corridor:
+    """A corridor network as compiled by :func:`_apply_corridors`: its source and other terminals and
+    the edges (each listed once) between the units; the solvers separate node cuts on it
+    (every set of units that separates a terminal from the source holds a selected unit)."""
+
+    source: int
+    sinks: np.ndarray
+    tail: np.ndarray
+    head: np.ndarray
+
+
+def _edges(d: sp.csc_matrix) -> tuple[np.ndarray, np.ndarray]:
+    """The edges (i < j) of an adjacency matrix (either triangle; values > 1e-15)."""
+    s = sp.triu(d + d.T, k=1).tocoo()
+    keep = s.data > 1.0e-15
+    i, j = s.row[keep].astype(np.int64), s.col[keep].astype(np.int64)
+    o = np.lexsort((j, i))
+    return i[o], j[o]
+
+
+def _add_connected(b: Builder, nodes: np.ndarray, d: sp.csc_matrix, tag: str) -> None:
+    """The selected ``nodes`` columns form one patch (or none is selected), exactly: a spanning
+    arborescence of the selected nodes with a flow that rules out cycles. Columns: one root per node
+    (at most one root), one arc per direction of every edge (a selected node has exactly one incoming
+    arc unless it is the root; an arc leaves a selected node; not both directions), and a flow per
+    arc (at most n - 1 where the arc is used; every non-root selected node keeps at least 1).
+
+    prioritizr's formulation (one arc per edge, from the higher index to the lower) is a restriction:
+    it misses the patches in which a unit has no selected neighbour of a higher index (three units in
+    a line, the middle one first, have no feasible patch), so its optimum can be worse than the best
+    patch, or a feasible problem infeasible."""
+    n = nodes.size
+    i, j = _edges(d)
+    tail = np.concatenate([i, j])
+    head = np.concatenate([j, i])
+    na, ne = tail.size, i.size
+    vt = b.vtype[int(nodes[0])] if n else "B"
+    root = b.add_columns(np.zeros(n), 0.0, 1.0, vt, f"{tag}_root")
+    arc = b.add_columns(np.zeros(na), 0.0, 1.0, vt, f"{tag}_arc")
+    flow = b.add_columns(np.zeros(na), 0.0, max(n - 1.0, 0.0), "C", f"{tag}_flow")
+    ar, aa = np.arange(n), np.arange(na)
+    rows, cols, vals, sense, rhs, ids = [], [], [], [], [], []
+    nrow = 0
+
+    def block(r, c, v, s, h, k, rid):
+        nonlocal nrow
+        rows.append(np.asarray(r, dtype=np.int64) + nrow)
+        cols.append(np.asarray(c, dtype=np.int64))
+        vals.append(np.asarray(v, dtype=np.float64))
+        sense.extend([s] * k)
+        rhs.extend([h] * k)
+        ids.extend([f"{tag}_{rid}"] * k)
+        nrow += k
+
+    block(np.zeros(n), root + ar, np.ones(n), "<=", 1.0, 1, "root")
+    # incoming arcs + root - node = 0
+    block(np.concatenate([head, ar, ar]), np.concatenate([arc + aa, root + ar, nodes]),
+          np.concatenate([np.ones(na), np.ones(n), -np.ones(n)]), "=", 0.0, n, "in")
+    # arc - tail <= 0
+    block(np.repeat(aa, 2), np.column_stack([arc + aa, nodes[tail]]).ravel(), np.tile([1.0, -1.0], na),
+          "<=", 0.0, na, "tail")
+    # both directions <= 1
+    block(np.tile(np.arange(ne), 2), arc + aa, np.ones(na), "<=", 1.0, ne, "pair")
+    # flow - (n - 1) arc <= 0
+    block(np.repeat(aa, 2), np.column_stack([flow + aa, arc + aa]).ravel(), np.tile([1.0, -(n - 1.0)], na),
+          "<=", 0.0, na, "cap")
+    # flow in - flow out - node + n root >= 0
+    block(np.concatenate([head, tail, ar, ar]), np.concatenate([flow + aa, flow + aa, nodes, root + ar]),
+          np.concatenate([np.ones(na), -np.ones(na), -np.ones(n), np.full(n, float(n))]), ">=", 0.0, n, "flow")
+    b.add_rows(np.concatenate(rows), np.concatenate(cols), np.concatenate(vals), sense, rhs, ids)
+    b.connected.append(Connected(np.asarray(nodes, dtype=np.int64), root, arc, tail, head))
+
+
 def _apply_contiguity(b: Builder, u, data) -> None:
-    """rcpp_apply_contiguity_constraints (one zone): a column per adjacent pair (lower triangle, by
-    column), y <= x_i for every pair, sum of the pairs of a unit j <= x_j, and pairs = selected - 1."""
-    d = _adjacency(u, data)
-    low = sp.tril(d, k=-1).tocsc()  # forceSymmetric(uplo = "L") then tril: the lower triangle as given
-    low.eliminate_zeros()
-    low.sort_indices()
-    pj = np.repeat(np.arange(low.shape[1]), np.diff(low.indptr))
-    pi = low.indices.astype(np.int64)
-    keep = low.data > 1.0e-15
-    pi, pj = pi[keep], pj[keep]
-    k = pi.size
-    first = b.add_columns(np.zeros(k), 0.0, 1.0, b.vtype[0], "c")
-    var = first + np.arange(k)
-    # c1: y_k - x_i <= 0
-    r1 = np.repeat(np.arange(k), 2)
-    c1 = np.column_stack([var, pi]).ravel()
-    v1 = np.tile([1.0, -1.0], k)
-    # c2: one row per run of pairs with the same j: -x_j + sum y <= 0
-    new = np.ones(k, dtype=bool)
-    new[1:] = pj[1:] != pj[:-1]
-    group = np.cumsum(new) - 1
-    ng = int(new.sum()) if k else 0
-    r2 = np.concatenate([np.arange(ng), group]) + k
-    c2 = np.concatenate([pj[new], var])
-    v2 = np.concatenate([-np.ones(ng), np.ones(k)])
-    # c3: -sum x + sum y = -1
-    r3 = np.full(b.n + k, k + ng)
-    c3 = np.concatenate([np.arange(b.n), var])
-    v3 = np.concatenate([-np.ones(b.n), np.ones(k)])
-    b.add_rows(np.concatenate([r1, r2, r3]), np.concatenate([c1, c2, c3]), np.concatenate([v1, v2, v3]),
-               ["<="] * (k + ng) + ["="], [0.0] * (k + ng) + [-1.0], ["c1"] * k + ["c2"] * ng + ["c3"])
+    """The selected units form one patch: :func:`_add_connected` on the units' columns (an exact
+    formulation, not prioritizr's)."""
+    _add_connected(b, np.arange(b.n), _adjacency(u, data), "c")
 
 
 def _apply_neighbors(b: Builder, u, k: int, clamp: bool, data) -> None:
@@ -363,10 +426,9 @@ def _apply_neighbors(b: Builder, u, k: int, clamp: bool, data) -> None:
 
 
 def _apply_feature_contiguity(b: Builder, u, data) -> None:
-    """rcpp_apply_feature_contiguity_constraints (one zone, the expanded formulation): every feature's
-    units (its y columns, the units where it counts) form one contiguous patch, as
-    add_contiguity_constraints on the y columns; ``data``: one adjacency matrix for every feature, a
-    list of one per feature, or None (the default adjacency)."""
+    """Every feature's units (its y columns of the expanded formulation, the units where it counts) form
+    one patch: :func:`_add_connected` for every feature (exact, not prioritizr's formulation); ``data``:
+    one adjacency matrix for every feature, a list of one per feature, or None (the default adjacency)."""
     nf = b.n_features
     if isinstance(data, (list, tuple)):
         if len(data) != nf:
@@ -376,59 +438,8 @@ def _apply_feature_contiguity(b: Builder, u, data) -> None:
         m = _adjacency(u, data)
         mats = [m] * nf
     n = b.n
-    pis, pjs = [], []
     for f in range(nf):
-        low = sp.tril(mats[f], k=-1).tocsc()
-        low.eliminate_zeros()
-        low.sort_indices()
-        pj = np.repeat(np.arange(low.shape[1]), np.diff(low.indptr))
-        pi = low.indices.astype(np.int64)
-        keep = low.data > 1.0e-15
-        pis.append(n + f * n + pi[keep])
-        pjs.append(n + f * n + pj[keep])
-    sizes = [x.size for x in pis]
-    total = int(sum(sizes))
-    first = b.add_columns(np.zeros(total), 0.0, 1.0, b.vtype[0], "fc")
-    starts = first + np.concatenate([[0], np.cumsum(sizes)[:-1]]).astype(np.int64)
-    # fc1 for every feature, then fc2 for every feature, then fc3 for every feature
-    r1, c1, v1 = [], [], []
-    row = 0
-    for f in range(nf):
-        k = sizes[f]
-        var = starts[f] + np.arange(k)
-        r1.append(row + np.repeat(np.arange(k), 2))
-        c1.append(np.column_stack([var, pis[f]]).ravel())
-        v1.append(np.tile([1.0, -1.0], k))
-        row += k
-    n1 = row
-    r2, c2, v2 = [], [], []
-    for f in range(nf):
-        k = sizes[f]
-        if not k:
-            continue
-        var = starts[f] + np.arange(k)
-        pj = pjs[f]
-        new = np.ones(k, dtype=bool)
-        new[1:] = pj[1:] != pj[:-1]
-        group = np.cumsum(new) - 1
-        ng = int(new.sum())
-        r2.append(np.concatenate([np.arange(ng), group]) + row)
-        c2.append(np.concatenate([pj[new], var]))
-        v2.append(np.concatenate([-np.ones(ng), np.ones(k)]))
-        row += ng
-    n2 = row - n1
-    r3, c3, v3 = [], [], []
-    for f in range(nf):
-        k = sizes[f]
-        var = starts[f] + np.arange(k)
-        r3.append(np.full(n + k, row))
-        c3.append(np.concatenate([n + f * n + np.arange(n), var]))
-        v3.append(np.concatenate([-np.ones(n), np.ones(k)]))
-        row += 1
-    cat = lambda parts: np.concatenate(parts) if parts else np.zeros(0)  # noqa: E731
-    b.add_rows(cat(r1 + r2 + r3).astype(np.int64), cat(c1 + c2 + c3).astype(np.int64), cat(v1 + v2 + v3),
-               ["<="] * (n1 + n2) + ["="] * nf, [0.0] * (n1 + n2) + [-1.0] * nf,
-               ["fc1"] * n1 + ["fc2"] * n2 + ["fc3"] * nf)
+        _add_connected(b, n + f * n + np.arange(n), mats[f], f"fc{f + 1}")
 
 
 def _corridor_edges(u, data, resistance):
@@ -496,6 +507,8 @@ def _apply_corridors(b: Builder, u, terminals, resistance, penalty: float, data)
                    ["<="] * (4 * ne) + ["="] * b.n, np.concatenate([np.zeros(4 * ne), rhs]),
                    ["corridor_capacity"] * (4 * ne) + ["corridor_flow"] * b.n)
         b.lb[term] = 1.0
+        b.corridors.append(Corridor(int(term[0]), term[1:].astype(np.int64), pi.astype(np.int64),
+                                    pj.astype(np.int64)))
 
 
 # ----------------------------------------------------------------------------- dispatch

@@ -119,6 +119,10 @@ def _highs_or_cut(m: OptimizationProblem, gap: float, time_limit: float, threads
 
     from ._milp_anneal import closure_model, cut_applies, solve_closure, solve_cut
 
+    if m.connected or m.corridors:  # contiguity, corridors: a first solution, cuts, then the MIP
+        from ._milp_connect import solve_connected
+
+        return solve_connected(m, gap, time_limit, threads, presolve, verbose, start, n_units)
     mm = cut_applies(m, n_units)
     t0 = time.perf_counter()
     if mm is not None:

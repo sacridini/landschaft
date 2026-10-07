@@ -565,4 +565,4 @@ def compile_problem(p):
     return OptimizationProblem(
         A=A, obj=obj_v, lb=lb_v, ub=ub_v, rhs=np.concatenate([np.asarray(x, dtype=np.float64) for x in rhs]),
         sense=tuple(sense), vtype=tuple(vtype), modelsense=modelsense,
-        row_ids=tuple(row_ids), col_ids=tuple(col_ids)), t
+        row_ids=tuple(row_ids), col_ids=tuple(col_ids), connected=tuple(b.connected), corridors=tuple(b.corridors)), t

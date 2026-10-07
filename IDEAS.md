@@ -1915,11 +1915,54 @@ mesmas matrizes dão o mesmo ótimo no highspy e no gurobipy (inclusive a curva 
   prioripy). Aliases com os nomes do prioritizr 9 e mais novos: `add_max_wtd_sum_objective`,
   `add_max_n_targets_met_objective`, `add_neighbor_constraints` (o modelo continua o do 8.0.6).
 
+### Andamento das pendências de pesquisa (fase 11, iniciada em 2026-10-07; em pausa, sem versão nova)
+* **Contiguidade exata** (feito, commitado, ainda sem release). **Bug do prioritizr (8.0.6 e 9.0)**: a
+  formulação do `add_contiguity_constraints` (Önal e Briers 2006 na documentação) só cria uma aresta por par
+  vizinho, do maior índice para o menor (`tril` + `sum y_ij <= x_j` por coluna): é uma **restrição**. Toda
+  unidade selecionada, menos a de maior índice, precisa de um vizinho selecionado de índice maior. Três unidades
+  em linha com a do meio de menor índice não têm mancha viável ("infeasible"); em problemas maiores o "ótimo" é
+  pior que a melhor mancha (`contiguity_matrix`: prioritizr 1499,58, o Gurobi com cortes lazy acha 1496,98;
+  `contiguity_raster`: prioritizr 1646,31, nosso motor acha 1646,02 em 120 s). O mesmo na contiguidade por
+  feição. Implementado só o modelo exato (`_milp_spatial._add_connected`): raiz por nó (no máximo uma: seleção
+  vazia permitida), arcos nos dois sentidos (grau de entrada + raiz = nó, arco <= nó da cauda, os dois sentidos
+  <= 1) e fluxo de um único produto nos arcos (f <= (n-1) arco; cada nó selecionado não raiz retém >= 1).
+  `OptimizationProblem.connected` e `.corridors` guardam a estrutura para os cortes (campos novos, fora da
+  comparação). O `compile()` deixa de ser bit a bit com o prioritizr só nesses dois casos; testes novos: a
+  restrição do nosso modelo (arcos do menor para o maior fixados em 0) dá o ótimo do prioritizr nos 5 casos de
+  referência, o ótimo exato bate com enumeração exaustiva numa grade 4 x 4, e o contraexemplo de 3 unidades.
+* **Motor de contiguidade e corredores no HiGHS** (`_milp_connect.py`, roteado no `_highs_or_cut`): (1) primeira
+  mancha pela restrição do prioritizr dentro do nosso modelo (gap pedido, no mínimo 1 %, 30 % do tempo; 120 s sem
+  limite), (2) relaxação do modelo exato com **cortes dirigidos** r(W) + y(entrada em W) >= x_k separados por
+  fluxo máximo (`scipy.sparse.csgraph.maximum_flow`, capacidades x 1e7) a partir de uma super-raiz, em rodadas
+  enquanto o limite sobe (para após 3 rodadas com alta < 0,1 %; 40 % do tempo), e nos corredores **cortes de
+  Steiner por vértices** x(S) >= 1 (fluxo nos nós divididos), (3) o MIP exato do HiGHS com os cortes, partindo da
+  primeira mancha. Medidas (120 s): `contiguity_raster` gap 5 % em 0,9 s, `contiguity_matrix` gap 5 % em 1,5 s;
+  gap 1 % fica aberto (~2-3 %) nos dois; `feature_contiguity_raster` acha o ótimo do prioritizr (509,27) mas o
+  limite com todos os cortes dirigidos converge a 380 (lacuna inerente: só o B&B fecha). Sintético 13 x 13
+  (10 feições, metas 20 %): prioritizr 141,06 em 45 s (restrito), nosso 139,9-140,2 em 120 s, Gurobi com cortes
+  lazy 136,45 (limite 112,5), Gurobi com cortes dirigidos 139,2 (limite 123). Corredores (Serra Verde, 4825
+  unidades, 153 terminais): os cortes de Steiner são válidos mas o limite quase não sobe (28.775 com e sem); o
+  gargalo é o B&B do HiGHS na parte de conjunto mínimo (gap 10 % em ~40 s, 1 % não fecha em 300 s). Armadilha:
+  com capacidades "infinitas" de 2^30 o `maximum_flow` do scipy (int32) estoura; "infinito" = 10 x escala.
+  O tempo-limite é respeitado (uma execução do protótipo antigo, MIP do HiGHS com a formulação restrita, levou
+  3144 s com limite de 120 s; não se repetiu no motor novo em 8 execuções).
+* **Tentado e descartado**: replacement importance por subproblema residual (só as linhas das feições da unidade
+  retirada, colunas não selecionadas, cobertura pequena): 216 s contra 12,7 s do método atual em 2161
+  re-soluções (10⁴ unidades); `max_features`: aperto de coeficientes min(a_i, t_f) nas linhas de meta (sem
+  efeito: quantidades por unidade << metas) e heurística gulosa por cobertura (8 metas contra 9 do motor atual e
+  10 do Gurobi; 10⁴ unidades, 30 feições, orçamento 10 %: limites 17,7 nosso e 14,5 Gurobi em 120 s).
+* Ambiente: `tests/test_zonal_extract.py` usa `np.long` (numpy 2); com numpy 1.26 a coleta falha (não
+  relacionado). A suíte de priorização: 670 passam; `test_covering_keeps_the_time_limit_on_wide_models` falhou
+  só sob disputa de CPU (passa sozinho).
+
 ### Próximos passos (retomar daqui)
-1. **Pendências de pesquisa** (da fase 9): contiguidade e corredores com cortes dentro do B&B, limite do
-   max_features, filogenéticos em 10⁶, multi-action com fronteira em gap 0 e o núcleo simétrico, fluxos
-   dinâmicos e reparo paralelo no motor de cortes; replacement importance sem o aquecimento do LP largo.
-2. Sob pedido: ProxIRR (Baisero et al. 2021, clean-room pelo artigo), zonas do prioritizr,
+1. Fase 11, o que falta: documentação da contiguidade exata (Learn 12.5 `spatial.md`: os números 31,8 da figura
+   de 3 km podem mudar; `docs/benchmarks.md`: trocar o parágrafo "Contiguity constraints are the exception");
+   CHANGELOG e release (1.29.0). Depois: filogenéticos em 10⁶, multi-action com fronteira em gap 0 e o núcleo
+   simétrico, fluxos dinâmicos (Kohli e Torr) e reparo paralelo no motor de cortes, heurística melhor para o
+   `max_features` (busca local com trocas de metas).
+2. Depois da fase 11: desempenho das métricas de paisagem e reprojeção (ordem pedida pelo usuário).
+3. Sob pedido: ProxIRR (Baisero et al. 2021, clean-room pelo artigo), zonas do prioritizr,
    `add_neighbor_penalties`.
 
 ### Decisões

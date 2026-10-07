@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 
 import numpy as np
@@ -20,6 +21,9 @@ from landschaft import _core
 
 PY_CASES = [(g, c) for g in ("core", "objectives", "spatial") for c in case_ids(g) if optimize_cases.CASES[c].py is not None]
 ALL = [(g, c) for g in ("core", "objectives", "spatial", "actions") for c in case_ids(g)]
+# contiguity: prioritizr's formulation is a restriction (it misses patches); ours is exact (see below)
+EXACT = [(g, c) for g, c in PY_CASES if "contiguity" not in c]
+CONTIGUITY = [(g, c) for g, c in PY_CASES if "contiguity" in c]
 
 
 def _solve_stored(m, gap=0.0, time_limit=math.inf, presolve="choose", start=None, relaxation=False):
@@ -56,7 +60,7 @@ def test_builtin_highs_same_optimum(group, name):
     assert r["x"].shape == (m.obj.size,)
 
 
-@pytest.mark.parametrize(("group", "name"), PY_CASES, ids=[c for _, c in PY_CASES])
+@pytest.mark.parametrize(("group", "name"), EXACT, ids=[c for _, c in EXACT])
 def test_compile_is_prioritizr(group, name):
     """The same model, bit for bit: the matrix in canonical order (by row, then column; prioritizr also
     stores the zero costs and coefficients it pushes, which are no entries here)."""
@@ -77,7 +81,7 @@ def test_compile_is_prioritizr(group, name):
     assert list(ours.row_ids) == ref.row_ids and list(ours.col_ids) == ref.col_ids
 
 
-@pytest.mark.parametrize(("group", "name"), PY_CASES, ids=[c for _, c in PY_CASES])
+@pytest.mark.parametrize(("group", "name"), EXACT, ids=[c for _, c in EXACT])
 def test_solve_reaches_prioritizr_optimum(group, name):
     p = optimize_cases.CASES[name].py()
     sol = p.add_highs_solver(gap=0).solve()
@@ -586,6 +590,75 @@ def test_penalties_follow_the_order_added():
     assert "b" not in z.col_ids
 
 
+@pytest.mark.parametrize(("group", "name"), CONTIGUITY, ids=[c for _, c in CONTIGUITY])
+def test_contiguity_restriction_is_prioritizr(group, name):
+    """Our exact model with the arcs from a lower unit to a higher one fixed at 0 is prioritizr's
+    formulation: the same optimum on HiGHS's MIP alone."""
+    from landschaft.prioritize._milp_connect import _restricted_bounds
+    from landschaft.prioritize._milp_solve import _highs
+
+    m = optimize_cases.CASES[name].py().compile()
+    r = _highs(dataclasses.replace(m, ub=_restricted_bounds(m), connected=()), 0.0, math.inf, 1, "choose", False,
+               None)
+    assert r["status"] == "optimal"
+    _assert_reference_optimum(r["objective"], result(group, name)["objective"][0], m.modelsense)
+
+
+def test_contiguity_is_exact():
+    """Three units in a line, the middle one first: prioritizr's formulation has no patch; and on a
+    4 x 4 grid the optimum is the best patch by enumeration (better than prioritizr's restriction)."""
+    import itertools
+
+    import pandas as pd
+    import scipy.sparse as sp
+    from scipy.sparse.csgraph import connected_components
+
+    from landschaft.prioritize._milp_connect import _restricted_bounds
+    from landschaft.prioritize._milp_solve import _highs
+
+    pu = pd.DataFrame({"id": [1, 2, 3], "cost": 1.0, "a": [1.0, 0, 0], "b": [0, 1.0, 0], "c": [0, 0, 1.0]})
+    line = sp.csc_matrix(np.array([[0, 1, 1], [1, 0, 0], [1, 0, 0]], dtype=float))
+    p = (ls.prioritize.problem(pu, ["a", "b", "c"], cost_column="cost").add_min_set_objective()
+         .add_relative_targets(1.0).add_binary_decisions().add_contiguity_constraints(line))
+    assert p.solve().objective == 3.0
+    m = p.compile()
+    assert _highs(dataclasses.replace(m, ub=_restricted_bounds(m), connected=()), 0.0, math.inf, 1, "choose",
+                  False, None)["status"] == "infeasible"
+
+    rng = np.random.default_rng(3)
+    side = 4
+    n = side * side
+    cost = rng.uniform(1, 10, n)
+    feats = (rng.random((3, n)) < 0.25) * rng.uniform(1, 2, (3, n))
+    feats[:, [0, 15]] += 1.0  # opposite corners: the patch must cross the grid
+    adj = np.zeros((n, n))
+    for i in range(n):
+        r, c = divmod(i, side)
+        for rr, cc in ((r + 1, c), (r, c + 1)):
+            if rr < side and cc < side:
+                adj[i, rr * side + cc] = adj[rr * side + cc, i] = 1.0
+    table = pd.DataFrame({"id": np.arange(1, n + 1), "cost": cost, **{f"f{k}": feats[k] for k in range(3)}})
+    p = (ls.prioritize.problem(table, ["f0", "f1", "f2"], cost_column="cost").add_min_set_objective()
+         .add_relative_targets(0.5).add_binary_decisions().add_contiguity_constraints(sp.csc_matrix(adj)))
+    best = math.inf
+    need = 0.5 * feats.sum(axis=1)
+    a = sp.csr_matrix(adj)
+    for bits in itertools.product((0, 1), repeat=n):
+        s = np.array(bits, dtype=bool)
+        if not s.any() or (feats[:, s].sum(axis=1) < need - 1e-9).any() or cost[s].sum() >= best:
+            continue
+        if connected_components(a[s][:, s], directed=False)[0] == 1:
+            best = cost[s].sum()
+    sol = p.add_highs_solver(gap=0.0).solve()
+    assert sol.status == "optimal" and sol.objective == pytest.approx(best, rel=1e-9)
+    m = p.compile()
+    restricted = _highs(dataclasses.replace(m, ub=_restricted_bounds(m), connected=()), 0.0, math.inf, 1, "choose",
+                        False, None)
+    assert restricted["objective"] >= best - 1e-9
+    sel = np.flatnonzero(sol.values > 0.5)
+    assert connected_components(a[sel][:, sel], directed=False)[0] == 1
+
+
 def test_contiguity_gives_one_patch():
     from scipy.sparse.csgraph import connected_components
 
@@ -593,7 +666,8 @@ def test_contiguity_gives_one_patch():
 
     for name in ("contiguity_raster", "contiguity_polygons"):
         p = optimize_cases.CASES[name].py()
-        sol = p.add_highs_solver(gap=0).solve()
+        sol = p.add_highs_solver(gap=0.05).solve()
+        assert sol.status == "optimal"
         sel = np.flatnonzero(sol.values > 0.5)
         adj = adjacency_matrix(p.units)[sel][:, sel]
         assert connected_components(adj, directed=False)[0] == 1, name
