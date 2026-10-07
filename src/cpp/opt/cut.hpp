@@ -14,7 +14,9 @@
 // submodular), so max L is the linear relaxation's bound or better. The
 // multipliers by a box-step bundle method (as opt/wide.cpp), one maximum flow
 // per evaluation; every cut's selection is repaired to meet the targets and
-// trimmed (marxan::Repair), the best one kept.
+// trimmed (marxan::Repair), the best one kept. The repairs run on other threads
+// while the bundle goes on; its decisions use the repairs of the evaluations up
+// to a fixed number back, so the result is the same on any number of threads.
 #pragma once
 
 #include <string>
@@ -29,6 +31,7 @@ struct Options {
     double time_limit = -1.0;  // seconds (< 0: none)
     int max_evaluations = 1000;
     bool verbose = false;
+    int threads = 1;           // repairs at the same time
 };
 
 struct Result {

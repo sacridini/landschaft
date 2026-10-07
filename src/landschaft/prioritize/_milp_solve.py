@@ -130,7 +130,7 @@ def _highs_or_cut(m: OptimizationProblem, gap: float, time_limit: float, threads
     mm = cut_applies(m, n_units)
     t0 = time.perf_counter()
     if mm is not None:
-        r = solve_cut(m, n_units, mm, gap, time_limit, verbose, start)
+        r = solve_cut(m, n_units, mm, gap, time_limit, verbose, start, threads)
     else:
         # budgeted minimisations with pair terms (min penalties...): the closure engine
         cm = closure_model(m, n_units) if n_units is not None and m.ncol > n_units else None

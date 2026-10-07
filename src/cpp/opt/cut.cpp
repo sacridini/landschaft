@@ -6,7 +6,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <deque>
+#include <future>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 
 #include "opt/bundle.hpp"
@@ -18,6 +21,10 @@ namespace opt::cut {
 namespace {
 
 using Clock = std::chrono::steady_clock;
+
+// the bundle's decisions see the repairs of the evaluations up to this many back (at most this many are
+// pending): a constant, so the result does not depend on the number of threads
+constexpr std::size_t kRepairLag = 8;
 
 double relative_gap(double upper, double lower) {
     if (!std::isfinite(upper) || !std::isfinite(lower)) return kInf;
@@ -69,13 +76,47 @@ Result solve(const marxan::Data& d, const Options& o, const std::vector<int>& in
     MaxFlow flow(n, pi, pj, pw, pw);
     const marxan::Repair repair(d, 1.0);
     double best = kInf;
-    auto take = [&](std::vector<int>& R) {
-        const double v = repair(R);
-        if (v < best) {
-            best = v;
-            res.x.assign(static_cast<std::size_t>(n), 0);
-            for (int i = 0; i < n; ++i) res.x[i] = R[i] == 1 || R[i] == 2;
+    // the repairs, in evaluation order: each on a thread of its own (at most o.threads at a time), their
+    // results taken in order once more than kRepairLag are pending (or all, at the end)
+    struct Pending {
+        std::shared_ptr<std::vector<int>> R;
+        std::future<double> value;
+    };
+    std::deque<Pending> pending;
+    const std::size_t running_max = static_cast<std::size_t>(std::max(1, o.threads));
+    auto settle = [&](std::size_t keep) {
+        while (pending.size() > keep) {
+            Pending& p = pending.front();
+            const double v = p.value.get();
+            if (v < best) {
+                best = v;
+                res.x.assign(static_cast<std::size_t>(n), 0);
+                for (int i = 0; i < n; ++i) res.x[i] = (*p.R)[i] == 1 || (*p.R)[i] == 2;
+            }
+            pending.pop_front();
         }
+    };
+    auto take = [&](const std::vector<int>& R) {
+        auto copy = std::make_shared<std::vector<int>>(R);
+        if (running_max == 1) {
+            std::promise<double> done;
+            done.set_value(repair(*copy));
+            pending.push_back({copy, done.get_future()});
+        } else {
+            // no more than o.threads running: wait for the oldest still running
+            std::size_t running = 0;
+            for (const Pending& p : pending)
+                running += p.value.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
+            for (Pending& p : pending) {
+                if (running < running_max) break;
+                if (p.value.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                    p.value.wait();
+                    --running;
+                }
+            }
+            pending.push_back({copy, std::async(std::launch::async, [&repair, copy] { return repair(*copy); })});
+        }
+        settle(kRepairLag);
     };
     std::vector<int> R(static_cast<std::size_t>(n));
     if (!initial.empty()) {
@@ -149,6 +190,7 @@ Result solve(const marxan::Data& d, const Options& o, const std::vector<int>& in
         o.max_evaluations, deadline);
     double bound = br.bound;
     const std::string& why = br.why;
+    settle(0);
     // primal search: the cuts of the best multipliers scaled up (more units in, less to repair)
     const double bound_value = bound;
     std::vector<double> best_y = br.centre;
@@ -158,6 +200,7 @@ Result solve(const marxan::Data& d, const Options& o, const std::vector<int>& in
         for (double& v : yt) v *= theta;
         lagrangian(yt, g);
     }
+    settle(0);
     bound = bound_value;
     res.objective = best;
     res.bound = bound;

@@ -37,6 +37,10 @@ in a new major version.
   of 20 %: a 7.7 % gap proven in 0.5 s instead of 10.5 % after 120 s).
 - Multi-action problems with boundary penalties: one product column per pair of neighbours instead of one
   per direction (the two were a symmetry of the MIP): 38 % fewer columns at 10³ units.
+- The cut engine (minimum sets with boundary penalties or connectivity rewards) repairs its selections on
+  `n_threads` threads while the bundle goes on, its decisions a fixed number of evaluations behind (the
+  same result on any number of threads): 10⁶ units, gap 1 %, 17.6 s -> 7.5 s (90 % of the time was the
+  repairs, 7 % the maximum flows, so dynamic flows would not pay).
 
 ### Fixed
 - The wide engine's sifting cycled on degenerate LPs (phylogenetic objectives at 10⁶ units: the units let

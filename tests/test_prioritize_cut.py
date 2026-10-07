@@ -98,6 +98,19 @@ def test_boundary_min_set_through_highs():
     assert sol.objective == pytest.approx(m.obj @ full, rel=1e-12)
 
 
+def test_parallel_repairs_give_the_same_result():
+    """The repairs run on other threads, but the bundle sees them a fixed number of evaluations late: the
+    same selection, objective and bound on any number of threads."""
+    p = _synthetic(120)
+    m = p.compile()
+    mm = cut_applies(m, p.units.n)
+    runs = [solve_cut(m, p.units.n, mm, 0.002, float("inf"), False, None, threads) for threads in (1, 3, 8)]
+    for r in runs[1:]:
+        assert np.array_equal(r["x"], runs[0]["x"])
+        assert r["objective"] == runs[0]["objective"] and r["bound"] == runs[0]["bound"]
+        assert r["evaluations"] == runs[0]["evaluations"]
+
+
 def test_small_boundary_goes_on_to_highs():
     """Below the gap asked for, small models go on to HiGHS's MIP from the cut engine's solution."""
     p = optimize_cases.CASES["boundary_polygons"].py()

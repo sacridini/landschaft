@@ -318,7 +318,7 @@ def solve_closure(m: OptimizationProblem, n: int, cm: dict, gap: float, time_lim
 
 
 def solve_cut(m: OptimizationProblem, n: int, mm: dict, gap: float, time_limit: float, verbose: bool,
-              start: np.ndarray | None = None) -> dict:
+              start: np.ndarray | None = None, threads: int = 1) -> dict:
     """The cut engine (opt/cut.cpp) on a model in Marxan's form."""
     from .. import _core
 
@@ -327,7 +327,7 @@ def solve_cut(m: OptimizationProblem, n: int, mm: dict, gap: float, time_limit: 
     out = _core.opt_solve_cut(
         mm["cost"], mm["status"], mm["offset"], mm["spindex"], mm["amount"], mm["target"], np.zeros(n), nb_start,
         nb, nb_cost, float(gap), -1.0 if not math.isfinite(time_limit) else float(time_limit), 1000, bool(verbose),
-        init)
+        init, int(threads))
     if out["status"] == "infeasible":
         return {"status": "infeasible", "has_solution": False, "x": None, "objective": math.nan, "bound": math.nan,
                 "gap": math.nan, "nodes": 0, "seconds": out["seconds"]}

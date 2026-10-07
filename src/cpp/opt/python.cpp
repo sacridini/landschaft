@@ -360,7 +360,7 @@ void register_python(py::module_& m) {
         [](const Doubles& cost, const IntArr& status, const Ints& offset, const IntArr& spindex, const Doubles& amount,
            const Doubles& target, const Doubles& fixedcost, const Ints& nb_start, const IntArr& nb,
            const Doubles& nb_cost, double gap, double time_limit, int max_evaluations, bool verbose,
-           const IntArr& initial) {
+           const IntArr& initial, int threads) {
             marxan::Data d;
             d.npu = static_cast<int>(cost.size());
             d.nsp = static_cast<int>(target.size());
@@ -385,6 +385,7 @@ void register_python(py::module_& m) {
             o.time_limit = time_limit;
             o.max_evaluations = max_evaluations;
             o.verbose = verbose;
+            o.threads = std::max(1, threads);
             std::vector<int> init(initial.data(), initial.data() + initial.size());
             cut::Result r;
             {
