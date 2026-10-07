@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.30.0] - 2026-10-07
+
 ### Added
 - `ls.original_vegetation(land_cover, natural, anthropic, past=, ecoregions=, failsafe=)`: the natural
   vegetation of converted land (the anthropic share of each pixel given back to the natural classes in
