@@ -339,7 +339,9 @@ def _population_frame(t) -> pd.DataFrame:
     if not isinstance(t, pd.DataFrame):
         raise TypeError("the population must be a DataFrame")
     t = t.copy()
-    if isinstance(t.index, pd.RangeIndex):
+    # the default index only: pandas 3 also gives a RangeIndex to evenly spaced times (an index of years)
+    ix = t.index
+    if isinstance(ix, pd.RangeIndex) and ix.name is None and ix.start == 0 and ix.step == 1:
         t = t.set_index(t.columns[0])
     t.columns = [int(c) for c in t.columns]
     return t.astype(np.float64)

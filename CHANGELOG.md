@@ -23,6 +23,15 @@ in a new major version.
   loop over species), and its standard deviation from the uncertainty of z (one deviation or one per
   species): by default the species' z err together (|sum d reduction / dz sd|), or plangea's two forms
   (`"independent"`, `"linear"`).
+### Fixed
+- pandas 3: R data frames read from `.rda` / `.rds` files (example data) keep their text columns as objects
+  with `None` for NA (pandas 3 inferred its string dtype, NA as NaN), and
+  `DevelopmentDemand.from_population` no longer takes evenly spaced times in the index (to which pandas 3
+  gives a `RangeIndex`) for a default index ("no observed population for subregion ...").
+- Tests on Linux: the two simulate test inputs drawn with numpy's `sin`, `cos` and `exp` (whose last bits
+  differ between platforms) are stored as drawn on Windows, where the references were made; MOLUSCE's
+  correlation, which went through numpy's dgemm on Windows, is compared within a few units in the last
+  place elsewhere (`conftest.WINDOWS_BLAS`).
 
 ## [1.30.0] - 2026-10-07
 

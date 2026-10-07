@@ -21,6 +21,7 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import cache
+from pathlib import Path
 
 import numpy as np
 
@@ -105,8 +106,23 @@ INPUTS: dict[str, Callable] = {
 }
 
 
+#: Inputs drawn with numpy's sin, cos or exp, whose last bits differ between platforms (and so the
+#: results compared bit for bit): their values as drawn on x86-64 Windows, where the references were
+#: made, are stored and used instead (``write_stored_inputs()`` writes them, on Windows).
+STORED_INPUTS = Path(__file__).parent / "data" / "reference" / "simulate" / "inputs.npz"
+STORED = ("surfaces", "glm_synth")
+
+
 def build_input(name: str):
-    return INPUTS[name]()
+    v = INPUTS[name]()
+    if name in STORED and STORED_INPUTS.exists():
+        with np.load(STORED_INPUTS) as s:
+            v = v.copy(data=s[name])
+    return v
+
+
+def write_stored_inputs() -> None:
+    np.savez_compressed(STORED_INPUTS, **{n: np.asarray(INPUTS[n]().values) for n in STORED})
 
 
 # ----------------------------------------------------------------------------- python helpers

@@ -300,6 +300,9 @@ def _data_frame(obj: RObject) -> pd.DataFrame:
     names = obj.attr("names").value
     cols = {name: _vector(col) if isinstance(col, RObject) and col.type != "list" else to_python(col)
             for name, col in zip(names, obj.value)}
+    # strings stay objects with None for NA (pandas 3 would infer its str dtype, NA as NaN)
+    cols = {k: pd.Series(v, dtype=object) if isinstance(v, np.ndarray) and v.dtype == object else v
+            for k, v in cols.items()}
     return pd.DataFrame(cols)
 
 

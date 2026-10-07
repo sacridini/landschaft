@@ -32,6 +32,13 @@ BITWISE = bool(_core.x87_math)
 # Windows the comparisons that go through them allow one unit in the last place.
 UCRT_LIBM = sys.platform == "win32"
 
+# References made by Python packages that call numpy's matrix products (MOLUSCE's
+# correlation: np.corrcoef, a dgemm) carry the summation order of the BLAS kernel
+# numpy used on Windows, where they were made; the same inputs, means and dot
+# products give other last bits through another build's dgemm, so off Windows those
+# values allow a few units in the last place.
+WINDOWS_BLAS = sys.platform == "win32"
+
 
 def same_bits(a, b, *, scale=None, ulps: float = 4) -> np.ndarray:
     """Element by element: ``a`` has the bits of ``b`` (NaN matching NaN).

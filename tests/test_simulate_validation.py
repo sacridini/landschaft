@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import simulate_cases
 import simulate_reference
+from conftest import WINDOWS_BLAS
 
 import landschaft as ls
 
@@ -21,6 +22,10 @@ def test_same_as_reference(case):
     for k in sorted(ref):
         a = np.asarray(ref[k], float)
         b = np.asarray(ours[k], float).reshape(a.shape)
+        if k == "coefficients" and case.startswith("molusce") and not WINDOWS_BLAS:
+            # the correlation (first) went through numpy's dgemm on Windows: see conftest.WINDOWS_BLAS
+            assert abs(b[0] - a[0]) <= 16 * np.spacing(abs(a[0])), (b[0], a[0])
+            a, b = a[1:], b[1:]
         np.testing.assert_array_equal(b, a, err_msg=k)
 
 
