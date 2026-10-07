@@ -500,6 +500,63 @@ def test_wide_engine_keeps_the_time_limit():
     assert sol.seconds < 3.0 and sol.status in ("optimal", "time_limit")
 
 
+def _tree(names, seed=7):
+    rng = np.random.default_rng(seed)
+    nodes = list(names)
+    while len(nodes) > 1:
+        i, j = sorted(rng.choice(len(nodes), 2, replace=False))
+        b, a = nodes.pop(j), nodes.pop(i)
+        nodes.append(f"({a}:{rng.uniform(0.5, 3):.3f},{b}:{rng.uniform(0.5, 3):.3f})")
+    return nodes[0] + ";"
+
+
+def test_subset_model_recognises_target_rewards():
+    from landschaft.prioritize._milp_subset import subset_model
+
+    p, total = _wide_problem(n=40, nf=6)
+    q = p.add_relative_targets(0.3)
+    names = [f"s{k}" for k in range(6)]
+    for obj in (q.add_max_features_objective(0.1 * total), q.add_max_phylo_div_objective(0.1 * total, _tree(names)),
+                q.add_max_phylo_end_objective(0.1 * total, _tree(names))):
+        sm = subset_model(obj.compile(), obj.units.n)
+        assert sm is not None and sm.flags.size == 6
+    for obj in (q.add_min_shortfall_objective(0.1 * total), q.add_min_set_objective(),
+                q.add_max_features_objective(0.1 * total).add_linear_constraints(5.0, "<=", np.ones(40 * 40))):
+        assert subset_model(obj.compile(), obj.units.n) is None
+
+
+def test_subset_search_raises_the_objective():
+    """The local search over the targets met improves on the wide engine, and keeps every row."""
+    from landschaft.prioritize._milp_solve import _highs
+    from landschaft.prioritize._milp_subset import improve_subset, subset_model
+
+    p, total = _wide_problem(n=150, nf=20, seed=11)
+    p = p.add_relative_targets(0.3).add_max_phylo_div_objective(0.1 * total, _tree([f"s{k}" for k in range(20)]))
+    m = p.compile()
+    sm = subset_model(m, p.units.n)
+    r = _highs(m, 0.01, 3.0, 4, "choose", False, None, n_units=p.units.n)
+    found = improve_subset(m, sm, np.asarray(r["x"]), math.inf, 4)
+    z, obj = found if found is not None else (np.asarray(r["x"]), r["objective"])
+    assert obj >= r["objective"] - 1e-9 and obj == pytest.approx(float(m.obj @ z))
+    lo, hi = m.row_bounds()
+    act = m.A @ z
+    assert (act >= lo - 1e-6).all() and (act <= hi + 1e-6).all()
+    a = p.add_highs_solver(gap=0.01, time_limit=10, n_threads=1).solve()
+    b = p.add_highs_solver(gap=0.01, time_limit=10, n_threads=4).solve()
+    assert a.cost <= 0.1 * total * (1 + 1e-9) and a.objective >= r["objective"] - 1e-9
+    if max(a.seconds, b.seconds) < 9:  # the search ended before the time limit: the same on any threads
+        assert np.array_equal(a.values, b.values) and a.objective == b.objective
+
+
+def test_max_features_bound_is_an_integer_count():
+    """max features: the number of targets met is an integer, so the bound drops to an integer (the cost
+    tie-break adds at most nothing to a maximisation)."""
+    p, total = _wide_problem(n=120, nf=20, seed=5)
+    p = p.add_relative_targets(0.4).add_max_features_objective(0.05 * total)
+    sol = p.add_highs_solver(gap=0.0, time_limit=3).solve()
+    assert sol.status == "time_limit" and sol.bound == math.floor(sol.bound)
+
+
 # ----------------------------------------------------------------------------- sub-regional targets
 
 def _regions():

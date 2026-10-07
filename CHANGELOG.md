@@ -6,6 +6,24 @@ in a new major version.
 
 ## [Unreleased]
 
+### Changed
+- Maximum features, phylogenetic diversity and phylogenetic endemism on HiGHS: after the wide engine, a
+  local search over the set of targets met (additions and swaps, the most valuable first, each priced
+  exactly by the covering engine). Synthetic problems (30 features, targets of 30 %, a budget of 10 %):
+  phylogenetic diversity at 10⁵ units 47.9 -> 53.7 (Gurobi in 300 s: 46.7), at 10⁶ 42.4 -> 52.2 in 60 s;
+  phylogenetic endemism at 10⁵ 841 (Gurobi in 30 s: 179).
+- Maximum features: the bound is rounded down to a whole number of targets (the cost tie-break adds
+  nothing to a maximisation), which proves gaps the linear relaxation alone does not (10⁴ units, targets
+  of 20 %: a 7.7 % gap proven in 0.5 s instead of 10.5 % after 120 s).
+
+### Fixed
+- The wide engine's sifting cycled on degenerate LPs (phylogenetic objectives at 10⁶ units: the units let
+  in at one round were dropped at the next, and the LP never converged within the time limit): the working
+  set now grows while more units price in than a round admits (5 rounds, 8 s).
+- HiGHS's MIP kept running up to 20 s past the time limit on wide models (10⁵ columns, 10⁶ non-zeros):
+  two changes to its sources (applied at build time by `src/cpp/opt/highs_patch.cmake`) make the central
+  rounding's line search and the analytic centre keep the limits.
+
 ## [1.29.0] - 2026-10-07
 
 ### Fixed

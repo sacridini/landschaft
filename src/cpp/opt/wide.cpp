@@ -563,6 +563,10 @@ struct Sifting {
             }
         }
         i64 widen = size;
+        // the working set's scale: it doubles while more units price in than a round admits (degenerate
+        // duals, as in the phylogenetic objectives at 10^6 units, where a fixed size cycled: the units let
+        // in were dropped again at the next round)
+        i64 cap = size;
         for (int round = 0; round < kMaxSiftRounds; ++round) {
             const double left = time_left();
             if (left <= 0) {
@@ -606,7 +610,7 @@ struct Sifting {
             // the LP would break the monotone decrease of the restricted LP's objective)
             const bool wrong = !wrong_up.empty();
             {
-                const std::size_t take = std::min(wrong_up.size(), static_cast<std::size_t>(4 * size));
+                const std::size_t take = std::min(wrong_up.size(), static_cast<std::size_t>(4 * cap));
                 std::partial_sort(wrong_up.begin(), wrong_up.begin() + static_cast<std::ptrdiff_t>(take), wrong_up.end());
                 for (std::size_t k = 0; k < take; ++k) at[wrong_up[k].second] = At::work;
             }
@@ -621,13 +625,14 @@ struct Sifting {
                 return;
             }
             widen = size;
-            const std::size_t add = std::min(raise.size(), static_cast<std::size_t>(4 * size));
+            if (raise.size() > static_cast<std::size_t>(4 * cap)) cap = std::min(2 * cap, n);
+            const std::size_t add = std::min(raise.size(), static_cast<std::size_t>(4 * cap));
             std::partial_sort(raise.begin(), raise.begin() + static_cast<std::ptrdiff_t>(add), raise.end());
             for (std::size_t k = 0; k < add; ++k) at[raise[k].second] = At::work;
             // keep the working set near its size: units at the bound their reduced cost points to leave it
             i64 working = 0;
             for (i64 j = 0; j < n; ++j) working += at[j] == At::work;
-            if (working > 8 * size) {
+            if (working > 8 * cap) {
                 std::vector<std::pair<double, i64>> out;
                 for (i64 j = 0; j < n; ++j) {
                     if (at[j] != At::work) continue;
@@ -635,7 +640,7 @@ struct Sifting {
                     if ((d[j] > tol && x[j] == w.m.lb[j]) || (d[j] < -tol && x[j] == w.m.ub[j]))
                         out.emplace_back(-std::abs(d[j]), j);
                 }
-                const std::size_t drop = std::min(out.size(), static_cast<std::size_t>(working - 4 * size));
+                const std::size_t drop = std::min(out.size(), static_cast<std::size_t>(working - 4 * cap));
                 std::partial_sort(out.begin(), out.begin() + static_cast<std::ptrdiff_t>(drop), out.end());
                 for (std::size_t k = 0; k < drop; ++k) {
                     const i64 j = out[k].second;
@@ -733,6 +738,30 @@ void trim(const Wide& w, std::vector<double>& xu, std::vector<double>& act, cons
 
 }  // namespace
 
+// A bound raised to the objective's integrality: when every other column with an objective term is an
+// integer one with an integer coefficient (a count of targets met or of features present) and the units'
+// terms are bounded (prioritizr's tie-break on cost), the other columns' part of any solution is an
+// integer, at least the bound minus the most the units can add.
+double integral_bound(const Wide& w, double lower) {
+    if (!std::isfinite(lower)) return lower;
+    bool any = false;
+    for (i64 j = w.n; j < w.ncol; ++j) {
+        if (w.c[j] == 0.0) continue;
+        if (!w.m.integer[j] || w.c[j] != std::round(w.c[j]) || !std::isfinite(w.m.lb[j]) || !std::isfinite(w.m.ub[j]))
+            return lower;
+        any = true;
+    }
+    if (!any) return lower;
+    double ulo = 0.0, uhi = 0.0;
+    for (i64 j = 0; j < w.n; ++j) {
+        const double a = w.c[j] * w.m.lb[j], b = w.c[j] * w.m.ub[j];
+        ulo += std::min(a, b);
+        uhi += std::max(a, b);
+    }
+    const double others = std::ceil(lower - uhi - 1e-6 * std::max(1.0, std::abs(lower)));
+    return std::max(lower, others + ulo);
+}
+
 bool is_wide(const Model& model, i64 n_units) {
     if (n_units < 0 || n_units > model.ncol || model.ncol - n_units > kMaxOther) return false;
     for (i64 j = 0; j < n_units; ++j)
@@ -786,7 +815,8 @@ SolveResult solve_wide(const Model& model, i64 n_units, const SolveOptions& opti
         xu.insert(xu.end(), xo.begin(), xo.end());
         return finish(xu, unit_obj + other_obj, std::min(lp.lagrangian, unit_obj + other_obj), "time_limit");
     }
-    const double lower = lp_done ? lp.lp_objective : lp.lagrangian;
+    const double lp_lower = lp_done ? lp.lp_objective : lp.lagrangian;
+    const double lower = options.relaxation ? lp_lower : integral_bound(w, lp_lower);
     if (!any_integer) return finish(lp.x, lp.lp_objective, lower, lp_done ? "optimal" : "time_limit");
     // the re-optimisations of the few other columns take milliseconds: they run even at the deadline
     auto aux_time = [&] { return std::max(time_left(), 0.5); };
@@ -1019,6 +1049,7 @@ SolveResult solve_wide(const Model& model, i64 n_units, const SolveOptions& opti
             if (mip.status == "infeasible") bound = std::max(bound, best_obj);
         }
     }
+    bound = integral_bound(w, bound);
     if (best.empty()) return finish({}, kInf, bound, mip_optimal ? "infeasible" : "time_limit");
     const bool ok = relative_gap(best_obj, bound) <= options.gap || mip_optimal;
     return finish(best, best_obj, std::min(bound, best_obj), ok ? "optimal" : "time_limit");

@@ -180,7 +180,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 FetchContent_Declare(highs
     URL https://github.com/ERGO-Code/HiGHS/archive/refs/tags/v1.15.1.tar.gz
     URL_HASH SHA256=a840d269dff2fafb371dd247df13ad5e026d7ce3b35ad3dc1eedd59bf0c2fb16
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    # our changes to its sources (see the script)
+    PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/opt/highs_patch.cmake)
 FetchContent_MakeAvailable(highs)
 unset(CMAKE_POSITION_INDEPENDENT_CODE)
 unset(BUILD_SHARED_LIBS)

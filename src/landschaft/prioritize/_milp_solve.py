@@ -118,11 +118,15 @@ def _highs_or_cut(m: OptimizationProblem, gap: float, time_limit: float, threads
     import time
 
     from ._milp_anneal import closure_model, cut_applies, solve_closure, solve_cut
+    from ._milp_subset import subset_model
 
     if m.connected or m.corridors:  # contiguity, corridors: a first solution, cuts, then the MIP
         from ._milp_connect import solve_connected
 
         return solve_connected(m, gap, time_limit, threads, presolve, verbose, start, n_units)
+    sm = subset_model(m, n_units)
+    if sm is not None:  # maximum features, phylogenetic diversity: the wide engine, then the subset search
+        return _wide_then_subset(m, sm, gap, time_limit, threads, presolve, verbose, start, n_units)
     mm = cut_applies(m, n_units)
     t0 = time.perf_counter()
     if mm is not None:
@@ -157,6 +161,35 @@ def _highs_or_cut(m: OptimizationProblem, gap: float, time_limit: float, threads
     out["status"] = "optimal" if out["gap"] <= gap else h["status"]
     out["seconds"] = time.perf_counter() - t0
     return out
+
+
+# the wide engine's share of the time limit before the subset search
+SUBSET_ENGINE_SHARE = 0.4
+
+
+def _wide_then_subset(m: OptimizationProblem, sm, gap: float, time_limit: float, threads: int, presolve: str,
+                      verbose: bool, start: np.ndarray | None, n_units: int) -> dict:
+    """Budgeted objectives that reward the targets met: the wide engine (its bound, a first solution),
+    then a local search over the set of targets met (:mod:`._milp_subset`) for the rest of the time."""
+    import time
+
+    from ._milp_subset import improve_subset
+
+    t0 = time.perf_counter()
+    share = time_limit * SUBSET_ENGINE_SHARE if math.isfinite(time_limit) else time_limit
+    r = dict(_highs(m, gap, share, threads, presolve, verbose, start, n_units=n_units))
+    if r["status"] in ("optimal", "infeasible") or not r["has_solution"]:
+        return r
+    deadline = t0 + time_limit if math.isfinite(time_limit) else math.inf
+    found = improve_subset(m, sm, np.asarray(r["x"]), deadline, threads, verbose)
+    if found is not None:
+        r["x"], r["objective"] = found
+        g = r["bound"] - r["objective"]  # a maximisation
+        r["gap"] = 0.0 if g <= 0 else g / max(abs(r["objective"]), 1e-10)
+        if r["gap"] <= gap:
+            r["status"] = "optimal"
+    r["seconds"] = time.perf_counter() - t0
+    return r
 
 
 def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.ndarray | None = None,
