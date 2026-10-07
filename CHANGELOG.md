@@ -6,6 +6,21 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.29.0] - 2026-10-07
+
+### Fixed
+- `add_contiguity_constraints` and `add_feature_contiguity_constraints` now use an exact model (a root, a
+  spanning arborescence on both directions of every edge and a single-commodity flow). prioritizr's
+  formulation, which the previous versions compiled, orients every edge from a unit to one of a lower
+  index: a restriction that misses patches (three units in a line with the middle one first have none)
+  and can return a costlier patch than the best one or call a feasible problem infeasible. `compile()`
+  still matches prioritizr row by row in every other case.
+
+### Changed
+- Contiguity and corridor constraints on HiGHS are solved in three steps: a first patch from prioritizr's
+  restriction, a bound from directed cuts (node cuts for corridors) separated by maximum flows, then the
+  exact MIP from the first patch, within the time limit.
+
 ## [1.28.0] - 2026-10-07
 
 ### Added
