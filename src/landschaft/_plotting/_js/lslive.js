@@ -60,10 +60,10 @@
         hello();
     }, 750);
 
-    var MAXPX = 4096;
+    var MAXPX = 4096, KEEP = 12;  // the details of the last bands seen, kept for their view
 
     function Live(map, id, layers) {
-        this.map = map; this.id = id; this.layers = layers; this.live = false;
+        this.map = map; this.id = id; this.layers = layers; this.live = false; this.kept = [];
         var self = this, wait = null;
         maps.push(this);
         this.schedule = function () {
@@ -85,9 +85,10 @@
         map.on("layeradd", function (e) {  // a band put on: its detail, made ready beforehand, at once
             var l = self.entry(e.layer);
             if (!l) { return; }
-            var r = l.ready, v = self.view();
+            var r = l.ready, v = self.view(), k = l.kept;
             l.ready = null;
-            if (r && self.fits(r, v)) { self.showImage(l, e.layer, r.a, r.box, r.res, r.img); }
+            if (!(r && self.fits(r, v, l)) && k && self.fits(k, v, l)) { r = k; }
+            if (r && self.fits(r, v, l)) { self.showImage(l, e.layer, r.a, r.box, r.res, r.img); }
             self.schedule();
         });
         if (via) { setTimeout(function () { self.hello(); }, 0); }
@@ -204,7 +205,7 @@
         var o = L.imageOverlay(img || a.url, bounds(a.ext), {opacity: base.options.opacity, interactive: false, className: "ls-detail",
                                                              pane: base.options.pane || "overlayPane", zIndex: 3});
         o._lsIsDetail = true;
-        l.det = {layer: o, box: box, res: px};
+        l.det = {layer: o, box: box, res: px, a: a};
         base._lsDetail = {layer: o, ext: a.ext, palette: a.palette || null, lookup: a.lookup || null};
         var swap = function () {  // the old detail off once the new one is drawn: never a gap
             if (old) { map.removeLayer(old.layer); }
@@ -264,7 +265,18 @@
         } else {
             this.map.removeLayer(d.layer);
             if (base) { base._lsDetail = null; hide(base, false); }
+            this.keep(l, d);
         }
+    };
+    // a detail taken off (its band left) kept for a while: the band shows sharp at once if it comes back
+    Live.prototype.keep = function (l, d) {
+        var img = d.layer.getElement && d.layer.getElement();
+        if (!img || !img.complete || !d.a) { return; }
+        l.kept = {a: d.a, img: img, box: d.box, res: d.res};
+        var i = this.kept.indexOf(l);
+        if (i >= 0) { this.kept.splice(i, 1); }
+        this.kept.push(l);
+        while (this.kept.length > KEEP) { this.kept.shift().kept = null; }
     };
     Live.prototype.clear = function (l) { l.req = (l.req || 0) + 1; l.asked = null; this.release(l); };
 

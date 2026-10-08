@@ -264,17 +264,14 @@ _SCRIPT = """
                 grp.removeLayer(lays[cur]); cur = k; grp.addLayer(lays[cur]);
                 range.value = k; lab.textContent = g.b[k];
             };
-            // while Python draws detail (live), a band is shown with its detail made ready first:
-            // never coarse, then sharp (a frame of the animation waits for it)
+            // while Python draws detail (live), a band played is shown with its detail made ready
+            // first: never coarse, then sharp (a frame of the animation waits for it). The slider
+            // shows a band at once: its detail comes once the slider rests (or at once, if seen lately)
             var asked = 0;
             var ready = function(k, wait) {
                 return window.LS_LIVE ? window.LS_LIVE.prepare(lays[k], wait) : Promise.resolve();
             };
-            range.addEventListener("input", function() {
-                var k = +range.value, n = ++asked;
-                lab.textContent = g.b[k];
-                ready(k, 400).then(function() { if (n === asked) { show(k); } });
-            });
+            range.addEventListener("input", function() { asked++; show(+range.value); });
             var step = function() {
                 var k = (cur + 1) % lays.length, next = ready(k, 8000), n = asked;
                 timer = setTimeout(function() {
