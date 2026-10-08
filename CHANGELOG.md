@@ -6,6 +6,15 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.33.2] - 2026-10-08
+
+### Fixed
+- The band slider of a stack was slow while Python draws detail (1.33.1): every position it went through
+  asked for that band's detail and waited for it, up to 400 ms, so a drag over 20 bands put one on the map,
+  after 1.2 s. The slider shows a band at once again (20 bands in a 0.9 s drag, each as it is reached) and
+  the detail is asked for once it rests; the details of the last 12 bands seen are kept for their view, so
+  a band seen again shows sharp at once. Playing still waits for each band's detail (no coarse frames).
+
 ## [1.33.1] - 2026-10-08
 
 ### Fixed
