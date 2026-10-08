@@ -472,7 +472,9 @@ def plot(obj, *, column=None, cmap=None, labels=None, categorical=None, vmin=Non
     In a notebook the plot shows inline; elsewhere it opens in a window of its own
     (pywebview, else the web browser). Rasters are reduced to the screen's
     resolution before anything else (a lazy raster is read reduced), so a map of a
-    whole country draws in about the time of a small one.
+    whole country draws in about the time of a small one. Vector layers of over
+    20 000 features (up to 2 million) are drawn by the graphics card (WebGL), sharp
+    at every zoom, the feature under the cursor read as for rasters.
 
     Parameters
     ----------

@@ -164,7 +164,7 @@ def test_rasters_without_georeferencing_are_charts():
 # --- vectors ------------------------------------------------------------------------------------------
 
 
-def test_vectors_as_geojson_or_image():
+def test_vectors_as_geojson_webgl_or_image(monkeypatch):
     polys = gpd.GeoDataFrame({"name": ["a", "b"], "area": [1.0, 2.0]}, crs=32633,
                              geometry=[box(500000, 4498000, 501000, 4499000), box(501500, 4498500, 502000, 4499500)])
     html = page(ls.plot(polys, column="name"))
@@ -173,9 +173,109 @@ def test_vectors_as_geojson_or_image():
     pts = gpd.GeoDataFrame({"v": rng.random(30000)}, crs=32633,
                            geometry=gpd.points_from_xy(rng.uniform(5e5, 6e5, 30000), rng.uniform(4.4e6, 4.5e6, 30000)))
     html = page(ls.plot(pts, column="v"))
-    assert '{"type":"FeatureCollection"' not in html and images(html)  # too many: an image
+    assert '{"type":"FeatureCollection"' not in html and "new L.LsGL(" in html  # many: WebGL
+    monkeypatch.setattr(_gl_module(), "MAX_FEATURES", 20_000)
+    html = page(ls.plot(pts, column="v"))
+    assert "new L.LsGL(" not in html and images(html)  # too many: an image
 
 
+def _gl_arrays(layer):
+    """The arrays of a WebGL layer decoded as lsgl.js decodes them."""
+    import zlib
+
+    blob = base64.b64decode(layer._ls_payload)
+    out = {}
+    def inflate(pieces):
+        return b"".join(zlib.decompress(blob[off:off + size]) for off, size in pieces)
+
+    for k, (pieces, n, delta) in layer.spec["arrays"].items():
+        raw = inflate(pieces)
+        v = np.frombuffer(raw, np.uint8).reshape(4, n).T.copy().view("<u4").ravel()
+        if delta:
+            z = v.astype(np.int64)
+            v = np.cumsum((z >> 1) ^ -(z & 1)).astype(np.int32)
+        out[k] = v
+    p = layer.spec["props"]
+    import json
+
+    out["props"] = json.loads(inflate(p)) if p else None
+    return out
+
+
+@pytest.mark.parametrize("crs", [32633, 4326])
+def test_many_vectors_are_drawn_with_webgl(monkeypatch, crs):
+    from landschaft._plotting import _vectors
+
+    monkeypatch.setattr(_vectors, "MAX_FEATURES", 2)
+    donut = box(500000, 4490000, 510000, 4500000).difference(box(503000, 4493000, 507000, 4497000))
+    from shapely.geometry import LineString, MultiPolygon
+
+    two = MultiPolygon([box(512000, 4490000, 514000, 4492000), box(515000, 4495000, 518000, 4498000)])
+    g = gpd.GeoDataFrame({"k": ["a", "b", "c", "d"], "n": [1.5, None, 3.0, 4.0]}, crs=32633, geometry=[
+        donut, two, LineString([(500000, 4502000), (518000, 4504000)]), Point(519000, 4491000)]).to_crs(crs)
+    kind, layer, legend = _vectors.layer(g, column="k")
+    assert kind == "webgl" and [c for _, c in legend.classes] == ["a", "b", "c", "d"]
+    a = _gl_arrays(layer)
+    q, (x0, y0) = layer.spec["q"], layer.spec["origin"]
+    n = len(a["pxy"]) // 2
+    x, y = a["pxy"][:n] * q + x0, a["pxy"][n:] * q + y0
+    # the triangles of each polygon cover its area (in Web Mercator), holes left out
+    merc = g.to_crs(3857).geometry.values
+    tri, start, v0 = a["pidx"], 0, 0
+    count_of = a["ptri"].astype(np.int64)
+    feature, areas = np.cumsum(a["pfeat"]), {}
+    verts = np.cumsum(np.r_[0, a["pring"]])
+    rings = np.cumsum(np.r_[0, a["prings"]])
+    for p_, count in enumerate(count_of):
+        t = tri[start:start + count].reshape(-1, 3).astype(np.int64) + int(v0)
+        ax_, ay_ = x[t], y[t]
+        area = 0.5 * np.abs((ax_[:, 1] - ax_[:, 0]) * (ay_[:, 2] - ay_[:, 0]) - (ax_[:, 2] - ax_[:, 0]) * (ay_[:, 1] - ay_[:, 0]))
+        areas[feature[p_]] = areas.get(feature[p_], 0.0) + area.sum()
+        start += count
+        v0 = verts[rings[p_ + 1]]
+    assert sorted(areas) == [0, 1]
+    for f, area in areas.items():
+        assert area == pytest.approx(merc[f].area, rel=1e-3)
+    assert list(np.cumsum(a["lfeat"])) == [2] and list(np.cumsum(a["tfeat"])) == [3]
+    assert list(a["fcol"]) == [0, 1, 2, 3] and a["props"] == {"k": ["a", "b", "c", "d"], "n": [1.5, None, 3.0, 4.0]}
+    html = page(ls.plot(g, column="k"))
+    assert html.count("L.LsGL = L.Renderer.extend") == 1 and "new L.LsGL(" in html and "LSPAYLOAD" not in html
+    assert '{"type":"FeatureCollection"' not in html
+    monkeypatch.setattr(_gl_module(), "MAX_FEATURES", 3)  # too many even for WebGL: an image
+    assert _vectors.layer(g, column="k")[0] == "image"
+
+
+
+def test_many_points_with_webgl_read_their_values_back_from_the_colours(monkeypatch):
+    from landschaft._plotting import _vectors
+
+    monkeypatch.setattr(_vectors, "MAX_FEATURES", 2)
+    monkeypatch.setattr(_vectors, "MAX_VALUES", 4)  # too many values to hold: none, the colour read
+    g = gpd.GeoDataFrame({"v": [1.0, 2.0, 3.0], "s": ["x", "y", None]}, crs=32633,
+                         geometry=gpd.points_from_xy([500000, 501000, 502500], [4490000, 4491000, 4490500]))
+    kind, layer, _ = _vectors.layer(g, column="v", categorical=False, vmin=1, vmax=3)
+    assert kind == "webgl"
+    a = _gl_arrays(layer)
+    q, (x0, y0) = layer.spec["q"], layer.spec["origin"]
+    x, y = a["txy"][:3] * q + x0, a["txy"][3:] * q + y0
+    from landschaft._vector import transform_xy
+
+    mx, my = transform_xy(np.array([500000.0, 501000, 502500]), np.array([4490000.0, 4491000, 4490500]), "EPSG:32633",
+                          "EPSG:3857")
+    assert np.abs(x - mx).max() <= q and np.abs(y - my).max() <= q
+    assert list(np.cumsum(a["tfeat"])) == [0, 1, 2] and list(a["fcol"]) == [0, 127, 254]
+    assert a["props"] is None and layer.spec["fields"] == []
+    assert layer.spec["lookup"] == {"vmin": 1.0, "vmax": 3.0, "log": False, "under": False, "over": False}
+    monkeypatch.setattr(_vectors, "MAX_VALUES", 100)
+    _, layer, _ = _vectors.layer(g, column="s")
+    assert _gl_arrays(layer)["props"] == {"v": [1.0, 2.0, 3.0], "s": ["x", "y", None]}
+    assert layer.spec["lookup"] == {"labels": ["x", "y"]}  # None: no value, the missing colour
+
+
+def _gl_module():
+    from landschaft._plotting import _gl
+
+    return _gl
 
 
 def test_lists_of_anything():
@@ -348,7 +448,8 @@ def test_a_pixel_colour_gives_back_its_value(forest):
     assert ramp.opacity == 0.85  # applied by the map to the layer, the palette opaque
 
 
-def test_maps_read_values_and_have_a_card_per_layer(forest):
+def test_maps_read_values_and_have_a_card_per_layer(forest, monkeypatch):
+    monkeypatch.setattr(_gl_module(), "MAX_FEATURES", 0)  # many features as an image
     stack = grid(np.random.default_rng(5).random((3, 40, 50)).astype("float32"), name="stack")
     poly = gpd.GeoDataFrame(geometry=[box(500300, 4498900, 500900, 4499500)], crs=32633)
     html = page(ls.plot([stack, poly]))

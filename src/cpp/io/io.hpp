@@ -81,6 +81,13 @@ void burn_runs(T* out, int ny, int nx, const Runs& runs, const double* value, bo
 template <class T>
 std::vector<float> block_mean(const T* values, int ny, int nx, int f, bool has_nodata, double nodata);
 
+// Polygons cut into triangles (earcut, for WebGL): polygon p has the rings
+// polygon_rings[p] .. polygon_rings[p + 1], ring r the points ring_offsets[r] .. ring_offsets[r + 1]
+// of xy. The triangles' vertex indices, three per triangle, counted from the first point of
+// their polygon, polygon after polygon; counts: the indices of each polygon.
+std::vector<std::uint32_t> triangulate(const double* xy, const i64* ring_offsets, const i64* polygon_rings,
+                                       i64 npolygons, std::vector<i64>* counts);
+
 // The rules of ls.reclassify, resolved: a cell is `missing` where it is NaN or
 // nodata, else the value of the interval [breaks[i], breaks[i + 1]) it falls in
 // when break_set[i] (the ranges), else key_out[k] where it equals keys[k]

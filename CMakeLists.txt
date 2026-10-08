@@ -269,6 +269,7 @@ add_library(iocore STATIC
     src/cpp/io/exact/traversal.cpp
     src/cpp/io/exact/traversal_areas.cpp
     src/cpp/io/reclass.cpp
+    src/cpp/io/triangulate.cpp
     src/cpp/io/warp.cpp
     src/cpp/io/zonal.cpp
 )

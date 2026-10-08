@@ -135,7 +135,13 @@ one cell per block for classes, and a raster read lazily (`chunks="auto"`) is
 read reduced, in strips, or through its overviews when it has some. It is
 reprojected to Web Mercator once and written as an 8-bit PNG with a palette.
 Vector layers of up to 20 000 features go to the map as GeoJSON, simplified to
-half a pixel; larger ones are drawn as an image. A static figure draws all the
+half a pixel. Larger ones, up to 2 million features, are drawn by the graphics
+card (WebGL): simplified to an eighth of a pixel, cut into triangles in C++ and
+packed into the page, they stay sharp when zoomed in, and the value of the
+feature under the cursor shows as for rasters, its columns in a popup on a
+click (200 000 polygons in about a second). Even larger layers are drawn as an
+image. WebGL needs a browser of the last few years (any recent Chrome, Edge,
+Firefox, Safari or VS Code). A static figure draws all the
 features of a layer at once (50 000 polygons in under a second) and burns more
 than 100 000 into an image. The bands of a stack share 16 million pixels, so a
 page of many bands stays light. A map of 100 million cells takes a fraction of

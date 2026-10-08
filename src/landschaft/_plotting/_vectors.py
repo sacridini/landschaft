@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Vector layers for maps: GeoJSON with rounded coordinates, or, for very many features, an image."""
+"""Vector layers for maps: GeoJSON with rounded coordinates; many features with WebGL (_gl); very many
+as an image."""
 
 from __future__ import annotations
 
@@ -10,11 +11,14 @@ import numpy as np
 from . import _palettes
 from ._raster import Image, Legend, distinct_palette, ramp_lookup
 
-#: Above this many features (or vertices), a layer is drawn as an image instead of GeoJSON.
+#: Above this many features (or vertices), a layer is drawn with WebGL (or as an image) instead of GeoJSON.
 MAX_FEATURES = 20_000
 MAX_VERTICES = 1_000_000
 #: Columns shown in the tooltip.
 MAX_TOOLTIP = 6
+#: Values of the columns a WebGL layer holds for its tooltips (features x columns); more: none (the
+#: value under the cursor read back from the colour, as for images).
+MAX_VALUES = 1_000_000
 _MISSING = "#808080"
 
 
@@ -135,8 +139,11 @@ def _layer_class():
 
 
 def layer(gdf, *, column=None, cmap=None, categorical=None, color: str = "#ffd60a", opacity: float = 0.7,
-          name: str | None = None, max_size: int = 2048, tooltip: bool = True, vmin=None, vmax=None, log=None):
-    """A vector layer for a folium map: ("geojson", folium layer, legend) or ("image", Image, legend)."""
+          name: str | None = None, max_size: int = 2048, tooltip: bool = True, vmin=None, vmax=None, log=None,
+          webgl: bool = True):
+    """A vector layer for a folium map: ("geojson", folium layer, legend), ("webgl", folium layer, legend)
+    or ("image", Image, legend). Up to MAX_FEATURES features (and MAX_VERTICES vertices): GeoJSON; up to
+    _gl.MAX_FEATURES: WebGL (``webgl=True``); more: an image."""
     import shapely
 
     name = name or (str(column) if column else "features")
@@ -146,7 +153,15 @@ def layer(gdf, *, column=None, cmap=None, categorical=None, color: str = "#ffd60
         gdf = gdf[keep_rows]
     codes, palette, legend = _colours(gdf, column, cmap, categorical, vmin, vmax, log)
     vertices = int(shapely.get_num_coordinates(gdf.geometry.values).sum())
+    keep = [c for c in gdf.columns if c != gdf.geometry.name][:MAX_TOOLTIP] if tooltip else []
     if len(gdf) > MAX_FEATURES or vertices > MAX_VERTICES:
+        from . import _gl
+
+        if len(gdf) * len(keep) > MAX_VALUES:  # no columns: the value read back from the colour
+            keep = []
+        gl = _gl.layer(gdf, codes, palette, color, opacity, name, max_size, keep, column, legend) if webgl else None
+        if gl is not None:
+            return "webgl", gl, legend
         return "image", _as_image(gdf, codes, palette, color, opacity, name, max_size, legend), legend
     if gdf.crs is not None and not gdf.crs.equals("EPSG:4326"):
         gdf = gdf.to_crs("EPSG:4326")
@@ -157,7 +172,6 @@ def layer(gdf, *, column=None, cmap=None, categorical=None, color: str = "#ffd60
     geoms = gdf.geometry.values
     if tol > 0 and kinds - {"Point", "MultiPoint"}:
         geoms = simplify(geoms, tol)
-    keep = [c for c in gdf.columns if c != gdf.geometry.name][:MAX_TOOLTIP] if tooltip else []
     props = gdf[keep].copy()
     for c in keep:  # JSON-friendly values
         if not (_palettes.is_number(props[c].dtype) or props[c].dtype == bool):
@@ -177,11 +191,21 @@ def simplify(geoms, tol: float):
     """Geometries simplified to ``tol`` for drawing: Douglas-Peucker without keeping their topology
     (6 to 20 times faster; a ring may cross itself by less than ``tol``, which no one sees); the
     features it would leave empty (smaller than ``tol``) simplified keeping their topology, so that
-    they are still there when zoomed in."""
+    they are still there when zoomed in. Many geometries in parts over threads (GEOS lets go of the GIL)."""
     import shapely
 
+    from .._threads import default_threads
+
     geoms = np.asarray(geoms, dtype=object)
-    out = shapely.simplify(geoms, tol, preserve_topology=False)
+    threads = min(default_threads(), len(geoms) // 10_000)
+    if threads > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(threads) as pool:
+            out = np.concatenate(list(pool.map(lambda part: shapely.simplify(part, tol, preserve_topology=False),
+                                               np.array_split(geoms, 4 * threads))))
+    else:
+        out = shapely.simplify(geoms, tol, preserve_topology=False)
     lost = shapely.is_empty(out) & ~shapely.is_empty(geoms)
     if lost.any():
         out[lost] = shapely.simplify(geoms[lost], tol, preserve_topology=True)

@@ -368,7 +368,7 @@ threads.
 
 `ls.plot`, from the data to the page a notebook or a window shows (the map's
 HTML, images and data included), measured with `tools/benchmark_plot.py`
-(version 1.31.1) on the performance cores, the fastest of 3 runs. A first plot
+(version 1.32.0) on the performance cores, the fastest of 3 runs. A first plot
 in a session also imports folium and compiles its templates, about 0.7 s once.
 A page holds everything it needs (Leaflet, about 0.16 MB; plotly, 4.3 MB, in
 a page with charts), so it opens without a network connection.
@@ -380,11 +380,12 @@ a page with charts), so it opens without a network connection.
 | float32 raster, 10 000 × 10 000, read lazily from a file | 0.61 s | 4.7 MB |
 | float32 raster, 2000 × 2000 | 0.23 s | 5.1 MB |
 | stack of 47 bands of 1000 × 1000 (a band per thread, 16 million pixels in all) | 0.85 s | 14 MB |
-| 10 000 polygons coloured by a column (GeoJSON) | 0.15 s | 2.7 MB |
-| 200 000 polygons coloured by a column (an image) | 0.98 s | 4.5 MB |
-| 2 million points coloured by a column (an image) | 0.77 s | 4.8 MB |
-| 50 000 polygons, static figure (`static=True`, drawn as a PNG) | 0.76 s | 0.7 MB |
-| 200 000 polygons, static figure (burnt into an image) | 0.83 s | 0.6 MB |
+| 10 000 polygons coloured by a column (GeoJSON) | 0.14 s | 2.7 MB |
+| 50 000 polygons coloured by a column (WebGL) | 0.36 s | 1.5 MB |
+| 200 000 polygons coloured by a column (WebGL, with their columns) | 0.99 s | 5.3 MB |
+| 2 million points coloured by a column (WebGL) | 0.70 s | 13 MB |
+| 50 000 polygons, static figure (`static=True`, drawn as a PNG) | 0.57 s | 0.7 MB |
+| 200 000 polygons, static figure (burnt into an image) | 0.80 s | 0.6 MB |
 | a table of landscape metrics (a chart) | 0.03 s | 4.3 MB |
 
 The time hardly grows with the size of a raster: it is reduced to the

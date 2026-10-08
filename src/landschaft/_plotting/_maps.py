@@ -192,30 +192,42 @@ _SCRIPT = """
         var d = l.ctx.getImageData(col, row, 1, 1).data;
         return d[3] === 0 ? null : value(l, index(l, d));
     }
-    function rows(latlng) {
+    function rows(latlng, full) {
         var out = [];
         L_.forEach(function(l) {
             var v = read(l, latlng);
             if (v !== undefined) { out.push([l.n, v === null ? "no data" : v]); }
+        });
+        // large vector layers (WebGL): the feature under the cursor, its columns on a click
+        (window.LS_GL || []).forEach(function(l) {
+            if (l._map === map) { out.push.apply(out, l.rowsAt(latlng, full)); }
         });
         return out;
     }
 
     var Readout = L.Control.extend({options: {position: "bottomleft"}, onAdd: function() {
         var div = L.DomUtil.create("div", "leaflet-control ls-coords");
-        map.on("mousemove", function(e) {  // a pixel read per visible layer: well under a millisecond
-            var ll = e.latlng;
-            var h = "<span class='ll'>" + ll.lat.toFixed(5) + ", " + ll.lng.toFixed(5) + "</span>";
-            rows(ll).forEach(function(r) { h += "<div><b>" + esc(r[0]) + "</b> " + esc(r[1]) + "</div>"; });
-            div.innerHTML = h;
+        var last = null, queued = false;
+        map.on("mousemove", function(e) {  // a pixel read per visible layer, once a frame
+            last = e.latlng;
+            if (queued) { return; }
+            queued = true;
+            requestAnimationFrame(function() {
+                queued = false;
+                if (!last) { return; }
+                var ll = last;
+                var h = "<span class='ll'>" + ll.lat.toFixed(5) + ", " + ll.lng.toFixed(5) + "</span>";
+                rows(ll).forEach(function(r) { h += "<div><b>" + esc(r[0]) + "</b> " + esc(r[1]) + "</div>"; });
+                div.innerHTML = h;
+            });
         });
-        map.on("mouseout", function() { div.innerHTML = ""; });
+        map.on("mouseout", function() { last = null; div.innerHTML = ""; });
         return div;
     }});
     new Readout().addTo(map);
-    if (L_.length) {
+    if (L_.length || (window.LS_GL || []).length) {
         map.on("click", function(e) {
-            var r = rows(e.latlng);
+            var r = rows(e.latlng, true);
             if (!r.length) { return; }
             var h = "<table class='ls-pop'>" + r.map(function(x) {
                 return "<tr><th>" + esc(x[0]) + "</th><td>" + esc(x[1]) + "</td></tr>"; }).join("") +
@@ -454,8 +466,16 @@ def add_image(m, img: Image, show: bool = True, pane: str | None = None):
 
 
 def add_vector(m, layer):
-    """A GeoJSON layer of _vectors, its data put in by render."""
+    """A GeoJSON or WebGL layer of _vectors, its data put in by render."""
     add_payload(m, layer)
+    if type(layer).__name__ == "GlLayer" and "ls_gl" not in m.get_root().header._children:
+        from branca.element import Element
+
+        from . import _gl
+
+        token = f"LSASSETGL{id(m)}"
+        m.__dict__["_ls_images"][token] = _gl.script()
+        m.get_root().header.add_child(Element(token), name="ls_gl")
     layer.add_to(m)
     return layer
 
@@ -478,7 +498,7 @@ def _install(m):
     m.__dict__["_ls_images"] = {}
 
 
-_TOKENS = re.compile(r"data:image/png;base64,LSIMAGE\d+x\d+|LSPAYLOAD\d+x\d+|LSASSET\d+")
+_TOKENS = re.compile(r"data:image/png;base64,LSIMAGE\d+x\d+|LSPAYLOAD\d+x\d+|LSASSET(?:GL)?\d+")
 
 
 def render(m) -> str:

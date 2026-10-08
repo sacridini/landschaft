@@ -268,6 +268,34 @@ void register_python(py::module_& m) {
         "Mean of every factor x factor block (cells with data), float32.");
 
     m.def(
+        "io_triangulate",
+        [](const py::array_t<double, py::array::c_style | py::array::forcecast>& xy,
+           const I64Array& ring_offsets, const I64Array& polygon_rings) {
+            if (xy.ndim() != 2 || xy.shape(1) != 2) throw py::value_error("xy must be (n, 2)");
+            const i64 np = static_cast<i64>(polygon_rings.size()) - 1;
+            if (np < 0) throw py::value_error("polygon_rings needs a first offset");
+            const i64 nr = static_cast<i64>(ring_offsets.size()) - 1;
+            if (np > 0 && (polygon_rings.data()[np] > nr || nr < 0 ||
+                           ring_offsets.data()[nr] > static_cast<i64>(xy.shape(0))))
+                throw py::value_error("offsets beyond the points");
+            std::vector<std::uint32_t> idx;
+            std::vector<i64> counts;
+            {
+                py::gil_scoped_release release;
+                idx = triangulate(xy.data(), ring_offsets.data(), polygon_rings.data(), np, &counts);
+            }
+            auto* hold = new std::vector<std::uint32_t>(std::move(idx));
+            py::capsule own(hold, [](void* q) { delete static_cast<std::vector<std::uint32_t>*>(q); });
+            py::array_t<std::uint32_t> a({static_cast<py::ssize_t>(hold->size())}, hold->data(), own);
+            auto* holdc = new std::vector<i64>(std::move(counts));
+            py::capsule ownc(holdc, [](void* q) { delete static_cast<std::vector<i64>*>(q); });
+            py::array_t<i64> c({static_cast<py::ssize_t>(holdc->size())}, holdc->data(), ownc);
+            return py::make_tuple(a, c);
+        },
+        py::arg("xy"), py::arg("ring_offsets"), py::arg("polygon_rings"),
+        "Triangles of polygons (earcut): vertex indices from each polygon's first point, and the number per polygon.");
+
+    m.def(
         "io_reclassify",
         [](const py::array& values, py::array& out, bool has_nodata, double nodata, const DoubleArray& keys,
            const py::array& key_out, const DoubleArray& breaks, const py::array& break_out,
