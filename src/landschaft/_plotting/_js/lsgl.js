@@ -286,6 +286,7 @@
             gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
             gl.disable(gl.SCISSOR_TEST);
             gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+            if (this._suppress) { return; }  // a layer of the part in view, in detail, drawn instead
             gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
             this._pass(false);
         },
@@ -293,7 +294,7 @@
         // the feature drawn at a point of the map (the nearest within a few pixels), or -1
         pick: function (latlng) {
             var gl = this._gl, map = this._map;
-            if (!gl || !this._buf || !map || map._animatingZoom || gl.isContextLost()) { return -1; }
+            if (!gl || !this._buf || !map || map._animatingZoom || this._suppress || gl.isContextLost()) { return -1; }
             var W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, m = window.devicePixelRatio || 1;
             var p = map.latLngToLayerPoint(latlng).subtract(this._bounds.min).multiplyBy(m);
             var x = Math.round(p.x), y = H - 1 - Math.round(p.y), r = Math.max(2, Math.round(3 * m));

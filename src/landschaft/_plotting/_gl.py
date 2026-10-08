@@ -242,4 +242,6 @@ def layer(gdf, codes, palette, color, opacity, name, max_size, fields, column, l
 
     w, s, e, n = transform_bounds("EPSG:3857", "EPSG:4326", bx0, by0, bx1, by1)
     gl._ls_bounds = ((s, w), (n, e))
+    gl._ls_merc = (bx0, by0, bx1, by1)
+    gl._ls_res = 2 * q  # the simplification's tolerance: finer than that, detail is asked for (live)
     return gl

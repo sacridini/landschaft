@@ -41,8 +41,9 @@ def plotly_url() -> str | bool:
     return js.as_uri() if js.exists() else True
 
 
-def open_window(html_page: str, title: str = "landschaft") -> Path:
-    """A page in a window of its own (pywebview), else in the web browser; the file written."""
+def open_window(html_page: str, title: str = "landschaft", js_api=None) -> Path:
+    """A page in a window of its own (pywebview), else in the web browser; the file written.
+    ``js_api``: an object whose methods the page calls (pywebview's JavaScript API)."""
     path = Path(tempfile.mkdtemp(prefix="landschaft_plot_")) / "plot.html"
     path.write_text(html_page, encoding="utf-8")
     try:
@@ -51,7 +52,7 @@ def open_window(html_page: str, title: str = "landschaft") -> Path:
         webbrowser.open(path.as_uri())
         return path
     try:
-        webview.create_window(title, url=path.as_uri(), width=1280, height=860)
+        webview.create_window(title, url=path.as_uri(), width=1280, height=860, js_api=js_api)
         webview.start()
     except Exception:  # noqa: BLE001 - no GUI (a server, missing WebView2...): the browser
         webbrowser.open(path.as_uri())

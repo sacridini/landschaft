@@ -52,6 +52,7 @@ class Image:
     palette: np.ndarray | None = None  # (n <= 256, 4) uint8 RGBA of the indices
     opacity: float = 1.0
     lookup: dict | None = None  # the value of each index: {"labels": [...]} or {"vmin", "vmax", "log", ...}
+    style: dict | None = None  # the colours chosen (render's style=): the detail of a part drawn alike
 
     @property
     def rgba(self) -> np.ndarray:
@@ -104,7 +105,7 @@ def reduce(da: xr.DataArray, max_size: int, categorical: bool):
     oy, ox = ny // f, nx // f
     src = _source_file(da)
     if src is not None and da.ndim == 2:
-        read = _read_reduced(src, ny, nx, f, categorical)
+        read = _read_reduced(src, ny, nx, f, categorical, t)
         if read is not None:
             v, (sx, sy) = read
             return v, t * t.scale(sx, sy)
@@ -134,10 +135,11 @@ def reduce(da: xr.DataArray, max_size: int, categorical: bool):
     return v, t * t.scale(f)
 
 
-def _read_reduced(src: str, ny: int, nx: int, f: int, categorical: bool):
-    """(values, (x scale, y scale)) of a one-band file read at 1/f of its resolution: through its overviews by GDAL when it has
-    some, else in strips of rows over threads, each reduced at once (C++ block means, or the
-    cell of each block for classes), so that the whole raster is never in memory."""
+def _read_reduced(src: str, ny: int, nx: int, f: int, categorical: bool, transform=None):
+    """(values, (x scale, y scale)) of a one-band file (or of a window of it: ``transform`` that of
+    the window, ny x nx its cells) read at 1/f of its resolution: through its overviews by GDAL
+    when it has some, else in strips of rows over threads, each reduced at once (C++ block means,
+    or the cell of each block for classes), so that the whole raster is never in memory."""
     from concurrent.futures import ThreadPoolExecutor
 
     import rasterio
@@ -148,11 +150,21 @@ def _read_reduced(src: str, ny: int, nx: int, f: int, categorical: bool):
     from .._threads import default_threads
 
     with rasterio.open(src) as ds:
-        if ds.count != 1 or (ds.height, ds.width) != (ny, nx):
+        if ds.count != 1:
             return None
+        r0 = c0 = 0
+        if (ds.height, ds.width) != (ny, nx):  # a window of the file: where it starts
+            ft = ds.transform
+            if transform is None or (transform.a, transform.e, transform.b, transform.d) != (ft.a, ft.e, ft.b, ft.d):
+                return None
+            c, r = (transform.c - ft.c) / ft.a, (transform.f - ft.f) / ft.e
+            c0, r0 = round(c), round(r)
+            if abs(c - c0) > 1e-6 or abs(r - r0) > 1e-6 or c0 < 0 or r0 < 0 or c0 + nx > ds.width \
+                    or r0 + ny > ds.height:
+                return None
         nodata, dtype = ds.nodata, ds.dtypes[0]
         if ds.overviews(1):
-            out = ds.read(1, out_shape=(max(1, ny // f), max(1, nx // f)),
+            out = ds.read(1, window=Window(c0, r0, nx, ny), out_shape=(max(1, ny // f), max(1, nx // f)),
                           resampling=Resampling.nearest if categorical else Resampling.average, masked=True)
             out = out.filled(out.fill_value) if categorical else out.astype(np.float32).filled(np.nan)
             return out, (nx / out.shape[1], ny / out.shape[0])  # the whole extent
@@ -167,9 +179,9 @@ def _read_reduced(src: str, ny: int, nx: int, f: int, categorical: bool):
         with rasterio.open(src) as d:
             if categorical:  # the centre cell of each block: read only those rows
                 rows = np.arange(y0 + f // 2, y1, f)
-                v = np.stack([d.read(1, window=Window(0, int(r), nx, 1))[0, f // 2::f][:ox] for r in rows])
+                v = np.stack([d.read(1, window=Window(c0, r0 + int(r), nx, 1))[0, f // 2::f][:ox] for r in rows])
             else:
-                block = d.read(1, window=Window(0, y0, nx, y1 - y0))
+                block = d.read(1, window=Window(c0, r0 + y0, nx, y1 - y0))
                 v = _core.io_block_mean(np.ascontiguousarray(block), f, has, float(nodata) if has else 0.0)
         out[y0 // f: y1 // f] = v[:, :ox]
 
@@ -349,9 +361,11 @@ def choose_cmap(da: xr.DataArray, v: np.ndarray, ok: np.ndarray) -> tuple[str, b
 # --- reprojection ----------------------------------------------------------------------------------
 
 
-def to_web_mercator(rgba: np.ndarray, transform, crs, n_threads: int):
+def to_web_mercator(rgba: np.ndarray, transform, crs, n_threads: int, size: int | None = None):
     """An image (palette indices, or RGBA) reprojected to EPSG:3857 (nearest cell), its lat/lon
-    bounds and its Web Mercator extent."""
+    bounds and its Web Mercator extent; ``size`` pixels on its long side (default: about as many
+    as the source: a detail at the screen's resolution takes more, so that the cells' edges, turned
+    by the projection, are drawn as fine as the screen)."""
     import rasterio
     from rasterio.warp import (
         Resampling,
@@ -369,7 +383,7 @@ def to_web_mercator(rgba: np.ndarray, transform, crs, n_threads: int):
     if src_crs.is_geographic:  # Web Mercator stops at about 85 degrees
         src_bounds = (src_bounds[0], max(src_bounds[1], -85.0), src_bounds[2], min(src_bounds[3], 85.0))
     dt, dw, dh = calculate_default_transform(src_crs, dst, w, h, *src_bounds)
-    scale = max(dw / w, dh / h, 1e-9)  # keep about as many pixels as the source image
+    scale = max(dw / w, dh / h, 1e-9) if size is None else max(dw, dh) / max(1, size)  # as many as the source
     dw, dh = max(1, round(dw / scale)), max(1, round(dh / scale))
     dt = dt * dt.scale(scale)
     bands = rgba[None] if rgba.ndim == 2 else np.moveaxis(rgba, -1, 0)
@@ -395,15 +409,20 @@ def _user_table(cmap: dict) -> dict:
 
 def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax=None, log=None,
            opacity: float = 0.85, categorical: bool | None = None, labels: dict | None = None,
-           title: str | None = None, mercator: bool = True, n_threads: int | None = None) -> Image:
+           title: str | None = None, mercator: bool = True, n_threads: int | None = None,
+           style: dict | None = None) -> Image:
     """A 2-D georeferenced raster as a coloured image for a web map (or in its own CRS).
 
     The colours: ``cmap`` a palette name or a list of colours (a ramp), or a dict
     ``{value: colour}`` (classes); by default the product's colours, distinct colours for
-    classes, or a ramp that suits the values. ``labels`` names the classes."""
+    classes, or a ramp that suits the values. ``labels`` names the classes. ``style``: the
+    choices of another image (its ``style``), so that a part of the raster drawn in detail
+    has the colours of the whole."""
     from .._threads import default_threads
 
     title = title or (str(da.name) if da.name is not None else "value")
+    if style is not None:
+        return _render_styled(da, style, max_size, opacity, title, n_threads or default_threads())
     table, names = _palettes.product_style(da.attrs)
     product_names = names or {}
     if isinstance(cmap, dict):
@@ -420,18 +439,24 @@ def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax
     ok = _valid(v, nodata)
     if categorical and table is None and np.issubdtype(v.dtype, np.integer) and np.unique(v[ok]).size > MAX_CLASSES:
         categorical = False  # many integer values (counts, ids, elevations): a colour ramp
+    missing_classes = []
     if categorical and product_names:  # a product's missing class is no data: the imagery shows through
-        missing = [k for k, n in product_names.items() if str(n).lower().startswith("missing")]
-        if missing:
-            ok &= ~np.isin(v, missing)
+        missing_classes = [k for k, n in product_names.items() if str(n).lower().startswith("missing")]
+        if missing_classes:
+            ok &= ~np.isin(v, missing_classes)
     if categorical:
         if table is None and cmap is not None and not isinstance(cmap, dict):  # classes in the colours of a ramp
             values = np.unique(v[ok]) if ok.any() else np.array([])
             ramp = _palettes.lut(cmap, max(len(values), 2))
             table = {int(k): (*ramp[i], 255) for i, k in enumerate(values.tolist())}
-        pixels, palette, legend, labels = colour_classes(v, ok, table, names, title,
-                                                         _palettes.LEGEND_ORDER.get(da.attrs.get("landschaft_product")))
+        order = _palettes.LEGEND_ORDER.get(da.attrs.get("landschaft_product"))
+        if table is None:  # distinct colours, fixed now (a part drawn later keeps them)
+            values = np.unique(v[ok]) if ok.any() else np.array([], dtype=v.dtype)
+            table = {int(k): (*_palettes.hex_to_rgb(c), 255)
+                     for k, c in zip(values.tolist(), _palettes.distinct(len(values)))}
+        pixels, palette, legend, labels = colour_classes(v, ok, table, names, title, order)
         lookup = {"labels": labels}
+        chosen = {"categorical": True, "table": table, "names": names, "order": order, "missing": missing_classes}
         if pixels is None:  # over 255 classes: a ramp
             categorical = False
     if not categorical:
@@ -440,17 +465,55 @@ def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax
         if centred and vmin is None and vmax is None:
             m = float(np.percentile(np.abs(v[ok]), 98)) if ok.any() else 1.0
             vmin, vmax = -m, m
-        pixels, palette, legend = colour_values(v, ok, cmap if isinstance(cmap, (str, list, tuple)) else auto_cmap,
-                                                vmin, vmax, use_log, title)
+        ramp = cmap if isinstance(cmap, (str, list, tuple)) else auto_cmap
+        pixels, palette, legend = colour_values(v, ok, ramp, vmin, vmax, use_log, title)
         lookup = ramp_lookup(legend)
+        chosen = {"categorical": False, "cmap": ramp, "vmin": legend.vmin, "vmax": legend.vmax, "log": use_log}
+    return _finish(da, v, t, pixels, palette, legend, lookup, title, opacity, mercator, n_threads,
+                   {**chosen, "title": title})
+
+
+def _finish(da, v, t, pixels, palette, legend, lookup, title, opacity, mercator, n_threads, style,
+            size=None) -> Image:
+    from .._threads import default_threads
+
     palette = distinct_palette(palette)
     xmin, ymax = t.c, t.f
     xmax, ymin = xmin + t.a * v.shape[1], ymax + t.e * v.shape[0]
     crs = da.rio.crs
     if mercator and crs is not None:
-        img, bounds, merc = to_web_mercator(pixels, t, crs, n_threads or default_threads())
-        return Image(img, bounds, legend, title, (xmin, ymin, xmax, ymax), crs, merc, palette, opacity, lookup)
-    return Image(pixels, None, legend, title, (xmin, ymin, xmax, ymax), crs, None, palette, opacity, lookup)
+        img, bounds, merc = to_web_mercator(pixels, t, crs, n_threads or default_threads(),
+                                            None if size is None or size <= max(pixels.shape) else size)
+        return Image(img, bounds, legend, title, (xmin, ymin, xmax, ymax), crs, merc, palette, opacity, lookup,
+                     style)
+    return Image(pixels, None, legend, title, (xmin, ymin, xmax, ymax), crs, None, palette, opacity, lookup, style)
+
+
+def _render_styled(da, style: dict, max_size: int, opacity: float, title: str, n_threads: int) -> Image:
+    """A raster (a part of one) drawn with the colours another image chose (its style). Classes
+    the other did not hold (rare ones, left out of its overview) get colours of their own."""
+    if style["categorical"]:
+        v, t = reduce(da, max_size, True)
+        ok = _valid(v, da.rio.nodata)
+        if style.get("missing"):
+            ok &= ~np.isin(v, style["missing"])
+        table = dict(style["table"])
+        present = np.unique(v[ok]) if ok.any() else np.array([], dtype=v.dtype)
+        new = [int(k) for k in present.tolist() if int(k) not in table]
+        if new:
+            used = {_palettes.rgb_to_hex(c[:3]) for c in table.values()}
+            spare = [c for c in _palettes.distinct(len(table) + len(new) + 8) if c not in used]
+            table.update({k: (*_palettes.hex_to_rgb(c), 255) for k, c in zip(new, spare)})
+        pixels, palette, legend, labels = colour_classes(v, ok, table, style.get("names"), title, style.get("order"))
+        if pixels is not None:
+            return _finish(da, v, t, pixels, palette, legend, {"labels": labels}, title, opacity, True, n_threads,
+                           style, max_size)
+        style = {"categorical": False, "cmap": "viridis", "vmin": None, "vmax": None, "log": False}
+    v, t = reduce(da, max_size, False)
+    ok = _valid(v, da.rio.nodata)
+    pixels, palette, legend = colour_values(v, ok, style["cmap"], style["vmin"], style["vmax"], style["log"], title)
+    return _finish(da, v, t, pixels, palette, legend, ramp_lookup(legend), title, opacity, True, n_threads, style,
+                   max_size)
 
 
 def ramp_lookup(legend: Legend) -> dict:

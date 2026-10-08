@@ -54,6 +54,20 @@ ramp's range (`≈ 1006`; `≤` / `≥` beyond its ends). Click to keep them in 
 popup. The values are read from the image in the page, so they are those of the
 map drawn: block means where a large raster was reduced to the screen.
 
+## Detail as you zoom in
+
+While Python runs, a map draws the part in view in full detail as you zoom in:
+past the resolution of the overview the page holds, it asks Python for the
+cells in view at the screen's resolution, in the colours of the overview (a
+raster of 50 000 × 50 000 cells shows its own cells, not block means), and the
+value under the cursor is read from them. Vector layers drawn as an image are
+burnt again for the view; WebGL layers get the features in view simplified to
+the screen. This works in a notebook (Jupyter, JupyterLab, VS Code: a widget of
+no size, under the map, carries the questions to the kernel) and in the window
+a script opens (pywebview), with no server and no port. A page saved, or a
+notebook opened again without its kernel, keeps the overview. The environment
+variable `LANDSCHAFT_PLOT_LIVE=0` turns it off.
+
 Every layer has a card in the legend, with a slider for its opacity (to see the
 imagery underneath); a card hides while its layer is switched off in the layer
 control (top right). The button under the zoom buttons shows the map full
@@ -148,4 +162,5 @@ page of many bands stays light. A map of 100 million cells takes a fraction of
 a second; see [Benchmarks](../benchmarks.md#plotting).
 
 In tests and in scripts that only save plots, the environment variable
-`LANDSCHAFT_PLOT_SHOW=0` keeps windows from opening.
+`LANDSCHAFT_PLOT_SHOW=0` keeps windows from opening. A detail asked for as
+you zoom in takes 10 to 100 ms for a raster in memory.

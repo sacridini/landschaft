@@ -160,9 +160,16 @@ def layer(gdf, *, column=None, cmap=None, categorical=None, color: str = "#ffd60
         if len(gdf) * len(keep) > MAX_VALUES:  # no columns: the value read back from the colour
             keep = []
         gl = _gl.layer(gdf, codes, palette, color, opacity, name, max_size, keep, column, legend) if webgl else None
+        from . import _live
+
         if gl is not None:
+            if _live.enabled():  # detail on demand: the features in view, simplified to the screen
+                gl._live = _live.gl_handler(gdf, codes, palette, color, opacity, name, keep, column, legend)
             return "webgl", gl, legend
-        return "image", _as_image(gdf, codes, palette, color, opacity, name, max_size, legend), legend
+        img = _as_image(gdf, codes, palette, color, opacity, name, max_size, legend)
+        if _live.enabled():  # detail on demand: the features in view burnt at the screen's resolution
+            img._live = _live.vector_image_handler(gdf, codes, palette, color, legend, name, opacity)
+        return "image", img, legend
     if gdf.crs is not None and not gdf.crs.equals("EPSG:4326"):
         gdf = gdf.to_crs("EPSG:4326")
     # simplify to about half a pixel of the whole extent; coordinates to about 0.1 m

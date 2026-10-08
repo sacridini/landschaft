@@ -111,19 +111,40 @@ class Plot:
                 f"<body>{body}</body></html>")
 
     # -- showing and saving -------------------------------------------------------------------------
+    def _live_maps(self) -> list[str]:
+        """The ids of the maps whose layers draw the part in view in detail while Python runs."""
+        return [m.__dict__["_ls_live_id"] for m in self.maps if m.__dict__.get("_ls_live")]
+
+    def _ipython_display_(self) -> None:
+        """In a notebook: the page (it stays in the saved notebook), and a widget, of no size, that
+        carries the maps' questions for detail to the kernel (anywidget)."""
+        from IPython.display import HTML, display
+
+        display(HTML(self._repr_html_()))
+        ids = self._live_maps()
+        if ids:
+            from . import _live
+
+            bridge = _live.bridge(ids)
+            if bridge is not None:
+                display(bridge)
+
     def show(self) -> None:
         """Show the plot: inline in a notebook, else in a window of its own."""
         if _env.in_notebook():
-            from IPython.display import HTML, display
-
-            display(HTML(self._repr_html_()))
+            self._ipython_display_()
             return
         if self.figure is not None and len(self.panels) == 1:
             import matplotlib.pyplot as plt
 
             plt.show()
             return
-        _env.open_window(self._page(_env.plotly_url()), self.title or "landschaft")
+        api = None
+        if self._live_maps():
+            from . import _live
+
+            api = _live.WindowApi()
+        _env.open_window(self._page(_env.plotly_url()), self.title or "landschaft", js_api=api)
 
     def save(self, path, *, dpi: int = 200) -> Path:
         """Write the plot: ``.html`` (interactive, self-contained), or ``.png``, ``.pdf``,
@@ -214,10 +235,12 @@ def _render_bands(da, dim, idx, titles, size, vmin, vmax, opacity, opts) -> list
     from . import _raster
 
     def band(k, title, n_threads):
-        img = _raster.render(da.isel({dim: k}), max_size=size, cmap=opts.get("cmap"), vmin=vmin, vmax=vmax,
+        layer = da.isel({dim: k})
+        img = _raster.render(layer, max_size=size, cmap=opts.get("cmap"), vmin=vmin, vmax=vmax,
                              log=opts.get("log"), opacity=opacity, categorical=opts.get("categorical"),
                              labels=opts.get("labels"), title=title, n_threads=n_threads)
         img.data_url()
+        _live_raster(img, layer)
         return img
 
     threads = default_threads()
@@ -291,8 +314,44 @@ def _map_layers(items, opts):
         img = _raster.render(da, max_size=opts["max_size"], cmap=opts.get("cmap"), vmin=opts.get("vmin"),
                              vmax=opts.get("vmax"), log=opts.get("log"), opacity=opacity,
                              categorical=opts.get("categorical"), labels=opts.get("labels"), title=name)
+        _live_raster(img, da)
         groups.append(Group(name, img.legend, opacity, None, [img]))
     return groups, notes
+
+
+def _live_raster(img, da) -> None:
+    """The image of a raster answers for the part in view in detail (live), when it is coarser than the raster."""
+    from . import _live
+
+    if _live.enabled() and img.style is not None and img.mercator_extent is not None \
+            and max(da.sizes["y"], da.sizes["x"]) > max(img.pixels.shape[:2]):
+        img._live = _live.raster_handler(da, img.style)
+
+
+def _live_layers(m, groups) -> None:
+    """The layers that answer for their part in view, registered with the map's id; the page's script."""
+    from . import _live, _maps
+    from ._raster import Image
+
+    entries = []
+    for g in groups:
+        for x, layer in zip(g.items, g.layers):
+            handler = getattr(x, "_live", None)
+            if handler is None:
+                continue
+            key = layer.get_name()
+            if isinstance(x, Image):
+                e = [float(v) for v in x.mercator_extent]
+                entries.append({"v": key, "key": key, "kind": "image", "ext": e,
+                                "res": (e[2] - e[0]) / max(1, x.pixels.shape[1])})
+            else:
+                entries.append({"v": key, "key": key, "kind": "gl", "ext": [float(v) for v in x._ls_merc],
+                                "res": float(x._ls_res)})
+            _live.register(m.__dict__["_ls_live_id"], key, handler)
+    if entries:
+        _maps.add_live(m, entries)
+        m.__dict__["_ls_live"] = True
+        m.__dict__["_ls_live_layers"] = entries
 
 
 def _map(items, opts, title):
@@ -321,6 +380,7 @@ def _map(items, opts, title):
                     bounds.append(((b[0][0], b[0][1]), (b[1][0], b[1][1])))
     if swipe is not None:
         swipe.add_to(m)
+    _live_layers(m, groups)
     _maps.finish(m, bounds, groups, title)
     panels = [_Panel("map", m, title)]
     if notes:
@@ -474,7 +534,9 @@ def plot(obj, *, column=None, cmap=None, labels=None, categorical=None, vmin=Non
     resolution before anything else (a lazy raster is read reduced), so a map of a
     whole country draws in about the time of a small one. Vector layers of over
     20 000 features (up to 2 million) are drawn by the graphics card (WebGL), sharp
-    at every zoom, the feature under the cursor read as for rasters.
+    at every zoom, the feature under the cursor read as for rasters. While Python
+    runs (a notebook's kernel, a script's window), zooming in past the overview
+    draws the part in view in full detail (``LANDSCHAFT_PLOT_LIVE=0``: off).
 
     Parameters
     ----------

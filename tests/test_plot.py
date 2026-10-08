@@ -173,10 +173,10 @@ def test_vectors_as_geojson_webgl_or_image(monkeypatch):
     pts = gpd.GeoDataFrame({"v": rng.random(30000)}, crs=32633,
                            geometry=gpd.points_from_xy(rng.uniform(5e5, 6e5, 30000), rng.uniform(4.4e6, 4.5e6, 30000)))
     html = page(ls.plot(pts, column="v"))
-    assert '{"type":"FeatureCollection"' not in html and "new L.LsGL(" in html  # many: WebGL
+    assert '{"type":"FeatureCollection"' not in html and "new L.LsGL({" in html  # many: WebGL
     monkeypatch.setattr(_gl_module(), "MAX_FEATURES", 20_000)
     html = page(ls.plot(pts, column="v"))
-    assert "new L.LsGL(" not in html and images(html)  # too many: an image
+    assert "new L.LsGL({" not in html and images(html)  # too many: an image
 
 
 def _gl_arrays(layer):
@@ -239,7 +239,7 @@ def test_many_vectors_are_drawn_with_webgl(monkeypatch, crs):
     assert list(np.cumsum(a["lfeat"])) == [2] and list(np.cumsum(a["tfeat"])) == [3]
     assert list(a["fcol"]) == [0, 1, 2, 3] and a["props"] == {"k": ["a", "b", "c", "d"], "n": [1.5, None, 3.0, 4.0]}
     html = page(ls.plot(g, column="k"))
-    assert html.count("L.LsGL = L.Renderer.extend") == 1 and "new L.LsGL(" in html and "LSPAYLOAD" not in html
+    assert html.count("L.LsGL = L.Renderer.extend") == 1 and "new L.LsGL({" in html and "LSPAYLOAD" not in html
     assert '{"type":"FeatureCollection"' not in html
     monkeypatch.setattr(_gl_module(), "MAX_FEATURES", 3)  # too many even for WebGL: an image
     assert _vectors.layer(g, column="k")[0] == "image"
@@ -270,6 +270,111 @@ def test_many_points_with_webgl_read_their_values_back_from_the_colours(monkeypa
     _, layer, _ = _vectors.layer(g, column="s")
     assert _gl_arrays(layer)["props"] == {"v": [1.0, 2.0, 3.0], "s": ["x", "y", None]}
     assert layer.spec["lookup"] == {"labels": ["x", "y"]}  # None: no value, the missing colour
+
+
+
+# --- detail on demand (live) --------------------------------------------------------------------------------
+
+
+def _live_png(answer):
+    from PIL import Image as PILImage
+
+    assert answer["ok"] and answer["url"].startswith("data:image/png;base64,")
+    return PILImage.open(io.BytesIO(base64.b64decode(answer["url"].split(",", 1)[1])))
+
+
+def test_live_raster_detail_has_the_colours_of_the_overview():
+    from landschaft._plotting import _live
+
+    yy, xx = np.mgrid[0:3000, 0:3000]
+    values = (np.sin(xx / 3.0) + np.cos(yy / 3.0)).astype("float32")
+    p = ls.plot(grid(values), basemap=None, max_size=512)
+    ids = p._live_maps()
+    assert len(ids) == 1 and "LS_LIVE.add(" in page(p)
+    assert _live.handle({"op": "hello", "map": ids[0]}) == {"ok": True}
+    assert _live.handle({"op": "hello", "map": "gone"}) == {"ok": False}
+    m = p.maps[0]
+    key = next(iter(_live._MAPS[ids[0]]))
+    ext = [float(v) for v in m.__dict__["_ls_live_layers"][0]["ext"]]
+    cx, cy = (ext[0] + ext[2]) / 2, (ext[1] + ext[3]) / 2
+    box = [cx - 300, cy - 300, cx + 300, cy + 300]  # about 60 x 60 cells of 30 m (in Web Mercator)
+    a = _live.handle({"op": "detail", "map": ids[0], "key": key, "bbox": box, "w": 800, "h": 800})
+    img = _live_png(a)
+    assert max(img.size) >= 700  # at the screen's resolution, finer than the cells
+    from landschaft._plotting import _raster
+
+    assert a["lookup"]["vmin"] == pytest.approx(_raster.render(grid(values), max_size=512).lookup["vmin"])
+    assert a["ext"][0] <= box[0] + 60 and a["ext"][2] >= box[2] - 60
+    bad = _live.handle({"op": "detail", "map": ids[0], "key": "nope", "bbox": box, "w": 10, "h": 10})
+    assert bad["ok"] is False and "error" in bad
+
+
+
+def test_a_window_of_a_lazy_raster_is_read_reduced_from_its_file(tmp_path):
+    values = np.random.default_rng(9).random((900, 1100)).astype("float32")
+    path = ls.write_raster(grid(values), tmp_path / "r.tif")
+    lazy, mem = ls.load_raster(path, chunks="auto"), grid(values)
+    for categorical in (False, True):
+        a, ta = _raster.reduce(lazy.isel(x=slice(101, 1001), y=slice(53, 803)), 200, categorical)
+        b, tb = _raster.reduce(mem.isel(x=slice(101, 1001), y=slice(53, 803)), 200, categorical)
+        assert np.array_equal(a, b) and ta == tb
+
+def test_live_class_detail_keeps_the_class_colours():
+    from landschaft._plotting import _raster
+
+    v = (np.arange(600)[None, :] // 7 + np.arange(600)[:, None] // 7) % 5
+    v[300, 300] = 9  # a class of one cell, left out of the overview
+    da = grid(v.astype("uint8"))
+    overview = _raster.render(da, max_size=100)
+    assert 9 not in overview.style["table"]
+    part = _raster.render(da.isel(x=slice(280, 320), y=slice(280, 320)), max_size=400, style=overview.style)
+    same = {lab: c for c, lab in overview.legend.classes}
+    for c, lab in part.legend.classes:
+        if lab in same:
+            assert same[lab] == c  # the classes of the overview in their colours
+    assert "9" in [lab for _, lab in part.legend.classes]  # the new one with a colour of its own
+    assert part.lookup["labels"][0] is None
+
+
+def test_live_vectors_answer_with_the_features_in_view(monkeypatch):
+    from landschaft._plotting import _gl, _vectors
+
+    monkeypatch.setattr(_vectors, "MAX_FEATURES", 10)
+    rng = np.random.default_rng(4)
+    g = gpd.GeoDataFrame({"v": rng.random(200)}, crs=32633,
+                         geometry=[Point(x, y).buffer(200, quad_segs=16) for x, y in
+                                   zip(rng.uniform(5e5, 6e5, 200), rng.uniform(4.4e6, 4.5e6, 200))])
+    kind, layer, _ = _vectors.layer(g, column="v")
+    assert kind == "webgl" and layer._live is not None
+    box = [float(v) for v in layer._ls_merc]
+    a = layer._live(box, 1000, 1000)
+    assert a["spec"]["arrays"]["pxy"][1] > 0 and a["bbox"] == box
+    assert layer._live([0.0, 0.0, 1.0, 1.0], 100, 100) is None  # nothing there
+    monkeypatch.setattr(_gl, "MAX_FEATURES", 5)  # too many for WebGL: an image, and its detail too
+    kind, img, _ = _vectors.layer(g, column="v")
+    assert kind == "image"
+    pic = _live_png({"ok": True, **img._live(list(img.mercator_extent), 600, 600)})
+    assert max(pic.size) >= 550
+
+
+def test_live_bridges(monkeypatch):
+    pytest.importorskip("anywidget")
+    from landschaft._plotting import _live
+
+    p = ls.plot(grid(np.random.default_rng(2).random((3000, 3000)).astype("float32")), basemap=None, max_size=256)
+    shown = []
+    monkeypatch.setattr("IPython.display.display", lambda x: shown.append(x))
+    p._ipython_display_()
+    assert type(shown[0]).__name__ == "HTML" and type(shown[1]).__name__ == "LiveBridge"
+    assert shown[1].maps == p._live_maps()
+    replies = []
+    monkeypatch.setattr(shown[1], "send", lambda content: replies.append(content))
+    shown[1]._answer(shown[1], {"req": "a:1", "msg": {"op": "hello", "map": p._live_maps()[0]}}, [])
+    assert replies == [{"req": "a:1", "map": p._live_maps()[0], "data": {"ok": True}}]
+    assert _live.WindowApi().ls_live({"op": "hello", "map": p._live_maps()[0]}) == {"ok": True}
+    monkeypatch.setenv("LANDSCHAFT_PLOT_LIVE", "0")
+    q = ls.plot(grid(np.random.default_rng(2).random((3000, 3000)).astype("float32")), basemap=None, max_size=256)
+    assert not q._live_maps() and "LS_LIVE" not in page(q)
 
 
 def _gl_module():
@@ -339,7 +444,7 @@ def test_save_html_and_static_images(tmp_path, forest):
 
 def test_windows_only_outside_notebooks(monkeypatch, forest):
     opened = []
-    monkeypatch.setattr(_env, "open_window", lambda html, title="": opened.append(title))
+    monkeypatch.setattr(_env, "open_window", lambda html, title="", **_: opened.append(title))
     monkeypatch.delenv("LANDSCHAFT_PLOT_SHOW", raising=False)
     monkeypatch.setattr(_env, "in_notebook", lambda: False)
     ls.plot(forest, title="here")

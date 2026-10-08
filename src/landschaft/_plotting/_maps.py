@@ -147,24 +147,24 @@ _SCRIPT = """
         var a = Math.abs(x);
         return (a !== 0 && (a >= 1e6 || a < 1e-3)) ? x.toExponential(3) : String(+x.toPrecision(4));
     };
-    var keys = P.map(function(pal) {
+    var keyed = function(pal) {
         var k = {};
         pal.forEach(function(c, i) { if (i > 0) { k[(c[0] << 16) | (c[1] << 8) | c[2]] = i; } });
         return k;
-    });
-    function index(l, d) {
-        var i = keys[l.p][(d[0] << 16) | (d[1] << 8) | d[2]];
+    };
+    var keys = P.map(keyed);
+    function index(pal, key, d) {
+        var i = key[(d[0] << 16) | (d[1] << 8) | d[2]];
         if (i !== undefined) { return i; }
         var best = 1, dist = Infinity;  // a colour blended by the browser: the nearest
-        P[l.p].forEach(function(c, j) {
+        pal.forEach(function(c, j) {
             if (j === 0) { return; }
             var e = (c[0] - d[0]) * (c[0] - d[0]) + (c[1] - d[1]) * (c[1] - d[1]) + (c[2] - d[2]) * (c[2] - d[2]);
             if (e < dist) { dist = e; best = j; }
         });
         return best;
     }
-    function value(l, i) {
-        var u = l.u;
+    function value(u, i) {
         if (u.labels) { return u.labels[i]; }
         if (i <= 1 && u.under) { return "\\u2264 " + fmt(u.vmin); }
         if (i >= 255 && u.over) { return "\\u2265 " + fmt(u.vmax); }
@@ -173,24 +173,36 @@ _SCRIPT = """
                       : u.vmin + x * (u.vmax - u.vmin);
         return "\\u2248 " + fmt(v);
     }
+    function pixel(o, img, e, p) {  // the colour of an image at a point (its canvas made once)
+        if (!o.ctx || o.img !== img) {
+            if (!img || !img.complete || !img.naturalWidth) { return null; }
+            var c = document.createElement("canvas");
+            c.width = img.naturalWidth; c.height = img.naturalHeight;
+            o.ctx = c.getContext("2d", {willReadFrequently: true});
+            o.ctx.drawImage(img, 0, 0);
+            o.img = img;
+        }
+        var w = o.ctx.canvas.width, h = o.ctx.canvas.height;
+        var col = Math.min(w - 1, Math.floor((p.x - e[0]) / (e[2] - e[0]) * w));
+        var row = Math.min(h - 1, Math.floor((e[3] - p.y) / (e[3] - e[1]) * h));
+        return o.ctx.getImageData(col, row, 1, 1).data;
+    }
+    function within(e, p) { return !(p.x < e[0] || p.x >= e[2] || p.y <= e[1] || p.y > e[3]); }
     function read(l, latlng) {  // the value of a layer at a point; null: no data; undefined: outside
         var lay = window[l.v], e = l.ext;
         if (!map.hasLayer(lay)) { return undefined; }
-        var p = L.CRS.EPSG3857.project(latlng);
-        if (p.x < e[0] || p.x >= e[2] || p.y <= e[1] || p.y > e[3]) { return undefined; }
-        if (!l.ctx) {
-            var img = lay.getElement();
-            if (!img || !img.complete || !img.naturalWidth) { return undefined; }
-            var c = document.createElement("canvas");
-            c.width = img.naturalWidth; c.height = img.naturalHeight;
-            l.ctx = c.getContext("2d", {willReadFrequently: true});
-            l.ctx.drawImage(img, 0, 0);
+        var p = L.CRS.EPSG3857.project(latlng), det = lay._lsDetail, d;
+        if (det && det.palette && within(det.ext, p)) {  // the part in view drawn in detail (live)
+            d = pixel(det, det.layer.getElement(), det.ext, p);
+            if (d) {
+                det.key = det.key || keyed(det.palette);
+                return d[3] === 0 ? null : value(det.lookup, index(det.palette, det.key, d));
+            }
         }
-        var w = l.ctx.canvas.width, h = l.ctx.canvas.height;
-        var col = Math.min(w - 1, Math.floor((p.x - e[0]) / (e[2] - e[0]) * w));
-        var row = Math.min(h - 1, Math.floor((e[3] - p.y) / (e[3] - e[1]) * h));
-        var d = l.ctx.getImageData(col, row, 1, 1).data;
-        return d[3] === 0 ? null : value(l, index(l, d));
+        if (!within(e, p)) { return undefined; }
+        d = pixel(l, lay.getElement(), e, p);
+        if (!d) { return undefined; }
+        return d[3] === 0 ? null : value(l.u, index(P[l.p], keys[l.p], d));
     }
     function rows(latlng, full) {
         var out = [];
@@ -420,6 +432,35 @@ def legend_html(groups: list[Group]) -> str:
     return "<div class='ls-legends'>" + "".join(parts) + "</div>" if parts else ""
 
 
+_LIVE = """
+{% macro script(this, kwargs) %}
+    LS_LIVE.add({{ this._parent.get_name() }}, {{ this.map_id|tojson }}, {{ this.layers|tojson }});
+{% endmacro %}
+"""
+
+
+def add_live(m, layers: list[dict]) -> None:
+    """Detail on demand for these layers ({"v": layer, "key", "kind": "image" or "gl", "ext": Web
+    Mercator extent, "res": the size of their cells there}), asked of Python while it runs."""
+    from branca.element import Element, MacroElement, Template
+
+    if not layers:
+        return
+    token = f"LSASSETLIVE{id(m)}"
+    m.__dict__["_ls_images"][token] = "<script>" + (_JS / "lslive.js").read_text(encoding="utf-8") + "</script>"
+    m.get_root().header.add_child(Element(token), name="ls_live")
+
+    class Live(MacroElement):
+        _template = Template(_LIVE)
+
+        def __init__(self):
+            super().__init__()
+            self._name = "LsLive"
+            self.map_id, self.layers = m.__dict__["_ls_live_id"], layers
+
+    Live().add_to(m)
+
+
 def new_map(basemap: str | None = "satellite"):
     try:
         import folium
@@ -433,6 +474,9 @@ def new_map(basemap: str | None = "satellite"):
                    width="100%", height="100%")
     m.default_js, m.default_css = [], []  # Leaflet only, in the page (folium's jQuery, Bootstrap... are not used)
     _install(m)
+    from . import _live
+
+    m.__dict__["_ls_live_id"] = _live.new_map()
     token = f"LSASSET{id(m)}"
     m.__dict__["_ls_images"][token] = _leaflet()
     m.get_root().header.add_child(Element(token), name="ls_leaflet")
@@ -498,7 +542,7 @@ def _install(m):
     m.__dict__["_ls_images"] = {}
 
 
-_TOKENS = re.compile(r"data:image/png;base64,LSIMAGE\d+x\d+|LSPAYLOAD\d+x\d+|LSASSET(?:GL)?\d+")
+_TOKENS = re.compile(r"data:image/png;base64,LSIMAGE\d+x\d+|LSPAYLOAD\d+x\d+|LSASSET(?:GL|LIVE)?\d+")
 
 
 def render(m) -> str:
