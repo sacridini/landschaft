@@ -219,6 +219,21 @@ def simplify(geoms, tol: float):
     return out
 
 
+def simplify_parts(parts, owner, tol: float, kinds=(3,)):
+    """Single-part geometries simplified (:func:`simplify`) and their owners, still single parts of
+    ``kinds`` (shapely type ids): GEOS mends a ring simplified without its topology that crosses
+    itself, and the mended polygon may come back in several parts (a MultiPolygon)."""
+    import shapely
+
+    out = simplify(parts, tol) if tol > 0 else np.asarray(parts, dtype=object)
+    kind = shapely.get_type_id(out)
+    if np.isin(kind, kinds).all():
+        return out, np.asarray(owner)
+    split, which = shapely.get_parts(out, return_index=True)
+    keep = np.isin(shapely.get_type_id(split), kinds) & ~shapely.is_empty(split)
+    return split[keep], np.asarray(owner)[which[keep]]
+
+
 def _as_image(gdf, codes, palette, color, opacity, name, max_size, legend) -> Image:
     """Very many features burnt into an image at the screen's resolution (Web Mercator, reprojected once)."""
     import shapely

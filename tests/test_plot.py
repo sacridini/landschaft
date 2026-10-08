@@ -283,6 +283,24 @@ def _live_png(answer):
     return PILImage.open(io.BytesIO(base64.b64decode(answer["url"].split(",", 1)[1])))
 
 
+
+def test_polygons_simplified_into_several_parts():
+    """Simplified without its topology, a ring may cross itself; GEOS mends it into a MultiPolygon
+    (Brazil's municipalities had 14 such parts): the layers take its parts."""
+    import shapely
+
+    from landschaft._plotting import _gl, _vectors
+
+    split = shapely.Polygon([(468, 290), (197, 1), (183, 0), (173, 3), (199, 10), (65, 406)])
+    assert shapely.simplify(split, 10.0, preserve_topology=False).geom_type == "MultiPolygon"
+    parts, owner = _vectors.simplify_parts(np.array([box(0, 0, 1, 1), split]), np.array([7, 8]), 10.0)
+    assert set(shapely.get_type_id(parts)) == {3} and list(owner) == [7, 8, 8]
+    g = gpd.GeoDataFrame({"v": [1.0]}, geometry=[split], crs=32633)
+    arrays = _gl.prepare(g, None, None, "#ffd60a", 5)[0].arrays  # 406 / (5 x 8): a tolerance of 10.15
+    assert arrays["prings"][1] == 2  # two polygons of feature 0
+    fig = ls.plot(g, static=True, basemap=None, max_size=20).figure  # a tolerance of 406 / 40
+    assert fig.axes[0].collections
+
 def test_live_raster_detail_has_the_colours_of_the_overview():
     from landschaft._plotting import _live
 
@@ -374,7 +392,7 @@ def test_live_bridges(monkeypatch):
     assert _live.WindowApi().ls_live({"op": "hello", "map": p._live_maps()[0]}) == {"ok": True}
     monkeypatch.setenv("LANDSCHAFT_PLOT_LIVE", "0")
     q = ls.plot(grid(np.random.default_rng(2).random((3000, 3000)).astype("float32")), basemap=None, max_size=256)
-    assert not q._live_maps() and "LS_LIVE" not in page(q)
+    assert not q._live_maps() and "LS_LIVE.add(" not in page(q)
 
 
 def _gl_module():

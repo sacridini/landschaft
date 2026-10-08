@@ -60,7 +60,7 @@
         hello();
     }, 750);
 
-    var R = 6378137, MAXPX = 4096;
+    var MAXPX = 4096;
 
     function Live(map, id, layers) {
         this.map = map; this.id = id; this.layers = layers; this.live = false;
@@ -69,26 +69,48 @@
         this.schedule = function () {
             if (!self.live) { return; }
             clearTimeout(wait);
-            wait = setTimeout(function () { self.layers.forEach(function (l) { self.update(l); }); }, 200);
+            wait = setTimeout(function () { self.layers.forEach(function (l) { self.update(l); }); }, 100);
         };
         map.on("moveend zoomend overlayadd overlayremove resize", this.schedule);
-        map.on("layeradd layerremove", function (e) {  // a band of a stack shown (not a detail drawn)
-            if (!(e.layer && e.layer._lsIsDetail)) { self.schedule(); }
+        // a zoom asks for the detail of the view it goes to as it starts, not once it has ended
+        map.on("zoomanim", function (e) {
+            if (!self.live) { return; }
+            var v = self.view(e.center, e.zoom);
+            self.layers.forEach(function (l) { self.update(l, v); });
+        });
+        map.on("layerremove", function (e) {  // a band of a stack taken off: its detail with it, at once
+            var l = self.entry(e.layer);
+            if (l) { self.clear(l); }
+        });
+        map.on("layeradd", function (e) {  // a band put on: its detail, made ready beforehand, at once
+            var l = self.entry(e.layer);
+            if (!l) { return; }
+            var r = l.ready, v = self.view();
+            l.ready = null;
+            if (r && self.fits(r, v)) { self.showImage(l, e.layer, r.a, r.box, r.res, r.img); }
+            self.schedule();
         });
         if (via) { setTimeout(function () { self.hello(); }, 0); }
     }
+    Live.prototype.entry = function (layer) {
+        for (var i = 0; i < this.layers.length; i++) { if (window[this.layers[i].v] === layer) { return this.layers[i]; } }
+        return null;
+    };
     Live.prototype.hello = function () {
         var self = this;
         ask({op: "hello", map: this.id}).then(function (a) {
             if (a && a.ok) { self.live = true; self.schedule(); }
         });
     };
-    // the view in Web Mercator and the size of a screen pixel there
-    Live.prototype.view = function () {
-        var map = this.map, b = map.getPixelBounds(), z = map.getZoom(), m = window.devicePixelRatio || 1;
-        var nw = L.CRS.EPSG3857.project(map.unproject(b.min, z)), se = L.CRS.EPSG3857.project(map.unproject(b.max, z));
+    // the view in Web Mercator and the size of a screen pixel there: the map's, or that of a zoom
+    // to (center, zoom)
+    Live.prototype.view = function (center, zoom) {
+        var map = this.map, m = window.devicePixelRatio || 1, size = map.getSize(), z = zoom === undefined ? map.getZoom() : zoom;
+        var c = map.project(center || map.getCenter(), z), half = size.divideBy(2);
+        var nw = L.CRS.EPSG3857.project(map.unproject(c.subtract(half), z));
+        var se = L.CRS.EPSG3857.project(map.unproject(c.add(half), z));
         var v = [nw.x, se.y, se.x, nw.y];
-        return {box: v, px: (v[2] - v[0]) / (map.getSize().x * m)};
+        return {box: v, px: (v[2] - v[0]) / (size.x * m)};
     };
     function inter(a, b) {
         var o = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])];
@@ -105,40 +127,92 @@
         var sw = L.CRS.EPSG3857.unproject(L.point(e[0], e[1])), ne = L.CRS.EPSG3857.unproject(L.point(e[2], e[3]));
         return L.latLngBounds(sw, ne);
     }
-
-    Live.prototype.update = function (l) {
-        var base = window[l.v], map = this.map, self = this;
-        if (!base || !map.hasLayer(base)) { this.clear(l); return; }
-        var v = this.view(), box = inter(v.box, l.ext);
-        if (!box || l.res <= v.px * 1.5) { this.clear(l); return; }  // the overview is fine enough here
-        var d = l.det;
-        if (d && inside(box, d.box) && d.res <= v.px * 1.5 && d.res >= v.px / 3) { return; }  // still good
-        if (d && !inside(box, d.box)) {  // panned beyond the detail: the overview again until the next
-            if (l.kind === "gl") { this.release(l); } else { hide(base, false); }
-        }
-        // the view and half of it around (pans), at the screen's resolution
-        var dx = (box[2] - box[0]) * 0.5, dy = (box[3] - box[1]) * 0.5;
+    // a detail (or a question) serves a view: it covers what of the layer is in view, finely enough
+    Live.prototype.fits = function (d, v, l) {
+        var box = inter(v.box, (l || {}).ext || d.box) || v.box;
+        return inside(box, d.box) && d.res <= v.px * 1.5 && d.res >= v.px / 3;
+    };
+    // what to ask for a view: the part in view and a quarter of it around (pans), at the screen's
+    // resolution (more around takes longer to draw: the detail would come after the zoom ends)
+    Live.prototype.plan = function (l, v) {
+        var box = inter(v.box, l.ext);
+        if (!box || l.res <= v.px * 1.5) { return null; }  // the overview is fine enough here
+        var dx = (box[2] - box[0]) * 0.25, dy = (box[3] - box[1]) * 0.25;
         var want = inter([box[0] - dx, box[1] - dy, box[2] + dx, box[3] + dy], l.ext);
         var px = Math.max(v.px, (want[2] - want[0]) / MAXPX, (want[3] - want[1]) / MAXPX);
-        var w = Math.max(1, Math.round((want[2] - want[0]) / px)), h = Math.max(1, Math.round((want[3] - want[1]) / px));
+        return {box: want, res: px, w: Math.max(1, Math.round((want[2] - want[0]) / px)),
+                h: Math.max(1, Math.round((want[3] - want[1]) / px))};
+    };
+    function decoded(a) {  // the image of an answer, decoded (drawn at once when shown)
+        var img = new Image();
+        img.src = a.url;
+        return (img.decode ? img.decode() : Promise.resolve()).then(function () { return img; }, function () { return img; });
+    }
+
+    Live.prototype.update = function (l, target) {
+        var base = window[l.v], map = this.map, self = this;
+        if (!base || !map.hasLayer(base)) { this.clear(l); return; }
+        var v = target || this.view(), p = this.plan(l, v);
+        if (!p) {
+            if (!target) { this.clear(l); }
+            return;
+        }
+        if (l.det && this.fits(l.det, v, l)) { return; }  // still good
+        if (l.asked && this.fits(l.asked, v, l)) { return; }  // on its way
+        if (!target && l.det && !inside(inter(v.box, l.ext), l.det.box) && l.kind !== "gl") {
+            hide(base, false);  // panned beyond the detail: the overview again until the next
+        }
         var req = l.req = (l.req || 0) + 1;
-        ask({op: "detail", map: this.id, key: l.key, bbox: want, w: w, h: h}).then(function (a) {
-            if (req !== l.req || !map.hasLayer(base)) { return; }  // a later view asked meanwhile
-            if (!a || !a.ok) { return; }
-            if (l.kind === "gl") { self.showGL(l, base, a, want, px); } else { self.showImage(l, base, a, want, px); }
+        l.asked = p;
+        ask({op: "detail", map: this.id, key: l.key, bbox: p.box, w: p.w, h: p.h}).then(function (a) {
+            if (req !== l.req) { return; }  // a later view asked meanwhile
+            l.asked = null;
+            if (!a || !a.ok || !map.hasLayer(base)) { return; }
+            var show = function (img) {
+                if (req !== l.req || !map.hasLayer(base)) { return; }
+                if (map._animatingZoom) { map.once("zoomend", function () { show(img); }); return; }
+                if (l.kind === "gl") { self.showGL(l, base, a, p.box, p.res); }
+                else { self.showImage(l, base, a, p.box, p.res, img); }
+            };
+            if (l.kind === "gl") { show(null); } else { decoded(a).then(show); }
         });
     };
 
-    Live.prototype.showImage = function (l, base, a, box, px) {
+    // the detail of a layer not on the map yet (the next band of a stack), for the view: the band is
+    // put on with it, never coarse first. Resolves when it is ready, at most after ``wait`` ms.
+    Live.prototype.prepare = function (l, wait) {
+        if (!this.live || l.kind !== "image") { return Promise.resolve(); }
+        var v = this.view(), p = this.plan(l, v);
+        if (!p) { return Promise.resolve(); }
+        if (l.det && this.fits(l.det, v, l)) { return Promise.resolve(); }
+        if (!(l.pre && this.fits(l.pre.plan, v, l))) {
+            var pre = {plan: p};
+            pre.promise = ask({op: "detail", map: this.id, key: l.key, bbox: p.box, w: p.w, h: p.h}).then(function (a) {
+                if (!a || !a.ok) { return; }
+                return decoded(a).then(function (img) {
+                    if (l.pre === pre) { l.ready = {a: a, img: img, box: p.box, res: p.res}; }
+                });
+            });
+            l.pre = pre;
+        }
+        var done = l.pre.promise;
+        return wait ? Promise.race([done, new Promise(function (r) { setTimeout(r, wait); })]) : done;
+    };
+
+    Live.prototype.showImage = function (l, base, a, box, px, img) {
         var map = this.map, old = l.det;
-        var o = L.imageOverlay(a.url, bounds(a.ext), {opacity: base.options.opacity, interactive: false,
-                                                       pane: base.options.pane || "overlayPane", zIndex: 3});
+        var o = L.imageOverlay(img || a.url, bounds(a.ext), {opacity: base.options.opacity, interactive: false, className: "ls-detail",
+                                                             pane: base.options.pane || "overlayPane", zIndex: 3});
         o._lsIsDetail = true;
-        o.addTo(map);
         l.det = {layer: o, box: box, res: px};
         base._lsDetail = {layer: o, ext: a.ext, palette: a.palette || null, lookup: a.lookup || null};
-        if (old) { map.removeLayer(old.layer); }
-        o.once("load", function () { if (l.det && l.det.layer === o) { hide(base, true); } });
+        var swap = function () {  // the old detail off once the new one is drawn: never a gap
+            if (old) { map.removeLayer(old.layer); }
+            if (l.det && l.det.layer === o) { hide(base, true); }
+        };
+        o.addTo(map);
+        var el = o.getElement();
+        if (el && el.complete && el.naturalWidth) { swap(); } else { o.once("load", swap); }
         if (!base._lsWrapped) {  // the detail follows the layer's opacity
             base._lsWrapped = true;
             var set = base.setOpacity;
@@ -152,16 +226,17 @@
     };
 
     Live.prototype.showGL = function (l, base, a, box, px) {
-        var map = this.map;
-        this.release(l);
+        var map = this.map, old = l.det;
         var g = new L.LsGL(a.spec, a.data, base.options.pane ? {pane: base.options.pane} : {});
         g._lsBase = base;
         g._lsIsDetail = true;
         g._fill = base._fill; g._line = base._line;
         g.addTo(map);
         l.det = {layer: g, box: box, res: px};
-        g._ready.then(function () {
-            if (l.det && l.det.layer === g) { base._suppress = true; base._draw(); }
+        g._ready.then(function () {  // the old detail off once the new one is drawn
+            if (!(l.det && l.det.layer === g)) { return; }
+            if (old) { dropGL(map, old.layer); }
+            base._suppress = true; base._draw();
         });
         if (!base._lsWrapped) {
             base._lsWrapped = true;
@@ -173,22 +248,35 @@
             };
         }
     };
+    function dropGL(map, layer) {
+        map.removeLayer(layer);
+        var i = (window.LS_GL || []).indexOf(layer);
+        if (i >= 0) { window.LS_GL.splice(i, 1); }
+    }
 
     Live.prototype.release = function (l) {
         var d = l.det, base = window[l.v];
         if (!d) { return; }
         l.det = null;
-        this.map.removeLayer(d.layer);
         if (l.kind === "gl") {
-            var i = (window.LS_GL || []).indexOf(d.layer);
-            if (i >= 0) { window.LS_GL.splice(i, 1); }
+            dropGL(this.map, d.layer);
             if (base) { base._suppress = false; base._draw(); }
-        } else if (base) {
-            base._lsDetail = null;
-            hide(base, false);
+        } else {
+            this.map.removeLayer(d.layer);
+            if (base) { base._lsDetail = null; hide(base, false); }
         }
     };
-    Live.prototype.clear = function (l) { l.req = (l.req || 0) + 1; this.release(l); };
+    Live.prototype.clear = function (l) { l.req = (l.req || 0) + 1; l.asked = null; this.release(l); };
 
-    window.LS_LIVE = {add: function (map, id, layers) { return new Live(map, id, layers); }};
+    window.LS_LIVE = {
+        add: function (map, id, layers) { return new Live(map, id, layers); },
+        // the detail of a layer about to be shown, made ready first (see Live.prepare)
+        prepare: function (layer, wait) {
+            for (var i = 0; i < maps.length; i++) {
+                var l = maps[i].entry(layer);
+                if (l) { return maps[i].prepare(l, wait); }
+            }
+            return Promise.resolve();
+        }
+    };
 })();

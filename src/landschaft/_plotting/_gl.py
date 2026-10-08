@@ -97,7 +97,7 @@ def prepare(gdf, codes, palette, color, max_size):
     import shapely
 
     from .. import _core
-    from ._vectors import simplify
+    from ._vectors import simplify_parts
 
     if len(gdf) > MAX_FEATURES:
         return None
@@ -130,11 +130,14 @@ def prepare(gdf, codes, palette, color, max_size):
         kind = shapely.get_type_id(parts)
     polys, lines, points = kind == 3, kind == 1, kind == 0
     pieces = {}
+    owners = {}
     if polys.any():
-        _, coords, offsets = shapely.to_ragged_array(simplify(parts[polys], tol) if tol > 0 else parts[polys])
+        sp, owners["p"] = simplify_parts(parts[polys], owner[polys], tol, (3,))
+        _, coords, offsets = shapely.to_ragged_array(sp)
         pieces["p"] = (coords, offsets)
     if lines.any():
-        _, coords, offsets = shapely.to_ragged_array(simplify(parts[lines], tol) if tol > 0 else parts[lines])
+        sl, owners["l"] = simplify_parts(parts[lines], owner[lines], tol, (1,))
+        _, coords, offsets = shapely.to_ragged_array(sl)
         pieces["l"] = (coords, offsets)
     if points.any():
         pieces["t"] = (shapely.get_coordinates(parts[points]), None)
@@ -160,14 +163,14 @@ def prepare(gdf, codes, palette, color, max_size):
         pk.add("pxy", xy, delta=True)
         pk.add("pring", np.diff(ring_off))
         pk.add("prings", np.diff(poly_off))
-        pk.add("pfeat", _feature_steps(owner[polys]))
+        pk.add("pfeat", _feature_steps(owners["p"]))
         pk.add("ptri", counts)
         pk.add("pidx", idx, delta=True)
     if "l" in pieces:
         coords, (line_off,) = pieces["l"]
         pk.add("lxy", _quantized(coords, x0, y0, q), delta=True)
         pk.add("llen", np.diff(line_off))
-        pk.add("lfeat", _feature_steps(owner[lines]))
+        pk.add("lfeat", _feature_steps(owners["l"]))
     if "t" in pieces:
         pk.add("txy", _quantized(pieces["t"][0], x0, y0, q), delta=True)
         pk.add("tfeat", _feature_steps(owner[points]))

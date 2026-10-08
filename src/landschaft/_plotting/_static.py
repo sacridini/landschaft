@@ -157,10 +157,8 @@ def _draw_vector(ax, gdf, codes, palette, colour, opacity, max_size) -> None:
     kind = shapely.get_type_id(parts)
     polygons, lines, points = kind == 3, np.isin(kind, (1, 2)), kind == 0
     if polygons.any():
-        polys = parts[polygons]
-        if tol > 0:
-            polys = _vectors.simplify(polys, tol)
-        paths, feature = _polygon_paths(polys, owner[polygons])
+        polys, owned = _vectors.simplify_parts(parts[polygons], owner[polygons], tol, (3,))
+        paths, feature = _polygon_paths(polys, owned)
         if paths:
             from matplotlib.collections import PathCollection
 
@@ -169,13 +167,11 @@ def _draw_vector(ax, gdf, codes, palette, colour, opacity, max_size) -> None:
     if lines.any():
         from matplotlib.collections import LineCollection
 
-        ls_ = parts[lines]
-        if tol > 0:
-            ls_ = _vectors.simplify(ls_, tol)
+        ls_, owned = _vectors.simplify_parts(parts[lines], owner[lines], tol, (1, 2))
         xy, line = shapely.get_coordinates(ls_, return_index=True)
         cut = np.flatnonzero(np.diff(line)) + 1
         segs = np.split(xy, cut)
-        feature = owner[lines][line[np.r_[0, cut]]] if len(xy) else []
+        feature = owned[line[np.r_[0, cut]]] if len(xy) else []
         if segs and len(xy):
             ax.add_collection(LineCollection(segs, colors=rgba[which[feature]], linewidths=1.0, alpha=opacity,
                                              zorder=3))

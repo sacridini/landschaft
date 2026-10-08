@@ -387,6 +387,8 @@ def to_web_mercator(rgba: np.ndarray, transform, crs, n_threads: int, size: int 
     dw, dh = max(1, round(dw / scale)), max(1, round(dh / scale))
     dt = dt * dt.scale(scale)
     bands = rgba[None] if rgba.ndim == 2 else np.moveaxis(rgba, -1, 0)
+    if dw * dh <= 4_000_000:  # GDAL sets up the transformation in every thread: slower for a few pixels
+        n_threads = 1  # (2 to 3 times for a projection such as EPSG:10603, Brazil's Albers)
     out = np.zeros((bands.shape[0], dh, dw), np.uint8)
     reproject(np.ascontiguousarray(bands), out, src_transform=transform, src_crs=src_crs, dst_transform=dt,
               dst_crs=dst, resampling=Resampling.nearest, num_threads=n_threads, src_nodata=0, dst_nodata=0)  # 0: transparent

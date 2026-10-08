@@ -264,11 +264,27 @@ _SCRIPT = """
                 grp.removeLayer(lays[cur]); cur = k; grp.addLayer(lays[cur]);
                 range.value = k; lab.textContent = g.b[k];
             };
-            range.addEventListener("input", function() { show(+range.value); });
+            // while Python draws detail (live), a band is shown with its detail made ready first:
+            // never coarse, then sharp (a frame of the animation waits for it)
+            var asked = 0;
+            var ready = function(k, wait) {
+                return window.LS_LIVE ? window.LS_LIVE.prepare(lays[k], wait) : Promise.resolve();
+            };
+            range.addEventListener("input", function() {
+                var k = +range.value, n = ++asked;
+                lab.textContent = g.b[k];
+                ready(k, 400).then(function() { if (n === asked) { show(k); } });
+            });
+            var step = function() {
+                var k = (cur + 1) % lays.length, next = ready(k, 8000), n = asked;
+                timer = setTimeout(function() {
+                    next.then(function() { if (timer && n === asked) { show(k); step(); } });
+                }, 900);
+            };
             play.addEventListener("click", function() {
-                if (timer) { clearInterval(timer); timer = null; play.innerHTML = "&#9654;"; return; }
+                if (timer) { clearTimeout(timer); timer = null; asked++; play.innerHTML = "&#9654;"; return; }
                 play.innerHTML = "&#10073;&#10073;";
-                timer = setInterval(function() { show((cur + 1) % lays.length); }, 900);
+                step();
             });
         }
         var sync = function() {
