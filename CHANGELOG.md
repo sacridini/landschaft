@@ -6,6 +6,23 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.32.0] - 2026-10-08
+
+### Added
+- `ls.plot`: vector layers of 20 000 to 2 million features are drawn on the map by the graphics card
+  (WebGL) instead of as an image: sharp at every zoom, the value of the feature under the cursor shown as
+  for rasters (its colouring column, or read back from its colour), its columns in a popup on a click,
+  with the opacity slider, the layer control and the swipe of `compare=True`. The features are
+  simplified to an eighth of a pixel in their own CRS, only their coordinates reprojected, polygons cut
+  into triangles in C++ (mapbox's earcut, vendored, ISC) over threads, and packed into the page as
+  quantized deltas in byte planes, deflated in pieces in parallel (the browser inflates them with
+  `DecompressionStream`). 200 000 polygons with three columns: 0.99 s and a 5.3 MB page (the image took
+  as long and could not be read); 2 million points: 0.70 s. Larger layers are still drawn as an image.
+
+### Changed
+- Vector layers are simplified for drawing over threads (GEOS lets go of the GIL): 4 times faster on
+  200 000 polygons.
+
 ## [1.31.1] - 2026-10-08
 
 ### Changed
