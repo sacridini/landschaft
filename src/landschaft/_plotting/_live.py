@@ -7,6 +7,7 @@ JavaScript API in a window. A page saved or opened elsewhere keeps the overview 
 from __future__ import annotations
 
 import base64
+import functools
 import math
 import os
 import threading
@@ -45,23 +46,42 @@ def register(map_id: str, key: str, handler) -> None:
 
 
 def handle(msg: dict) -> dict:
-    """The answer to a message of a map: ``{"op": "hello"}`` (whether its layers answer), or
-    ``{"op": "detail", "key", "bbox", "w", "h"}``. Errors are answered, not raised."""
+    """The answer to a message of a map: ``{"op": "hello"}`` (whether its layers answer),
+    ``{"op": "detail", "key", "bbox", "w", "h"}``, or ``{"op": "details", "keys": [...], ...}``
+    (several layers in the same view, the bands of a series: answered over threads, as
+    ``{"ok", "answers": [...]}``). Errors are answered, not raised."""
     try:
         map_id = str(msg.get("map"))
         with _LOCK:
             layers = _MAPS.get(map_id)
         if msg.get("op") == "hello":
             return {"ok": layers is not None}
-        if layers is None or msg.get("key") not in layers:
+        if layers is None:
             return {"ok": False, "error": "this map is no longer held (draw it again)"}
         bbox = [float(v) for v in msg["bbox"]]
         w = int(min(MAX_DETAIL, max(1, msg["w"])))
         h = int(min(MAX_DETAIL, max(1, msg["h"])))
-        out = layers[msg["key"]](bbox, w, h)
-        return {"ok": out is not None, **(out or {})}
+        if msg.get("op") == "details":
+            from concurrent.futures import ThreadPoolExecutor
+
+            from .._threads import default_threads
+
+            keys = [str(k) for k in msg.get("keys", [])]
+            with ThreadPoolExecutor(max(1, min(default_threads(), len(keys)))) as pool:
+                return {"ok": True, "answers": list(pool.map(lambda k: _one(layers, k, bbox, w, h), keys))}
+        return _one(layers, msg.get("key"), bbox, w, h)
     except Exception as err:  # noqa: BLE001 - reported to the page
         return {"ok": False, "error": f"{type(err).__name__}: {err}"}
+
+
+def _one(layers: dict, key, bbox, w, h) -> dict:
+    if key not in layers:
+        return {"ok": False, "error": "this map is no longer held (draw it again)"}
+    try:
+        out = layers[key](bbox, w, h)
+    except Exception as err:  # noqa: BLE001 - reported to the page
+        return {"ok": False, "error": f"{type(err).__name__}: {err}"}
+    return {"ok": out is not None, **(out or {})}
 
 
 # --- the answers of layers ----------------------------------------------------------------------------
@@ -79,12 +99,19 @@ def _image_answer(img) -> dict:
     return out
 
 
+@functools.lru_cache(64)
+def _bounds_in(crs: str, bbox: tuple) -> tuple:
+    """A Web Mercator box in a CRS (the same view asked for every band of a series: once), through
+    the transformation made once for the CRS (rasterio's transform_bounds sets PROJ up every time)."""
+    from ._raster import _to_source
+
+    return tuple(_to_source(crs).transform_bounds(*bbox, densify_pts=21))
+
+
 def _source_window(da, bbox):
     """The cells of a raster under a Web Mercator box (and one more around), or None outside it."""
-    from rasterio.warp import transform_bounds
-
     crs = da.rio.crs
-    x0, y0, x1, y1 = transform_bounds("EPSG:3857", crs, *bbox) if crs is not None else bbox
+    x0, y0, x1, y1 = _bounds_in(crs.to_wkt(), tuple(bbox)) if crs is not None else bbox  # not to_string(): slow
     xs, ys = np.asarray(da.x.values), np.asarray(da.y.values)
 
     def span(c, lo, hi):
@@ -108,7 +135,7 @@ def raster_handler(da, style: dict):
         if sub is None:
             return None
         # the cells in view at the screen's resolution (the long side of the view, in cells)
-        img = render(sub, max_size=max(w, h, 1), style=style, title=style.get("title"))
+        img = render(sub, max_size=max(w, h, 1), style=style, title=style.get("title"), view=(bbox, w, h))
         return _image_answer(img)
 
     return answer

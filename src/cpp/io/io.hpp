@@ -85,6 +85,15 @@ std::vector<float> block_mean(const T* values, int ny, int nx, int f, bool has_n
 // polygon_rings[p] .. polygon_rings[p + 1], ring r the points ring_offsets[r] .. ring_offsets[r + 1]
 // of xy. The triangles' vertex indices, three per triangle, counted from the first point of
 // their polygon, polygon after polygon; counts: the indices of each polygon.
+// Where every pixel of a W x H view comes from in an h x w grid (north up: gt = x0, dx, y0, dy):
+// the source coordinates X, Y of the pixels' centres known on a coarse grid (columns ci, rows cj,
+// ncj x nci values), linear between; out: the cell's index (row * w + col), -1 outside the grid.
+void view_index(const double* X, const double* Y, const i64* ci, i64 nci, const i64* cj, i64 ncj, i64 W, i64 H,
+                const double* gt, i64 w, i64 h, std::int32_t* out);
+
+// out[p] = src[index[p]] (channels bytes a pixel), 0 where the index is -1.
+void gather_pixels(const std::uint8_t* src, i64 channels, const std::int32_t* index, i64 n, std::uint8_t* out);
+
 std::vector<std::uint32_t> triangulate(const double* xy, const i64* ring_offsets, const i64* polygon_rings,
                                        i64 npolygons, std::vector<i64>* counts);
 

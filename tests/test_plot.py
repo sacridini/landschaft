@@ -337,6 +337,97 @@ def test_a_window_of_a_lazy_raster_is_read_reduced_from_its_file(tmp_path):
         b, tb = _raster.reduce(mem.isel(x=slice(101, 1001), y=slice(53, 803)), 200, categorical)
         assert np.array_equal(a, b) and ta == tb
 
+
+def _gdal_nearest(rgba, t, crs, size):
+    """The Web Mercator image of rgba as GDAL warps it (nearest, 0 as no data): what to_web_mercator did."""
+    import rasterio
+    from rasterio.warp import Resampling, calculate_default_transform, reproject
+
+    h, w = rgba.shape[:2]
+    src, dst = rasterio.crs.CRS.from_user_input(crs), rasterio.crs.CRS.from_epsg(3857)
+    left, top = t.c, t.f
+    right, bottom = left + t.a * w, top + t.e * h
+    sb = (min(left, right), min(top, bottom), max(left, right), max(top, bottom))
+    if src.is_geographic:
+        sb = (sb[0], max(sb[1], -85.0), sb[2], min(sb[3], 85.0))
+    dt, dw, dh = calculate_default_transform(src, dst, w, h, *sb)
+    sc = max(dw / w, dh / h, 1e-9) if size is None else max(dw, dh) / size
+    dw, dh = max(1, round(dw / sc)), max(1, round(dh / sc))
+    dt = dt * dt.scale(sc)
+    bands = rgba[None] if rgba.ndim == 2 else np.moveaxis(rgba, -1, 0)
+    out = np.zeros((bands.shape[0], dh, dw), np.uint8)
+    reproject(np.ascontiguousarray(bands), out, src_transform=t, src_crs=src, dst_transform=dt, dst_crs=dst,
+              resampling=Resampling.nearest, num_threads=1, src_nodata=0, dst_nodata=0)
+    return out[0] if rgba.ndim == 2 else np.moveaxis(out, 0, -1)
+
+
+@pytest.mark.parametrize("crs,t", [("EPSG:32633", from_origin(500000, 4600000, 30, 30)),
+                                   ("EPSG:10603", from_origin(5000000, 9000000, 30, 30)),
+                                   ("EPSG:4326", from_origin(-50.0, -10.0, 0.01, 0.01))])
+def test_images_reprojected_once_per_grid_as_gdal_warps_them(crs, t):
+    rng = np.random.default_rng(1)
+    for shape in ((120, 170), (120, 170, 4)):
+        a = rng.integers(0, 6, shape).astype(np.uint8)
+        for size in (None, 400):
+            img, *_ = _raster.to_web_mercator(a, t, crs, 2, size)
+            assert np.array_equal(img, _gdal_nearest(a, t, crs, size))
+            again, *_ = _raster.to_web_mercator(a[::-1].copy(), t, crs, 2, size)  # the same grid: its plan kept
+            assert np.array_equal(again, _gdal_nearest(a[::-1].copy(), t, crs, size))
+
+
+@pytest.mark.parametrize("crs,t", [("EPSG:32633", from_origin(500000, 4600000, 30, 30)),
+                                   ("EPSG:10603", from_origin(5000000, 9000000, 30, 30))])
+def test_a_view_is_reprojected_pixel_by_pixel_as_proj_does(crs, t):
+    """The detail of a view: its pixels' cells within a hundredth of a percent of PROJ's, pixel by pixel
+    (GDAL's approximate transformer is off at 3 to 6 % of the cells' edges at these sizes)."""
+    from pyproj import Transformer
+
+    h, w = 300, 400
+    a = np.random.default_rng(2).integers(1, 7, (h, w)).astype(np.uint8)
+    cx, cy = Transformer.from_crs(crs, 3857, always_xy=True).transform(t.c + 30 * w / 2, t.f - 30 * h / 2)
+    box, W, H = (cx - 3000, cy - 2000, cx + 3000, cy + 2000), 600, 400
+    img, bounds, merc = _raster.to_web_mercator(a, t, crs, 1, view=(box, W, H))
+    assert img.shape == (H, W) and merc == box
+    sx, sy = (box[2] - box[0]) / W, (box[3] - box[1]) / H
+    gx, gy = np.meshgrid(box[0] + (np.arange(W) + .5) * sx, box[3] - (np.arange(H) + .5) * sy)
+    X, Y = Transformer.from_crs(3857, crs, always_xy=True).transform(gx, gy)
+    c, r = np.floor((X - t.c) / t.a).astype(int), np.floor((Y - t.f) / t.e).astype(int)
+    inside = (c >= 0) & (c < w) & (r >= 0) & (r < h)
+    exact = np.where(inside, a[np.clip(r, 0, h - 1), np.clip(c, 0, w - 1)], 0)
+    assert (img == exact).mean() > 0.9999
+    (s, w_), (n, e) = bounds
+    assert w_ < e and s < n
+
+
+def test_the_lookup_of_pixels_through_an_index():
+    from landschaft import _core
+
+    src = np.arange(12, dtype=np.uint8).reshape(3, 4)
+    idx = np.array([[0, 11, -1], [5, -1, 3]], np.int32)
+    assert _core.io_gather(src, idx).tolist() == [[0, 11, 0], [5, 0, 3]]
+    rgba = np.arange(48, dtype=np.uint8).reshape(3, 4, 4)
+    assert _core.io_gather(rgba, idx)[0, 1].tolist() == [44, 45, 46, 47] and _core.io_gather(rgba, idx)[0, 2].sum() == 0
+    with pytest.raises(ValueError):
+        _core.io_gather(src, np.array([12], np.int32))
+
+
+def test_live_series_answers_several_bands_at_once():
+    from landschaft._plotting import _live
+
+    stack = grid(np.random.default_rng(3).integers(0, 4, (3, 1500, 1500)).astype("uint8"), name="lc")
+    p = ls.plot(stack, basemap=None, max_size=256)
+    entries = p.maps[0].__dict__["_ls_live_layers"]
+    assert [e["band"] for e in entries] == [0, 1, 2] and len({e["series"] for e in entries}) == 1
+    ext = entries[0]["ext"]
+    box = [ext[0], ext[1], (ext[0] + ext[2]) / 2, (ext[1] + ext[3]) / 2]
+    mid = p._live_maps()[0]
+    many = _live.handle({"op": "details", "map": mid, "keys": [e["key"] for e in entries] + ["gone"], "bbox": box,
+                         "w": 500, "h": 500})
+    one = _live.handle({"op": "detail", "map": mid, "key": entries[1]["key"], "bbox": box, "w": 500, "h": 500})
+    assert many["ok"] and [a["ok"] for a in many["answers"]] == [True, True, True, False]
+    assert many["answers"][1]["url"] == one["url"] and many["answers"][0]["url"] != one["url"]
+    assert one["ext"] == box  # the view itself, aligned with the screen's pixels
+
 def test_live_class_detail_keeps_the_class_colours():
     from landschaft._plotting import _raster
 

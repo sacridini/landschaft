@@ -5,9 +5,12 @@ lookup table, reprojected to Web Mercator, encoded as PNG."""
 from __future__ import annotations
 
 import base64
+import functools
 import io
 import math
 import os
+import threading
+from collections import OrderedDict
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -361,11 +364,17 @@ def choose_cmap(da: xr.DataArray, v: np.ndarray, ok: np.ndarray) -> tuple[str, b
 # --- reprojection ----------------------------------------------------------------------------------
 
 
-def to_web_mercator(rgba: np.ndarray, transform, crs, n_threads: int, size: int | None = None):
-    """An image (palette indices, or RGBA) reprojected to EPSG:3857 (nearest cell), its lat/lon
-    bounds and its Web Mercator extent; ``size`` pixels on its long side (default: about as many
-    as the source: a detail at the screen's resolution takes more, so that the cells' edges, turned
-    by the projection, are drawn as fine as the screen)."""
+_PLANS: OrderedDict = OrderedDict()
+_PLANS_LOCK = threading.Lock()
+#: Reprojections kept (each an index of the source cell of every pixel: 4 bytes a pixel).
+MAX_PLANS = 8
+
+
+def _warp_plan(transform, crs, h: int, w: int, size: int | None, n_threads: int):
+    """Where every pixel of the Web Mercator image of an h x w grid comes from (nearest cell): its
+    index in the grid (-1: none), the image's lat/lon bounds and its Web Mercator extent. GDAL works
+    it out once for a grid and a size, by reprojecting the cells' indices; images of the same grid
+    (the bands of a stack, the bands of a series in the same view) only look their pixels up."""
     import rasterio
     from rasterio.warp import (
         Resampling,
@@ -374,29 +383,104 @@ def to_web_mercator(rgba: np.ndarray, transform, crs, n_threads: int, size: int 
         transform_bounds,
     )
 
+    src_crs = crs if isinstance(crs, rasterio.crs.CRS) else rasterio.crs.CRS.from_user_input(crs)
+    key = (tuple(transform)[:6], src_crs.to_wkt(), h, w, size)  # to_string() looks the EPSG code up: 50 ms
+    with _PLANS_LOCK:  # one computes it, the others (bands in threads) wait for it
+        plan = _PLANS.get(key)
+        if plan is not None:
+            _PLANS.move_to_end(key)
+            return plan
+        left, top = transform.c, transform.f
+        right, bottom = left + transform.a * w, top + transform.e * h
+        src_bounds = (min(left, right), min(top, bottom), max(left, right), max(top, bottom))
+        dst = rasterio.crs.CRS.from_epsg(3857)
+        if src_crs.is_geographic:  # Web Mercator stops at about 85 degrees
+            src_bounds = (src_bounds[0], max(src_bounds[1], -85.0), src_bounds[2], min(src_bounds[3], 85.0))
+        dt, dw, dh = calculate_default_transform(src_crs, dst, w, h, *src_bounds)
+        scale = max(dw / w, dh / h, 1e-9) if size is None else max(dw, dh) / max(1, size)  # as many as the source
+        dw, dh = max(1, round(dw / scale)), max(1, round(dh / scale))
+        dt = dt * dt.scale(scale)
+        if dw * dh <= 4_000_000:  # GDAL sets up the transformation in every thread: slower for a few pixels
+            n_threads = 1  # (2 to 3 times for a projection such as EPSG:10603, Brazil's Albers)
+        cells = np.arange(h * w, dtype=np.int32).reshape(h, w)
+        index = np.full((dh, dw), -1, np.int32)
+        reproject(cells, index, src_transform=transform, src_crs=src_crs, dst_transform=dt, dst_crs=dst,
+                  resampling=Resampling.nearest, num_threads=n_threads, dst_nodata=-1)
+        l, t = dt.c, dt.f
+        r, b = l + dt.a * dw, t + dt.e * dh
+        w_, s_, e_, n_ = transform_bounds(dst, "EPSG:4326", l, b, r, t)
+        plan = (index, ((s_, w_), (n_, e_)), (l, b, r, t))
+        _PLANS[key] = plan
+        while len(_PLANS) > MAX_PLANS:
+            _PLANS.popitem(last=False)
+        return plan
+
+
+@functools.lru_cache(16)
+def _to_source(crs_wkt: str):
+    """pyproj's transformation from Web Mercator to a CRS, made once (PROJ takes tens of ms to set up
+    a projection given as WKT, such as EPSG:10603 read from a file)."""
+    from pyproj import Transformer
+
+    return Transformer.from_crs("EPSG:3857", crs_wkt, always_xy=True)
+
+
+#: A view's pixels are reprojected exactly every this many pixels, linearly between (as GDAL's
+#: approximate transformer does: well under a hundredth of a pixel off for a view on a screen).
+_STEP = 16
+
+
+def _view_plan(transform, crs, h: int, w: int, view):
+    """Where every pixel of a view on the screen (``view``: its Web Mercator box and its width and
+    height in pixels) comes from in an h x w grid (nearest cell): as _warp_plan, the image the box
+    itself, aligned with the screen's pixels."""
+    import rasterio
+
+    (x0, y0, x1, y1), W, H = view
+    src_crs = crs if isinstance(crs, rasterio.crs.CRS) else rasterio.crs.CRS.from_user_input(crs)
+    key = ("view", tuple(transform)[:6], src_crs.to_wkt(), h, w, tuple(view[0]), W, H)
+    with _PLANS_LOCK:
+        plan = _PLANS.get(key)
+        if plan is not None:
+            _PLANS.move_to_end(key)
+            return plan
+    from .. import _core
+
+    sx, sy = (x1 - x0) / W, (y1 - y0) / H
+    ci = np.unique(np.r_[np.arange(0, W, _STEP), W - 1]).astype(np.int64)
+    cj = np.unique(np.r_[np.arange(0, H, _STEP), H - 1]).astype(np.int64)
+    gx, gy = np.meshgrid(x0 + (ci + 0.5) * sx, y1 - (cj + 0.5) * sy)
+    X, Y = _to_source(src_crs.to_wkt()).transform(gx, gy)  # (len(cj), len(ci))
+    index = _core.io_view_index(np.asarray(X, np.float64), np.asarray(Y, np.float64), ci, cj, W, H,
+                                (transform.c, transform.a, transform.f, transform.e), w, h)
+    lon0, lon1 = np.degrees(x0 / _R), np.degrees(x1 / _R)
+    lat0, lat1 = np.degrees(np.arctan(np.sinh(y0 / _R))), np.degrees(np.arctan(np.sinh(y1 / _R)))
+    plan = (index, ((float(lat0), float(lon0)), (float(lat1), float(lon1))), (x0, y0, x1, y1))
+    with _PLANS_LOCK:
+        _PLANS[key] = plan
+        while len(_PLANS) > MAX_PLANS:
+            _PLANS.popitem(last=False)
+    return plan
+
+
+_R = 6378137.0  # Web Mercator's sphere
+
+
+def to_web_mercator(rgba: np.ndarray, transform, crs, n_threads: int, size: int | None = None, view=None):
+    """An image (palette indices, or RGBA) reprojected to EPSG:3857 (nearest cell), its lat/lon
+    bounds and its Web Mercator extent; ``size`` pixels on its long side (default: about as many
+    as the source: a detail at the screen's resolution takes more, so that the cells' edges, turned
+    by the projection, are drawn as fine as the screen). The reprojection of a grid is worked out
+    once (_warp_plan): 0 (transparent) where no cell falls, as GDAL leaves it. ``view`` (a Web
+    Mercator box, width, height): the image is that view's pixels on the screen (_view_plan)."""
+    from .. import _core
+
     h, w = rgba.shape[:2]
-    left, top = transform.c, transform.f
-    right, bottom = left + transform.a * w, top + transform.e * h
-    src_bounds = (min(left, right), min(top, bottom), max(left, right), max(top, bottom))
-    dst = rasterio.crs.CRS.from_epsg(3857)
-    src_crs = rasterio.crs.CRS.from_user_input(crs)
-    if src_crs.is_geographic:  # Web Mercator stops at about 85 degrees
-        src_bounds = (src_bounds[0], max(src_bounds[1], -85.0), src_bounds[2], min(src_bounds[3], 85.0))
-    dt, dw, dh = calculate_default_transform(src_crs, dst, w, h, *src_bounds)
-    scale = max(dw / w, dh / h, 1e-9) if size is None else max(dw, dh) / max(1, size)  # as many as the source
-    dw, dh = max(1, round(dw / scale)), max(1, round(dh / scale))
-    dt = dt * dt.scale(scale)
-    bands = rgba[None] if rgba.ndim == 2 else np.moveaxis(rgba, -1, 0)
-    if dw * dh <= 4_000_000:  # GDAL sets up the transformation in every thread: slower for a few pixels
-        n_threads = 1  # (2 to 3 times for a projection such as EPSG:10603, Brazil's Albers)
-    out = np.zeros((bands.shape[0], dh, dw), np.uint8)
-    reproject(np.ascontiguousarray(bands), out, src_transform=transform, src_crs=src_crs, dst_transform=dt,
-              dst_crs=dst, resampling=Resampling.nearest, num_threads=n_threads, src_nodata=0, dst_nodata=0)  # 0: transparent
-    l, t = dt.c, dt.f
-    r, b = l + dt.a * dw, t + dt.e * dh
-    w_, s_, e_, n_ = transform_bounds(dst, "EPSG:4326", l, b, r, t)
-    img = out[0] if rgba.ndim == 2 else np.ascontiguousarray(np.moveaxis(out, 0, -1))
-    return img, ((s_, w_), (n_, e_)), (l, b, r, t)
+    if view is not None and transform.b == 0 and transform.d == 0:
+        index, bounds, merc = _view_plan(transform, crs, h, w, view)
+    else:
+        index, bounds, merc = _warp_plan(transform, crs, h, w, size, n_threads)
+    return _core.io_gather(np.ascontiguousarray(rgba, dtype=np.uint8), index), bounds, merc
 
 
 # --- a layer -------------------------------------------------------------------------------------------
@@ -412,7 +496,7 @@ def _user_table(cmap: dict) -> dict:
 def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax=None, log=None,
            opacity: float = 0.85, categorical: bool | None = None, labels: dict | None = None,
            title: str | None = None, mercator: bool = True, n_threads: int | None = None,
-           style: dict | None = None) -> Image:
+           style: dict | None = None, view=None) -> Image:
     """A 2-D georeferenced raster as a coloured image for a web map (or in its own CRS).
 
     The colours: ``cmap`` a palette name or a list of colours (a ramp), or a dict
@@ -423,8 +507,8 @@ def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax
     from .._threads import default_threads
 
     title = title or (str(da.name) if da.name is not None else "value")
-    if style is not None:
-        return _render_styled(da, style, max_size, opacity, title, n_threads or default_threads())
+    if style is not None:  # view: (Web Mercator box, width, height) of the screen it is drawn for
+        return _render_styled(da, style, max_size, opacity, title, n_threads or default_threads(), view)
     table, names = _palettes.product_style(da.attrs)
     product_names = names or {}
     if isinstance(cmap, dict):
@@ -476,7 +560,7 @@ def render(da: xr.DataArray, *, max_size: int = 2048, cmap=None, vmin=None, vmax
 
 
 def _finish(da, v, t, pixels, palette, legend, lookup, title, opacity, mercator, n_threads, style,
-            size=None) -> Image:
+            size=None, view=None) -> Image:
     from .._threads import default_threads
 
     palette = distinct_palette(palette)
@@ -485,13 +569,14 @@ def _finish(da, v, t, pixels, palette, legend, lookup, title, opacity, mercator,
     crs = da.rio.crs
     if mercator and crs is not None:
         img, bounds, merc = to_web_mercator(pixels, t, crs, n_threads or default_threads(),
-                                            None if size is None or size <= max(pixels.shape) else size)
+                                            None if size is None or size <= max(pixels.shape) else size, view)
         return Image(img, bounds, legend, title, (xmin, ymin, xmax, ymax), crs, merc, palette, opacity, lookup,
                      style)
     return Image(pixels, None, legend, title, (xmin, ymin, xmax, ymax), crs, None, palette, opacity, lookup, style)
 
 
-def _render_styled(da, style: dict, max_size: int, opacity: float, title: str, n_threads: int) -> Image:
+def _render_styled(da, style: dict, max_size: int, opacity: float, title: str, n_threads: int,
+                   view=None) -> Image:
     """A raster (a part of one) drawn with the colours another image chose (its style). Classes
     the other did not hold (rare ones, left out of its overview) get colours of their own."""
     if style["categorical"]:
@@ -509,13 +594,13 @@ def _render_styled(da, style: dict, max_size: int, opacity: float, title: str, n
         pixels, palette, legend, labels = colour_classes(v, ok, table, style.get("names"), title, style.get("order"))
         if pixels is not None:
             return _finish(da, v, t, pixels, palette, legend, {"labels": labels}, title, opacity, True, n_threads,
-                           style, max_size)
+                           style, max_size, view)
         style = {"categorical": False, "cmap": "viridis", "vmin": None, "vmax": None, "log": False}
     v, t = reduce(da, max_size, False)
     ok = _valid(v, da.rio.nodata)
     pixels, palette, legend = colour_values(v, ok, style["cmap"], style["vmin"], style["vmax"], style["log"], title)
     return _finish(da, v, t, pixels, palette, legend, ramp_lookup(legend), title, opacity, True, n_threads, style,
-                   max_size)
+                   max_size, view)
 
 
 def ramp_lookup(legend: Legend) -> dict:

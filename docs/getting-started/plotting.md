@@ -68,6 +68,13 @@ a script opens (pywebview), with no server and no port. A page saved, or a
 notebook opened again without its kernel, keeps the overview. The environment
 variable `LANDSCHAFT_PLOT_LIVE=0` turns it off.
 
+A stack is a time series: once the view rests, the other bands are drawn for it
+ahead, the nearest first (the 41 bands of a 5000 × 5000 series in about 0.4 s),
+so the band slider and the play button show every band sharp at once. The
+details of the bands seen are kept (decoded up to 256 MB, the rest as PNG). A
+detail takes 15 to 40 ms: the bands of a stack share the reprojection of their
+grid, worked out once per view in C++ and exact to the pixel.
+
 Every layer has a card in the legend, with a slider for its opacity (to see the
 imagery underneath); a card hides while its layer is switched off in the layer
 control (top right). The button under the zoom buttons shows the map full
@@ -162,5 +169,4 @@ page of many bands stays light. A map of 100 million cells takes a fraction of
 a second; see [Benchmarks](../benchmarks.md#plotting).
 
 In tests and in scripts that only save plots, the environment variable
-`LANDSCHAFT_PLOT_SHOW=0` keeps windows from opening. A detail asked for as
-you zoom in takes 10 to 100 ms for a raster in memory.
+`LANDSCHAFT_PLOT_SHOW=0` keeps windows from opening.

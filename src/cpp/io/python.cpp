@@ -268,6 +268,50 @@ void register_python(py::module_& m) {
         "Mean of every factor x factor block (cells with data), float32.");
 
     m.def(
+        "io_view_index",
+        [](const py::array_t<double, py::array::c_style | py::array::forcecast>& X,
+           const py::array_t<double, py::array::c_style | py::array::forcecast>& Y, const I64Array& ci,
+           const I64Array& cj, i64 W, i64 H, const std::array<double, 4>& gt, i64 w, i64 h) {
+            const i64 nci = static_cast<i64>(ci.size()), ncj = static_cast<i64>(cj.size());
+            if (X.ndim() != 2 || X.shape(0) != ncj || X.shape(1) != nci || Y.ndim() != 2 || Y.shape(0) != ncj ||
+                Y.shape(1) != nci)
+                throw py::value_error("X and Y must be (len(cj), len(ci))");
+            if (nci < 1 || ncj < 1 || W < 1 || H < 1) throw py::value_error("an empty view");
+            if (w * h > 2147483647LL) throw py::value_error("a grid of over 2^31 cells");
+            py::array_t<std::int32_t> out({static_cast<py::ssize_t>(H), static_cast<py::ssize_t>(W)});
+            {
+                py::gil_scoped_release release;
+                view_index(X.data(), Y.data(), ci.data(), nci, cj.data(), ncj, W, H, gt.data(), w, h,
+                           out.mutable_data());
+            }
+            return out;
+        },
+        py::arg("X"), py::arg("Y"), py::arg("ci"), py::arg("cj"), py::arg("W"), py::arg("H"), py::arg("gt"),
+        py::arg("w"), py::arg("h"),
+        "The cell (index in an h x w grid, -1 outside) of every pixel of a W x H view, from the source coordinates "
+        "of a coarse grid of its pixels (linear between). gt: x0, dx, y0, dy.");
+    m.def(
+        "io_gather",
+        [](const py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>& src,
+           const py::array_t<std::int32_t, py::array::c_style | py::array::forcecast>& index) {
+            const i64 channels = src.ndim() == 3 ? static_cast<i64>(src.shape(2)) : 1;
+            const i64 cells = static_cast<i64>(src.shape(0)) * static_cast<i64>(src.shape(1));
+            std::vector<py::ssize_t> shape(index.shape(), index.shape() + index.ndim());
+            if (channels > 1) shape.push_back(static_cast<py::ssize_t>(channels));
+            py::array_t<std::uint8_t> out(shape);
+            const i64 n = static_cast<i64>(index.size());
+            const std::int32_t* ix = index.data();
+            for (i64 p = 0; p < n; ++p)
+                if (ix[p] >= cells) throw py::value_error("an index beyond the image");
+            {
+                py::gil_scoped_release release;
+                gather_pixels(src.data(), channels, ix, n, out.mutable_data());
+            }
+            return out;
+        },
+        py::arg("src"), py::arg("index"),
+        "src's pixels (h x w, or h x w x channels uint8) at the cells of index (any shape; -1: 0).");
+    m.def(
         "io_triangulate",
         [](const py::array_t<double, py::array::c_style | py::array::forcecast>& xy,
            const I64Array& ring_offsets, const I64Array& polygon_rings) {

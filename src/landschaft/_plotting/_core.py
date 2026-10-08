@@ -334,8 +334,9 @@ def _live_layers(m, groups) -> None:
     from ._raster import Image
 
     entries = []
-    for g in groups:
-        for x, layer in zip(g.items, g.layers):
+    for gi, g in enumerate(groups):
+        series = bool(g.bands) and len(g.layers) > 1  # the bands of a stack: the page asks for them ahead
+        for j, (x, layer) in enumerate(zip(g.items, g.layers)):
             handler = getattr(x, "_live", None)
             if handler is None:
                 continue
@@ -343,7 +344,8 @@ def _live_layers(m, groups) -> None:
             if isinstance(x, Image):
                 e = [float(v) for v in x.mercator_extent]
                 entries.append({"v": key, "key": key, "kind": "image", "ext": e,
-                                "res": (e[2] - e[0]) / max(1, x.pixels.shape[1])})
+                                "res": (e[2] - e[0]) / max(1, x.pixels.shape[1]),
+                                **({"series": gi, "band": j} if series else {})})
             else:
                 entries.append({"v": key, "key": key, "kind": "gl", "ext": [float(v) for v in x._ls_merc],
                                 "res": float(x._ls_res)})
