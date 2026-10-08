@@ -6,6 +6,19 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.33.0] - 2026-10-08
+
+### Added
+- `ls.plot`: detail as you zoom in. While Python runs, a map asks for the part in view at the screen's
+  resolution once it is zoomed in past the overview its page holds: a raster's own cells (read through a
+  window of the raster, a lazy one from its file) in the overview's colours and classes, reprojected at the
+  screen's resolution, the value under the cursor read from them; vector layers drawn as an image burnt
+  again for the view; WebGL layers given the features in view simplified to the screen (a spatial index made
+  at the first question). The questions go through pywebview's JavaScript API in a script's window, and in a
+  notebook (Jupyter, JupyterLab, VS Code) through a widget of no size shown under the map (anywidget, now a
+  dependency): no server, no port. The map itself stays an HTML output, so a saved notebook or page keeps
+  the overview. A detail takes 10 to 100 ms for a raster in memory. `LANDSCHAFT_PLOT_LIVE=0` turns it off.
+
 ## [1.32.0] - 2026-10-08
 
 ### Added

@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "landschaft"
-version = "1.32.0"
+version = "1.33.0"
 description = "Fast, exact landscape pattern, fragmentation, landscape-metric and connectivity analysis for Python."
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -29,6 +29,7 @@ dependencies = [
     "Pillow",
     "contextily>=1.3",
     "pywebview>=5",
+    "anywidget>=0.9",
     "h3>=4",
     "dendropy>=4",
 ]
