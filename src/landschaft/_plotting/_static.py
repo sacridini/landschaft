@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import warnings
 
 import numpy as np
@@ -80,12 +81,9 @@ def _draw_spatial(ax, items, opts, legends: bool = True):
                                                        opts.get("categorical"), opts.get("vmin"), opts.get("vmax"),
                                                        opts.get("log"))
             if codes is None:
-                colour, legend = opts.get("color") or "#ffd60a", None
-            else:
-                colour = np.array(palette + [_vectors._MISSING], dtype=object)[codes]
-            points = set(gdf.geom_type) <= {"Point", "MultiPoint"}
-            gdf.plot(ax=ax, color=colour, alpha=opts.get("opacity") or 0.7, edgecolor="#222", linewidth=0.5,
-                     markersize=14 if points else None, zorder=3)
+                legend = None
+            _draw_vector(ax, gdf, codes, palette, opts.get("color") or "#ffd60a", opts.get("opacity") or 0.7,
+                         opts["max_size"])
             out.append(legend)
             continue
         da = obj
@@ -118,6 +116,109 @@ def _draw_spatial(ax, items, opts, legends: bool = True):
         for lg in out:
             _legend(ax, lg)
     return crs, [lg for lg in out if lg is not None]
+
+
+#: Above this many features (or vertices), a static map burns a vector layer into an image.
+MAX_FEATURES = 100_000
+MAX_VERTICES = 2_000_000
+
+
+def _draw_vector(ax, gdf, codes, palette, colour, opacity, max_size) -> None:
+    """A vector layer drawn as one collection per kind of geometry, made from the coordinates of all
+    features at once (geopandas makes a patch per feature, 8 times slower), simplified to half a
+    pixel of ``max_size``; very many features burnt into an image as on interactive maps."""
+    import shapely
+    from matplotlib.colors import to_rgba_array
+
+    from . import _vectors
+
+    geoms = np.asarray(gdf.geometry.values, dtype=object)
+    keep = ~shapely.is_missing(geoms) & ~shapely.is_empty(geoms)
+    geoms = geoms[keep]
+    codes = None if codes is None else np.asarray(codes)[keep]
+    if not len(geoms):
+        return
+    colours = [colour] if codes is None else palette + [_vectors._MISSING]
+    rgba = to_rgba_array(colours)
+    which = np.zeros(len(geoms), np.int64) if codes is None else np.where(codes < 0, len(palette), codes)
+    if len(geoms) > MAX_FEATURES or int(shapely.get_num_coordinates(geoms).sum()) > MAX_VERTICES:
+        burnt, cols, (x0, y0, x1, y1) = (
+            _vectors.burn_points(*shapely.get_coordinates(geoms).T, codes, palette, colour, max_size)
+            if set(np.unique(shapely.get_type_id(geoms)).tolist()) == {0} else
+            _vectors.burn(_frame(geoms, gdf.crs), codes, palette, colour, max_size))
+        lut = np.zeros((len(cols) + 1, 4), np.float32)
+        lut[1:] = to_rgba_array(cols)
+        lut[1:, 3] = opacity
+        ax.imshow(lut[burnt], extent=(x0, x1, y0, y1), interpolation="nearest", zorder=3)
+        return
+    x0, y0, x1, y1 = shapely.total_bounds(geoms)
+    tol = max(x1 - x0, y1 - y0) / (max_size * 2.0)
+    parts, owner = shapely.get_parts(geoms, return_index=True)
+    kind = shapely.get_type_id(parts)
+    polygons, lines, points = kind == 3, np.isin(kind, (1, 2)), kind == 0
+    if polygons.any():
+        polys = parts[polygons]
+        if tol > 0:
+            polys = _vectors.simplify(polys, tol)
+        paths, feature = _polygon_paths(polys, owner[polygons])
+        if paths:
+            from matplotlib.collections import PathCollection
+
+            ax.add_collection(PathCollection(paths, facecolors=rgba[which[feature]], edgecolors="#222222",
+                                             linewidths=0.5, alpha=opacity, zorder=3))
+    if lines.any():
+        from matplotlib.collections import LineCollection
+
+        ls_ = parts[lines]
+        if tol > 0:
+            ls_ = _vectors.simplify(ls_, tol)
+        xy, line = shapely.get_coordinates(ls_, return_index=True)
+        cut = np.flatnonzero(np.diff(line)) + 1
+        segs = np.split(xy, cut)
+        feature = owner[lines][line[np.r_[0, cut]]] if len(xy) else []
+        if segs and len(xy):
+            ax.add_collection(LineCollection(segs, colors=rgba[which[feature]], linewidths=1.0, alpha=opacity,
+                                             zorder=3))
+    if points.any():
+        xy = shapely.get_coordinates(parts[points])
+        ax.scatter(xy[:, 0], xy[:, 1], s=14, c=rgba[which[owner[points]]], edgecolors="#222222", linewidths=0.5,
+                   alpha=opacity, zorder=3)
+    ax.update_datalim([(x0, y0), (x1, y1)])
+    ax.autoscale_view()
+
+
+def _frame(geoms, crs):
+    import geopandas as gpd
+
+    return gpd.GeoDataFrame(geometry=gpd.GeoSeries(geoms, crs=crs))
+
+
+def _polygon_paths(polys, owner):
+    """A compound path per feature (its polygons and their holes) and the feature of each path. Matplotlib
+    fills by the non-zero rule: holes are turned against their exterior."""
+    import shapely
+    from matplotlib.path import Path as MplPath
+
+    rings, poly_of_ring = shapely.get_rings(polys, return_index=True)
+    xy, ring_of = shapely.get_coordinates(rings, return_index=True)
+    if not len(xy):
+        return [], np.array([], np.int64)
+    n_rings = len(rings)
+    start = np.searchsorted(ring_of, np.arange(n_rings))
+    stop = np.r_[start[1:], len(xy)]
+    exterior = np.r_[True, poly_of_ring[1:] != poly_of_ring[:-1]]
+    flip = shapely.is_ccw(rings) != exterior  # exteriors anticlockwise, holes clockwise
+    if flip.any():
+        r = ring_of
+        i = np.arange(len(xy))
+        xy = xy[np.where(flip[r], start[r] + stop[r] - 1 - i, i)]
+    codes = np.full(len(xy), MplPath.LINETO, np.uint8)
+    codes[start] = MplPath.MOVETO
+    codes[stop - 1] = MplPath.CLOSEPOLY
+    feature_of_vertex = owner[poly_of_ring[ring_of]]
+    cut = np.r_[0, np.flatnonzero(np.diff(feature_of_vertex)) + 1, len(xy)]
+    paths = [MplPath(xy[a:b], codes[a:b]) for a, b in itertools.pairwise(cut)]
+    return paths, feature_of_vertex[cut[:-1]]
 
 
 # --- the furniture of a map: coordinates, scale bar, north arrow -------------------------------------------

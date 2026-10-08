@@ -52,7 +52,11 @@ def run(label, obj, **kw):
     for _ in range(REPS):
         t0 = time.perf_counter()
         p = ls.plot(obj, **kw)
-        html = p.to_html()
+        html = p.to_html()  # a static figure: drawn as a PNG in the page
+        if p.figure is not None:
+            import matplotlib.pyplot as plt
+
+            plt.close(p.figure)
         best = min(best, time.perf_counter() - t0)
     print(f"{label:42s} {best:7.2f} s   html {len(html) / 1e6:6.1f} MB", flush=True)
 
@@ -85,6 +89,7 @@ if "all" in cases or "vector" in cases:
         polys = gpd.GeoDataFrame({"v": rng.random(n), "cat": rng.integers(0, 8, n).astype(str)}, crs=32633,
                                  geometry=shapely.buffer(shapely.points(cx, cy), rng.uniform(50, 400, n), quad_segs=4))
         run(f"{n} polygons, numeric column", polys, column="v")
+        run(f"{n} polygons, static figure", polys, column="v", static=True, basemap=None)
     for n in (200_000, 2_000_000):
         pts = gpd.GeoDataFrame({"v": rng.random(n)}, crs=32633,
                                geometry=gpd.points_from_xy(rng.uniform(500000, 800000, n),

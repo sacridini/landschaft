@@ -17,6 +17,8 @@ from . import _env
 MAX_LAYERS = 16
 #: Bands of a stack drawn as layers (the others are left out, with a note).
 MAX_BANDS = 128
+#: Pixels of all the bands of a stack on a map together (each band at least 512 on its long side).
+STACK_PIXELS = 16_000_000
 
 _RGB_NAMES = ({"r", "g", "b"}, {"red", "green", "blue"}, {"b4", "b3", "b2"})
 
@@ -267,8 +269,8 @@ def _map_layers(items, opts):
             if len(idx) > MAX_BANDS:
                 notes.append(f"{name}: the first {MAX_BANDS} of {len(idx)} bands are drawn (bands= to choose)")
                 idx = idx[:MAX_BANDS]
-            # the more bands, the coarser each (the page holds them all)
-            size = opts["max_size"] if len(idx) <= 4 else max(512, opts["max_size"] // (2 if len(idx) <= 64 else 4))
+            # the more bands, the coarser each: the page holds them all, at most STACK_PIXELS together
+            size = min(opts["max_size"], max(512, int((STACK_PIXELS / len(idx)) ** 0.5)))
             # one scale for every band of a stack, unless given
             vmin, vmax = opts.get("vmin"), opts.get("vmax")
             if vmin is None and vmax is None and np.issubdtype(da.dtype, np.floating):

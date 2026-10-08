@@ -156,7 +156,7 @@ def layer(gdf, *, column=None, cmap=None, categorical=None, color: str = "#ffd60
     kinds = set(gdf.geometry.geom_type)
     geoms = gdf.geometry.values
     if tol > 0 and kinds - {"Point", "MultiPoint"}:
-        geoms = shapely.simplify(geoms, tol, preserve_topology=True)
+        geoms = simplify(geoms, tol)
     keep = [c for c in gdf.columns if c != gdf.geometry.name][:MAX_TOOLTIP] if tooltip else []
     props = gdf[keep].copy()
     for c in keep:  # JSON-friendly values
@@ -173,35 +173,79 @@ def layer(gdf, *, column=None, cmap=None, categorical=None, color: str = "#ffd60
     return "geojson", gj, legend
 
 
+def simplify(geoms, tol: float):
+    """Geometries simplified to ``tol`` for drawing: Douglas-Peucker without keeping their topology
+    (6 to 20 times faster; a ring may cross itself by less than ``tol``, which no one sees); the
+    features it would leave empty (smaller than ``tol``) simplified keeping their topology, so that
+    they are still there when zoomed in."""
+    import shapely
+
+    geoms = np.asarray(geoms, dtype=object)
+    out = shapely.simplify(geoms, tol, preserve_topology=False)
+    lost = shapely.is_empty(out) & ~shapely.is_empty(geoms)
+    if lost.any():
+        out[lost] = shapely.simplify(geoms[lost], tol, preserve_topology=True)
+    return out
+
+
 def _as_image(gdf, codes, palette, color, opacity, name, max_size, legend) -> Image:
     """Very many features burnt into an image at the screen's resolution (Web Mercator, reprojected once)."""
-    import geopandas as gpd
     import shapely
+
+    if set(np.unique(shapely.get_type_id(gdf.geometry.values))) == {0}:  # points: their coordinates only
+        xy = shapely.get_coordinates(gdf.geometry.values)
+        x, y = xy[:, 0], xy[:, 1]
+        if gdf.crs is not None:
+            x, y = transform_xy(x, y, gdf.crs)
+        burnt, colours, extent = burn_points(x, y, codes, palette, color, max_size)
+    else:
+        burnt, colours, extent = burn(to_web_mercator(gdf), codes, palette, color, max_size)
+    return _image(burnt, colours, legend, name, opacity, extent)
+
+
+def _colour_values(n, codes, palette, color):
+    """The colours of an image of features and each feature's 1-based index into them (0: no feature)."""
+    if codes is None:
+        return [color], np.ones(n, np.int64)
+    return palette + [_MISSING], np.where(codes < 0, len(palette), codes) + 1
+
+
+def burn(gdf, codes, palette, color, max_size):
+    """Features burnt into a grid of at most ``max_size`` cells on the long side, in their own CRS
+    (C++ rasterisation, every cell touched): (1-based colour indices, the colours, the grid's extent)."""
+    import geopandas as gpd
     import xarray as xr
     from rasterio.transform import from_origin
 
     from .._vector import rasterize
     from ..io import _with_georef
 
-    if set(np.unique(shapely.get_type_id(gdf.geometry.values))) == {0}:  # points: their coordinates only
-        return _points_image(gdf, codes, palette, color, opacity, name, max_size, legend)
-    merc = to_web_mercator(gdf)
-    x0, y0, x1, y1 = merc.total_bounds
+    x0, y0, x1, y1 = gdf.total_bounds
     size = max(x1 - x0, y1 - y0) / max_size or 1.0
     w, h = max(1, math.ceil((x1 - x0) / size)), max(1, math.ceil((y1 - y0) / size))
     t = from_origin(x0, y1, size, size)
     x = x0 + size * (np.arange(w) + 0.5)
     y = y1 - size * (np.arange(h) + 0.5)
     like = xr.DataArray(np.zeros((h, w), np.uint8), coords={"y": y, "x": x}, dims=("y", "x"))
-    like = _with_georef(like, crs="EPSG:3857", transform=t)
-    if codes is None:
-        colours, values = [color], np.ones(len(merc), np.int64)
-    else:
-        colours = palette + [_MISSING]
-        values = np.where(codes < 0, len(palette), codes) + 1  # 1-based: 0 is no feature
-    frame = gpd.GeoDataFrame({"__k": values}, geometry=merc.geometry.values, crs=merc.crs)
+    like = _with_georef(like, crs=gdf.crs, transform=t)
+    colours, values = _colour_values(len(gdf), codes, palette, color)
+    frame = gpd.GeoDataFrame({"__k": values}, geometry=gdf.geometry.values, crs=gdf.crs)
     burnt = np.asarray(rasterize(frame, like, field="__k", all_touched=True, dtype="uint16"))
-    return _image(burnt, colours, legend, name, opacity, (x0, y1 - size * h, x0 + size * w, y1))
+    return burnt, colours, (x0, y1 - size * h, x0 + size * w, y1)
+
+
+def burn_points(x, y, codes, palette, color, max_size):
+    """Points burnt into a grid as :func:`burn` does, the cell of every point found directly (the last
+    point of a cell drawn)."""
+    x0, x1, y0, y1 = float(np.min(x)), float(np.max(x)), float(np.min(y)), float(np.max(y))
+    size = max(x1 - x0, y1 - y0) / max_size or 1.0
+    w, h = max(1, math.ceil((x1 - x0) / size)), max(1, math.ceil((y1 - y0) / size))
+    col = np.minimum(((x - x0) / size).astype(np.int64), w - 1)
+    row = np.minimum(((y1 - y) / size).astype(np.int64), h - 1)
+    colours, values = _colour_values(len(x), codes, palette, color)
+    pixels = np.zeros(h * w, np.uint16)
+    pixels[row * w + col] = values  # several points in a cell: one of them
+    return pixels.reshape(h, w), colours, (x0, y1 - size * h, x0 + size * w, y1)
 
 
 def _image(burnt, colours, legend, name, opacity, extent) -> Image:
@@ -222,32 +266,6 @@ def _image(burnt, colours, legend, name, opacity, extent) -> Image:
         pixels, palette_out = pal[burnt], None
     w_, s_, e_, n_ = transform_bounds("EPSG:3857", "EPSG:4326", *extent)
     return Image(pixels, ((s_, w_), (n_, e_)), legend, name, None, "EPSG:3857", extent, palette_out, opacity, lookup)
-
-
-def _points_image(gdf, codes, palette, color, opacity, name, max_size, legend) -> Image:
-    """Very many points as an image: their coordinates reprojected (no geometries made), the cell of
-    every point found directly, the last point of a cell drawn."""
-    import shapely
-
-    xy = shapely.get_coordinates(gdf.geometry.values)
-    x, y = xy[:, 0], xy[:, 1]
-    if gdf.crs is not None:
-        x, y = transform_xy(x, y, gdf.crs)
-    x0, x1, y0, y1 = float(np.min(x)), float(np.max(x)), float(np.min(y)), float(np.max(y))
-    size = max(x1 - x0, y1 - y0) / max_size or 1.0
-    w, h = max(1, math.ceil((x1 - x0) / size)), max(1, math.ceil((y1 - y0) / size))
-    col = np.minimum(((x - x0) / size).astype(np.int64), w - 1)
-    row = np.minimum(((y1 - y) / size).astype(np.int64), h - 1)
-    if codes is None:
-        colours, values = [color], np.ones(len(x), np.int64)
-    else:
-        colours = palette + [_MISSING]
-        values = np.where(codes < 0, len(palette), codes) + 1
-    flat = row * w + col
-    pixels = np.zeros(h * w, np.uint16)
-    pixels[flat] = values  # several points in a cell: one of them
-    return _image(pixels.reshape(h, w), colours, legend, name, opacity, (x0, y1 - size * h, x0 + size * w, y1))
-
 
 
 def transform_xy(x, y, src, dst="EPSG:3857"):

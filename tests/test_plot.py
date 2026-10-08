@@ -176,6 +176,8 @@ def test_vectors_as_geojson_or_image():
     assert '{"type":"FeatureCollection"' not in html and images(html)  # too many: an image
 
 
+
+
 def test_lists_of_anything():
     table = pd.Series([3, 1, 2], index=["a", "b", "c"], name="n")
     p = ls.plot([table, np.arange(5.0)])  # not maps: each part as it calls for
@@ -461,6 +463,71 @@ def test_static_vectors_take_the_map_colours():
     assert [t.get_text() for t in ax.get_legend().get_texts()] == ["oak", "pine"]
 
 
+
+def _pixels(fig):
+    fig.canvas.draw()
+    return np.asarray(fig.canvas.buffer_rgba())[..., :3]
+
+
+def _at(fig, ax, x, y):
+    """The colour drawn at a point of the data (the layout drawn first)."""
+    a = _pixels(fig)
+    px, py = ax.transData.transform((x, y))
+    return a[a.shape[0] - round(float(py)), round(float(px))].tolist()
+
+
+def test_static_vectors_holes_parts_lines_and_points():
+    pytest.importorskip("matplotlib")
+    import shapely
+    from shapely.geometry import LineString, MultiPolygon
+
+    donut = box(500000, 4490000, 510000, 4500000).difference(box(503000, 4493000, 507000, 4497000))
+    turned = shapely.Polygon(donut.exterior.coords[::-1], [donut.interiors[0].coords])  # both rings one way
+    parts = MultiPolygon([box(512000, 4490000, 514000, 4492000), box(515000, 4495000, 518000, 4498000)])
+    g = gpd.GeoDataFrame({"k": ["a", "b", "c", "d", "e"]}, crs=32633, geometry=[
+        donut, parts, LineString([(500000, 4502000), (518000, 4504000)]), Point(519000, 4491000),
+        shapely.affinity.translate(turned, 0, -12000)])
+    cmap = {"a": "#ff0000", "b": "#0000ff", "c": "#00ff00", "d": "#ff00ff", "e": "#00ffff"}
+    fig = ls.plot(g, column="k", cmap=cmap, opacity=1, static=True, basemap=None, scalebar=False,
+                  north_arrow=False).figure
+    ax = fig.axes[0]
+    assert _at(fig, ax, 501500, 4495000) == [255, 0, 0]  # the ring
+    assert _at(fig, ax, 505000, 4495000) == [255, 255, 255]  # its hole
+    assert _at(fig, ax, 505000, 4483000) == [255, 255, 255]  # the hole of a polygon turned the other way
+    assert _at(fig, ax, 501500, 4483000) == [0, 255, 255]
+    assert _at(fig, ax, 513000, 4491000) == [0, 0, 255] == _at(fig, ax, 516500, 4496500)  # both parts
+    assert {type(c).__name__ for c in ax.collections} == {"PathCollection", "LineCollection"}
+
+
+def test_static_vectors_very_many_are_an_image(monkeypatch):
+    pytest.importorskip("matplotlib")
+    from landschaft._plotting import _static
+
+    rng = np.random.default_rng(3)
+    polys = gpd.GeoDataFrame({"v": rng.random(300)}, crs=32633,
+                             geometry=[box(x, y, x + 500, y + 500) for x, y in
+                                       zip(rng.uniform(5e5, 6e5, 300), rng.uniform(4.4e6, 4.5e6, 300))])
+    fig = ls.plot(polys, column="v", static=True, basemap=None).figure
+    assert not fig.axes[0].images and fig.axes[0].collections
+    monkeypatch.setattr(_static, "MAX_FEATURES", 100)
+    fig = ls.plot(polys, column="v", static=True, basemap=None).figure
+    ax = fig.axes[0]
+    assert len(ax.images) == 1 and not ax.collections
+    x0, _, _, y1 = ax.images[0].get_extent()
+    assert x0 == pytest.approx(polys.total_bounds[0]) and y1 == pytest.approx(polys.total_bounds[3])
+
+
+def test_vectors_simplified_keep_their_small_features():
+    import shapely
+
+    from landschaft._plotting._vectors import simplify
+
+    geoms = np.array([shapely.Point(0, 0).buffer(100, quad_segs=32), shapely.Point(5000, 0).buffer(1)])
+    out = simplify(geoms, 10.0)
+    assert shapely.get_num_coordinates(out[0]) < shapely.get_num_coordinates(geoms[0])
+    assert not shapely.is_empty(out).any()  # the small circle is still there
+
+
 # --- stacks band by band, results of their own -------------------------------------------------------------
 
 
@@ -470,6 +537,18 @@ def test_a_stack_is_one_layer_with_a_band_slider():
     assert html.count("class='bands'") == 1 and "max='4'" in html and ">b0</span>" in html
     assert "LC.addOverlay(grp, g.t)" in html and '"b": ["b0", "b1", "b2", "b3", "b4"]' in html
 
+
+
+def test_the_bands_of_a_stack_share_a_budget_of_pixels(monkeypatch):
+    from landschaft._plotting import _core
+
+    stack = grid(np.random.default_rng(8).random((3, 1200, 1200)).astype("float32"))
+    side = lambda: max(_core._map_layers([("s", stack)], {"max_size": 2048})[0][0].items[0].pixels.shape)
+    assert side() >= 1200
+    monkeypatch.setattr(_core, "STACK_PIXELS", 3 * 600 * 600)
+    assert side() <= 610
+    monkeypatch.setattr(_core, "STACK_PIXELS", 3 * 100 * 100)
+    assert 395 <= side() <= 410  # never coarser than 512 cells: blocks of 3 x 3 (1200 / 512, up)
 
 def test_species_distribution_results():
     pytest.importorskip("sklearn")

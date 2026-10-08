@@ -135,8 +135,11 @@ one cell per block for classes, and a raster read lazily (`chunks="auto"`) is
 read reduced, in strips, or through its overviews when it has some. It is
 reprojected to Web Mercator once and written as an 8-bit PNG with a palette.
 Vector layers of up to 20 000 features go to the map as GeoJSON, simplified to
-half a pixel; larger ones are drawn as an image. A map of 100 million cells
-takes a fraction of a second; see [Benchmarks](../benchmarks.md#plotting).
+half a pixel; larger ones are drawn as an image. A static figure draws all the
+features of a layer at once (50 000 polygons in under a second) and burns more
+than 100 000 into an image. The bands of a stack share 16 million pixels, so a
+page of many bands stays light. A map of 100 million cells takes a fraction of
+a second; see [Benchmarks](../benchmarks.md#plotting).
 
 In tests and in scripts that only save plots, the environment variable
 `LANDSCHAFT_PLOT_SHOW=0` keeps windows from opening.
