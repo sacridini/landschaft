@@ -6,6 +6,20 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.33.1] - 2026-10-08
+
+### Fixed
+- `ls.plot` of polygons with over 20 000 features or a million vertices (Brazil's municipalities) failed with
+  "too many values to unpack": simplified without its topology, a ring that crosses itself is mended by GEOS
+  into a MultiPolygon, which the WebGL layer and static figures now take part by part.
+- Playing the bands of a stack (or moving its slider) while Python draws detail showed every band coarse,
+  then sharp: a band is now put on the map together with its detail, made ready beforehand (a frame of the
+  animation waits for it, 0 coarse frames instead of about a third). A detail replaces the one before it once
+  drawn, never leaving a gap, and a zoom asks for the detail of the view it goes to as it starts.
+- The detail of a view came in 0.3 s for a raster in a projection such as EPSG:10603 (Brazil's Albers): GDAL
+  set the transformation up again in every thread. Images of up to 4 million pixels are reprojected in one
+  thread: 0.06 to 0.1 s, within the zoom's animation. Around the view a quarter of it is asked for, not half.
+
 ## [1.33.0] - 2026-10-08
 
 ### Added
