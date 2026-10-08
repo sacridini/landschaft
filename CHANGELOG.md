@@ -6,6 +6,21 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.31.1] - 2026-10-08
+
+### Changed
+- `ls.plot(..., static=True)` draws a vector layer as one collection per kind of geometry, made from the
+  coordinates of all its features at once, instead of geopandas's patch per feature: 50 000 polygons in
+  0.76 s instead of 3.7 s. More than 100 000 features (or 2 million vertices) are burnt into an image at the
+  figure's resolution (C++ rasterisation), as on interactive maps. Holes are drawn whatever the orientation
+  of the rings.
+- Vector layers are simplified for drawing without keeping their topology (6 to 20 times faster; a feature
+  that would vanish is simplified keeping it, so small polygons are still there when zoomed in): 10 000
+  polygons on a map in 0.15 s instead of 0.24 s.
+- The bands of a stack on a map share 16 million pixels (each at least 512 on its long side), instead of a
+  fixed size per number of bands: a page of 47 bands of 1000 x 1000 is 14 MB instead of 54 MB, lighter in a
+  notebook.
+
 ## [1.31.0] - 2026-10-07
 
 ### Added
