@@ -6,6 +6,27 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.34.0] - 2026-10-08
+
+### Added
+- `ls.plot` of a stack (a time series) while Python draws detail: once the view rests, the other bands
+  are asked for ahead, the nearest first, eight at a time over threads (the 41 bands of a 5000 x 5000
+  MSPA series in 0.37 s of Python), so the band slider (even at a step every 16 ms) and the play button
+  show every band sharp at once: no coarse frame in the tests, forwards, backwards and after a pan. The
+  details of the bands seen are kept: decoded up to 256 MB (the bands around the one shown first), the
+  others as their PNG, decoded when shown.
+
+### Changed
+- Rasters are reprojected for maps once per grid: GDAL works out the source cell of every pixel (the
+  same pixels as before) and the bands of a stack, or images of the same grid, only look their pixels up
+  (C++): a stack of 47 bands in 0.56 s instead of 0.81 s, the 41 bands of the series above in 0.2 s
+  instead of 1.4 s.
+- The detail of a view is that view's pixels on the screen: their source cells worked out in C++ from
+  PROJ every 16 pixels and linear between, within a hundredth of a percent of PROJ pixel by pixel (GDAL's
+  approximate transformer was off at 3 to 6 % of the cells' edges), with PROJ's transformation made once
+  per CRS (setting up a CRS read from a file, such as EPSG:10603, took 50 ms, every time). A detail takes
+  15 to 40 ms instead of 65 to 300 ms.
+
 ## [1.33.2] - 2026-10-08
 
 ### Fixed
