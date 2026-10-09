@@ -6,6 +6,36 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- Management zones in `ls.prioritize` (prioritizr's zones): every planning unit goes to at most one of
+  several zones (strict protection, sustainable use, restoration...), each with its own cost and its own
+  contribution to the features. `problem()` takes the zones' costs (a mapping zone -> raster, a raster with
+  a band per zone, or a mapping zone -> cost column for tables and polygons) and either the features once
+  with a `contribution=` per zone (a number, one per feature, or a raster / column of factors) or every
+  zone's own features (a mapping, prioritizr's `zones()`); Marxan-style tables take a `zone` column and a
+  `zones=` table. Targets are summed over the zones by default (`add_relative_targets(0.3)`: 30% of every
+  feature's total, its amounts counted by their zone's contribution); `zone=` adds targets of one zone or a
+  list of zones, a features x zones matrix gives every zone its own targets, and `add_manual_targets`
+  takes a `zone` column (a zone or a list). `add_mandatory_allocation_constraints()`, locked units per zone
+  (a mapping zone -> units, or a raster with a band per zone), manual bounded and locked constraints with
+  a `zone` column (or `zone=`), binary, proportion and semicontinuous decisions. The compiled model is
+  prioritizr 8.0.6's `compile()` bit for bit (13 reference cases: 2 and 3 zones, rasters, tables, polygons,
+  Marxan tables, costs missing in some zones) and the solver reaches prioritizr's optimum on Gurobi. The
+  solution has `values` (units x zones), a layer per zone (`selection`), the zone of every unit (`zones`, a
+  map of zone numbers or a column of names), `zone_costs` and the coverage per target with its zones.
+  `category_layer` and `binary_stack` convert between zone maps and stacks of zone layers (for example to
+  lock an existing zoning plan). This first part covers the minimum set objective on HiGHS's MIP and Gurobi;
+  the other objectives, spatial penalties, Landschaft's own engines and the evaluations follow.
+- The feature matrix of raster planning units builds every zone's layers in one pass in C++ (the features
+  times each zone's constant or per-cell contribution, in parallel over the layers).
+- Reference group `zones` (tools/make_reference_optimize.py) and three zone families in
+  tools/benchmark_optimize.py (`zones_minset`, `zones_maxutil`, `zones_boundary`), with the built-in HiGHS
+  as a solver (`builtin`).
+
+### Fixed
+- prioritizr's manual bounded and locked constraints open a zone where a unit has no cost (at cost 0):
+  with zones, Landschaft keeps such a unit out of the zone, and a lower bound above 0 there is an error.
+
 ## [1.37.0] - 2026-10-09
 
 ### Added

@@ -12,6 +12,7 @@ import pandas as pd
 import xarray as xr
 
 from .._save import Saveable
+from ._zones import one_zone
 
 __all__ = ["PrioritizationReport", "ZonationComparison", "coarsen", "compare_zonation", "refine", "report",
            "sdm_features"]
@@ -85,6 +86,7 @@ def compare_zonation(p, solution=None, zonation=None, rule: str = "CAZ2", n_thre
     >>> bool(c.table["milp_met"].all())
     True
     """
+    one_zone(p, "compare_zonation")
     from ._milp_eval import (
         _values,
         eval_boundary_summary,
@@ -180,6 +182,7 @@ def report(p, solution=None, *, importance: bool = True, zonation: bool = False,
     ['representation', 'summary', 'targets']
     >>> page = ls.plot(r, show=False).save("report.html")
     """
+    one_zone(p, "report")
     from ._milp_compile import NO_TARGETS
     from ._milp_eval import (
         eval_boundary_summary,

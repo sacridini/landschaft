@@ -18,6 +18,8 @@ import pandas as pd
 import scipy.sparse as sp
 import xarray as xr
 
+from ._zones import one_zone
+
 __all__ = [
     "eval_asym_connectivity_summary",
     "eval_boundary_summary",
@@ -152,6 +154,7 @@ def eval_n_summary(p, solution) -> pd.DataFrame:
        summary      n
     0  overall  534.0
     """
+    one_zone(p, "eval_n_summary")
     return pd.DataFrame({"summary": ["overall"], "n": [_r_sum(_values(p, solution))]})
 
 
@@ -169,6 +172,7 @@ def eval_cost_summary(p, solution) -> pd.DataFrame:
     >>> round(P.eval_cost_summary(p, sol)["cost"].item(), 1) == round(sol.cost, 1)
     True
     """
+    one_zone(p, "eval_cost_summary")
     s = _values(p, solution)
     return pd.DataFrame({"summary": ["overall"], "cost": [_r_sum(p.units.cost * s)]})
 
@@ -192,6 +196,7 @@ def eval_boundary_summary(p, solution, edge_factor: float = 0.5, data=None) -> p
        summary  boundary
     0  overall  382500.0
     """
+    one_zone(p, "eval_boundary_summary")
     from .. import _core
     from ._milp_matrices import boundary_matrix
     from ._milp_spatial import r_round
@@ -261,6 +266,7 @@ def eval_connectivity_summary(p, solution, data) -> pd.DataFrame:
     >>> round(P.eval_connectivity_summary(p, sol, cm)["connectivity"].item(), 2)
     1276348.0
     """
+    one_zone(p, "eval_connectivity_summary")
     return pd.DataFrame({"summary": ["overall"], "connectivity": [_connectivity(p, solution, data, False)]})
 
 
@@ -281,6 +287,7 @@ def eval_asym_connectivity_summary(p, solution, data) -> pd.DataFrame:
     >>> round(P.eval_asym_connectivity_summary(p, sol, asym)["asym_connectivity"].item(), 2)
     638174.0
     """
+    one_zone(p, "eval_asym_connectivity_summary")
     return pd.DataFrame({"summary": ["overall"], "asym_connectivity": [_connectivity(p, solution, data, True)]})
 
 
@@ -320,6 +327,7 @@ def eval_feature_representation_summary(p, solution) -> pd.DataFrame:
     6     araucaria_forest          0.428
     7             mangrove          0.210
     """
+    one_zone(p, "eval_feature_representation_summary")
     u = p.units
     held = _held(p, _values(p, solution))
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -344,6 +352,7 @@ def eval_target_coverage_summary(p, solution, include_sense: bool = False) -> pd
     >>> bool(cov["met"].all())
     True
     """
+    one_zone(p, "eval_target_coverage_summary")
     from .. import _core
     from ._milp_compile import NO_TARGETS, compile_problem
 
@@ -404,6 +413,7 @@ def eval_extinction_risk(p, solution, z=0.25) -> pd.DataFrame:
     >>> round(float(risk["extinction_risk"].iloc[-1]), 3)
     2.423
     """
+    one_zone(p, "eval_extinction_risk")
     rep = eval_feature_representation_summary(p, solution)
     z = np.broadcast_to(np.asarray(z, dtype=np.float64), (len(rep),))
     rel = np.clip(np.nan_to_num(rep["relative_held"].to_numpy(dtype=np.float64)), 0.0, 1.0)
@@ -444,6 +454,7 @@ def eval_ferrier_importance(p, solution):
     >>> float(fi.sel(band="total").max()) > 0
     True
     """
+    one_zone(p, "eval_ferrier_importance")
     from .. import _core
     from ._milp_compile import NO_TARGETS, compile_problem
 
@@ -491,6 +502,7 @@ def eval_rare_richness_importance(p, solution, rescale: bool = True):
     >>> float(rwr.max())
     1.0
     """
+    one_zone(p, "eval_rare_richness_importance")
     u = p.units
     s = _values(p, solution)
     sel = _selected(s)
@@ -538,6 +550,7 @@ def eval_replacement_importance(p, solution, rescale: bool = True, n_threads: in
     >>> float(rc.max())
     1.0
     """
+    one_zone(p, "eval_replacement_importance")
     from concurrent.futures import ThreadPoolExecutor
 
     from .. import _threads
@@ -632,6 +645,7 @@ def eval_rank_importance(p, solution, n: int | None = None, budgets=None, rescal
     2  17695.4  optimal
     3  23593.9  optimal
     """
+    one_zone(p, "eval_rank_importance")
     from ._milp import OptimizationProblem
     from ._milp_compile import compile_problem
 
@@ -724,6 +738,7 @@ def eval_landscape_metrics(solution, level: str | None = "class", metric=None, *
     0     ca  53400.0
     1     np     13.0
     """
+    one_zone(solution, "eval_landscape_metrics")
     from .. import lsm
 
     m = _selection_map(solution)
@@ -750,6 +765,7 @@ def eval_mspa(solution, **kw):
     >>> int(areas.loc["Core", "pixels"]) >= 0
     True
     """
+    one_zone(solution, "eval_mspa")
     import landschaft as ls
 
     m = _selection_map(solution)

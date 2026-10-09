@@ -19,10 +19,19 @@ namespace opt {
 
 class FeatureMatrix {
 public:
-    explicit FeatureMatrix(std::int64_t layers);
+    // features: the features per zone (add_scaled); 0 = layers (one zone)
+    explicit FeatureMatrix(std::int64_t layers, std::int64_t features = 0);
 
     // values: layers x n (row-major), the next n cells; unit: the planning unit of each cell (-1: none)
     void add(const double* values, std::int64_t n, const std::int64_t* unit, int threads);
+
+    // management zones: the layers are zone after zone, each the same features times the zone's
+    // contribution (layer z * features + f = values[f] * factor). values: features x n (row-major);
+    // scale: zones x n (row-major) per-cell factors, or null for the constant factors scalar[layer]; a
+    // zone with has_scale[z] = 0 takes the constant factors even when scale is given. Every product is formed in double,
+    // as terra multiplies two rasters, then treated as add() treats a value.
+    void add_scaled(const double* values, std::int64_t n, const std::int64_t* unit, const double* scale,
+                    const double* scalar, const std::uint8_t* has_scale, int threads);
 
     std::int64_t layers() const { return static_cast<std::int64_t>(totals_.size()); }
     const std::vector<double>& totals() const { return totals_; }
@@ -31,6 +40,7 @@ public:
     void csr(std::vector<std::int64_t>& start, std::vector<std::int64_t>& index, std::vector<double>& value) const;
 
 private:
+    std::int64_t nfeatures_;
     std::vector<double> totals_;
     std::vector<std::vector<std::int64_t>> index_;
     std::vector<std::vector<double>> value_;

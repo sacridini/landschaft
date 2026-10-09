@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 from .._save import Saveable
 from ._milp import OptimizationProblem, Units
@@ -200,8 +201,9 @@ def _wide_then_subset(m: OptimizationProblem, sm, gap: float, time_limit: float,
 
 
 def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.ndarray | None = None,
-                n_units: int | None = None) -> dict:
-    """Solve a compiled model on a solver; the result's status, solution and bounds."""
+                n_units: int | None = None, engines: bool = True) -> dict:
+    """Solve a compiled model on a solver; the result's status, solution and bounds. ``engines``: False
+    solves on HiGHS's own MIP, without landschaft's engines (the models with zones, until they take them)."""
     from .. import _threads
 
     gap = float(options.get("gap", 0.1))
@@ -209,7 +211,9 @@ def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.nd
     time_limit = math.inf if tl is None else float(tl)
     threads = _threads.resolve(options.get("n_threads"))
     verbose = bool(options.get("verbose", False))
-    if solver == "highs":
+    if solver == "highs" and not engines:
+        r = _highs(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start)
+    elif solver == "highs":
         r = _highs_or_cut(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start, n_units)
     elif solver == "gurobi":
         r = _gurobi(m, gap, time_limit, threads, verbose, start)
@@ -237,8 +241,18 @@ class Solution(Saveable):
         The selected share of every planning unit (1 / 0 with binary
         decisions): a raster on the planning units' grid (NaN outside the
         planning units) or a copy of their table with a ``solution`` column.
+        With zones: a raster with a layer per zone (dimension ``zone``; NaN
+        where a unit has no cost in the zone), or a column ``solution_<zone>``
+        per zone and a ``zone`` column with the name of the unit's zone.
     values
-        The same, one value per planning unit (in their order).
+        The same, one value per planning unit (in their order); with zones,
+        planning units x zones.
+    zones
+        With zones: the zone of every planning unit as a raster of zone
+        numbers (1, 2, ... in the order of ``zone_names``; 0: none; NaN
+        outside the planning units; the names in ``attrs["zones"]``), or a
+        column of zone names. With shares (proportion decisions), the zone
+        with the largest share.
     coverage
         Every target's feature, sense, the feature's total amount, the target,
         the amount held and the shortfall, absolute and relative, and whether
@@ -265,18 +279,32 @@ class Solution(Saveable):
     status: str = ""
     solver: str = ""
     seconds: float = 0.0
+    zone_names: tuple = ()
+    zones: object = field(default=None, repr=False)
 
     @property
     def cost(self) -> float:
-        """Total cost of the selection."""
-        return float(self._cost @ self.values)
+        """Total cost of the selection (over every zone)."""
+        v = self.values.T.ravel() if self.values.ndim == 2 else self.values
+        return float(self._cost @ v)
+
+    @property
+    def zone_costs(self) -> dict:
+        """With zones: the cost of the selection in every zone."""
+        if not self.zone_names:
+            raise ValueError("the problem has no zones")
+        c = self._cost.reshape(len(self.zone_names), -1)
+        return {z: float(c[k] @ self.values[:, k]) for k, z in enumerate(self.zone_names)}
 
     _cost: np.ndarray = field(default=None, repr=False)
 
     def _save_items(self) -> dict:
-        return {"selection": self.selection, "coverage": self.coverage, "objective": self.objective,
-                "bound": self.bound, "gap": self.gap, "status": self.status, "solver": self.solver,
-                "seconds": self.seconds, "cost": self.cost}
+        out = {"selection": self.selection, "coverage": self.coverage, "objective": self.objective,
+               "bound": self.bound, "gap": self.gap, "status": self.status, "solver": self.solver,
+               "seconds": self.seconds, "cost": self.cost}
+        if self.zone_names:
+            out["zones"] = self.zones
+        return out
 
 
 def _selection(u: Units, values: np.ndarray):
@@ -293,8 +321,47 @@ def _selection(u: Units, values: np.ndarray):
     return t
 
 
+def zone_selection(u: Units, values: np.ndarray):
+    """The selection of a problem with zones (values: units x zones): a layer per zone or a column per zone,
+    and the zone of every unit (a raster of zone numbers or a column of names)."""
+    nz = u.nz
+    closed = ~np.isfinite(u.cost.reshape(nz, -1).T)
+    shown = np.where(closed, np.nan, values)
+    picked = np.nanmax(np.where(closed, -np.inf, values), axis=1) > 0
+    code = np.where(picked, np.argmax(np.where(closed, -np.inf, values), axis=1) + 1, 0)
+    if u.kind == "raster":
+        ny, nx = u.template.shape
+        out = np.full((nz, ny * nx), np.nan)
+        out[:, u.index] = shown.T
+        dims = u.template.dims
+        da = xr.DataArray(out.reshape(nz, ny, nx), dims=("zone", *dims),
+                          coords={"zone": list(u.zone_names), **{d: u.template[d] for d in dims if d in u.template.coords}},
+                          name="solution")
+        crs = u.template.rio.crs
+        if crs is not None:
+            da = da.rio.write_crs(crs)
+        zmap = np.full(ny * nx, np.nan)
+        zmap[u.index] = code
+        zones = u.template.copy(data=zmap.reshape(ny, nx))
+        zones.name = "zone"
+        zones.attrs = {**zones.attrs, "zones": {k + 1: z for k, z in enumerate(u.zone_names)}}
+        return da, zones
+    t = u.template.copy()
+    for k, z in enumerate(u.zone_names):
+        col = np.full(len(t), np.nan)
+        col[u.index] = shown[:, k]
+        t[f"solution_{z}"] = col
+    names = np.array([None, *u.zone_names], dtype=object)
+    zcol = np.full(len(t), None, dtype=object)
+    zcol[u.index] = names[code]
+    t["zone"] = zcol
+    return t, t["zone"].copy()
+
+
 def coverage_table(u: Units, values: np.ndarray, targets=None, m: OptimizationProblem | None = None) -> pd.DataFrame:
     """prioritizr's target coverage summary: one row per target (per feature, without targets)."""
+    if u.zoned:
+        return _zone_coverage(u, values, targets)
     if targets is None or targets.sense[:1] == ("?",):  # objectives without targets
         held = u.rij @ values
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -325,9 +392,45 @@ def coverage_table(u: Units, values: np.ndarray, targets=None, m: OptimizationPr
     return out
 
 
+def _zone_coverage(u: Units, values: np.ndarray, targets) -> pd.DataFrame:
+    """The coverage of the targets of a problem with zones (values: the unit columns, zone after zone): one
+    row per target with its zones; without targets, every feature in every zone."""
+    held = targets.matrix @ values
+    sense = np.asarray(targets.sense)
+    total = targets.total
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rel = np.where(total != 0, held / total, np.nan)
+    if sense[:1].tolist() == ["?"]:
+        return pd.DataFrame({"feature": [u.feature_names[k] for k in targets.feature], "zone": list(targets.zone_label),
+                             "total_amount": total, "absolute_held": held, "relative_held": rel})
+    target = targets.value
+    shortfall = np.where(sense == ">=", np.maximum(target - held, 0.0),
+                         np.where(sense == "<=", np.maximum(held - target, 0.0), np.abs(held - target)))
+    tol = 1e-9 * np.maximum(1.0, np.abs(target))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rel_target = np.where(total != 0, target / total, np.nan)
+        rel_short = np.where(total != 0, shortfall / total, np.nan)
+    return pd.DataFrame({
+        "feature": [u.feature_names[k] for k in targets.feature], "zone": list(targets.zone_label), "sense": sense,
+        "total_amount": total, "absolute_target": target, "absolute_held": held, "absolute_shortfall": shortfall,
+        "relative_target": rel_target, "relative_held": rel, "relative_shortfall": rel_short, "met": shortfall <= tol,
+    })
+
+
 def make_solution(u: Units, m: OptimizationProblem, r: dict, targets=None) -> Solution:
     if not r["has_solution"]:
         raise RuntimeError(f"no solution ({r['solver']}: {r['status']})")
+    if u.zoned:
+        ncol = u.cost.size
+        x = np.asarray(r["x"], dtype=np.float64)[:ncol]
+        integer = np.isin(np.asarray(m.vtype[:ncol]), ("B", "I"))
+        x = np.where(integer, np.round(x), x)
+        values = x.reshape(u.nz, u.n).T.copy()
+        selection, zones = zone_selection(u, values)
+        return Solution(selection=selection, values=values, coverage=coverage_table(u, x, targets, m),
+                        objective=float(r["objective"]), bound=float(r["bound"]), gap=float(r["gap"]),
+                        status=r["status"], solver=r["solver"], seconds=float(r["seconds"]),
+                        zone_names=u.zone_names, zones=zones, _cost=np.where(np.isfinite(u.cost), u.cost, 0.0))
     values = np.asarray(r["x"], dtype=np.float64)[: u.n]
     integer = np.isin(np.asarray(m.vtype[: u.n]), ("B", "I"))
     values = np.where(integer, np.round(values), values)

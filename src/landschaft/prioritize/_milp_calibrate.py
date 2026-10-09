@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from .._save import Saveable
+from ._zones import one_zone
 
 __all__ = ["TradeOffs", "calibrate", "calibrate_budget", "calibrate_penalty", "cohon_penalty", "iterative_solve",
            "knee_point", "mean_sd", "pareto_front", "protected_cells", "topsis"]
@@ -253,6 +254,7 @@ def cohon_penalty(p, penalty: str = "boundary", data=None, edge_factor: float = 
     >>> list(ideals.columns)
     ['solution', 'cost', 'boundary']
     """
+    one_zone(p, "cohon_penalty")
     if p.objective is None or p.objective[0] != "min_set":
         raise ValueError("cohon_penalty needs a min set problem (without the penalty)")
     solver, opts = p.solver
@@ -294,6 +296,7 @@ def calibrate_penalty(p, penalty: str = "boundary", values=None, n: int = 9, dat
     2  0.100  optimal
     >>> best = cal.best("topsis")
     """
+    one_zone(p, "calibrate_penalty")
     if values is None:
         c, _ = cohon_penalty(p, penalty, data, edge_factor)
         if c <= 0:
@@ -329,6 +332,7 @@ def calibrate_budget(p, penalty: str = "boundary", thresholds=None, inflation=No
     >>> bool((cal.table["cost"] <= cal.table["value"] + 1e-6).all())
     True
     """
+    one_zone(p, "calibrate_budget")
     if p.objective is None or p.objective[0] != "min_set":
         raise ValueError("calibrate_budget needs a min set problem (without the penalty)")
     if thresholds is None:
@@ -369,6 +373,7 @@ def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> 
     2    2       True
     3    8       True
     """
+    one_zone(p, "pareto_front")
     from ._milp_eval import eval_target_coverage_summary
 
     if p.targets is None and p.subregional is None:
@@ -448,6 +453,7 @@ def iterative_solve(p, update, steps: int, lock_previous: bool = False):
     >>> bool(table["cost"].is_monotonic_increasing)
     True
     """
+    one_zone(p, "iterative_solve")
     if int(steps) != steps or steps < 1:
         raise ValueError("steps must be a whole number >= 1")
     sols, rows = [], []
@@ -485,6 +491,7 @@ def protected_cells(solution):
     >>> mask.dtype.name
     'bool'
     """
+    one_zone(solution, "protected_cells")
     sel = solution.selection
     if not hasattr(sel, "dims") or sel.ndim < 2:
         raise ValueError("protected_cells needs a solution on raster planning units")

@@ -15,7 +15,7 @@ rows, columns, coefficients, bounds and right-hand sides.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -91,10 +91,27 @@ class Units:
     features: object = None  # the feature rasters (raster and polygon units), for a Zonation start
     all_rij: object = None  # tables and polygons: features x every row, cost or not (sub-regional totals)
     r_sums: bool = False  # totals are R's sum() (tables of feature columns: colSums), not a double sum
+    # management zones (empty: one zone). With zones, cost and rij run over the columns of every zone, zone
+    # after zone (column z * n + i; cost NaN: the unit cannot go to the zone), totals is features x zones,
+    # zone_rij every zone's features x units and base_totals the totals that targets summed over zones are
+    # shares of (the base features of the contributions; None with every zone's own features)
+    zone_names: tuple[str, ...] = ()
+    zone_rij: tuple = ()
+    base_totals: object = None
+
+    @property
+    def nz(self) -> int:
+        """The number of zones (1 without zones)."""
+        return max(1, len(self.zone_names))
 
     @property
     def n(self) -> int:
-        return self.cost.size
+        """The number of planning units."""
+        return self.cost.size // self.nz
+
+    @property
+    def zoned(self) -> bool:
+        return len(self.zone_names) > 0
 
 
 def _sequential_sum(v: np.ndarray) -> float:
@@ -397,8 +414,8 @@ def _check_bounds_table(data, value_cols: tuple[str, ...]) -> pd.DataFrame:
         raise ValueError(f"{what}: 'pu' must hold whole numbers from 1 (1-based unit indices)")
     if value_cols == ("lower", "upper") and (d["upper"] < d["lower"]).any():
         raise ValueError(f"{what}: an upper bound is below its lower bound")
-    if "zone" in d.columns and d["zone"].nunique() > 1:
-        raise ValueError(f"{what}: zones are not supported (one zone only)")
+    if "zone" in d.columns:
+        d["zone"] = d["zone"].astype(str)
     return d
 
 
@@ -448,10 +465,19 @@ class Problem:
     subregional: tuple | None = None
     spatial: tuple = ()  # ("penalty" | "constraint", kind, ...) in the order added
     portfolio: tuple | None = None  # (kind, options)
+    # management zones: targets of given zones, ((zone, ...), kind, per-feature values) in the order added
+    zone_targets: tuple = ()
+    mandatory: bool = False  # every planning unit goes to a zone (add_mandatory_allocation_constraints)
+
+    @property
+    def zones(self) -> tuple[str, ...]:
+        """The names of the management zones (empty without zones)."""
+        return self.units.zone_names
 
     def __repr__(self) -> str:
         u = self.units
-        return (f"Problem({u.kind}, {u.n:,} planning units, {len(u.feature_names)} features; "
+        zones = f", {u.nz} zones {list(u.zone_names)}" if u.zoned else ""
+        return (f"Problem({u.kind}, {u.n:,} planning units{zones}, {len(u.feature_names)} features; "
                 f"objective={self.objective and self.objective[0]}, targets={self.targets and self.targets[0]}, "
                 f"decisions={self.decisions[0]}, solver={self.solver[0]})")
 
@@ -529,23 +555,54 @@ class Problem:
         return self._with(objective=("min_penalties", _budget(budget)))
 
     # --- targets
-    def add_relative_targets(self, targets) -> Problem:
-        """Targets as shares (0-1) of every feature's total amount (one value or one per feature)."""
-        return self._with(targets=("relative", self._per_feature(targets)))
+    def add_relative_targets(self, targets, zone=None) -> Problem:
+        """Targets as shares (0-1) of every feature's total amount (one value or one per feature).
 
-    def add_absolute_targets(self, targets) -> Problem:
-        """Targets as amounts of every feature (one value or one per feature)."""
-        return self._with(targets=("absolute", self._per_feature(targets)))
+        With zones, the targets are met by the sum over the zones of the features' amounts in them,
+        each counted by its zone's contribution: a share of the feature's total (the base features
+        of the contributions; with every zone's own features, the sum of its totals in the zones, as
+        prioritizr). ``zone``: targets of one zone (shares of the feature's total in that zone) or of a
+        list of zones, added to the others (targets of the same zones replace the earlier ones). A
+        matrix (features x zones) gives every zone its own targets (prioritizr's form).
+        """
+        return self._targets("relative", targets, zone)
+
+    def add_absolute_targets(self, targets, zone=None) -> Problem:
+        """Targets as amounts of every feature (one value or one per feature); ``zone`` as in
+        :meth:`add_relative_targets`."""
+        return self._targets("absolute", targets, zone)
+
+    def _targets(self, kind: str, targets, zone) -> Problem:
+        if zone is None:
+            return self._with(targets=(kind, self._per_feature(targets)))
+        from ._zones import zone_key
+
+        key = zone_key(self.units, zone)
+        a = np.asarray(targets, dtype=np.float64)
+        if a.ndim > 1:
+            raise ValueError("targets of given zones: one value or one per feature")
+        new = (key, kind, self._per_feature(a))
+        keys = [t[0] for t in self.zone_targets]
+        if key in keys:  # the same zones: replaced where they were
+            k = keys.index(key)
+            return self._with(zone_targets=(*self.zone_targets[:k], new, *self.zone_targets[k + 1:]))
+        return self._with(zone_targets=(*self.zone_targets, new))
 
     def add_manual_targets(self, targets: pd.DataFrame) -> Problem:
         """Targets from a table, one row per target: ``feature`` (name), ``type`` (``"relative"`` or
         ``"absolute"``), ``target`` and, optionally, ``sense`` (``">="``, the default, ``"<="`` or
-        ``"="``). A feature may have several targets, or none."""
+        ``"="``). A feature may have several targets, or none. With zones, an optional ``zone``
+        column: a zone or a list of zones whose amounts the target adds up (default: every zone; a
+        relative target as in :meth:`add_relative_targets`)."""
         t = pd.DataFrame(targets)
         for col in ("feature", "type", "target"):
             if col not in t.columns:
                 raise ValueError(f"the targets table needs a {col!r} column")
-        extra = set(t.columns) - {"feature", "type", "target", "sense"}
+        if "zone" in t.columns:
+            from ._zones import zone_key
+
+            t["zone"] = [zone_key(self.units, z) for z in t["zone"]]
+        extra = set(t.columns) - {"feature", "type", "target", "sense", "zone"}
         if extra:
             raise ValueError(f"unknown columns in the targets table: {sorted(extra)}")
         if not np.isfinite(t["target"].to_numpy(dtype=np.float64)).all():
@@ -616,7 +673,12 @@ class Problem:
 
     def _per_feature(self, v) -> np.ndarray:
         n = len(self.units.feature_names)
-        a = np.asarray(v, dtype=np.float64).ravel()
+        a = np.asarray(v, dtype=np.float64)
+        if a.ndim == 2 and self.units.zoned:  # features x zones: every zone's own targets (prioritizr's matrix)
+            if a.shape != (n, self.units.nz):
+                raise ValueError(f"a matrix of targets must be features x zones ({n} x {self.units.nz})")
+            return a.copy()
+        a = a.ravel()
         if a.size == 1:
             a = np.repeat(a, n)
         if a.size != n:
@@ -715,15 +777,24 @@ class Problem:
     # --- constraints
     def add_locked_in_constraints(self, locked) -> Problem:
         """Planning units that must be selected: a raster (1 = locked), a column name, a boolean
-        array over the planning units or their (0-based) indices."""
+        array over the planning units or their (0-based) indices. With zones, a mapping zone -> any of
+        these: the units locked into each zone (a unit in one zone at most, and only where it has a
+        cost)."""
         return self._with(locked_in=locked)
 
     def add_locked_out_constraints(self, locked) -> Problem:
-        """Planning units that must not be selected (as :meth:`add_locked_in_constraints`)."""
+        """Planning units that must not be selected (as :meth:`add_locked_in_constraints`; with zones,
+        a mapping zone -> the units kept out of that zone)."""
         return self._with(locked_out=locked)
 
+    def add_mandatory_allocation_constraints(self) -> Problem:
+        """With zones: every planning unit goes to a zone (by default a unit may go to none)."""
+        if not self.units.zoned:
+            raise ValueError("mandatory allocation needs a problem with zones")
+        return self._with(mandatory=True)
+
     def add_manual_bounded_constraints(self, data: pd.DataFrame | None = None, *, lower=None,
-                                       upper=None) -> Problem:
+                                       upper=None, zone=None) -> Problem:
         """The selected share of given planning units must lie between a lower and an upper bound
         (prioritizr's ``add_manual_bounded_constraints``; prioripy's ``add_continuous_bounds``).
 
@@ -739,6 +810,9 @@ class Problem:
             planning units' grid, a column of their table, or one value per planning unit (or per
             cell or row). A unit with NaN in both is left alone; a NaN (or a side not given) takes the
             decisions' own bound (0, or 1 or the semicontinuous limit).
+        zone
+            With zones: the zone of the values (the table takes a ``zone`` column instead). A unit
+            without a cost in a zone stays out of it (a lower bound above 0 there is an error).
 
         Notes
         -----
@@ -752,9 +826,10 @@ class Problem:
         if data is not None and (lower is not None or upper is not None):
             raise ValueError("give either a table (data) or lower= / upper=, not both")
         spec = _check_bounds_table(data, ("lower", "upper")) if data is not None else (lower, upper)
-        return self._with(bounds=(*self.bounds, ("bounded", spec)))
+        return self._with(bounds=(*self.bounds, ("bounded", self._zone_spec(spec, zone, data is not None))))
 
-    def add_manual_locked_constraints(self, data: pd.DataFrame | None = None, *, status=None) -> Problem:
+    def add_manual_locked_constraints(self, data: pd.DataFrame | None = None, *, status=None,
+                                      zone=None) -> Problem:
         """Fix the selected share of given planning units (prioritizr's ``add_manual_locked_constraints``):
         a ``status`` of 1 locks a unit in, 0 out, a share in between (proportion decisions) fixes it.
 
@@ -765,17 +840,46 @@ class Problem:
         status
             The same as values: a number, a raster on the planning units' grid, a column of their table
             or one value per planning unit; NaN leaves a unit alone.
+        zone
+            With zones: as in :meth:`add_manual_bounded_constraints`.
         """
         if (data is None) == (status is None):
             raise ValueError("give either a table (data) or status=")
         spec = _check_bounds_table(data, ("status",)) if data is not None else (status, status)
-        return self._with(bounds=(*self.bounds, ("locked", spec)))
+        return self._with(bounds=(*self.bounds, ("locked", self._zone_spec(spec, zone, data is not None))))
+
+    def _zone_spec(self, spec, zone, table: bool):
+        """A manual bound's specification with its zone: with zones, the table's zone column as zone
+        indices, or ``(values, zone index)``."""
+        u = self.units
+        if not u.zoned:
+            if zone is not None or (table and "zone" in spec.columns and spec["zone"].nunique() > 1):
+                raise ValueError("zones are given but the problem has none")
+            return spec
+        from ._zones import zone_key
+
+        if table:
+            if zone is not None:
+                raise ValueError("give the zones in the table's zone column")
+            if "zone" not in spec.columns:
+                raise ValueError("with zones, the table needs a zone column")
+            spec = spec.copy()
+            spec["zone"] = [zone_key(u, z, single=True)[0] for z in spec["zone"]]
+            return spec
+        if zone is None:
+            raise ValueError("with zones, give the zone of the values (zone=)")
+        return (spec, zone_key(u, zone, single=True)[0])
 
     def _manual_bounds(self, lb: np.ndarray, ub: np.ndarray, binary: bool, limit: float) -> None:
-        """Apply the manual bounded and locked constraints to the units' bounds (in place)."""
+        """Apply the manual bounded and locked constraints to the units' bounds (in place; with zones,
+        the bounds of every unit and zone, zone after zone)."""
         u = self.units
+        n = u.n
         for kind, spec in self.bounds:
             what = f"manual {kind} constraints"
+            zcol = None
+            if u.zoned and not isinstance(spec, pd.DataFrame):
+                spec, zcol = spec
             if isinstance(spec, pd.DataFrame):
                 total = u.template.size if u.kind == "raster" else len(u.template)
                 pu = spec["pu"].to_numpy(dtype=np.float64)
@@ -789,6 +893,8 @@ class Problem:
                 cols = ("status", "status") if kind == "locked" else ("lower", "upper")
                 lo = spec[cols[0]].to_numpy(dtype=np.float64)[keep]
                 hi = spec[cols[1]].to_numpy(dtype=np.float64)[keep]
+                if u.zoned:  # the column of the unit in its zone
+                    j = spec["zone"].to_numpy(dtype=np.int64)[keep] * n + j
             else:
                 a = _bound_values(u, spec[0], what)
                 b = a if kind == "locked" else _bound_values(u, spec[1], what)
@@ -800,6 +906,8 @@ class Problem:
                     raise ValueError(f"{what}: the bounds must be finite")
                 if (hi < lo).any():
                     raise ValueError(f"{what}: an upper bound is below its lower bound")
+                if zcol is not None:
+                    j = zcol * n + j
             if lo.size and (lo.min() < 0 or hi.max() > limit):
                 raise ValueError(f"{what}: the bounds must lie within the decisions' bounds [0, {limit:g}]")
             if binary and lo.size and not (np.isin(lo, (0.0, 1.0)).all() and np.isin(hi, (0.0, 1.0)).all()):
@@ -810,39 +918,36 @@ class Problem:
             ub[j] = hi
 
     def _unit_bounds(self) -> tuple[np.ndarray, np.ndarray]:
-        """The planning units' bounds as compiled: the decisions', the locked units', the manual ones."""
-        n = self.units.n
+        """The planning units' bounds as compiled: the decisions', the locked units', the manual ones
+        (with zones: of every unit and zone, zone after zone; a unit without a cost in a zone stays out
+        of it)."""
+        u = self.units
+        ncol = u.cost.size
         limit = 1.0 if self.decisions[0] != "semicontinuous" else float(self.decisions[1])
-        lb, ub = np.zeros(n), np.full(n, limit)
-        lb[self._mask(self.locked_in)] = 1.0
-        ub[self._mask(self.locked_out)] = 0.0
+        lb, ub = np.zeros(ncol), np.full(ncol, limit)
+        li, lo = self._mask(self.locked_in), self._mask(self.locked_out)
+        if (li & lo).any():
+            raise ValueError(f"{int((li & lo).sum())} planning units are both locked in and locked out")
+        lb[li] = 1.0
+        ub[lo] = 0.0
         if self.bounds:
             self._manual_bounds(lb, ub, self.decisions[0] == "binary", limit)
+        closed = ~np.isfinite(u.cost)
+        if closed.any():
+            bad = closed & (lb > 0)
+            if bad.any():
+                raise ValueError(f"{int(bad.sum())} planning units are locked or bounded into zones where they "
+                                 "have no cost")
+            ub[closed] = 0.0
         return lb, ub
 
     def _mask(self, locked) -> np.ndarray:
         u = self.units
-        if locked is None:
-            return np.zeros(u.n, dtype=bool)
-        if isinstance(locked, xr.DataArray):
-            if u.kind != "raster":
-                raise TypeError("a raster of locked units needs raster planning units")
-            v = np.asarray(locked.values, dtype=np.float64).ravel()
-            if v.size != u.template.size:
-                raise ValueError("the raster of locked units must be on the planning units' grid")
-            return np.nan_to_num(v[u.index], nan=0.0) != 0
-        if isinstance(locked, str):
-            if u.kind != "table":
-                raise TypeError("a column of locked units needs table planning units")
-            return u.template[locked].to_numpy(dtype=bool)[u.index]
-        a = np.asarray(locked)
-        if a.dtype == bool:
-            if a.size != u.n:
-                raise ValueError(f"the boolean mask must have one value per planning unit ({u.n})")
-            return a.ravel()
-        m = np.zeros(u.n, dtype=bool)
-        m[a.astype(np.int64).ravel()] = True
-        return m
+        if u.zoned:
+            from ._zones import zone_mask
+
+            return zone_mask(self, locked)
+        return unit_mask(u, locked)
 
     # --- decisions
     def add_binary_decisions(self) -> Problem:
@@ -978,6 +1083,11 @@ class Problem:
         from ._milp_solve import make_solution, solve_model
 
         m, targets = compile_problem(self)
+        zoned = self.units.zoned
+        if zoned and self.solver[0] == "anneal":
+            raise ValueError("the anneal solver does not support zones yet: use HiGHS or Gurobi")
+        if zoned and self.portfolio is not None:
+            raise ValueError("portfolios do not support zones yet")
         if self.portfolio is not None:
             if start is not None:
                 raise ValueError("a start solution and a portfolio cannot be combined")
@@ -988,12 +1098,16 @@ class Problem:
             return solve_portfolio(self, m, targets)
         if start is not None:
             start = self._start(start, m)
-        r = solve_model(m, self.solver[0], self.solver[1], start, n_units=self.units.n)
+        r = solve_model(m, self.solver[0], self.solver[1], start, n_units=None if zoned else self.units.n,
+                        engines=not zoned)
         return make_solution(self.units, m, r, targets)
 
     def _start(self, start, m: OptimizationProblem) -> np.ndarray:
         from ._zonation import ZonationResult
 
+        if self.units.zoned and (isinstance(start, (str, ZonationResult)) or (
+                isinstance(start, xr.DataArray) and start.ndim >= 2)):
+            raise ValueError("with zones, the start solution is one value per planning unit and zone")
         if isinstance(start, str):
             if start != "zonation":
                 raise ValueError(f"unknown start {start!r} (a solution, 'zonation' or a Zonation result)")
@@ -1002,13 +1116,43 @@ class Problem:
             start = start.rank
         if isinstance(start, xr.DataArray) and start.ndim >= 2:
             return _start_from_rank(m, _unit_ranks(self.units, start))
-        start = np.asarray(start, dtype=np.float64).ravel()
-        n = self.units.n
+        start = np.asarray(start, dtype=np.float64)
+        if self.units.zoned and start.ndim == 2:  # units x zones -> the columns, zone after zone
+            start = start.T
+        start = start.ravel()
+        n = self.units.cost.size
         if start.size == n and m.ncol > n:  # the other columns from the units: the solver completes them
             start = np.concatenate([start, np.zeros(m.ncol - n)])
         if start.size != m.ncol:
-            raise ValueError(f"the start solution must have one value per planning unit ({n})")
+            raise ValueError(f"the start solution must have one value per planning unit ({self.units.n})"
+                             + (f" and zone ({self.units.nz})" if self.units.zoned else ""))
         return start
+
+
+def unit_mask(u: Units, locked) -> np.ndarray:
+    """Locked planning units as a mask: a raster (non-zero), a column name, a boolean array over the
+    planning units or their (0-based) indices."""
+    if locked is None:
+        return np.zeros(u.n, dtype=bool)
+    if isinstance(locked, xr.DataArray):
+        if u.kind != "raster":
+            raise TypeError("a raster of locked units needs raster planning units")
+        v = np.asarray(locked.values, dtype=np.float64).ravel()
+        if v.size != u.template.size:
+            raise ValueError("the raster of locked units must be on the planning units' grid")
+        return np.nan_to_num(v[u.index], nan=0.0) != 0
+    if isinstance(locked, str):
+        if u.kind != "table":
+            raise TypeError("a column of locked units needs table planning units")
+        return u.template[locked].to_numpy(dtype=bool)[u.index]
+    a = np.asarray(locked)
+    if a.dtype == bool:
+        if a.size != u.n:
+            raise ValueError(f"the boolean mask must have one value per planning unit ({u.n})")
+        return a.ravel()
+    m = np.zeros(u.n, dtype=bool)
+    m[a.astype(np.int64).ravel()] = True
+    return m
 
 
 def _budget(budget) -> float:
@@ -1091,7 +1235,7 @@ def _start_from_rank(m: OptimizationProblem, rank: np.ndarray) -> np.ndarray:
     return x
 
 
-def problem(x, features=None, *, cost_column: str | None = None, rij=None) -> Problem:
+def problem(x, features=None, *, cost_column=None, rij=None, contribution=None, zones=None) -> Problem:
     """A conservation planning problem (prioritizr's ``problem()``).
 
     Parameters
@@ -1111,7 +1255,20 @@ def problem(x, features=None, *, cost_column: str | None = None, rij=None) -> Pr
         The cost column of a table.
     rij
         Marxan-style amounts (``pu``, ``species``, ``amount``) with a table of
-        planning units that has an ``id`` column.
+        planning units that has an ``id`` column (with zones, a ``zone``
+        column too).
+    contribution
+        Management zones: every planning unit goes to at most one zone, each
+        with its own cost (``x``: a mapping zone -> cost raster, a raster with
+        a band per zone, or ``cost_column`` a mapping zone -> column). The
+        features are given once, and ``contribution`` says how much of them
+        counts in each zone: a mapping zone -> a number, one number per
+        feature, or a raster (a column with tables) of factors per unit
+        (zones not listed count fully). Instead, ``features`` may be a
+        mapping zone -> that zone's own features (prioritizr's ``zones()``).
+    zones
+        With ``rij`` and a ``zone`` column: the zones table (``id``,
+        ``name``), in the order of the cost columns.
 
     Examples
     --------
@@ -1128,6 +1285,11 @@ def problem(x, features=None, *, cost_column: str | None = None, rij=None) -> Pr
     >>> bool(sol.coverage["met"].all())
     True
     """
+    from ._zones import wants_zones, zone_units
+
+    if wants_zones(x, cost_column, contribution, zones) or isinstance(features, Mapping):
+        return Problem(zone_units(x, features, cost_column=cost_column, rij=rij, contribution=contribution,
+                                  zones=zones))
     if isinstance(x, xr.DataArray):
         if features is None:
             raise ValueError("a raster problem needs the features' rasters")

@@ -19,6 +19,7 @@ import pandas as pd
 import scipy.sparse as sp
 
 from .._save import Saveable
+from ._zones import one_zone
 
 __all__ = ["ProxIRR", "eval_proxirr", "eval_proxirr_marxan"]
 
@@ -115,6 +116,7 @@ def eval_proxirr(p, triage: bool = False, n_threads: int | None = None) -> ProxI
     >>> float(irr.beta.max()) <= 1.0, float(irr.gamma.max()) >= float(irr.beta.max())
     (True, True)
     """
+    one_zone(p, "eval_proxirr")
     from .. import _core, _threads
     from ._milp_compile import NO_TARGETS, compile_problem
     from ._milp_eval import _per_unit

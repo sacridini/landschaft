@@ -315,7 +315,35 @@ void register_python(py::module_& m) {
         "Marxan 4.0.6's runs (opt/marxan.hpp).");
     py::class_<FeatureMatrix>(m, "OptFeatureMatrix",
                               "Features x planning units of raster units, built block by block (opt/features.hpp).")
-        .def(py::init<std::int64_t>(), py::arg("layers"))
+        .def(py::init<std::int64_t, std::int64_t>(), py::arg("layers"), py::arg("features") = 0)
+        .def(
+            "add_scaled",
+            [](FeatureMatrix& self, const Doubles& values, const Ints& unit, py::object scale, const Doubles& scalar,
+               py::object has_scale, int threads) {
+                if (values.ndim() != 2) throw std::invalid_argument("values must be (features, cells)");
+                const std::int64_t n = values.shape(1);
+                if (values.shape(0) == 0 || self.layers() % values.shape(0) != 0 || scalar.size() != self.layers())
+                    throw std::invalid_argument("layers must be zones x features, with one constant factor each");
+                const std::int64_t nz = self.layers() / values.shape(0);
+                if (unit.ndim() != 1 || unit.shape(0) != n)
+                    throw std::invalid_argument("unit must have one entry per cell");
+                Doubles s;
+                py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast> hs;
+                if (!scale.is_none()) {
+                    s = scale.cast<Doubles>();
+                    hs = has_scale.cast<py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>>();
+                    if (s.ndim() != 2 || s.shape(0) != nz || s.shape(1) != n || hs.size() != nz)
+                        throw std::invalid_argument("scale must be (zones, cells), has_scale one flag per zone");
+                }
+                const double* sp = scale.is_none() ? nullptr : s.data();
+                const std::uint8_t* hp = scale.is_none() ? nullptr : hs.data();
+                py::gil_scoped_release release;
+                self.add_scaled(values.data(), n, unit.data(), sp, scalar.data(), hp, threads);
+            },
+            py::arg("values"), py::arg("unit"), py::arg("scale"), py::arg("scalar"), py::arg("has_scale"),
+            py::arg("threads") = 1,
+            "Add the next cells of the zones' layers: values (features, cells) times each zone's factor "
+            "(scale (zones, cells) where has_scale, else scalar: one per layer, zone after zone).")
         .def(
             "add",
             [](FeatureMatrix& self, const Doubles& values, const Ints& unit, int threads) {

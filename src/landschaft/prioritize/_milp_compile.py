@@ -51,6 +51,8 @@ class Targets:
     region: np.ndarray | None = None
     region_label: tuple | None = None
     matrix: object = None  # the targets' amounts in the planning units (targets x units), once compiled
+    zone: tuple | None = None  # with zones: every target's zones (indices), whose amounts it adds up
+    zone_label: tuple | None = None  # ... and their names ("protect + use")
 
     @property
     def n(self) -> int:
@@ -297,12 +299,27 @@ def compile_problem(p):
         raise ValueError("the problem has no objective: add one (add_min_set_objective, ...)")
     kind = p.objective[0]
     nf = len(u.feature_names)
-    n = u.n
+    zoned = u.zoned
+    if zoned:
+        from ._zones import (
+            check_zone_problem,
+            fake_zone_targets,
+            resolve_zone_targets,
+            zone_target_matrix,
+        )
+
+        check_zone_problem(p)
+    # the columns of the planning units: one per unit (and zone, zone after zone)
+    n = u.cost.size
     if kind in NO_TARGETS:
-        if p.targets is not None:
+        if p.targets is not None or p.zone_targets:
             warnings.warn(f"targets are ignored by the {kind} objective", UserWarning, stacklevel=3)
-        # the "fake" targets prioritizr's compile() makes: one per feature
-        t = Targets(np.arange(nf), ("?",) * nf, np.zeros(nf), u.totals.copy())
+        # the "fake" targets prioritizr's compile() makes: one per feature (and zone)
+        t = fake_zone_targets(u) if zoned else Targets(np.arange(nf), ("?",) * nf, np.zeros(nf), u.totals.copy())
+    elif zoned:
+        if p.targets is None and not p.zone_targets:
+            raise ValueError(f"the {kind} objective needs targets (add_relative_targets, add_absolute_targets, ...)")
+        t = resolve_zone_targets(p)
     else:
         if p.targets is None and p.subregional is None:
             raise ValueError(f"the {kind} objective needs targets (add_relative_targets, add_absolute_targets, ...)")
@@ -312,7 +329,9 @@ def compile_problem(p):
         sub, unit_codes = resolve_subregional(u, p.subregional, u.feature_names)
         t = _concat(t, sub)
     nt = t.n
-    cost = u.cost
+    # a unit without a cost in a zone: cost 0 there and the column fixed at 0 (prioritizr's objectives)
+    closed = ~np.isfinite(u.cost)
+    cost = np.where(closed, 0.0, u.cost) if zoned else u.cost
 
     # decisions: the planning units' columns
     lb = [np.zeros(n)]
@@ -324,7 +343,10 @@ def compile_problem(p):
         ub, vtype = [np.full(n, p.decisions[1])], ["C"] * n
 
     # the targets' rows (the features' amounts) and the objective's rows and columns
-    rij = u.rij[t.feature] if not np.array_equal(t.feature, np.arange(nf)) else u.rij
+    if zoned:
+        rij = zone_target_matrix(u, t)
+    else:
+        rij = u.rij[t.feature] if not np.array_equal(t.feature, np.arange(nf)) else u.rij
     if t.region is not None and (t.region >= 0).any():
         # a sub-regional target: its feature's amounts in the units of its region only
         rij = sp.csr_matrix(rij, copy=True)
@@ -491,6 +513,17 @@ def compile_problem(p):
 
     nrow = nt + nrow_extra
     ncol = n + ncol_extra
+    if zoned:
+        # every unit goes to one zone at most (exactly one with mandatory allocation): after the objective's
+        # rows (rcpp_add_zones_constraints)
+        nu, nz = u.n, u.nz
+        extra_rows.append((nrow + np.repeat(np.arange(nu), nz), (np.arange(nz)[None, :] * nu + np.arange(nu)[:, None]).ravel(),
+                           np.ones(nu * nz)))
+        sense = [*sense, *(["="] * nu if p.mandatory else ["<="] * nu)]
+        rhs = [*rhs, np.ones(nu)]
+        row_ids = [*row_ids, *(["pu_zone"] * nu)]
+        nrow += nu
+        obj[0] = np.where(closed, 0.0, obj[0])
     a = sp.coo_matrix(blocks[0])
     rows, cols, vals = [a.row.astype(np.int64)], [a.col.astype(np.int64)], [a.data]
     for r, c, v in extra_rows:
@@ -556,6 +589,12 @@ def compile_problem(p):
     obj_v, lb_v, ub_v = b.obj, b.lb, b.ub
     vtype, sense, row_ids, col_ids = b.vtype, b.sense, b.row_ids, b.col_ids
     rhs = b.rhs
+    if zoned:  # the locked units and manual bounds of every unit and zone, the zones without a cost closed
+        lb_v[:n], ub_v[:n] = p._unit_bounds()
+        return OptimizationProblem(
+            A=A, obj=obj_v, lb=lb_v, ub=ub_v, rhs=np.concatenate([np.asarray(x, dtype=np.float64) for x in rhs]),
+            sense=tuple(sense), vtype=tuple(vtype), modelsense=modelsense, row_ids=tuple(row_ids),
+            col_ids=tuple(col_ids), connected=tuple(b.connected), corridors=tuple(b.corridors)), t
     # locked units (bounds only: their place among the constraints does not matter)
     li, lo = p._mask(p.locked_in), p._mask(p.locked_out)
     if (li & lo).any():

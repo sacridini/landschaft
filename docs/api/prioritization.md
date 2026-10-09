@@ -159,6 +159,18 @@ sol.status, round(sol.gap, 3)
 
 ::: landschaft.prioritize.example_data
 
+### Management zones
+
+With zones (prioritizr's zones), every planning unit goes to at most one of several zones, each with
+its own cost and its own contribution to the features: give `problem` the costs of the zones (a mapping
+zone -> raster, or cost columns) and the contributions, or every zone's own features. Targets are summed
+over the zones unless a `zone` is given. The solution's `zones` is the zone of every unit; these two
+helpers convert between such maps and stacks of zone layers.
+
+::: landschaft.prioritize.category_layer
+
+::: landschaft.prioritize.binary_stack
+
 ## Spatial relations
 
 The matrices that penalties and constraints read: the length of the boundary units share, which
