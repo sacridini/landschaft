@@ -307,6 +307,35 @@ class TestWindow:
         for m in what:
             np.testing.assert_array_equal(ours[m], expected[m], err_msg=m)
 
+    @pytest.mark.parametrize(
+        "options",
+        [{"edge_depth": 2}, {"edge_depth": 1, "consider_boundary": True}, {"edge_depth": 2, "consider_boundary": True}],
+    )
+    def test_brute_force_core_areas(self, options):
+        # class values that are not 0..k-1, classes coming and going between
+        # windows: each window's landscape is refilled
+        data = lsm_scenes.clustered((15, 17), [3, 10, 42, 7], seed=11, sigma=1.5, na_fraction=0.05)
+        window = np.ones((7, 5), bool)
+        what = ["np", "tca", "core_mn", "cai_mn", "dcad", "dcore_sd", "circle_mn", "enn_mn", "pafrac", "contag"]
+        ours = ls.window_metrics(data, window, what=["lsm_l_" + m for m in what], res=(2.0, 2.0), **options)
+        expected = brute_window(data, window, (2.0, 2.0), what, **options)
+        for m in what:
+            np.testing.assert_array_equal(ours[m], expected[m], err_msg=m)
+
+    def test_contrast_tables_use_the_class_values(self):
+        # the window's classes keep their values: the contrast table applies
+        data = lsm_scenes.clustered((12, 13), [10, 20, 30], seed=3, sigma=1.2)
+        contrast = {(10, 20): 0.5, (10, 30): 1.0, (20, 30): 0.2}
+        what = ["cwed", "teci"]
+        window = np.ones((5, 5), bool)
+        ours = ls.window_metrics(
+            data, window, what=["lsm_l_" + m for m in what], res=(1.0, 1.0), extras=True, contrast=contrast
+        )
+        expected = brute_window(data, window, (1.0, 1.0), what, contrast=contrast)
+        for m in what:
+            assert np.isfinite(ours[m]).any()
+            np.testing.assert_array_equal(ours[m], expected[m], err_msg=m)
+
     def test_single_cell_window(self):
         data = np.ma.MaskedArray(np.array([[1, 2], [3, 4]]), mask=[[False, True], [False, False]])
         out = ls.window_metrics(data, 1, what=["lsm_l_ta", "lsm_l_np"], res=10)

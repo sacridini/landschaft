@@ -200,39 +200,35 @@ const PatchPairs& Landscape::patch_pairs(double radius, bool same_class) {
         for (i64 i = 0; i < m; ++i) by_patch[at[sid[i]]++] = i;
     }
     std::vector<std::vector<PairHit>> found(static_cast<std::size_t>(pt.n));
-#pragma omp parallel if (m >= 4096)
-    {
-        FlatMin nearest;  // patch -> smallest squared distance, for one focal patch
-#pragma omp for schedule(dynamic, 64)
-        for (i64 a = 0; a < pt.n; ++a) {
-            nearest.clear();
-            for (i64 t = by_patch_start[a]; t < by_patch_start[a + 1]; ++t) {
-                const i64 i = by_patch[t];
-                const double xi = static_cast<double>(col[i] + 1) * rx;
-                const double yi = static_cast<double>(row[i] + 1) * ry;
-                const i64 x0 = std::max<i64>(0, col[i] - cx);
-                const i64 x1 = std::min<i64>(nx - 1, col[i] + cx);
-                for (i64 x = x0; x <= x1; ++x) {
-                    const i64 s = col_start[x];
-                    const i64 e = col_start[x + 1];
-                    i64 j = std::lower_bound(row.begin() + s, row.begin() + e,
-                                             static_cast<std::int32_t>(row[i] - cy)) - row.begin();
-                    const double dx = static_cast<double>(x + 1) * rx - xi;
-                    const double dx2 = dx * dx;
-                    if (dx2 > r2) continue;
-                    for (; j < e && row[j] <= row[i] + cy; ++j) {
-                        const std::int32_t b = sid[j];
-                        if (b <= a) continue;  // each pair once, from its smaller patch
-                        if (same_class && pt.cls[a] != pt.cls[b]) continue;
-                        const double dy = static_cast<double>(row[j] + 1) * ry - yi;
-                        const double dd = dx2 + dy * dy;
-                        if (dd <= r2) nearest.update(b, dd);
-                    }
+    // nearest: patch -> smallest squared distance, for one focal patch
+    parallel_for_scratch<FlatMin>(m >= 4096, pt.n, 64, [&](i64 a, FlatMin& nearest) {
+        nearest.clear();
+        for (i64 t = by_patch_start[a]; t < by_patch_start[a + 1]; ++t) {
+            const i64 i = by_patch[t];
+            const double xi = static_cast<double>(col[i] + 1) * rx;
+            const double yi = static_cast<double>(row[i] + 1) * ry;
+            const i64 x0 = std::max<i64>(0, col[i] - cx);
+            const i64 x1 = std::min<i64>(nx - 1, col[i] + cx);
+            for (i64 x = x0; x <= x1; ++x) {
+                const i64 s = col_start[x];
+                const i64 e = col_start[x + 1];
+                i64 j = std::lower_bound(row.begin() + s, row.begin() + e,
+                                         static_cast<std::int32_t>(row[i] - cy)) - row.begin();
+                const double dx = static_cast<double>(x + 1) * rx - xi;
+                const double dx2 = dx * dx;
+                if (dx2 > r2) continue;
+                for (; j < e && row[j] <= row[i] + cy; ++j) {
+                    const std::int32_t b = sid[j];
+                    if (b <= a) continue;  // each pair once, from its smaller patch
+                    if (same_class && pt.cls[a] != pt.cls[b]) continue;
+                    const double dy = static_cast<double>(row[j] + 1) * ry - yi;
+                    const double dd = dx2 + dy * dy;
+                    if (dd <= r2) nearest.update(b, dd);
                 }
             }
-            nearest.collect(found[a]);
         }
-    }
+        nearest.collect(found[a]);
+    });
     PatchPairs out;
     for (i64 a = 0; a < pt.n; ++a) {
         std::sort(found[a].begin(), found[a].end(), [](const PairHit& u, const PairHit& v) { return u.b < v.b; });
@@ -359,7 +355,7 @@ std::vector<double> Landscape::contrast_edges(bool teci, bool by_class) {
 // FRAGSTATS' DCORE statistics (convention = "fragstats"): over the sizes
 // (ha) of the disjunct core areas of the class (or the landscape), the
 // area-weighted mean weighted by those sizes. NaN without core areas.
-std::vector<double> Landscape::dcore_sizes(const std::string& stat, bool by_class) {
+std::vector<double> Landscape::dcore_sizes(std::string_view stat, bool by_class) {
     const Core& core = this->core();
     if (!core.has_area_cells) throw std::logic_error("disjunct core area sizes are not kept out of core");
     const int k = n_classes();
@@ -384,7 +380,7 @@ std::vector<double> Landscape::dcore_sizes(const std::string& stat, bool by_clas
         } else if (stat == "cv") {
             out[g] = sd / mean * 100;
         } else {
-            out[g] = n == 0 ? kNaN : reduce_statistic(stat, v, n, v);
+            out[g] = n == 0 ? kNaN : reduce_statistic(std::string(stat), v, n, v);
         }
     }
     return out;

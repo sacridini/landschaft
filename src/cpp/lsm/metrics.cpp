@@ -37,7 +37,7 @@ double r_median(const double* x, i64 n) {
 // Summary statistics of the patch values x[0..n) (weights w: patch areas):
 // am (area-weighted mean, as R's weighted.mean), md (median) and ra (range)
 // as FRAGSTATS. NA propagates. (mn, sd and cv: Landscape::stat_values.)
-double reduce(const std::string& stat, const double* x, i64 n, const double* w) {
+double reduce(std::string_view stat, const double* x, i64 n, const double* w) {
     if (stat == "am"sv) {
         if (n == 0) return kNaN;
         return sum_of(0, n, [&](i64 i) { return x[i] * w[i]; }) / r_sum(w, n);
@@ -58,19 +58,30 @@ constexpr const char* kStats[] = {"mn", "sd", "cv", "am", "md", "ra"};
 
 // "<base>_<stat>" split into base and stat (stat empty when the name has no
 // summary-statistic suffix).
-std::pair<std::string, std::string> split_stat(const std::string& name) {
+std::pair<std::string_view, std::string_view> split_stat(std::string_view name) {
     const std::size_t pos = name.rfind('_');
-    if (pos == std::string::npos || pos == 0 || name.size() - pos != 3) return {};
-    const std::string_view suffix(name.data() + pos + 1, 2);
+    if (pos == std::string_view::npos || pos == 0 || name.size() - pos != 3) return {};
+    const std::string_view suffix = name.substr(pos + 1);
     for (const char* stat : kStats) {
-        if (suffix == stat) return {name.substr(0, pos), std::string(suffix)};
+        if (suffix == stat) return {name.substr(0, pos), suffix};
     }
     return {};
 }
 
+// The patch metrics with summary statistics (their place in the caches).
+constexpr std::string_view kPatchBases[] = {"area", "cai",   "circle", "contig", "core", "dcore", "enn",  "frac",
+                                            "gyrate", "ncore", "para", "perim",  "shape", "prox", "simi", "econ"};
+
+int base_index(std::string_view name) {
+    for (int i = 0; i < static_cast<int>(std::size(kPatchBases)); ++i) {
+        if (name == kPatchBases[i]) return i;
+    }
+    return -1;
+}
+
 // One summary statistic of x[0..n) (mean and sd: the mn and sd already known;
 // population: FRAGSTATS' standard deviation over n).
-double summary(const std::string& stat, const double* x, i64 n, const double* w, double mean, double sd,
+double summary(std::string_view stat, const double* x, i64 n, const double* w, double mean, double sd,
                bool population) {
     if (stat == "mn"sv) return r_mean(x, n);
     if (stat == "sd"sv) return r_sd(x, n, mean, population);
@@ -184,11 +195,21 @@ const std::vector<i64>& Landscape::class_start() {
     return class_start_;
 }
 
-const std::vector<double>& Landscape::patch_base(const std::string& name) {
+Landscape::CachedValues& Landscape::patch_entry(std::string_view name) {
+    const int b = base_index(name);
+    if (b >= 0) return base_cache_[b];
     if (auto it = patch_cache_.find(name); it != patch_cache_.end()) return it->second;
+    return patch_cache_.emplace(std::string(name), CachedValues{}).first->second;
+}
+
+const std::vector<double>& Landscape::patch_base(std::string_view name) {
+    // computed in place (other entries may be added meanwhile: the node stays)
+    CachedValues& entry = patch_entry(name);
+    if (entry.valid) return entry.values;
     const Patches& pt = patches();
     const i64 n = pt.n;
-    std::vector<double> out(static_cast<std::size_t>(n));
+    std::vector<double>& out = entry.values;
+    out.assign(static_cast<std::size_t>(n), 0.0);
     const double factor_ha = resx_ * resy_ / 10000;
     const bool parallel = n >= kParallelPatches;
     if (name == "area"sv) {
@@ -228,7 +249,7 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
             out[i] = (((diagonal + straight + cells) / cells) - 1) / 12;
         }
     } else if (name == "gyrate"sv || name == "enn"sv || name == "circle"sv) {
-        if (tables_only_) throw std::logic_error(name + " of an out-of-core landscape needs a detail pass");
+        if (tables_only_) throw std::logic_error(std::string(name) + " of an out-of-core landscape needs a detail pass");
         out = name == "gyrate"sv ? gyrate() : name == "enn"sv ? enn() : circle();
     } else if (name == "core"sv) {
         const Core& core = this->core();
@@ -241,16 +262,17 @@ const std::vector<double>& Landscape::patch_base(const std::string& name) {
         if (tables_only_) throw std::logic_error("econ is not available for an out-of-core landscape");
         out = econ();
     } else if (name == "prox"sv || name == "simi"sv) {
-        if (tables_only_) throw std::logic_error(name + " is not available for an out-of-core landscape");
+        if (tables_only_) throw std::logic_error(std::string(name) + " is not available for an out-of-core landscape");
         out = proximity(name == "simi"sv);
     } else if (name == "cai"sv) {
         const std::vector<double> area = patch_base("area");
         const std::vector<double> core = patch_base("core");
         for (i64 i = 0; i < n; ++i) out[i] = core[i] / area[i] * 100;
     } else {
-        throw std::invalid_argument("unknown patch metric: " + name);
+        throw std::invalid_argument("unknown patch metric: " + std::string(name));
     }
-    return patch_cache_.emplace(name, std::move(out)).first->second;
+    entry.valid = true;
+    return out;
 }
 
 // Mean distance of the cell centres to the patch centroid; with cell_center
@@ -348,11 +370,11 @@ std::vector<double> Landscape::patch_metric(const std::string& name) { return pa
 // landscape (one value). Cached for large landscapes: mn is shared by sd and
 // cv, sd by cv. The classes are computed in parallel when there are many
 // patches (R's sums are sequential within a class).
-const std::vector<double>& Landscape::stat_values(const std::string& base, const std::string& stat, bool by_class) {
+const std::vector<double>& Landscape::stat_values(std::string_view base, std::string_view stat, bool by_class) {
     const int slot = stat_slot(base, stat, by_class);
     if (slot < 0) {
         patch_base(base);  // unknown metric: throws
-        throw std::invalid_argument("unknown summary statistic: " + base + "_" + stat);
+        throw std::invalid_argument("unknown summary statistic: " + std::string(base) + "_" + std::string(stat));
     }
     if (stat_done_[slot]) return stat_cache_[slot];
     if (base == "dcore"sv && options_.fragstats) {
@@ -369,25 +391,20 @@ const std::vector<double>& Landscape::stat_values(const std::string& base, const
     const i64 whole[2] = {0, patches().n};
     const i64* start = by_class ? class_start().data() : whole;
     const i64 groups = by_class ? n_classes() : 1;
-    std::vector<double> out(static_cast<std::size_t>(groups));
+    std::vector<double>& out = stat_cache_[slot];  // in place: keeps its memory across reset()
+    out.resize(static_cast<std::size_t>(groups));
     parallel_for_dynamic(groups > 1 && start[groups] >= kParallelPatches, groups, [&](i64 g) {
         out[g] = summary(stat, x.data() + start[g], start[g + 1] - start[g], w.data() + start[g],
                          mean.empty() ? kNaN : mean[g], sd.empty() ? kNaN : sd[g], options_.fragstats);
     });
-    stat_cache_[slot] = std::move(out);
     stat_done_[slot] = true;
-    return stat_cache_[slot];
+    return out;
 }
 
 // Slot of a summary statistic in stat_cache_, -1 for other patch metrics.
-int Landscape::stat_slot(const std::string& base, const std::string& stat, bool by_class) {
-    static constexpr std::string_view kBases[] = {"area",   "cai",   "circle", "contig", "core",  "dcore",
-                                                  "enn",    "frac",  "gyrate", "ncore",  "para",  "perim",
-                                                  "shape",  "prox",  "simi",   "econ"};
-    int b = -1;
-    for (int i = 0; i < kStatBases && b < 0; ++i) {
-        if (base == kBases[i]) b = i;
-    }
+int Landscape::stat_slot(std::string_view base, std::string_view stat, bool by_class) {
+    static_assert(std::size(kPatchBases) == kStatBases);
+    const int b = base_index(base);
     int st = -1;
     for (int i = 0; i < kStatKinds && st < 0; ++i) {
         if (stat == std::string_view(kStats[i], 2)) st = i;
@@ -544,22 +561,25 @@ std::vector<double> Landscape::pafrac_by(const std::vector<i64>& start, bool hec
     static const std::string kLogAreaM2 = "~log area m2";
     static const std::string kLogAreaHa = "~log area ha";
     const std::string& key_area = hectares ? kLogAreaHa : kLogAreaM2;
-    if (!patch_cache_.count(kLogPerim)) {
-        const std::vector<double>& perim = patch_base("perim");
+    const std::vector<double>& perim = patch_base("perim");
+    const std::vector<double>& area = patch_base("area");
+    CachedValues& log_perim = patch_cache_[kLogPerim];
+    if (!log_perim.valid) {
         const auto n = static_cast<i64>(perim.size());
-        std::vector<double> lp(perim.size());
-        parallel_for(n >= kParallelPatches, n, [&](i64 i) { lp[i] = r_log(perim[i]); });
-        patch_cache_.emplace(kLogPerim, std::move(lp));
+        log_perim.values.resize(perim.size());
+        parallel_for(n >= kParallelPatches, n, [&](i64 i) { log_perim.values[i] = r_log(perim[i]); });
+        log_perim.valid = true;
     }
-    if (!patch_cache_.count(key_area)) {
-        const std::vector<double>& area = patch_base("area");
+    CachedValues& log_area = patch_cache_[key_area];
+    if (!log_area.valid) {
         const auto n = static_cast<i64>(area.size());
-        std::vector<double> la(area.size());
-        parallel_for(n >= kParallelPatches, n, [&](i64 i) { la[i] = r_log(hectares ? area[i] : area[i] * 10000); });
-        patch_cache_.emplace(key_area, std::move(la));
+        log_area.values.resize(area.size());
+        parallel_for(n >= kParallelPatches, n,
+                     [&](i64 i) { log_area.values[i] = r_log(hectares ? area[i] : area[i] * 10000); });
+        log_area.valid = true;
     }
-    const std::vector<double>& lp = patch_cache_.at(kLogPerim);
-    const std::vector<double>& la = patch_cache_.at(key_area);
+    const std::vector<double>& lp = log_perim.values;
+    const std::vector<double>& la = log_area.values;
     const auto groups = static_cast<i64>(start.size()) - 1;
     std::vector<double> out(static_cast<std::size_t>(groups), kNaN);
     parallel_for_dynamic(groups > 1 && start.back() >= kParallelPatches, groups, [&](i64 g) {

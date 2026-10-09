@@ -45,6 +45,21 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   (script `window_metric_costs.py` no scratchpad da sessão: refazer). No Windows o py-spy não resolveu os
   símbolos do `_core` mesmo com o PDB ao lado: perfilar no WSL (venv `~/lsprof` com a wheel e o py-spy,
   `LD_PRELOAD` da libstdc++ do sistema).
+  **Feito (2026-10-09)**, bit a bit: todas as métricas 7,47 -> 3,7 s, `np` 1,45 -> 0,60 s (numa thread 10,2 -> 3,9 s).
+  Em ordem de ganho: (1) um `Landscape` por thread reaproveitado por `reset()` (patches, núcleo,
+  adjacências e valores por patch guardam a memória; os caches por patch ficam no lugar, marcados como
+  velhos; as métricas com estatísticas em posições fixas, sem `std::map` de strings; `std::string_view` no
+  caminho dos nomes); no Windows a alocação pesa muito mais que no Linux (o perfil do Linux dava 5 %, o ganho
+  no Windows foi ~30 %); (2) a cópia da janela já entrega índices locais, valores verdadeiros das classes e
+  contagens (corrigiu as tabelas de contraste/similaridade, que eram lidas pelo índice denso); (3) rótulos com
+  a árvore de decisão de Wu, Otoo e Suzuki (2009) (`uf_find` era 34 % do `np`), estatísticas por pedaço num
+  registro só (o MSVC não faz análise de alias por tipo e recarregava os 9 vetores a cada célula) e rotulagem
+  "leve" das áreas núcleo (só classe, células e primeira célula); (4) núcleo com `edge_depth` = 1 pelos quatro
+  vizinhos, sem a distância city-block; (5) casco dos círculos com o y mínimo e máximo de cada coluna, sem
+  ordenar os cantos; (6) nenhuma região OpenMP (`#pragma omp parallel if (falso)` ainda monta uma equipe
+  serializada) nos caminhos das paisagens pequenas (`parallel_for_scratch`). Custo extra por grupo sobre o
+  `np` (400², 11 threads, 160 mil janelas): núcleo +0,07 s, círculo +0,07, adjacências +0,04, ENN +0,035,
+  `gyrate` +0,035 (script `per_metric.py`). O que falta é o algoritmo incremental abaixo.
 - Janela móvel: reaproveitar rótulos globais e só corrigir os patches cortados pela
   borda da janela (algoritmo incremental). Hoje cada janela é uma paisagem pequena
   (1000×1000, janela 21×21, 66 métricas: ~7 s; ~73 µs por janela numa thread).

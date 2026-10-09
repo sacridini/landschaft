@@ -135,23 +135,31 @@ std::vector<i64> sort_by_key(std::vector<std::uint64_t> key) {
     return order;
 }
 
-// Patch pieces of one strip and their statistics.
+// A patch piece of one strip and its statistics, kept together: the cells
+// of a piece update one record.
+struct Piece {
+    i64 cells, edge_h, edge_v, adj_orth, adj_diag, sum_x, sum_y, first_cm;
+    std::int32_t cls;
+};
+
 struct StripStats {
-    std::vector<std::int32_t> cls;
-    std::vector<i64> cells, edge_h, edge_v, adj_orth, adj_diag, sum_x, sum_y, first_cm;
+    std::vector<Piece> pieces;
 };
 
 // Label the rows [y0, y1): pixels become -(local index) - 2 (NA: -1) in
-// `code`, which serves meanwhile as the union-find parent array.
+// `code`, which serves meanwhile as the union-find parent array. Without
+// `Full`, a piece only gets its class, cells and first cell.
+template <bool Full>
 void label_strip(const std::int32_t* cls, std::int32_t* code, i64 nx, i64 ny, i64 y0, i64 y1,
                  int directions, StripStats& st) {
-    // room for the pieces of small strips at once (one allocation per table)
-    const auto guess = static_cast<std::size_t>(std::min<i64>(nx * (y1 - y0), 256));
-    for (auto* v : {&st.cells, &st.edge_h, &st.edge_v, &st.adj_orth, &st.adj_diag, &st.sum_x, &st.sum_y, &st.first_cm}) {
-        v->reserve(guess);
-    }
-    st.cls.reserve(guess);
-    for (i64 p = y0 * nx; p < y1 * nx; ++p) code[p] = static_cast<std::int32_t>(p);
+    std::vector<Piece>& pieces = st.pieces;
+    pieces.clear();
+    // room for the pieces of small strips at once
+    pieces.reserve(static_cast<std::size_t>(std::min<i64>(nx * (y1 - y0), 256)));
+    // Every pixel points to an earlier one of its piece (or to itself), with
+    // the decision tree of Wu, Otoo and Suzuki (2009): a neighbour already
+    // joined to the others need not be looked at, so most pixels just take
+    // a parent and only the meeting of two pieces needs a union.
     for (i64 y = y0; y < y1; ++y) {
         const i64 row = y * nx;
         for (i64 x = 0; x < nx; ++x) {
@@ -159,18 +167,40 @@ void label_strip(const std::int32_t* cls, std::int32_t* code, i64 nx, i64 ny, i6
             const std::int32_t c = cls[p];
             if (c < 0) continue;
             const auto P = static_cast<std::int32_t>(p);
-            if (x > 0 && cls[p - 1] == c) uf_unite(code, P, P - 1);
-            if (y == y0) continue;
-            if (cls[p - nx] == c) uf_unite(code, P, static_cast<std::int32_t>(p - nx));
+            const bool left = x > 0 && cls[p - 1] == c;
+            if (y == y0) {
+                code[p] = left ? P - 1 : P;
+                continue;
+            }
+            const auto U = static_cast<std::int32_t>(p - nx);
+            const bool up = cls[p - nx] == c;
             if (directions == 8) {
-                if (x > 0 && cls[p - nx - 1] == c) uf_unite(code, P, static_cast<std::int32_t>(p - nx - 1));
-                if (x + 1 < nx && cls[p - nx + 1] == c) uf_unite(code, P, static_cast<std::int32_t>(p - nx + 1));
+                // the up-left, up and up-right cells of one class are one
+                // piece, and so are the left cell and those above it
+                if (up) {
+                    code[p] = U;
+                } else if (x + 1 < nx && cls[p - nx + 1] == c) {
+                    code[p] = U + 1;
+                    if (x > 0 && cls[p - nx - 1] == c) {
+                        uf_unite(code, P, U - 1);
+                    } else if (left) {
+                        uf_unite(code, P, P - 1);
+                    }
+                } else if (x > 0 && cls[p - nx - 1] == c) {
+                    code[p] = U - 1;
+                } else {
+                    code[p] = left ? P - 1 : P;
+                }
+            } else if (up) {
+                code[p] = U;
+                if (left) uf_unite(code, P, P - 1);
+            } else {
+                code[p] = left ? P - 1 : P;
             }
         }
     }
     // Forward pass: parents (earlier pixels, already resolved) become local
     // ids, and the statistics of each piece are accumulated.
-    i64 n_local = 0;
     for (i64 y = y0; y < y1; ++y) {
         for (i64 x = 0; x < nx; ++x) {
             const i64 p = y * nx + x;
@@ -182,31 +212,29 @@ void label_strip(const std::int32_t* cls, std::int32_t* code, i64 nx, i64 ny, i6
             i64 k;
             const std::int32_t up = code[p];
             if (up == static_cast<std::int32_t>(p)) {
-                k = n_local++;
+                k = static_cast<i64>(pieces.size());
                 code[p] = static_cast<std::int32_t>(-(k + 2));
-                st.cls.push_back(c);
-                for (auto* v : {&st.cells, &st.edge_h, &st.edge_v, &st.adj_orth, &st.adj_diag, &st.sum_x, &st.sum_y}) {
-                    v->push_back(0);
-                }
-                st.first_cm.push_back(x * ny + y);
+                pieces.push_back(Piece{0, 0, 0, 0, 0, 0, 0, x * ny + y, c});
             } else {
                 code[p] = code[up];
                 k = -static_cast<i64>(code[p]) - 2;
             }
-            st.cells[k] += 1;
-            st.sum_x[k] += x;
-            st.sum_y[k] += y;
-            st.first_cm[k] = std::min(st.first_cm[k], x * ny + y);
+            Piece& pc = pieces[k];
+            pc.cells += 1;
+            pc.first_cm = std::min(pc.first_cm, x * ny + y);
+            if (!Full) continue;
+            pc.sum_x += x;
+            pc.sum_y += y;
             const bool left = x > 0 && cls[p - 1] == c;
             const bool right = x + 1 < nx && cls[p + 1] == c;
             const bool above = y > 0 && cls[p - nx] == c;
             const bool below = y + 1 < ny && cls[p + nx] == c;
-            st.edge_h[k] += !left + !right;
-            st.edge_v[k] += !above + !below;
-            st.adj_orth[k] += right + below;
+            pc.edge_h += !left + !right;
+            pc.edge_v += !above + !below;
+            pc.adj_orth += right + below;
             // With 8 directions, diagonal cells of one class are one patch.
             if (directions == 8 && y > 0) {
-                st.adj_diag[k] += (x > 0 && cls[p - nx - 1] == c) + (x + 1 < nx && cls[p - nx + 1] == c);
+                pc.adj_diag += (x > 0 && cls[p - nx - 1] == c) + (x + 1 < nx && cls[p - nx + 1] == c);
             }
         }
     }
@@ -245,53 +273,81 @@ static void count_diagonal_pairs(const std::int32_t* cls, i64 nx, i64 ny, Patche
 }
 
 Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions) {
-    const i64 n = nx * ny;
     Patches out;
+    label_patches(cls, nx, ny, directions, out);
+    return out;
+}
+
+void label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions, Patches& out, bool full) {
+    const i64 n = nx * ny;
     out.strip_rows = kStripRows;
     const i64 n_strips = (ny + kStripRows - 1) / kStripRows;
     out.code.resize(static_cast<std::size_t>(n));
     std::int32_t* code = out.code.data();
-    std::vector<StripStats> strips(static_cast<std::size_t>(n_strips));
-    const bool parallel = n >= kParallelThreshold && n_strips > 1;
-    parallel_for_dynamic(parallel, n_strips, [&](i64 s) {
-        label_strip(cls, code, nx, ny, s * kStripRows, std::min(ny, (s + 1) * kStripRows), directions, strips[s]);
-    });
-    out.strip_offset.assign(static_cast<std::size_t>(n_strips + 1), 0);
-    for (i64 s = 0; s < n_strips; ++s) {
-        out.strip_offset[s + 1] = out.strip_offset[s] + static_cast<i64>(strips[s].cls.size());
-    }
-    const i64 n_local = out.strip_offset[n_strips];
 
     if (n_strips == 1) {
         // One strip (moving windows, most sample plots): its pieces are the
-        // patches; only their order is left.
-        StripStats& st = strips[0];
-        const i64 m = n_local;
-        std::vector<std::uint64_t> key(static_cast<std::size_t>(m));
-        for (i64 i = 0; i < m; ++i) {
-            key[i] = static_cast<std::uint64_t>(st.cls[i]) * static_cast<std::uint64_t>(n) +
-                     static_cast<std::uint64_t>(st.first_cm[i]);
+        // patches; only their order is left. The work tables stay with the
+        // thread for its next landscape.
+        thread_local StripStats st;
+        thread_local std::vector<std::uint64_t> key;
+        thread_local std::vector<i64> order;
+        if (full) {
+            label_strip<true>(cls, code, nx, ny, 0, ny, directions, st);
+        } else {
+            label_strip<false>(cls, code, nx, ny, 0, ny, directions, st);
         }
-        const std::vector<i64> order = sort_by_key(std::move(key));
-        auto take = [&](auto& src, auto& dst) {
-            dst.resize(static_cast<std::size_t>(m));
-            for (i64 i = 0; i < m; ++i) dst[i] = src[order[i]];
-        };
+        const std::vector<Piece>& pieces = st.pieces;
+        const auto m = static_cast<i64>(pieces.size());
+        out.strip_offset.assign({0, m});
+        key.resize(static_cast<std::size_t>(m));
+        for (i64 i = 0; i < m; ++i) {
+            key[i] = static_cast<std::uint64_t>(pieces[i].cls) * static_cast<std::uint64_t>(n) +
+                     static_cast<std::uint64_t>(pieces[i].first_cm);
+        }
+        if (m < 512) {  // the keys are distinct: any sort gives this order
+            order.resize(static_cast<std::size_t>(m));
+            std::iota(order.begin(), order.end(), i64(0));
+            std::sort(order.begin(), order.end(), [&](i64 a, i64 b) { return key[a] < key[b]; });
+        } else {
+            order = sort_by_key(key);
+        }
         out.n = m;
-        take(st.cls, out.cls);
-        take(st.cells, out.cells);
-        take(st.edge_h, out.edge_h);
-        take(st.edge_v, out.edge_v);
-        take(st.adj_orth, out.adj_orth);
-        take(st.adj_diag, out.adj_diag);
-        take(st.sum_x, out.sum_x);
-        take(st.sum_y, out.sum_y);
-        take(st.first_cm, out.first_cm);
+        out.cls.resize(static_cast<std::size_t>(m));
+        out.cells.resize(static_cast<std::size_t>(m));
+        out.first_cm.resize(static_cast<std::size_t>(m));
+        for (auto* v : {&out.edge_h, &out.edge_v, &out.adj_orth, &out.adj_diag, &out.sum_x, &out.sum_y}) {
+            v->resize(full ? static_cast<std::size_t>(m) : 0);
+        }
+        for (i64 i = 0; i < m; ++i) {
+            const Piece& pc = pieces[order[i]];
+            out.cls[i] = pc.cls;
+            out.cells[i] = pc.cells;
+            out.first_cm[i] = pc.first_cm;
+            if (!full) continue;
+            out.edge_h[i] = pc.edge_h;
+            out.edge_v[i] = pc.edge_v;
+            out.adj_orth[i] = pc.adj_orth;
+            out.adj_diag[i] = pc.adj_diag;
+            out.sum_x[i] = pc.sum_x;
+            out.sum_y[i] = pc.sum_y;
+        }
         out.local_to_patch.resize(static_cast<std::size_t>(m));
         for (i64 i = 0; i < m; ++i) out.local_to_patch[order[i]] = static_cast<std::int32_t>(i);
-        if (directions == 4) count_diagonal_pairs(cls, nx, ny, out, false);
-        return out;
+        if (full && directions == 4) count_diagonal_pairs(cls, nx, ny, out, false);
+        return;
     }
+
+    std::vector<StripStats> strips(static_cast<std::size_t>(n_strips));
+    const bool parallel = n >= kParallelThreshold && n_strips > 1;
+    parallel_for_dynamic(parallel, n_strips, [&](i64 s) {
+        label_strip<true>(cls, code, nx, ny, s * kStripRows, std::min(ny, (s + 1) * kStripRows), directions, strips[s]);
+    });
+    out.strip_offset.assign(static_cast<std::size_t>(n_strips + 1), 0);
+    for (i64 s = 0; s < n_strips; ++s) {
+        out.strip_offset[s + 1] = out.strip_offset[s] + static_cast<i64>(strips[s].pieces.size());
+    }
+    const i64 n_local = out.strip_offset[n_strips];
 
     // Join the pieces that touch across strip seams.
     std::vector<std::int32_t> parent(static_cast<std::size_t>(n_local));
@@ -340,38 +396,40 @@ Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions) {
     std::vector<i64> first_cm(static_cast<std::size_t>(tmp.n));
     std::vector<std::int32_t> root_id(static_cast<std::size_t>(n_local), -1);
     parallel_for(parallel, n_strips, [&](i64 s) {
-        const StripStats& st = strips[s];
+        const std::vector<Piece>& pieces = strips[s].pieces;
         std::int32_t g = static_cast<std::int32_t>(roots_before[s]);
-        for (std::size_t k = 0; k < st.cls.size(); ++k) {
+        for (std::size_t k = 0; k < pieces.size(); ++k) {
             const i64 l = out.strip_offset[s] + static_cast<i64>(k);
             if (gid[l] != l) continue;
             root_id[l] = g;
-            tmp.cls[g] = st.cls[k];
-            tmp.cells[g] = st.cells[k];
-            tmp.edge_h[g] = st.edge_h[k];
-            tmp.edge_v[g] = st.edge_v[k];
-            tmp.adj_orth[g] = st.adj_orth[k];
-            tmp.adj_diag[g] = st.adj_diag[k];
-            tmp.sum_x[g] = st.sum_x[k];
-            tmp.sum_y[g] = st.sum_y[k];
-            first_cm[g] = st.first_cm[k];
+            const Piece& pc = pieces[k];
+            tmp.cls[g] = pc.cls;
+            tmp.cells[g] = pc.cells;
+            tmp.edge_h[g] = pc.edge_h;
+            tmp.edge_v[g] = pc.edge_v;
+            tmp.adj_orth[g] = pc.adj_orth;
+            tmp.adj_diag[g] = pc.adj_diag;
+            tmp.sum_x[g] = pc.sum_x;
+            tmp.sum_y[g] = pc.sum_y;
+            first_cm[g] = pc.first_cm;
             ++g;
         }
     });
     for (i64 s = 0; s < n_strips; ++s) {
-        const StripStats& st = strips[s];
-        for (std::size_t k = 0; k < st.cls.size(); ++k) {
+        const std::vector<Piece>& pieces = strips[s].pieces;
+        for (std::size_t k = 0; k < pieces.size(); ++k) {
             const i64 l = out.strip_offset[s] + static_cast<i64>(k);
             if (gid[l] == l) continue;
             const std::int32_t g = root_id[gid[l]];
-            tmp.cells[g] += st.cells[k];
-            tmp.edge_h[g] += st.edge_h[k];
-            tmp.edge_v[g] += st.edge_v[k];
-            tmp.adj_orth[g] += st.adj_orth[k];
-            tmp.adj_diag[g] += st.adj_diag[k];
-            tmp.sum_x[g] += st.sum_x[k];
-            tmp.sum_y[g] += st.sum_y[k];
-            first_cm[g] = std::min(first_cm[g], st.first_cm[k]);
+            const Piece& pc = pieces[k];
+            tmp.cells[g] += pc.cells;
+            tmp.edge_h[g] += pc.edge_h;
+            tmp.edge_v[g] += pc.edge_v;
+            tmp.adj_orth[g] += pc.adj_orth;
+            tmp.adj_diag[g] += pc.adj_diag;
+            tmp.sum_x[g] += pc.sum_x;
+            tmp.sum_y[g] += pc.sum_y;
+            first_cm[g] = std::min(first_cm[g], pc.first_cm);
         }
     }
     parallel_for(parallel, n_local, [&](i64 l) { gid[l] = root_id[gid[l]]; });
@@ -406,21 +464,13 @@ Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions) {
     parallel_for(parallel, n_local, [&](i64 l) { out.local_to_patch[l] = rank[gid[l]]; });
 
     if (directions == 4) count_diagonal_pairs(cls, nx, ny, out, parallel);
-    return out;
 }
 
 Landscape::Landscape(const std::int32_t* values, const std::uint8_t* na_mask, i64 nx, i64 ny, double resx,
                      double resy, Options options)
     : nx_(nx), ny_(ny), resx_(resx), resy_(resy), options_(std::move(options)) {
     if (nx < 0 || ny < 0) throw std::invalid_argument("negative raster size");
-    if (options_.directions != 4 && options_.directions != 8) throw std::invalid_argument("directions must be 4 or 8");
-    if (options_.neighbourhood != 4 && options_.neighbourhood != 8) {
-        throw std::invalid_argument("neighbourhood must be 4 or 8");
-    }
-    if (options_.base != "log2" && options_.base != "log" && options_.base != "log10") {
-        throw std::invalid_argument("base must be 'log2', 'log' or 'log10'");
-    }
-    if (options_.edge_depth < 0) throw std::invalid_argument("edge_depth must be >= 0");
+    check_options();
     const i64 n = nx * ny;
     if (n >= (i64(1) << 31) - 2) throw std::invalid_argument("raster too large for in-memory metrics");
 
@@ -546,16 +596,66 @@ Landscape::Landscape(i64 nx, i64 ny, double resx, double resy, Options options, 
     valid_cells_ = std::accumulate(class_cells_.begin(), class_cells_.end(), i64(0));
 }
 
+Landscape::Landscape(double resx, double resy, Options options)
+    : resx_(resx), resy_(resy), options_(std::move(options)) {
+    check_options();
+}
+
+void Landscape::check_options() const {
+    if (options_.directions != 4 && options_.directions != 8) throw std::invalid_argument("directions must be 4 or 8");
+    if (options_.neighbourhood != 4 && options_.neighbourhood != 8) {
+        throw std::invalid_argument("neighbourhood must be 4 or 8");
+    }
+    if (options_.base != "log2" && options_.base != "log" && options_.base != "log10") {
+        throw std::invalid_argument("base must be 'log2', 'log' or 'log10'");
+    }
+    if (options_.edge_depth < 0) throw std::invalid_argument("edge_depth must be >= 0");
+}
+
+void Landscape::reset(const std::int32_t* cls, i64 nx, i64 ny, const std::vector<std::int32_t>& class_values,
+                      const std::vector<i64>& class_cells) {
+    nx_ = nx;
+    ny_ = ny;
+    cls_.assign(cls, cls + nx * ny);
+    class_values_.assign(class_values.begin(), class_values.end());
+    class_cells_.assign(class_cells.begin(), class_cells.end());
+    valid_cells_ = std::accumulate(class_cells_.begin(), class_cells_.end(), i64(0));
+    if (patches_) {
+        spare_patches_ = std::move(*patches_);
+        patches_.reset();
+    }
+    if (adjacency_) {
+        spare_adjacency_ = std::move(*adjacency_);
+        adjacency_.reset();
+    }
+    if (core_) {
+        spare_core_ = std::move(*core_);
+        core_.reset();
+    }
+    for (auto& entry : patch_cache_) entry.second.valid = false;
+    for (auto& entry : base_cache_) entry.valid = false;
+    stat_done_.fill(false);
+    total_area_.reset();
+    class_cache_.clear();
+    landscape_cache_.clear();
+    class_start_.clear();
+    patch_circles_.reset();
+    pair_cache_.clear();
+}
+
 void Landscape::set_patch_values(const std::string& name, std::vector<double> values) {
     if (static_cast<i64>(values.size()) != patches().n) throw std::invalid_argument("one value per patch expected");
-    patch_cache_[name] = std::move(values);
+    patch_entry(name) = CachedValues{std::move(values), true};
     stat_done_.fill(false);
     class_cache_.clear();
     landscape_cache_.clear();
 }
 
 const Patches& Landscape::patches() {
-    if (!patches_) patches_ = label_patches(cls_.data(), nx_, ny_, options_.directions);
+    if (!patches_) {
+        label_patches(cls_.data(), nx_, ny_, options_.directions, spare_patches_);
+        patches_ = std::move(spare_patches_);
+    }
     return *patches_;
 }
 
@@ -634,47 +734,75 @@ const Core& Landscape::core() {
     constexpr std::int32_t kFar = std::numeric_limits<std::int32_t>::max() / 2;
     const std::int32_t outside = options_.consider_boundary ? kFar : 1;
     const std::int32_t* cls = cls_.data();
-    std::vector<std::int32_t> dist = city_block_distance(cls, nx, ny, outside, outside, outside);
+    // At depth 1 (the default) a cell is core when its four neighbours are
+    // of its class, outside cells counting as another class unless
+    // consider_boundary: no distances needed.
+    std::vector<std::int32_t> dist;
+    if (depth > 1) dist = city_block_distance(cls, nx, ny, outside, outside, outside);
     const std::int32_t* d = dist.data();
+    const bool inside_ok = options_.consider_boundary;
+    auto is_core = [&](i64 p, i64 x, i64 y) {
+        if (depth > 1) return d[p] > depth;
+        const std::int32_t c = cls[p];
+        return (x > 0 ? cls[p - 1] == c : inside_ok) && (x + 1 < nx ? cls[p + 1] == c : inside_ok) &&
+               (y > 0 ? cls[p - nx] == c : inside_ok) && (y + 1 < ny ? cls[p + nx] == c : inside_ok);
+    };
 
-    // Core cells per patch, summed per strip piece and then per patch.
-    std::vector<std::int32_t> core_cls(static_cast<std::size_t>(n), -1);
-    const i64 n_strips = static_cast<i64>(pt.strip_offset.size()) - 1;
-    std::vector<std::vector<i64>> pieces(static_cast<std::size_t>(n_strips));
-    parallel_for_dynamic(parallel && n_strips > 1, n_strips, [&](i64 s) {
-        std::vector<i64>& acc = pieces[s];
-        acc.assign(static_cast<std::size_t>(pt.strip_offset[s + 1] - pt.strip_offset[s]), 0);
-        const i64 y1 = std::min(ny, (s + 1) * pt.strip_rows);
-        for (i64 y = s * pt.strip_rows; y < y1; ++y) {
-            for (i64 x = 0; x < nx; ++x) {
-                const i64 p = y * nx + x;
-                if (cls[p] < 0 || d[p] <= depth) continue;
-                core_cls[p] = cls[p];
-                ++acc[-static_cast<i64>(pt.code[p]) - 2];
-            }
-        }
-    });
-    dist = {};
-    Core out;
+    // Core cells per patch (in parallel: summed per strip piece, then per
+    // patch). The tables reuse the memory of the previous raster (reset).
+    std::vector<std::int32_t>& core_cls = core_cls_;
+    core_cls.assign(static_cast<std::size_t>(n), -1);
+    Core out = std::move(spare_core_);
     out.cells.assign(static_cast<std::size_t>(pt.n), 0);
     out.areas.assign(static_cast<std::size_t>(pt.n), 0);
-    for (i64 s = 0; s < n_strips; ++s) {
-        for (std::size_t k = 0; k < pieces[s].size(); ++k) {
-            out.cells[pt.local_to_patch[pt.strip_offset[s] + static_cast<i64>(k)]] += pieces[s][k];
+    const i64 n_strips = static_cast<i64>(pt.strip_offset.size()) - 1;
+    if (parallel && n_strips > 1) {
+        std::vector<std::vector<i64>> pieces(static_cast<std::size_t>(n_strips));
+        parallel_for_dynamic(true, n_strips, [&](i64 s) {
+            std::vector<i64>& acc = pieces[s];
+            acc.assign(static_cast<std::size_t>(pt.strip_offset[s + 1] - pt.strip_offset[s]), 0);
+            const i64 y1 = std::min(ny, (s + 1) * pt.strip_rows);
+            for (i64 y = s * pt.strip_rows; y < y1; ++y) {
+                for (i64 x = 0; x < nx; ++x) {
+                    const i64 p = y * nx + x;
+                    if (cls[p] < 0 || !is_core(p, x, y)) continue;
+                    core_cls[p] = cls[p];
+                    ++acc[-static_cast<i64>(pt.code[p]) - 2];
+                }
+            }
+        });
+        for (i64 s = 0; s < n_strips; ++s) {
+            for (std::size_t k = 0; k < pieces[s].size(); ++k) {
+                out.cells[pt.local_to_patch[pt.strip_offset[s] + static_cast<i64>(k)]] += pieces[s][k];
+            }
+        }
+    } else {
+        const std::int32_t* code = pt.code.data();
+        const std::int32_t* to_patch = pt.local_to_patch.data();
+        i64* core_cells = out.cells.data();
+        for (i64 y = 0; y < ny; ++y) {
+            const i64 first_local = pt.strip_offset[y / pt.strip_rows] - 2;
+            for (i64 x = 0; x < nx; ++x) {
+                const i64 p = y * nx + x;
+                if (cls[p] < 0 || !is_core(p, x, y)) continue;
+                core_cls[p] = cls[p];
+                ++core_cells[to_patch[first_local - code[p]]];
+            }
         }
     }
-    pieces = {};
+    dist = {};
 
     // Disjunct core areas: core cells labelled like patches; each lies in one
     // patch (cores of different patches cannot touch).
-    const Patches cores = label_patches(core_cls.data(), nx, ny, options_.directions);
+    label_patches(core_cls.data(), nx, ny, options_.directions, core_patches_, false);
+    const Patches& cores = core_patches_;
     for (i64 i = 0; i < cores.n; ++i) {
         const i64 x = cores.first_cm[i] / ny;
         const i64 y = cores.first_cm[i] % ny;
         ++out.areas[pt.patch(y * nx + x, y)];
     }
-    out.area_cells = cores.cells;
-    out.area_class = cores.cls;
+    out.area_cells.assign(cores.cells.begin(), cores.cells.end());
+    out.area_class.assign(cores.cls.begin(), cores.cls.end());
     out.has_area_cells = true;
     core_ = std::move(out);
     return *core_;
@@ -689,63 +817,67 @@ const Adjacency& Landscape::adjacency() {
     const bool diag = options_.neighbourhood == 8;
     const std::size_t cells = static_cast<std::size_t>(dim) * dim;
     const i64 n = nx_ * ny_;
-    // Thread-local tables unless they would be large.
-    const int n_threads = (n >= kParallelThreshold && cells * 3 * max_threads() <= (std::size_t(1) << 25)) ? max_threads() : 1;
-    std::vector<std::vector<i64>> h(n_threads, std::vector<i64>(cells, 0));
-    std::vector<std::vector<i64>> v(n_threads, std::vector<i64>(cells, 0));
-    std::vector<std::vector<i64>> d(diag ? n_threads : 0, std::vector<i64>(cells, 0));
     const i64 nx = nx_;
     const i64 ny = ny_;
-    auto count_row = [&](i64 y) {
-        const int t = n_threads > 1 ? thread_id() : 0;
-        i64* hh = h[t].data();
-        i64* vv = v[t].data();
+    const std::int32_t* cl = cls_.data();
+    // The pairs of the cells of row y, added to the tables hh, vv and dd.
+    auto count_row = [cl, nx, ny, dim, na, out, diag](i64 y, i64* hh, i64* vv, i64* dd) {
+        auto nb = [cl, na](i64 q) { return cl[q] < 0 ? na : cl[q]; };
         for (i64 x = 0; x < nx; ++x) {
             const i64 p = y * nx + x;
-            const int a = cls_[p];
+            const int a = cl[p];
             if (a < 0) continue;
             const i64 row = static_cast<i64>(a) * dim;
-            auto nb = [&](i64 q) { return cls_[q] < 0 ? na : cls_[q]; };
             ++hh[row + (x > 0 ? nb(p - 1) : out)];
             ++hh[row + (x + 1 < nx ? nb(p + 1) : out)];
             ++vv[row + (y > 0 ? nb(p - nx) : out)];
             ++vv[row + (y + 1 < ny ? nb(p + nx) : out)];
             if (diag) {
-                i64* dd = d[t].data();
                 for (int dy = -1; dy <= 1; dy += 2) {
                     const i64 yy = y + dy;
                     if (yy < 0 || yy >= ny) continue;
                     for (int dx = -1; dx <= 1; dx += 2) {
                         const i64 xx = x + dx;
                         if (xx < 0 || xx >= nx) continue;
-                        const int b = cls_[yy * nx + xx];
+                        const int b = cl[yy * nx + xx];
                         if (b >= 0) ++dd[row + b];
                     }
                 }
             }
         }
     };
-    if (n_threads > 1) {
-#pragma omp parallel for schedule(static) num_threads(n_threads)
-        for (i64 y = 0; y < ny; ++y) count_row(y);
-    } else {
-        for (i64 y = 0; y < ny; ++y) count_row(y);
-    }
-    Adjacency adj;
+    // The result reuses the memory of the previous raster (reset).
+    Adjacency adj = std::move(spare_adjacency_);
     adj.dim = dim;
-    adj.h = std::move(h[0]);
-    adj.v = std::move(v[0]);
-    for (int t = 1; t < n_threads; ++t) {
-        for (std::size_t i = 0; i < cells; ++i) {
-            adj.h[i] += h[t][i];
-            adj.v[i] += v[t][i];
-        }
-    }
+    adj.h.assign(cells, 0);
+    adj.v.assign(cells, 0);
     if (diag) {
-        adj.diag = std::move(d[0]);
-        for (int t = 1; t < n_threads; ++t) {
-            for (std::size_t i = 0; i < cells; ++i) adj.diag[i] += d[t][i];
+        adj.diag.assign(cells, 0);
+    } else {
+        adj.diag.clear();
+    }
+    // Thread-local tables unless they would be large.
+    const int n_threads = (n >= kParallelThreshold && cells * 3 * max_threads() <= (std::size_t(1) << 25)) ? max_threads() : 1;
+    if (n_threads > 1) {
+        std::vector<std::vector<i64>> h(n_threads, std::vector<i64>(cells, 0));
+        std::vector<std::vector<i64>> v(n_threads, std::vector<i64>(cells, 0));
+        std::vector<std::vector<i64>> d(diag ? n_threads : 0, std::vector<i64>(cells, 0));
+#pragma omp parallel for schedule(static) num_threads(n_threads)
+        for (i64 y = 0; y < ny; ++y) {
+            const int t = thread_id();
+            count_row(y, h[t].data(), v[t].data(), diag ? d[t].data() : nullptr);
         }
+        for (int t = 0; t < n_threads; ++t) {
+            for (std::size_t i = 0; i < cells; ++i) {
+                adj.h[i] += h[t][i];
+                adj.v[i] += v[t][i];
+            }
+            if (diag) {
+                for (std::size_t i = 0; i < cells; ++i) adj.diag[i] += d[t][i];
+            }
+        }
+    } else {
+        for (i64 y = 0; y < ny; ++y) count_row(y, adj.h.data(), adj.v.data(), diag ? adj.diag.data() : nullptr);
     }
     adjacency_ = std::move(adj);
     return *adjacency_;

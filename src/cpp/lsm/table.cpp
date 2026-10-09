@@ -141,29 +141,25 @@ std::vector<double> window_metrics(const RasterView& raster, const std::uint8_t*
         Landscape probe(&one, nullptr, 1, 1, raster.resx, raster.resy, options);
         for (const std::string& name : names) probe.landscape_metric(name);
     }
-    // Class values as dense indices (same order): windows then need no
-    // large look-up tables.
-    std::vector<std::int32_t> dense(static_cast<std::size_t>(n), 0);
-    std::vector<std::uint8_t> na(static_cast<std::size_t>(n), 0);
+    // Class values as dense indices (same order, -1 = NA): windows then need
+    // no large look-up tables.
+    std::vector<std::int32_t> dense(static_cast<std::size_t>(n), -1);
+    std::vector<std::int32_t> classes;
     {
-        std::vector<std::int32_t> classes;
         for (i64 p = 0; p < n; ++p) {
-            if (raster.na_mask && raster.na_mask[p]) {
-                na[p] = 1;
-            } else {
-                classes.push_back(raster.values[p]);
-            }
+            if (!(raster.na_mask && raster.na_mask[p])) classes.push_back(raster.values[p]);
         }
         std::sort(classes.begin(), classes.end());
         classes.erase(std::unique(classes.begin(), classes.end()), classes.end());
 #pragma omp parallel for schedule(static) if (n >= kLargeRaster)
         for (i64 p = 0; p < n; ++p) {
-            if (!na[p]) {
+            if (!(raster.na_mask && raster.na_mask[p])) {
                 dense[p] = static_cast<std::int32_t>(std::lower_bound(classes.begin(), classes.end(), raster.values[p]) -
                                                      classes.begin());
             }
         }
     }
+    const auto n_classes = static_cast<i64>(classes.size());
     std::vector<double> out(static_cast<std::size_t>(m * n));
     const i64 hx = wx / 2;
     const i64 hy = wy / 2;
@@ -182,37 +178,74 @@ std::vector<double> window_metrics(const RasterView& raster, const std::uint8_t*
     }
     Options options8 = options;
     options8.directions = 8;
+    // terra::focal hands window_lsm the values row by row and it fills its
+    // window matrix column by column: its landscape is the window
+    // transposed. Ours is too (with the cell sides swapped, so the geometry
+    // stays right): the patches then come in R's order, which pafrac's
+    // regression rounds by.
+    std::vector<std::uint8_t> shape(static_cast<std::size_t>(wx * wy));
+    for (i64 j = 0; j < wy; ++j) {
+        for (i64 i = 0; i < wx; ++i) shape[i * wy + j] = window[j * wx + i] != 0;
+    }
     FirstError error;
 #pragma omp parallel
     {
+        // One landscape per thread, refilled window after window; the
+        // window's classes come out of the copy (cells per global class,
+        // the classes seen), so the landscape gets them ready.
+        Landscape l(raster.resy, raster.resx, options);
+        std::optional<Landscape> l8;
+        if (any_eight) l8.emplace(raster.resy, raster.resx, options8);
         std::vector<std::int32_t> buf(static_cast<std::size_t>(wx * wy));
-        std::vector<std::uint8_t> buf_na(static_cast<std::size_t>(wx * wy));
+        std::vector<i64> count(static_cast<std::size_t>(n_classes), 0);
+        std::vector<std::int32_t> local(static_cast<std::size_t>(n_classes));
+        std::vector<std::int32_t> seen, values;
+        std::vector<i64> cells;
 #pragma omp for schedule(dynamic)
         for (i64 y = 0; y < ny; ++y) {
             error.run([&] {
+                const i64 j0 = std::max<i64>(0, hy - y);
+                const i64 j1 = std::min<i64>(wy, ny - y + hy);
                 for (i64 x = 0; x < nx; ++x) {
-                    // terra::focal hands window_lsm the values row by row and
-                    // it fills its window matrix column by column: its
-                    // landscape is the window transposed. Ours is too (with
-                    // the cell sides swapped, so the geometry stays right):
-                    // the patches then come in R's order, which pafrac's
-                    // regression rounds by.
-                    for (i64 j = 0; j < wy; ++j) {
-                        const i64 yy = y - hy + j;
-                        for (i64 i = 0; i < wx; ++i) {
-                            const i64 xx = x - hx + i;
-                            const i64 b = i * wy + j;
-                            const bool in =
-                                window[j * wx + i] && yy >= 0 && yy < ny && xx >= 0 && xx < nx && !na[yy * nx + xx];
-                            buf_na[b] = !in;
-                            buf[b] = in ? dense[yy * nx + xx] : 0;
+                    seen.clear();
+                    for (i64 i = 0; i < wx; ++i) {
+                        std::int32_t* col = buf.data() + i * wy;
+                        const i64 xx = x - hx + i;
+                        if (xx < 0 || xx >= nx) {
+                            std::fill(col, col + wy, -1);
+                            continue;
                         }
+                        const std::uint8_t* in = shape.data() + i * wy;
+                        std::fill(col, col + j0, -1);
+                        for (i64 j = j0; j < j1; ++j) {
+                            const std::int32_t v = in[j] ? dense[(y - hy + j) * nx + xx] : -1;
+                            col[j] = v;
+                            if (v >= 0 && count[v]++ == 0) seen.push_back(v);
+                        }
+                        std::fill(col + j1, col + wy, -1);
                     }
-                    Landscape l(buf.data(), buf_na.data(), wy, wx, raster.resy, raster.resx, options);
-                    std::optional<Landscape> l8;
-                    if (any_eight) l8.emplace(buf.data(), buf_na.data(), wy, wx, raster.resy, raster.resx, options8);
-                    for (i64 k = 0; k < m; ++k) {
-                        out[k * n + y * nx + x] = eight[k] ? l8->landscape_metric(names[k]) : l.landscape_metric(names[k]);
+                    std::sort(seen.begin(), seen.end());
+                    const auto k = seen.size();
+                    values.resize(k);
+                    cells.resize(k);
+                    for (std::size_t c = 0; c < k; ++c) {
+                        const std::int32_t g = seen[c];
+                        local[g] = static_cast<std::int32_t>(c);
+                        values[c] = classes[g];
+                        cells[c] = count[g];
+                        count[g] = 0;
+                    }
+                    if (k > 1) {
+                        for (std::int32_t& v : buf) {
+                            if (v >= 0) v = local[v];
+                        }
+                    } else if (k == 1) {
+                        for (std::int32_t& v : buf) v = v >= 0 ? 0 : -1;
+                    }
+                    l.reset(buf.data(), wy, wx, values, cells);
+                    if (l8) l8->reset(buf.data(), wy, wx, values, cells);
+                    for (i64 q = 0; q < m; ++q) {
+                        out[q * n + y * nx + x] = eight[q] ? l8->landscape_metric(names[q]) : l.landscape_metric(names[q]);
                     }
                 }
             });

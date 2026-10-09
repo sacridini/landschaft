@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -112,6 +113,9 @@ constexpr i64 kStripRows = 64;
 // Patches of a raster of dense class indices (-1 = NA), labelled in strips
 // of kStripRows rows, in landscapemetrics' order.
 Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions);
+// The same into `out`, whose memory is reused. Without `full`, a raster of
+// one strip only gets the class, cells and first cell of its patches.
+void label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions, Patches& out, bool full = true);
 
 // City-block distance of every valid cell to the nearest cell of another
 // class or NA, and to the edges of the array, which count as `top`, `bottom`
@@ -204,6 +208,14 @@ public:
     // with set_core / set_patch_values before they are asked for.
     Landscape(i64 nx, i64 ny, double resx, double resy, Options options, std::vector<std::int32_t> class_values,
               std::vector<i64> class_cells, Patches patches, Adjacency adjacency);
+    // An empty landscape that takes its rasters from reset() (moving
+    // windows): one object serves many small rasters and keeps its memory.
+    Landscape(double resx, double resy, Options options);
+    // A new raster of class indices 0..k-1 (-1 = NA), the classes
+    // `class_values` (increasing) with `class_cells` cells each; everything
+    // is computed again for it.
+    void reset(const std::int32_t* cls, i64 nx, i64 ny, const std::vector<std::int32_t>& class_values,
+               const std::vector<i64>& class_cells);
 
     bool has_raster() const { return !tables_only_; }
     void set_core(Core core) { core_ = std::move(core); }
@@ -242,14 +254,15 @@ public:
     std::vector<i64> cooccurrence(const std::vector<std::pair<int, int>>& offsets);
 
 private:
+    void check_options() const;
     // metrics.cpp
-    const std::vector<double>& patch_base(const std::string& name);
+    const std::vector<double>& patch_base(std::string_view name);
     std::vector<double> gyrate();
     std::vector<double> class_metric_impl(const std::string& name);
     double landscape_metric_impl(const std::string& name);
     std::vector<double> cohesion_terms();
-    const std::vector<double>& stat_values(const std::string& base, const std::string& stat, bool by_class);
-    int stat_slot(const std::string& base, const std::string& stat, bool by_class);
+    const std::vector<double>& stat_values(std::string_view base, std::string_view stat, bool by_class);
+    int stat_slot(std::string_view base, std::string_view stat, bool by_class);
     const std::vector<i64>& class_start();
     double cohesion_factor() const;
     // utils.cpp
@@ -262,7 +275,7 @@ private:
     std::vector<double> proximity(bool similarity);
     std::vector<double> connectance(bool by_class);
     std::vector<double> contrast_edges(bool teci, bool by_class);
-    std::vector<double> dcore_sizes(const std::string& stat, bool by_class);
+    std::vector<double> dcore_sizes(std::string_view stat, bool by_class);
     // geometry.cpp
     std::vector<double> enn();
     std::vector<double> circle();
@@ -286,14 +299,29 @@ private:
 
     bool tables_only_ = false;
     std::optional<Patches> patches_;
+    // the memory of the tables of the previous raster (reset)
+    Patches spare_patches_;
+    Adjacency spare_adjacency_;
+    Core spare_core_;
+    Patches core_patches_;
+    std::vector<std::int32_t> core_cls_;
     std::optional<Adjacency> adjacency_;
     std::optional<Core> core_;
-    std::map<std::string, std::vector<double>> patch_cache_; // node-based: references stay valid
+    // Patch values per metric: the patch metrics with summary statistics in
+    // fixed places, the others by name (node-based: references stay valid).
+    // reset() only marks them stale, so the next raster reuses the memory.
+    struct CachedValues {
+        std::vector<double> values;
+        bool valid = false;
+    };
+    CachedValues& patch_entry(std::string_view name);
+    std::map<std::string, CachedValues, std::less<>> patch_cache_;
     // summary statistics (stat_values): per patch metric, statistic and level
     static constexpr int kStatBases = 16;
     static constexpr int kStatKinds = 6;
     std::array<std::vector<double>, kStatBases * kStatKinds * 2> stat_cache_;
     std::array<bool, kStatBases * kStatKinds * 2> stat_done_{};
+    std::array<CachedValues, kStatBases> base_cache_;
     std::optional<double> total_area_;
     std::map<std::string, std::vector<double>> class_cache_;
     std::map<std::string, double> landscape_cache_;
@@ -374,7 +402,7 @@ std::uint64_t morton_code(std::uint32_t x, std::uint32_t y);
 
 // Smallest circle around the given cell corners (grid units: x to the right,
 // y down), scaled by (rx, ry): Welzl's algorithm (seeded) on their convex
-// hull, which is exact on the grid. `corners` is sorted in place.
+// hull, which is exact on the grid. `corners` is overwritten.
 EnclosingCircle grid_circle(std::vector<std::pair<i64, i64>>& corners, double rx, double ry, std::uint64_t seed);
 
 // Landscape-level metrics in a moving window (window: wy rows x wx columns,

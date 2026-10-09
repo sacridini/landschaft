@@ -6,6 +6,21 @@ in a new major version.
 
 ## [Unreleased]
 
+### Changed
+- `ls.window_metrics` is about twice as fast, with the same values bit for bit: every landscape metric
+  in a 21 x 21 window over a 1000 x 1000 map takes 3.7 s instead of 7.5 s (11 threads), the number of
+  patches 0.60 s instead of 1.45 s. Each thread now refills one landscape window after window and keeps
+  its memory (patches, core areas, adjacencies, patch values), the copy of the window hands the landscape
+  its classes ready, patches are labelled with the decision tree of Wu, Otoo and Suzuki (2009) (a union
+  only where two pieces meet), cores at the default `edge_depth` = 1 come from the four neighbours without
+  distances, circles find the hull of their corners without sorting them, and small landscapes no longer
+  open (serialised) OpenMP regions. Whole maps gain too.
+
+### Fixed
+- `ls.window_metrics` with FRAGSTATS contrast or similarity tables (`contrast=` for `cwed` and `teci`,
+  `similarity=` for `simi`) looked the tables up by the window's class indices instead of the class values,
+  so most windows got NaN or the wrong weights.
+
 ## [1.35.0] - 2026-10-09
 
 ### Added
