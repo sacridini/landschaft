@@ -2306,6 +2306,18 @@ o fim filogenético usa o `rowSums` do R (80 bits) dos totais das zonas; o orça
 O risco de extinção (nosso) soma as zonas pelas contribuições (total = o da base). Um problema de uma zona dada
 como mapeamento é o problema sem zonas mais uma linha trivial por unidade (testado em 7 objetivos).
 
+**Fase 3 feita** (1.40.0, 2026-10-09): `_zones_spatial.py` (borda com `edge_factor` por zona e matriz de zonas,
+conectividade simétrica e assimétrica com matriz de zonas, penalidades lineares por zona, restrições lineares,
+vizinhos com `k` por zona e matriz binária, contiguidade por grupos de zonas ligadas: a nossa formulação exata
+sobre colunas que somam as zonas do grupo). 10 casos bit a bit (contiguidade: ótimo <= o do prioritizr). Fatos:
+a matriz de borda vem das células com custo em alguma zona (`allNA`); os pares de zonas diferentes entram nos
+dois sentidos, entrada a entrada; a conectividade usa `tril` de `d * zones[z1, z2]` para todo par (z1, z2), sem a
+diagonal fora da diagonal de zonas. Bugs do prioritizr corrigidos (referência corrigida no harness): a adjacência
+padrão com zonas pega só as células com custo em todas as zonas (`min(is.finite)`); as penalidades lineares
+somem todas quando a de uma zona é 0 (`min(abs(p)) > 1e-50`). Borda e contiguidade com zonas levam minutos no
+MIP do HiGHS mesmo em 168 unidades (testes com limite de tempo: limite <= ótimo do prioritizr <= o nosso) até a
+fase 4. Ficam de fora (decisão 2): contiguidade por feição e corredores com zonas, arrays 4D.
+
 `add_neighbor_penalties` (do prioritizr 9) continua um item à parte, sob pedido.
 
 ### Próximos passos (retomar daqui)

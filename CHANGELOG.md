@@ -6,6 +6,26 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.40.0] - 2026-10-09
+
+### Added
+- Spatial penalties and constraints with management zones: boundary penalties (`edge_factor` one or one per
+  zone; `zones`: `"same"`, the default, `"any"`, or a zones x zones matrix of how much the boundary between two
+  zones counts, from -1 to 1), symmetric and asymmetric connectivity penalties (`zones=` likewise), linear
+  penalties (a penalty per zone; the same data in every zone, a mapping zone -> data or a raster with a layer
+  per zone) and constraints (summed over every zone), neighbour constraints (`k` one or one per zone, `zones` a
+  binary matrix of the zones that count as neighbours) and contiguity constraints (`zones`: the clusters of
+  linked zones whose units form one patch; exact, as without zones). Compiled bit for bit as prioritizr
+  8.0.6's `compile()` (10 more reference cases) with the same optima as prioritizr on Gurobi. Feature
+  contiguity and corridors are not available with zones.
+
+### Fixed
+- prioritizr's default adjacency with zones (neighbour and contiguity constraints) takes only the cells with a
+  cost in every zone, so a unit missing from one zone loses all its neighbours: Landschaft takes the cells
+  with a cost in any zone, as prioritizr's boundary matrix does.
+- prioritizr's linear penalties with zones leave out the penalties of every zone when one zone's penalty is 0:
+  Landschaft applies the others.
+
 ## [1.39.0] - 2026-10-09
 
 ### Added
