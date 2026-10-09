@@ -142,6 +142,7 @@ def main() -> None:
             if c["kind"] == "bd" and c["bd"].get("exrisk"):
                 c["bd"]["x_vals"] = pc.exrisk_x(n_master).tolist()
                 c["bd"]["scen"] = [{"name": k, **v} for k, v in pc.SCEN_CASES.items()]
+                c["bd"]["scen_cd"] = [{"name": k, **v} for k, v in pc.SCEN_CD_CASES.items()]
         eco_file = write_tif(tmp / "ecoregion_codes.tif", pc.ecoregion_codes())
         for name, spec in pc.EC_CASES.items():
             cases.append({"name": name, "kind": "ec", "oa": oa_job(tmp, name + "_oa", pc.OA_CASES["oa_past_er"]),

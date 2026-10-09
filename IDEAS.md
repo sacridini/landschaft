@@ -2455,6 +2455,43 @@ habitat que volta para cada espécie conforme a classe natural restaurada. O `ls
   escala global (milhões de células, milhares de espécies) medida só até 9 x 10⁴ x 500; o custo mínimo por
   bissecção poderia usar interpolação (benefício côncavo no orçamento) em vez do meio.
 
+### Itens abertos da restauração (pedido em 2026-10-09: "tudo o que ficou faltando")
+Fases, nesta ordem; ao fim de cada uma: testes, commit (versão e push no fim, com o usuário).
+* **A. Ações `C` e `D`** (e R+D, R+C). Cada ação é um bloco de colunas x >= 0 (a fração da célula restaurada,
+  conservada ou convertida), com seus limites; o habitat das espécies é afim em x: A = base + G x, G com sinal
+  (restaurar e conservar ganham, converter perde), e o benefício min(A/P, 1)^z continua côncavo: o exato
+  (decomposição simplicial) vale para todas. `D` com variável positiva (área convertida) em vez do x negativo
+  do plangea. `C`: o contrafactual do plangea (a terra natural não conservada das unidades se perde),
+  generalizado por `threat` (fração perdida sem conservação, padrão 1 = plangea): base = atual - G_nat
+  threat nat, conservar x devolve G_nat threat x. C+D na mesma célula não (contraditório).
+  * Perda por espécie: `HabitatAreas.loss` = área x Σ das frações atuais das classes adequadas / fração natural
+    (a composição natural atual, o `prop_restore` do plangea para C e D), nas células da distribuição com
+    terra natural; `ecosystem_areas` também com `loss` (área da célula onde há terra natural).
+  * Intactness: `reduction` por unidade restaurada e `increase` por unidade convertida (ou perdida, em C).
+  * Bugs do plangea (só a forma correta): em C o `.multi_refresh_vars_update_hab` subtrai a fração natural
+    (0-1) de uma área em km²; as inclinações iniciais de C são tomadas no habitat atual, não no contrafactual.
+* **B. Alvos por sub-região**: projeções econométricas (variação líquida da área natural por região:
+  positiva = restaurar, negativa = converter; a direção restringe as colunas da região, o que o
+  `harmonize_sr_r_or_c_bvals` pretendia), compensação `sparable` só no problema só de restauração; alvos
+  relativos (fração da área disponível por região, os `flat`); alvos em outras unidades (produção, custo);
+  alvos por ecossistema (`harmonize_sr_ecosys`): exato (alocação côncava separável, por bissecção no
+  multiplicador) e os passos do plangea para comparar.
+  * Bugs do plangea: o caminho econométrico de R+D não funciona (`blim_sr` só é preenchido em C+R, que o
+    `check_cfg` proíbe; o `harmonize_sr_sparable` roda também em R+D e zera as metas de conversão).
+* **C. Curva de trade-off e gradiente**: o exato em várias metas, independentes (a fronteira) ou aninhadas
+  (cada nível contém o anterior: limites inferiores no exato), o mapa de gradiente (`post_gradient_output`: o
+  passo em que cada célula entrou) e o `steps` do plangea nos passos da curva; a escolha de pesos por
+  média/desvio (`post_choose_weights`) ao lado do `topsis`.
+* **D. Intactness exata**: T(x) com a pegada H = max(H0 - a x_R + b x_D, 0) é convexa em t = H0 - H (soma de
+  exponenciais) e t é côncava em x: não é côncava. Minorização sucessiva: o plano tangente em t (coeficientes
+  >= 0) vezes t(x) côncavo é uma minorante côncava que toca em x0; cada passo é um problema côncavo exato e T
+  nunca cai (ótimo local). Limite superior: a secante de cada par (j, k) da janela no seu intervalo de
+  t_j + t_k (côncava em x); o gap informado.
+* **E. Custo mínimo por interpolação**: a corda entre os dois lados (benefício côncavo no orçamento: o ponto da
+  corda alcança a meta) e a extrapolação da secante pela esquerda (limite inferior), com o meio como recurso.
+* **F. Escala global**: medir em milhões de células e milhares de espécies (dados sintéticos), perfilar e
+  otimizar (oráculo do vértice sem LP quando só há uma linha, produtos com o ganho em C++/OpenMP).
+
 ### Não portar
 O JSON de configuração e o cache de pastas do `harmonize` (a nossa E/S faz isso); o deslocamento
 `b + |min b| + 1` dos benefícios (muda o ranking de forma arbitrária); o "power range collapse" (reescala

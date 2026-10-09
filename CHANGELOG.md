@@ -6,6 +6,25 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- Conservation and conversion in restoration plans (plangea's `C`, `D` and `R + D`):
+  `ls.prioritize.restoration_problem(restorable, conservable=, convertible=, threat=)`. Every action is a
+  block of shares (from 0 to what can be acted on, times `limit`, now also per action); conserving keeps
+  the habitat that the baseline loses (`threat` of the natural land, 1 as plangea), converting takes it
+  away (with a positive share converted instead of plangea's negative x), so the benefit stays concave and
+  the exact method proves the optimum of every form. Area targets of one action, of all of them or of the
+  `"net"` change of natural land (`action=`); linear values and costs per action (a mapping); the
+  intactness benefit takes the footprint's `increase` per unit converted; the solution has `conserved`
+  and `converted` maps and the area of every action (`areas`); `evaluate(restored=, conserved=,
+  converted=)`; `eval_risk_reduction` reports the `baseline` habitat. `ls.sdm.area_of_habitat(...,
+  loss=True)` and `ecosystem_areas` give the habitat lost per unit of natural land lost (the current
+  natural cover). plangea's procedure (`method="steps"`) for C and D matches its `scen` loop (plans to
+  1e-12, refreshed layers to 1e-7).
+- Corrected in plangea (only the correct form): under C its habitat update subtracts the natural share
+  (0-1) from an area in km², and its first slopes are taken at the current habitat instead of the
+  baseline's; under C and D the original cover (and so the potential habitat) is computed on the
+  problem's pixels only, so a pixel converted in full adds no potential habitat.
+
 ## [1.36.0] - 2026-10-09
 
 ### Added

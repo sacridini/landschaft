@@ -236,6 +236,68 @@ for (case in job$cases) {
           put(sc$name, "ub", ub)
         }
       }
+      # scen's loop for conversion ("D") and conservation ("C"): the pixels with natural land, their
+      # current natural cover as prop_restore, x in [-natural, 0] (D, the target negated, sense "<=") or
+      # [0, natural] (C); the habitats now and potential of the restoration run (plangea computes the
+      # original cover only on the problem's pixels, so under C or D a pixel converted in full adds no
+      # potential habitat). C corrected: the baseline (the natural land not conserved is lost) gives the
+      # first slopes too, and the natural share lost is an area (the share times the pixel's area; plangea
+      # subtracts the share from an area), both through lu_vals.
+      if (!is.null(b$scen_cd)) {
+        nat_now <- Reduce("+", lu_ras[types == "N"])
+        for (sc in b$scen_cd) {
+          keep <- values(nat_now) > 0
+          if (!is.null(sc$cols)) keep <- keep & colFromCell(nat_now, seq_len(ncell(nat_now))) <= sc$cols
+          master_n <- which(keep)
+          cn <- lapply(lu_ras[types == "N"], function(x) x[master_n])
+          prop_n <- matrix(unlist(cn), ncol = length(cn))
+          colnames(prop_n) <- names(cn)
+          total_n <- rowSums(prop_n)
+          for (i in 1:ncol(prop_n)) {prop_n[, i] <- prop_n[, i] / total_n}
+          px_n <- area(lu_ras[[1]])[master_n] * 1e-6
+          nat_n <- values(nat_now)[master_n]
+          put(sc$name, "master_n", master_n)
+          # the species' ranges over these pixels (harmonize_bd's spp_main_range is over its own master_index)
+          range_n <- lapply(bd$spp_terr_range, function(r) master_n[master_n %in% r])
+          is_c <- sc$type == "C"
+          cfg_cd <- list(scenarios = list(problem_type = sc$type, use_threads = FALSE),
+                         landscape_features = list(land_use = list(class_types = "N")))
+          lu_cd <- if (is_c) list(nat = nat_n * px_n) else NULL
+          update <- function(cum) .multi_refresh_vars_update_hab(
+            hab_now_areas = bd$hab_now_areas, restored_area = cum * px_n, prop_restore = prop_n,
+            usphab_proc = bd$usphab_proc, usphab_index = bd$usphab_index, master_index = master_n,
+            verbose = FALSE, spp_main_range = range_n, cfg = cfg_cd, threads = 1,
+            recalc_threads = FALSE, lu_vals = lu_cd)
+          layer <- function(hab) .multi_calc_bd(slp = .multi_extinction_slope(A = hab, Amax = bd$hab_pot_areas),
+                                                prop_restore = prop_n, usphab_proc = bd$usphab_proc,
+                                                usphab_index = bd$usphab_index, spp_main_range = range_n,
+                                                master_index = master_n)
+          cum <- rep(0, length(master_n))
+          bd0 <- layer(if (is_c) update(cum) else bd$hab_now_areas)
+          sf <- 1 / 10^trunc(log10(max(abs(bd0), na.rm = TRUE)))
+          obj <- scen_objective_function(list(bd0 * sf), "B", rescale_ben = FALSE)
+          target <- sc$share * sum(nat_n * px_n)
+          rhs <- if (is_c) target else -target
+          iter_lb <- if (is_c) 0 * nat_n else -nat_n
+          iter_ub <- if (is_c) nat_n else 0 * nat_n
+          put(sc$name, "bd_0", bd0)
+          for (k in seq_len(sc$steps)) {
+            res <- scen_solver(obj = obj, mat = matrix(px_n, nrow = 1), rhs = rhs / sc$steps, ub = iter_ub,
+                               lb = iter_lb, sense = "<=", vtype = "C", gurobi = TRUE)
+            x <- res$x
+            if (is_c) iter_ub[x > 0] <- (iter_ub - x)[x > 0] else iter_lb[x < 0] <- (iter_lb - x)[x < 0]
+            cum <- cum + x
+            if (k < sc$steps) {
+              nbd <- layer(update(cum))
+              put(sc$name, paste0("cum_", k), cum)
+              put(sc$name, paste0("bd_", k), nbd)
+              obj <- scen_objective_function(list(nbd * sf), "B", rescale_ben = FALSE)
+            }
+          }
+          put(sc$name, "x", cum)
+          put(sc$name, "target", target)
+        }
+      }
     }
   } else if (case$kind == "ec") {
     o <- case$oa

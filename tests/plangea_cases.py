@@ -197,6 +197,16 @@ SCEN_CASES = {
     "scen_4_60": dict(steps=4, share=0.6),
 }
 
+# the same for conversion ("D") and conservation ("C", corrected) on bd_absent's habitats: the target a
+# share of the natural area (converted, at least; conserved, at most); conservation on the natural land of
+# the first `cols` columns (with all of it, its baseline loses every species' habitat: slopes at A ~ 0)
+SCEN_CD_CASES = {
+    "scen_d_1": dict(type="D", steps=1, share=0.2),
+    "scen_d_3": dict(type="D", steps=3, share=0.3),
+    "scen_c_1": dict(type="C", steps=1, share=0.3, cols=7),
+    "scen_c_4": dict(type="C", steps=4, share=0.5, cols=7),
+}
+
 # the risk of ecosystem collapse (multi_calc_ec): the ecoregions' natural area over plangea's master pixels
 # (its form) or over all the land (the corrected one)
 EC_CASES = {

@@ -73,11 +73,18 @@ class HabitatAreas(Saveable):
         unit of the cell's area restored): a sparse matrix, species (in the
         order of ``table``) x cells of the grid (row-major), over the cells
         of its range with anthropic land. None without the original vegetation.
+    loss
+        The habitat each species loses per unit of a cell's area of natural
+        land lost (converted, or not conserved): the cell's area times the
+        share of the species' classes in its current natural cover, over the
+        cells of its range with natural land (the same layout as ``gain``).
+        None unless asked for (``loss=True``).
     """
 
     table: pd.DataFrame
     gain: sp.csr_matrix | None = field(default=None, repr=False)
     _template: xr.DataArray | None = field(default=None, repr=False)
+    loss: sp.csr_matrix | None = field(default=None, repr=False)
 
     def gain_map(self, species: str) -> xr.DataArray:
         """The habitat a species gains per unit of each cell restored, as a raster (0 elsewhere)."""
@@ -118,6 +125,7 @@ def area_of_habitat(
     elevation_limits=None,
     include_unlisted: bool = True,
     cell_area=None,
+    loss: bool = False,
     n_threads: int | None = None,
 ) -> HabitatAreas:
     """Area of habitat of species: their ranges refined by habitats and elevations.
@@ -165,6 +173,9 @@ def area_of_habitat(
     cell_area
         The area of a cell: a number, a raster, or None: from the grid in km²
         (see :func:`cell_area_km2`).
+    loss
+        Also the habitat lost per unit of natural land converted (``loss``):
+        what conservation and conversion plans need.
     n_threads
         Threads (default: all cores but one).
 
@@ -287,9 +298,18 @@ def area_of_habitat(
     if restore is not None:
         indptr, index, values = _core.rest_habitat_gain(restore, area, range_ptr, range_idx, suit, domain, threads)
         gain = sp.csr_matrix((values, index, indptr), shape=(len(sp_names), ncell))
+    lost = None
+    if loss:
+        # plangea's prop_restore of conservation and conversion: the current natural cover, as shares
+        total = current.sum(axis=0)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            mix = np.ascontiguousarray(np.where(total > 0, current / total, 0.0))
+        dom = (total > 0).astype(np.uint8)
+        indptr, index, values = _core.rest_habitat_gain(mix, area, range_ptr, range_idx, suit, dom, threads)
+        lost = sp.csr_matrix((values, index, indptr), shape=(len(sp_names), ncell))
     table = pd.DataFrame({
         "species": sp_names, "current": now, "potential": pot,
         "range_cells": np.diff(range_ptr), "classes": [", ".join(c) for c in classes_col],
         "valid": (now > 0) & (pot > 0) & suit.any(axis=1) & np.asarray(listed),
     })
-    return HabitatAreas(table=table, gain=gain, _template=template)
+    return HabitatAreas(table=table, gain=gain, _template=template, loss=lost)

@@ -1,24 +1,27 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Restoration planning: how much of every converted cell to restore, for the most benefit
 (the restoration problem of plangea, Strassburg et al. 2020, International Institute for
-Sustainability; GPL >= 3).
+Sustainability; GPL >= 3), and its conservation and conversion forms.
 
 The decision is the share x_i of each cell restored, between 0 and the share that can be (its
-anthropic land, times a limit). The benefits:
+anthropic land, times a limit). A plan can also conserve natural land that would otherwise be lost,
+or convert natural land (to meet a demand for it): every action is a block of shares, each from 0 to
+what it can be. The benefits:
 
 - the reduction of species' extinction risk (or ecosystems' risk of collapse): a species with habitat
   A of a potential P has the risk 1 - (A / P)^z (the species-area relationship, z = 0.25), and
-  restoring gives it habitat, A = A_now + sum_i g_si x_i;
+  restoring gives it habitat, A = A_0 + sum_i g_si x_i (conserving keeps habitat that would be lost,
+  converting takes it away: g < 0);
 - linear benefits (carbon, per km² restored);
 - ecological intactness, by its derivative (:func:`landschaft.intactness_gradient`).
 
-The risk reduction is concave in x, so the problem (the most weighted benefit within area targets and a
-budget) is solved to a proven tolerance by simplicial decomposition: plans that are vertices of the
-set of plans, each the solution of a linear program over the cells with only the problem's rows,
-mixed by a small smooth master problem; the bound is the Frank-Wolfe one. The cheapest plan for a
-benefit is a bisection on the budget. plangea's procedure (a ratio of benefits to costs per cell, the
-target in steps with the benefits recomputed between them: a heuristic whose result depends on the
-number of steps) is ``method="steps"``, reproduced for comparison.
+The risk reduction is concave in x (A is affine in x), so the problem (the most weighted benefit
+within area targets and a budget) is solved to a proven tolerance by simplicial decomposition: plans
+that are vertices of the set of plans, each the solution of a linear program over the cells with only
+the problem's rows, mixed by a small smooth master problem; the bound is the Frank-Wolfe one. The
+cheapest plan for a benefit is a bisection on the budget. plangea's procedure (a ratio of benefits
+to costs per cell, the target in steps with the benefits recomputed between them: a heuristic whose
+result depends on the number of steps) is ``method="steps"``, reproduced for comparison.
 """
 
 from __future__ import annotations
@@ -42,6 +45,9 @@ __all__ = ["RestorationProblem", "RestorationSolution", "RiskReduction", "ecosys
 PLANGEA_Z = 0.25  # plangea's exponent of the species-area relationship
 PLANGEA_DELTA = 1e-6  # plangea's finite difference of the risk (in habitat area), method="steps"
 EXRISK_EPS = 1e-8  # plangea's multi_exrisk_aggregate: an updated habitat this close to 0 is 0
+ACTIONS = ("restore", "conserve", "convert")  # the blocks of a plan's shares, in this order
+_CODE = {a: k for k, a in enumerate(ACTIONS)}
+_SHARE = {"restore": "restorable", "conserve": "conservable", "convert": "convertible"}
 
 
 # ----------------------------------------------------------------------------- inputs
@@ -82,12 +88,16 @@ def _per_species(values, names: np.ndarray, default: float, what: str) -> np.nda
     return out
 
 
+def _is_grid(values) -> bool:
+    return isinstance(values, xr.DataArray) or (isinstance(values, np.ndarray) and values.ndim == 2) or isinstance(
+        values, (str, bytes)) or hasattr(values, "__fspath__")
+
+
 def _on_units(p: RestorationProblem, values, what: str) -> np.ndarray:
     """A number, a raster or an array on the problem's grid, or one value per unit: the units' values."""
     if np.isscalar(values):
         return np.full(p.index.size, float(values))
-    if isinstance(values, xr.DataArray) or (isinstance(values, np.ndarray) and values.ndim == 2) or isinstance(
-            values, (str, bytes)) or hasattr(values, "__fspath__"):
+    if _is_grid(values):
         _, v = _grid_values(values, what)
         if v.shape != p.shape:
             raise ValueError(f"{what}: the grid {v.shape} is not the problem's {p.shape}")
@@ -98,34 +108,64 @@ def _on_units(p: RestorationProblem, values, what: str) -> np.ndarray:
     return v
 
 
+def _per_column(p: RestorationProblem, values, what: str) -> np.ndarray:
+    """As :func:`_on_units`, or a mapping action -> values (0 for the actions left out)."""
+    if not isinstance(values, Mapping):
+        return _on_units(p, values, what)
+    unknown = set(values) - set(p.actions)
+    if unknown:
+        raise ValueError(f"{what}: no action {sorted(unknown)} in the problem ({', '.join(p.actions)})")
+    out = np.zeros(p.n)
+    for a, v in values.items():
+        m = p.action == _CODE[a]
+        out[m] = _on_units(p, v, f"{what}[{a!r}]")[m]
+    return out
+
+
 @dataclass(frozen=True)
 class _Risk:
-    """A risk benefit: species (or ecosystems) with habitat now, potential habitat and the gain per unit
-    of every unit restored (already discounted)."""
+    """A risk benefit: species (or ecosystems) with habitat now, without the plan (``base``: less than
+    now when conservation's baseline loses natural land), potential habitat and the habitat every unit
+    of a share adds (restoring, already discounted; conserving) or takes away (converting)."""
 
     name: str
     weight: float
     species: tuple
     current: np.ndarray
     potential: np.ndarray
-    gain: sp.csr_matrix  # species x units: habitat per unit share restored, times (1 - discount)
-    hab: sp.csr_matrix  # species x units: the same per unit of the cell's area (plangea's hab_values)
+    gain: sp.csr_matrix  # species x columns: habitat per unit share, signed
+    hab: sp.csr_matrix  # species x columns: the same per unit of the cell's area (plangea's hab_values)
     z: np.ndarray  # one exponent per species
     discount: np.ndarray
+    base: np.ndarray  # the habitat without the plan
+
+
+@dataclass(frozen=True)
+class _Footprint:
+    """What a plan does to the human footprint, for the intactness benefit."""
+
+    hfi: object  # the footprint as given (its grid gives the cells' size)
+    h0: np.ndarray  # the footprint without the plan (flat; conservation's baseline loss added)
+    change: np.ndarray  # per column: the footprint's change per unit share (negative lowers it)
+    radius: int
+    gamma: float
+    beta: float
+    z: float
+    cell_size: object
 
 
 @dataclass(frozen=True)
 class _Linear:
     name: str
     weight: float
-    coef: np.ndarray  # benefit per unit share restored
+    coef: np.ndarray  # benefit per unit share
     layer: np.ndarray  # plangea's per-cell layer (method="steps")
-    intactness: tuple | None = None  # (hfi grid, reduction grid, radius, gamma, beta, z, cell_size)
+    intactness: _Footprint | None = None
 
 
 @dataclass(frozen=True)
 class _Targets:
-    rows: sp.csr_matrix  # targets x units: area per unit share restored
+    rows: sp.csr_matrix  # targets x columns: area (or another value) per unit share
     rhs: np.ndarray
     sense: tuple
     labels: tuple
@@ -138,21 +178,42 @@ class RestorationProblem:
 
     template: xr.DataArray | None = field(repr=False)
     shape: tuple
-    index: np.ndarray = field(repr=False)  # the units' cells (row-major)
-    upper: np.ndarray = field(repr=False)  # the share of each unit that can be restored
-    area: np.ndarray = field(repr=False)  # each unit's area (km²)
+    index: np.ndarray = field(repr=False)  # the columns' cells (row-major), block after block
+    upper: np.ndarray = field(repr=False)  # the share of each column's cell that can be acted on
+    area: np.ndarray = field(repr=False)  # each column's cell area (km²)
     benefits: tuple = ()
     targets: tuple = ()
-    cost: np.ndarray | None = field(default=None, repr=False)  # per unit share restored
+    cost: np.ndarray | None = field(default=None, repr=False)  # per unit share
     cost_layer: np.ndarray | None = field(default=None, repr=False)  # per km² (plangea's layer)
     budget: float | None = None
     objective: tuple = ("max_benefit",)
     solver: tuple = ("highs", {})
+    action: np.ndarray | None = field(default=None, repr=False)  # per column: 0 restore, 1 conserve, 2 convert
+    natural: np.ndarray | None = field(default=None, repr=False)  # conservation: the natural share lost without it
+    threat: np.ndarray | None = field(default=None, repr=False)  # conservation: the part of it lost
+    lower: np.ndarray | None = field(default=None, repr=False)  # per column: the least share (None: 0)
+
+    def __post_init__(self):
+        if self.action is None:
+            object.__setattr__(self, "action", np.zeros(self.index.size, dtype=np.int8))
+        if self.natural is None:
+            object.__setattr__(self, "natural", np.zeros(self.index.size))
+        if self.threat is None:
+            object.__setattr__(self, "threat", np.ones(self.index.size))
 
     @property
     def n(self) -> int:
-        """The number of planning units (cells that can be restored)."""
+        """The number of decision columns: the planning units of every action."""
         return int(self.index.size)
+
+    @property
+    def actions(self) -> tuple:
+        """The actions of the plan, of ``"restore"``, ``"conserve"`` and ``"convert"``."""
+        present = set(np.unique(self.action).tolist())
+        return tuple(a for k, a in enumerate(ACTIONS) if k in present)
+
+    def _lb(self) -> np.ndarray:
+        return np.zeros(self.n) if self.lower is None else self.lower
 
     # --- benefits
     def add_extinction_risk_benefit(self, areas, z=PLANGEA_Z, weight: float = 1.0,
@@ -161,15 +222,17 @@ class RestorationProblem:
 
         A species with habitat A of a potential P has the risk 1 - (A / P)^z (0 at A >= P); restoring a
         share x_i of a cell gives it ``g_i x_i`` more habitat, g the gain of
-        :func:`landschaft.sdm.area_of_habitat` (or of :func:`ecosystem_areas`). The benefit is the sum
-        over the species of the risk now minus the risk after.
+        :func:`landschaft.sdm.area_of_habitat` (or of :func:`ecosystem_areas`). Conserving a share of a
+        cell's natural land keeps the habitat that would be lost (its ``loss`` times the threat);
+        converting it takes that habitat away. The benefit is the sum over the species of the risk
+        without the plan minus the risk with it (negative when conversion raises the risk).
 
         Parameters
         ----------
         areas
             A :class:`~landschaft.sdm.HabitatAreas` with its gain (``area_of_habitat`` given the
-            original vegetation), on the problem's grid; the species that are not ``valid`` are left
-            out.
+            original vegetation) for restoration and its loss (``loss=True``) for conservation and
+            conversion, on the problem's grid; the species that are not ``valid`` are left out.
         z
             The exponent of the species-area relationship, in (0, 1): a number for every species
             (default 0.25, plangea's), one per species (in the order of ``areas.table``) or a mapping
@@ -180,16 +243,22 @@ class RestorationProblem:
             The share of the habitat value that restored land does NOT deliver, in [0, 1] (0: restored
             land is habitat in full, as Strassburg et al. 2020 assume): the gain becomes
             g (1 - discount). A number, one per species (in the order of ``areas.table``) or a mapping
-            species -> discount. It is not a financial discount rate.
+            species -> discount. It is not a financial discount rate, and only restoration has it.
         name
             The benefit's name (default ``"extinction_risk"``, numbered when repeated).
         """
         gain = getattr(areas, "gain", None)
         table = getattr(areas, "table", None)
-        if gain is None or table is None:
+        loss = getattr(areas, "loss", None)
+        acts = self.actions
+        if table is None or ("restore" in acts and gain is None):
             raise ValueError("areas: a HabitatAreas with its gain (area_of_habitat given the original vegetation)")
-        if gain.shape[1] != self.shape[0] * self.shape[1]:
-            raise ValueError("areas: not on the problem's grid")
+        if ("conserve" in acts or "convert" in acts) and loss is None:
+            raise ValueError("areas: no loss for conservation or conversion (area_of_habitat(..., loss=True))")
+        ncell = self.shape[0] * self.shape[1]
+        for m in (gain, loss):
+            if m is not None and m.shape[1] != ncell:
+                raise ValueError("areas: not on the problem's grid")
         names = table["species"].astype(str).to_numpy()
         zs = _per_species(z, names, PLANGEA_Z, "z")
         if (zs <= 0).any() or (zs >= 1).any():
@@ -198,28 +267,52 @@ class RestorationProblem:
         if not np.isfinite(d).all() or (d < 0).any() or (d > 1).any():
             raise ValueError("restoration_discount must be in [0, 1]")
         keep = np.flatnonzero(table["valid"].to_numpy(bool) & (table["potential"].to_numpy(np.float64) > 0))
-        g = sp.csr_matrix(gain)[keep][:, self.index].tocsr()
-        g.sort_indices()
-        area = self.area
-        hab = g.copy()
-        hab.data = hab.data / area[hab.indices]
-        gd = g.multiply(sp.csr_matrix((1.0 - d[keep])[:, None])).tocsr()
+        current = table["current"].to_numpy(np.float64)[keep].copy()
+        base = current.copy()
+        blocks, habs = [], []
+        for code, act in enumerate(ACTIONS):
+            cols = np.flatnonzero(self.action == code)
+            if cols.size == 0:
+                continue
+            src = gain if act == "restore" else loss
+            g = sp.csr_matrix(src)[keep][:, self.index[cols]].tocsr()
+            g.sort_indices()
+            hab = g.copy()
+            hab.data = hab.data / self.area[cols][hab.indices]
+            if act == "restore":
+                g = g.multiply(sp.csr_matrix((1.0 - d[keep])[:, None])).tocsr()
+                hab = hab.multiply(sp.csr_matrix((1.0 - d[keep])[:, None])).tocsr()
+            elif act == "conserve":
+                # without the plan the natural land of the units is lost (by the threat): conserving keeps it
+                base = base - g @ (self.threat[cols] * self.natural[cols])
+                w = sp.diags(self.threat[cols])
+                g, hab = (g @ w).tocsr(), (hab @ w).tocsr()
+            else:
+                g, hab = -g, -hab
+            blocks.append(g)
+            habs.append(hab)
+        gd = sp.hstack(blocks).tocsr() if len(blocks) > 1 else blocks[0]
+        hb = sp.hstack(habs).tocsr() if len(habs) > 1 else habs[0]
         gd.sort_indices()
+        hb.sort_indices()
         risk = _Risk(name=self._name(name, "extinction_risk"), weight=float(weight), species=tuple(names[keep]),
-                     current=table["current"].to_numpy(np.float64)[keep].copy(),
-                     potential=table["potential"].to_numpy(np.float64)[keep].copy(), gain=gd, hab=hab,
-                     z=zs[keep].copy(), discount=d[keep])
+                     current=current, potential=table["potential"].to_numpy(np.float64)[keep].copy(), gain=gd,
+                     hab=hb, z=zs[keep].copy(), discount=d[keep], base=np.maximum(base, 0.0))
         return replace(self, benefits=self.benefits + (risk,))
 
     def add_linear_benefit(self, values, weight: float = 1.0, name: str | None = None,
                            per: str = "area") -> RestorationProblem:
-        """A benefit proportional to the area restored, such as carbon.
+        """A benefit proportional to the area acted on, such as carbon.
 
-        ``values``: a raster on the problem's grid, a number or one value per unit; per km² restored
-        (``per="area"``) or per cell restored in full (``per="cell"``)."""
-        v = _on_units(self, values, "values")
+        ``values``: a raster on the problem's grid, a number or one value per unit, or a mapping action
+        -> values (0 for the actions left out); per km² (``per="area"``) or per cell in full
+        (``per="cell"``) of the action. A loss is negative (the carbon stock of converted land, say);
+        conservation's values count the land the plan saves from loss (they are multiplied by the
+        threat)."""
+        v = _per_column(self, values, "values")
         if not np.isfinite(v).all():
             raise ValueError("values: NaN or infinite on a planning unit")
+        v = np.where(self.action == _CODE["conserve"], v * self.threat, v)
         if per == "area":
             coef, layer = v * self.area, v
         elif per == "cell":
@@ -229,24 +322,46 @@ class RestorationProblem:
         return replace(self, benefits=self.benefits + (_Linear(self._name(name, "linear"), float(weight), coef,
                                                                layer),))
 
-    def add_intactness_benefit(self, hfi, reduction, radius: int = 3, weight: float = 1.0, *,
+    def add_intactness_benefit(self, hfi, reduction=None, radius: int = 3, weight: float = 1.0, *, increase=None,
                                gamma: float | None = None, beta: float = -0.2, z: float = 0.5, cell_size=None,
                                name: str | None = None) -> RestorationProblem:
         """Ecological intactness (Beyer et al. 2020): restoring a share x of a cell lowers its human
-        footprint by ``reduction`` x; the benefit is the total intactness gained, linearised at no
-        restoration (:func:`landschaft.intactness_gradient`; with ``method="steps"`` it is recomputed at
-        every step, as plangea does). ``hfi`` on the problem's grid; the other parameters as
-        :func:`landschaft.intactness`."""
-        from ..intactness import INTACTNESS_GAMMA, intactness_gradient
+        footprint by ``reduction`` x, converting it raises the footprint by ``increase`` x (and natural
+        land lost for want of conservation by ``increase`` times the threat, which conserving spares);
+        the benefit is the total intactness gained, linearised at the plan of nothing
+        (:func:`landschaft.intactness_gradient`; with ``method="steps"`` it is recomputed at every
+        step, as plangea does). ``hfi``, ``reduction`` and ``increase`` on the problem's grid (or
+        numbers); the other parameters as :func:`landschaft.intactness`."""
+        from ..intactness import INTACTNESS_GAMMA
 
         gamma = INTACTNESS_GAMMA if gamma is None else float(gamma)
-        g = intactness_gradient(hfi, reduction, radius, gamma=gamma, beta=beta, z=z, cell_size=cell_size)
-        gv = np.asarray(g.values, dtype=np.float64)
-        if gv.shape != self.shape:
-            raise ValueError(f"hfi: the grid {gv.shape} is not the problem's {self.shape}")
-        coef = np.nan_to_num(gv.ravel()[self.index])
-        lin = _Linear(self._name(name, "intactness"), float(weight), coef, coef.copy(),
-                      intactness=(hfi, reduction, int(radius), gamma, float(beta), float(z), cell_size))
+        _, h = _grid_values(hfi, "hfi")
+        if h.shape != self.shape:
+            raise ValueError(f"hfi: the grid {h.shape} is not the problem's {self.shape}")
+        acts = self.actions
+        change = np.zeros(self.n)
+        h0 = h.ravel().copy()
+        if "restore" in acts:
+            if reduction is None:
+                raise ValueError("restoration needs the reduction of the footprint per unit restored")
+            m = self.action == _CODE["restore"]
+            change[m] = -np.nan_to_num(_on_units(self, reduction, "reduction"))[m]
+        if "conserve" in acts or "convert" in acts:
+            if increase is None:
+                raise ValueError("conservation and conversion need the increase of the footprint per unit converted")
+            inc = np.nan_to_num(_on_units(self, increase, "increase"))
+            m = self.action == _CODE["convert"]
+            change[m] = inc[m]
+            m = self.action == _CODE["conserve"]
+            if m.any():
+                change[m] = -inc[m] * self.threat[m]
+                lost = np.bincount(self.index[m], weights=inc[m] * self.threat[m] * self.natural[m],
+                                   minlength=h0.size)
+                h0 = h0 + lost
+        fp = _Footprint(hfi=hfi, h0=h0, change=change, radius=int(radius), gamma=gamma, beta=float(beta), z=float(z),
+                        cell_size=cell_size)
+        coef = _intactness_coef(self, fp, np.zeros(self.n))
+        lin = _Linear(self._name(name, "intactness"), float(weight), coef, coef.copy(), intactness=fp)
         return replace(self, benefits=self.benefits + (lin,))
 
     def _name(self, name, default):
@@ -261,8 +376,25 @@ class RestorationProblem:
         return out
 
     # --- constraints
-    def add_area_target(self, target, sense: str = "<=", regions=None) -> RestorationProblem:
-        """The area restored (km²): in the whole landscape, or in every region.
+    def _area_coef(self, action) -> np.ndarray:
+        """The area a unit share of every column counts for: of one action, of all of them (``"all"``),
+        or the change of natural land (``"net"``: restored minus converted)."""
+        acts = self.actions
+        if action is None:
+            action = "net" if ("restore" in acts and "convert" in acts) else "all"
+        if action == "all":
+            return self.area.copy()
+        if action == "net":
+            sign = np.select([self.action == _CODE["restore"], self.action == _CODE["convert"]], [1.0, -1.0], 0.0)
+            return self.area * sign
+        if action not in ACTIONS:
+            raise ValueError("action: 'restore', 'conserve', 'convert', 'net' or 'all'")
+        if action not in acts:
+            raise ValueError(f"action: the problem has no {action!r} ({', '.join(acts)})")
+        return np.where(self.action == _CODE[action], self.area, 0.0)
+
+    def add_area_target(self, target, sense: str = "<=", regions=None, action: str | None = None) -> RestorationProblem:
+        """The area acted on (km²): in the whole landscape, or in every region.
 
         Parameters
         ----------
@@ -273,13 +405,18 @@ class RestorationProblem:
             ``"<="`` (at most: the most valuable cells for that area), ``">="`` or ``"="``.
         regions
             A raster of region codes on the problem's grid (NaN: no region) or one code per unit.
+        action
+            The area of ``"restore"``, ``"conserve"`` or ``"convert"``, of ``"all"`` of them, or the
+            ``"net"`` change of natural land (restored minus converted). Default: ``"net"`` when the
+            plan restores and converts, ``"all"`` otherwise.
         """
         if sense not in ("<=", ">=", "="):
             raise ValueError("sense: '<=', '>=' or '='")
+        coef = self._area_coef(action)
         if regions is None:
             if not np.isscalar(target):
                 raise ValueError("a target per region needs regions")
-            rows = sp.csr_matrix(self.area[None, :])
+            rows = sp.csr_matrix(coef[None, :])
             t = _Targets(rows, np.array([float(target)]), (sense,), ("landscape",))
         else:
             codes = _on_units(self, regions, "regions")
@@ -294,10 +431,10 @@ class RestorationProblem:
                 raise ValueError("sense: '<=', '>=' or '='")
             r, c, v = [], [], []
             for k, code in enumerate(tab["region"].to_numpy(np.float64)):
-                cells = np.flatnonzero(codes == code)
+                cells = np.flatnonzero((codes == code) & (coef != 0))
                 r += [k] * cells.size
                 c += cells.tolist()
-                v += self.area[cells].tolist()
+                v += coef[cells].tolist()
             rows = sp.csr_matrix((v, (r, c)), shape=(len(tab), self.n))
             t = _Targets(rows, tab["target"].to_numpy(np.float64), tuple(senses),
                          tuple(str(x) for x in tab["region"].tolist()))
@@ -306,8 +443,8 @@ class RestorationProblem:
         return replace(self, targets=self.targets + (t,))
 
     def add_budget(self, budget: float, cost) -> RestorationProblem:
-        """Spend at most ``budget`` restoring, ``cost`` per km² restored (a raster, a number or one value
-        per unit; the opportunity cost of the land, say)."""
+        """Spend at most ``budget``, ``cost`` per km² acted on (a raster, a number, one value per unit
+        or a mapping action -> cost; the opportunity cost of the land, say)."""
         c = self._cost(cost)
         if not math.isfinite(float(budget)):
             raise ValueError("budget must be finite")
@@ -318,7 +455,7 @@ class RestorationProblem:
         return replace(self, objective=("max_benefit",))
 
     def add_min_cost_objective(self, benefit: float, cost=None) -> RestorationProblem:
-        """The cheapest plan whose weighted benefit reaches ``benefit``; ``cost`` per km² restored (or the
+        """The cheapest plan whose weighted benefit reaches ``benefit``; ``cost`` per km² acted on (or the
         budget's, without it)."""
         if cost is None and self.cost_layer is None:
             raise ValueError("the minimum cost needs a cost")
@@ -326,7 +463,7 @@ class RestorationProblem:
         return replace(out, objective=("min_cost", float(benefit)))
 
     def _cost(self, cost) -> np.ndarray:
-        c = _on_units(self, cost, "cost")
+        c = _per_column(self, cost, "cost")
         if not np.isfinite(c).all():
             raise ValueError("cost: NaN or infinite on a planning unit")
         return c
@@ -374,16 +511,35 @@ class RestorationProblem:
         return self._solution(x, bound=bound, status=status, method=method, rounds=rounds,
                               seconds=time.perf_counter() - t0)
 
-    def evaluate(self, restored) -> RestorationSolution:
-        """The benefits, cost and area of a plan: the share restored per unit (a raster on the grid or
-        one value per unit)."""
-        x = _on_units(self, restored, "restored")
+    def evaluate(self, plan=None, *, restored=None, conserved=None, converted=None) -> RestorationSolution:
+        """The benefits, cost and area of a plan: the shares of every column (``plan``: a raster on the
+        grid or one value per unit when the problem has one action, or one value per column), or the
+        shares ``restored``, ``conserved`` and ``converted`` (rasters or one value per unit; 0 for those
+        left out)."""
+        given = {"restore": restored, "conserve": conserved, "convert": converted}
+        if plan is not None:
+            if any(v is not None for v in given.values()):
+                raise ValueError("give the plan or the shares of each action, not both")
+            if len(self.actions) > 1 and _is_grid(plan):
+                raise ValueError("a plan of several actions: give restored=, conserved= and converted=")
+            x = _on_units(self, plan, "plan")
+        else:
+            x = np.zeros(self.n)
+            for a, v in given.items():
+                if v is None:
+                    continue
+                if a not in self.actions:
+                    raise ValueError(f"the problem has no {a!r} ({', '.join(self.actions)})")
+                m = self.action == _CODE[a]
+                x[m] = _on_units(self, v, f"{a}")[m]
         return self._solution(np.nan_to_num(x), bound=math.nan, status="given", method="given", rounds=0,
                               seconds=0.0)
 
     def uniform(self, area: float | None = None) -> RestorationSolution:
-        """plangea's uniform scenario: every unit restored by the same share of what it can be, for a
-        total ``area`` (default: the first landscape area target)."""
+        """plangea's uniform scenario: every unit acted on by the same share of what it can be, for a
+        total ``area`` (default: the first landscape area target). For a plan of one action."""
+        if len(self.actions) > 1:
+            raise ValueError("the uniform plan is for a problem of one action")
         if area is None:
             land = [t for t in self.targets if t.labels == ("landscape",)]
             if not land:
@@ -398,21 +554,30 @@ class RestorationProblem:
         rows = []
         total = 0.0
         for b in self.benefits:
-            v = _benefit_value(b, x)
+            v = _benefit_value(self, b, x)
             rows.append({"benefit": b.name, "kind": "extinction_risk" if isinstance(b, _Risk) else "linear",
                          "value": v, "weight": b.weight, "weighted": b.weight * v})
             total += b.weight * v
         table = pd.DataFrame(rows, columns=["benefit", "kind", "value", "weight", "weighted"])
         cost = float(self.cost @ x) if self.cost is not None else math.nan
         objective = cost if self.objective[0] == "min_cost" and method != "steps" else total
-        grid = np.full(self.shape[0] * self.shape[1], np.nan)
-        grid[self.index] = x
-        grid = grid.reshape(self.shape)
-        restored = self.template.copy(data=grid) if self.template is not None else xr.DataArray(grid, dims=("y", "x"))
-        restored.name = "restored"
-        return RestorationSolution(restored=restored, values=x, area=float(self.area @ x), cost=cost,
+        maps, areas = {}, {}
+        for code, act in enumerate(ACTIONS):
+            m = self.action == code
+            if not m.any():
+                maps[act] = None
+                continue
+            grid = np.full(self.shape[0] * self.shape[1], np.nan)
+            grid[self.index[m]] = x[m]
+            grid = grid.reshape(self.shape)
+            da = self.template.copy(data=grid) if self.template is not None else xr.DataArray(grid, dims=("y", "x"))
+            da.name = {"restore": "restored", "conserve": "conserved", "convert": "converted"}[act]
+            maps[act] = da
+            areas[act] = float(self.area[m] @ x[m])
+        return RestorationSolution(restored=maps["restore"], values=x, area=float(self.area @ x), cost=cost,
                                    benefits=table, benefit=total, objective=objective, bound=bound, status=status,
-                                   method=method, rounds=rounds, seconds=seconds)
+                                   method=method, rounds=rounds, seconds=seconds, conserved=maps["conserve"],
+                                   converted=maps["convert"], areas=areas)
 
 
 @dataclass
@@ -421,12 +586,14 @@ class RestorationSolution(Saveable):
 
     Attributes
     ----------
-    restored
-        The share of every cell restored (NaN outside the planning units).
+    restored, conserved, converted
+        The share of every cell restored, conserved and converted (NaN outside the planning units;
+        None for an action the problem does not have).
     values
-        The same, one value per unit.
-    area
-        The area restored (km²).
+        The shares, one value per column (the units of every action, block after block: restore,
+        conserve, convert).
+    area, areas
+        The area acted on (km²) and the area of every action.
     cost
         Its cost (NaN without a cost).
     benefits
@@ -442,7 +609,7 @@ class RestorationSolution(Saveable):
         ``method="steps"``), the time.
     """
 
-    restored: xr.DataArray = field(repr=False)
+    restored: xr.DataArray | None = field(repr=False)
     values: np.ndarray = field(repr=False)
     area: float = 0.0
     cost: float = math.nan
@@ -454,18 +621,26 @@ class RestorationSolution(Saveable):
     method: str = ""
     rounds: int = 0
     seconds: float = 0.0
+    conserved: xr.DataArray | None = field(default=None, repr=False)
+    converted: xr.DataArray | None = field(default=None, repr=False)
+    areas: dict = field(default_factory=dict)
 
     def _save_items(self) -> dict:
-        return {"restored": self.restored, "benefits": self.benefits, "area": self.area, "cost": self.cost,
-                "benefit": self.benefit, "objective": self.objective, "bound": self.bound, "status": self.status,
-                "method": self.method}
+        out = {"benefits": self.benefits, "area": self.area, "cost": self.cost, "benefit": self.benefit,
+               "objective": self.objective, "bound": self.bound, "status": self.status, "method": self.method}
+        for key in ("restored", "conserved", "converted"):
+            if getattr(self, key) is not None:
+                out[key] = getattr(self, key)
+        return out
 
 
-def restoration_problem(restorable, *, limit=1.0, cell_area=None) -> RestorationProblem:
-    """A restoration problem: how much of every converted cell to restore.
+def restoration_problem(restorable=None, *, conservable=None, convertible=None, limit=1.0, threat=1.0,
+                        cell_area=None) -> RestorationProblem:
+    """A restoration problem: how much of every converted cell to restore (and of natural land to
+    conserve or convert).
 
-    The planning units are the cells with land that can be restored; the decision is the share x_i of
-    each restored, from 0 to ``restorable`` x ``limit``. Then add benefits
+    The planning units are the cells with land an action can take; the decision is the share x_i of
+    each, from 0 to the share that can be times ``limit``. Then add benefits
     (:meth:`~RestorationProblem.add_extinction_risk_benefit`,
     :meth:`~RestorationProblem.add_linear_benefit`, :meth:`~RestorationProblem.add_intactness_benefit`),
     targets (:meth:`~RestorationProblem.add_area_target`), a budget, and solve.
@@ -475,8 +650,20 @@ def restoration_problem(restorable, *, limit=1.0, cell_area=None) -> Restoration
     restorable
         The share of every cell that can be restored: a raster, or a
         :class:`~landschaft.OriginalVegetation` (its anthropic share).
+    conservable
+        The share of every cell's natural land that conservation can keep (plangea's ``C``): without
+        the plan, ``threat`` of it is lost (plangea: all of it). The benefits count what conserving
+        saves.
+    convertible
+        The share of every cell's natural land that can be converted (plangea's ``D``, a demand for
+        land met where it costs the least benefit). With ``restorable`` too, the plan restores some
+        cells and converts others (plangea's ``R + D``). Not with ``conservable``.
     limit
-        plangea's bound limit: a number or a raster multiplying ``restorable``.
+        plangea's bound limit: a number or a raster multiplying the shares, or a mapping action ->
+        limit.
+    threat
+        The share of the conservable land lost without conservation, in [0, 1]: a number or a raster
+        (default 1, plangea's).
     cell_area
         The cells' area in km²: a number, a raster, or None (from the grid, see
         :func:`landschaft.sdm.cell_area_km2`).
@@ -503,15 +690,52 @@ def restoration_problem(restorable, *, limit=1.0, cell_area=None) -> Restoration
 
     if isinstance(restorable, OriginalVegetation):
         restorable = restorable.anthropic
-    template, r = _grid_values(restorable, "restorable")
-    shape = r.shape
-    lim = np.full(shape, float(limit)) if np.isscalar(limit) else _grid_values(limit, "limit")[1]
-    if lim.shape != shape:
-        raise ValueError("limit: not on the grid of restorable")
-    up = np.nan_to_num(r, nan=0.0) * np.nan_to_num(lim, nan=0.0)
-    index = np.flatnonzero(up.ravel() > 0)
+    given = [(a, d) for a, d in zip(ACTIONS, (restorable, conservable, convertible)) if d is not None]
+    if not given:
+        raise ValueError("give the land that can be restored (restorable), conserved or converted")
+    if conservable is not None and convertible is not None:
+        raise ValueError("conservable and convertible: the same natural land is either conserved or converted")
+    template, shape = None, None
+    shares = {}
+    for act, data in given:
+        t, v = _grid_values(data, _SHARE[act])
+        if shape is None:
+            shape = v.shape
+        elif v.shape != shape:
+            raise ValueError(f"{_SHARE[act]}: the grid {v.shape} is not {shape}")
+        template = template if template is not None else t
+        shares[act] = np.nan_to_num(v, nan=0.0)
+
+    def grid_of(value, what):
+        if np.isscalar(value):
+            return np.full(shape, float(value))
+        g = _grid_values(value, what)[1]
+        if g.shape != shape:
+            raise ValueError(f"{what}: not on the grid of {_SHARE[given[0][0]]}")
+        return g
+
+    if isinstance(limit, Mapping):
+        unknown = set(limit) - {a for a, _ in given}
+        if unknown:
+            raise ValueError(f"limit: no action {sorted(unknown)} in the problem")
+    th = grid_of(threat, "threat") if conservable is not None else None
+    if th is not None and (np.nanmin(th) < 0 or np.nanmax(th) > 1):
+        raise ValueError("threat must be in [0, 1]")
+    idx, up, act_codes, nat, thr = [], [], [], [], []
+    for act, _ in given:
+        lim_v = limit.get(act, 1.0) if isinstance(limit, Mapping) else limit
+        lim = grid_of(lim_v, "limit")
+        u = (shares[act] * np.nan_to_num(lim, nan=0.0)).ravel()
+        cells = np.flatnonzero(u > 0)
+        idx.append(cells)
+        up.append(u[cells])
+        act_codes.append(np.full(cells.size, _CODE[act], dtype=np.int8))
+        nat.append(shares[act].ravel()[cells] if act == "conserve" else np.zeros(cells.size))
+        thr.append(np.nan_to_num(th.ravel()[cells], nan=0.0) if act == "conserve" else np.ones(cells.size))
+    index = np.concatenate(idx)
     if index.size == 0:
-        raise ValueError("no cell can be restored")
+        raise ValueError("no cell can be " + " or ".join({"restore": "restored", "conserve": "conserved",
+                                                          "convert": "converted"}[a] for a, _ in given))
     if cell_area is None:
         if template is None:
             raise ValueError("give cell_area (km²) with a plain array")
@@ -523,14 +747,15 @@ def restoration_problem(restorable, *, limit=1.0, cell_area=None) -> Restoration
     else:
         area = _grid_values(cell_area, "cell_area")[1]
         if area.shape != shape:
-            raise ValueError("cell_area: not on the grid of restorable")
+            raise ValueError(f"cell_area: not on the grid of {_SHARE[given[0][0]]}")
     a = area.ravel()[index]
     if not np.isfinite(a).all() or (a <= 0).any():
-        raise ValueError("cell_area: positive on every cell that can be restored")
+        raise ValueError("cell_area: positive on every cell of the planning units")
     if template is not None:
         template = template.copy(data=np.full(shape, np.nan))
     return RestorationProblem(template=template, shape=shape, index=index.astype(np.int64),
-                              upper=up.ravel()[index].copy(), area=a.copy())
+                              upper=np.concatenate(up).copy(), area=a.copy(), action=np.concatenate(act_codes),
+                              natural=np.concatenate(nat), threat=np.concatenate(thr))
 
 
 def ecosystem_areas(land_cover, natural, anthropic, ecoregions, *, cell_area=None):
@@ -553,8 +778,9 @@ def ecosystem_areas(land_cover, natural, anthropic, ecoregions, *, cell_area=Non
     -------
     landschaft.sdm.HabitatAreas
         One row per ecoregion (``species`` its code): ``current`` the natural area, ``potential`` the
-        natural plus the anthropic area, and the gain: the cell's area per unit restored, in the cells
-        with anthropic land.
+        natural plus the anthropic area, the gain (the cell's area per unit restored, in the cells
+        with anthropic land) and the loss (the cell's area per unit of natural land lost, in the cells
+        with natural land).
 
     Notes
     -----
@@ -603,7 +829,7 @@ def ecosystem_areas(land_cover, natural, anthropic, ecoregions, *, cell_area=Non
         area = _grid_values(cell_area, "cell_area")[1]
     e, a, nv, av = eco.ravel(), area.ravel(), nat.ravel(), ant.ravel()
     codes = np.unique(e[np.isfinite(e)])
-    cur, pot, rows, cols, vals = [], [], [], [], []
+    cur, pot, rows, cols, vals, lrows, lcols, lvals = [], [], [], [], [], [], [], []
     for k, code in enumerate(codes):
         cells = np.flatnonzero(e == code)
         cur.append(float(np.sum(a[cells] * nv[cells])))
@@ -612,12 +838,17 @@ def ecosystem_areas(land_cover, natural, anthropic, ecoregions, *, cell_area=Non
         rows += [k] * g.size
         cols += g.tolist()
         vals += a[g].tolist()
+        g = cells[nv[cells] > 0]
+        lrows += [k] * g.size
+        lcols += g.tolist()
+        lvals += a[g].tolist()
     gain = sp.csr_matrix((vals, (rows, cols)), shape=(codes.size, e.size))
+    loss = sp.csr_matrix((lvals, (lrows, lcols)), shape=(codes.size, e.size))
     label = [str(int(c)) if float(c).is_integer() else str(c) for c in codes]
     table = pd.DataFrame({"species": label, "current": cur, "potential": pot,
                           "range_cells": [int(np.sum(e == c)) for c in codes], "classes": ", ".join(natural),
                           "valid": (np.array(pot) > 0)})
-    return HabitatAreas(table=table, gain=gain, _template=template)
+    return HabitatAreas(table=table, gain=gain, _template=template, loss=loss)
 
 
 # ----------------------------------------------------------------------------- the benefits
@@ -628,17 +859,45 @@ def _h(r: np.ndarray, z: float) -> np.ndarray:
 
 
 def _ratio(b: _Risk, x: np.ndarray) -> np.ndarray:
-    return (b.current + b.gain @ x) / b.potential
+    return (b.base + b.gain @ x) / b.potential
 
 
-def _benefit_value(b, x: np.ndarray) -> float:
+def _benefit_value(p: RestorationProblem, b, x: np.ndarray) -> float:
     if isinstance(b, _Linear):
         return float(b.coef @ x)
-    return float(np.sum(_h(_ratio(b, x), b.z) - _h(b.current / b.potential, b.z)))
+    return float(np.sum(_h(_ratio(b, x), b.z) - _h(b.base / b.potential, b.z)))
 
 
 def _true_objective(p: RestorationProblem, x: np.ndarray) -> float:
-    return sum(b.weight * _benefit_value(b, x) for b in p.benefits)
+    return sum(b.weight * _benefit_value(p, b, x) for b in p.benefits)
+
+
+def _footprint_at(p: RestorationProblem, fp: _Footprint, x: np.ndarray) -> np.ndarray:
+    """The human footprint (flat) under the plan x: without it, plus the columns' changes, at least 0."""
+    h = fp.h0.copy()
+    if x.any():
+        d = np.bincount(p.index, weights=fp.change * x, minlength=h.size)
+        ok = ~np.isnan(h)
+        v = h[ok] + d[ok]
+        h[ok] = np.where(v < 0, 0.0, v)
+    return h
+
+
+def _intactness_coef(p: RestorationProblem, fp: _Footprint, x: np.ndarray) -> np.ndarray:
+    """The derivative of the total intactness in every column's share, at the plan x."""
+    from ..intactness import intactness_gradient
+
+    h = _footprint_at(p, fp, x).reshape(p.shape)
+    grid = fp.hfi.copy(data=h) if isinstance(fp.hfi, xr.DataArray) and fp.hfi.ndim == 2 else h
+    out = np.zeros(p.n)
+    for code in np.unique(p.action):
+        m = p.action == code
+        a = np.zeros(h.size)
+        a[p.index[m]] = -fp.change[m]  # what a unit share lowers the footprint by
+        g = intactness_gradient(grid, a.reshape(p.shape), fp.radius, gamma=fp.gamma, beta=fp.beta, z=fp.z,
+                                cell_size=fp.cell_size)
+        out[m] = np.nan_to_num(np.asarray(g.values, dtype=np.float64).ravel()[p.index[m]])
+    return out
 
 
 # ----------------------------------------------------------------------------- exact
@@ -673,6 +932,16 @@ def _feasible_set(p: RestorationProblem) -> tuple[sp.csr_matrix, np.ndarray, tup
     return sp.vstack(rows).tocsr(), np.concatenate(rhs), tuple(sense)
 
 
+def _positive(g: sp.csr_matrix) -> sp.csr_matrix:
+    return g if g.nnz == 0 or g.data.min() >= 0 else g.maximum(0.0).tocsr()
+
+
+def _has_negative(g: sp.csr_matrix) -> np.ndarray:
+    if g.nnz == 0 or g.data.min() >= 0:
+        return np.zeros(g.shape[0], dtype=bool)
+    return np.asarray((g < 0).sum(axis=1)).ravel() > 0
+
+
 def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
     """The most weighted benefit by simplicial decomposition: the plan is a mix of vertices of the set of
     plans, each from a linear program over the units (the benefits' gradient at the current plan, the
@@ -697,9 +966,12 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         if isinstance(b, _Linear):
             lin += b.weight * b.coef
     rows, rhs, sense = _feasible_set(p)
-    floors = [np.maximum(1e-9 * _ratio(b, p.upper), 1e-15) for b in risks]
-    caps = [np.maximum(b.potential - b.current, 0.0) for b in risks]
-    lifted = [np.zeros(b.current.size, dtype=bool) for b in risks]
+    lb_x = p._lb()
+    floors = [np.maximum(1e-9 * (b.base + _positive(b.gain) @ p.upper) / b.potential, 1e-15) for b in risks]
+    caps = [np.maximum(b.potential - b.base, 0.0) for b in risks]
+    # the least habitat gained: below 0 for species that conversion takes habitat from
+    floor_y = [np.where(_has_negative(b.gain), -b.base, 0.0) for b in risks]
+    lifted = [np.zeros(b.base.size, dtype=bool) for b in risks]
 
     def left() -> float:
         return deadline - time.perf_counter()
@@ -708,7 +980,7 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         """The derivative of benefit i in the habitat gained y of every species: 0 past the potential,
         except for a lifted species (y <= P - A), whose left derivative it keeps there."""
         b = risks[i]
-        r = (b.current + y) / b.potential
+        r = (b.base + y) / b.potential
         d = b.z * np.maximum(np.minimum(r, 1.0), floors[i]) ** (b.z - 1.0) * (b.weight / b.potential)
         return np.where((r < 1.0) | lifted[i], d, 0.0)
 
@@ -717,14 +989,14 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         cols = [(i, np.flatnonzero(lifted[i])) for i in range(len(risks))]
         m_y = sum(s.size for _, s in cols)
         if m_y == 0:
-            A, obj, lb, ub, b_rhs, b_sense = rows, cx, np.zeros(n), p.upper, rhs, sense
+            A, obj, lb, ub, b_rhs, b_sense = rows, cx, lb_x, p.upper, rhs, sense
         else:
             # y_s - g_s x <= 0 for every lifted species, 0 <= y_s <= P_s - A_s
             g_rows = sp.vstack([risks[i].gain[s] for i, s in cols if s.size]).tocsr()
             A = sp.vstack([sp.hstack([rows, sp.csr_matrix((rows.shape[0], m_y))]),
                            sp.hstack([-g_rows, sp.identity(m_y, format="csr")])]).tocsr()
             obj = np.concatenate([cx] + [dy[i][s] for i, s in cols if s.size])
-            lb = np.zeros(n + m_y)
+            lb = np.concatenate([lb_x] + [floor_y[i][s] for i, s in cols if s.size])
             ub = np.concatenate([p.upper] + [caps[i][s] for i, s in cols if s.size])
             b_rhs, b_sense = np.concatenate([rhs, np.zeros(m_y)]), tuple(sense) + ("<=",) * m_y
         m = OptimizationProblem(A=A, obj=obj, lb=lb, ub=ub, rhs=b_rhs, sense=b_sense, vtype=("C",) * (n + m_y),
@@ -735,12 +1007,12 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         if not r["has_solution"]:
             raise RuntimeError(f"no plan ({p.solver[0]}: {r['status']})")
         # only an optimal vertex gives a valid bound
-        return np.clip(np.asarray(r["x"], dtype=np.float64)[:n], 0.0, p.upper), r["status"] == "optimal"
+        return np.clip(np.asarray(r["x"], dtype=np.float64)[:n], lb_x, p.upper), r["status"] == "optimal"
 
     # the vertices (sparse columns), their gains per risk benefit (species x vertices) and linear benefit;
     # a lifted species counts min(g v, P - A) of a vertex (its best y there)
     verts: list[sp.csr_matrix] = []
-    gv = [np.zeros((b.current.size, 0)) for b in risks]
+    gv = [np.zeros((b.base.size, 0)) for b in risks]
     lv = np.zeros(0)
 
     def effective(i: int) -> np.ndarray:
@@ -767,7 +1039,7 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         def f(lam):
             v = float(lv @ lam)
             for i, b in enumerate(risks):
-                v += b.weight * float(np.sum(_h((b.current + ev[i] @ lam) / b.potential, b.z)))
+                v += b.weight * float(np.sum(_h((b.base + ev[i] @ lam) / b.potential, b.z)))
             return -v
 
         def grad(lam):
@@ -783,8 +1055,8 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         lam = lam / lam.sum() if lam.sum() > 0 else lam0
         return lam if f(lam) <= f(lam0) else lam0
 
-    add_vertex(vertex(lin + sum(b.gain.T @ slopes(i, np.zeros(b.current.size)) for i, b in enumerate(risks)),
-                      [slopes(i, np.zeros(b.current.size)) for i, b in enumerate(risks)])[0])
+    add_vertex(vertex(lin + sum(b.gain.T @ slopes(i, np.zeros(b.base.size)) for i, b in enumerate(risks)),
+                      [slopes(i, np.zeros(b.base.size)) for i, b in enumerate(risks)])[0])
     bound, best_x, best = math.inf, None, -math.inf
     status, it = "iteration_limit", 0
     lam = np.ones(1)
@@ -795,14 +1067,14 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         for w, v in zip(lam, verts):
             if w > 0:
                 x += w * v.toarray().ravel()
-        x = np.clip(x, 0.0, p.upper)
+        x = np.clip(x, lb_x, p.upper)
         f = _true_objective(p, x)
         if f > best:
             best_x, best = x, f
         # the lifted objective at the mix (x, y): at most the plan's benefit f
         ys = [e @ lam for e in ev]
         f_lift = float(lv @ lam) + sum(
-            b.weight * float(np.sum(_h((b.current + y) / b.potential, b.z) - _h(b.current / b.potential, b.z)))
+            b.weight * float(np.sum(_h((b.base + y) / b.potential, b.z) - _h(b.base / b.potential, b.z)))
             for b, y in zip(risks, ys))
         dy = [slopes(i, ys[i]) for i in range(len(risks))]
         cx = lin.copy()
@@ -885,9 +1157,9 @@ def _solve_min_cost(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]
 # ----------------------------------------------------------------------------- plangea's steps
 
 def _plangea_slopes(b: _Risk, extra: np.ndarray) -> np.ndarray:
-    """plangea's .multi_extinction_slope: |risk((A + delta) / P) - risk(A / P)| / delta, A the habitat now
-    plus what was restored."""
-    a = b.current + extra
+    """plangea's .multi_extinction_slope: |risk((A + delta) / P) - risk(A / P)| / delta, A the habitat
+    without the plan plus what the plan so far changed."""
+    a = b.base + extra
     r1 = np.maximum(1.0 - (a / b.potential) ** b.z, 0.0)
     r2 = np.maximum(1.0 - ((a + PLANGEA_DELTA) / b.potential) ** b.z, 0.0)
     return np.abs(r2 - r1) / PLANGEA_DELTA
@@ -896,18 +1168,11 @@ def _plangea_slopes(b: _Risk, extra: np.ndarray) -> np.ndarray:
 def _steps_layer(p: RestorationProblem, b, cum: np.ndarray) -> np.ndarray:
     if isinstance(b, _Risk):
         slopes = _plangea_slopes(b, b.gain @ cum)
-        # plangea's bd: the slopes times the habitat share a unit of the cell restored gives
-        hab = b.hab.multiply(sp.csr_matrix((slopes * (1.0 - b.discount))[:, None])).tocsc()
+        # plangea's bd: the slopes times the habitat share a unit of the cell gives (or takes, signed)
+        hab = b.hab.multiply(sp.csr_matrix(slopes[:, None])).tocsc()
         return np.asarray(hab.sum(axis=0)).ravel()
     if b.intactness is not None and cum.any():
-        from ..intactness import intactness_gradient
-
-        hfi, reduction, radius, gamma, beta, z, cell_size = b.intactness
-        full = np.zeros(p.shape[0] * p.shape[1])
-        full[p.index] = cum
-        g = intactness_gradient(hfi, reduction, radius, gamma=gamma, beta=beta, z=z, cell_size=cell_size,
-                                restored=full.reshape(p.shape))
-        return np.nan_to_num(np.asarray(g.values, dtype=np.float64).ravel()[p.index])
+        return _intactness_coef(p, b.intactness, cum)
     return b.layer
 
 
@@ -924,6 +1189,8 @@ def _solve_steps(p: RestorationProblem, steps: int) -> np.ndarray:
         raise ValueError("steps must be at least 1")
     if p.budget is not None or p.objective[0] != "max_benefit":
         raise ValueError("method='steps' takes area targets only (plangea's procedure): no budget, no minimum cost")
+    if p.lower is not None and p.lower.any():
+        raise ValueError("method='steps' takes no least shares")
     if not p.targets:
         raise ValueError("method='steps' needs an area target")
     n = p.n
@@ -961,8 +1228,10 @@ def _solve_steps(p: RestorationProblem, steps: int) -> np.ndarray:
 
 @dataclass
 class RiskReduction(Saveable):
-    """Result of :func:`eval_risk_reduction`: per species, its habitat and risk before and after; the
-    total reduction and its standard deviation from the uncertainty of z."""
+    """Result of :func:`eval_risk_reduction`: per species, its habitat now (``current``), without the
+    plan (``baseline``: less than now when conservation's baseline loses land) and gained by it, its
+    risk before and after; the total reduction (negative when conversion raises the risk) and its
+    standard deviation from the uncertainty of z."""
 
     table: pd.DataFrame = field(repr=False)
     total: float = 0.0
@@ -1030,17 +1299,18 @@ def eval_risk_reduction(problem: RestorationProblem, solution, z_sd: float | Non
     b = risks[0]
     x = solution.values if isinstance(solution, RestorationSolution) else _on_units(problem, solution, "solution")
     gained = b.gain @ np.nan_to_num(np.asarray(x, dtype=np.float64))
-    after = b.current + gained
+    after = b.base + gained
     after = np.where(np.abs(after) < EXRISK_EPS, 0.0, after)
 
     def reduction(z: np.ndarray) -> np.ndarray:
-        before = np.maximum(1.0 - (b.current / b.potential) ** z, 0.0)
+        before = np.maximum(1.0 - (b.base / b.potential) ** z, 0.0)
         aft = np.maximum(1.0 - (after / b.potential) ** z, 0.0)
         return np.nan_to_num(before - aft)
 
     red = reduction(b.z)
-    table = pd.DataFrame({"species": list(b.species), "current": b.current, "potential": b.potential,
-                          "gained": gained, "risk_before": np.maximum(1.0 - (b.current / b.potential) ** b.z, 0.0),
+    table = pd.DataFrame({"species": list(b.species), "current": b.current, "baseline": b.base,
+                          "potential": b.potential, "gained": gained,
+                          "risk_before": np.maximum(1.0 - (b.base / b.potential) ** b.z, 0.0),
                           "risk_after": np.maximum(1.0 - (after / b.potential) ** b.z, 0.0), "reduction": red})
     total = float(np.sum(red))
     sd = math.nan

@@ -371,3 +371,220 @@ def test_exact_with_species_at_their_potential():
     assert sol.bound >= sol.benefit - 1e-12 and sol.bound - sol.benefit <= 1e-7 * sol.bound
     assert sol.benefit == pytest.approx(_scipy_optimum(q, 0.3 * anth.sum()), rel=1e-6)
     assert sol.benefit >= q.solve(method="steps", steps=5).benefit
+
+
+# ----------------------------------------------------------------------------- conservation and conversion
+
+@pytest.fixture(scope="module")
+def natural_case(case):
+    """bd_absent's habitats with their loss, and the natural share of every cell."""
+    cover, veg, _, _ = case
+    names, r = pc.ranges()
+    aoh = ls.sdm.area_of_habitat(pc.grid(r, names=names), cover, pc.NATURAL, suitability=pc.habitat_table(),
+                                 original=veg, loss=True)
+    nat = sum(np.nan_to_num(cover.values[k]) for k in range(len(pc.NATURAL)))
+    return aoh, pc.grid(nat)
+
+
+@pytest.mark.parametrize("name", list(pc.SCEN_CD_CASES))
+def test_conversion_and_conservation_steps_are_plangea(ref, natural_case, name):
+    """scen's loop for D (x in [-natural, 0]) and C (corrected: its baseline loses the natural land not
+    conserved, as an area): the pixels, the first layer, the plan and the refreshed layers."""
+    arrays, _ = ref
+    aoh, nat = natural_case
+    spec = pc.SCEN_CD_CASES[name]
+    conv = spec["type"] == "D"
+    if "cols" in spec:
+        nat = nat.where(np.arange(pc.SHAPE[1])[None, :] < spec["cols"], 0.0)
+    p = P.restoration_problem(convertible=nat) if conv else P.restoration_problem(conservable=nat)
+    p = p.add_extinction_risk_benefit(aoh)
+    assert p.actions == (("convert",) if conv else ("conserve",))
+    np.testing.assert_array_equal(p.index, arrays[f"{name}/master_n"].astype(np.int64) - 1)
+    sign = -1.0 if conv else 1.0  # plangea's x of conversion is negative, its layer positive
+    np.testing.assert_allclose(sign * R._steps_layer(p, p.benefits[0], np.zeros(p.n)), arrays[f"{name}/bd_0"],
+                               rtol=1e-7)
+    q = p.add_area_target(float(arrays[f"{name}/target"][0]), sense=">=" if conv else "<=")
+    sol = q.solve(method="steps", steps=spec["steps"])
+    np.testing.assert_allclose(sign * sol.values, arrays[f"{name}/x"], rtol=0, atol=1e-12)
+    for k in range(1, spec["steps"]):
+        bd = R._steps_layer(p, p.benefits[0], sign * arrays[f"{name}/cum_{k}"])
+        np.testing.assert_allclose(sign * bd, arrays[f"{name}/bd_{k}"], rtol=1e-7)
+
+
+def _scipy_general(q):
+    """An independent optimum of the concave problem with any area rows, by scipy's SLSQP."""
+    from scipy.optimize import minimize
+
+    rows, rhs, sense = R._feasible_set(q)
+    dense = rows.toarray()
+    cons = []
+    for a, r, s in zip(dense, rhs, sense):
+        if s == "<=":
+            cons.append({"type": "ineq", "fun": lambda x, a=a, r=r: r - a @ x, "jac": lambda x, a=a: -a})
+        elif s == ">=":
+            cons.append({"type": "ineq", "fun": lambda x, a=a, r=r: a @ x - r, "jac": lambda x, a=a: a})
+        else:
+            cons.append({"type": "eq", "fun": lambda x, a=a, r=r: a @ x - r, "jac": lambda x, a=a: a})
+    risks = [b for b in q.benefits if isinstance(b, R._Risk)]
+    lin = sum((b.weight * b.coef for b in q.benefits if isinstance(b, R._Linear)), np.zeros(q.n))
+
+    def f(x):
+        v = lin @ x
+        for b in risks:
+            v += b.weight * np.sum(np.minimum(np.maximum(b.base + b.gain @ x, 0) / b.potential, 1.0) ** b.z)
+        return -v
+
+    def grad(x):
+        g = lin.copy()
+        for b in risks:
+            r = (b.base + b.gain @ x) / b.potential
+            d = np.where(r < 1.0, b.z * np.maximum(r, 1e-12) ** (b.z - 1.0), 0.0) / b.potential
+            g += b.weight * (b.gain.T @ d)
+        return -g
+
+    best = None
+    for start in (q.upper * 0.5, np.zeros(q.n), q.upper):
+        res = minimize(f, start, jac=grad, bounds=list(zip(np.zeros(q.n), q.upper)), method="SLSQP",
+                       constraints=cons, options={"maxiter": 3000, "ftol": 1e-15})
+        if res.success and (best is None or res.fun < best.fun):
+            best = res
+    base = sum(b.weight * np.sum(np.minimum(b.base / b.potential, 1.0) ** b.z) for b in risks)
+    return -best.fun - base
+
+
+@pytest.mark.parametrize("kind", ["convert", "conserve"])
+def test_exact_conversion_and_conservation(natural_case, kind):
+    """The exact plans of D and C: the optimum (against SLSQP), never worse than plangea's steps or the
+    uniform plan; converting raises the risk (a negative benefit), conserving lowers it from the
+    baseline."""
+    aoh, nat = natural_case
+    p = P.restoration_problem(**{("convertible" if kind == "convert" else "conservable"): nat})
+    p = p.add_extinction_risk_benefit(aoh)
+    total = float(p.upper @ p.area)
+    q = p.add_area_target(0.3 * total, sense=">=" if kind == "convert" else "<=")
+    sol = q.solve()
+    assert sol.status == "optimal" and sol.bound >= sol.benefit - 1e-12
+    assert sol.benefit == pytest.approx(_scipy_general(q), rel=1e-6, abs=1e-9)
+    assert sol.benefit >= q.solve(method="steps", steps=3).benefit - 1e-12
+    assert sol.benefit >= q.uniform().benefit - 1e-12
+    assert sol.areas == {kind: pytest.approx(sol.area)}
+    m = sol.converted if kind == "convert" else sol.conserved
+    assert sol.restored is None and np.nansum(m.values) == pytest.approx(sol.values.sum())
+    rr = P.eval_risk_reduction(q, sol)
+    assert rr.total == pytest.approx(sol.benefit, rel=1e-12)
+    if kind == "convert":
+        assert sol.benefit < 0 and (rr.table["baseline"] == rr.table["current"]).all()
+    else:
+        assert sol.benefit > 0 and (rr.table["baseline"] <= rr.table["current"] + 1e-12).all()
+        # the baseline loses every species' habitat in the natural land of the units
+        b = q.benefits[0]
+        np.testing.assert_allclose(b.current - b.base, b.gain @ q.natural, rtol=1e-12)
+
+
+def test_restoration_with_conversion(case, natural_case):
+    """R + D: separate columns for the anthropic land restored and the natural land converted; a demand
+    for land met with no net loss of natural land; restoring gains (original vegetation), converting
+    loses (current natural cover)."""
+    _, veg, _, _ = case
+    aoh, nat = natural_case
+    p = P.restoration_problem(veg, convertible=nat).add_extinction_risk_benefit(aoh)
+    assert p.actions == ("restore", "convert")
+    nr = int(np.sum(p.action == 0))
+    g = p.benefits[0].gain.toarray()
+    assert (g[:, :nr] >= 0).all() and (g[:, nr:] <= 0).all()
+    q = p.add_area_target(5.0, sense=">=", action="convert").add_area_target(0.0, sense=">=")  # net >= 0
+    sol = q.solve()
+    assert sol.status == "optimal"
+    assert sol.areas["convert"] >= 5.0 * (1 - 1e-9)
+    assert sol.areas["restore"] >= sol.areas["convert"] * (1 - 1e-9)
+    assert sol.benefit == pytest.approx(_scipy_general(q), rel=1e-6, abs=1e-9)
+    ev = q.evaluate(restored=sol.restored, converted=sol.converted)
+    assert ev.benefit == pytest.approx(sol.benefit, rel=1e-12)
+    np.testing.assert_array_equal(q.evaluate(sol.values).values, sol.values)
+    with pytest.raises(ValueError, match="several actions"):
+        q.evaluate(sol.restored)
+    with pytest.raises(ValueError, match="one action"):
+        q.uniform(5.0)
+
+
+def test_actions_values_costs_and_errors(case, natural_case):
+    _, veg, aoh_r, _ = case
+    aoh, nat = natural_case
+    rng = np.random.default_rng(8)
+    carbon = pc.grid(rng.random(pc.SHAPE) * 50)
+    p = P.restoration_problem(veg, convertible=nat, limit={"convert": 0.5})
+    d, r = p.action == 2, p.action == 0
+    np.testing.assert_allclose(p.upper[d], 0.5 * nat.values.ravel()[p.index[d]])
+    q = p.add_linear_benefit({"restore": carbon, "convert": -2.0}, name="carbon")
+    lin = q.benefits[0]
+    np.testing.assert_array_equal(lin.coef[d], -2.0 * p.area[d])
+    np.testing.assert_array_equal(lin.coef[r], carbon.values.ravel()[p.index[r]] * p.area[r])
+    c = q.add_budget(10.0, {"restore": 3.0})
+    assert (c.cost[d] == 0).all() and (c.cost[r] == 3.0 * p.area[r]).all()
+    # conservation's values count what conserving saves from the threat
+    t = 0.4
+    cons = P.restoration_problem(conservable=nat, threat=t).add_linear_benefit(1.0)
+    np.testing.assert_allclose(cons.benefits[0].coef, t * cons.area)
+    b = P.restoration_problem(conservable=nat, threat=t).add_extinction_risk_benefit(aoh).benefits[0]
+    full = P.restoration_problem(conservable=nat).add_extinction_risk_benefit(aoh).benefits[0]
+    np.testing.assert_allclose(b.gain.toarray(), t * full.gain.toarray(), rtol=1e-15)
+    np.testing.assert_allclose(b.current - b.base, t * (full.current - full.base), rtol=1e-12)
+    with pytest.raises(ValueError, match="either conserved or converted"):
+        P.restoration_problem(conservable=nat, convertible=nat)
+    with pytest.raises(ValueError, match="loss"):
+        P.restoration_problem(convertible=nat).add_extinction_risk_benefit(aoh_r)
+    with pytest.raises(ValueError, match="no action"):
+        P.restoration_problem(veg).add_linear_benefit({"convert": 1.0})
+    with pytest.raises(ValueError, match="no 'convert'"):
+        P.restoration_problem(veg).add_area_target(1.0, action="convert")
+    with pytest.raises(ValueError, match="threat"):
+        P.restoration_problem(conservable=nat, threat=1.5)
+    with pytest.raises(ValueError, match="increase"):
+        P.restoration_problem(convertible=nat).add_intactness_benefit(np.ones(pc.SHAPE), cell_size=1.0)
+    with pytest.raises(ValueError, match="give the land"):
+        P.restoration_problem()
+
+
+@pytest.mark.parametrize("kind", ["convert", "conserve"])
+def test_intactness_of_conversion_and_conservation(kind):
+    """The linear intactness benefit of converting (the footprint rises by increase x) and conserving
+    (the baseline loses the natural land by increase x threat; conserving spares it) is the derivative
+    of the total intactness."""
+    rng = np.random.default_rng(9)
+    shape = (7, 8)
+    share = rng.random(shape) * 0.8
+    hfi = 2.0 + rng.random(shape) * 10
+    inc = 1.0 + rng.random(shape) * 3
+    threat = 0.6
+    kw = {"convertible": share} if kind == "convert" else {"conservable": share, "threat": threat}
+    p = P.restoration_problem(cell_area=1.0, **kw).add_intactness_benefit(hfi, increase=inc, radius=2, cell_size=1.0)
+    coef = p.benefits[0].coef
+
+    def total(x):
+        h = hfi.ravel().copy()
+        if kind == "convert":
+            h[p.index] += inc.ravel()[p.index] * x
+        else:
+            h[p.index] += inc.ravel()[p.index] * threat * (share.ravel()[p.index] - x)
+        return float(ls.intactness(h.reshape(shape), 2, cell_size=1.0).values.sum())
+
+    for k in (0, 5, p.n - 1):
+        e = np.zeros(p.n)
+        e[k] = 1e-5
+        assert coef[k] == pytest.approx((total(e) - total(-e)) / 2e-5, rel=1e-5)
+    assert (coef < 0).all() if kind == "convert" else (coef > 0).all()
+
+
+def test_ecosystem_areas_loss(case):
+    cover, _, _, _ = case
+    ea = P.ecosystem_areas(cover, pc.NATURAL, pc.ANTHROPIC, pc.grid(pc.ecoregion_codes()), cell_area=1.0)
+    nat = sum(np.nan_to_num(cover.values[k]) for k in range(3)).ravel()
+    codes = pc.ecoregion_codes().ravel()
+    for k, code in enumerate(np.unique(codes)):
+        row = ea.loss[k].toarray().ravel()
+        np.testing.assert_array_equal(row, np.where((codes == code) & (nat > 0), 1.0, 0.0))
+    p = P.restoration_problem(convertible=pc.grid(nat.reshape(pc.SHAPE)), cell_area=1.0)
+    b = p.add_extinction_risk_benefit(ea).benefits[0]
+    x = np.full(p.n, 0.1)
+    expected = [np.sum(0.1 * ((codes == c) & (nat > 0))) for c in np.unique(codes)]
+    np.testing.assert_allclose(b.gain @ x, -np.array(expected))
