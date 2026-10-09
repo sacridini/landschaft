@@ -341,7 +341,13 @@ void label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions, Patc
     std::vector<StripStats> strips(static_cast<std::size_t>(n_strips));
     const bool parallel = n >= kParallelThreshold && n_strips > 1;
     parallel_for_dynamic(parallel, n_strips, [&](i64 s) {
-        label_strip<true>(cls, code, nx, ny, s * kStripRows, std::min(ny, (s + 1) * kStripRows), directions, strips[s]);
+        const i64 y0 = s * kStripRows;
+        const i64 y1 = std::min(ny, (s + 1) * kStripRows);
+        if (full) {
+            label_strip<true>(cls, code, nx, ny, y0, y1, directions, strips[s]);
+        } else {
+            label_strip<false>(cls, code, nx, ny, y0, y1, directions, strips[s]);
+        }
     });
     out.strip_offset.assign(static_cast<std::size_t>(n_strips + 1), 0);
     for (i64 s = 0; s < n_strips; ++s) {
@@ -463,7 +469,7 @@ void label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions, Patc
     out.local_to_patch.resize(static_cast<std::size_t>(n_local));
     parallel_for(parallel, n_local, [&](i64 l) { out.local_to_patch[l] = rank[gid[l]]; });
 
-    if (directions == 4) count_diagonal_pairs(cls, nx, ny, out, parallel);
+    if (full && directions == 4) count_diagonal_pairs(cls, nx, ny, out, parallel);
 }
 
 Landscape::Landscape(const std::int32_t* values, const std::uint8_t* na_mask, i64 nx, i64 ny, double resx,

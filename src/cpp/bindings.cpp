@@ -893,6 +893,7 @@ void bind_landscape(py::module_& m) {
             return long_table_dict(t);
         });
 
+    py::class_<lsm::TiledBlock>(m, "LsmTiledBlock", "A block prepared by LsmTiled, waiting to be merged.");
     py::class_<lsm::TiledLandscape>(m, "LsmTiled")
         .def(py::init([](i64 nx, i64 ny, double resx, double resy, const py::dict& options,
                          const std::vector<std::int32_t>& class_values) {
@@ -910,6 +911,16 @@ void bind_landscape(py::module_& m) {
             tiled_check(t, values, na, rows + above + below);
             lsm_call(t.n_threads(), [&] { t.add_block(values.data(), na.data(), y0, rows, above, below); });
         })
+        // prepare_*: from any thread (n_threads: its OpenMP threads), merge_*: in block order
+        .def("prepare_block", [](const lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
+                                 const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below, int n_threads) {
+            tiled_check(t, values, na, rows + above + below);
+            return lsm_call(n_threads, [&] { return t.prepare_block(values.data(), na.data(), y0, rows, above, below); });
+        }, py::arg("values"), py::arg("na"), py::arg("y0"), py::arg("rows"), py::arg("above"), py::arg("below"),
+           py::arg("n_threads") = 0)
+        .def("merge_block", [](lsm::TiledLandscape& t, lsm::TiledBlock& block) {
+            lsm_call(t.n_threads(), [&] { t.merge_block(block); });
+        })
         .def("finish", [](lsm::TiledLandscape& t) { lsm_call(t.n_threads(), [&] { t.finish(); }); })
         .def("landscape", [](lsm::TiledLandscape& t) -> lsm::Landscape& { return t.landscape(); },
              py::return_value_policy::reference_internal)
@@ -922,6 +933,15 @@ void bind_landscape(py::module_& m) {
             tiled_check(t, values, na, rows + above + below);
             lsm_call(t.n_threads(), [&] { t.detail_block(values.data(), na.data(), y0, rows, above, below); });
         })
+        .def("prepare_detail", [](const lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
+                                  const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below, int n_threads) {
+            tiled_check(t, values, na, rows + above + below);
+            return lsm_call(n_threads, [&] { return t.prepare_detail(values.data(), na.data(), y0, rows, above, below); });
+        }, py::arg("values"), py::arg("na"), py::arg("y0"), py::arg("rows"), py::arg("above"), py::arg("below"),
+           py::arg("n_threads") = 0)
+        .def("merge_detail", [](lsm::TiledLandscape& t, lsm::TiledBlock& block) {
+            lsm_call(t.n_threads(), [&] { t.merge_detail(block); });
+        })
         .def("end_detail", [](lsm::TiledLandscape& t) { return lsm_call(t.n_threads(), [&] { return t.end_detail(); }); })
         .def("tie_block", [](lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
                              const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below) {
@@ -930,12 +950,13 @@ void bind_landscape(py::module_& m) {
         })
         .def("end_ties", [](lsm::TiledLandscape& t) { lsm_call(t.n_threads(), [&] { t.end_ties(); }); })
         .def("block_labels", [](const lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
-                                const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below) {
+                                const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below, int n_threads) {
             tiled_check(t, values, na, rows + above + below);
-            auto v = lsm_call(t.n_threads(),
+            auto v = lsm_call(n_threads > 0 ? n_threads : t.n_threads(),
                               [&] { return t.block_labels(values.data(), na.data(), y0, rows, above, below); });
             return to_array(std::move(v), t.nx(), rows);
-        });
+        }, py::arg("values"), py::arg("na"), py::arg("y0"), py::arg("rows"), py::arg("above"), py::arg("below"),
+           py::arg("n_threads") = 0);
 
     // rasters: list of (values, na_mask or None, resx, resy)
     m.def(

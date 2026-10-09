@@ -4,15 +4,21 @@
 The file is read three times at most: once for its class values, once for
 the patches and class adjacencies (enough for most metrics), and once more
 for core areas, gyrate, circle and enn when those are asked for (plus once
-for gyrate with ``cell_center``). Only one block (and a few context rows) is
-in memory at a time; the patch tables are. Maps of patch ids or metrics are
-lazy (dask): every block is read and labelled again when it is computed.
+for gyrate with ``cell_center``). Blocks are read ahead on a thread, and
+blocks of few rows are prepared several at a time (each on some of the
+threads) and merged in order, so the results do not depend on it; only those
+blocks (with a few context rows) are in memory at a time, and the patch
+tables. Maps of patch ids or metrics are lazy (dask): every block is read and
+labelled again when it is computed.
 """
 
 from __future__ import annotations
 
 import os
+import threading
 import warnings
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import rasterio
@@ -25,6 +31,7 @@ __all__ = ["TiledReader", "DETAIL_FAMILIES"]
 
 _INT32 = np.iinfo(np.int32)
 _STRIP = 64  # the C++ strip height: blocks are multiples of it
+_AHEAD = 2  # blocks read ahead while the engine works on the current one
 _CORE = {"core", "ncore", "cai", "tca", "cpland", "ndca", "dcad", "dcore"}
 
 # metric family -> detail computed by the extra pass
@@ -32,13 +39,12 @@ DETAIL_FAMILIES = {**{f: "core" for f in _CORE}, "gyrate": "gyrate", "circle": "
 
 
 def block_size(block_rows, width: int, n_threads: int = 0) -> int:
-    """Rows per block, a multiple of 64. "auto": 64 rows per thread (the
-    strips labelled in parallel) and at least 4 million cells, but at most
-    32 million cells."""
+    """Rows per block, a multiple of 64. "auto": one strip of 64 rows (the
+    blocks are worked on side by side, see `TiledReader._workers`), but at
+    least 32,768 cells."""
     width = max(width, 1)
     if block_rows == "auto" or block_rows is True:
-        rows = max(_STRIP * resolve(n_threads), (1 << 22) // width)
-        rows = min(rows, (1 << 25) // width)
+        rows = (1 << 15) // width
     else:
         rows = int(block_rows)
         if rows <= 0:
@@ -83,8 +89,7 @@ class TiledReader:
         classes = self._class_values()
         ny, nx = self.shape
         self.engine = _core.LsmTiled(nx, ny, self.res[0], self.res[1], options, classes)
-        for block in self._blocks(1):
-            self.engine.add_block(*block)
+        self._run(1, self.engine.prepare_block, self.engine.merge_block)
         self.engine.finish()
         self.options = options
 
@@ -122,51 +127,90 @@ class TiledReader:
             raise TypeError(f"expected a numeric raster, got dtype {arr.dtype}")
         return np.ascontiguousarray(arr, dtype=np.int32), mask.view(np.uint8)
 
+    def _spans(self, halo: int) -> list[tuple[int, int, int, int]]:
+        """(y0, rows, above, below) of every block with `halo` context rows."""
+        ny = self.shape[0]
+        return [(y0, rows, min(halo, y0), min(halo, ny - y0 - rows)) for y0, rows in self.blocks()]
+
+    def _workers(self) -> tuple[int, int]:
+        """Blocks prepared at once and the threads of each: blocks side by
+        side, one thread each (a block's own parallel work has serial parts,
+        and small parallel regions cost more than they give), within about
+        64 rows (or 32,768 cells) per thread in all and at most 32 million
+        cells; a block larger than that alone, on every thread."""
+        threads = resolve(self.n_threads)
+        width = self.shape[1]
+        block = self.block_rows * width
+        budget = min(threads * max(_STRIP * width, 1 << 15), 1 << 25)
+        workers = max(1, min(threads, len(self.blocks()), budget // block))
+        return workers, 1 if workers > 1 else threads
+
+    def _run(self, halo: int, prepare, merge) -> None:
+        """Every block read (ahead, see `_blocks`), prepared (several at once,
+        see `_workers`) and merged in block order."""
+        workers, threads = self._workers()
+        if workers == 1:
+            for block in self._blocks(halo):
+                merge(prepare(*block, threads))
+            return
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            pending = deque()
+            try:
+                for block in self._blocks(halo):
+                    pending.append(pool.submit(prepare, *block, threads))
+                    if len(pending) > workers:
+                        merge(pending.popleft().result())
+                while pending:
+                    merge(pending.popleft().result())
+            finally:
+                for future in pending:
+                    future.cancel()
+
     def _blocks(self, halo: int):
         """(values, mask, y0, rows, above, below) of every block with `halo`
-        context rows."""
-        ny = self.shape[0]
-        # GDAL decodes compressed blocks on the same threads
-        with rasterio.Env(GDAL_NUM_THREADS=self._gdal_threads), rasterio.open(self.path) as src:
-            for y0 in range(0, ny, self.block_rows):
-                rows = min(self.block_rows, ny - y0)
-                above = min(halo, y0)
-                below = min(halo, ny - y0 - rows)
-                values, mask = self._read(src, y0 - above, y0 + rows + below)
-                yield values, mask, y0, rows, above, below
+        context rows. The next blocks are read (and converted) on a thread of
+        their own while the caller works on the current one."""
+        spans = self._spans(halo)
+        local = threading.local()
+
+        def read(span):
+            y0, rows, above, below = span
+            if getattr(local, "src", None) is None:
+                # GDAL decodes compressed blocks on the same threads (the
+                # environment is the reading thread's, for all its blocks)
+                local.env = rasterio.Env(GDAL_NUM_THREADS=self._gdal_threads)
+                local.env.__enter__()
+                local.src = rasterio.open(self.path)
+            values, mask = self._read(local.src, y0 - above, y0 + rows + below)
+            return values, mask, y0, rows, above, below
+
+        def close():
+            if getattr(local, "src", None) is not None:
+                local.src.close()
+                local.env.__exit__(None, None, None)
+                local.src = local.env = None
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pending = deque(pool.submit(read, span) for span in spans[:_AHEAD])
+            following = len(pending)
+            try:
+                while pending:
+                    block = pending.popleft().result()
+                    if following < len(spans):
+                        pending.append(pool.submit(read, spans[following]))
+                        following += 1
+                    yield block
+            finally:
+                for future in pending:
+                    future.cancel()
+                pool.submit(close).result()
 
     def _class_values(self) -> np.ndarray:
         """The class values of the file (pass 0)."""
-        with rasterio.open(self.path) as src:
-            dtype = np.dtype(src.dtypes[self.band - 1])
-        if dtype.kind in "ui" and dtype.itemsize <= 2:
-            # small integers: count every value of the raw blocks
-            info = np.iinfo(dtype)
-            counts = np.zeros(int(info.max) - int(info.min) + 1, dtype=np.int64)
-            ny = self.shape[0]
-            with rasterio.Env(GDAL_NUM_THREADS=self._gdal_threads), rasterio.open(self.path) as src:
-                for y0 in range(0, ny, self.block_rows):
-                    rows = min(self.block_rows, ny - y0)
-                    arr = src.read(self.band, window=Window(0, y0, self.shape[1], rows)).ravel()
-                    if info.min < 0:
-                        arr = arr.astype(np.int32) - int(info.min)
-                    counts += np.bincount(arr, minlength=counts.size)
-            nd = self.nodata
-            if nd is not None and not (isinstance(nd, float) and np.isnan(nd)) and float(nd).is_integer():
-                if info.min <= nd <= info.max:
-                    counts[int(nd) - int(info.min)] = 0
-            return (np.flatnonzero(counts) + int(info.min)).astype(np.int32)
-        found: set[int] = set()
+        found = np.empty(0, dtype=np.int32)
         for values, mask, *_ in self._blocks(0):
-            valid = values[mask == 0]
-            if not valid.size:
-                continue
-            lo, hi = int(valid.min()), int(valid.max())
-            if hi - lo < 1 << 20:  # small range: count instead of sorting
-                found.update((np.flatnonzero(np.bincount(valid - lo, minlength=hi - lo + 1)) + lo).tolist())
-            else:
-                found.update(np.unique(valid).tolist())
-        return np.array(sorted(found), dtype=np.int32)
+            found = np.union1d(found, _core.lsm_unique_values(values, mask))
+        return found.astype(np.int32)
 
     # -- maps ------------------------------------------------------------------
 
@@ -175,27 +219,55 @@ class TiledReader:
         ny = self.shape[0]
         return [(y0, min(self.block_rows, ny - y0)) for y0 in range(0, ny, self.block_rows)]
 
-    def block_labels(self, y0: int, rows: int) -> np.ndarray:
-        """Patch ids (1..n, 0 = NA) of the rows of one block, read again."""
-        with rasterio.Env(GDAL_NUM_THREADS=self._gdal_threads), rasterio.open(self.path) as src:
-            values, mask = self._read(src, y0, y0 + rows)
-        return self.engine.block_labels(values, mask, y0, rows, 0, 0)
+    def chunks(self) -> list[list[tuple[int, int]]]:
+        """The blocks grouped into the chunks of the lazy maps: rows in
+        multiples of 512 (the tiles ``write_raster`` writes) and at least 4
+        million cells, unless a block is larger."""
+        blocks = self.blocks()
+        target = max(512, -(-(1 << 22) // self.shape[1]))
+        out: list[list[tuple[int, int]]] = []
+        for y0, rows in blocks:
+            if out:
+                first = out[-1][0][0]
+                height = y0 - first
+                if height < target or height % 512:
+                    out[-1].append((y0, rows))
+                    continue
+            out.append([(y0, rows)])
+        return out
+
+    def chunk_labels(self, chunk: list[tuple[int, int]], n_threads: int = 0) -> np.ndarray:
+        """Patch ids (1..n, 0 = NA) of the rows of consecutive blocks, read again."""
+        y0 = chunk[0][0]
+        y1 = chunk[-1][0] + chunk[-1][1]
+        with rasterio.Env(GDAL_NUM_THREADS=str(n_threads or self._gdal_threads)), rasterio.open(self.path) as src:
+            values, mask = self._read(src, y0, y1)
+        out = np.empty(values.shape, dtype=np.int32)
+        for b0, rows in chunk:
+            a = b0 - y0
+            out[a:a + rows] = self.engine.block_labels(values[a:a + rows], mask[a:a + rows], b0, rows, 0, 0, n_threads)
+        return out
 
     def lazy_map(self, values: np.ndarray | None = None):
-        """The patch ids as a dask array (one chunk per block), or
-        ``values[ids]`` with ``values[0]`` for NA."""
+        """The patch ids as a dask array (see `chunks`), or ``values[ids]``
+        with ``values[0]`` for NA."""
         import dask
         import dask.array as dsa
 
         dtype = np.int32 if values is None else values.dtype
+        # dask computes the chunks side by side: each gets its share of the threads
+        chunks = self.chunks()
+        threads = resolve(self.n_threads)
+        share = max(1, threads // min(threads, len(chunks)))
 
-        def block(y0: int, rows: int) -> np.ndarray:
-            ids = self.block_labels(y0, rows)
+        def chunk_map(chunk) -> np.ndarray:
+            ids = self.chunk_labels(chunk, share)
             return ids if values is None else values[ids]
 
         parts = [
-            dsa.from_delayed(dask.delayed(block, pure=False)(y0, rows), shape=(rows, self.shape[1]), dtype=dtype)
-            for y0, rows in self.blocks()
+            dsa.from_delayed(dask.delayed(chunk_map, pure=False)(c), dtype=dtype,
+                             shape=(c[-1][0] + c[-1][1] - c[0][0], self.shape[1]))
+            for c in chunks
         ]
         return dsa.concatenate(parts, axis=0)
 
@@ -217,8 +289,7 @@ class TiledReader:
         core, gyrate, circle, enn = ("core" in need), ("gyrate" in need), ("circle" in need), ("enn" in need)
         e = self.engine
         e.begin_detail(core, gyrate, circle, enn)
-        for block in self._blocks(e.detail_halo(core, enn)):
-            e.detail_block(*block)
+        self._run(e.detail_halo(core, enn), e.prepare_detail, e.merge_detail)
         if e.end_detail():
             for block in self._blocks(0):
                 e.tie_block(*block)

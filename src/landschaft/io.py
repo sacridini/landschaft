@@ -1619,13 +1619,26 @@ def write_raster(
             warnings.simplefilter("ignore", rasterio.errors.NotGeoreferencedWarning)
         with rasterio.Env(GDAL_TIFF_INTERNAL_MASK=True), rasterio.open(path, "w", **profile) as dst:
             if hasattr(values, "dask"):
-                rows = values.chunks[-2]
-                y0 = 0
-                for nr in rows:
-                    block = prepared(values[..., y0:y0 + nr, :].compute())
-                    window = rasterio.windows.Window(0, y0, width, nr)
-                    dst.write(block if block.ndim == 3 else block[None], window=window)
-                    y0 += nr
+                # rows of chunks computed several at a time (one per thread, at
+                # most 32 million cells, or one row of chunks), written in order
+                import dask
+
+                from ._threads import default_threads
+
+                starts = np.concatenate([[0], np.cumsum(values.chunks[-2])]).astype(int)
+                cells = bands * width
+                i = 0
+                while i < len(starts) - 1:
+                    j = i + 1
+                    while (j < len(starts) - 1 and j - i < default_threads()
+                           and (starts[j + 1] - starts[i]) * cells <= 1 << 25):
+                        j += 1
+                    parts = dask.compute(*[values[..., starts[k]:starts[k + 1], :] for k in range(i, j)])
+                    for k, part in zip(range(i, j), parts):
+                        block = prepared(part)
+                        window = rasterio.windows.Window(0, int(starts[k]), width, int(starts[k + 1] - starts[k]))
+                        dst.write(block if block.ndim == 3 else block[None], window=window)
+                    i = j
             else:
                 block = prepared(values)
                 dst.write(block if block.ndim == 3 else block[None])

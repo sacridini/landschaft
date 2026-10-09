@@ -260,9 +260,12 @@ class Landscape:
     block_rows
         Out-of-core computation for rasters larger than memory: ``data`` must
         be a file, read by blocks of this many rows (rounded up to a multiple
-        of 64; ``"auto"``: about 4 million cells per block). Only the patch
-        tables stay in memory. Results are identical to the in-memory ones;
-        ``labels`` and ``to_raster`` are not available.
+        of 64; ``"auto"``: 64 rows, at least 32,768 cells). Small blocks are
+        worked on side by side, one per thread (about 64 rows per thread in
+        memory, at most 32 million cells); a larger block alone, on every
+        thread. Only those blocks and the patch tables stay in memory.
+        Results are identical to the in-memory ones; ``labels`` and
+        ``to_raster`` give lazy rasters, computed and written block by block.
     n_threads
         Threads of the C++ core (default: all cores but one).
     convention

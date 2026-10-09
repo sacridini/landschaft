@@ -74,7 +74,18 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   qualquer ordem, qualquer thread) e dá os ids finais pelo `piece_patch`; no Python os mapas são dask
   preguiçosos (um pedaço por bloco, `TiledReader.lazy_map`) e o `write_raster` grava bloco a bloco.
   Blocos processados em paralelo (hoje um bloco por vez, paralelo por faixas) ajudariam
-  em rasters estreitos.
+  em rasters estreitos. **Feito (2026-10-09)**: `TiledLandscape` separa `prepare_block`/`prepare_detail`
+  (de qualquer thread) de `merge_block`/`merge_detail` (em ordem de bloco: mesma numeração dos pedaços e
+  mesmas somas); no Python, uma thread lê à frente (`_blocks`, `rasterio.Env` uma vez por thread: abrir um
+  por bloco custava ~0,5 ms) e um pool prepara blocos lado a lado, **uma thread cada**: misturar vários blocos
+  com 2-4 threads OpenMP cada era pior (regiões paralelas pequenas, threads ociosas girando). Medidas em 100M
+  de células (10000² e 1000 x 100000), construção e passada de detalhe: 1,21 -> 0,56 s e 1,93 -> 0,86 s;
+  1,13 -> 0,74 s e 2,09 -> 0,66 s; na memória 0,41 e 0,66 s. Com um bloco grande só (o antigo "auto", 64
+  linhas por thread) o detalhe ficava em ~1,5 s: as partes seriais de cada bloco pesam; por isso o "auto"
+  agora é 64 linhas (>= 32768 células). Mapas preguiçosos: pedaços dask de vários blocos, linhas múltiplas de
+  512 (os tiles do `write_raster`: janelas de 64 linhas recomprimiam tiles parciais, 10 s contra 1,8 s) e
+  >= 4M células; o `write_raster` calcula vários pedaços de uma vez. A passada 0 usa o `lsm_unique_values`
+  (o `np.bincount` segura o GIL). Fica sequencial a passada de empates do `gyrate` com `cell_center`.
 
 ## Reprojeção (`ls.reproject`, como o `project()` do terra)
 

@@ -113,8 +113,9 @@ constexpr i64 kStripRows = 64;
 // Patches of a raster of dense class indices (-1 = NA), labelled in strips
 // of kStripRows rows, in landscapemetrics' order.
 Patches label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions);
-// The same into `out`, whose memory is reused. Without `full`, a raster of
-// one strip only gets the class, cells and first cell of its patches.
+// The same into `out`, whose memory is reused. Without `full`, only the
+// class, cells and first cell of the patches are counted (the other tables
+// are empty or zero).
 void label_patches(const std::int32_t* cls, i64 nx, i64 ny, int directions, Patches& out, bool full = true);
 
 // City-block distance of every valid cell to the nearest cell of another
@@ -421,6 +422,22 @@ std::vector<double> window_metrics(const RasterView& raster, const std::uint8_t*
 // areas, gyrate, circle and enn need a detail pass over the same blocks
 // (and gyrate with cell_center a pass for the ties); their results are
 // identical to the in-memory computation.
+//
+// The work on a block is done in two steps: prepare_* (most of it, from any
+// thread: several blocks at once) and merge_* (in block order, on one
+// thread), which gives the same results whatever the blocks prepared at once;
+// add_block and detail_block do both.
+
+// A block prepared, waiting to be merged.
+struct TiledBlock {
+    struct Data;
+    std::unique_ptr<Data> d;
+    TiledBlock();
+    TiledBlock(TiledBlock&&) noexcept;
+    TiledBlock& operator=(TiledBlock&&) noexcept;
+    ~TiledBlock();
+};
+
 class TiledLandscape {
 public:
     TiledLandscape(i64 nx, i64 ny, double resx, double resy, Options options, std::vector<std::int32_t> class_values);
@@ -432,6 +449,9 @@ public:
 
     // pass 1
     void add_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above, i64 below);
+    TiledBlock prepare_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above,
+                             i64 below) const;
+    void merge_block(TiledBlock& block);
     void finish();
     Landscape& landscape();
 
@@ -440,6 +460,11 @@ public:
     void begin_detail(bool core, bool gyrate, bool circle, bool enn);
     void detail_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above,
                       i64 below);
+    // (circle: also marks the cells of the block's own rows, which no other
+    // block touches)
+    TiledBlock prepare_detail(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above,
+                              i64 below) const;
+    void merge_detail(TiledBlock& block);
     // true when gyrate with cell_center needs the tie pass
     bool end_detail();
     void tie_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above, i64 below);

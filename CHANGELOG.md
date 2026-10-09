@@ -26,6 +26,16 @@ in a new major version.
   (11 threads), now close to bilinear (0.21 s). The four rows of the 4 x 4 kernel go two at a time through
   SSE2 registers, each summed in GDAL's order, and the cells are checked for NoData four at a time (NaN on
   the values themselves).
+- Out-of-core landscapes (`block_rows`) work on several blocks at once: a pool of threads labels the blocks
+  (one thread each) while the next ones are read ahead, and the blocks are merged in order, so the results
+  are the same bits as in memory. On 100 million cells, building the landscape takes 0.56 s instead of
+  1.21 s and the core, enn, gyrate and circle pass 0.86 s instead of 1.93 s (a 1000-column raster: 0.74 s
+  and 0.66 s instead of 1.13 s and 2.09 s), close to the whole map in memory. `block_rows="auto"` is now
+  64 rows (at least 32,768 cells), worked on one block per thread; larger blocks you choose still go one at
+  a time, on every thread. Core areas out of core also take the four-neighbour shortcut at `edge_depth` = 1,
+  and the class values of the file are found in C++.
+- `ls.write_raster` computes the chunks of a dask array several at a time (one per thread, at most 32 million
+  cells) before writing them in order, instead of one after the other.
 
 ### Fixed
 - `ls.window_metrics` with FRAGSTATS contrast or similarity tables (`contrast=` for `cwed` and `teci`,

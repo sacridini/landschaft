@@ -111,10 +111,11 @@ big = ls.Landscape(ls.example_data("clc"), block_rows=256)
 big.out_of_core, big.class_metrics(["ca", "np", "ed"]).head(3)
 ```
 
-`block_rows="auto"` picks about four million cells per block. Maps of patch
-ids (`labels`) and of metrics (`to_raster`) come out lazy, as dask arrays: each
-block is read and labelled again when it is computed, and with `path=` the
-map is written to the file block by block, never whole in memory:
+`block_rows="auto"` reads blocks of 64 rows and works on one per thread at a
+time, so about 64 rows per thread are in memory. Maps of patch ids (`labels`)
+and of metrics (`to_raster`) come out lazy, as dask arrays: each block is read
+and labelled again when it is computed, and with `path=` the map is written to
+the file block by block, never whole in memory:
 
 ```python
 big.to_raster("area", path="patch_area.tif").name

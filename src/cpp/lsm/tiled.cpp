@@ -177,7 +177,52 @@ struct TiledLandscape::State {
     Patches label_block(const std::vector<std::int32_t>& ext, i64 above, i64 rows) const {
         return label_patches(ext.data() + above * nx, nx, rows, opt.directions);
     }
+
+    // Index of the block of the first pass starting at row y0 (rows checked).
+    std::size_t block_index(i64 y0, i64 rows, const char* what) const {
+        const auto it = std::lower_bound(block_y0.begin(), block_y0.end(), y0);
+        const auto b = static_cast<std::size_t>(it - block_y0.begin());
+        const i64 y_end = b + 1 < block_y0.size() ? block_y0[b + 1] : ny;
+        if (it == block_y0.end() || *it != y0 || rows != y_end - y0) throw std::invalid_argument(what);
+        return b;
+    }
+
+    // Patch of every patch of a block labelling (its pieces of the first pass).
+    std::vector<std::int32_t> local_patches(std::size_t b, const Patches& bp) const {
+        const i64 offset = block_offset[b];
+        const i64 n_local =
+            (b + 1 < block_offset.size() ? block_offset[b + 1] : static_cast<i64>(piece_patch.size())) - offset;
+        if (bp.n != n_local) throw std::invalid_argument("the block differs from the first pass");
+        return {piece_patch.begin() + offset, piece_patch.begin() + offset + n_local};
+    }
 };
+
+// What a block prepared hands to its merge.
+struct TiledBlock::Data {
+    i64 y0 = 0, rows = 0;
+    // pass 1: the block's patches (pieces) and their boxes, diagonal pairs of
+    // pieces (4 directions), its first and last rows (class, piece; -1: NA)
+    // and its class adjacencies
+    Patches bp;
+    std::vector<Box> boxes;
+    std::vector<std::pair<std::int32_t, std::int32_t>> diag;
+    std::vector<std::int32_t> first_cls, first_piece, last_cls, last_piece;
+    std::vector<i64> h, v, dg;
+    // detail pass
+    std::size_t block = 0;
+    std::vector<std::pair<std::int32_t, double>> gyrate_sums;  // (patch, sum of a strip piece), in strip order
+    std::vector<std::int32_t> local_patch;                    // cell_center: kept with bp for the merge
+    std::vector<std::uint64_t> enn_key;
+    std::vector<std::int32_t> enn_patch;
+    std::vector<std::pair<std::int32_t, i64>> core_cells;  // (patch, core cells)
+    std::vector<std::int32_t> core_owner;                   // patch of each core piece
+    std::vector<std::int32_t> core_first_cls, core_first_piece, core_last_cls, core_last_piece;
+};
+
+TiledBlock::TiledBlock() = default;
+TiledBlock::TiledBlock(TiledBlock&&) noexcept = default;
+TiledBlock& TiledBlock::operator=(TiledBlock&&) noexcept = default;
+TiledBlock::~TiledBlock() = default;
 
 TiledLandscape::TiledLandscape(i64 nx, i64 ny, double resx, double resy, Options options,
                                std::vector<std::int32_t> class_values)
@@ -228,9 +273,16 @@ int TiledLandscape::n_threads() const { return s_->opt.n_threads; }
 
 void TiledLandscape::add_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above,
                                i64 below) {
-    State& s = *s_;
+    if (s_->finished) throw std::logic_error("the first pass is finished");
+    if (y0 != s_->next_y) throw std::invalid_argument("blocks must come in order, without gaps");
+    TiledBlock block = prepare_block(values, na_mask, y0, rows, above, below);
+    merge_block(block);
+}
+
+TiledBlock TiledLandscape::prepare_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows,
+                                         i64 above, i64 below) const {
+    const State& s = *s_;
     if (s.finished) throw std::logic_error("the first pass is finished");
-    if (y0 != s.next_y) throw std::invalid_argument("blocks must come in order, without gaps");
     s.check_block(y0, rows, above, below, 1);
     if (y0 + rows < s.ny && rows % kStripRows != 0) {
         throw std::invalid_argument("blocks (but the last) must have a multiple of 64 rows");
@@ -241,14 +293,123 @@ void TiledLandscape::add_block(const std::int32_t* values, const std::uint8_t* n
     const i64 ext_rows = above + rows + below;
     const std::vector<std::int32_t> ext = s.dense(values, na_mask, ext_rows * nx);
     const std::int32_t* E = ext.data() + above * nx;  // first row of the block
-    const Patches bp = s.label_block(ext, above, rows);
+    TiledBlock out;
+    out.d = std::make_unique<TiledBlock::Data>();
+    TiledBlock::Data& b = *out.d;
+    b.y0 = y0;
+    b.rows = rows;
+    b.bp = s.label_block(ext, above, rows);
+    const Patches& bp = b.bp;
+    b.boxes = patch_boxes(bp, nx, rows);
+
+    // 4 directions: diagonal pairs of one class in different pieces of the
+    // block may still be one patch
+    if (s.opt.directions == 4) {
+        for (i64 y = 1; y < rows; ++y) {
+            for (i64 x = 0; x < nx; ++x) {
+                const i64 p = y * nx + x;
+                const std::int32_t c = E[p];
+                if (c < 0) continue;
+                const std::int32_t me = bp.patch(p, y);
+                for (int dx = -1; dx <= 1; dx += 2) {
+                    const i64 xx = x + dx;
+                    if (xx < 0 || xx >= nx || E[p - nx + dx] != c) continue;
+                    const std::int32_t other = bp.patch(p - nx + dx, y - 1);
+                    if (other != me) b.diag.emplace_back(me, other);
+                }
+            }
+        }
+    }
+
+    // the first and last rows, for the seams with the blocks around
+    b.first_cls.assign(E, E + nx);
+    b.last_cls.assign(E + (rows - 1) * nx, E + rows * nx);
+    b.first_piece.resize(static_cast<std::size_t>(nx));
+    b.last_piece.resize(static_cast<std::size_t>(nx));
+    for (i64 x = 0; x < nx; ++x) {
+        b.first_piece[x] = E[x] < 0 ? -1 : bp.patch(x, 0);
+        const i64 p = (rows - 1) * nx + x;
+        b.last_piece[x] = E[p] < 0 ? -1 : bp.patch(p, rows - 1);
+    }
+
+    // class adjacencies of the block's cells (context rows as neighbours)
+    const int k = static_cast<int>(s.class_values.size());
+    const int dim = s.adj.dim;
+    const int na = k;
+    const int edge = k + 1;
+    const bool diag = s.opt.neighbourhood == 8;
+    const auto cells = static_cast<std::size_t>(dim) * dim;
+    b.h.assign(cells, 0);
+    b.v.assign(cells, 0);
+    b.dg.assign(diag ? cells : 0, 0);
+    auto count_rows = [&](i64 r0, i64 r1, i64* hh, i64* vv, i64* dd) {
+        for (i64 yl = r0; yl < r1; ++yl) {
+            const i64 y = y0 + yl;
+            for (i64 x = 0; x < nx; ++x) {
+                const i64 p = yl * nx + x;
+                const int a = E[p];
+                if (a < 0) continue;
+                const i64 row = static_cast<i64>(a) * dim;
+                auto nb = [&](i64 q) { return E[q] < 0 ? na : E[q]; };
+                ++hh[row + (x > 0 ? nb(p - 1) : edge)];
+                ++hh[row + (x + 1 < nx ? nb(p + 1) : edge)];
+                ++vv[row + (y > 0 ? nb(p - nx) : edge)];
+                ++vv[row + (y + 1 < ny ? nb(p + nx) : edge)];
+                if (diag) {
+                    for (int dy = -1; dy <= 1; dy += 2) {
+                        if (y + dy < 0 || y + dy >= ny) continue;
+                        for (int dx = -1; dx <= 1; dx += 2) {
+                            if (x + dx < 0 || x + dx >= nx) continue;
+                            const int c = E[p + dy * nx + dx];
+                            if (c >= 0) ++dd[row + c];
+                        }
+                    }
+                }
+            }
+        }
+    };
+    if (rows * nx >= kParallelThreshold) {
+#pragma omp parallel
+        {
+            std::vector<i64> h(cells, 0), v(cells, 0), d(diag ? cells : 0, 0);
+#pragma omp for schedule(static)
+            for (i64 yl = 0; yl < rows; ++yl) count_rows(yl, yl + 1, h.data(), v.data(), d.data());
+#pragma omp critical(lsm_tiled_adjacency)
+            {
+                for (std::size_t i = 0; i < cells; ++i) {
+                    b.h[i] += h[i];
+                    b.v[i] += v[i];
+                }
+                for (std::size_t i = 0; i < d.size(); ++i) b.dg[i] += d[i];
+            }
+        }
+    } else {
+        count_rows(0, rows, b.h.data(), b.v.data(), b.dg.data());
+    }
+    // the merge needs the tables of the pieces only
+    b.bp.code = {};
+    b.bp.local_to_patch = {};
+    return out;
+}
+
+void TiledLandscape::merge_block(TiledBlock& block) {
+    State& s = *s_;
+    if (s.finished) throw std::logic_error("the first pass is finished");
+    if (!block.d) throw std::invalid_argument("the block was merged already");
+    TiledBlock::Data& b = *block.d;
+    if (b.y0 != s.next_y) throw std::invalid_argument("blocks must come in order, without gaps");
+    const i64 nx = s.nx;
+    const i64 ny = s.ny;
+    const i64 y0 = b.y0;
+    const i64 rows = b.rows;
+    const Patches& bp = b.bp;
     const i64 offset = static_cast<i64>(s.cls.size());
     if (offset + bp.n > std::numeric_limits<std::int32_t>::max()) throw std::length_error("too many patch pieces");
     s.block_y0.push_back(y0);
     s.block_offset.push_back(offset);
 
     // pieces, in bulk; capacity for the total projected from the rows read
-    const std::vector<Box> boxes = patch_boxes(bp, nx, rows);
+    const std::vector<Box>& boxes = b.boxes;
     const i64 total = offset + bp.n;
     if (static_cast<std::size_t>(total) > s.cls.capacity()) {
         const auto projected = static_cast<std::size_t>(static_cast<double>(total) * ny / (y0 + rows) * 1.05) + 1024;
@@ -275,43 +436,25 @@ void TiledLandscape::add_block(const std::int32_t* values, const std::uint8_t* n
         s.sum_x[i] = bp.sum_x[k];
         s.sum_y[i] = bp.sum_y[k] + y0 * bp.cells[k];
         s.first_cm[i] = (bp.first_cm[k] / rows) * ny + y0 + bp.first_cm[k] % rows;
-        Box b = boxes[k];
-        b.y0 += static_cast<std::int32_t>(y0);
-        b.y1 += static_cast<std::int32_t>(y0);
-        s.box[i] = b;
+        Box bx = boxes[k];
+        bx.y0 += static_cast<std::int32_t>(y0);
+        bx.y1 += static_cast<std::int32_t>(y0);
+        s.box[i] = bx;
         s.parent[i] = static_cast<std::int32_t>(i);
     }
     for (i64 k = 0; k < bp.n; ++k) s.class_cells[bp.cls[k]] += bp.cells[k];
-
-    // 4 directions: diagonal pairs of one class in different pieces of the
-    // block may still be one patch
-    if (s.opt.directions == 4) {
-        for (i64 y = 1; y < rows; ++y) {
-            for (i64 x = 0; x < nx; ++x) {
-                const i64 p = y * nx + x;
-                const std::int32_t c = E[p];
-                if (c < 0) continue;
-                const std::int32_t me = bp.patch(p, y);
-                for (int dx = -1; dx <= 1; dx += 2) {
-                    const i64 xx = x + dx;
-                    if (xx < 0 || xx >= nx || E[p - nx + dx] != c) continue;
-                    const std::int32_t other = bp.patch(p - nx + dx, y - 1);
-                    if (other != me) {
-                        s.diag_pending.emplace_back(static_cast<std::int32_t>(offset + me),
-                                                    static_cast<std::int32_t>(offset + other));
-                    }
-                }
-            }
-        }
+    for (const auto& pr : b.diag) {
+        s.diag_pending.emplace_back(static_cast<std::int32_t>(offset + pr.first),
+                                    static_cast<std::int32_t>(offset + pr.second));
     }
 
     // the seam with the previous block: the block labelling took the row
     // above for the landscape boundary
     if (y0 > 0) {
         for (i64 x = 0; x < nx; ++x) {
-            const std::int32_t c = E[x];
+            const std::int32_t c = b.first_cls[x];
             if (c < 0) continue;
-            const auto me = static_cast<std::int32_t>(offset + bp.patch(x, 0));
+            const auto me = static_cast<std::int32_t>(offset + b.first_piece[x]);
             if (s.prev_cls[x] == c) {
                 const std::int32_t up = s.prev_piece[x];
                 uf_unite(s.parent, me, up);
@@ -332,58 +475,18 @@ void TiledLandscape::add_block(const std::int32_t* values, const std::uint8_t* n
         }
     }
     for (i64 x = 0; x < nx; ++x) {
-        const i64 p = (rows - 1) * nx + x;
-        s.prev_cls[x] = E[p];
-        s.prev_piece[x] = E[p] < 0 ? -1 : static_cast<std::int32_t>(offset + bp.patch(p, rows - 1));
+        s.prev_cls[x] = b.last_cls[x];
+        s.prev_piece[x] = b.last_cls[x] < 0 ? -1 : static_cast<std::int32_t>(offset + b.last_piece[x]);
     }
 
-    // class adjacencies of the block's cells (context rows as neighbours)
-    const int k = static_cast<int>(s.class_values.size());
-    const int dim = s.adj.dim;
-    const int na = k;
-    const int out = k + 1;
-    const bool diag = s.opt.neighbourhood == 8;
-    std::vector<i64>& H = s.adj.h;
-    std::vector<i64>& V = s.adj.v;
-    std::vector<i64>& D = s.adj.diag;
-#pragma omp parallel if (rows * nx >= kParallelThreshold)
-    {
-        std::vector<i64> h(H.size(), 0), v(V.size(), 0), d(diag ? D.size() : 0, 0);
-#pragma omp for schedule(static)
-        for (i64 yl = 0; yl < rows; ++yl) {
-            const i64 y = y0 + yl;
-            for (i64 x = 0; x < nx; ++x) {
-                const i64 p = yl * nx + x;
-                const int a = E[p];
-                if (a < 0) continue;
-                const i64 row = static_cast<i64>(a) * dim;
-                auto nb = [&](i64 q) { return E[q] < 0 ? na : E[q]; };
-                ++h[row + (x > 0 ? nb(p - 1) : out)];
-                ++h[row + (x + 1 < nx ? nb(p + 1) : out)];
-                ++v[row + (y > 0 ? nb(p - nx) : out)];
-                ++v[row + (y + 1 < ny ? nb(p + nx) : out)];
-                if (diag) {
-                    for (int dy = -1; dy <= 1; dy += 2) {
-                        if (y + dy < 0 || y + dy >= ny) continue;
-                        for (int dx = -1; dx <= 1; dx += 2) {
-                            if (x + dx < 0 || x + dx >= nx) continue;
-                            const int b = E[p + dy * nx + dx];
-                            if (b >= 0) ++d[row + b];
-                        }
-                    }
-                }
-            }
-        }
-#pragma omp critical(lsm_tiled_adjacency)
-        {
-            for (std::size_t i = 0; i < H.size(); ++i) {
-                H[i] += h[i];
-                V[i] += v[i];
-            }
-            for (std::size_t i = 0; i < d.size(); ++i) D[i] += d[i];
-        }
+    // class adjacencies
+    for (std::size_t i = 0; i < s.adj.h.size(); ++i) {
+        s.adj.h[i] += b.h[i];
+        s.adj.v[i] += b.v[i];
     }
+    for (std::size_t i = 0; i < b.dg.size(); ++i) s.adj.diag[i] += b.dg[i];
     s.next_y = y0 + rows;
+    block.d.reset();
 }
 
 void TiledLandscape::finish() {
@@ -532,26 +635,33 @@ void TiledLandscape::begin_detail(bool core, bool gyrate, bool circle, bool enn)
 
 void TiledLandscape::detail_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows,
                                   i64 above, i64 below) {
-    State& s = *s_;
+    const State& s = *s_;
     if (s.d_block >= s.block_y0.size() || s.block_y0[s.d_block] != y0) {
         throw std::invalid_argument("the detail pass must use the blocks of the first pass");
     }
-    const i64 y_end = s.d_block + 1 < s.block_y0.size() ? s.block_y0[s.d_block + 1] : s.ny;
-    if (rows != y_end - y0) throw std::invalid_argument("the detail pass must use the blocks of the first pass");
+    TiledBlock block = prepare_detail(values, na_mask, y0, rows, above, below);
+    merge_detail(block);
+}
+
+TiledBlock TiledLandscape::prepare_detail(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows,
+                                          i64 above, i64 below) const {
+    State& s = *s_;  // the circle marks of the block's rows are written here
+    if (!s.finished) throw std::logic_error("the first pass is not finished");
+    const std::size_t block = s.block_index(y0, rows, "the detail pass must use the blocks of the first pass");
     s.check_block(y0, rows, above, below, detail_halo(s.d_core, s.d_enn));
     const i64 nx = s.nx;
     const i64 ny = s.ny;
     const i64 ext_rows = above + rows + below;
     const std::vector<std::int32_t> ext = s.dense(values, na_mask, ext_rows * nx);
     const std::int32_t* E = ext.data() + above * nx;
-    const Patches bp = s.label_block(ext, above, rows);
-    const i64 offset = s.block_offset[s.d_block];
-    const i64 n_local = (s.d_block + 1 < s.block_offset.size() ? s.block_offset[s.d_block + 1]
-                                                                : static_cast<i64>(s.piece_patch.size())) -
-                        offset;
-    if (bp.n != n_local) throw std::invalid_argument("the block differs from the first pass");
-    std::vector<std::int32_t> local_patch(static_cast<std::size_t>(bp.n));
-    for (i64 k = 0; k < bp.n; ++k) local_patch[k] = s.piece_patch[offset + k];
+    TiledBlock out;
+    out.d = std::make_unique<TiledBlock::Data>();
+    TiledBlock::Data& b = *out.d;
+    b.y0 = y0;
+    b.rows = rows;
+    b.block = block;
+    Patches bp = s.label_block(ext, above, rows);
+    std::vector<std::int32_t> local_patch = s.local_patches(block, bp);
     const bool parallel = rows * nx >= kParallelThreshold;
     const i64 n_strips = static_cast<i64>(bp.strip_offset.size()) - 1;
 
@@ -578,32 +688,13 @@ void TiledLandscape::detail_block(const std::int32_t* values, const std::uint8_t
         }
         for (i64 st = 0; st < n_strips; ++st) {
             for (std::size_t k = 0; k < pieces[st].size(); ++k) {
-                s.gsum[local_patch[bp.local_to_patch[bp.strip_offset[st] + static_cast<i64>(k)]]] += pieces[st][k];
-            }
-        }
-    }
-    if (s.d_gyrate && s.opt.cell_center) {
-        // nearest cells to the centroid (6 significant digits), in row order
-        for (i64 yl = 0; yl < rows; ++yl) {
-            for (i64 x = 0; x < nx; ++x) {
-                const std::int32_t lp = bp.patch(yl * nx + x, yl);
-                if (lp < 0) continue;
-                const std::int32_t k = local_patch[lp];
-                const double X = (x + 1) * s.resx;
-                const double Y = (y0 + yl + 1) * s.resy;
-                const double d = r_signif(std::sqrt((X - s.gx[k]) * (X - s.gx[k]) + (Y - s.gy[k]) * (Y - s.gy[k])), 6);
-                if (d < s.best[k]) {
-                    s.best[k] = d;
-                    s.ties[k].clear();
-                    s.ties[k].emplace_back(X, Y);
-                } else if (d == s.best[k]) {
-                    s.ties[k].emplace_back(X, Y);
-                }
+                b.gyrate_sums.emplace_back(local_patch[bp.local_to_patch[bp.strip_offset[st] + static_cast<i64>(k)]],
+                                           pieces[st][k]);
             }
         }
     }
     if (s.d_circle && s.opt.fragstats) {
-        // one row of a patch is only seen by the thread of that row
+        // one row of a patch is only seen by the thread of that row (and the block of that row)
 #pragma omp parallel for schedule(static) if (parallel)
         for (i64 yl = 0; yl < rows; ++yl) {
             const i64 y = y0 + yl;
@@ -617,7 +708,8 @@ void TiledLandscape::detail_block(const std::int32_t* values, const std::uint8_t
             }
         }
     } else if (s.d_circle) {
-        // cells on the edges of their patch's bounding box (distinct flags per cell)
+        // cells on the edges of their patch's bounding box (distinct flags per
+        // cell, so per row and block)
 #pragma omp parallel for schedule(static) if (parallel)
         for (i64 yl = 0; yl < rows; ++yl) {
             const auto y = static_cast<std::int32_t>(y0 + yl);
@@ -625,15 +717,15 @@ void TiledLandscape::detail_block(const std::int32_t* values, const std::uint8_t
                 const std::int32_t lp = bp.patch(yl * nx + x, yl);
                 if (lp < 0) continue;
                 const std::int32_t k = local_patch[lp];
-                const Box& b = s.patch_box[k];
-                const i64 w = b.x1 - b.x0 + 1;
-                const i64 h = b.y1 - b.y0 + 1;
+                const Box& bx = s.patch_box[k];
+                const i64 w = bx.x1 - bx.x0 + 1;
+                const i64 h = bx.y1 - bx.y0 + 1;
                 std::uint8_t* f = s.flags.data() + s.flag_offset[k];
                 const auto X = static_cast<std::int32_t>(x);
-                if (y == b.y0) f[X - b.x0] = 1;                 // top row
-                if (y == b.y1) f[w + X - b.x0] = 1;             // bottom row
-                if (X == b.x0) f[2 * w + y - b.y0] = 1;         // left column
-                if (X == b.x1) f[2 * w + h + y - b.y0] = 1;     // right column
+                if (y == bx.y0) f[X - bx.x0] = 1;                 // top row
+                if (y == bx.y1) f[w + X - bx.x0] = 1;             // bottom row
+                if (X == bx.x0) f[2 * w + y - bx.y0] = 1;         // left column
+                if (X == bx.x1) f[2 * w + h + y - bx.y0] = 1;     // right column
             }
         }
     }
@@ -655,49 +747,124 @@ void TiledLandscape::detail_block(const std::int32_t* values, const std::uint8_t
         }
         std::size_t count = 0;
         for (const auto& f : found) count += f.size();
-        std::vector<std::uint64_t> keys;
-        std::vector<std::int32_t> patches;
-        keys.reserve(count);
-        patches.reserve(count);
+        b.enn_key.reserve(count);
+        b.enn_patch.reserve(count);
         for (auto& f : found) {
             for (const auto& e : f) {
-                keys.push_back(e.first);
-                patches.push_back(e.second);
+                b.enn_key.push_back(e.first);
+                b.enn_patch.push_back(e.second);
             }
             f = {};
         }
-        s.enn_key.push_back(std::move(keys));
-        s.enn_patch.push_back(std::move(patches));
     }
     if (s.d_core) {
         // city-block distance on the extended block: the context rows are
         // at least edge_depth deep, so only the raster edges count as edges
         const i64 depth = std::max(1, s.opt.edge_depth);
         const std::int32_t outside = s.opt.consider_boundary ? kFar : 1;
-        const std::int32_t top = y0 - above == 0 ? outside : kFar;
-        const std::int32_t bottom = y0 + rows + below == ny ? outside : kFar;
-        const std::vector<std::int32_t> dist = city_block_distance(ext.data(), nx, ext_rows, top, bottom, outside);
-        const std::int32_t* d = dist.data() + above * nx;
-        std::vector<std::int32_t> core_cls(static_cast<std::size_t>(rows * nx), -1);
-        for (i64 p = 0; p < rows * nx; ++p) {
-            if (E[p] < 0 || d[p] <= depth) continue;
-            core_cls[p] = E[p];
-            ++s.core_cells[local_patch[bp.patch(p, p / nx)]];
+        std::vector<std::int32_t> dist;
+        if (depth > 1) {
+            const std::int32_t top = y0 - above == 0 ? outside : kFar;
+            const std::int32_t bottom = y0 + rows + below == ny ? outside : kFar;
+            dist = city_block_distance(ext.data(), nx, ext_rows, top, bottom, outside);
         }
-        // disjunct core areas: core cells labelled like patches, joined across seams
-        const Patches cp = label_patches(core_cls.data(), nx, rows, s.opt.directions);
-        const auto core_offset = static_cast<i64>(s.core_parent.size());
+        const std::int32_t* d = depth > 1 ? dist.data() + above * nx : nullptr;
+        // at depth 1 (as Landscape::core()): the four neighbours, the context
+        // rows giving those across the block seams
+        const bool inside_ok = s.opt.consider_boundary;
+        auto is_core = [&](i64 p, i64 x, i64 y) {
+            if (depth > 1) return d[p] > depth;
+            const std::int32_t c = E[p];
+            return (x > 0 ? E[p - 1] == c : inside_ok) && (x + 1 < nx ? E[p + 1] == c : inside_ok) &&
+                   (y > 0 ? E[p - nx] == c : inside_ok) && (y + 1 < ny ? E[p + nx] == c : inside_ok);
+        };
+        std::vector<std::int32_t> core_cls(static_cast<std::size_t>(rows * nx), -1);
+        std::vector<i64> per_piece(static_cast<std::size_t>(bp.n), 0);
+        for (i64 yl = 0; yl < rows; ++yl) {
+            for (i64 x = 0; x < nx; ++x) {
+                const i64 p = yl * nx + x;
+                if (E[p] < 0 || !is_core(p, x, y0 + yl)) continue;
+                core_cls[p] = E[p];
+                ++per_piece[bp.patch(p, yl)];
+            }
+        }
+        for (i64 k = 0; k < bp.n; ++k) {
+            if (per_piece[k] > 0) b.core_cells.emplace_back(local_patch[k], per_piece[k]);
+        }
+        // disjunct core areas: core cells labelled like patches (class,
+        // cells and first cell only), joined across seams by the merge
+        Patches cp;
+        label_patches(core_cls.data(), nx, rows, s.opt.directions, cp, false);
+        b.core_owner.resize(static_cast<std::size_t>(cp.n));
         for (i64 j = 0; j < cp.n; ++j) {
-            s.core_parent.push_back(core_offset + j);
             const i64 x = cp.first_cm[j] / rows;
             const i64 yl = cp.first_cm[j] % rows;
-            s.core_owner.push_back(local_patch[bp.patch(yl * nx + x, yl)]);
+            b.core_owner[j] = local_patch[bp.patch(yl * nx + x, yl)];
+        }
+        b.core_first_cls.assign(core_cls.begin(), core_cls.begin() + nx);
+        b.core_last_cls.assign(core_cls.end() - nx, core_cls.end());
+        b.core_first_piece.resize(static_cast<std::size_t>(nx));
+        b.core_last_piece.resize(static_cast<std::size_t>(nx));
+        for (i64 x = 0; x < nx; ++x) {
+            b.core_first_piece[x] = core_cls[x] < 0 ? -1 : cp.patch(x, 0);
+            const i64 p = (rows - 1) * nx + x;
+            b.core_last_piece[x] = core_cls[p] < 0 ? -1 : cp.patch(p, rows - 1);
+        }
+    }
+    if (s.d_gyrate && s.opt.cell_center) {
+        // the nearest cells go in row order over all blocks: the merge does it
+        b.bp = std::move(bp);
+        b.local_patch = std::move(local_patch);
+    }
+    return out;
+}
+
+void TiledLandscape::merge_detail(TiledBlock& block) {
+    State& s = *s_;
+    if (!block.d) throw std::invalid_argument("the block was merged already");
+    TiledBlock::Data& b = *block.d;
+    if (b.block != s.d_block) throw std::invalid_argument("the detail pass must merge the blocks in order");
+    const i64 nx = s.nx;
+    const i64 y0 = b.y0;
+    const i64 rows = b.rows;
+    for (const auto& [pid, sum] : b.gyrate_sums) s.gsum[pid] += sum;
+    if (s.d_gyrate && s.opt.cell_center) {
+        // nearest cells to the centroid (6 significant digits), in row order
+        const Patches& bp = b.bp;
+        for (i64 yl = 0; yl < rows; ++yl) {
+            for (i64 x = 0; x < nx; ++x) {
+                const std::int32_t lp = bp.patch(yl * nx + x, yl);
+                if (lp < 0) continue;
+                const std::int32_t k = b.local_patch[lp];
+                const double X = (x + 1) * s.resx;
+                const double Y = (y0 + yl + 1) * s.resy;
+                const double d = r_signif(std::sqrt((X - s.gx[k]) * (X - s.gx[k]) + (Y - s.gy[k]) * (Y - s.gy[k])), 6);
+                if (d < s.best[k]) {
+                    s.best[k] = d;
+                    s.ties[k].clear();
+                    s.ties[k].emplace_back(X, Y);
+                } else if (d == s.best[k]) {
+                    s.ties[k].emplace_back(X, Y);
+                }
+            }
+        }
+    }
+    if (s.d_enn) {
+        s.enn_key.push_back(std::move(b.enn_key));
+        s.enn_patch.push_back(std::move(b.enn_patch));
+    }
+    if (s.d_core) {
+        for (const auto& [pid, n] : b.core_cells) s.core_cells[pid] += n;
+        const auto core_offset = static_cast<i64>(s.core_parent.size());
+        for (std::size_t j = 0; j < b.core_owner.size(); ++j) {
+            s.core_parent.push_back(core_offset + static_cast<i64>(j));
+            s.core_owner.push_back(b.core_owner[j]);
         }
         if (y0 > 0) {
             for (i64 x = 0; x < nx; ++x) {
-                const std::int32_t c = core_cls[x];
+                const std::int32_t c = b.core_first_cls[x];
                 if (c < 0) continue;
-                const i64 me = core_offset + cp.patch(x, 0);
+                const i64 me = core_offset + b.core_first_piece[x];
                 if (s.prev_core_cls[x] == c) uf_unite(s.core_parent, me, s.prev_core_piece[x]);
                 if (s.opt.directions == 8) {
                     for (int dx = -1; dx <= 1; dx += 2) {
@@ -710,12 +877,12 @@ void TiledLandscape::detail_block(const std::int32_t* values, const std::uint8_t
             }
         }
         for (i64 x = 0; x < nx; ++x) {
-            const i64 p = (rows - 1) * nx + x;
-            s.prev_core_cls[x] = core_cls[p];
-            s.prev_core_piece[x] = core_cls[p] < 0 ? -1 : core_offset + cp.patch(p, rows - 1);
+            s.prev_core_cls[x] = b.core_last_cls[x];
+            s.prev_core_piece[x] = b.core_last_cls[x] < 0 ? -1 : core_offset + b.core_last_piece[x];
         }
     }
     ++s.d_block;
+    block.d.reset();
 }
 
 bool TiledLandscape::end_detail() {
@@ -855,27 +1022,19 @@ std::vector<std::int32_t> TiledLandscape::block_labels(const std::int32_t* value
                                                        i64 rows, i64 above, i64 below) const {
     const State& s = *s_;
     if (!s.finished) throw std::logic_error("the first pass is not finished");
-    const auto it = std::lower_bound(s.block_y0.begin(), s.block_y0.end(), y0);
-    const auto b = static_cast<std::size_t>(it - s.block_y0.begin());
-    const i64 y_end = b + 1 < s.block_y0.size() ? s.block_y0[b + 1] : s.ny;
-    if (it == s.block_y0.end() || *it != y0 || rows != y_end - y0) {
-        throw std::invalid_argument("the labels must be read by the blocks of the first pass");
-    }
+    const std::size_t b = s.block_index(y0, rows, "the labels must be read by the blocks of the first pass");
     s.check_block(y0, rows, above, below, 0);
     const i64 nx = s.nx;
     const std::vector<std::int32_t> ext = s.dense(values, na_mask, (above + rows + below) * nx);
     const Patches bp = s.label_block(ext, above, rows);
-    const i64 offset = s.block_offset[b];
-    const i64 n_local =
-        (b + 1 < s.block_offset.size() ? s.block_offset[b + 1] : static_cast<i64>(s.piece_patch.size())) - offset;
-    if (bp.n != n_local) throw std::invalid_argument("the block differs from the first pass");
+    const std::vector<std::int32_t> local_patch = s.local_patches(b, bp);
     std::vector<std::int32_t> out(static_cast<std::size_t>(rows * nx));
 #pragma omp parallel for schedule(static) if (rows * nx >= kParallelThreshold)
     for (i64 yl = 0; yl < rows; ++yl) {
         for (i64 x = 0; x < nx; ++x) {
             const i64 p = yl * nx + x;
             const std::int32_t lp = bp.patch(p, yl);
-            out[p] = lp < 0 ? 0 : s.piece_patch[offset + lp] + 1;
+            out[p] = lp < 0 ? 0 : local_patch[lp] + 1;
         }
     }
     return out;

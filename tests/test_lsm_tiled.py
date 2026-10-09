@@ -136,7 +136,7 @@ def test_maps_are_lazy_and_the_memory_ones(tmp_path, directions):
     memory = ls.Landscape(path, directions=directions)
     tiled = ls.Landscape(path, block_rows=64, directions=directions)
     ids = tiled.labels()
-    assert hasattr(ids.data, "dask") and ids.data.numblocks == (4, 1)
+    assert hasattr(ids.data, "dask") and ids.data.numblocks == (len(tiled._tiled.chunks()), 1)
     assert ids.rio.nodata == 0 and ids.rio.transform() == memory.labels().rio.transform()
     # the last block first: each block stands on its own
     np.testing.assert_array_equal(ids[192:].values, memory.labels()[192:].values)
@@ -144,6 +144,20 @@ def test_maps_are_lazy_and_the_memory_ones(tmp_path, directions):
     for metric, level in [("area", None), ("gyrate", None), ("core", None), ("enn", None), ("circle", None),
                           ("pland", "class"), ("np", "class")]:
         np.testing.assert_array_equal(tiled.to_raster(metric, level).values, memory.to_raster(metric, level).values)
+
+
+def test_map_chunks_hold_whole_tiles(tmp_path):
+    """Chunks of the lazy maps: whole blocks, rows in multiples of 512 (the
+    tiles written) and about 4 million cells; any blocks run side by side."""
+    data = lsm_scenes.clustered((2100, 4096), [1, 2], seed=6, sigma=4.0)
+    path = write(tmp_path / "wide.tif", data, dtype="uint8")
+    tiled = ls.Landscape(path, block_rows=128)
+    chunks = tiled._tiled.chunks()
+    assert [c[-1][0] + c[-1][1] - c[0][0] for c in chunks] == [1024, 1024, 52]
+    assert [b for c in chunks for b in c] == tiled._tiled.blocks()
+    one = ls.Landscape(path, block_rows=128, n_threads=1)
+    np.testing.assert_array_equal(tiled.labels().values, one.labels().values)
+    pd.testing.assert_frame_equal(tiled.metrics(), one.metrics(), check_exact=True)
 
 
 def test_maps_are_written_block_by_block(tmp_path):
