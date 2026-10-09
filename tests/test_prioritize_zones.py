@@ -17,6 +17,11 @@ from optimize_reference import case_ids, model, result
 import landschaft as ls
 
 ZONE_CASES = case_ids("zones")
+# contiguity: prioritizr's formulation is a restriction, ours exact (not the same model; the optimum <= theirs)
+EXACT = [c for c in ZONE_CASES if "contiguity" not in c]
+# boundary penalties and contiguity take minutes on HiGHS's MIP (even to a 1% gap): a time limit
+SLOW = ("zones_boundary", "zones_boundary_matrix", "zones_contiguity")
+SLOW_SECONDS = 15
 
 
 def _assert_reference_optimum(ours: float, ref: float, sense: str) -> None:
@@ -44,7 +49,7 @@ def _assert_same_model(ours, ref) -> None:
     assert list(ours.row_ids) == ref.row_ids and list(ours.col_ids) == ref.col_ids
 
 
-@pytest.mark.parametrize("name", ZONE_CASES)
+@pytest.mark.parametrize("name", EXACT)
 def test_compile_is_prioritizr(name):
     _assert_same_model(optimize_cases.CASES[name].py().compile(), model("zones", name))
 
@@ -52,13 +57,23 @@ def test_compile_is_prioritizr(name):
 @pytest.mark.parametrize("name", ZONE_CASES)
 def test_solve_reaches_prioritizr_optimum(name):
     p = optimize_cases.CASES[name].py()
-    sol = p.add_highs_solver(gap=0).solve()
+    slow = name in SLOW
+    sol = p.add_highs_solver(gap=0, time_limit=SLOW_SECONDS if slow else None).solve()
     ref = result("zones", name)
     kind = p.objective[0]
-    assert sol.status == "optimal"
-    _assert_reference_optimum(sol.objective, ref["objective"][0], "max" if kind.startswith("max") else "min")
+    r = ref["objective"][0]
+    if slow:  # within the time limit: the bound below prioritizr's optimum; ours no better than it (but with
+        # contiguity, exact here, a restriction there)
+        assert sol.status in ("optimal", "time_limit")
+        assert sol.bound <= r * (1 + 1e-9) + 1e-9
+        if "contiguity" not in name:
+            assert sol.objective >= r * (1 - 1e-9) - 1e-9
+    else:
+        assert sol.status == "optimal"
+        _assert_reference_optimum(sol.objective, r, "max" if kind.startswith("max") else "min")
+    if kind == "min_set" and not slow and not any(sp_[0] == "penalty" for sp_ in p.spatial):
+        assert sol.cost == pytest.approx(r, rel=1e-9)
     if kind == "min_set":
-        assert sol.cost == pytest.approx(ref["objective"][0], rel=1e-9)
         assert sol.coverage["met"].all()
     else:  # within the budget, or every zone's
         budget = np.atleast_1d(p.objective[1])
@@ -186,7 +201,11 @@ def test_errors():
         lock = {"protect": np.array([0, 1]), "use": np.array([1])}
         p.add_relative_targets(0.3).add_locked_in_constraints(lock).compile()
     with pytest.raises(ValueError, match="not supported with zones"):
-        p.add_relative_targets(0.3).add_boundary_penalties(1.0).compile()
+        p.add_relative_targets(0.3).add_feature_contiguity_constraints().compile()
+    with pytest.raises(ValueError, match="zones are given but the problem has none"):
+        ls.prioritize.problem(optimize_cases.pu_cost(), optimize_cases.features()).add_boundary_penalties(1, zones="same")
+    with pytest.raises(ValueError, match="symmetric"):
+        p.add_relative_targets(0.3).add_boundary_penalties(1.0, zones=optimize_cases._ZM_A).compile()
     with pytest.raises(ValueError, match="contribution: unknown zones"):
         ls.prioritize.problem(optimize_cases.zone_cost(), optimize_cases.features(), contribution={"x": 1})
     with pytest.raises(TypeError, match="mapping zone"):
@@ -275,3 +294,4 @@ def test_extinction_risk_with_zones_counts_every_zone():
     assert list(cov["zone"]) == ["protect + use + restore"] * 5
     # the amounts are summed over the zones by their contributions; the totals are the base features'
     np.testing.assert_allclose(cov["total_amount"], p.units.base_totals)
+

@@ -619,6 +619,9 @@ def compile_problem(p):
     b = Builder(nrow, ncol, rows, cols, vals, obj_v, lb_v, ub_v, vtype,
                 sense, [np.asarray(x, dtype=np.float64) for x in rhs], row_ids, col_ids, modelsense, n)
     b.n_features = nf
+    if zoned:
+        from ._zones_spatial import apply_zone_constraint as apply_constraint
+        from ._zones_spatial import apply_zone_penalty as apply_penalty
     for spec in p.spatial:
         if spec[0] == "penalty":
             apply_penalty(b, u, spec[1:])

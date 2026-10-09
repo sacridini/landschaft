@@ -841,8 +841,9 @@ def check_zone_problem(p) -> None:
     kind = p.objective[0]
     if kind not in ZONE_OBJECTIVES:
         raise ValueError(f"the {kind} objective is not supported with zones yet (supported: {list(ZONE_OBJECTIVES)})")
-    if p.spatial:
-        raise ValueError("spatial penalties and constraints are not supported with zones yet")
+    for spec in p.spatial:
+        if spec[1] in ("feature_contiguity", "corridors"):
+            raise ValueError(f"{spec[1].replace('_', ' ')} constraints are not supported with zones")
     budget = p.objective[1] if len(p.objective) > 1 and kind != "min_set" else None
     if budget is not None and np.size(budget) not in (1, p.units.nz):
         raise ValueError(f"one budget, or one per zone ({p.units.nz})")

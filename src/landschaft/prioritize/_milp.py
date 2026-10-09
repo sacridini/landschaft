@@ -707,39 +707,65 @@ class Problem:
     def _add(self, *spec) -> Problem:
         return self._with(spatial=(*self.spatial, spec))
 
-    def add_boundary_penalties(self, penalty: float, edge_factor: float = 0.5, data=None) -> Problem:
+    def _zones_arg(self, zones) -> tuple:
+        """The zones matrix of a spatial penalty or constraint: part of its specification with zones."""
+        if not self.units.zoned:
+            if zones is not None:
+                raise ValueError("zones are given but the problem has none")
+            return ()
+        return (zones,)
+
+    def add_boundary_penalties(self, penalty: float, edge_factor: float = 0.5, data=None, zones=None) -> Problem:
         """Penalise the boundary of the selection (more compact solutions): ``penalty`` per unit of
         exposed boundary length. ``edge_factor``: the share of the boundary at the edge of the study
         area (not shared with another planning unit) that counts. ``data``: a boundary matrix of every
         unit (shared lengths, every unit's perimeter on the diagonal); by default from the planning
-        units' raster grid or polygons."""
+        units' raster grid or polygons.
+
+        With zones: ``edge_factor`` one or one per zone, and ``zones`` how much the boundary between
+        two zones counts: ``"same"`` (the default, prioritizr's identity matrix: the boundary of every
+        zone's units), ``"any"``, or a symmetric zones x zones matrix (values from -1 to 1; the diagonal
+        for units of the same zone, the other cells for neighbours in different zones; a DataFrame by
+        zone names works too)."""
+        if self.units.zoned:
+            return self._add("penalty", "boundary", float(penalty), edge_factor, data, zones)
+        if zones is not None:
+            raise ValueError("zones are given but the problem has none")
         if not 0 <= edge_factor <= 1:
             raise ValueError("edge_factor must be from 0 to 1")
         return self._add("penalty", "boundary", float(penalty), float(edge_factor), data)
 
-    def add_connectivity_penalties(self, penalty: float, data) -> Problem:
+    def add_connectivity_penalties(self, penalty: float, data, zones=None) -> Problem:
         """Reward selecting connected units: ``penalty`` x the connectivity of every pair selected
-        together (a symmetric matrix of every unit; the diagonal rewards a unit alone)."""
-        return self._add("penalty", "connectivity", float(penalty), data)
+        together (a symmetric matrix of every unit; the diagonal rewards a unit alone). With zones,
+        ``zones`` as in :meth:`add_boundary_penalties` (how much a connection between two zones
+        counts)."""
+        return self._add("penalty", "connectivity", float(penalty), data, *self._zones_arg(zones))
 
-    def add_asym_connectivity_penalties(self, penalty: float, data) -> Problem:
+    def add_asym_connectivity_penalties(self, penalty: float, data, zones=None) -> Problem:
         """Penalise asymmetric connections that the selection breaks: ``penalty`` x the connectivity
-        from a selected unit to one not selected (a matrix of every unit, rows the sources)."""
-        return self._add("penalty", "asym_connectivity", float(penalty), data)
+        from a selected unit to one not selected (a matrix of every unit, rows the sources). With
+        zones, ``zones`` as in :meth:`add_boundary_penalties` (it need not be symmetric)."""
+        return self._add("penalty", "asym_connectivity", float(penalty), data, *self._zones_arg(zones))
 
     def add_linear_penalties(self, penalty: float, data) -> Problem:
         """Penalise selecting units by a value of each (``penalty`` x value): a raster on the units'
-        grid, a column name, or one value per unit."""
+        grid, a column name, or one value per unit. With zones, ``penalty`` one or one per zone (a list
+        or a mapping) and ``data`` the same values in every zone or a mapping zone -> values (zones not
+        given: 0) or a raster with a layer per zone."""
+        if self.units.zoned:
+            return self._add("penalty", "linear", penalty, data)
         return self._add("penalty", "linear", float(penalty), data)
 
     def add_linear_constraints(self, threshold: float, sense: str, data) -> Problem:
         """The sum over the selected units of a value of each (as :meth:`add_linear_penalties`) must
-        be ``>=``, ``<=`` or ``=`` the ``threshold``."""
+        be ``>=``, ``<=`` or ``=`` the ``threshold``. With zones, the sum over every zone (``data`` as
+        in :meth:`add_linear_penalties`)."""
         if sense not in (">=", "<=", "="):
             raise ValueError("sense must be '>=', '<=' or '='")
         return self._add("constraint", "linear", float(threshold), sense, data)
 
-    def add_contiguity_constraints(self, data=None) -> Problem:
+    def add_contiguity_constraints(self, data=None, zones=None) -> Problem:
         """The selected units must form one contiguous patch. ``data``: an adjacency matrix of every
         unit; by default units that share an edge (raster cells, 4 directions) or that touch (polygons).
 
@@ -749,20 +775,30 @@ class Problem:
         index, so it can return a costlier patch than the best, or call a feasible problem infeasible.
         On HiGHS the problem is solved in three steps: a first patch from that restriction, a bound from
         directed cuts, then the exact MIP from the first patch. Contiguity stays the hardest spatial
-        rule: give it a time limit on more than a few hundred units."""
-        return self._add("constraint", "contiguity", data)
+        rule: give it a time limit on more than a few hundred units.
 
-    def add_neighbors_constraints(self, k: int, clamp: bool = True, data=None) -> Problem:
+        With zones, ``zones`` is a binary symmetric zones x zones matrix: the zones linked through it
+        form a cluster whose units (in any of its zones) must form one patch; a zone with 0 on the
+        diagonal is free. By default (``"same"``) the units of every zone form one patch."""
+        return self._add("constraint", "contiguity", data, *self._zones_arg(zones))
+
+    def add_neighbors_constraints(self, k: int, clamp: bool = True, data=None, zones=None) -> Problem:
         """Every selected unit must have at least ``k`` selected neighbours (``clamp``: at most as many
         as it has). ``data``: an adjacency matrix of every unit, by default as
-        :meth:`add_contiguity_constraints`."""
+        :meth:`add_contiguity_constraints`. With zones, ``k`` one or one per zone, and ``zones`` a
+        binary zones x zones matrix of the zones whose units count as neighbours of a unit in a zone
+        (default ``"same"``: only its own zone's)."""
+        if self.units.zoned:
+            return self._add("constraint", "neighbors", k, bool(clamp), data, zones)
+        if zones is not None:
+            raise ValueError("zones are given but the problem has none")
         if int(k) != k or k < 0:
             raise ValueError("k must be a whole number >= 0")
         return self._add("constraint", "neighbors", int(k), bool(clamp), data)
 
-    def add_neighbor_constraints(self, k: int, clamp: bool = True, data=None) -> Problem:
+    def add_neighbor_constraints(self, k: int, clamp: bool = True, data=None, zones=None) -> Problem:
         """:meth:`add_neighbors_constraints` under the name of prioritizr's newer versions."""
-        return self.add_neighbors_constraints(k, clamp, data)
+        return self.add_neighbors_constraints(k, clamp, data, zones)
 
     def add_feature_contiguity_constraints(self, data=None) -> Problem:
         """Every feature's units (where it is counted towards its targets) must form one contiguous

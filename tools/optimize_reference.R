@@ -168,6 +168,17 @@ fix_phylo <- function(f) {
 add_max_phylo_div_objective_fixed <- fix_phylo(prioritizr::add_max_phylo_div_objective)
 add_max_phylo_end_objective_fixed <- fix_phylo(prioritizr::add_max_phylo_end_objective)
 
+# prioritizr 8.0.6's linear penalties with zones leave out the penalties of every zone when any zone's
+# penalty is 0 (if (min(abs(p)) > 1e-50)); the fixed version applies them when any is not 0.
+add_linear_penalties_fixed <- local({
+  f <- methods::getMethod("add_linear_penalties", c("ConservationProblem", "ANY", "dgCMatrix"))@.Data
+  src <- deparse(f)
+  bad <- "min(abs(p)) > 1e-50"
+  stopifnot(any(grepl(bad, src, fixed = TRUE)))
+  src <- gsub(bad, "max(abs(p)) > 1e-50", src, fixed = TRUE)
+  eval(parse(text = src), envir = asNamespace("prioritizr"))
+})
+
 pa_data <- function(pu = pa_pu, features = pa_features, dist_features = pa_dist_features, threats = pa_threats,
                     dist_threats = pa_dist_threats, sensitivity = pa_sensitivity, boundary = pa_boundary) {
   prioriactions::inputData(pu = pu, features = features, dist_features = dist_features, threats = threats,

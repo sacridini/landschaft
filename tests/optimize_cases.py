@@ -653,6 +653,52 @@ def zone_polygons():
     return g
 
 
+def _cell_pairs(seed: int, symmetric: bool):
+    """Connectivity among all the grid's cells (row-major, 1-based triplets i, j, x): links to the next cell
+    and to the one below, some missing, a few on the diagonal."""
+    n = NY * NX
+    rng = np.random.default_rng(seed)
+    i, j, x = [], [], []
+    for k in range(n):
+        for step in (1, NX):
+            m = k + step
+            if m < n and rng.random() < 0.6:
+                v = float(np.round(rng.uniform(0.1, 3.0), 3))
+                i.append(k)
+                j.append(m)
+                x.append(v)
+                if symmetric:
+                    i.append(m)
+                    j.append(k)
+                    x.append(v)
+                elif rng.random() < 0.5:
+                    i.append(m)
+                    j.append(k)
+                    x.append(float(np.round(rng.uniform(0.1, 3.0), 3)))
+        if rng.random() < 0.1:
+            i.append(k)
+            j.append(k)
+            x.append(float(np.round(rng.uniform(0.1, 1.0), 3)))
+    return _triplets(i, j, x)
+
+
+def cell_conn():
+    """Symmetric connectivity among the grid's cells."""
+    return _cell_pairs(41, True)
+
+
+def cell_asym():
+    """Asymmetric connectivity among the grid's cells (rows: sources)."""
+    return _cell_pairs(42, False)
+
+
+def zone_linear():
+    """Values per cell and zone for linear penalties and constraints (NaN outside the units' area)."""
+    v = np.stack([smooth_field(51 + k) * (k + 1) for k in range(3)])
+    v[:, :3, :4] = np.nan
+    return grid(v, names=ZONES)
+
+
 def zone_bounds_cells():
     """Bounds of (cell, zone) pairs within [0, 1] and a cell that is not a planning unit (skipped)."""
     import pandas as pd
@@ -683,7 +729,7 @@ INPUTS = {f.__name__: f for f in (
     bounds_cells, status_cells, bounds_rows, proxirr_entries, marxan_pu, marxan_puvspr, marxan_spec,
     marxan_puvspr_ids, marxan_pu_ids, marxan_spec_ids, proxirr_many, zone_cost, zone_cost2, zf_protect, zf_use,
     zf_restore, zone_locked_in, zone_locked_out, zone_table, zone_rij, zone_ids, zone_polygons,
-    zone_bounds_cells, zone_status_cells)}
+    zone_bounds_cells, zone_status_cells, cell_conn, cell_asym, zone_linear)}
 
 
 def build_input(name: str):
@@ -1296,6 +1342,62 @@ CASES.update({
 })
 
 
+_ZONES_B = "matrix(c(1, 0.4, -0.2, 0.4, 0.8, 0, -0.2, 0, 1), ncol = 3)"
+_ZONES_C = "matrix(c(1, 0.5, 0, 0.5, 1, 0.3, 0, 0.3, 0.2), ncol = 3)"
+_ZONES_A = "matrix(c(1, 0.2, 0, 0.6, 1, 0.5, 0, 0.1, 0.8), ncol = 3)"
+_ZONES_N = "matrix(c(1, 1, 0, 1, 1, 0, 0, 0, 1), ncol = 3)"
+_CELLS = "dims = rep(terra::ncell(zone_cost), 2)"
+# the fixed default adjacency with zones: of the cells with a cost in any zone (a layer of them)
+_ADJ_FIXED = "adj <- adjacency_matrix(terra::app(zone_cost, function(v) if (all(is.na(v))) NA_real_ else 1))"
+
+CASES.update({
+    # --- zones: spatial penalties and constraints
+    "zones_boundary": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_boundary_penalties(0.5) |> add_binary_decisions())""", notes="the identity zones matrix"),
+    "zones_boundary_matrix": _zc(ZONE_RASTER, f"""
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_boundary_penalties(0.3, edge_factor = c(0.5, 1, 0.2), zones = {_ZONES_B}) |>
+                  add_binary_decisions())""", notes="between-zone boundaries, a negative one"),
+    "zones_boundary_max": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_max_utility_objective(2500) |> add_boundary_penalties(0.01) |>
+                  add_binary_decisions())"""),
+    "zones_connectivity": _zc((*ZONE_RASTER, "cell_conn"), f"""
+        cm <- Matrix::sparseMatrix(i = cell_conn$i, j = cell_conn$j, x = cell_conn$x, {_CELLS})
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_connectivity_penalties(5, zones = {_ZONES_C}, data = cm) |> add_binary_decisions())"""),
+    "zones_asym_connectivity": _zc((*ZONE_RASTER, "cell_asym"), f"""
+        am <- Matrix::sparseMatrix(i = cell_asym$i, j = cell_asym$j, x = cell_asym$x, {_CELLS})
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_asym_connectivity_penalties(3, zones = {_ZONES_A}, data = am) |> add_binary_decisions())"""),
+    "zones_linear_penalties": _zc((*ZONE_RASTER, "zone_linear"), """
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_linear_penalties(c(20, 10, 5), zone_linear) |> add_binary_decisions())"""),
+    "zones_linear_penalties_zero": _zc((*ZONE_RASTER, "zone_linear"), """
+        d <- as.matrix(terra::as.data.frame(zone_linear, na.rm = FALSE)); d[is.na(d)] <- 0
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_linear_penalties_fixed(c(20, 0, 5), as(d, "dgCMatrix")) |> add_binary_decisions())""",
+                                         notes="a zone with penalty 0: prioritizr drops every zone's (fixed)"),
+    "zones_linear_constraints": _zc((*ZONE_RASTER, "zone_linear"), """
+        d <- as.matrix(terra::as.data.frame(zone_linear, na.rm = FALSE)); d[is.na(d)] <- 0
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_linear_constraints(50, "<=", as(d, "dgCMatrix")) |> add_binary_decisions())"""),
+    "zones_neighbors": _zc(ZONE_RASTER, f"""
+        {_ADJ_FIXED}
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_neighbor_constraints(c(2, 1, 2), data = adj) |> add_binary_decisions())""",
+                           notes="the adjacency of the cells with a cost in any zone (prioritizr's default: every zone, a bug)"),
+    "zones_neighbors_matrix": _zc(ZONE_RASTER, f"""
+        {_ADJ_FIXED}
+        reference(zp3() |> add_max_utility_objective(2500) |>
+                  add_neighbor_constraints(c(1, 2, 1), zones = {_ZONES_N}, data = adj) |> add_binary_decisions())"""),
+    "zones_contiguity": _zc(ZONE_RASTER, f"""
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.15)) |>
+                  add_contiguity_constraints(zones = {_ZONES_N}) |> add_binary_decisions())""",
+                              notes="prioritizr's formulation (a restriction): ours is exact, the optimum <= this"),
+})
+
+
 def _zone_matrix_targets() -> np.ndarray:
     """_ZONE_MATRIX as features x zones (R fills the matrix column by column)."""
     return np.array([0.2, 0.1, 0.15, 0.3, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.05, 0, 0.1, 0.05, 0.05]).reshape(3, 5).T
@@ -1402,6 +1504,40 @@ PY_ZONES.update({
     .add_relative_targets(0.3).add_binary_decisions(),
     "zones_max_phylo_end": lambda: _zone_general().add_max_phylo_end_objective([900, 600, 500], TREE_SHUFFLED)
     .add_relative_targets(_zone_matrix_targets()).add_binary_decisions(),
+})
+_ZM_B = np.array([1, 0.4, -0.2, 0.4, 0.8, 0, -0.2, 0, 1.0]).reshape(3, 3)
+_ZM_C = np.array([1, 0.5, 0, 0.5, 1, 0.3, 0, 0.3, 0.2]).reshape(3, 3)
+_ZM_A = np.array([1, 0.2, 0, 0.6, 1, 0.5, 0, 0.1, 0.8]).reshape(3, 3).T  # R fills by column
+_ZM_N = np.array([1, 1, 0, 1, 1, 0, 0, 0, 1.0]).reshape(3, 3)
+
+
+def _cells(t):
+    return _matrix(t, NY * NX)
+
+
+PY_ZONES.update({
+    "zones_boundary": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_boundary_penalties(0.5).add_binary_decisions(),
+    "zones_boundary_matrix": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_boundary_penalties(0.3, edge_factor=[0.5, 1, 0.2], zones=_ZM_B).add_binary_decisions(),
+    "zones_boundary_max": lambda: _zone_general().add_max_utility_objective(2500).add_boundary_penalties(0.01)
+    .add_binary_decisions(),
+    "zones_connectivity": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_connectivity_penalties(5, _cells(cell_conn()), zones=_ZM_C).add_binary_decisions(),
+    "zones_asym_connectivity": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_asym_connectivity_penalties(3, _cells(cell_asym()), zones=_ZM_A).add_binary_decisions(),
+    "zones_linear_penalties": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_linear_penalties([20, 10, 5], zone_linear()).add_binary_decisions(),
+    "zones_linear_penalties_zero": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_linear_penalties({"protect": 20, "use": 0, "restore": 5}, zone_linear()).add_binary_decisions(),
+    "zones_linear_constraints": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_linear_constraints(50, "<=", {z: zone_linear()[k] for k, z in enumerate(ZONES)}).add_binary_decisions(),
+    "zones_neighbors": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_neighbors_constraints([2, 1, 2]).add_binary_decisions(),
+    "zones_neighbors_matrix": lambda: _zone_general().add_max_utility_objective(2500)
+    .add_neighbors_constraints([1, 2, 1], zones=_ZM_N).add_binary_decisions(),
+    "zones_contiguity": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.15)
+    .add_contiguity_constraints(zones=_ZM_N).add_binary_decisions(),
 })
 for _name, _fn in PY_ZONES.items():
     CASES[_name].py = _fn
