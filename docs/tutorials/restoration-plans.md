@@ -14,6 +14,7 @@ restoration*, solved exactly.
 - solve a plan for an area target, and compare it with restoring everywhere alike;
 - add ecosystems, carbon and ecological intactness, and weigh them against each other;
 - plan with a budget, find the cheapest plan for a benefit, and set targets per region;
+- map priorities as a gradient, and plan conservation and land conversion with the same model;
 - report the uncertainty of the results, and save them.
 
 !!! info "Background"
@@ -339,7 +340,80 @@ Without regional targets, region 1 gets nothing: its species are in good shape. 
 9 % of the benefit (0.234 against 0.257), the price of the rule, which a planner can now put in front of decision makers. Use
 `sense=">="` for minimum targets (each region restores at least its part) and `"="` for exact ones.
 
-## Step 7: uncertainty
+## Step 7: a priority gradient
+
+A plan for 100 km² does not say where to start. `tradeoff` solves the plans of a growing target, each
+containing the previous one (`nested=True`, the default), and maps how early every cell enters: a
+**priority gradient**.
+
+```python
+curve = p.tradeoff([0.25, 0.5, 0.75, 1.0])     # 25, 50, 75 and 100 km²
+print(curve.table[["level", "area", "benefit", "status"]].round(4))
+g = curve.gradient.values                      # 4: in the first 25 km², 1: only in the last
+print({int(k): int(n) for k, n in zip(*np.unique(g[np.isfinite(g)], return_counts=True))})
+```
+
+The first quarter of the area avoids 38 % of the risk the whole plan avoids (0.097 of 0.257), the first half 68 %:
+the gradient is steep, and the 67 cells of level 4 are where to begin. Each level is the best plan that contains the
+previous ones; `nested=False` solves every level on its own (the trade-off frontier, plans that need not contain
+each other). Here both agree to the fourth decimal: the best 50 km² contain the best 25 km². `method="steps"`
+gives the original model's gradient for comparison.
+
+## Step 8: conserving and converting
+
+The same model answers two more questions. **Which natural land to keep?** With `conservable=` the units are the
+natural land, and the baseline loses what is threatened (`threat`, the share lost without protection: here more
+where the human footprint is high); conserving keeps it. **Where to meet a demand for land?** With `convertible=`
+the plan converts natural land where it costs the least benefit, and with `restorable` too it can restore
+elsewhere what it converts. Both need the habitat each species *loses* per unit of natural land, `loss=True`:
+
+```python
+aoh = ls.sdm.area_of_habitat(ranges, cover, natural, suitability=suitability, original=veg, loss=True)
+nat = cover.sel(band=natural).sum("band")           # the natural share of every cell
+keep = (P.restoration_problem(conservable=nat, threat=(footprint / 20).clip(0, 1))
+          .add_extinction_risk_benefit(aoh, name="species")
+          .add_area_target(100))
+kept = keep.solve()
+print(kept.status, f"benefit {kept.benefit:.4f}")
+P.eval_risk_reduction(keep, kept).table[["species", "current", "baseline", "risk_after"]].round(3)
+```
+
+The `baseline` is each species' habitat if the threatened land were lost; conserving the best 100 km² avoids a
+risk of 0.046, mostly for the golden lion tamarin and the mangrove, whose remnants are the most threatened.
+
+```python
+swap = (P.restoration_problem(veg, convertible=nat)
+          .add_extinction_risk_benefit(aoh, name="species")
+          .add_area_target(50, sense="=", action="convert")   # a demand of 50 km² of farmland
+          .add_area_target(0, sense="="))                     # no net loss: restore what is converted
+both = swap.solve()
+print(both.status, {k: round(v, 1) for k, v in both.areas.items()}, f"benefit {both.benefit:.4f}")
+```
+
+The 50 km² are converted outside every species' range, so the plan loses nothing and restores 50 km² where they
+count most: the same benefit as restoring 50 km² alone (0.175). Converting the same area uniformly would raise the
+risk by 0.025. The solution has a `converted` map beside `restored`.
+
+Projections of land demand per region (from an economic model, say) go in with `add_projected_change`: a region
+that spares land restores it, one that needs land converts it, each its projected change:
+
+```python
+proj = (P.restoration_problem(veg, convertible=nat)
+          .add_extinction_risk_benefit(aoh, name="species")
+          .add_projected_change({1: -30, 2: 20, 3: 40}, regions))    # km²: region 1 needs 30
+s = proj.solve()
+for r in (1, 2, 3):
+    inside = regions.values == r
+    print(f"region {r}: restores {np.nansum(np.where(inside, s.restored.values, 0)):.0f} km², "
+          f"converts {np.nansum(np.where(inside, s.converted.values, 0)):.0f} km²")
+```
+
+A plan that only restores cannot convert: there the land demanded is taken from the restoration
+(`compensate=True`), regions 2 and 3 restoring 10 and 20 km² of the 30 km² spared on balance.
+`ecosystem_targets` shares a target among ecoregions for the least risk of collapse, a table of targets per
+region for `add_area_target`.
+
+## Step 9: uncertainty
 
 The exponent z of the species-area relationship is uncertain: 0.25 is a typical value, but estimates vary from about 0.15
 to 0.35 (the original model uses a standard deviation of 0.1). `eval_risk_reduction(z_sd=...)` propagates it to the total by the delta
@@ -393,7 +467,11 @@ page = ls.plot(plan.restored, show=False)              # an interactive map
 - **Sense of the area target.** `add_area_target(100, sense="=")` restores exactly 100 km²; `">="` with a budget
   asks for at least that area.
 - **Larger landscapes.** The exact method scales with the cells: its linear programs have only the problem's rows
-  (targets and budget). 9 x 10<sup>4</sup> cells and 500 species solve in about a second.
+  (targets and budget), and with a single area target or budget none is needed. 9 x 10<sup>6</sup> cells and 5000
+  species solve, proven, in about 10 s.
+- **Exact intactness.** `add_intactness_benefit(..., form="exact")` optimises the total intactness itself, not its
+  slope at the start: it pays where the footprint can be cleared. The total intactness is not concave, so the plan
+  is a local optimum with a bound on the best (status `"local"` unless they meet).
 - **Restoration in other planners.** To choose whole cells against targets, use [optimized conservation
   plans](conservation-plans.md) with the gains as features ([recipe](../learn/prioritization/process.md#restoration));
   to restore corridors between habitat patches, see [distance and restoration](distance-restoration.md).

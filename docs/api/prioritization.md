@@ -260,6 +260,8 @@ the choice of one by TOPSIS or the knee of the curve, and solving again as a pro
 
 ::: landschaft.prioritize.knee_point
 
+::: landschaft.prioritize.mean_sd
+
 ::: landschaft.prioritize.iterative_solve
 
 ::: landschaft.prioritize.protected_cells
@@ -308,11 +310,16 @@ budget: prioriactions's models (Salgado-Rojas et al. 2020), bit for bit, from ta
 
 How much of every converted cell to restore, for the most reduction of the species' extinction risk
 (and of the ecosystems' risk of collapse), carbon and ecological intactness within area targets and a
-budget, or the cheapest plan for a benefit: the restoration problem of plangea (Strassburg et al. 2020).
-The species-area curves are concave, so the optimum is found and proven, by simplicial decomposition
-(linear programs over the cells, mixed by a small concave problem); plangea's own procedure (benefit per cost per cell, the target in steps) is
-`method="steps"`. The inputs come from `ls.original_vegetation`, `ls.sdm.area_of_habitat` and
-`ls.intactness_gradient`. Tutorial: [restoration priorities](../tutorials/restoration-plans.md).
+budget, or the cheapest plan for a benefit: the restoration problem of plangea (Strassburg et al. 2020),
+with its conservation (`conservable=`) and conversion (`convertible=`) forms. The species-area curves are
+concave, so the optimum is found and proven, by simplicial decomposition (linear programs over the cells,
+mixed by a small concave problem), from thousands of cells to millions; plangea's own procedure (benefit
+per cost per cell, the target in steps) is `method="steps"`. Targets per region come from projections of
+land demand (`add_projected_change`), shares of the land (`relative=True`), other values
+(`add_linear_target`) or the ecosystems' risk of collapse (`ecosystem_targets`); `tradeoff` gives the plans
+of a growing target and the gradient of priorities, `compare_weights` ranks sets of weights. The inputs
+come from `ls.original_vegetation`, `ls.sdm.area_of_habitat` and `ls.intactness`. Tutorial:
+[restoration priorities](../tutorials/restoration-plans.md).
 
 ::: landschaft.prioritize.restoration_problem
 
@@ -320,7 +327,11 @@ The species-area curves are concave, so the optimum is found and proven, by simp
 
 ::: landschaft.prioritize.RestorationSolution
 
+::: landschaft.prioritize.RestorationTradeOff
+
 ::: landschaft.prioritize.ecosystem_areas
+
+::: landschaft.prioritize.ecosystem_targets
 
 ::: landschaft.prioritize.eval_risk_reduction
 
