@@ -6,6 +6,12 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- Maps of out-of-core landscapes (`ls.Landscape(path, block_rows=...)`): `labels()` and `to_raster()`, which
+  needed the whole raster, now return lazy (dask) rasters on the file's grid, one chunk per block: each block
+  is read and labelled again when computed (in any order), with the same ids and values as in memory. With
+  `path=` (new for `labels()` too) the map is written to the GeoTIFF block by block, never whole in memory.
+
 ### Changed
 - `ls.window_metrics` is about twice as fast, with the same values bit for bit: every landscape metric
   in a 21 x 21 window over a 1000 x 1000 map takes 3.7 s instead of 7.5 s (11 threads), the number of

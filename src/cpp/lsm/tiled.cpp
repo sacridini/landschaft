@@ -851,6 +851,36 @@ void TiledLandscape::tie_block(const std::int32_t* values, const std::uint8_t* n
     ++s.t_block;
 }
 
+std::vector<std::int32_t> TiledLandscape::block_labels(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0,
+                                                       i64 rows, i64 above, i64 below) const {
+    const State& s = *s_;
+    if (!s.finished) throw std::logic_error("the first pass is not finished");
+    const auto it = std::lower_bound(s.block_y0.begin(), s.block_y0.end(), y0);
+    const auto b = static_cast<std::size_t>(it - s.block_y0.begin());
+    const i64 y_end = b + 1 < s.block_y0.size() ? s.block_y0[b + 1] : s.ny;
+    if (it == s.block_y0.end() || *it != y0 || rows != y_end - y0) {
+        throw std::invalid_argument("the labels must be read by the blocks of the first pass");
+    }
+    s.check_block(y0, rows, above, below, 0);
+    const i64 nx = s.nx;
+    const std::vector<std::int32_t> ext = s.dense(values, na_mask, (above + rows + below) * nx);
+    const Patches bp = s.label_block(ext, above, rows);
+    const i64 offset = s.block_offset[b];
+    const i64 n_local =
+        (b + 1 < s.block_offset.size() ? s.block_offset[b + 1] : static_cast<i64>(s.piece_patch.size())) - offset;
+    if (bp.n != n_local) throw std::invalid_argument("the block differs from the first pass");
+    std::vector<std::int32_t> out(static_cast<std::size_t>(rows * nx));
+#pragma omp parallel for schedule(static) if (rows * nx >= kParallelThreshold)
+    for (i64 yl = 0; yl < rows; ++yl) {
+        for (i64 x = 0; x < nx; ++x) {
+            const i64 p = yl * nx + x;
+            const std::int32_t lp = bp.patch(p, yl);
+            out[p] = lp < 0 ? 0 : s.piece_patch[offset + lp] + 1;
+        }
+    }
+    return out;
+}
+
 void TiledLandscape::end_ties() {
     State& s = *s_;
     if (!s.tie_pass || s.t_block != s.block_y0.size()) throw std::logic_error("the tie pass has not covered the raster");

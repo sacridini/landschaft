@@ -928,7 +928,14 @@ void bind_landscape(py::module_& m) {
             tiled_check(t, values, na, rows + above + below);
             lsm_call(t.n_threads(), [&] { t.tie_block(values.data(), na.data(), y0, rows, above, below); });
         })
-        .def("end_ties", [](lsm::TiledLandscape& t) { lsm_call(t.n_threads(), [&] { t.end_ties(); }); });
+        .def("end_ties", [](lsm::TiledLandscape& t) { lsm_call(t.n_threads(), [&] { t.end_ties(); }); })
+        .def("block_labels", [](const lsm::TiledLandscape& t, const CArray<std::int32_t>& values,
+                                const CArray<std::uint8_t>& na, i64 y0, i64 rows, i64 above, i64 below) {
+            tiled_check(t, values, na, rows + above + below);
+            auto v = lsm_call(t.n_threads(),
+                              [&] { return t.block_labels(values.data(), na.data(), y0, rows, above, below); });
+            return to_array(std::move(v), t.nx(), rows);
+        });
 
     // rasters: list of (values, na_mask or None, resx, resy)
     m.def(

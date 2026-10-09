@@ -128,13 +128,39 @@ def test_detail_pass_only_when_needed(tmp_path):
     assert lm._tiled.done == {"enn", "core", "gyrate"}
 
 
-def test_raster_outputs_are_not_available(tmp_path):
-    path = write(tmp_path / "map.tif", lsm_scenes.clustered((70, 30), [1, 2], seed=1))
-    lm = ls.Landscape(path, block_rows=64)
-    with pytest.raises(NotImplementedError):
-        lm.labels()
-    with pytest.raises(NotImplementedError):
-        lm.to_raster("area")
+@pytest.mark.parametrize("directions", [8, 4])
+def test_maps_are_lazy_and_the_memory_ones(tmp_path, directions):
+    """Patch ids and metric maps, computed block by block (in any order)."""
+    data = lsm_scenes.clustered((200, 45), [3, 7, 9], seed=4, na_fraction=0.05)
+    path = write(tmp_path / "map.tif", data, res=(2.0, 3.0))
+    memory = ls.Landscape(path, directions=directions)
+    tiled = ls.Landscape(path, block_rows=64, directions=directions)
+    ids = tiled.labels()
+    assert hasattr(ids.data, "dask") and ids.data.numblocks == (4, 1)
+    assert ids.rio.nodata == 0 and ids.rio.transform() == memory.labels().rio.transform()
+    # the last block first: each block stands on its own
+    np.testing.assert_array_equal(ids[192:].values, memory.labels()[192:].values)
+    np.testing.assert_array_equal(ids.values, memory.labels().values)
+    for metric, level in [("area", None), ("gyrate", None), ("core", None), ("enn", None), ("circle", None),
+                          ("pland", "class"), ("np", "class")]:
+        np.testing.assert_array_equal(tiled.to_raster(metric, level).values, memory.to_raster(metric, level).values)
+
+
+def test_maps_are_written_block_by_block(tmp_path):
+    path = write(tmp_path / "map.tif", lsm_scenes.clustered((150, 60), [1, 2, 5], seed=2, na_fraction=0.1))
+    memory = ls.Landscape(path)
+    tiled = ls.Landscape(path, block_rows=64)
+    for name, a, b in [
+        ("labels", tiled.labels(path=tmp_path / "t_ids.tif"), memory.labels(path=tmp_path / "m_ids.tif")),
+        ("area", tiled.to_raster("area", path=tmp_path / "t_area.tif"),
+         memory.to_raster("area", path=tmp_path / "m_area.tif")),
+    ]:
+        ta, tb = ls.load_raster(a), ls.load_raster(b)
+        np.testing.assert_array_equal(ta.values, tb.values, err_msg=name)
+        assert ta.dtype == tb.dtype and ta.rio.transform() == tb.rio.transform()
+        assert (np.isnan(ta.rio.nodata) and np.isnan(tb.rio.nodata)) or ta.rio.nodata == tb.rio.nodata
+    out = tiled.to_raster(["area", "shape"], path=tmp_path / "maps")
+    assert sorted(p.name for p in out.values()) == ["area.tif", "shape.tif"]
 
 
 def test_landscape_metrics_function(tmp_path):

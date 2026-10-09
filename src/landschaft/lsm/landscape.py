@@ -435,14 +435,25 @@ class Landscape:
         """
         return self._tiled is not None
 
-    def labels(self) -> xr.DataArray | np.ndarray:
+    def labels(self, path=None, **write_options) -> xr.DataArray | np.ndarray:
         """Map of patch ids.
+
+        Out of core (``block_rows``) the map is lazy (dask): each block is read
+        and labelled again when computed, so it can be larger than memory;
+        with ``path`` it is written to the file block by block.
+
+        Parameters
+        ----------
+        path
+            Write the map to this GeoTIFF (``write_raster``) and return the path.
+        **write_options
+            Options of :func:`landschaft.write_raster` (``compress``...).
 
         Returns
         -------
-        xarray.DataArray or numpy.ndarray
+        xarray.DataArray, numpy.ndarray or path
             Patch ids 1..n (the ``id`` of the patch tables), 0 where NA; same grid
-            as the input. Not available out of core.
+            as the input (lazy out of core), or the path written.
 
         Examples
         --------
@@ -451,9 +462,19 @@ class Landscape:
         >>> ids = lc.labels()
         >>> int(ids.max()) == lc.n_patches
         True
+
+        A file read by blocks gets its map written by blocks:
+
+        >>> big = ls.Landscape(ls.example_data("clc"), block_rows=256)
+        >>> path = big.labels(path="patch_ids.tif")
+        >>> int(ls.load_raster(path).max()) == big.n_patches
+        True
         """
-        self._no_raster("labels")
-        return self._wrap(self._core.labels(), "patches")
+        if self._tiled is not None:
+            raster = self._lazy_raster(self._tiled.lazy_map(), "patches")
+        else:
+            raster = self._wrap(self._core.labels(), "patches")
+        return raster if path is None else self._write(raster, path, write_options)
 
     def _no_raster(self, what: str) -> None:
         if self._tiled is not None:
@@ -479,12 +500,14 @@ class Landscape:
         path
             Write the raster to this GeoTIFF (``write_raster``; with a list, a
             directory: one ``<metric>.tif`` each), and return the path(s).
+            Out of core (``block_rows``) the raster is lazy (dask) and is
+            written block by block.
 
         Returns
         -------
         xarray.DataArray, numpy.ndarray, dict or path
-            The raster (same form as the input), a dict of them for a list of
-            metrics, or the path(s) written.
+            The raster (same form as the input; lazy out of core), a dict of
+            them for a list of metrics, or the path(s) written.
 
         Examples
         --------
@@ -493,8 +516,12 @@ class Landscape:
         >>> area = lc.to_raster("area")                  # every patch painted with its area (ha)
         >>> pland = lc.to_raster("pland", level="class")
         >>> path = lc.to_raster("shape", path="shape.tif")
+
+        Out of core, written block by block:
+
+        >>> big = ls.Landscape(ls.example_data("clc"), block_rows=256)
+        >>> path = big.to_raster("area", path="area.tif")
         """
-        self._no_raster("to_raster")
         if not isinstance(metric, str):
             names = list(metric)
             if path is not None:
@@ -504,29 +531,48 @@ class Landscape:
             return {m: self.to_raster(m, level) for m in names}
         if level is None:
             level = "patch" if canonical_name(metric, "patch") in _patch_names() else "class"
-        labels = np.asarray(self._core.labels())
+        # the value of every patch id (0: NA)
         if level == "patch":
             values = np.concatenate([[np.nan], self._patch_values(metric)])
-            out = values[labels]
         elif level == "class":
             (name,), _ = _names(metric, "class")
             self._ensure([name])
-            per_class = self._core.class_metric(name)
-            pclass = np.concatenate([[-1], self._core.patch_class()])
-            cell_class = pclass[labels]
-            out = np.where(cell_class >= 0, per_class[np.maximum(cell_class, 0)], np.nan)
+            per_class = np.asarray(self._core.class_metric(name), dtype=np.float64)
+            values = np.concatenate([[np.nan], per_class[self._core.patch_class()]])
         else:
             raise ValueError("level must be 'patch' or 'class'")
-        raster = self._wrap(out, metric)
-        if path is None:
-            return raster
-        from ..io import _load_map, write_raster
+        if self._tiled is not None:
+            raster = self._lazy_raster(self._tiled.lazy_map(values), metric)
+        else:
+            raster = self._wrap(values[np.asarray(self._core.labels())], metric)
+        return raster if path is None else self._write(raster, path, write_options)
+
+    def _lazy_raster(self, arr, name: str) -> xr.DataArray:
+        """A lazy map of an out-of-core landscape on the grid of its file."""
+        from ..io import _with_georef
+
+        t = self._tiled.transform
+        ny, nx = self.shape
+        da = xr.DataArray(
+            arr,
+            coords={"y": t.f + t.e * (np.arange(ny) + 0.5), "x": t.c + t.a * (np.arange(nx) + 0.5)},
+            dims=("y", "x"),
+            name=name,
+        )
+        nodata = np.nan if np.issubdtype(arr.dtype, np.floating) else 0
+        return _with_georef(da, crs=self._tiled.crs, transform=t, nodata=nodata)
+
+    def _write(self, raster, path, write_options: dict):
+        """Write a map of this landscape (block by block when lazy)."""
+        from ..io import write_raster
 
         if isinstance(raster, np.ndarray):
             xmin, _, _, ymax = self._extent
             from rasterio.transform import Affine
 
             write_options.setdefault("transform", Affine(self.resolution[0], 0, xmin, 0, -self.resolution[1], ymax))
+        if np.issubdtype(raster.dtype, np.floating):
+            write_options.setdefault("nodata", np.nan)  # known: no pass over a lazy map to look for NaN
         return write_raster(raster, path, colormap=None, **write_options)
 
     @property

@@ -111,9 +111,17 @@ big = ls.Landscape(ls.example_data("clc"), block_rows=256)
 big.out_of_core, big.class_metrics(["ca", "np", "ed"]).head(3)
 ```
 
-`block_rows="auto"` picks about four million cells per block. A few
-features need the whole raster (patch maps, `to_raster`); everything else
-works.
+`block_rows="auto"` picks about four million cells per block. Maps of patch
+ids (`labels`) and of metrics (`to_raster`) come out lazy, as dask arrays: each
+block is read and labelled again when it is computed, and with `path=` the
+map is written to the file block by block, never whole in memory:
+
+```python
+big.to_raster("area", path="patch_area.tif").name
+```
+
+A few features still need the whole raster (`patches`, `centroids`, the
+FRAGSTATS `prox`, `simi`, `econ` and `connect`); everything else works.
 
 For tables with millions of patches, write them in chunks instead of building
 them in memory:

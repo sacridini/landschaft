@@ -445,6 +445,12 @@ public:
     void tie_block(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows, i64 above, i64 below);
     void end_ties();
 
+    // Patch ids (1-based as labels(), 0 = NA) of the cells of a block of the
+    // first pass, read again (context rows are skipped): in any order, from
+    // any thread, once the first pass is finished.
+    std::vector<std::int32_t> block_labels(const std::int32_t* values, const std::uint8_t* na_mask, i64 y0, i64 rows,
+                                           i64 above, i64 below) const;
+
 private:
     struct State;
     std::unique_ptr<State> s_;

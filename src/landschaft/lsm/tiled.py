@@ -5,7 +5,8 @@ The file is read three times at most: once for its class values, once for
 the patches and class adjacencies (enough for most metrics), and once more
 for core areas, gyrate, circle and enn when those are asked for (plus once
 for gyrate with ``cell_center``). Only one block (and a few context rows) is
-in memory at a time; the patch tables are.
+in memory at a time; the patch tables are. Maps of patch ids or metrics are
+lazy (dask): every block is read and labelled again when it is computed.
 """
 
 from __future__ import annotations
@@ -58,6 +59,7 @@ class TiledReader:
             self.band = 1 if band is None else int(band)
             self.shape = (src.height, src.width)
             self.transform = src.transform
+            self.crs = src.crs
             if res is None:
                 rx, ry = src.res
                 res = (abs(float(rx)), abs(float(ry)))
@@ -165,6 +167,37 @@ class TiledReader:
             else:
                 found.update(np.unique(valid).tolist())
         return np.array(sorted(found), dtype=np.int32)
+
+    # -- maps ------------------------------------------------------------------
+
+    def blocks(self) -> list[tuple[int, int]]:
+        """(first row, rows) of the blocks of the first pass."""
+        ny = self.shape[0]
+        return [(y0, min(self.block_rows, ny - y0)) for y0 in range(0, ny, self.block_rows)]
+
+    def block_labels(self, y0: int, rows: int) -> np.ndarray:
+        """Patch ids (1..n, 0 = NA) of the rows of one block, read again."""
+        with rasterio.Env(GDAL_NUM_THREADS=self._gdal_threads), rasterio.open(self.path) as src:
+            values, mask = self._read(src, y0, y0 + rows)
+        return self.engine.block_labels(values, mask, y0, rows, 0, 0)
+
+    def lazy_map(self, values: np.ndarray | None = None):
+        """The patch ids as a dask array (one chunk per block), or
+        ``values[ids]`` with ``values[0]`` for NA."""
+        import dask
+        import dask.array as dsa
+
+        dtype = np.int32 if values is None else values.dtype
+
+        def block(y0: int, rows: int) -> np.ndarray:
+            ids = self.block_labels(y0, rows)
+            return ids if values is None else values[ids]
+
+        parts = [
+            dsa.from_delayed(dask.delayed(block, pure=False)(y0, rows), shape=(rows, self.shape[1]), dtype=dtype)
+            for y0, rows in self.blocks()
+        ]
+        return dsa.concatenate(parts, axis=0)
 
     # -- detail passes -------------------------------------------------------
 

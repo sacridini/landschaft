@@ -70,6 +70,9 @@ implementar em outro momento. As fases combinadas estão no fim, para referênci
   um ENN realmente fora da memória (p. ex. árvores por bloco em disco, ou busca por
   anéis de blocos vizinhos) tiraria esse limite. `labels()`/`to_raster()` por blocos
   poderiam gravar direto num GeoTIFF (reescrevendo os rótulos na passada de detalhe).
+  **Feito (2026-10-09)**: `TiledLandscape::block_labels` rerrotula um bloco da primeira passada (sem estado:
+  qualquer ordem, qualquer thread) e dá os ids finais pelo `piece_patch`; no Python os mapas são dask
+  preguiçosos (um pedaço por bloco, `TiledReader.lazy_map`) e o `write_raster` grava bloco a bloco.
   Blocos processados em paralelo (hoje um bloco por vez, paralelo por faixas) ajudariam
   em rasters estreitos.
 
