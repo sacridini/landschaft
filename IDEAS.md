@@ -2297,6 +2297,15 @@ cada zona e uma lista de zonas, o `sum()` do R (80 bits) dos totais; travas por 
 prioritizr corrigido: limites manuais reabrem uma zona sem custo (custo 0); aqui a zona fica fechada e um
 limite inferior > 0 nela é erro.
 
+**Fase 2 feita** (1.39.0, 2026-10-09): todos os objetivos com zonas, orçamento total ou por zona (lista ou
+mapeamento), pesos por meta, por feição ou feição x zona (sem metas: `c(matrix)`, zona após zona), metas por
+sub-região com coluna `zone` (totais por região e zona em `zone_region_totals`, das camadas das zonas). 11 casos
+bit a bit. Fatos de paridade: as metas "falsas" sem metas são `expand.grid(feature, zone)` (feição primeiro); a
+abundância positiva do max utility é a da zona só nas unidades com custo nela (`rowSums` em ordem de unidade);
+o fim filogenético usa o `rowSums` do R (80 bits) dos totais das zonas; o orçamento por zona é uma linha por zona.
+O risco de extinção (nosso) soma as zonas pelas contribuições (total = o da base). Um problema de uma zona dada
+como mapeamento é o problema sem zonas mais uma linha trivial por unidade (testado em 7 objetivos).
+
 `add_neighbor_penalties` (do prioritizr 9) continua um item à parte, sob pedido.
 
 ### Próximos passos (retomar daqui)

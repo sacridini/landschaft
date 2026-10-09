@@ -6,6 +6,18 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.39.0] - 2026-10-09
+
+### Added
+- Every objective of `ls.prioritize` with management zones: minimum shortfall, minimum largest shortfall,
+  maximum utility, cover and features, maximum phylogenetic diversity and endemism, minimum penalties and
+  the minimum extinction risk (ours: every feature's amounts summed over its zones by their contributions).
+  Budgets are one number or one per zone (a list in the zones' order or a mapping zone -> budget); feature
+  weights are one per target, or, without targets, one per feature (the same in every zone) or a features x
+  zones matrix. Sub-regional targets (an extension) take a `zone` column. Compiled bit for bit as
+  prioritizr 8.0.6's `compile()` (11 more reference cases; the phylogenetic objectives with the tip-order
+  fix) with the same optima as prioritizr on Gurobi.
+
 ## [1.38.0] - 2026-10-09
 
 ### Added
