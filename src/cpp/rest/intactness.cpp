@@ -144,4 +144,86 @@ std::vector<double> intactness_gradient(const double* hfi, const double* reducti
     return out;
 }
 
+double intactness_secant(const double* h0, const double* tlo, const double* thi, i64 ny, i64 nx,
+                         const IntactnessParams& p, int threads, std::vector<double>& sigma) {
+    const Window win = make_window(p);
+    const i64 nw = static_cast<i64>(win.w.size());
+    const i64 size = ny * nx;
+    const double gz = p.gamma * p.z;
+    std::vector<double> wsum(static_cast<std::size_t>(size), kNaN);
+#pragma omp parallel for num_threads(threads) schedule(dynamic, 4)
+    for (i64 r = 0; r < ny; ++r)
+        for (i64 c = 0; c < nx; ++c) {
+            const i64 i = r * nx + c;
+            if (std::isnan(h0[i])) continue;
+            double w = 0.0;
+            for (i64 t = 0; t < nw; ++t) {
+                const i64 rr = r + win.dr[t], cc = c + win.dc[t];
+                if (rr < 0 || rr >= ny || cc < 0 || cc >= nx || std::isnan(h0[rr * nx + cc])) continue;
+                w += win.w[t];
+            }
+            wsum[i] = w;
+        }
+    // the secant of the pair (j, k), weight wt of k in j's window: its slope and its value at s_lo
+    auto secant = [&](i64 j, i64 k, double wt, double& slope, double& at_lo) {
+        const double c = wt / wsum[j];
+        const double base = h0[j] + h0[k];
+        const double lo = tlo[j] + tlo[k], hi = thi[j] + thi[k];
+        const double e_lo = c * std::exp(gz * (lo - base));
+        if (hi - lo > 1e-12 * (1.0 + std::fabs(lo) + std::fabs(hi))) {
+            slope = (c * std::exp(gz * (hi - base)) - e_lo) / (hi - lo);
+        } else {
+            slope = gz * e_lo;  // no room: the tangent
+        }
+        at_lo = e_lo - slope * lo;
+    };
+    sigma.assign(static_cast<std::size_t>(size), 0.0);
+    std::vector<double> u0(static_cast<std::size_t>(ny), 0.0);
+    // j's own side: the pairs of its window
+#pragma omp parallel for num_threads(threads) schedule(dynamic, 4)
+    for (i64 r = 0; r < ny; ++r) {
+        double row = 0.0;
+        for (i64 c = 0; c < nx; ++c) {
+            const i64 j = r * nx + c;
+            if (std::isnan(h0[j])) continue;
+            double s = 0.0;
+            for (i64 t = 0; t < nw; ++t) {
+                const i64 rr = r + win.dr[t], cc = c + win.dc[t];
+                if (rr < 0 || rr >= ny || cc < 0 || cc >= nx) continue;
+                const i64 k = rr * nx + cc;
+                if (std::isnan(h0[k])) continue;
+                double slope, at_lo;
+                secant(j, k, win.w[t], slope, at_lo);
+                s += slope;
+                row += at_lo;
+            }
+            sigma[j] += s;
+        }
+        u0[r] = row;
+    }
+    // k's side: the pairs (j, k) of the windows that hold k (the window is symmetric)
+    std::vector<double> other(static_cast<std::size_t>(size), 0.0);
+#pragma omp parallel for num_threads(threads) schedule(dynamic, 4)
+    for (i64 r = 0; r < ny; ++r)
+        for (i64 c = 0; c < nx; ++c) {
+            const i64 k = r * nx + c;
+            if (std::isnan(h0[k])) continue;
+            double s = 0.0;
+            for (i64 t = 0; t < nw; ++t) {
+                const i64 rr = r + win.dr[t], cc = c + win.dc[t];
+                if (rr < 0 || rr >= ny || cc < 0 || cc >= nx) continue;
+                const i64 j = rr * nx + cc;
+                if (std::isnan(h0[j])) continue;
+                double slope, at_lo;
+                secant(j, k, win.w[t], slope, at_lo);
+                s += slope;
+            }
+            other[k] = s;
+        }
+    double total = 0.0;
+    for (i64 r = 0; r < ny; ++r) total += u0[r];
+    for (i64 i = 0; i < size; ++i) sigma[i] += other[i];
+    return total;
+}
+
 }  // namespace rest

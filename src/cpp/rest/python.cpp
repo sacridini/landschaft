@@ -157,6 +157,22 @@ py::array_t<double> py_intactness_gradient(const Vec& hfi, const Vec& reduction,
     return to_array(std::move(out), {ny, nx});
 }
 
+py::tuple py_intactness_secant(const Vec& h0, const Vec& tlo, const Vec& thi, double gamma, double beta, double z,
+                               int radius, double dx, double dy, int threads) {
+    if (h0.ndim() != 2 || tlo.ndim() != 2 || thi.ndim() != 2 || h0.shape(0) != tlo.shape(0) ||
+        h0.shape(1) != tlo.shape(1) || h0.shape(0) != thi.shape(0) || h0.shape(1) != thi.shape(1))
+        throw std::invalid_argument("the footprint and the bounds of its reduction must be 2-D and alike");
+    const i64 ny = h0.shape(0), nx = h0.shape(1);
+    std::vector<double> sigma;
+    double u0;
+    {
+        py::gil_scoped_release release;
+        u0 = rest::intactness_secant(h0.data(), tlo.data(), thi.data(), ny, nx,
+                                     params(gamma, beta, z, radius, dx, dy), threads, sigma);
+    }
+    return py::make_tuple(u0, to_array(std::move(sigma), {ny, nx}));
+}
+
 }  // namespace
 
 namespace rest {
@@ -180,6 +196,9 @@ void register_python(py::module_& m) {
     m.def("rest_intactness_gradient", &py_intactness_gradient, py::arg("hfi"), py::arg("reduction"),
           py::arg("gamma"), py::arg("beta"), py::arg("z"), py::arg("radius"), py::arg("dx"), py::arg("dy"),
           py::arg("threads"), "d(total intactness) / d(share of each cell restored).");
+    m.def("rest_intactness_secant", &py_intactness_secant, py::arg("h0"), py::arg("tlo"), py::arg("thi"),
+          py::arg("gamma"), py::arg("beta"), py::arg("z"), py::arg("radius"), py::arg("dx"), py::arg("dy"),
+          py::arg("threads"), "A concave upper bound of the total intactness: (u0, sigma).");
 }
 
 }  // namespace rest

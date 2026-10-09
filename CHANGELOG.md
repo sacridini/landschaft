@@ -34,6 +34,14 @@ in a new major version.
   gradient map of `post_gradient_output` (how many levels act on a cell). `compare_weights` solves with
   sets of the benefits' weights and ranks them by plangea's `post_choose_weights` metric, also as
   `ls.prioritize.mean_sd` beside `topsis`.
+- The exact ecological intactness in restoration plans: `add_intactness_benefit(..., form="exact")` takes
+  the total intactness itself instead of its derivative at the plan of nothing. It is not concave (a sum
+  of exponentials of the footprint), so the exact method climbs by successive concave minorants (the
+  tangent of every pair's exponential in the footprint's reduction, each step solved exactly, the benefit
+  never falling) to a local optimum, and bounds the best plan by the secant of every pair over the
+  footprints the plans can reach (new C++ kernel `rest_intactness_secant`); the status is `"local"` unless
+  the two meet. Where the footprint can be cleared the plan gains much over the linearised one (2.5 times
+  the intactness in a test of 2000 cells); the bound's gap is 2-20 % in the tests.
 - Corrected in plangea (only the correct form): in its trade-off loop the habitat is refreshed from the
   current gradient step's restoration only, forgetting the earlier steps, and a region's "<=" target
   caps every gradient step instead of the whole plan; `post_choose_weights` takes the mean of the

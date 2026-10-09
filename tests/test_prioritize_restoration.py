@@ -799,3 +799,106 @@ def test_compare_weights_ranks_by_mean_over_sd(case):
     assert t.loc[0, "extinction_risk"] >= t.loc[2, "extinction_risk"] and t.loc[2, "carbon"] >= t.loc[0, "carbon"]
     with pytest.raises(ValueError, match="no benefit"):
         q.compare_weights([{"water": 1.0}])
+
+
+# ----------------------------------------------------------------------------- exact intactness
+
+def _intactness_problem(shape=(8, 9), seed=12, low=3.0, high=20.0, red=(1.0, 6.0), kind="restorable"):
+    rng = np.random.default_rng(seed)
+    share = rng.random(shape) * 0.8
+    hfi = low + rng.random(shape) * (high - low)
+    a = red[0] + rng.random(shape) * (red[1] - red[0])
+    p = P.restoration_problem(**{kind: share}, cell_area=1.0)
+    kw = {"reduction": a} if kind == "restorable" else {"increase": a}
+    return p, hfi, a, kw
+
+
+def test_intactness_minorant_and_secant_bound():
+    """The tangent minorant never overestimates the total intactness and touches it at its point; the
+    secant majorant (C++) never underestimates it over the plans' box."""
+    from landschaft import _core
+
+    p, hfi, a, kw = _intactness_problem(low=0.0, red=(2.0, 30.0))  # footprints that can reach 0
+    q = p.add_intactness_benefit(hfi, radius=2, cell_size=1.0, form="exact", **kw)
+    b = q.benefits[0]
+    fp = b.intactness
+    cells, amat, lo, hi = R._reduction_terms(q, fp)
+    h0 = fp.h0
+    tlo, thi = np.zeros(h0.size), np.zeros(h0.size)
+    tlo[cells], thi[cells] = np.minimum(lo, h0[cells]), np.minimum(hi, h0[cells])
+    u0, sigma = _core.rest_intactness_secant(h0.reshape(q.shape), tlo.reshape(q.shape), thi.reshape(q.shape),
+                                             fp.gamma, fp.beta, fp.z, fp.radius, 1.0, 1.0, 2)
+    sigma = np.asarray(sigma).ravel()
+    rng = np.random.default_rng(13)
+    x0 = rng.random(q.n) * q.upper
+    t0 = np.minimum(amat @ x0, h0[cells])
+    g = -ls.intactness_gradient(h0.reshape(q.shape) - np.bincount(cells, t0, h0.size).reshape(q.shape),
+                                -np.ones(q.shape), 2, cell_size=1.0).values.ravel()
+    T0 = R._intactness_total(q, fp, x0)
+    for _ in range(20):
+        x = rng.random(q.n) * q.upper
+        t = np.minimum(amat @ x, h0[cells])
+        T = R._intactness_total(q, fp, x)
+        assert T >= T0 + float(g[cells] @ (t - t0)) - 1e-9 * T
+        assert T <= u0 + float(sigma[cells] @ t) + 1e-9 * T
+    assert R._intactness_total(q, fp, x0) == pytest.approx(T0)
+    assert (sigma >= 0).all()
+
+
+def test_exact_intactness_against_the_vertices():
+    """A small problem whose only benefit is the exact intactness: its optimum is at a vertex of the set
+    of plans (a convex objective), all enumerated; the plan found is at most it, the bound at least it,
+    and at least the plan of the linearised benefit."""
+    from itertools import product
+
+    p, hfi, a, kw = _intactness_problem(shape=(3, 4), seed=14, low=1.0, high=8.0, red=(0.5, 3.0))
+    target = 0.4 * float(p.upper @ p.area)
+    q = p.add_intactness_benefit(hfi, radius=1, cell_size=1.0, form="exact", **kw).add_area_target(target)
+    sol = q.solve()
+    assert sol.status in ("optimal", "local") and sol.method == "exact"
+    assert sol.area <= target * (1 + 1e-9)
+    t0 = q.benefits[0].t0
+    best = -np.inf
+    n = q.n
+    for k in range(n):  # one share between its bounds, the others at theirs
+        others = [j for j in range(n) if j != k]
+        for bits in product((0.0, 1.0), repeat=n - 1):
+            x = np.zeros(n)
+            x[others] = np.array(bits) * q.upper[others]
+            room = target - float(q.area[others] @ x[others])
+            if room < -1e-12:
+                continue
+            x[k] = min(q.upper[k], room / q.area[k])
+            best = max(best, R._intactness_total(q, q.benefits[0].intactness, x) - t0)
+    assert sol.benefit <= best + 1e-9
+    assert sol.bound >= best - 1e-9
+    assert sol.benefit >= 0.97 * best
+    lin = p.add_intactness_benefit(hfi, radius=1, cell_size=1.0, **kw).add_area_target(target).solve()
+    assert sol.benefit >= q.evaluate(lin.values).benefit - 1e-9
+    assert q.evaluate(sol.values).benefit == pytest.approx(sol.benefit, rel=1e-12)
+    assert sol.benefits["kind"].tolist() == ["intactness"]
+
+
+def test_exact_intactness_with_other_benefits_and_conversion(case):
+    """With the extinction risk too (the minorant's steps solve both exactly), and for conversion (the
+    footprint rises: the benefit is negative and the least loss is sought)."""
+    *_, p = case
+    rng = np.random.default_rng(15)
+    hfi = pc.grid(5.0 + rng.random(pc.SHAPE) * 10)
+    red = pc.grid(1.0 + rng.random(pc.SHAPE) * 4)
+    q = p.add_intactness_benefit(hfi, red, radius=2, weight=0.01, form="exact").add_area_target(6.0)
+    sol = q.solve()
+    assert sol.status in ("optimal", "local") and sol.bound >= sol.benefit - 1e-12
+    lin = p.add_intactness_benefit(hfi, red, radius=2, weight=0.01).add_area_target(6.0).solve()
+    assert sol.benefit >= q.evaluate(lin.values).benefit - 1e-9
+    d, hfi_d, inc, kw = _intactness_problem(kind="convertible", seed=16)
+    qd = d.add_intactness_benefit(hfi_d, radius=2, cell_size=1.0, form="exact", **kw)
+    qd = qd.add_area_target(0.3 * float(d.upper @ d.area), sense=">=")
+    sd = qd.solve()
+    assert sd.benefit < 0 and sd.bound >= sd.benefit - 1e-12
+    unif = qd.uniform()
+    assert sd.benefit >= unif.benefit - 1e-9
+    with pytest.raises(ValueError, match="form"):
+        p.add_intactness_benefit(hfi, red, form="cubic")
+    with pytest.raises(ValueError, match="weight"):
+        p.add_intactness_benefit(hfi, red, weight=-1.0, form="exact")

@@ -161,6 +161,23 @@ class _Linear:
     coef: np.ndarray  # benefit per unit share
     layer: np.ndarray  # plangea's per-cell layer (method="steps")
     intactness: _Footprint | None = None
+    exact: bool = False  # intactness: its true value (not linearised at the plan of nothing)
+    t0: float = math.nan  # intactness: the total without the plan
+
+
+@dataclass(frozen=True)
+class _Capped:
+    """Benefits linear in x, plus terms coef_e min(A_e x, cap_e) (concave), for the exact solver: the
+    terms are lifted, y_e <= A_e x and lo_e <= y_e <= cap_e in its linear programs."""
+
+    lin: np.ndarray
+    A: sp.csr_matrix
+    cap: np.ndarray
+    lo: np.ndarray
+    coef: np.ndarray
+
+    def value(self, x: np.ndarray) -> float:
+        return float(self.lin @ x) + float(self.coef @ np.minimum(self.A @ x, self.cap))
 
 
 @dataclass(frozen=True)
@@ -324,15 +341,27 @@ class RestorationProblem:
 
     def add_intactness_benefit(self, hfi, reduction=None, radius: int = 3, weight: float = 1.0, *, increase=None,
                                gamma: float | None = None, beta: float = -0.2, z: float = 0.5, cell_size=None,
-                               name: str | None = None) -> RestorationProblem:
+                               form: str = "linear", name: str | None = None) -> RestorationProblem:
         """Ecological intactness (Beyer et al. 2020): restoring a share x of a cell lowers its human
         footprint by ``reduction`` x, converting it raises the footprint by ``increase`` x (and natural
         land lost for want of conservation by ``increase`` times the threat, which conserving spares);
-        the benefit is the total intactness gained, linearised at the plan of nothing
-        (:func:`landschaft.intactness_gradient`; with ``method="steps"`` it is recomputed at every
-        step, as plangea does). ``hfi``, ``reduction`` and ``increase`` on the problem's grid (or
-        numbers); the other parameters as :func:`landschaft.intactness`."""
+        the benefit is the total intactness gained. ``hfi``, ``reduction`` and ``increase`` on the
+        problem's grid (or numbers); the other parameters as :func:`landschaft.intactness`.
+
+        ``form="linear"``: linearised at the plan of nothing (:func:`landschaft.intactness_gradient`;
+        with ``method="steps"`` it is recomputed at every step, as plangea does). ``form="exact"``: the
+        total intactness itself, which is not concave (a sum of exponentials of the footprint): the exact
+        method improves the plan by successive concave minorants (the tangent of every pair's
+        exponential, which never overestimates; each step solved exactly, the benefit never falls) to a
+        local optimum, and bounds the best plan by the secant of every pair over the footprints the
+        plans can reach. The status is ``"optimal"`` when the two meet within the tolerance, else
+        ``"local"`` (the bound is reported). The weight must be at least 0."""
         from ..intactness import INTACTNESS_GAMMA
+
+        if form not in ("linear", "exact"):
+            raise ValueError("form: 'linear' or 'exact'")
+        if form == "exact" and weight < 0:
+            raise ValueError("the exact intactness needs a weight of at least 0")
 
         gamma = INTACTNESS_GAMMA if gamma is None else float(gamma)
         _, h = _grid_values(hfi, "hfi")
@@ -361,7 +390,9 @@ class RestorationProblem:
         fp = _Footprint(hfi=hfi, h0=h0, change=change, radius=int(radius), gamma=gamma, beta=float(beta), z=float(z),
                         cell_size=cell_size)
         coef = _intactness_coef(self, fp, np.zeros(self.n))
-        lin = _Linear(self._name(name, "intactness"), float(weight), coef, coef.copy(), intactness=fp)
+        t0 = _intactness_total(self, fp, np.zeros(self.n)) if form == "exact" else math.nan
+        lin = _Linear(self._name(name, "intactness"), float(weight), coef, coef.copy(), intactness=fp,
+                      exact=form == "exact", t0=t0)
         return replace(self, benefits=self.benefits + (lin,))
 
     def _name(self, name, default):
@@ -598,7 +629,7 @@ class RestorationProblem:
         targets only (no budget, no minimum cost)."""
         t0 = time.perf_counter()
         if method == "exact":
-            solver = _solve_sd if self.objective[0] == "max_benefit" else _solve_min_cost
+            solver = _solve_max if self.objective[0] == "max_benefit" else _solve_min_cost
             x, bound, status, rounds = solver(self)
         elif method == "steps":
             x = _solve_steps(self, int(steps))[-1]
@@ -770,8 +801,8 @@ class RestorationProblem:
         total = 0.0
         for b in self.benefits:
             v = _benefit_value(self, b, x)
-            rows.append({"benefit": b.name, "kind": "extinction_risk" if isinstance(b, _Risk) else "linear",
-                         "value": v, "weight": b.weight, "weighted": b.weight * v})
+            kind = "extinction_risk" if isinstance(b, _Risk) else ("intactness" if b.exact else "linear")
+            rows.append({"benefit": b.name, "kind": kind, "value": v, "weight": b.weight, "weighted": b.weight * v})
             total += b.weight * v
         table = pd.DataFrame(rows, columns=["benefit", "kind", "value", "weight", "weighted"])
         cost = float(self.cost @ x) if self.cost is not None else math.nan
@@ -1268,6 +1299,8 @@ def _ratio(b: _Risk, x: np.ndarray) -> np.ndarray:
 
 def _benefit_value(p: RestorationProblem, b, x: np.ndarray) -> float:
     if isinstance(b, _Linear):
+        if b.exact:
+            return _intactness_total(p, b.intactness, x) - b.t0
         return float(b.coef @ x)
     return float(np.sum(_h(_ratio(b, x), b.z) - _h(b.base / b.potential, b.z)))
 
@@ -1285,6 +1318,43 @@ def _footprint_at(p: RestorationProblem, fp: _Footprint, x: np.ndarray) -> np.nd
         v = h[ok] + d[ok]
         h[ok] = np.where(v < 0, 0.0, v)
     return h
+
+
+def _footprint_grid(fp: _Footprint, h: np.ndarray):
+    return fp.hfi.copy(data=h) if isinstance(fp.hfi, xr.DataArray) and fp.hfi.ndim == 2 else h
+
+
+def _intactness_total(p: RestorationProblem, fp: _Footprint, x: np.ndarray) -> float:
+    """The total intactness under the plan x."""
+    from ..intactness import intactness
+
+    h = _footprint_at(p, fp, x).reshape(p.shape)
+    q = intactness(_footprint_grid(fp, h), fp.radius, gamma=fp.gamma, beta=fp.beta, z=fp.z, cell_size=fp.cell_size)
+    return float(np.nansum(q.values))
+
+
+def _reduction_terms(p: RestorationProblem, fp: _Footprint):
+    """The footprint's reduction t_i(x) = min(a_i x, h0_i) of every cell with planning units: the
+    cells, a (cells x columns) and the bounds of a x over the plans' box."""
+    cells, inv = np.unique(p.index, return_inverse=True)
+    a = sp.csr_matrix((-fp.change, (inv, np.arange(p.n))), shape=(cells.size, p.n))
+    lb = p._lb()
+    hi = a.maximum(0.0) @ p.upper + a.minimum(0.0) @ lb
+    lo = a.maximum(0.0) @ lb + a.minimum(0.0) @ p.upper
+    return cells, a, lo, hi
+
+
+def _capped_terms(p: RestorationProblem, fp: _Footprint, coef_cell: np.ndarray) -> _Capped:
+    """coef_i t_i(x) over the cells: linear where the footprint cannot reach 0, lifted where it can."""
+    cells, a, lo, hi = _reduction_terms(p, fp)
+    h0 = fp.h0[cells]
+    c = np.nan_to_num(coef_cell[cells])
+    ok = np.isfinite(h0) & (c != 0)
+    linear = ok & (hi <= h0)
+    lifted = np.flatnonzero(ok & ~linear)
+    lin = a[np.flatnonzero(linear)].T @ c[linear]
+    return _Capped(lin=np.asarray(lin).ravel(), A=a[lifted].tocsr(), cap=h0[lifted], lo=np.minimum(lo[lifted], h0[lifted]),
+                   coef=c[lifted])
 
 
 def _intactness_coef(p: RestorationProblem, fp: _Footprint, x: np.ndarray) -> np.ndarray:
@@ -1346,7 +1416,7 @@ def _has_negative(g: sp.csr_matrix) -> np.ndarray:
     return np.asarray((g < 0).sum(axis=1)).ravel() > 0
 
 
-def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
+def _solve_sd(p: RestorationProblem, extra: _Capped | None = None) -> tuple[np.ndarray, float, str, int]:
     """The most weighted benefit by simplicial decomposition: the plan is a mix of vertices of the set of
     plans, each from a linear program over the units (the benefits' gradient at the current plan, the
     targets and the budget as rows), the mix by a small smooth master problem (SLSQP on the weights); the
@@ -1358,7 +1428,10 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
     A species that reaches its potential habitat (r = 1) puts a kink in the benefit, where the
     Frank-Wolfe bound does not close. Such a species is lifted: its habitat gained becomes a variable y
     of its own, y <= g x and y <= P - A (one row and one column in the linear programs), on which the
-    benefit is smooth up to r = 1. Species are lifted as the vertices overshoot their potential."""
+    benefit is smooth up to r = 1. Species are lifted as the vertices overshoot their potential.
+
+    ``extra``: more benefits, linear and capped-linear terms (lifted from the start), added to the
+    problem's own (the exact intactness's minorants and bounds)."""
     opts = p.solver[1]
     tol = float(opts.get("tolerance", 1e-7))
     tl = opts.get("time_limit")
@@ -1369,6 +1442,10 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
     for b in p.benefits:
         if isinstance(b, _Linear):
             lin += b.weight * b.coef
+    m_c = 0
+    if extra is not None:
+        lin = lin + extra.lin
+        m_c = extra.A.shape[0]
     rows, rhs, sense = _feasible_set(p)
     lb_x = p._lb()
     floors = [np.maximum(1e-9 * (b.base + _positive(b.gain) @ p.upper) / b.potential, 1e-15) for b in risks]
@@ -1391,17 +1468,20 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
     def vertex(cx: np.ndarray, dy: list) -> tuple[np.ndarray, bool]:
         """The best vertex for the objective cx on the units and dy on the lifted species."""
         cols = [(i, np.flatnonzero(lifted[i])) for i in range(len(risks))]
-        m_y = sum(s.size for _, s in cols)
+        m_y = sum(s.size for _, s in cols) + m_c
         if m_y == 0:
             A, obj, lb, ub, b_rhs, b_sense = rows, cx, lb_x, p.upper, rhs, sense
         else:
-            # y_s - g_s x <= 0 for every lifted species, 0 <= y_s <= P_s - A_s
-            g_rows = sp.vstack([risks[i].gain[s] for i, s in cols if s.size]).tocsr()
+            # y_s - g_s x <= 0 for every lifted species, 0 <= y_s <= P_s - A_s; y_e - A_e x <= 0 for the
+            # capped terms, lo_e <= y_e <= cap_e
+            blocks = [risks[i].gain[s] for i, s in cols if s.size] + ([extra.A] if m_c else [])
+            g_rows = sp.vstack(blocks).tocsr()
             A = sp.vstack([sp.hstack([rows, sp.csr_matrix((rows.shape[0], m_y))]),
                            sp.hstack([-g_rows, sp.identity(m_y, format="csr")])]).tocsr()
-            obj = np.concatenate([cx] + [dy[i][s] for i, s in cols if s.size])
-            lb = np.concatenate([lb_x] + [floor_y[i][s] for i, s in cols if s.size])
-            ub = np.concatenate([p.upper] + [caps[i][s] for i, s in cols if s.size])
+            ce = [extra.coef] if m_c else []
+            obj = np.concatenate([cx] + [dy[i][s] for i, s in cols if s.size] + ce)
+            lb = np.concatenate([lb_x] + [floor_y[i][s] for i, s in cols if s.size] + ([extra.lo] if m_c else []))
+            ub = np.concatenate([p.upper] + [caps[i][s] for i, s in cols if s.size] + ([extra.cap] if m_c else []))
             b_rhs, b_sense = np.concatenate([rhs, np.zeros(m_y)]), tuple(sense) + ("<=",) * m_y
         m = OptimizationProblem(A=A, obj=obj, lb=lb, ub=ub, rhs=b_rhs, sense=b_sense, vtype=("C",) * (n + m_y),
                                 modelsense="max", row_ids=("row",) * A.shape[0], col_ids=("x",) * (n + m_y))
@@ -1418,17 +1498,20 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
     verts: list[sp.csr_matrix] = []
     gv = [np.zeros((b.base.size, 0)) for b in risks]
     lv = np.zeros(0)
+    yc = np.zeros((m_c, 0))  # the capped terms' y of every vertex: min(A v, cap)
 
     def effective(i: int) -> np.ndarray:
         return np.where(lifted[i][:, None], np.minimum(gv[i], caps[i][:, None]), gv[i])
 
     def add_vertex(v: np.ndarray) -> np.ndarray:
-        nonlocal lv
+        nonlocal lv, yc
         verts.append(sp.csr_matrix(v[None, :]))
         for i, b in enumerate(risks):
             gv[i] = np.hstack([gv[i], (b.gain @ v)[:, None]])
             lifted[i] |= (caps[i] > 0) & (gv[i][:, -1] >= caps[i] * (1.0 - 1e-12))
-        lv = np.append(lv, lin @ v)
+        y = np.minimum(extra.A @ v, extra.cap) if m_c else np.zeros(0)
+        yc = np.hstack([yc, y[:, None]])
+        lv = np.append(lv, lin @ v + (float(extra.coef @ y) if m_c else 0.0))
 
     def master(lam0: np.ndarray, ev: list) -> np.ndarray:
         """The best mix of the vertices (weights on the simplex), by SLSQP with the exact gradient from
@@ -1472,7 +1555,7 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
             if w > 0:
                 x += w * v.toarray().ravel()
         x = np.clip(x, lb_x, p.upper)
-        f = _true_objective(p, x)
+        f = _true_objective(p, x) + (extra.value(x) if extra is not None else 0.0)
         if f > best:
             best_x, best = x, f
         # the lifted objective at the mix (x, y): at most the plan's benefit f
@@ -1491,6 +1574,8 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         if exact:
             # the vertex's y: min(g v, P - A) on the lifted species (the linear program's best y there)
             gain_v = sum(float(lift_val[i] @ (np.minimum(b.gain @ v, caps[i]) - ys[i])) for i, b in enumerate(risks))
+            if m_c:
+                gain_v += float(extra.coef @ (np.minimum(extra.A @ v, extra.cap) - yc @ lam))
             bound = min(bound, max(f_lift + float(cx @ (v - x)) + gain_v, f))
         if bound - best <= tol * max(1.0, abs(bound)):
             status = "optimal"
@@ -1503,11 +1588,91 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         if keep.size < lam.size:
             verts[:] = [verts[j] for j in keep]
             gv[:] = [m_[:, keep] for m_ in gv]
+            yc = yc[:, keep]
             lv = lv[keep]
             lam = lam[keep] / lam[keep].sum()
         add_vertex(v)
         lam = np.append(lam, 0.0)
     return best_x, bound, status, it
+
+
+def _solve_max(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
+    """The most weighted benefit: simplicial decomposition, or with the exact intactness successive
+    concave minorants (:func:`_solve_mm`)."""
+    if any(isinstance(b, _Linear) and b.exact for b in p.benefits):
+        return _solve_mm(p)
+    return _solve_sd(p)
+
+
+def _solve_mm(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
+    """The exact intactness T(x) = sum over the windows' pairs of c_jk exp(gamma z (t_j + t_k)), t the
+    footprint's reduction: convex in t, and t_i(x) = min(a_i x, h0_i) concave in x. At a plan x0 the
+    tangent of the exponentials gives T(x) >= T(x0) + sum_i g_i (t_i(x) - t_i(x0)), g >= 0 (the
+    derivative in t): a concave minorant that touches T at x0. Each step maximises the other benefits
+    plus the minorant exactly (simplicial decomposition, the capped terms lifted), so the benefit never
+    falls; the steps stop when it no longer rises. The bound: the secant of every pair over the
+    reductions the plans can reach is a concave majorant (``rest_intactness_secant``); the most of the
+    other benefits plus it bounds the best plan."""
+    from .. import _core, _threads
+    from ..intactness import _cell_km, intactness_gradient
+
+    opts = p.solver[1]
+    tol = float(opts.get("tolerance", 1e-7))
+    threads = _threads.resolve(opts.get("n_threads"))
+    exact = [b for b in p.benefits if isinstance(b, _Linear) and b.exact]
+    q = replace(p, benefits=tuple(b for b in p.benefits if not (isinstance(b, _Linear) and b.exact)))
+    ncell = p.shape[0] * p.shape[1]
+
+    def t_gradient(fp: _Footprint, x: np.ndarray) -> np.ndarray:
+        h = _footprint_at(p, fp, x).reshape(p.shape)
+        g = intactness_gradient(_footprint_grid(fp, h), -np.ones(p.shape), fp.radius, gamma=fp.gamma, beta=fp.beta,
+                                z=fp.z, cell_size=fp.cell_size, n_threads=threads)
+        return -np.nan_to_num(np.asarray(g.values, dtype=np.float64).ravel())
+
+    def combine(parts: list) -> _Capped:
+        return _Capped(lin=sum(c.lin for c in parts), A=sp.vstack([c.A for c in parts]).tocsr(),
+                       cap=np.concatenate([c.cap for c in parts]), lo=np.concatenate([c.lo for c in parts]),
+                       coef=np.concatenate([c.coef for c in parts]))
+
+    # the first minorant at the plan of nothing (a point of tangency need not be a feasible plan)
+    best_x, best = np.clip(np.zeros(p.n), p._lb(), p.upper), -math.inf
+    status, it = "local", 0
+    for it in range(1, 101):
+        surrogate = combine([_capped_terms(p, b.intactness, b.weight * t_gradient(b.intactness, best_x)) for b in exact])
+        x1, _, st, _ = _solve_sd(q, surrogate)
+        f1 = _true_objective(p, x1)
+        if st == "time_limit":
+            if f1 > best:
+                best_x, best = x1, f1
+            status = "time_limit"
+            break
+        if f1 <= best + tol * max(1.0, abs(best)):
+            if f1 > best:
+                best_x, best = x1, f1
+            break
+        best_x, best = x1, f1
+    # the bound: the other benefits plus the secants
+    parts, const = [], 0.0
+    for b in exact:
+        fp = b.intactness
+        cells, _, lo, hi = _reduction_terms(p, fp)
+        h0 = fp.h0
+        tlo, thi = np.zeros(ncell), np.zeros(ncell)
+        with np.errstate(invalid="ignore"):
+            tlo[cells] = np.minimum(lo, h0[cells])
+            thi[cells] = np.minimum(hi, h0[cells])
+        grid = _footprint_grid(fp, h0.reshape(p.shape))
+        dx, dy = _cell_km(grid, fp.cell_size) if isinstance(grid, xr.DataArray) else _cell_km(
+            xr.DataArray(grid, dims=("y", "x")), fp.cell_size)
+        u0, sigma = _core.rest_intactness_secant(h0.reshape(p.shape), tlo.reshape(p.shape), thi.reshape(p.shape),
+                                                 fp.gamma, fp.beta, fp.z, fp.radius, dx, dy, threads)
+        parts.append(_capped_terms(p, fp, b.weight * np.asarray(sigma).ravel()))
+        const += b.weight * (u0 - b.t0)
+    _, ub, ub_status, _ = _solve_sd(q, combine(parts))
+    bound = ub + const if ub_status == "optimal" else math.inf
+    if status != "time_limit" and bound - best <= tol * max(1.0, abs(bound)):
+        status = "optimal"
+    return best_x, max(bound, best), status, it
 
 
 def _solve_min_cost(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
@@ -1525,7 +1690,7 @@ def _solve_min_cost(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]
         q = replace(p, objective=("max_benefit",), budget=budget, solver=(inner[0], {
             **inner[1], "time_limit": max(deadline - time.perf_counter(), 1e-3) if math.isfinite(deadline) else None}))
         try:
-            return _solve_sd(q)
+            return _solve_max(q)
         except RuntimeError as e:
             if "infeasible" in str(e):
                 return None
