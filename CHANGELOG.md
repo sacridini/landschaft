@@ -6,6 +6,26 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.35.0] - 2026-10-09
+
+### Added
+- Tutorial *Restoration priorities* (docs/tutorials/restoration-plans.md): a complete restoration plan for
+  Serra Verde, from the original vegetation and the species' areas of habitat to plans for an area target,
+  several benefits (species, ecosystems, carbon, intactness) and their trade-offs, budgets, the cheapest plan
+  for a benefit, regional targets and uncertainty, with ten figures (`rest_*` in
+  tools/make_prioritize_figures.py).
+- Example data for restoration plans in `ls.prioritize.example_data`: `land_cover` (shares of six classes),
+  `past_cover`, `footprint`, `ecoregions` and `carbon_potential`, derived from the Serra Verde landscape (the
+  other layers are unchanged).
+
+### Fixed
+- The exact restoration solver (`RestorationProblem.solve()`) did not close its bound when a species was
+  restored to its whole potential habitat (the benefit has a kink there): on the tutorial's data a plan of
+  300 km² stopped after 5000 vertices 1.8 % from its bound, reported as `"time_limit"`. Such species are now
+  lifted (their habitat gained a variable of its own, at most the potential), and the plan is proven optimal
+  in 2 vertices; a budgeted plan that stopped after 18 s without a proof now takes 0.01 s. Running out of
+  iterations is now reported as `"iteration_limit"`.
+
 ## [1.34.0] - 2026-10-08
 
 ### Added
