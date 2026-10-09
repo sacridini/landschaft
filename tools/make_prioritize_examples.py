@@ -2,7 +2,9 @@
 """Write the example data of ls.prioritize (src/landschaft/prioritize/data): "Serra Verde", an imaginary
 coastal region of 60 x 90 cells of 1 km (SIRGAS 2000 / UTM 23S) with mountains in the north-west, a
 coastal plain with three cities, two rivers, roads, eight conservation features, protected areas,
-habitat condition, regions, carbon and two threats.
+habitat condition, regions, carbon and two threats; and, for restoration plans, the shares of six land-cover
+classes now and of the natural ones in the past, the human footprint, four ecoregions and the carbon that
+restored vegetation would hold.
 
 The landscape is prioripy's tutorial data (docs/assets/tutorial_data.py of prioripy 0.11.11, by the
 same author, MIT), generated with the same seed: the same maps.
@@ -105,7 +107,54 @@ def build_landscape(seed: int = 7) -> dict:
     terminals = ((_blob(10, 18, 4, 6) > 0.5) | (_blob(14, 60, 3, 4) > 0.5)) & land
     return {"land": land, "cost": cost, "species": species, "protected": protected, "urban": urban,
             "condition": condition, "regions": regions, "deforestation": deforestation, "fire": fire,
-            "carbon": carbon, "terminals": terminals, "elevation": elevation, "river": river, "roads": roads}
+            "carbon": carbon, "terminals": terminals, "elevation": elevation, "river": river, "roads": roads,
+            "humidity": humidity, "city_intensity": city_intensity, "road_dist": road_dist}
+
+
+NATURAL = ["forest", "savanna", "mangrove"]
+COVER = [*NATURAL, "pasture", "cropland", "urban"]
+
+
+def build_restoration(L: dict, seed: int = 7) -> dict:
+    """The layers of the restoration tutorial, derived from the landscape (an RNG of their own, so the other
+    layers do not change): the share of six land-cover classes in every cell now, the natural cover in the
+    past (before most of the conversion), the human footprint, four ecoregions and the carbon that restored
+    vegetation would hold."""
+    land, elevation, condition, urban = L["land"], L["elevation"], L["condition"], L["urban"]
+    rng = np.random.default_rng(seed + 200)
+    _, x = np.mgrid[0:ROWS, 0:COLS]
+    coast = ndimage.distance_transform_edt(land)
+    noise = _smooth_noise(rng, 4)
+    # the potential natural vegetation: mangrove on the shore, savanna in the dry west below the highlands,
+    # forest elsewhere
+    mangrove = np.clip(1.25 * np.exp(-(coast - 1.0)), 0, 0.9)
+    savanna = (1 / (1 + np.exp((x - 22 - 10 * (noise - 0.5)) / 3.0)) * (1 - np.clip((elevation - 0.6) / 0.2, 0, 1))
+               * (1 - mangrove))
+    forest = 1 - mangrove - savanna
+    potential = np.stack([forest, savanna, mangrove])
+    # converted land now follows the habitat's degradation; the cities are built-up land
+    anthropic = np.clip((1 - condition - 0.12) / 0.8, 0, 1)
+    built = np.where(urban, 0.85, 0.0)
+    anthropic = np.where(urban, 0.15 * anthropic, anthropic)
+    crops = anthropic * np.clip(0.2 + 0.8 * (1 - elevation) * noise, 0, 1)
+    pasture = anthropic - crops
+    # savanna and mangrove were converted more than forest, in proportion
+    natural = potential * np.array([1.0, 0.55, 0.7])[:, None, None]
+    natural = natural / natural.sum(axis=0) * (1 - anthropic - built)
+    cover = np.round(np.concatenate([natural, pasture[None], crops[None], built[None]]), 4)
+    past = np.round(potential * (1 - 0.35 * anthropic - built), 4)
+    # the human footprint (0-50; the pressures of Venter et al. 2016): built land 10, crops 7, pasture 4, roads
+    # 8 and their indirect pressure, and the population around the cities
+    road_dist = L["road_dist"]
+    roads = np.where(L["roads"], 8.0, 3.75 * np.exp(-(road_dist - 0.5)))
+    hfi = 10 * built + 7 * cover[4] + 4 * cover[3] + roads + 8 * np.clip(L["city_intensity"], 0, 1)
+    hfi = np.round(np.clip(hfi, 0, 50), 2)
+    ecoregions = np.where(mangrove > 0.3, 1, np.where(savanna > 0.5, 4, np.where(elevation > 0.55, 3, 2)))
+    # carbon in restored vegetation after 30 years (t/ha): wetter places grow more; savanna holds less, mangrove
+    # more
+    carbon = np.round((40 + 110 * L["humidity"]) * (forest + 0.35 * savanna + 1.3 * mangrove), 1)
+    return {"land_cover": cover, "past_cover": past, "footprint": hfi, "ecoregions": ecoregions,
+            "carbon_potential": carbon}
 
 
 def _grid(values, land, names=None):
@@ -135,6 +184,12 @@ def main() -> None:
     ls.write_raster(_grid(np.stack(L["species"]), land, SPECIES), OUT / "features.tif")
     ls.write_raster(_grid(np.stack([np.round(L["deforestation"], 3), np.round(L["fire"], 3)]), land,
                           ["deforestation", "fire"]), OUT / "threats.tif")
+    # the restoration tutorial
+    R = build_restoration(L)
+    ls.write_raster(_grid(R["land_cover"], land, COVER), OUT / "land_cover.tif")
+    ls.write_raster(_grid(R["past_cover"], land, NATURAL), OUT / "past_cover.tif")
+    for name in ("footprint", "ecoregions", "carbon_potential"):
+        ls.write_raster(_grid(R[name], land), OUT / f"{name}.tif")
     # rivers and roads as rasters (1 = present) for the maps of the documentation
     ls.write_raster(_grid(np.stack([L["river"], L["roads"]]).astype(np.float32), land, ["rivers", "roads"]),
                     OUT / "lines.tif")

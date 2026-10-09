@@ -9,7 +9,7 @@ from pathlib import Path
 
 EXAMPLES = {name: f"{name}.tif" for name in (
     "cost", "features", "protected", "urban", "condition", "regions", "carbon", "terminals", "threats", "elevation",
-    "lines")}
+    "lines", "land_cover", "past_cover", "footprint", "ecoregions", "carbon_potential")}
 
 
 def example_data(name: str = "features") -> Path:
@@ -20,7 +20,7 @@ def example_data(name: str = "features") -> Path:
 
     Parameters
     ----------
-    name : {"cost", "features", "protected", "urban", "condition", "regions", "carbon", "terminals", "threats", "elevation", "lines"}
+    name : {"cost", "features", "protected", "urban", "condition", "regions", "carbon", "terminals", "threats", "elevation", "lines", "land_cover", "past_cover", "footprint", "ecoregions", "carbon_potential"}
         ``"cost"``: land cost (thousand USD per km²), cheap in the mountains, dear near cities and roads;
         ``"features"``: habitat suitability (0-1) of eight features, a stack with the bands
         ``jaguar`` (widespread), ``lowland_tapir`` (river valleys), ``harpy_eagle`` (remote mountain
@@ -33,6 +33,13 @@ def example_data(name: str = "features") -> Path:
         mountain parks to link by a corridor (1); ``"threats"``: ``deforestation`` and ``fire``
         intensity (0-1); ``"elevation"``: relative elevation (0-1); ``"lines"``: the ``rivers`` and the
         ``roads`` (1), for maps.
+
+        For restoration plans (:func:`restoration_problem`): ``"land_cover"``: the share (0-1) of six
+        classes in every cell, the bands ``forest``, ``savanna``, ``mangrove`` (natural), ``pasture``,
+        ``cropland`` (anthropic) and ``urban``; ``"past_cover"``: the share of the three natural classes
+        in the past, before most of the conversion; ``"footprint"``: the human footprint index (0-50);
+        ``"ecoregions"``: four ecoregions (1 coast, 2 lowland forest, 3 montane forest, 4 savanna);
+        ``"carbon_potential"``: the carbon restored vegetation would hold after 30 years (t/ha).
 
     Returns
     -------
