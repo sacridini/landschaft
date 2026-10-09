@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.36.0] - 2026-10-09
+
 ### Added
 - Maps of out-of-core landscapes (`ls.Landscape(path, block_rows=...)`): `labels()` and `to_raster()`, which
   needed the whole raster, now return lazy (dask) rasters on the file's grid, one chunk per block: each block
