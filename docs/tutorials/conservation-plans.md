@@ -173,6 +173,8 @@ page = ls.plot(r, show=False).save("serra_verde_plan.html")
 - **Large problems**: `coarsen` and `refine`
   ([chapter 12.9](../learn/prioritization/together.md#large-problems)).
 - **Marxan**: `P.marxan` runs Marxan's own tables and annealing; `add_anneal_solver` solves a problem with it.
+- **Restoration**: how much of every converted cell to restore, for species, carbon and intactness:
+  [restoration priorities](restoration-plans.md).
 - **Recipes** for 30x30, restoration, offsets, regions and carbon:
   [chapter 12.10](../learn/prioritization/process.md#recipes).
 - The [API reference](../api/prioritization.md#optimization) lists every function.

@@ -201,6 +201,7 @@ Two further tools answer questions of proximity:
 | How connected is the habitat now, and what could it gain? | `ls.restoration_status` |
 | Which patches would add the most connectivity if restored? | `HabitatGraph(..., restoration=...)` |
 | Which habitat object is each point of the matrix closest to? | `ls.influence_zones`, `ls.proximity` |
+| How much of every converted cell to restore, for species, carbon and intactness? | `ls.prioritize.restoration_problem` ([tutorial](../tutorials/restoration-plans.md)) |
 
 !!! success "Key points"
     - Distance to habitat describes both edge exposure inside habitat and

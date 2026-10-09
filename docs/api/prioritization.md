@@ -309,10 +309,10 @@ budget: prioriactions's models (Salgado-Rojas et al. 2020), bit for bit, from ta
 How much of every converted cell to restore, for the most reduction of the species' extinction risk
 (and of the ecosystems' risk of collapse), carbon and ecological intactness within area targets and a
 budget, or the cheapest plan for a benefit: the restoration problem of plangea (Strassburg et al. 2020).
-The species-area curves are concave, so the optimum is found exactly, by linear programs with tangent
-planes of the curves; plangea's own procedure (benefit per cost per cell, the target in steps) is
+The species-area curves are concave, so the optimum is found and proven, by simplicial decomposition
+(linear programs over the cells, mixed by a small concave problem); plangea's own procedure (benefit per cost per cell, the target in steps) is
 `method="steps"`. The inputs come from `ls.original_vegetation`, `ls.sdm.area_of_habitat` and
-`ls.intactness_gradient`.
+`ls.intactness_gradient`. Tutorial: [restoration priorities](../tutorials/restoration-plans.md).
 
 ::: landschaft.prioritize.restoration_problem
 

@@ -181,6 +181,7 @@ nav:
       - Biodiversity analysis: tutorials/biodiversity.md
       - Conservation priorities: tutorials/prioritization.md
       - Optimized conservation plans: tutorials/conservation-plans.md
+      - Restoration priorities: tutorials/restoration-plans.md
       - Species distributions: tutorials/species-distributions.md
       - Land change simulation: tutorials/land-change-simulation.md
   - API reference:

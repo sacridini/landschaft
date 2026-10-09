@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Figures of the Learn chapters on conservation planning (docs/learn/prioritization*), computed with
+"""Figures of the Learn chapters on conservation planning (docs/learn/prioritization*) and of the tutorial on
+restoration plans (rest_*, docs/tutorials/restoration-plans.md), computed with
 ls.prioritize on Serra Verde (ls.prioritize.example_data). The numbers quoted in the text are written to
 build/prioritize_figures.json.
 
@@ -683,6 +684,362 @@ def prio_gap():
     NUM["gap"] = {"bound": float(lo.objective), "optimum": float(exact.cost), "loose": float(loose.cost),
                   "loose_bound": float(loose.bound), "loose_gap": loose.gap}
     save(fig, "prio_gap")
+
+
+# ----------------------------------------------------------------------------- restoration (tutorial)
+NATURAL = ["forest", "savanna", "mangrove"]
+ANTHROPIC = ["pasture", "cropland"]
+COVER_COLORS = {"forest": "#1f7a4d", "mangrove": "#2a78d6", "savanna": "#c79a1e", "pasture": "#9b59b6",
+                "cropland": "#eb6834", "urban": URBAN}
+SUITABILITY = {"jaguar": ["forest", "savanna"], "lowland_tapir": ["forest"], "harpy_eagle": ["forest"],
+               "maned_wolf": ["savanna"], "golden_lion_tamarin": ["forest"],
+               "neotropical_otter": ["forest", "mangrove"], "araucaria_forest": ["forest"], "mangrove": ["mangrove"]}
+CMAP_RESTORE = LinearSegmentedColormap.from_list("restore", ["#f3f7e9", "#c6e0a4", "#7fbf6a", "#2f8f4e", "#0b5a33"])
+
+
+def rest():
+    """The inputs and plans of the restoration tutorial (docs/tutorials/restoration-plans.md)."""
+    if "rest" in _CACHE:
+        return _CACHE["rest"]
+    d = {k: load(k) for k in ("land_cover", "past_cover", "footprint", "ecoregions", "carbon_potential", "regions")}
+    cover = d["land_cover"]
+    props = d["past_cover"] / d["past_cover"].sum("band")
+    eco_props = props.copy()
+    codes = d["ecoregions"].values
+    for code in np.unique(codes[np.isfinite(codes)]):
+        inside = codes == code
+        eco_props.values[:, inside] = np.nanmean(props.values[:, inside], axis=1)[:, None]
+    d["eco_props"] = eco_props
+    d["veg"] = ls.original_vegetation(cover, NATURAL, ANTHROPIC, past=d["past_cover"], ecoregions=eco_props)
+    d["aoh"] = ls.sdm.area_of_habitat((FEATURES > 0).astype("float32"), cover, NATURAL, suitability=SUITABILITY,
+                                      original=d["veg"])
+    d["eco"] = P.ecosystem_areas(cover, NATURAL, ANTHROPIC, d["ecoregions"])
+    d["reduction"] = ((4 * cover.sel(band="pasture") + 7 * cover.sel(band="cropland"))
+                      / cover.sel(band=ANTHROPIC).sum("band")).fillna(0)
+    d["p"] = P.restoration_problem(d["veg"]).add_extinction_risk_benefit(d["aoh"], name="species").add_area_target(100)
+    d["plan"] = d["p"].solve()
+    _CACHE["rest"] = d
+    return d
+
+
+def cover_map(ax, shares, names, title):
+    """The dominant class of every cell."""
+    base_map(ax, title, relief=False)
+    v = np.nan_to_num(shares.values)
+    top = np.argmax(v, axis=0).astype(float)
+    top[~LAND_MASK | (v.sum(axis=0) <= 0)] = np.nan
+    ax.imshow(top, cmap=ListedColormap([COVER_COLORS[n] for n in names]), vmin=-0.5, vmax=len(names) - 0.5,
+              interpolation="nearest")
+
+
+@figure
+def rest_landscape():
+    d = rest()
+    cover = d["land_cover"]
+    names = [str(b) for b in cover.band.values]
+    fig, axes = plt.subplots(1, 3, figsize=(14, 3.6))
+    cover_map(axes[0], cover, names, "A. Land cover today (largest share)")
+    continuous(axes[1], cover.sel(band=ANTHROPIC).sum("band").values, CMAP_COST, "B. Pasture and cropland",
+               "share of the cell", vmin=0, vmax=1)
+    continuous(axes[2], d["footprint"].values, CMAP_THREAT, "C. Human footprint", "index (0-50)", zero_empty=False)
+    legend_below(fig, [Patch(color=COVER_COLORS[n], label=n) for n in names], y=0.1)
+    NUM["rest_landscape"] = {"anthropic_km2": float(cover.sel(band=ANTHROPIC).sum()),
+                             "urban_km2": float(cover.sel(band="urban").sum())}
+    save(fig, "rest_landscape")
+
+
+@figure
+def rest_vegetation():
+    d = rest()
+    veg = d["veg"]
+    fig, axes = plt.subplots(1, 4, figsize=(15.5, 3.3), gridspec_kw={"wspace": 0.25})
+    cover_map(axes[0], d["land_cover"].sel(band=NATURAL), NATURAL, "A. Natural cover today")
+    cover_map(axes[1], veg.original, NATURAL, "B. Original vegetation")
+    continuous(axes[2], veg.restore.sel(band="savanna").values, CMAP_BIO, "C. Restored land: savanna",
+               "share", vmin=0, vmax=1, zero_empty=False)
+    base_map(axes[3], "D. Source of the proportions", relief=False)
+    src = np.where(np.nan_to_num(veg.anthropic.values) > 0, veg.source.values, np.nan)
+    ax = axes[3]
+    ax.imshow(src, cmap=ListedColormap(["#a9d5b3", SERIES[1]]), vmin=-0.5, vmax=1.5, interpolation="nearest")
+    ax.legend(handles=[Patch(color="#a9d5b3", label="past cover"), Patch(color=SERIES[1], label="ecoregion")],
+              loc="upper center", bbox_to_anchor=(0.5, -0.02), ncol=2, fontsize=8)
+    fig.legend(handles=[Patch(color=COVER_COLORS[n], label=n) for n in NATURAL], loc="upper center", ncol=3,
+               bbox_to_anchor=(0.3, 0.1), fontsize=8.5)
+    save(fig, "rest_vegetation")
+
+
+@figure
+def rest_habitat():
+    d = rest()
+    aoh, cover, veg = d["aoh"], d["land_cover"], d["veg"]
+    sp_ = "golden_lion_tamarin"
+    rng_ = (FEATURES.sel(band=sp_).values > 0)
+    now = np.where(rng_, np.nan_to_num(cover.sel(band="forest").values), 0)
+    orig = np.where(rng_, np.nan_to_num(veg.original.sel(band="forest").values), 0)
+    fig = plt.figure(figsize=(16, 3.4))
+    gs = fig.add_gridspec(1, 5, width_ratios=[1, 1, 1.12, 0.8, 1.15], wspace=0.08)
+    axes = [fig.add_subplot(gs[0, k]) for k in (0, 1, 2, 4)]
+    for ax, v, t in ((axes[0], now, "A. Tamarin habitat today"), (axes[1], orig, "B. ... before conversion"),
+                     (axes[2], np.asarray(aoh.gain_map(sp_).values), "C. Gained per cell restored")):
+        continuous(ax, v, CMAP_BIO, t, "share of the cell" if ax is axes[2] else None, vmin=0, vmax=1,
+                   cbar=ax is axes[2])
+        for a in (axes[0], axes[1], axes[2]):
+            a.set_xlim(20, 75)
+            a.set_ylim(58, 20)
+    t = aoh.table
+    kept = (t["current"] / t["potential"]).to_numpy()
+    order = np.argsort(kept)
+    ax = axes[3]
+    labs = [str(s).replace("_", " ").capitalize() for s in t["species"]]
+    ax.barh(np.arange(len(t)), kept[order] * 100, color=SELECTED, height=0.6)
+    ax.barh(np.arange(len(t)), (1 - kept[order]) * 100, left=kept[order] * 100, color="#e4e2dc", height=0.6)
+    ax.set_yticks(np.arange(len(t)), [labs[i] for i in order])
+    ax.set_xlim(0, 100)
+    ax.set_xlabel("share of the potential habitat left today (%)")
+    ax.set_title("D. Habitat left of what there was")
+    style_chart(ax, "x")
+    for i, k in enumerate(order):
+        ax.text(kept[k] * 100 - 2, i, f"{kept[k]:.0%}", va="center", ha="right", color="white", fontsize=8)
+    NUM["rest_habitat"] = t[["species", "current", "potential"]].round(2).to_dict("list")
+    save(fig, "rest_habitat")
+
+
+@figure
+def rest_risk():
+    d = rest()
+    rr = P.eval_risk_reduction(d["p"], d["plan"]).table
+    labs = [str(x).replace("_", " ").capitalize() for x in rr["species"]]
+    fig = plt.figure(figsize=(16, 3.8))
+    gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 1], wspace=0.45)
+    ax = fig.add_subplot(gs[0, 0])
+    r = np.linspace(0, 1, 300)
+    ax.plot(r * 100, 1 - r ** 0.25, color=INK2, lw=2)
+    for k, row in rr.iterrows():
+        r0 = row.current / row.potential
+        ax.plot(r0 * 100, 1 - r0 ** 0.25, "o", color=SERIES[0], ms=8, mec="white", mew=1.5, zorder=3)
+        if row.risk_before > 0.03:
+            dy = {"lowland_tapir": -14, "neotropical_otter": 8}.get(str(row.species), 4)
+            ax.annotate(labs[k], (r0 * 100, 1 - r0 ** 0.25), xytext=(8, dy), textcoords="offset points",
+                        fontsize=8, color=INK2)
+    ax.set_xlim(30, 101)
+    ax.set_ylim(-0.005, 0.27)
+    ax.set_xlabel("habitat left, share of the potential (%)")
+    ax.set_ylabel("extinction risk, 1 - r^0.25")
+    ax.set_title("A. The species on the curve today")
+    style_chart(ax, "both")
+    ax = fig.add_subplot(gs[0, 1])
+    order = np.argsort(rr["risk_before"].to_numpy())
+    for i, k in enumerate(order):
+        b, a = rr["risk_before"].iloc[k], rr["risk_after"].iloc[k]
+        ax.plot([a, b], [i, i], color=GRID, lw=3, zorder=1)
+        ax.plot(b, i, "o", color=SERIES[1], ms=8, zorder=2)
+        ax.plot(a, i, "o", color=SELECTED, ms=8, zorder=3)
+    ax.set_yticks(np.arange(len(order)), [labs[k] for k in order])
+    ax.set_xlabel("extinction risk")
+    ax.set_title("B. Risk now and after 100 km²")
+    ax.legend(handles=[plt.Line2D([], [], marker="o", ls="", color=SERIES[1], label="now"),
+                       plt.Line2D([], [], marker="o", ls="", color=SELECTED, label="after the plan")],
+              fontsize=8, loc="lower right")
+    style_chart(ax, "x")
+    ax = fig.add_subplot(gs[0, 2])
+    areas = [10, 25, 50, 75, 100, 150, 200, 300, 400, 600]
+    base = P.restoration_problem(d["veg"]).add_extinction_risk_benefit(d["aoh"])
+    vals = [base.add_area_target(a).solve().benefit for a in areas]
+    uni = [base.add_area_target(a).uniform().benefit for a in areas]
+    ax.plot(areas, vals, "-o", color=SELECTED, lw=2, ms=5, label="optimal plan")
+    ax.plot(areas, uni, "-o", color=SERIES[1], lw=2, ms=5, label="same share everywhere")
+    ax.set_xlabel("area restored (km²)")
+    ax.set_ylabel("extinction risk avoided (sum)")
+    ax.set_title("C. Returns diminish with the area")
+    ax.legend(fontsize=8)
+    style_chart(ax, "both")
+    NUM["rest_curve"] = {"areas": areas, "optimal": vals, "uniform": uni}
+    save(fig, "rest_risk")
+
+
+@figure
+def rest_plan():
+    d = rest()
+    p, plan = d["p"], d["plan"]
+    uni = p.uniform()
+    steps = p.solve(method="steps", steps=10)
+    fig = plt.figure(figsize=(15, 3.6))
+    gs = fig.add_gridspec(1, 4, width_ratios=[1, 1.12, 0.3, 1.1], wspace=0.08)
+    a, b, c = (fig.add_subplot(gs[0, k]) for k in (0, 1, 3))
+    continuous(a, plan.restored.values, CMAP_RESTORE, "A. The optimal plan (100 km²)", vmin=0, vmax=1, cbar=False)
+    overlay(a, np.nan_to_num(URBAN_R.values), URBAN, 0.9)
+    continuous(b, uni.restored.values, CMAP_RESTORE, "B. The same share everywhere", "share of the cell restored",
+               vmin=0, vmax=1)
+    overlay(b, np.nan_to_num(URBAN_R.values), URBAN, 0.9)
+    t0 = P.eval_risk_reduction(p, plan).table
+    t1 = P.eval_risk_reduction(p, uni).table
+    x = np.arange(len(t0))
+    c.bar(x - 0.2, t0["reduction"], 0.4, color=SELECTED, label=f"optimal ({plan.benefit:.3f})")
+    c.bar(x + 0.2, t1["reduction"], 0.4, color=SERIES[1], label=f"same share ({uni.benefit:.3f})")
+    c.set_xticks(x, [str(s).replace("_", " ").capitalize() for s in t0["species"]], rotation=35, ha="right")
+    c.set_ylabel("extinction risk avoided")
+    c.set_title("C. Risk avoided per species")
+    c.legend(fontsize=8)
+    style_chart(c)
+    NUM["rest_plan"] = {"benefit": plan.benefit, "bound": plan.bound, "uniform": uni.benefit,
+                        "steps10": steps.benefit, "cells": int((plan.values > 0).sum()),
+                        "full": int((plan.values >= p.upper - 1e-9).sum())}
+    save(fig, "rest_plan")
+
+
+@figure
+def rest_intactness():
+    d = rest()
+    q = ls.intactness(d["footprint"], radius=3)
+    g = ls.intactness_gradient(d["footprint"], d["reduction"], radius=3)
+    fig, axes = plt.subplots(1, 3, figsize=(14, 3.4))
+    continuous(axes[0], d["footprint"].values, CMAP_THREAT, "A. Human footprint", "index", zero_empty=False)
+    continuous(axes[1], q.values, CMAP_BIO, "B. Ecological intactness", "0-1", vmin=0, vmax=1, zero_empty=False)
+    g_ = np.where(np.nan_to_num(d["veg"].anthropic.values) > 0, g.values, np.nan)
+    continuous(axes[2], g_, CMAP_VALUE, "C. Intactness gained per cell restored", "gain")
+    NUM["rest_intactness"] = {"mean": float(q.mean()), "grad_max": float(g.max())}
+    save(fig, "rest_intactness")
+
+
+def _benefits_alone(d):
+    if "rest_alone" in _CACHE:
+        return _CACHE["rest_alone"]
+    base = P.restoration_problem(d["veg"]).add_area_target(100)
+    carbon = d["carbon_potential"] * 100 / 1e6
+    adds = {
+        "species": lambda q, w=1.0: q.add_extinction_risk_benefit(d["aoh"], weight=w, name="species"),
+        "ecosystems": lambda q, w=1.0: q.add_extinction_risk_benefit(d["eco"], weight=w, name="ecosystems"),
+        "carbon": lambda q, w=1.0: q.add_linear_benefit(carbon, weight=w, name="carbon"),
+        "intactness": lambda q, w=1.0: q.add_intactness_benefit(d["footprint"], d["reduction"], radius=3, weight=w,
+                                                                name="intactness"),
+    }
+    alone = {k: f(base).solve() for k, f in adds.items()}
+    _CACHE["rest_alone"] = (base, adds, alone)
+    return _CACHE["rest_alone"]
+
+
+@figure
+def rest_benefits():
+    d = rest()
+    base, adds, alone = _benefits_alone(d)
+    best = {k: s.benefit for k, s in alone.items()}
+    multi = base
+    for k, f in adds.items():
+        multi = f(multi, 1 / best[k])
+    mp = multi.solve()
+    fig = plt.figure(figsize=(16, 3.6))
+    gs = fig.add_gridspec(1, 5, width_ratios=[1, 1, 1, 0.25, 1.15], wspace=0.08)
+    axes = [fig.add_subplot(gs[0, k]) for k in (0, 1, 2, 4)]
+    for ax, s, t in ((axes[0], alone["species"], "A. Species only"), (axes[1], alone["carbon"], "B. Carbon only"),
+                     (axes[2], mp, "C. All four benefits")):
+        continuous(ax, s.restored.values, CMAP_RESTORE, t, vmin=0, vmax=1, cbar=False)
+        overlay(ax, np.nan_to_num(URBAN_R.values), URBAN, 0.9)
+    ax = axes[3]
+    ws = np.linspace(0, 1, 11)
+    pts = []
+    for w in ws:
+        q = adds["carbon"](adds["species"](base, w / best["species"]), (1 - w) / best["carbon"])
+        v = q.solve().benefits.set_index("benefit")["value"]
+        pts.append((v["carbon"] / best["carbon"], v["species"] / best["species"]))
+    pts = np.array(pts)
+    ax.plot(pts[:, 0] * 100, pts[:, 1] * 100, "-o", color=SERIES[0], lw=2, ms=5)
+    for w, (cx, sy) in zip(ws, pts):
+        if round(w, 1) in (0.0, 0.2, 1.0):
+            ax.annotate(f"w = {w:.1f}", (cx * 100, sy * 100), xytext=(-6, -14), textcoords="offset points",
+                        fontsize=8, color=INK2, ha="right" if w > 0 else "center")
+    ax.margins(x=0.08, y=0.08)
+    ax.set_xlabel("carbon, % of its best")
+    ax.set_ylabel("species, % of their best")
+    ax.set_title("D. Species against carbon")
+    style_chart(ax, "both")
+    NUM["rest_benefits"] = {"alone": best, "multi": {k: float(v) / best[k] for k, v in mp.benefits.set_index("benefit")["value"].items()},
+                            "front": pts.tolist()}
+    save(fig, "rest_benefits")
+
+
+@figure
+def rest_budget():
+    d = rest()
+    p = d["p"]
+    budgets = [1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000, 12000]
+    by_budget = [p.add_budget(b, COST).solve() for b in budgets]
+    cheap = p.add_min_cost_objective(0.95 * d["plan"].benefit, COST).solve()
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 3.8), gridspec_kw={"width_ratios": [1, 1.1], "wspace": 0.4})
+    continuous(axes[0], cheap.restored.values, CMAP_RESTORE, "A. Cheapest for 95 % of the benefit",
+               "share restored", vmin=0, vmax=1)
+    overlay(axes[0], np.nan_to_num(URBAN_R.values), URBAN, 0.9)
+    ax = axes[1]
+    ax.plot(np.array(budgets) / 1000, [s.benefit for s in by_budget], "-o", color=SELECTED, lw=2, ms=5,
+            label="most benefit for the budget")
+    ax.axhline(d["plan"].benefit, color=INK2, lw=1, ls=":")
+    ax.text(1.0, d["plan"].benefit + 0.004, "100 km² without a budget", fontsize=8, color=INK2)
+    ax.plot(cheap.cost / 1000, cheap.benefit, "o", color=TARGET, ms=8, label="cheapest plan for 95 %")
+    ax.set_xlabel("budget (million USD)")
+    ax.set_ylabel("extinction risk avoided")
+    ax.set_title("B. What each budget buys (at most 100 km²)")
+    ax.legend(fontsize=8, loc="lower right")
+    style_chart(ax, "both")
+    plan_cost = float(np.nansum(np.nan_to_num(d["plan"].restored.values) * np.nan_to_num(COST.values)))
+    NUM["rest_budget"] = {"budgets": budgets, "benefit": [s.benefit for s in by_budget], "cheap_cost": cheap.cost,
+                          "cheap_area": cheap.area, "plan_cost": plan_cost}
+    save(fig, "rest_budget")
+
+
+@figure
+def rest_regions():
+    d = rest()
+    reg = d["regions"]
+    rp = (P.restoration_problem(d["veg"]).add_extinction_risk_benefit(d["aoh"])
+            .add_area_target({1: 30, 2: 40, 3: 30}, regions=reg)).solve()
+    fig, axes = plt.subplots(1, 3, figsize=(14, 3.6), gridspec_kw={"width_ratios": [1, 1, 0.8]})
+    rv = reg.values
+    edges = np.zeros_like(rv, dtype=bool)
+    edges[:, 1:] |= (rv[:, 1:] != rv[:, :-1]) & np.isfinite(rv[:, 1:]) & np.isfinite(rv[:, :-1])
+    for ax, s, t in ((axes[0], d["plan"], "A. One target for the landscape"),
+                     (axes[1], rp, "B. A target in every region")):
+        continuous(ax, s.restored.values, CMAP_RESTORE, t, vmin=0, vmax=1, cbar=False)
+        overlay(ax, edges, INK2, 0.8)
+        for code, (yy, xx) in {1: (8, 6), 2: (8, 40), 3: (8, 75)}.items():
+            ax.text(xx, yy, f"region {code}", fontsize=8, color=INK2)
+    ax = axes[2]
+    x = np.arange(3)
+    a0 = [float(np.nansum(np.where(rv == r, d["plan"].restored.values, 0))) for r in (1, 2, 3)]
+    a1 = [float(np.nansum(np.where(rv == r, rp.restored.values, 0))) for r in (1, 2, 3)]
+    ax.bar(x - 0.2, a0, 0.4, color=SERIES[0], label="landscape target")
+    ax.bar(x + 0.2, a1, 0.4, color=SELECTED, label="regional targets")
+    ax.set_xticks(x, ["region 1", "region 2", "region 3"])
+    ax.set_ylabel("area restored (km²)")
+    ax.set_title("C. Where the 100 km² go")
+    ax.legend(fontsize=8)
+    style_chart(ax)
+    NUM["rest_regions"] = {"benefit": rp.benefit, "plain": d["plan"].benefit, "area_plain": a0, "area_regions": a1}
+    save(fig, "rest_regions")
+
+
+@figure
+def rest_uncertainty():
+    d = rest()
+    plan = d["plan"]
+    tabs = {}
+    for z in (0.15, 0.25, 0.35):
+        q = P.restoration_problem(d["veg"]).add_extinction_risk_benefit(d["aoh"], z=z).add_area_target(100)
+        tabs[z] = P.eval_risk_reduction(q, plan).table.set_index("species")["reduction"]
+    ru = P.eval_risk_reduction(d["p"], plan, z_sd=0.1)
+    fig, ax = plt.subplots(figsize=(8, 3.6))
+    names = list(tabs[0.25].index)
+    x = np.arange(len(names))
+    mid = tabs[0.25].to_numpy()
+    lo, hi = np.minimum(tabs[0.15], tabs[0.35]).to_numpy(), np.maximum(tabs[0.15], tabs[0.35]).to_numpy()
+    ax.bar(x, mid, 0.55, color=SELECTED, label="z = 0.25")
+    ax.errorbar(x, mid, yerr=[mid - lo, hi - mid], fmt="none", ecolor=INK, capsize=4, lw=1.2,
+                label="z from 0.15 to 0.35")
+    ax.set_xticks(x, [str(s).replace("_", " ").capitalize() for s in names], rotation=35, ha="right")
+    ax.set_ylabel("extinction risk avoided")
+    ax.set_title(f"Risk avoided and the exponent z (total {ru.total:.3f} ± {ru.sd:.3f})")
+    ax.legend(fontsize=8)
+    style_chart(ax)
+    NUM["rest_uncertainty"] = {"total": ru.total, "sd": ru.sd}
+    save(fig, "rest_uncertainty")
 
 
 def main():

@@ -115,6 +115,14 @@ and follow along.
     The cheapest plan that meets every target: reserves, compactness,
     budgets, importance, actions against threats, and a report.
 
+-   :material-sprout-outline:{ .lg .middle } **[Restoration priorities](restoration-plans.md)**
+
+    ---
+
+    How much of every converted cell to restore: original vegetation,
+    habitat gains, extinction risk, carbon, intactness, budgets, regions
+    and uncertainty.
+
 -   :material-map-marker-radius-outline:{ .lg .middle } **[Species distributions](species-distributions.md)**
 
     ---
