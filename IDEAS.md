@@ -2492,6 +2492,40 @@ Fases, nesta ordem; ao fim de cada uma: testes, commit (versão e push no fim, c
 * **F. Escala global**: medir em milhões de células e milhares de espécies (dados sintéticos), perfilar e
   otimizar (oráculo do vértice sem LP quando só há uma linha, produtos com o ganho em C++/OpenMP).
 
+### Andamento dos itens abertos (2026-10-09)
+* **A feita** (commit 0cd53bc): blocos de colunas por ação (`action`, `natural`, `threat` por coluna), ganho com
+  sinal, `base` (habitat sem o plano) no lugar de `current`, `HabitatAreas.loss` (`area_of_habitat(...,
+  loss=True)`, a composição natural atual pelo `rest_habitat_gain`), `ecosystem_areas` com `loss`, alvos por
+  ação (`action=`: uma ação, `"all"`, `"net"`), valores e custos por ação (mapeamento), `increase` na
+  intactness, mapas `conserved`/`converted` e `areas`. Paridade: o laço do `scen` para D e C (C corrigido) no
+  harness (`SCEN_CD_CASES`): planos 1e-12, camadas 1e-7. O caso C com toda a terra natural é degenerado (o
+  contrafactual zera o habitat: inclinações em A ~ 1e-15 são ruído); os casos C usam as 7 primeiras colunas.
+  * Bug novo do plangea: sob C/D o `harmonize_oa` só calcula a vegetação original nos pixels do problema
+    (naturais), então o potencial de habitat depende do tipo de problema (pixels todo convertidos não contam).
+  * R+D: colunas separadas para restaurar (vegetação original) e converter (cobertura natural atual) na mesma
+    célula; o plangea usa uma só variável por pixel com uma só mistura (a atual onde há natural): sem paridade
+    por desenho.
+* **B feita** (6c8bc8c): `add_projected_change` (R+D: direção por região e linhas da variação líquida; só R:
+  compensação `sparable`, sem metas negativas; só D: as demandas), `relative=True`, `add_linear_target`,
+  `ecosystem_targets` exato (multiplicador por bissecção, KKT nos testes) e `steps` (paridade 1e-12 com o
+  `harmonize_sr_ecosys` no Gurobi).
+* **C feita** (c22dc00): `tradeoff(levels, nested, targets, method, steps)`, `RestorationTradeOff` (tabela,
+  planos, gradientes por ação; `best()`), `compare_weights` e `mean_sd`. O `_solve_steps` virou uma
+  sequência de níveis (linhas que crescem: incremento/passos; as outras: a parte do que falta). Paridade da
+  curva em passos com o refresh corrigido (empates entre unidades de ganhos iguais comparados pela soma).
+* **D feita** (12b5f91): `form="exact"`, minorização sucessiva (`_solve_mm`) com termos lineares com teto
+  levantados no SD (`_Capped`), limite pela secante (`rest_intactness_secant`). Status `"local"`: gaps de 2 a
+  20 % nos testes (a secante sobre toda a faixa é frouxa; apertar exigiria branch-and-bound espacial).
+* **E feita** (c61e79e): regula falsi de Illinois no orçamento: 11 resoluções onde a bissecção fazia 26.
+* **F feita**: medido com `tools/benchmark_restoration.py` (sintético, núcleos P, 11 threads). Antes: 10⁶ x 2000
+  (3,8 x 10⁷ ganhos) 1,9 s; 4 x 10⁶ x 4000 (1,5 x 10⁸) 8,3 s de solve + 5,6 s de montagem (HiGHS 2,5 s, o
+  `vtype` como array de strings 1,7 s, produtos do scipy numa thread 3,4 s, seleção de colunas do scipy).
+  Agora: oráculo do vértice por mochila fracionária (`rest_knapsack`, seleção ponderada, só com uma linha de
+  coeficientes >= 0), produtos `rest_csr_matvec`/`rest_csr_rmatvec` (OpenMP; a transposta por somas locais
+  por thread), corte de colunas `rest_csr_select_columns`, sem a matriz `hab` guardada: 0,7 s; 3,4 s + 0,6 s;
+  9 x 10⁶ x 5000 (4,3 x 10⁸) 9,9 s, todos provados a 1e-7; com 10 metas por região (HiGHS) 10⁶ x 2000 em
+  1,5 s. Fica: a transposta (0,23 s por chamada a 1,5 x 10⁸) poderia usar uma CSC guardada (mais memória).
+
 ### Não portar
 O JSON de configuração e o cache de pastas do `harmonize` (a nossa E/S faz isso); o deslocamento
 `b + |min b| + 1` dos benefícios (muda o ranking de forma arbitrária); o "power range collapse" (reescala

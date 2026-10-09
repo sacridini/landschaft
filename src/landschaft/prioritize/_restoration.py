@@ -52,6 +52,47 @@ _SHARE = {"restore": "restorable", "conserve": "conservable", "convert": "conver
 
 # ----------------------------------------------------------------------------- inputs
 
+def _select(m: sp.csr_matrix, rows: np.ndarray, cells: np.ndarray) -> sp.csr_matrix:
+    """The rows ``rows`` of a species x cells matrix and the columns ``cells`` (sorted), as CSR with
+    sorted indices: a remap of the column indices in C++ (scipy's column selection is slow at
+    millions of cells)."""
+    from .. import _core, _threads
+
+    if rows.size != m.shape[0] or (rows != np.arange(m.shape[0])).any():
+        m = m[rows]
+    if not m.has_sorted_indices:
+        m = m.sorted_indices()
+    pos = np.full(m.shape[1], -1, dtype=np.int64)
+    pos[cells] = np.arange(cells.size)
+    indptr, indices, data = _core.rest_csr_select_columns(m.indptr, m.indices, m.data, m.shape[0], pos,
+                                                          _threads.resolve(None))
+    if indices.size < 2**31:  # int32 indices both, or scipy widens them all
+        indptr = indptr.astype(np.int32)
+    out = sp.csr_matrix((data, indices, indptr), shape=(m.shape[0], cells.size), copy=False)
+    out.has_sorted_indices = True
+    return out
+
+
+def _mv(g: sp.csr_matrix, x: np.ndarray) -> np.ndarray:
+    """G x, in parallel for large matrices."""
+    if g.nnz < 200_000:
+        return g @ x
+    from .. import _core, _threads
+
+    return _core.rest_csr_matvec(g.indptr, g.indices, g.data, g.shape[0], np.ascontiguousarray(x, dtype=np.float64),
+                                 _threads.resolve(None))
+
+
+def _rmv(g: sp.csr_matrix, y: np.ndarray) -> np.ndarray:
+    """G' y, in parallel for large matrices."""
+    if g.nnz < 200_000:
+        return g.T @ y
+    from .. import _core, _threads
+
+    return _core.rest_csr_rmatvec(g.indptr, g.indices, g.data, g.shape[0], g.shape[1],
+                                  np.ascontiguousarray(y, dtype=np.float64), _threads.resolve(None))
+
+
 def _grid_values(data, what: str) -> tuple[xr.DataArray | None, np.ndarray]:
     if isinstance(data, (str, bytes)) or hasattr(data, "__fspath__"):
         import landschaft as ls
@@ -134,7 +175,6 @@ class _Risk:
     current: np.ndarray
     potential: np.ndarray
     gain: sp.csr_matrix  # species x columns: habitat per unit share, signed
-    hab: sp.csr_matrix  # species x columns: the same per unit of the cell's area (plangea's hab_values)
     z: np.ndarray  # one exponent per species
     discount: np.ndarray
     base: np.ndarray  # the habitat without the plan
@@ -286,35 +326,30 @@ class RestorationProblem:
         keep = np.flatnonzero(table["valid"].to_numpy(bool) & (table["potential"].to_numpy(np.float64) > 0))
         current = table["current"].to_numpy(np.float64)[keep].copy()
         base = current.copy()
-        blocks, habs = [], []
+        blocks = []
         for code, act in enumerate(ACTIONS):
             cols = np.flatnonzero(self.action == code)
             if cols.size == 0:
                 continue
-            src = gain if act == "restore" else loss
-            g = sp.csr_matrix(src)[keep][:, self.index[cols]].tocsr()
-            g.sort_indices()
-            hab = g.copy()
-            hab.data = hab.data / self.area[cols][hab.indices]
+            g = _select(sp.csr_matrix(gain if act == "restore" else loss), keep, self.index[cols])
             if act == "restore":
-                g = g.multiply(sp.csr_matrix((1.0 - d[keep])[:, None])).tocsr()
-                hab = hab.multiply(sp.csr_matrix((1.0 - d[keep])[:, None])).tocsr()
+                if (d[keep] != 0).any():
+                    g.data = g.data * np.repeat(1.0 - d[keep], np.diff(g.indptr))
             elif act == "conserve":
                 # without the plan the natural land of the units is lost (by the threat): conserving keeps it
                 base = base - g @ (self.threat[cols] * self.natural[cols])
-                w = sp.diags(self.threat[cols])
-                g, hab = (g @ w).tocsr(), (hab @ w).tocsr()
+                g.data = g.data * self.threat[cols][g.indices]
             else:
-                g, hab = -g, -hab
+                g.data = -g.data
             blocks.append(g)
-            habs.append(hab)
-        gd = sp.hstack(blocks).tocsr() if len(blocks) > 1 else blocks[0]
-        hb = sp.hstack(habs).tocsr() if len(habs) > 1 else habs[0]
-        gd.sort_indices()
-        hb.sort_indices()
+        if len(blocks) > 1:
+            gd = sp.hstack(blocks).tocsr()
+            gd.sort_indices()
+        else:
+            gd = blocks[0]
         risk = _Risk(name=self._name(name, "extinction_risk"), weight=float(weight), species=tuple(names[keep]),
                      current=current, potential=table["potential"].to_numpy(np.float64)[keep].copy(), gain=gd,
-                     hab=hb, z=zs[keep].copy(), discount=d[keep], base=np.maximum(base, 0.0))
+                     z=zs[keep].copy(), discount=d[keep], base=np.maximum(base, 0.0))
         return replace(self, benefits=self.benefits + (risk,))
 
     def add_linear_benefit(self, values, weight: float = 1.0, name: str | None = None,
@@ -1294,7 +1329,7 @@ def _h(r: np.ndarray, z: float) -> np.ndarray:
 
 
 def _ratio(b: _Risk, x: np.ndarray) -> np.ndarray:
-    return (b.base + b.gain @ x) / b.potential
+    return (b.base + _mv(b.gain, x)) / b.potential
 
 
 def _benefit_value(p: RestorationProblem, b, x: np.ndarray) -> float:
@@ -1406,6 +1441,19 @@ def _feasible_set(p: RestorationProblem) -> tuple[sp.csr_matrix, np.ndarray, tup
     return sp.vstack(rows).tocsr(), np.concatenate(rhs), tuple(sense)
 
 
+def _knapsack_vertex(c: np.ndarray, row: tuple, lb: np.ndarray, ub: np.ndarray) -> np.ndarray:
+    """The best vertex of the plans with one row a x (sense) cap: a fractional knapsack (C++)."""
+    from .. import _core
+
+    a, cap, sense = row
+    if not math.isfinite(cap):
+        return np.where(c > 0, ub, lb)
+    ok, x = _core.rest_knapsack(np.ascontiguousarray(c, dtype=np.float64), a, lb, ub, cap, sense)
+    if not ok:
+        raise RuntimeError("the restoration problem is infeasible (targets or budget)")
+    return x
+
+
 def _positive(g: sp.csr_matrix) -> sp.csr_matrix:
     return g if g.nnz == 0 or g.data.min() >= 0 else g.maximum(0.0).tocsr()
 
@@ -1448,6 +1496,12 @@ def _solve_sd(p: RestorationProblem, extra: _Capped | None = None) -> tuple[np.n
         m_c = extra.A.shape[0]
     rows, rhs, sense = _feasible_set(p)
     lb_x = p._lb()
+    # a set of plans of one row of coefficients >= 0 (or none): its vertices without a linear program
+    one_row = None
+    if rows.shape[0] == 0:
+        one_row = (np.zeros(n), math.inf, "<=")
+    elif rows.shape[0] == 1 and (rows.data >= 0).all():
+        one_row = (rows.toarray().ravel(), float(rhs[0]), sense[0])
     floors = [np.maximum(1e-9 * (b.base + _positive(b.gain) @ p.upper) / b.potential, 1e-15) for b in risks]
     caps = [np.maximum(b.potential - b.base, 0.0) for b in risks]
     # the least habitat gained: below 0 for species that conversion takes habitat from
@@ -1469,6 +1523,8 @@ def _solve_sd(p: RestorationProblem, extra: _Capped | None = None) -> tuple[np.n
         """The best vertex for the objective cx on the units and dy on the lifted species."""
         cols = [(i, np.flatnonzero(lifted[i])) for i in range(len(risks))]
         m_y = sum(s.size for _, s in cols) + m_c
+        if m_y == 0 and one_row is not None:
+            return _knapsack_vertex(cx, one_row, lb_x, p.upper), True
         if m_y == 0:
             A, obj, lb, ub, b_rhs, b_sense = rows, cx, lb_x, p.upper, rhs, sense
         else:
@@ -1507,7 +1563,7 @@ def _solve_sd(p: RestorationProblem, extra: _Capped | None = None) -> tuple[np.n
         nonlocal lv, yc
         verts.append(sp.csr_matrix(v[None, :]))
         for i, b in enumerate(risks):
-            gv[i] = np.hstack([gv[i], (b.gain @ v)[:, None]])
+            gv[i] = np.hstack([gv[i], _mv(b.gain, v)[:, None]])
             lifted[i] |= (caps[i] > 0) & (gv[i][:, -1] >= caps[i] * (1.0 - 1e-12))
         y = np.minimum(extra.A @ v, extra.cap) if m_c else np.zeros(0)
         yc = np.hstack([yc, y[:, None]])
@@ -1542,7 +1598,7 @@ def _solve_sd(p: RestorationProblem, extra: _Capped | None = None) -> tuple[np.n
         lam = lam / lam.sum() if lam.sum() > 0 else lam0
         return lam if f(lam) <= f(lam0) else lam0
 
-    add_vertex(vertex(lin + sum(b.gain.T @ slopes(i, np.zeros(b.base.size)) for i, b in enumerate(risks)),
+    add_vertex(vertex(lin + sum(_rmv(b.gain, slopes(i, np.zeros(b.base.size))) for i, b in enumerate(risks)),
                       [slopes(i, np.zeros(b.base.size)) for i, b in enumerate(risks)])[0])
     bound, best_x, best = math.inf, None, -math.inf
     status, it = "iteration_limit", 0
@@ -1568,12 +1624,12 @@ def _solve_sd(p: RestorationProblem, extra: _Capped | None = None) -> tuple[np.n
         for i, b in enumerate(risks):
             free = np.where(lifted[i], 0.0, dy[i])
             if free.any():
-                cx += b.gain.T @ free
+                cx += _rmv(b.gain, free)
         lift_val = [np.where(lifted[i], dy[i], 0.0) for i in range(len(risks))]
         v, exact = vertex(cx, lift_val)
         if exact:
             # the vertex's y: min(g v, P - A) on the lifted species (the linear program's best y there)
-            gain_v = sum(float(lift_val[i] @ (np.minimum(b.gain @ v, caps[i]) - ys[i])) for i, b in enumerate(risks))
+            gain_v = sum(float(lift_val[i] @ (np.minimum(_mv(b.gain, v), caps[i]) - ys[i])) for i, b in enumerate(risks))
             if m_c:
                 gain_v += float(extra.coef @ (np.minimum(extra.A @ v, extra.cap) - yc @ lam))
             bound = min(bound, max(f_lift + float(cx @ (v - x)) + gain_v, f))
@@ -1764,7 +1820,9 @@ def _steps_layer(p: RestorationProblem, b, cum: np.ndarray) -> np.ndarray:
     if isinstance(b, _Risk):
         slopes = _plangea_slopes(b, b.gain @ cum)
         # plangea's bd: the slopes times the habitat share a unit of the cell gives (or takes, signed)
-        hab = b.hab.multiply(sp.csr_matrix(slopes[:, None])).tocsc()
+        hab = b.gain.copy()
+        hab.data = hab.data / p.area[hab.indices]  # per unit of the cell's area (plangea's hab_values)
+        hab = hab.multiply(sp.csr_matrix(slopes[:, None])).tocsc()
         return np.asarray(hab.sum(axis=0)).ravel()
     if b.intactness is not None and cum.any():
         return _intactness_coef(p, b.intactness, cum)

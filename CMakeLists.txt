@@ -232,6 +232,7 @@ set_target_properties(sdmcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(restcore STATIC
     src/cpp/rest/habitat.cpp
     src/cpp/rest/intactness.cpp
+    src/cpp/rest/plan.cpp
 )
 target_include_directories(restcore PUBLIC src/cpp)
 # R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp).

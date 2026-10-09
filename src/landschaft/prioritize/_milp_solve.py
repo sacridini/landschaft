@@ -21,6 +21,13 @@ def _is_covering(m: OptimizationProblem) -> bool:
             and bool(np.isfinite(m.ub).all()))
 
 
+def _integer(vtype) -> np.ndarray:
+    """1 for the integer (and binary) columns: no array of strings when all are continuous."""
+    if isinstance(vtype, tuple) and vtype.count("C") == len(vtype):
+        return np.zeros(len(vtype), dtype=np.uint8)
+    return np.isin(np.asarray(vtype), ("B", "I")).astype(np.uint8)
+
+
 def _method(m: OptimizationProblem, n_units: int | None) -> str:
     if _is_covering(m):
         return "covering"
@@ -41,7 +48,7 @@ def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, 
     a = m.A
     return _core.opt_solve_highs(
         start=a.indptr.astype(np.int64), index=a.indices.astype(np.int64), value=a.data, obj=m.obj, lb=m.lb,
-        ub=m.ub, row_lo=lo, row_hi=hi, integer=np.isin(np.asarray(m.vtype), ("B", "I")).astype(np.uint8),
+        ub=m.ub, row_lo=lo, row_hi=hi, integer=_integer(m.vtype),
         maximize=m.modelsense == "max", offset=0.0, gap=gap, time_limit=time_limit, threads=threads,
         presolve=presolve, verbose=verbose, relaxation=relaxation, initial=start,
         method=_method(m, n_units), n_units=-1 if n_units is None else int(n_units))
@@ -56,7 +63,7 @@ class Prepared:
         a = m.A
         self.kw = {"start": a.indptr.astype(np.int64), "index": a.indices.astype(np.int64), "value": a.data,
                    "obj": m.obj, "row_lo": lo, "row_hi": hi,
-                   "integer": np.isin(np.asarray(m.vtype), ("B", "I")).astype(np.uint8),
+                   "integer": _integer(m.vtype),
                    "maximize": m.modelsense == "max", "offset": 0.0}
         self.method = _method(m, n_units)
         self.n_units = -1 if n_units is None else int(n_units)

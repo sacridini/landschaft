@@ -905,3 +905,62 @@ def test_exact_intactness_with_other_benefits_and_conversion(case):
         p.add_intactness_benefit(hfi, red, form="cubic")
     with pytest.raises(ValueError, match="weight"):
         p.add_intactness_benefit(hfi, red, weight=-1.0, form="exact")
+
+
+# ----------------------------------------------------------------------------- the solver's pieces at scale
+
+@pytest.mark.parametrize("sense", ["<=", ">=", "="])
+def test_knapsack_vertex_is_the_linear_program(sense):
+    """The vertex of plans with one row (C++ weighted selection) has the linear program's value, with
+    least shares, free units (a = 0), ties and units worth nothing or less."""
+    from landschaft import _core
+    from landschaft.prioritize._milp import OptimizationProblem
+
+    rng = np.random.default_rng(16)
+    n = 3000
+    c = rng.normal(size=n)
+    c[::7] = c[3]  # ties
+    a = rng.random(n) * 2
+    a[::50] = 0.0
+    lb = np.where(rng.random(n) < 0.1, rng.random(n) * 0.2, 0.0)
+    ub = lb + rng.random(n)
+    cap = 0.3 * float(a @ ub)
+    ok, x = _core.rest_knapsack(c, a, lb, ub, cap, sense)
+    assert ok and (x >= lb - 1e-15).all() and (x <= ub + 1e-15).all()
+    row = float(a @ x)
+    assert {"<=": row <= cap * (1 + 1e-12), ">=": row >= cap * (1 - 1e-12), "=": abs(row - cap) <= 1e-9 * cap}[sense]
+    m = OptimizationProblem(A=sp.csr_matrix(a[None, :]), obj=c, lb=lb, ub=ub, rhs=np.array([cap]), sense=(sense,),
+                            vtype=("C",) * n, modelsense="max", row_ids=("r",), col_ids=("x",) * n)
+    r = R._solve_lp(P.restoration_problem(np.ones((1, 1)), cell_area=1.0), m, 60.0)
+    assert float(c @ x) == pytest.approx(r["objective"], rel=1e-10, abs=1e-10)
+    ok, _ = _core.rest_knapsack(c, a, lb, ub, 10 * float(a @ ub), ">=")
+    assert not ok
+    ok, _ = _core.rest_knapsack(c, a, lb, ub, -1.0, "<=")
+    assert not ok
+
+
+def test_sparse_products_and_column_selection():
+    """G x, G' y and the selection of columns (C++, in parallel) against scipy, with int32 and int64
+    indices and empty rows."""
+    from landschaft import _core
+
+    rng = np.random.default_rng(17)
+    g = sp.random(300, 5000, density=0.05, format="csr", random_state=1)
+    g = sp.vstack([g, sp.csr_matrix((2, 5000)), g[:3]]).tocsr()
+    x = rng.random(5000)
+    y = rng.random(g.shape[0])
+    for m in (g, sp.csr_matrix((g.data, g.indices.astype(np.int64), g.indptr.astype(np.int64)), shape=g.shape)):
+        np.testing.assert_allclose(_core.rest_csr_matvec(m.indptr, m.indices, m.data, m.shape[0], x, 4), m @ x,
+                                   rtol=1e-12)
+        np.testing.assert_allclose(_core.rest_csr_rmatvec(m.indptr, m.indices, m.data, m.shape[0], m.shape[1], y, 4),
+                                   m.T @ y, rtol=1e-12)
+        rows = np.array([0, 5, 300, 301, 302, 40])
+        cells = np.sort(rng.choice(5000, 700, replace=False))
+        sel = R._select(m, rows, cells)
+        assert (sel != m[rows][:, cells]).nnz == 0 and sel.has_sorted_indices
+        assert sel.indices.dtype == np.int32
+    big = sp.random(200, 20000, density=0.1, format="csr", random_state=2)  # above the parallel threshold
+    xx = rng.random(20000)
+    np.testing.assert_allclose(R._mv(big, xx), big @ xx, rtol=1e-12)
+    yy = rng.random(200)
+    np.testing.assert_allclose(R._rmv(big, yy), big.T @ yy, rtol=1e-12)

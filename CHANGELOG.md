@@ -42,6 +42,13 @@ in a new major version.
   footprints the plans can reach (new C++ kernel `rest_intactness_secant`); the status is `"local"` unless
   the two meet. Where the footprint can be cleared the plan gains much over the linearised one (2.5 times
   the intactness in a test of 2000 cells); the bound's gap is 2-20 % in the tests.
+- Restoration plans at a global scale: the exact method proves the optimum of 9 x 10^6 cells and 5000 species
+  (4.3 x 10^8 habitat gains) in 10 s, 4 x 10^6 x 4000 in 3.4 s instead of 8.3 s (11 threads). Its vertices
+  under one area target or budget are fractional knapsacks solved by weighted selection in C++ instead of a
+  linear program, the products of the gain matrix with plans and slopes run in parallel (C++), and the gain
+  matrix is cut to the planning units by a remap of its columns (5.6 s to 0.6 s). The HiGHS wrapper no
+  longer builds an array of strings for models of continuous columns only. `tools/benchmark_restoration.py`
+  times it on synthetic data.
 - The cheapest restoration plan for a benefit (`add_min_cost_objective`) searches the budget by regula falsi
   with Illinois' modification instead of a bisection (the most benefit is concave in the budget): 11
   solves where the bisection took 26, about 20 instead of 25 for a benefit within 0.1 % of the most.

@@ -7,10 +7,12 @@
 
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "rest/habitat.hpp"
 #include "rest/intactness.hpp"
+#include "rest/plan.hpp"
 
 namespace py = pybind11;
 
@@ -173,6 +175,80 @@ py::tuple py_intactness_secant(const Vec& h0, const Vec& tlo, const Vec& thi, do
     return py::make_tuple(u0, to_array(std::move(sigma), {ny, nx}));
 }
 
+py::tuple py_knapsack(const Vec& c, const Vec& a, const Vec& lb, const Vec& ub, double cap, const std::string& sense) {
+    const i64 n = c.size();
+    if (a.size() != n || lb.size() != n || ub.size() != n) throw std::invalid_argument("arrays of different sizes");
+    std::vector<double> x(static_cast<std::size_t>(n));
+    bool ok;
+    {
+        py::gil_scoped_release release;
+        ok = rest::knapsack(c.data(), a.data(), lb.data(), ub.data(), n, cap, sense, x.data());
+    }
+    return py::make_tuple(ok, to_array(std::move(x), {n}));
+}
+
+template <class T>
+using Ints = py::array_t<T, py::array::c_style>;
+
+// the products dispatch on scipy's index types: int32 or int64 pointers, int32 or int64 indices
+template <class F>
+void with_csr(const py::array& indptr, const py::array& indices, F&& f) {
+    const bool p64 = indptr.dtype().itemsize() == 8, i64_ = indices.dtype().itemsize() == 8;
+    if (indptr.dtype().kind() != 'i' || indices.dtype().kind() != 'i')
+        throw std::invalid_argument("CSR indices must be signed integers");
+    if (!p64 && !i64_) {
+        auto p = Ints<std::int32_t>::ensure(indptr);
+        auto q = Ints<std::int32_t>::ensure(indices);
+        f(p.data(), q.data());
+    } else if (p64 && !i64_) {
+        auto p = Ints<std::int64_t>::ensure(indptr);
+        auto q = Ints<std::int32_t>::ensure(indices);
+        f(p.data(), q.data());
+    } else {
+        auto p = Ints<std::int64_t>::ensure(indptr);
+        auto q = Ints<std::int64_t>::ensure(indices);
+        f(p.data(), q.data());
+    }
+}
+
+py::array_t<double> py_csr_matvec(const py::array& indptr, const py::array& indices, const Vec& data, i64 nrow,
+                                  const Vec& x, int threads) {
+    if (indptr.size() != nrow + 1 || indices.size() != data.size()) throw std::invalid_argument("not a CSR matrix");
+    std::vector<double> out(static_cast<std::size_t>(nrow));
+    with_csr(indptr, indices, [&](const auto* p, const auto* q) {
+        py::gil_scoped_release release;
+        rest::csr_matvec(p, q, data.data(), nrow, x.data(), out.data(), threads);
+    });
+    return to_array(std::move(out), {nrow});
+}
+
+py::array_t<double> py_csr_rmatvec(const py::array& indptr, const py::array& indices, const Vec& data, i64 nrow,
+                                   i64 ncol, const Vec& y, int threads) {
+    if (indptr.size() != nrow + 1 || indices.size() != data.size() || y.size() != nrow)
+        throw std::invalid_argument("not a CSR matrix");
+    std::vector<double> out(static_cast<std::size_t>(ncol));
+    with_csr(indptr, indices, [&](const auto* p, const auto* q) {
+        py::gil_scoped_release release;
+        rest::csr_rmatvec(p, q, data.data(), nrow, ncol, y.data(), out.data(), threads);
+    });
+    return to_array(std::move(out), {ncol});
+}
+
+py::tuple py_csr_select_columns(const py::array& indptr, const py::array& indices, const Vec& data, i64 nrow,
+                                const Index& pos, int threads) {
+    if (indptr.size() != nrow + 1 || indices.size() != data.size()) throw std::invalid_argument("not a CSR matrix");
+    std::vector<i64> p_out;
+    std::vector<std::int32_t> i_out;
+    std::vector<double> d_out;
+    with_csr(indptr, indices, [&](const auto* p, const auto* q) {
+        py::gil_scoped_release release;
+        rest::csr_select_columns(p, q, data.data(), nrow, pos.data(), p_out, i_out, d_out, threads);
+    });
+    const py::ssize_t nnz = static_cast<py::ssize_t>(i_out.size());
+    return py::make_tuple(to_array(std::move(p_out), {nrow + 1}), to_array(std::move(i_out), {nnz}),
+                          to_array(std::move(d_out), {nnz}));
+}
+
 }  // namespace
 
 namespace rest {
@@ -196,6 +272,15 @@ void register_python(py::module_& m) {
     m.def("rest_intactness_gradient", &py_intactness_gradient, py::arg("hfi"), py::arg("reduction"),
           py::arg("gamma"), py::arg("beta"), py::arg("z"), py::arg("radius"), py::arg("dx"), py::arg("dy"),
           py::arg("threads"), "d(total intactness) / d(share of each cell restored).");
+    m.def("rest_knapsack", &py_knapsack, py::arg("c"), py::arg("a"), py::arg("lb"), py::arg("ub"), py::arg("cap"),
+          py::arg("sense"), "max c x, a x (sense) cap, lb <= x <= ub, a >= 0: (feasible, x).");
+    m.def("rest_csr_select_columns", &py_csr_select_columns, py::arg("indptr"), py::arg("indices"), py::arg("data"),
+          py::arg("nrow"), py::arg("pos"), py::arg("threads"),
+          "The columns of a CSR matrix with pos >= 0, renumbered: (indptr, indices, data).");
+    m.def("rest_csr_matvec", &py_csr_matvec, py::arg("indptr"), py::arg("indices"), py::arg("data"), py::arg("nrow"),
+          py::arg("x"), py::arg("threads"), "G x for a CSR matrix G, in parallel.");
+    m.def("rest_csr_rmatvec", &py_csr_rmatvec, py::arg("indptr"), py::arg("indices"), py::arg("data"),
+          py::arg("nrow"), py::arg("ncol"), py::arg("y"), py::arg("threads"), "G' y for a CSR matrix G, in parallel.");
     m.def("rest_intactness_secant", &py_intactness_secant, py::arg("h0"), py::arg("tlo"), py::arg("thi"),
           py::arg("gamma"), py::arg("beta"), py::arg("z"), py::arg("radius"), py::arg("dx"), py::arg("dy"),
           py::arg("threads"), "A concave upper bound of the total intactness: (u0, sigma).");
