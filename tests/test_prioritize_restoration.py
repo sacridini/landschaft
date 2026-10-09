@@ -697,3 +697,105 @@ def test_relative_and_linear_targets(case):
     pv = prod.values.ravel()[p.index] * p.area * sol.values
     assert pv.sum() <= 6.0 * (1 + 1e-9) and pv[reg == 1].sum() >= 1.0 * (1 - 1e-9)
     assert sol.status == "optimal"
+
+
+# ----------------------------------------------------------------------------- trade-off curves and weights
+
+@pytest.mark.parametrize("name", list(pc.TRADEOFF_CASES))
+def test_tradeoff_steps_is_plangea(ref, case, name):
+    """scen's gradient steps (the landscape target in levels, each in refresh steps, the habitat refreshed
+    from the whole plan so far): the plan of every level; the gradient counts the levels that act on a
+    cell (plangea's post_gradient_output)."""
+    arrays, _ = ref
+    *_, p = case
+    spec = pc.TRADEOFF_CASES[name]
+    q = p.add_area_target(float(arrays[f"{name}/target"][0]))
+    levels = [(k + 1) / spec["levels"] for k in range(spec["levels"])]
+    curve = q.tradeoff(levels, method="steps", steps=spec["steps"])
+    # units with the same gains and area tie in every linear program: their sums are compared
+    g = q.benefits[0].gain.tocsc()
+    keys = [g[:, j].toarray().tobytes() + q.area[j].tobytes() for j in range(q.n)]
+    groups = {}
+    for j, key in enumerate(keys):
+        groups.setdefault(key, []).append(j)
+    for k, s in enumerate(curve.solutions):
+        theirs = arrays[f"{name}/x_{k + 1}"]
+        for cols in groups.values():
+            np.testing.assert_allclose(s.values[cols].sum(), theirs[cols].sum(), rtol=0, atol=1e-12)
+            if len(cols) == 1:
+                np.testing.assert_allclose(s.values[cols], theirs[cols], rtol=0, atol=1e-12)
+    count = np.sum([s.values > 0 for s in curve.solutions], axis=0)
+    np.testing.assert_array_equal(curve.gradient.values.ravel()[q.index], count)
+    assert curve.table["level"].tolist() == levels
+    np.testing.assert_allclose(curve.table["area"], np.array(levels) * curve.table["target"].iloc[-1], rtol=1e-9)
+    if spec["steps"] == 1:  # a single solve in steps is the last level
+        np.testing.assert_allclose(q.solve(method="steps").values, curve.solutions[-1].values, atol=1e-12)
+
+
+def test_tradeoff_exact_nested_and_frontier(case):
+    """Nested: every plan contains the previous (a priority order) and is the best given it; the
+    frontier's plans are each the optimum, at least as good as the nested ones, the benefit concave in
+    the target; the gradient of conversion counts down."""
+    *_, p = case
+    q = p.add_area_target(0.5 * float(p.upper @ p.area))
+    levels = [0.2, 0.4, 0.7, 1.0]
+    nested = q.tradeoff(levels)
+    front = q.tradeoff(levels, nested=False)
+    for a, b in zip(nested.solutions[:-1], nested.solutions[1:]):
+        assert (b.values >= a.values - 1e-9).all()
+    for k, s in enumerate(front.solutions):
+        own = replace_target(q, levels[k]).solve()
+        assert s.benefit == pytest.approx(own.benefit, rel=1e-9)
+        assert s.benefit >= nested.solutions[k].benefit - 1e-9
+        assert s.status == "optimal" and nested.solutions[k].status == "optimal"
+    assert nested.solutions[0].benefit == pytest.approx(front.solutions[0].benefit, rel=1e-9)
+    b = front.table["benefit"].to_numpy()
+    t = front.table["target"].to_numpy()
+    slopes = np.diff(np.concatenate([[0.0], b])) / np.diff(np.concatenate([[0.0], t]))
+    assert (np.diff(slopes) <= 1e-9).all()
+    g = nested.gradient.values.ravel()[q.index]
+    first = nested.solutions[0].values > 0
+    assert (g[first] == len(levels)).all() and set(np.unique(g)) <= set(range(len(levels) + 1))
+    assert any(nested.best() is s for s in nested.solutions)
+    with pytest.raises(ValueError, match="increasing"):
+        q.tradeoff([0.5, 0.2])
+    with pytest.raises(ValueError, match="to grow"):
+        P.restoration_problem(case[1]).add_area_target({1.0: 2.0}, regions=_regions()).tradeoff()
+
+
+def replace_target(q, level):
+    from dataclasses import replace
+
+    return replace(q, targets=tuple(replace(t, rhs=t.rhs * level) for t in q.targets))
+
+
+def test_tradeoff_conversion_gradient(natural_case):
+    aoh, nat = natural_case
+    q = P.restoration_problem(convertible=nat).add_extinction_risk_benefit(aoh)
+    q = q.add_area_target(0.4 * float(q.upper @ q.area), sense=">=")
+    curve = q.tradeoff([0.5, 1.0])
+    g = curve.gradients["convert"].values.ravel()[q.index]
+    first = curve.solutions[0].values > 0
+    assert (g[first] == 1).all() and (g[~(curve.solutions[1].values > 0)] == 3).all()
+
+
+def test_compare_weights_ranks_by_mean_over_sd(case):
+    """plangea's post_choose_weights: the values rescaled over the sets, the cost inverted, mean / sd."""
+    *_, p = case
+    rng = np.random.default_rng(11)
+    carbon = pc.grid(rng.random(pc.SHAPE) * 100)
+    cost = rng.random(p.n) + 0.5
+    q = p.add_linear_benefit(carbon, name="carbon").add_area_target(8.0).add_budget(1e9, cost)
+    sets = [{"extinction_risk": 1.0, "carbon": 0.0}, {"extinction_risk": 1.0, "carbon": 1e-3},
+            {"extinction_risk": 0.0, "carbon": 1.0}]
+    cmp_ = q.compare_weights(sets)
+    t = cmp_.table
+    assert list(t.columns[:2]) == ["w.extinction_risk", "w.carbon"]
+    d = t[["extinction_risk", "carbon", "cost"]].to_numpy()
+    v = (d - d.min(axis=0)) / np.ptp(d, axis=0)
+    v[:, 2] = 1 - v[:, 2]
+    np.testing.assert_allclose(t["score"], v.mean(axis=1) / v.std(axis=1, ddof=1), rtol=1e-12)
+    assert cmp_.best() is cmp_.solutions[int(np.argmin(t["rank"]))]
+    assert t.loc[0, "extinction_risk"] >= t.loc[2, "extinction_risk"] and t.loc[2, "carbon"] >= t.loc[0, "carbon"]
+    with pytest.raises(ValueError, match="no benefit"):
+        q.compare_weights([{"water": 1.0}])

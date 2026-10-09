@@ -222,3 +222,11 @@ ESYS_CASES = {
     "esys_10": {"target": 8.0, "minimum": 0.5, "hl": 0.0, "steps": 10, "change": [4.0, -1.5, 2.0]},
     "esys_damped": {"target": 15.0, "minimum": 0.2, "hl": -1.0, "steps": 5, "change": [3.0, 1.0, -5.0]},
 }
+
+
+# scen's trade-off curve on bd_absent (gradient steps of the landscape target, corrected refresh): the
+# number of levels, the refresh steps per level and the full target as a share of the restorable area
+TRADEOFF_CASES = {
+    "curve_4": {"levels": 4, "steps": 1, "share": 0.6},
+    "curve_2x3": {"levels": 2, "steps": 3, "share": 0.5},
+}

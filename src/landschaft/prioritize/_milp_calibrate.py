@@ -16,7 +16,7 @@ import pandas as pd
 from .._save import Saveable
 
 __all__ = ["TradeOffs", "calibrate", "calibrate_budget", "calibrate_penalty", "cohon_penalty", "iterative_solve",
-           "knee_point", "pareto_front", "protected_cells", "topsis"]
+           "knee_point", "mean_sd", "pareto_front", "protected_cells", "topsis"]
 
 PENALTIES = ("boundary", "connectivity", "asym_connectivity", "linear")
 
@@ -86,6 +86,40 @@ def topsis(decision, weights=None, impacts=None) -> pd.DataFrame:
         score = dl / (dl + du)
     rank = pd.Series(-score).rank(method="average").to_numpy()
     return pd.DataFrame({"alt.row": np.arange(1, d.shape[0] + 1), "score": score, "rank": rank})
+
+
+def mean_sd(decision, impacts=None) -> pd.DataFrame:
+    """plangea's choice of weights (``post_choose_weights``): every criterion (a column of ``decision``)
+    rescaled to 0-1 over the alternatives (a constant one to 1), the "-" ones (smaller is better)
+    inverted, and every alternative scored by the mean of its criteria divided by their standard
+    deviation (good on all of them at once). Returns ``mean``, ``sd``, ``score`` (larger is better) and
+    ``rank`` (1 = best). plangea took the mean after adding the deviation as a column (the mean of the
+    criteria and the deviation); here it is the criteria's.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ls.prioritize.mean_sd([[1.0, 9.0], [4.0, 6.0], [9.0, 1.0]], impacts=["+", "+"])["rank"].tolist()
+    [2.5, 1.0, 2.5]
+    """
+    d = np.asarray(decision, dtype=np.float64)
+    if d.ndim != 2 or d.shape[0] < 1:
+        raise ValueError("decision must be a matrix: alternatives x criteria")
+    nc = d.shape[1]
+    imp = ["+"] * nc if impacts is None else list(impacts)
+    if len(imp) != nc or any(i not in ("+", "-") for i in imp):
+        raise ValueError("one impact ('+' or '-') per criterion")
+    lo, span = d.min(axis=0), np.ptp(d, axis=0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        v = np.where(span > 0, (d - lo) / np.where(span > 0, span, 1.0), 1.0)  # aux_rescale_variation
+    v = np.where(np.array([i == "-" for i in imp]), 1.0 - v, v)
+    mean = v.mean(axis=1)
+    sd = v.std(axis=1, ddof=1) if nc > 1 else np.zeros(d.shape[0])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        score = np.where(sd > 0, mean / np.where(sd > 0, sd, 1.0), np.where(mean > 0, np.inf, 0.0))
+    rank = pd.Series(-score).rank(method="average").to_numpy()
+    return pd.DataFrame({"alt.row": np.arange(1, d.shape[0] + 1), "mean": mean, "sd": sd, "score": score,
+                         "rank": rank})
 
 
 def knee_point(x, y) -> int:

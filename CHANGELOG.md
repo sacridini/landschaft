@@ -28,6 +28,16 @@ in a new major version.
   flat targets); `add_linear_target` (targets on production, opportunity cost or any value);
   `ls.prioritize.ecosystem_targets` (a target shared among ecosystems for the least risk of collapse,
   exactly, or by plangea's steps of `harmonize_sr_ecosys`, which it matches to 1e-12).
+- Trade-off curves of restoration plans: `RestorationProblem.tradeoff(levels)` solves the plans of a growing
+  target, nested (every plan contains the previous, each the exact best given it: a priority order) or as
+  the frontier (each level optimal on its own), or by plangea's gradient steps (`method="steps"`), with the
+  gradient map of `post_gradient_output` (how many levels act on a cell). `compare_weights` solves with
+  sets of the benefits' weights and ranks them by plangea's `post_choose_weights` metric, also as
+  `ls.prioritize.mean_sd` beside `topsis`.
+- Corrected in plangea (only the correct form): in its trade-off loop the habitat is refreshed from the
+  current gradient step's restoration only, forgetting the earlier steps, and a region's "<=" target
+  caps every gradient step instead of the whole plan; `post_choose_weights` takes the mean of the
+  criteria together with their standard deviation.
 - Corrected in plangea (only the correct form): its econometric targets of R + D do not work (the
   per-region bounds are set only for C + R, which its checks forbid, and the compensation of demanded land
   runs for R + D too, zeroing the conversion targets); with more land demanded than spared it gives

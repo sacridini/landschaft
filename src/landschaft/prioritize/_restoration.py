@@ -39,7 +39,7 @@ import xarray as xr
 from .._save import Saveable
 from ._milp import OptimizationProblem
 
-__all__ = ["RestorationProblem", "RestorationSolution", "RiskReduction", "ecosystem_areas", "ecosystem_targets",
+__all__ = ["RestorationProblem", "RestorationSolution", "RestorationTradeOff", "RiskReduction", "ecosystem_areas", "ecosystem_targets",
            "eval_risk_reduction", "restoration_problem"]
 
 PLANGEA_Z = 0.25  # plangea's exponent of the species-area relationship
@@ -601,7 +601,7 @@ class RestorationProblem:
             solver = _solve_sd if self.objective[0] == "max_benefit" else _solve_min_cost
             x, bound, status, rounds = solver(self)
         elif method == "steps":
-            x = _solve_steps(self, int(steps))
+            x = _solve_steps(self, int(steps))[-1]
             bound, status, rounds = math.nan, "heuristic", int(steps)
         else:
             raise ValueError("method: 'exact' or 'steps'")
@@ -645,6 +645,124 @@ class RestorationProblem:
         total = float(np.sum(self.upper * self.area))
         x = self.upper * (float(area) / total if total > 0 else 0.0)
         return self._solution(x, bound=math.nan, status="uniform", method="uniform", rounds=0, seconds=0.0)
+
+    def tradeoff(self, levels=(0.25, 0.5, 0.75, 1.0), *, nested: bool = True, targets: str = "landscape",
+                 method: str = "exact", steps: int = 1, threshold: float = 0.0) -> RestorationTradeOff:
+        """The plans for a growing target: the trade-off curve, and the priority of every cell.
+
+        Parameters
+        ----------
+        levels
+            Shares of the targets (in (0, 1], increasing): plangea's gradient steps.
+        nested
+            Every level's plan contains the previous one (a priority order: the exact best plan given
+            the earlier levels, with their shares as the least shares), or (False) every level is the
+            exact optimum on its own (the frontier: plans need not contain each other).
+        targets
+            The target rows that grow: the landscape's (``"landscape"``, plangea's default; the regions'
+            targets hold at every level) or ``"all"``.
+        method
+            ``"exact"`` or ``"steps"`` (plangea's procedure, nested by construction: the levels follow
+            one another, ``steps`` parts each, the layers recomputed from the whole plan so far).
+        threshold
+            A cell counts in a level when its share is above it (the gradient).
+
+        Returns
+        -------
+        RestorationTradeOff
+            The table (one row per level: the target, area, cost, benefits), the plans and the gradient
+            (plangea's ``post_gradient_output``): for restoration and conservation, the number of levels
+            whose plan acts on the cell (the most for the first chosen); for conversion, the levels plus
+            one minus that number (the least for the first converted).
+        """
+        lv = np.asarray(levels, dtype=np.float64).ravel()
+        if lv.size == 0 or (lv <= 0).any() or (lv > 1).any() or (np.diff(lv) <= 0).any():
+            raise ValueError("levels: increasing shares in (0, 1]")
+        if targets not in ("landscape", "all"):
+            raise ValueError("targets: 'landscape' or 'all'")
+        flags = [np.full(t.rhs.size, targets == "all" or t.labels == ("landscape",)) for t in self.targets]
+        scaled = np.concatenate(flags) if flags else np.zeros(0, dtype=bool)
+        if not scaled.any():
+            raise ValueError("the trade-off needs a target to grow (add a landscape area target)")
+        t0 = time.perf_counter()
+        sols = []
+        if method == "steps":
+            plans = _solve_steps(self, int(steps), lv, scaled)
+            for x in plans:
+                sols.append(self._solution(x, bound=math.nan, status="heuristic", method="steps", rounds=int(steps),
+                                           seconds=time.perf_counter() - t0))
+        elif method == "exact":
+            prev = None
+            for level in lv:
+                ts = tuple(replace(t, rhs=t.rhs * level) if f.all() else t for t, f in zip(self.targets, flags))
+                q = replace(self, targets=ts)
+                if nested and prev is not None:
+                    q = replace(q, lower=np.maximum(prev, self._lb()))
+                s = q.solve()
+                sols.append(s)
+                prev = s.values
+        else:
+            raise ValueError("method: 'exact' or 'steps'")
+        land = [t for t in self.targets if t.labels == ("landscape",)]
+        rows = []
+        for level, s in zip(lv, sols):
+            row = {"level": float(level), "target": float(land[0].rhs[0] * level) if land else math.nan,
+                   "area": s.area, "cost": s.cost, "benefit": s.benefit, "status": s.status}
+            for a, v in s.areas.items():
+                row[f"area_{a}"] = v
+            for b in s.benefits.itertuples():
+                row[b.benefit] = b.value
+            rows.append(row)
+        table = pd.DataFrame(rows)
+        gradients = {}
+        for code, act in enumerate(ACTIONS):
+            m = self.action == code
+            if not m.any():
+                continue
+            count = np.sum([s.values[m] > threshold for s in sols], axis=0).astype(np.float64)
+            if act == "convert":
+                count = lv.size + 1 - count
+            grid = np.full(self.shape[0] * self.shape[1], np.nan)
+            grid[self.index[m]] = count
+            grid = grid.reshape(self.shape)
+            da = self.template.copy(data=grid) if self.template is not None else xr.DataArray(grid, dims=("y", "x"))
+            da.name = f"gradient_{act}"
+            gradients[act] = da
+        return RestorationTradeOff(table=table, solutions=sols, gradients=gradients)
+
+    def compare_weights(self, weights, *, method: str = "exact", steps: int = 1) -> RestorationTradeOff:
+        """Solve with every set of the benefits' weights and rank the sets by plangea's metric
+        (``post_choose_weights``): every benefit's value (and the cost, inverted) rescaled to 0-1 over
+        the sets, the mean over them divided by their standard deviation (see :func:`mean_sd`); the
+        best set does well on every benefit at once.
+
+        ``weights``: a list of mappings benefit name -> weight (the others keep theirs). Returns the
+        table (``w.<benefit>``, the values, ``cost``, ``mean``, ``sd``, ``score``, ``rank``) and the
+        plans; ``best()`` is the first in rank."""
+        from ._milp_calibrate import mean_sd
+
+        sets = [dict(w) for w in weights]
+        if not sets:
+            raise ValueError("no weights")
+        names = [b.name for b in self.benefits]
+        for w in sets:
+            unknown = set(w) - set(names)
+            if unknown:
+                raise ValueError(f"weights: no benefit {sorted(unknown)}")
+        sols, rows = [], []
+        for w in sets:
+            q = replace(self, benefits=tuple(replace(b, weight=float(w.get(b.name, b.weight))) for b in self.benefits))
+            s = q.solve(method=method, steps=steps)
+            sols.append(s)
+            row = {f"w.{b.name}": float(w.get(b.name, b.weight)) for b in self.benefits}
+            row.update(dict(zip(s.benefits["benefit"], s.benefits["value"])))
+            row["cost"] = s.cost
+            rows.append(row)
+        table = pd.DataFrame(rows)
+        crit = list(names) + (["cost"] if self.cost is not None else [])
+        score = mean_sd(table[crit].to_numpy(np.float64), ["+"] * len(names) + ["-"] * (len(crit) - len(names)))
+        table = pd.concat([table, score[["mean", "sd", "score", "rank"]]], axis=1)
+        return RestorationTradeOff(table=table, solutions=sols, gradients={})
 
     def _solution(self, x, *, bound, status, method, rounds, seconds) -> RestorationSolution:
         x = np.asarray(x, dtype=np.float64)
@@ -728,6 +846,49 @@ class RestorationSolution(Saveable):
         for key in ("restored", "conserved", "converted"):
             if getattr(self, key) is not None:
                 out[key] = getattr(self, key)
+        return out
+
+
+@dataclass
+class RestorationTradeOff(Saveable):
+    """Plans over a trade-off (:meth:`RestorationProblem.tradeoff`) or over sets of weights
+    (:meth:`RestorationProblem.compare_weights`).
+
+    Attributes
+    ----------
+    table
+        One row per plan.
+    solutions
+        The :class:`RestorationSolution` of every row.
+    gradients
+        The trade-off's gradient per action (an empty mapping for weights).
+    """
+
+    table: pd.DataFrame = field(repr=False)
+    solutions: list = field(repr=False)
+    gradients: dict = field(default_factory=dict, repr=False)
+
+    def __repr__(self) -> str:
+        return f"RestorationTradeOff({len(self.solutions)} plans)"
+
+    @property
+    def gradient(self) -> xr.DataArray:
+        """The gradient of a plan of one action (see :meth:`RestorationProblem.tradeoff`)."""
+        if len(self.gradients) != 1:
+            raise ValueError("the gradient of a plan of several actions: see gradients")
+        return next(iter(self.gradients.values()))
+
+    def best(self) -> RestorationSolution:
+        """The plan ranked first (compare_weights), or the knee of the curve of benefit against area."""
+        from ._milp_calibrate import knee_point
+
+        if "rank" in self.table:
+            return self.solutions[int(np.argmin(self.table["rank"].to_numpy()))]
+        return self.solutions[knee_point(self.table["area"].to_numpy(), -self.table["benefit"].to_numpy())]
+
+    def _save_items(self) -> dict:
+        out = {"table": self.table}
+        out.update({f"gradient_{a}": g for a, g in self.gradients.items()})
         return out
 
 
@@ -1427,7 +1588,13 @@ def _scale(layer: np.ndarray) -> float:
     return 1.0 / 10.0 ** math.trunc(math.log10(mx))
 
 
-def _solve_steps(p: RestorationProblem, steps: int) -> np.ndarray:
+def _solve_steps(p: RestorationProblem, steps: int, levels=(1.0,), scaled=None) -> list:
+    """plangea's procedure: the targets met in ``steps`` parts, each a linear program on the weighted
+    layers per cost, the layers recomputed from the plan so far between the parts (with more than one
+    part). Over the ``levels`` of a trade-off curve (shares of the ``scaled`` target rows, plangea's
+    gradient steps) the parts follow one another and the plan of every level is kept; the other rows
+    hold for the plan so far: every part asks for its share of what is left of the row (plangea's
+    ``scen_check_sr_targets``; its rows of "<=" are a cap per level there). Returns the plans."""
     if steps < 1:
         raise ValueError("steps must be at least 1")
     if p.budget is not None or p.objective[0] != "max_benefit":
@@ -1444,27 +1611,34 @@ def _solve_steps(p: RestorationProblem, steps: int) -> np.ndarray:
     csf = _scale(p.cost_layer) if p.cost_layer is not None else 1.0
     denom = p.cost_layer * csf if p.cost_layer is not None else 1.0
     rows = sp.vstack([t.rows for t in p.targets]).tocsr()
-    rhs = np.concatenate([t.rhs for t in p.targets]) / steps
+    full = np.concatenate([t.rhs for t in p.targets])
     sense = tuple(s for t in p.targets for s in t.sense)
-    for k in range(steps):
-        b_sum = 0.0
-        for b, v, s in zip(p.benefits, layers, sf):
-            b_sum = b_sum + b.weight * s * v
-        obj = (b_sum / denom) if p.benefits else np.ones(n) / denom
-        obj = np.broadcast_to(np.asarray(obj, dtype=np.float64), (n,)).copy()
-        m = OptimizationProblem(A=rows, obj=obj, lb=np.zeros(n), ub=ub.copy(), rhs=rhs, sense=sense,
-                                vtype=("C",) * n, modelsense="max", row_ids=("area",) * rows.shape[0],
-                                col_ids=("x",) * n)
-        r = _solve_lp(p, m, math.inf)
-        if not r["has_solution"]:
-            raise RuntimeError(f"step {k + 1}: no solution ({r['status']})")
-        x = np.clip(np.asarray(r["x"], dtype=np.float64)[:n], 0.0, None)
-        ub = np.where(x > 0, ub - x, ub)
-        cum = cum + x
-        if k + 1 < steps:
-            layers = [_steps_layer(p, b, cum) if (isinstance(b, _Risk) or b.intactness is not None) else v
-                      for b, v in zip(p.benefits, layers)]
-    return np.minimum(cum, p.upper)
+    scaled = np.ones(full.size, dtype=bool) if scaled is None else np.asarray(scaled, dtype=bool)
+    out, prev = [], 0.0
+    for li, level in enumerate(levels):
+        inc, prev = float(level) - prev, float(level)
+        for k in range(steps):
+            done = rows @ cum
+            rhs = np.where(scaled, full * inc / steps, np.maximum(np.minimum(full / steps, full - done), 0.0))
+            b_sum = 0.0
+            for b, v, s in zip(p.benefits, layers, sf):
+                b_sum = b_sum + b.weight * s * v
+            obj = (b_sum / denom) if p.benefits else np.ones(n) / denom
+            obj = np.broadcast_to(np.asarray(obj, dtype=np.float64), (n,)).copy()
+            m = OptimizationProblem(A=rows, obj=obj, lb=np.zeros(n), ub=ub.copy(), rhs=rhs, sense=sense,
+                                    vtype=("C",) * n, modelsense="max", row_ids=("area",) * rows.shape[0],
+                                    col_ids=("x",) * n)
+            r = _solve_lp(p, m, math.inf)
+            if not r["has_solution"]:
+                raise RuntimeError(f"step {k + 1}: no solution ({r['status']})")
+            x = np.clip(np.asarray(r["x"], dtype=np.float64)[:n], 0.0, None)
+            ub = np.where(x > 0, ub - x, ub)
+            cum = cum + x
+            if steps > 1 and not (li + 1 == len(levels) and k + 1 == steps):
+                layers = [_steps_layer(p, b, cum) if (isinstance(b, _Risk) or b.intactness is not None) else v
+                          for b, v in zip(p.benefits, layers)]
+        out.append(np.minimum(cum, p.upper))
+    return out
 
 
 # ----------------------------------------------------------------------------- evaluation

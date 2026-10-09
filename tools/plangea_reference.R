@@ -244,6 +244,43 @@ for (case in job$cases) {
           put(sc$name, "ub", ub)
         }
       }
+      # scen's trade-off curve (gradient steps of the landscape target, each in refresh steps); corrected:
+      # the habitat is refreshed from the whole plan so far (plangea uses the current gradient step's
+      # restoration only, iter_res_cum, forgetting the earlier steps)
+      if (!is.null(b$tradeoff)) {
+        ub <- values(interest)[master_index]
+        sf <- 1 / 10^trunc(log10(max(abs(bd$bd), na.rm = TRUE)))
+        for (sc in b$tradeoff) {
+          target <- sc$share * sum(ub * px_area)
+          obj <- scen_objective_function(list(bd$bd * sf), "B", rescale_ben = FALSE)
+          iter_ub <- ub
+          total <- rep(0, length(master_index))
+          for (lev in seq_len(sc$levels)) {
+            for (k in seq_len(sc$steps)) {
+              res <- scen_solver(obj = obj, mat = matrix(px_area, nrow = 1), rhs = target / sc$levels / sc$steps,
+                                 ub = iter_ub, lb = 0 * ub, sense = "<=", vtype = "C", gurobi = TRUE)
+              x <- res$x
+              iter_ub[x > 0] <- (iter_ub - x)[x > 0]
+              total <- total + x
+              if (sc$steps > 1 && !(lev == sc$levels && k == sc$steps)) {
+                hab <- .multi_refresh_vars_update_hab(
+                  hab_now_areas = bd$hab_now_areas, restored_area = total * px_area, prop_restore = oa$prop_restore,
+                  usphab_proc = bd$usphab_proc, usphab_index = bd$usphab_index, master_index = master_index,
+                  verbose = FALSE, spp_main_range = bd$spp_main_range,
+                  cfg = list(scenarios = list(problem_type = "R", use_threads = FALSE)), threads = 1,
+                  recalc_threads = FALSE)
+                nbd <- .multi_calc_bd(slp = .multi_extinction_slope(A = hab, Amax = bd$hab_pot_areas),
+                                      prop_restore = oa$prop_restore, usphab_proc = bd$usphab_proc,
+                                      usphab_index = bd$usphab_index, spp_main_range = bd$spp_main_range,
+                                      master_index = master_index)
+                obj <- scen_objective_function(list(nbd * sf), "B", rescale_ben = FALSE)
+              }
+            }
+            put(sc$name, paste0("x_", lev), total)
+          }
+          put(sc$name, "target", target)
+        }
+      }
       # scen's loop for conversion ("D") and conservation ("C"): the pixels with natural land, their
       # current natural cover as prop_restore, x in [-natural, 0] (D, the target negated, sense "<=") or
       # [0, natural] (C); the habitats now and potential of the restoration run (plangea computes the
