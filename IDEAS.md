@@ -2174,9 +2174,10 @@ do plangea". Entram as três abaixo, sem ordem obrigatória.
 
 ### Próximos passos (retomar daqui)
 1. Fase 11: feita até onde dava sem cortes no B&B (1.30.0); o que ficou aberto está na lista acima.
-2. Desempenho das métricas de paisagem e da reprojeção (ordem pedida pelo usuário): começado só com medidas
-   (seção "Desempenho e escala", medidas de 2026-10-07); retomar pela janela móvel, depois o cubic em SIMD da
-   reprojeção.
+2. Desempenho das métricas de paisagem e da reprojeção (ordem pedida pelo usuário): **feito em 2026-10-09**
+   (janela móvel 2x, cubic em SSE2 1,6x, mapas fora da memória gravados por blocos, blocos em paralelo; ver
+   "Desempenho e escala" e "Reprojeção"). Ficam: o algoritmo incremental da janela móvel, cubic spline e
+   Lanczos, o modo por histograma de 16 bits.
 3. **Lacunas em relação ao prioripy**: feitas e integradas (1.30.0).
 4. **Restauração a partir do plangea**: partes 2, 3 e 4 (ferramentas gerais) feitas e integradas (1.30.0); parte
    1 (o problema de restauração, variante `R`) feita no ramo do worktree, a integrar; abertos: `C`/`D` e o
