@@ -2221,7 +2221,7 @@ unidade; as zonas são uma escolha exclusiva por unidade. Ficam os dois, e a doc
    unidades x 3 zonas no HiGHS, no Gurobi e no prioritizr: onde o HiGHS para (o modelo tem n_zonas vezes mais
    colunas e uma linha de empacotamento por unidade, o que tira o min set da forma de cobertura).
 1. **Núcleo**: entrada das zonas (`ls.prioritize.zones(...)` ou mapeamento zona -> feições, custos por zona; as
-   formas fáceis de [[feedback-io-design]]: rasters, pilhas, tabelas), `Problem` com zonas, matriz de feições
+   formas fáceis da E/S do landschaft: rasters, pilhas, tabelas), `Problem` com zonas, matriz de feições
    por zona em C++ (a `opt/features.cpp` em blocos por zona), metas por zona (absolutas, relativas, manuais com
    lista de zonas), alocação obrigatória, decisões binárias/proporção/semicontínuas, locked/bounded por zona,
    compilação bitwise, `Solution` com a matriz unidade x zona, o mapa categórico e a pilha (`category_layer`,
