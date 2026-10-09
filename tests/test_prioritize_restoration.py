@@ -344,6 +344,9 @@ def test_exact_scales_with_the_units():
     cheap = p.add_min_cost_objective(0.999 * sol.benefit, cost=1.0).solve()
     assert cheap.status == "optimal" and cheap.benefit >= 0.999 * sol.benefit * (1 - 1e-9)
     assert cheap.bound <= cheap.cost < sol.area
+    assert cheap.rounds < 25  # the bisection's 25 solves
+    half = p.add_min_cost_objective(0.5 * sol.benefit, cost=1.0).solve()
+    assert half.status == "optimal" and half.rounds <= 15 and half.benefit >= 0.5 * sol.benefit * (1 - 1e-9)
 
 
 def test_gurobi_solver(case):
@@ -818,7 +821,7 @@ def test_intactness_minorant_and_secant_bound():
     secant majorant (C++) never underestimates it over the plans' box."""
     from landschaft import _core
 
-    p, hfi, a, kw = _intactness_problem(low=0.0, red=(2.0, 30.0))  # footprints that can reach 0
+    p, hfi, _, kw = _intactness_problem(low=0.0, red=(2.0, 30.0))  # footprints that can reach 0
     q = p.add_intactness_benefit(hfi, radius=2, cell_size=1.0, form="exact", **kw)
     b = q.benefits[0]
     fp = b.intactness
@@ -851,7 +854,7 @@ def test_exact_intactness_against_the_vertices():
     and at least the plan of the linearised benefit."""
     from itertools import product
 
-    p, hfi, a, kw = _intactness_problem(shape=(3, 4), seed=14, low=1.0, high=8.0, red=(0.5, 3.0))
+    p, hfi, _, kw = _intactness_problem(shape=(3, 4), seed=14, low=1.0, high=8.0, red=(0.5, 3.0))
     target = 0.4 * float(p.upper @ p.area)
     q = p.add_intactness_benefit(hfi, radius=1, cell_size=1.0, form="exact", **kw).add_area_target(target)
     sol = q.solve()
@@ -891,7 +894,7 @@ def test_exact_intactness_with_other_benefits_and_conversion(case):
     assert sol.status in ("optimal", "local") and sol.bound >= sol.benefit - 1e-12
     lin = p.add_intactness_benefit(hfi, red, radius=2, weight=0.01).add_area_target(6.0).solve()
     assert sol.benefit >= q.evaluate(lin.values).benefit - 1e-9
-    d, hfi_d, inc, kw = _intactness_problem(kind="convertible", seed=16)
+    d, hfi_d, _, kw = _intactness_problem(kind="convertible", seed=16)
     qd = d.add_intactness_benefit(hfi_d, radius=2, cell_size=1.0, form="exact", **kw)
     qd = qd.add_area_target(0.3 * float(d.upper @ d.area), sense=">=")
     sd = qd.solve()

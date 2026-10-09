@@ -42,6 +42,9 @@ in a new major version.
   footprints the plans can reach (new C++ kernel `rest_intactness_secant`); the status is `"local"` unless
   the two meet. Where the footprint can be cleared the plan gains much over the linearised one (2.5 times
   the intactness in a test of 2000 cells); the bound's gap is 2-20 % in the tests.
+- The cheapest restoration plan for a benefit (`add_min_cost_objective`) searches the budget by regula falsi
+  with Illinois' modification instead of a bisection (the most benefit is concave in the budget): 11
+  solves where the bisection took 26, about 20 instead of 25 for a benefit within 0.1 % of the most.
 - Corrected in plangea (only the correct form): in its trade-off loop the habitat is refreshed from the
   current gradient step's restoration only, forgetting the earlier steps, and a region's "<=" target
   caps every gradient step instead of the whole plan; `post_choose_weights` takes the mean of the
