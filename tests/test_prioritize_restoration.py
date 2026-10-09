@@ -304,14 +304,14 @@ def test_errors(case):
         p.add_extinction_risk_benefit(object())
 
 
-def _synthetic(side=100, n_species=100, seed=1):
+def _synthetic(side=100, n_species=100, seed=1, radius=(0.1, 0.3)):
     """Circular ranges with random habitat shares on a side x side grid; anthropic land everywhere."""
     rng = np.random.default_rng(seed)
     anth = rng.random((side, side)) * 0.7
     yy, xx = np.mgrid[0:side, 0:side] / side
     rows, cols, vals, cur, pot = [], [], [], [], []
     for s in range(n_species):
-        cx, cy, rad = rng.random(), rng.random(), 0.1 + 0.3 * rng.random()
+        cx, cy, rad = rng.random(), rng.random(), radius[0] + radius[1] * rng.random()
         cells = np.flatnonzero((((xx - cx) ** 2 + (yy - cy) ** 2) < rad ** 2).ravel())
         share = rng.random(cells.size)
         rows += [s] * cells.size
@@ -356,3 +356,18 @@ def test_gurobi_solver(case):
     except Exception as e:  # noqa: BLE001 - no licence
         pytest.skip(f"Gurobi unavailable: {e}")
     assert b.benefit == pytest.approx(a.benefit, rel=1e-7)
+
+
+def test_exact_with_species_at_their_potential():
+    """Species restored to their whole potential habitat put a kink in the benefit (r = 1), where the
+    Frank-Wolfe bound alone does not close: lifted, they are proven optimal in a few vertices."""
+    anth, aoh = _synthetic(14, 20, seed=3, radius=(0.08, 0.2))
+    p = P.restoration_problem(anth, cell_area=1.0).add_extinction_risk_benefit(aoh)
+    q = p.add_area_target(0.3 * anth.sum())
+    sol = q.solve()
+    rr = P.eval_risk_reduction(q, sol).table
+    assert ((rr["current"] + rr["gained"]) >= rr["potential"] * (1 - 1e-9)).sum() >= 2
+    assert sol.status == "optimal" and sol.rounds < 200
+    assert sol.bound >= sol.benefit - 1e-12 and sol.bound - sol.benefit <= 1e-7 * sol.bound
+    assert sol.benefit == pytest.approx(_scipy_optimum(q, 0.3 * anth.sum()), rel=1e-6)
+    assert sol.benefit >= q.solve(method="steps", steps=5).benefit

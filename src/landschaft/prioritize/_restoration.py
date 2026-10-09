@@ -437,8 +437,9 @@ class RestorationSolution(Saveable):
         The objective (the weighted benefit, or the cost with the minimum-cost objective) and the bound
         on the optimum the exact method proved (NaN for ``method="steps"``).
     status, method, rounds, seconds
-        ``"optimal"`` (within the tolerance), ``"time_limit"``, ``"heuristic"`` (steps) ...; the method,
-        the iterations (vertices or bisection steps; steps for ``method="steps"``), the time.
+        ``"optimal"`` (within the tolerance), ``"time_limit"``, ``"iteration_limit"``, ``"heuristic"``
+        (steps) ...; the method, the iterations (vertices or bisection steps; steps for
+        ``method="steps"``), the time.
     """
 
     restored: xr.DataArray = field(repr=False)
@@ -679,7 +680,12 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
     bound is the Frank-Wolfe one, F(x) + grad F(x) . (v - x) for the best vertex v, valid because the
     benefit is concave. Its linear programs have only the problem's few rows, so it scales with the
     units, where one linear program with tangent planes of every species' curve (Kelley's cutting planes,
-    tried first) did not: 9 x 10^4 cells and 500 species, 0.57 s against more than 15 minutes."""
+    tried first) did not: 9 x 10^4 cells and 500 species, 0.57 s against more than 15 minutes.
+
+    A species that reaches its potential habitat (r = 1) puts a kink in the benefit, where the
+    Frank-Wolfe bound does not close. Such a species is lifted: its habitat gained becomes a variable y
+    of its own, y <= g x and y <= P - A (one row and one column in the linear programs), on which the
+    benefit is smooth up to r = 1. Species are lifted as the vertices overshoot their potential."""
     opts = p.solver[1]
     tol = float(opts.get("tolerance", 1e-7))
     tl = opts.get("time_limit")
@@ -692,21 +698,37 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
             lin += b.weight * b.coef
     rows, rhs, sense = _feasible_set(p)
     floors = [np.maximum(1e-9 * _ratio(b, p.upper), 1e-15) for b in risks]
+    caps = [np.maximum(b.potential - b.current, 0.0) for b in risks]
+    lifted = [np.zeros(b.current.size, dtype=bool) for b in risks]
 
     def left() -> float:
         return deadline - time.perf_counter()
 
-    def gradient(x: np.ndarray) -> np.ndarray:
-        g = lin.copy()
-        for b, fl in zip(risks, floors):
-            r = _ratio(b, x)
-            d = np.where(r < 1.0, b.z * np.maximum(r, fl) ** (b.z - 1.0), 0.0) * (b.weight / b.potential)
-            g += b.gain.T @ d
-        return g
+    def slopes(i: int, y: np.ndarray) -> np.ndarray:
+        """The derivative of benefit i in the habitat gained y of every species: 0 past the potential,
+        except for a lifted species (y <= P - A), whose left derivative it keeps there."""
+        b = risks[i]
+        r = (b.current + y) / b.potential
+        d = b.z * np.maximum(np.minimum(r, 1.0), floors[i]) ** (b.z - 1.0) * (b.weight / b.potential)
+        return np.where((r < 1.0) | lifted[i], d, 0.0)
 
-    def vertex(c: np.ndarray) -> tuple[np.ndarray, bool]:
-        m = OptimizationProblem(A=rows, obj=c, lb=np.zeros(n), ub=p.upper, rhs=rhs, sense=sense, vtype=("C",) * n,
-                                modelsense="max", row_ids=("row",) * rows.shape[0], col_ids=("x",) * n)
+    def vertex(cx: np.ndarray, dy: list) -> tuple[np.ndarray, bool]:
+        """The best vertex for the objective cx on the units and dy on the lifted species."""
+        cols = [(i, np.flatnonzero(lifted[i])) for i in range(len(risks))]
+        m_y = sum(s.size for _, s in cols)
+        if m_y == 0:
+            A, obj, lb, ub, b_rhs, b_sense = rows, cx, np.zeros(n), p.upper, rhs, sense
+        else:
+            # y_s - g_s x <= 0 for every lifted species, 0 <= y_s <= P_s - A_s
+            g_rows = sp.vstack([risks[i].gain[s] for i, s in cols if s.size]).tocsr()
+            A = sp.vstack([sp.hstack([rows, sp.csr_matrix((rows.shape[0], m_y))]),
+                           sp.hstack([-g_rows, sp.identity(m_y, format="csr")])]).tocsr()
+            obj = np.concatenate([cx] + [dy[i][s] for i, s in cols if s.size])
+            lb = np.zeros(n + m_y)
+            ub = np.concatenate([p.upper] + [caps[i][s] for i, s in cols if s.size])
+            b_rhs, b_sense = np.concatenate([rhs, np.zeros(m_y)]), tuple(sense) + ("<=",) * m_y
+        m = OptimizationProblem(A=A, obj=obj, lb=lb, ub=ub, rhs=b_rhs, sense=b_sense, vtype=("C",) * (n + m_y),
+                                modelsense="max", row_ids=("row",) * A.shape[0], col_ids=("x",) * (n + m_y))
         r = _solve_lp(p, m, max(left(), 1e-3), n)
         if r["status"] == "infeasible":
             raise RuntimeError("the restoration problem is infeasible (targets or budget)")
@@ -715,19 +737,24 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         # only an optimal vertex gives a valid bound
         return np.clip(np.asarray(r["x"], dtype=np.float64)[:n], 0.0, p.upper), r["status"] == "optimal"
 
-    # the vertices (sparse columns), their gains per risk benefit (species x vertices) and linear benefit
+    # the vertices (sparse columns), their gains per risk benefit (species x vertices) and linear benefit;
+    # a lifted species counts min(g v, P - A) of a vertex (its best y there)
     verts: list[sp.csr_matrix] = []
     gv = [np.zeros((b.current.size, 0)) for b in risks]
     lv = np.zeros(0)
 
-    def add_vertex(v: np.ndarray):
+    def effective(i: int) -> np.ndarray:
+        return np.where(lifted[i][:, None], np.minimum(gv[i], caps[i][:, None]), gv[i])
+
+    def add_vertex(v: np.ndarray) -> np.ndarray:
         nonlocal lv
         verts.append(sp.csr_matrix(v[None, :]))
         for i, b in enumerate(risks):
             gv[i] = np.hstack([gv[i], (b.gain @ v)[:, None]])
+            lifted[i] |= (caps[i] > 0) & (gv[i][:, -1] >= caps[i] * (1.0 - 1e-12))
         lv = np.append(lv, lin @ v)
 
-    def master(lam0: np.ndarray) -> np.ndarray:
+    def master(lam0: np.ndarray, ev: list) -> np.ndarray:
         """The best mix of the vertices (weights on the simplex), by SLSQP with the exact gradient from
         ``lam0``: a smooth concave problem of a few variables. Its accuracy only steers the search: the
         bound is Frank-Wolfe's on the plan it gives."""
@@ -740,15 +767,13 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         def f(lam):
             v = float(lv @ lam)
             for i, b in enumerate(risks):
-                v += b.weight * float(np.sum(_h((b.current + gv[i] @ lam) / b.potential, b.z)))
+                v += b.weight * float(np.sum(_h((b.current + ev[i] @ lam) / b.potential, b.z)))
             return -v
 
         def grad(lam):
             g = lv.copy()
-            for i, b in enumerate(risks):
-                r = (b.current + gv[i] @ lam) / b.potential
-                d = np.where(r < 1.0, b.z * np.maximum(r, floors[i]) ** (b.z - 1.0), 0.0) * (b.weight / b.potential)
-                g += gv[i].T @ d
+            for i in range(len(risks)):
+                g += ev[i].T @ slopes(i, ev[i] @ lam)
             return -g
 
         res = minimize(f, lam0, jac=grad, method="SLSQP", bounds=[(0.0, 1.0)] * k,
@@ -758,12 +783,14 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         lam = lam / lam.sum() if lam.sum() > 0 else lam0
         return lam if f(lam) <= f(lam0) else lam0
 
-    add_vertex(vertex(gradient(np.zeros(n)))[0])
+    add_vertex(vertex(lin + sum(b.gain.T @ slopes(i, np.zeros(b.current.size)) for i, b in enumerate(risks)),
+                      [slopes(i, np.zeros(b.current.size)) for i, b in enumerate(risks)])[0])
     bound, best_x, best = math.inf, None, -math.inf
-    status, it = "time_limit", 0
+    status, it = "iteration_limit", 0
     lam = np.ones(1)
     for it in range(1, 5001):
-        lam = master(lam)
+        ev = [effective(i) for i in range(len(risks))]
+        lam = master(lam, ev)
         x = np.zeros(n)
         for w, v in zip(lam, verts):
             if w > 0:
@@ -772,14 +799,28 @@ def _solve_sd(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]:
         f = _true_objective(p, x)
         if f > best:
             best_x, best = x, f
-        g = gradient(x)
-        v, exact = vertex(g)
+        # the lifted objective at the mix (x, y): at most the plan's benefit f
+        ys = [e @ lam for e in ev]
+        f_lift = float(lv @ lam) + sum(
+            b.weight * float(np.sum(_h((b.current + y) / b.potential, b.z) - _h(b.current / b.potential, b.z)))
+            for b, y in zip(risks, ys))
+        dy = [slopes(i, ys[i]) for i in range(len(risks))]
+        cx = lin.copy()
+        for i, b in enumerate(risks):
+            free = np.where(lifted[i], 0.0, dy[i])
+            if free.any():
+                cx += b.gain.T @ free
+        lift_val = [np.where(lifted[i], dy[i], 0.0) for i in range(len(risks))]
+        v, exact = vertex(cx, lift_val)
         if exact:
-            bound = min(bound, max(f + float(g @ (v - x)), f))
+            # the vertex's y: min(g v, P - A) on the lifted species (the linear program's best y there)
+            gain_v = sum(float(lift_val[i] @ (np.minimum(b.gain @ v, caps[i]) - ys[i])) for i, b in enumerate(risks))
+            bound = min(bound, max(f_lift + float(cx @ (v - x)) + gain_v, f))
         if bound - best <= tol * max(1.0, abs(bound)):
             status = "optimal"
             break
         if left() <= 0:
+            status = "time_limit"
             break
         # drop the vertices out of the mix (the master grows with them)
         keep = np.flatnonzero(lam > 1e-12)
@@ -834,6 +875,8 @@ def _solve_min_cost(p: RestorationProblem) -> tuple[np.ndarray, float, str, int]
             lo = mid
             if r is None or r[1] < target:  # proven: no plan within mid reaches the benefit
                 proven = mid
+    if status != "optimal" and time.perf_counter() < deadline:
+        status = "iteration_limit"
     if best_x is None:
         raise RuntimeError(f"no plan reaches the benefit within the tolerance ({status})")
     return best_x, proven, status, it
