@@ -15,7 +15,7 @@ import optimize_cases
 import pytest
 from optimize_reference import case_ids, model, result, solve_gurobi, solve_highs
 
-CASES = [(g, c) for g in ("core", "objectives", "spatial", "actions") for c in case_ids(g)]
+CASES = [(g, c) for g in ("core", "objectives", "spatial", "actions", "zones") for c in case_ids(g)]
 IDS = [c for _, c in CASES]
 
 
@@ -42,7 +42,9 @@ def test_reference_case(group, name):
     assert m.A_i.min() >= 0 and m.A_i.max() < nrow and m.A_j.min() >= 0 and m.A_j.max() < ncol
     assert m.modelsense in ("min", "max")
     x = r["solution"]
-    if group in ("core", "objectives", "spatial"):
+    if x.ndim == 2:  # zones: units x zones, NA where a unit has no cost in a zone; the columns are zone after zone
+        x = np.nan_to_num(x.T.ravel())
+    if group in ("core", "objectives", "spatial", "zones"):
         # prioritizr reports the planning-unit columns, which come first
         assert set(m.col_ids) >= {"pu"} and len(m.row_ids) == nrow
         npu = m.col_ids.count("pu")

@@ -44,6 +44,25 @@ build <- function(job) {
   }
   cost <- rast(job$cost)
   feats <- rast(job$features)
+  if (startsWith(job$family, "zones_")) {
+    # three zones: protection (the features), use (half of them), restoration (the gain of them)
+    zn <- c("protect", "use", "restore")
+    costs <- c(cost, rast(job$zones$cost_use), rast(job$zones$cost_restore))
+    gain <- rast(job$zones$gain)
+    totals <- global(feats, "sum", na.rm = TRUE)[[1]]
+    return(function() {
+      z <- zones(feats, feats * 0.5, feats * gain, zone_names = zn, feature_names = names(feats))
+      p <- problem(costs, z)
+      p <- switch(job$family,
+        zones_minset = , zones_boundary = p |> add_min_set_objective() |>
+          add_manual_targets(tibble::tibble(feature = names(feats), zone = rep(list(zn), nlyr(feats)),
+                                            type = "absolute", target = job$target * totals)),
+        zones_maxutil = p |> add_max_utility_objective(budget = job$budget),
+        stop("unknown family ", job$family))
+      if (job$family == "zones_boundary") p <- p |> add_boundary_penalties(job$penalty, zones = diag(3))
+      p |> add_binary_decisions()
+    })
+  }
   function() {
     p <- problem(cost, feats)
     p <- switch(job$family,

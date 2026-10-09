@@ -121,11 +121,18 @@ dump <- function(case, key, x) {
 # --- helpers the cases use
 
 # the solution in planning-unit order (the cells or rows with a cost, in order)
+# (with zones: a planning units x zones matrix)
 solution_values <- function(s, p) {
+  nz <- number_of_zones(p)
   if (inherits(s, "SpatRaster")) {
+    if (nz > 1) return(as.matrix(values(s))[p$planning_unit_indices(), seq_len(nz), drop = FALSE])
     return(values(s[[1]], mat = FALSE)[p$planning_unit_indices()])
   }
   if (inherits(s, "sf")) s <- st_drop_geometry(s)
+  if (nz > 1) {
+    cols <- paste0("solution_1_", p$zone_names())
+    return(as.matrix(as.data.frame(s)[p$planning_unit_indices(), cols, drop = FALSE]))
+  }
   s[["solution_1"]][p$planning_unit_indices()]
 }
 

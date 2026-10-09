@@ -30,7 +30,7 @@ from itertools import pairwise
 import numpy as np
 
 GROUPS: list[str] = ["core", "objectives", "spatial", "matrices", "portfolio", "actions", "exact", "eval",
-                      "calibrate"]
+                      "calibrate", "zones"]
 
 NY, NX = 12, 15
 RES = 100.0
@@ -522,12 +522,168 @@ def sol_table():
     return pd.DataFrame({"solution_1": _solution_values()})
 
 
+# --- management zones (prioritizr's zones): three zones on the 12 x 15 grid
+
+ZONES = ("protect", "use", "restore")
+
+
+@cache
+def _zone_costs() -> np.ndarray:
+    """Cost of every zone (3, 12, 15): protection the planning units' cost, sustainable use cheaper (another
+    field), restoration a third field. NaN where a unit cannot go to a zone: the top-left corner in all of
+    them (no planning unit), use not in the top rows on the right, restoration not in a block in the
+    middle; the two holes of the cost raster can go to restoration only."""
+    protect = _cost()
+    use = 5.0 + 45.0 * smooth_field(12)
+    use[:3, :4] = np.nan
+    use[:2, 10:] = np.nan
+    use[6, 7] = use[9, 2] = np.nan
+    restore = 6.0 + 40.0 * smooth_field(13)
+    restore[:3, :4] = np.nan
+    restore[5:8, 3:6] = np.nan
+    return np.stack([protect, use, restore])
+
+
+@cache
+def _zone_gain() -> np.ndarray:
+    """The share of every feature that restoration brings back in each cell (0.2 to 0.8)."""
+    return 0.2 + 0.6 * smooth_field(14)
+
+
+def zone_contributions() -> tuple[float, float, object]:
+    """Contribution of every zone to the features: protection all, use half, restoration the gain raster."""
+    return 1.0, 0.5, _zone_gain()
+
+
+@cache
+def _zone_features() -> np.ndarray:
+    """The features in every zone (3, 5, 12, 15): the base features times the zone's contribution."""
+    f = _features()
+    return np.stack([f * 1.0, f * 0.5, f * _zone_gain()[None]])
+
+
+def zone_cost():
+    return grid(_zone_costs(), names=ZONES)
+
+
+def zone_cost2():
+    """The first two zones only."""
+    return grid(_zone_costs()[:2], names=ZONES[:2])
+
+
+def zf_protect():
+    return grid(_zone_features()[0])
+
+
+def zf_use():
+    return grid(_zone_features()[1])
+
+
+def zf_restore():
+    return grid(_zone_features()[2])
+
+
+def _zone_units() -> np.ndarray:
+    """Cells with a cost in any zone (the planning units of the zone problems)."""
+    return np.flatnonzero(np.isfinite(_zone_costs()).any(axis=0).ravel())
+
+
+def zone_locked_in():
+    """Cells locked in a zone (one layer per zone; 1 = locked): some to protection, some to restoration."""
+    m = np.zeros((3, NY, NX))
+    m[0, 4:6, 10:12] = 1.0
+    m[0, 11, 14] = 1.0
+    m[2, 10:12, 0:2] = 1.0
+    return grid(m, names=ZONES)
+
+
+def zone_locked_out():
+    """Cells locked out of a zone: a block out of protection, a few out of use."""
+    m = np.zeros((3, NY, NX))
+    m[0, 8:10, 5:8] = 1.0
+    m[1, 3, 4:9] = 1.0
+    return grid(m, names=ZONES)
+
+
+def zone_table():
+    """The zone problem's planning units as a table: id, one cost column per zone (NA: not in that zone),
+    the features' amounts in every zone (p_f1.., u_f1.., r_f1..; NaN = 0) and the locks per zone."""
+    import pandas as pd
+
+    cells = _zone_units()
+    c = _zone_costs().reshape(3, -1)[:, cells]
+    f = np.nan_to_num(_zone_features().reshape(3, 5, -1)[:, :, cells])
+    li = zone_locked_in().values.reshape(3, -1)[:, cells] == 1
+    lo = zone_locked_out().values.reshape(3, -1)[:, cells] == 1
+    data = {"id": np.arange(1, cells.size + 1, dtype=np.float64)}
+    data.update({f"cost_{z}": c[k] for k, z in enumerate(ZONES)})
+    for k, z in enumerate(ZONES):
+        data.update({f"{z[0]}_f{j + 1}": f[k, j] for j in range(5)})
+    data.update({f"locked_in_{z}": li[k] for k, z in enumerate(ZONES)})
+    data.update({f"locked_out_{z}": lo[k] for k, z in enumerate(ZONES)})
+    return pd.DataFrame(data)
+
+
+def zone_rij():
+    """Marxan-style amounts with a zone column (zone ids 10, 20, 30): rows with a non-zero amount."""
+    import pandas as pd
+
+    t = zone_table()
+    rows = [(pu, j + 1.0, 10.0 * (k + 1), a) for k, z in enumerate(ZONES) for j in range(5)
+            for pu, a in zip(t["id"], t[f"{z[0]}_f{j + 1}"]) if a > 0]
+    pu, sp, zone, amount = map(np.asarray, zip(*rows))
+    return pd.DataFrame({"pu": pu, "species": sp, "zone": zone, "amount": amount})
+
+
+def zone_ids():
+    import pandas as pd
+
+    return pd.DataFrame({"id": [10.0, 20.0, 30.0], "name": list(ZONES)})
+
+
+def zone_polygons():
+    """pu_polygons with a cost column per zone (use not allowed in two of them)."""
+    g = pu_polygons()
+    rng = np.random.default_rng(8)
+    g = g.rename(columns={"cost": "cost_protect"})
+    use = np.round(rng.uniform(20, 300, len(g)), 2)
+    use[[3, 11]] = np.nan
+    g.insert(1, "cost_use", use)
+    g.insert(2, "cost_restore", np.round(rng.uniform(40, 400, len(g)), 2))
+    return g
+
+
+def zone_bounds_cells():
+    """Bounds of (cell, zone) pairs within [0, 1] and a cell that is not a planning unit (skipped)."""
+    import pandas as pd
+
+    cells = _zone_units()
+    pick = cells[[0, 5, 17, 40, 41, 90, 120]]
+    return pd.DataFrame({"pu": np.concatenate([pick + 1.0, [1.0]]),
+                         "zone": ["protect", "use", "restore", "protect", "use", "restore", "use", "protect"],
+                         "lower": [0.2, 0.0, 0.5, 0.0, 0.3, 0.1, 0.0, 0.0],
+                         "upper": [0.9, 0.4, 1.0, 0.0, 0.8, 0.6, 1.0, 1.0]})
+
+
+def zone_status_cells():
+    """Statuses of (cell, zone) pairs: in, out, a cell locked into restoration by zone_locked_in moved out."""
+    import pandas as pd
+
+    cells = _zone_units()
+    pick = cells[[2, 30, 31, 70]]
+    return pd.DataFrame({"pu": np.concatenate([pick + 1.0, [10 * NX + 1.0]]),
+                         "zone": ["use", "protect", "restore", "use", "restore"],
+                         "status": [1.0, 0.0, 1.0, 0.0, 0.0]})
+
+
 INPUTS = {f.__name__: f for f in (
     pu_cost, features, shapes, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
     pu_polygons_partial, pa_pu, pa_features, pa_dist_features, pa_threats, pa_dist_threats, pa_sensitivity,
     pa_boundary, bnd_table, conn_table, asym_table, penalty_raster, adj_table, sol_raster, solp_raster, sol_table,
     bounds_cells, status_cells, bounds_rows, proxirr_entries, marxan_pu, marxan_puvspr, marxan_spec,
-    marxan_puvspr_ids, marxan_pu_ids, marxan_spec_ids, proxirr_many)}
+    marxan_puvspr_ids, marxan_pu_ids, marxan_spec_ids, proxirr_many, zone_cost, zone_cost2, zf_protect, zf_use,
+    zf_restore, zone_locked_in, zone_locked_out, zone_table, zone_rij, zone_ids, zone_polygons,
+    zone_bounds_cells, zone_status_cells)}
 
 
 def build_input(name: str):
@@ -1011,6 +1167,175 @@ PY: dict[str, Callable] = {
     .add_binary_decisions(),
 }
 for _name, _fn in PY.items():
+    CASES[_name].py = _fn
+
+
+# ----------------------------------------------------------------------------- management zones (R)
+# prioritizr 8.0.6's zones: the zone problems of the 12 x 15 grid (protect, use, restore). ``sum_targets``
+# is landschaft's default target with zones: a share of the feature's total (the base layer: protection
+# counts it all) met by the sum over the zones, i.e. prioritizr's manual absolute target with a list of zones.
+
+ZONE_RASTER = ("zone_cost", "zf_protect", "zf_use", "zf_restore", "features")
+_R_ZONES = """
+    zn <- c("protect", "use", "restore")
+    zp3 <- function(cost = zone_cost) problem(cost, zones(zf_protect, zf_use, zf_restore, zone_names = zn,
+                                                          feature_names = paste0("f", 1:5)))
+    sum_targets <- function(t, z = zn) tibble::tibble(feature = paste0("f", 1:5), zone = rep(list(z), 5),
+                                                      type = "absolute",
+                                                      target = t * terra::global(features, "sum", na.rm = TRUE)[[1]])
+"""
+_ZONE_MATRIX = "matrix(c(0.2, 0.1, 0.15, 0.3, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.05, 0, 0.1, 0.05, 0.05), ncol = 3)"
+
+
+def _zc(inputs, code: str, notes: str = "") -> Case:
+    return Case("zones", inputs, _R_ZONES + code, notes=notes)
+
+
+CASES.update({
+    "zones_minset_sum": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_binary_decisions())""", notes="3 zones, NA costs per zone, targets summed over the zones"),
+    "zones_minset_2z": _zc(("zone_cost2", "zf_protect", "zf_use", "features"), """
+        p <- problem(zone_cost2, zones(zf_protect, zf_use, zone_names = zn[1:2], feature_names = paste0("f", 1:5)))
+        reference(p |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3, zn[1:2])) |>
+                  add_binary_decisions())"""),
+    "zones_minset_matrix": _zc(ZONE_RASTER, f"""
+        reference(zp3() |> add_min_set_objective() |> add_relative_targets({_ZONE_MATRIX}) |>
+                  add_binary_decisions())""", notes="relative targets per zone (shares of each zone's totals)"),
+    "zones_minset_mandatory": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_mandatory_allocation_constraints() |> add_binary_decisions())"""),
+    "zones_manual_targets": _zc(ZONE_RASTER, """
+        t <- tibble::tibble(
+          feature = c("f1", "f2", "f3", "f4", "f4", "f5", "f5"),
+          zone = list(c("protect", "use"), "protect", zn, "use", c("protect", "restore"), "restore", "use"),
+          type = c("relative", "absolute", "relative", "relative", "relative", "absolute", "relative"),
+          sense = c(">=", ">=", ">=", "<=", ">=", ">=", "<="),
+          target = c(0.2, 1, 0.25, 0.4, 0.2, 2, 0.3))
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(t) |> add_binary_decisions())""",
+                                  notes="zone lists (relative: share of R's sum of the zones' totals), senses"),
+    "zones_locked_raster": _zc((*ZONE_RASTER, "zone_locked_in", "zone_locked_out"), """
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_locked_in_constraints(zone_locked_in) |> add_locked_out_constraints(zone_locked_out) |>
+                  add_binary_decisions())"""),
+    "zones_manual_bounded": _zc((*ZONE_RASTER, "zone_bounds_cells"), """
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_manual_bounded_constraints(zone_bounds_cells) |> add_proportion_decisions())"""),
+    "zones_manual_locked": _zc((*ZONE_RASTER, "zone_locked_in", "zone_status_cells"), """
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_locked_in_constraints(zone_locked_in) |> add_manual_locked_constraints(zone_status_cells) |>
+                  add_binary_decisions())""", notes="a cell locked into restoration then locked out of it"),
+    "zones_proportion": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_proportion_decisions())""", notes="an LP"),
+    "zones_semicontinuous": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.3)) |>
+                  add_semicontinuous_decisions(0.6))"""),
+    "zones_table": _zc(("zone_table",), f"""
+        z <- zones(paste0("p_f", 1:5), paste0("u_f", 1:5), paste0("r_f", 1:5), zone_names = zn,
+                   feature_names = paste0("f", 1:5))
+        reference(problem(zone_table, z, cost_column = paste0("cost_", zn)) |> add_min_set_objective() |>
+                  add_relative_targets({_ZONE_MATRIX}) |>
+                  add_locked_in_constraints(paste0("locked_in_", zn)) |>
+                  add_locked_out_constraints(paste0("locked_out_", zn)) |> add_binary_decisions())""",
+                         notes="totals: R's colSums of each zone's columns"),
+    "zones_rij": _zc(("zone_table", "spec_table", "zone_rij", "zone_ids"), """
+        t <- tibble::tibble(feature = paste0("f", 1:5), zone = rep(list(zn), 5), type = "relative",
+                            target = c(0.2, 0.3, 0.25, 0.1, 0.3))
+        reference(problem(zone_table[, c("id", paste0("cost_", zn))], spec_table, rij = zone_rij, zones = zone_ids,
+                          cost_column = paste0("cost_", zn)) |> add_min_set_objective() |>
+                  add_manual_targets(t) |> add_binary_decisions())""",
+                       notes="Marxan-style amounts with a zone column; zone ids 10, 20, 30"),
+    "zones_polygons": _zc(("zone_polygons", "zf_protect", "zf_use", "zf_restore"), f"""
+        z <- zones(zf_protect, zf_use, zf_restore, zone_names = zn, feature_names = paste0("f", 1:5))
+        reference(problem(zone_polygons, z, cost_column = paste0("cost_", zn)) |> add_min_set_objective() |>
+                  add_relative_targets({_ZONE_MATRIX}) |> add_binary_decisions())"""),
+})
+
+
+def _zone_matrix_targets() -> np.ndarray:
+    """_ZONE_MATRIX as features x zones (R fills the matrix column by column)."""
+    return np.array([0.2, 0.1, 0.15, 0.3, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.05, 0, 0.1, 0.05, 0.05]).reshape(3, 5).T
+
+
+def _zone_easy(cost=None):
+    """The easy form: the base features with every zone's contribution (protect 1, use 0.5, restore the gain)."""
+    from landschaft.prioritize import problem as ls_problem
+
+    _, half, gain = zone_contributions()
+    cost = zone_cost() if cost is None else cost
+    contrib = {"use": half, "restore": grid(gain)}
+    contrib = {z: c for z, c in contrib.items() if z in [str(b) for b in cost["band"].values]}
+    return ls_problem(cost, features(), contribution=contrib)
+
+
+def _zone_general():
+    """The general form: every zone's own features (prioritizr's zones())."""
+    from landschaft.prioritize import problem as ls_problem
+
+    return ls_problem(zone_cost(), features={"protect": zf_protect(), "use": zf_use(), "restore": zf_restore()})
+
+
+def _zone_manual_table():
+    import pandas as pd
+
+    return pd.DataFrame({
+        "feature": ["f1", "f2", "f3", "f4", "f4", "f5", "f5"],
+        "zone": [["protect", "use"], "protect", list(ZONES), "use", ["protect", "restore"], "restore", "use"],
+        "type": ["relative", "absolute", "relative", "relative", "relative", "absolute", "relative"],
+        "sense": [">=", ">=", ">=", "<=", ">=", ">=", "<="],
+        "target": [0.2, 1, 0.25, 0.4, 0.2, 2, 0.3]})
+
+
+def _zone_table_problem():
+    from landschaft.prioritize import problem as ls_problem
+
+    return ls_problem(zone_table(), features={z: [f"{z[0]}_f{k}" for k in range(1, 6)] for z in ZONES},
+                      cost_column={z: f"cost_{z}" for z in ZONES})
+
+
+def _zone_rij_problem():
+    import pandas as pd
+
+    from landschaft.prioritize import problem as ls_problem
+
+    t = zone_table()[["id", *[f"cost_{z}" for z in ZONES]]]
+    p = ls_problem(t, spec_table(), rij=zone_rij(), zones=zone_ids(), cost_column=[f"cost_{z}" for z in ZONES])
+    return p.add_manual_targets(pd.DataFrame({"feature": [f"f{k}" for k in range(1, 6)], "zone": [list(ZONES)] * 5,
+                                              "type": "relative", "target": [0.2, 0.3, 0.25, 0.1, 0.3]}))
+
+
+PY_ZONES: dict[str, Callable] = {
+    "zones_minset_sum": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3).add_binary_decisions(),
+    "zones_minset_2z": lambda: _zone_easy(zone_cost2()).add_min_set_objective().add_relative_targets(0.3)
+    .add_binary_decisions(),
+    "zones_minset_matrix": lambda: _zone_general().add_min_set_objective()
+    .add_relative_targets(_zone_matrix_targets()).add_binary_decisions(),
+    "zones_minset_mandatory": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_mandatory_allocation_constraints().add_binary_decisions(),
+    "zones_manual_targets": lambda: _zone_general().add_min_set_objective().add_manual_targets(_zone_manual_table())
+    .add_binary_decisions(),
+    "zones_locked_raster": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_locked_in_constraints(zone_locked_in()).add_locked_out_constraints(zone_locked_out()).add_binary_decisions(),
+    "zones_manual_bounded": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_manual_bounded_constraints(zone_bounds_cells()).add_proportion_decisions(),
+    "zones_manual_locked": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_locked_in_constraints(zone_locked_in()).add_manual_locked_constraints(zone_status_cells())
+    .add_binary_decisions(),
+    "zones_proportion": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_proportion_decisions(),
+    "zones_semicontinuous": lambda: _zone_easy().add_min_set_objective().add_relative_targets(0.3)
+    .add_semicontinuous_decisions(0.6),
+    "zones_table": lambda: _zone_table_problem().add_min_set_objective().add_relative_targets(_zone_matrix_targets())
+    .add_locked_in_constraints([f"locked_in_{z}" for z in ZONES])
+    .add_locked_out_constraints([f"locked_out_{z}" for z in ZONES]).add_binary_decisions(),
+    "zones_rij": lambda: _zone_rij_problem().add_min_set_objective().add_binary_decisions(),
+    "zones_polygons": lambda: __import__("landschaft").prioritize.problem(
+        zone_polygons(), features={"protect": zf_protect(), "use": zf_use(), "restore": zf_restore()},
+        cost_column={z: f"cost_{z}" for z in ZONES}).add_min_set_objective()
+    .add_relative_targets(_zone_matrix_targets()).add_binary_decisions(),
+}
+for _name, _fn in PY_ZONES.items():
     CASES[_name].py = _fn
 
 

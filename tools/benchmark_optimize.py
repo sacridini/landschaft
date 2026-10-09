@@ -18,9 +18,14 @@ a global thread scheduler per process). Families:
 - ``boundary``: the same with boundary penalties;
 - ``contiguity``: the same with contiguity constraints (small sizes only);
 - ``maxutil``: maximum utility with a budget of 20% of the total cost;
-- ``actions``: prioriactions minimizeCosts, 10 features, 3 threats.
+- ``actions``: prioriactions minimizeCosts, 10 features, 3 threats;
+- ``zones_minset``, ``zones_maxutil``, ``zones_boundary``: the same with three management zones
+  (protection: the features, cost 1 to 10; sustainable use: half of them, cost 0.5 to 5; restoration:
+  a gain from 0.2 to 0.8 of them, cost 1 to 6), min set targets summed over the zones (30% of the
+  features' totals), max utility with one budget.
 
-Solvers: ``highs`` (highspy, development environment only), ``gurobi``
+Solvers: ``highs`` (highspy, development environment only), ``builtin`` (the
+HiGHS built into landschaft, patched, on the compiled model), ``gurobi``
 (gurobipy) and ``prioritizr`` (the package's own solve on Gurobi, build +
 solve). Experiments, at ``--experiment-gap`` (10% by default, prioritizr's
 default): ``threads`` (HiGHS and Gurobi on 1, 2, 4 and N threads on one
@@ -47,9 +52,10 @@ sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT / "tools"))
 
 R_SCRIPT = ROOT / "tools" / "optimize_benchmark.R"
-FAMILIES = ["minset", "boundary", "contiguity", "maxutil", "actions"]
+FAMILIES = ["minset", "boundary", "contiguity", "maxutil", "actions", "zones_minset", "zones_maxutil", "zones_boundary"]
 # largest default size per family (the larger ones take hours or do not fit)
-MAX_SIZE = {"minset": 10**6, "boundary": 10**6, "contiguity": 10**4, "maxutil": 10**6, "actions": 10**5}
+MAX_SIZE = {"minset": 10**6, "boundary": 10**6, "contiguity": 10**4, "maxutil": 10**6, "actions": 10**5,
+            "zones_minset": 10**6, "zones_maxutil": 10**6, "zones_boundary": 10**5}
 N_FEATURES = 30
 OCCUPIED = 0.3
 
@@ -87,6 +93,20 @@ def raster_inputs(work: Path, side: int) -> tuple[Path, list[Path]]:
             _write(f, np.where(v > cut, v - cut, 0.0))
         feats.append(f)
     return cost, feats
+
+
+def zone_inputs(work: Path, side: int) -> dict[str, str]:
+    """The other zones' costs (use: 0.5 to 5, restoration: 1 to 6) and restoration's gain (0.2 to 0.8)."""
+    d = work / f"raster_{side}"
+    d.mkdir(parents=True, exist_ok=True)
+    out = {}
+    for name, seed, lo, hi in (("cost_use", 2, 0.5, 5.0), ("cost_restore", 3, 1.0, 6.0), ("gain", 4, 0.2, 0.8)):
+        f = d / f"{name}.tif"
+        if not f.exists():
+            v = _field(side, seed)
+            _write(f, lo + (hi - lo) * (v - v.min()) / (v.max() - v.min()))
+        out[name] = f.as_posix()
+    return out
 
 
 def _table(d: Path, name: str, columns: dict[str, np.ndarray]) -> dict:
@@ -147,6 +167,8 @@ def build_model(work: Path, family: str, side: int, prioritizr_solve: dict | Non
         cost, feats = raster_inputs(work, side)
         job = {"family": family, "cost": cost.as_posix(), "features": [f.as_posix() for f in feats],
                "target": 0.3, "penalty": 0.5, "budget": 0.2 * 5.5 * side * side}
+        if family.startswith("zones_"):
+            job["zones"] = zone_inputs(work, side)
     out = mdir
     if prioritizr_solve is not None:
         job.update(prioritizr_solve, solve=True)
@@ -294,10 +316,33 @@ def solve_gurobi(m, threads: int, gap: float, time_limit: float, log: bool = Fal
                 "version": ".".join(map(str, gp.gurobi.version())), **traj.summary()}
 
 
+def solve_builtin(m, threads: int, gap: float, time_limit: float, log: bool = False, log_file: str = "") -> dict:
+    """The HiGHS built into landschaft (patched) on the compiled model, as Problem.solve calls it."""
+    from landschaft import _core
+
+    a = m.csr()
+    lo, hi = _row_bounds_of(m)
+    t0 = time.perf_counter()
+    r = _core.opt_solve_highs(
+        start=a.indptr.astype(np.int64), index=a.indices.astype(np.int64), value=a.data, obj=m.obj, lb=m.lb,
+        ub=m.ub, row_lo=lo, row_hi=hi, integer=np.isin(np.asarray(m.vtype), ("B", "I")).astype(np.uint8),
+        maximize=m.modelsense == "max", offset=0.0, gap=gap, time_limit=time_limit, threads=threads,
+        presolve="choose", verbose=log, relaxation=False, initial=None)
+    t1 = time.perf_counter()
+    return {"status": "Optimal" if r["status"] == "optimal" else r["status"], "objective": r["objective"],
+            "bound": r["bound"], "gap": r["gap"], "nodes": r["nodes"], "seconds": t1 - t0}
+
+
+def _row_bounds_of(m):
+    from optimize_reference import _row_bounds
+
+    return _row_bounds(m)
+
+
 def run_one(args) -> None:
     """--run-one: solve a model directory in this process and print the result as JSON."""
     m = load_model(Path(args.model))
-    fn = {"highs": solve_highs, "gurobi": solve_gurobi}[args.solver]
+    fn = {"highs": solve_highs, "gurobi": solve_gurobi, "builtin": solve_builtin}[args.solver]
     log_file = Path(args.model) / f"{args.solver}_t{args.threads}.log"
     log_file.unlink(missing_ok=True)
     print(json.dumps(fn(m, args.threads, args.gap, args.time_limit, log_file=str(log_file))))
