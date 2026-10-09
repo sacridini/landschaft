@@ -2172,6 +2172,84 @@ do plangea". Entram as três abaixo, sem ordem obrigatória.
   busca por id e `na.rm`). Tudo bit a bit. Decisão: global 0 com local 0 dá alpha 0 (o proxirr para com erro).
   Registrado no `ls.plot` (mapas de beta e gamma).
 
+### Zonas de manejo do prioritizr (planejado em 2026-10-09)
+Pedido do usuário em 2026-10-09. Hoje o `ls.prioritize` só tem uma zona: decide se cada unidade entra ou não.
+Com zonas, cada unidade é alocada a no máximo uma de várias zonas de manejo (proteção integral, uso sustentável,
+restauração...), cada zona com o seu custo e a sua contribuição para cada feição. As metas podem ser por zona ou
+somar zonas, e as penalidades espaciais dizem quanto vale agrupar unidades da mesma zona ou de zonas
+diferentes. Os validadores atuais recusam `zone` com mais de um valor (`_milp.py`, "zones are not supported";
+`_milp_compile.py`, "one budget (a single zone)").
+
+**Referência**: o prioritizr 8.0.6 (git `b3023f9f`, o mesmo do resto do `ls.prioritize`; instalado no R lib, com
+os dados `sim_zones_*`), compilação bitwise contra o `compile()` e ótimo igual ao do Gurobi, como nas fases 1 a
+6. O multi-action (prioriactions) é outra coisa: ações sobre ameaças com benefícios por feição, várias por
+unidade; as zonas são uma escolha exclusiva por unidade. Ficam os dois, e a documentação diz quando usar cada um.
+
+**Semântica do 8.0.6 a reproduzir** (ler no código antes de cada fase; o que segue é o levantamento inicial):
+* Colunas x_{z,i} zona após zona (coluna = z n_pu + i), custo por zona (uma camada ou coluna de custo por zona;
+  NA de custo numa zona: a unidade não pode ir para essa zona, a confirmar no harness), feições por zona
+  (`zones()`: lista de rasters ou de nomes de colunas, uma por zona; ou tabela longa `pu`, `species`, `zone`,
+  `amount`).
+* Uma linha por unidade, sum_z x_{z,i} <= 1 (`rcpp_add_zones_constraints`, `row_id` "pu_zone"), depois do
+  objetivo e antes das penalidades (a ordem das linhas conta para a paridade); "=" com
+  `add_mandatory_allocation_constraints()` (toda unidade recebe uma zona).
+* Metas: matriz feição x zona nas absolutas e relativas (a relativa é a fração do total da feição naquela zona);
+  `add_manual_targets` com `zone` como lista (uma meta que soma várias zonas), `sense` e `type`; loglinear só
+  com uma zona. Formulação comprimida: a linha da meta soma as colunas das zonas da meta; expandida:
+  y_{z,f,i} <= x_{z,i}.
+* Orçamento total ou um por zona nos objetivos com orçamento (max utility/cover/features/phylo, min shortfall,
+  min largest shortfall); pesos das feições por feição x zona; os objetivos filogenéticos somam o que cada
+  feição tem em todas as zonas.
+* Penalidades com matriz de zonas: borda (diagonal: agrupar na mesma zona; fora dela: entre zonas),
+  conectividade simétrica e assimétrica (matriz de zonas ou array 4D unidade x unidade x zona x zona),
+  penalidades lineares com dados por zona.
+* Restrições com zonas: locked in/out por zona (matriz, raster ou coluna por zona), manuais locked/bounded com a
+  coluna `zone` (já validada hoje), contiguidade (matriz binária simétrica de zonas conectadas), contiguidade por
+  feição (lista de matrizes), vizinhos (matriz, array 4D ou tabela com `zone1`/`zone2`), restrições lineares
+  por zona.
+* Avaliação: os resumos ganham uma linha `overall` mais uma por zona; cobertura de metas com metas de várias
+  zonas; replacement e rank importance por zona (orçamentos por zona no rank); Ferrier e rare richness só com
+  uma zona (erro, como lá). Portfólios valem para todas as formas. Solução: matriz unidade x zona; os ajudantes
+  `category_layer`/`binary_stack` convertem entre o raster categórico e a pilha de zonas.
+* Bugs do prioritizr achados no caminho: só a forma correta, testada contra a referência corrigida no harness
+  (como nas outras fases).
+
+**Fases** (ao fim de cada fase: testes, versão, commit, push, próxima):
+0. **Harness e benchmark**: grupo `zones` em `tools/make_reference_optimize.py` / `optimize_reference.R` (entradas
+   geradas em Python, rasters por zona e tabelas longas; `compile()` e ótimo no Gurobi); casos com 2 e 3 zonas,
+   formulações comprimida e expandida, alocação obrigatória, NA de custo numa zona. Benchmark de 10³ a 10⁶
+   unidades x 3 zonas no HiGHS, no Gurobi e no prioritizr: onde o HiGHS para (o modelo tem n_zonas vezes mais
+   colunas e uma linha de empacotamento por unidade, o que tira o min set da forma de cobertura).
+1. **Núcleo**: entrada das zonas (`ls.prioritize.zones(...)` ou mapeamento zona -> feições, custos por zona; as
+   formas fáceis de [[feedback-io-design]]: rasters, pilhas, tabelas), `Problem` com zonas, matriz de feições
+   por zona em C++ (a `opt/features.cpp` em blocos por zona), metas por zona (absolutas, relativas, manuais com
+   lista de zonas), alocação obrigatória, decisões binárias/proporção/semicontínuas, locked/bounded por zona,
+   compilação bitwise, `Solution` com a matriz unidade x zona, o mapa categórico e a pilha (`category_layer`,
+   `binary_stack`). Resolução pelo modelo compilado no HiGHS e no Gurobi (os motores próprios recusam zonas
+   até a fase 4, com mensagem clara).
+2. **Objetivos, orçamentos e pesos**: todos os objetivos com zonas, orçamento total ou por zona, pesos feição x
+   zona, objetivos filogenéticos; metas por sub-região (extensão nossa) com zonas.
+3. **Penalidades e restrições espaciais com zonas**: borda, conectividade (matriz de zonas e array 4D, entradas
+   do `ls.conn`/`ls.circuit`/`ls.cost`), assimétrica, penalidades e restrições lineares, contiguidade,
+   contiguidade por feição, vizinhos; corredores (extensão nossa) por zona. Compilação bitwise em todas.
+4. **Motores próprios com zonas**: (a) min set e afins: o Lagrangiano das metas decompõe por unidade em escolher a
+   zona de menor custo reduzido ou nenhuma (forma fechada; com alocação obrigatória, a melhor zona), com
+   arredondamento e reparo: o motor de cobertura generalizado, limite = LP; (b) objetivos com orçamento: o motor
+   `wide` com um orçamento por zona; (c) penalidades de par entre zonas: alfa-expansão por min-cut no motor de
+   cortes quando a matriz de zonas é uma métrica (Boykov, Veksler & Zabih 2001), senão o HiGHS; (d) o `anneal`
+   com troca de zona como movimento (extensão nossa; o Marxan with Zones só como leitura se a licença permitir,
+   senão pelo artigo de Watts et al. 2009); (e) portfólios. Meta: 10⁶ unidades x 3 zonas no tempo do min set
+   de uma zona.
+5. **Avaliação**: `eval_*` com zonas (linha `overall` + por zona) bitwise, replacement e rank importance por zona
+   (re-solves em paralelo), Ferrier e rare richness recusando zonas como o prioritizr; as avaliações nossas
+   (`eval_landscape_metrics`, `eval_mspa`, ProxIRR, LSI/LSC) por zona onde fizer sentido.
+6. **Integração e documentação**: `ls.plot` (mapa categórico das zonas, legendas por zona), relatório, exemplo
+   de Serra Verde com zonas (proteção integral, uso sustentável, restauração com os ganhos do
+   `ls.prioritize.restoration_problem`), seção do tutorial e do Learn (zonas x multi-action), página da API e
+   guia de migração (tirar "zonas" de "o que não existe").
+
+`add_neighbor_penalties` (do prioritizr 9) continua um item à parte, sob pedido.
+
 ### Próximos passos (retomar daqui)
 1. Fase 11: feita até onde dava sem cortes no B&B (1.30.0); o que ficou aberto está na lista acima.
 2. Desempenho das métricas de paisagem e da reprojeção (ordem pedida pelo usuário): **feito em 2026-10-09**
@@ -2179,10 +2257,11 @@ do plangea". Entram as três abaixo, sem ordem obrigatória.
    "Desempenho e escala" e "Reprojeção"). Ficam: o algoritmo incremental da janela móvel, cubic spline e
    Lanczos, o modo por histograma de 16 bits.
 3. **Lacunas em relação ao prioripy**: feitas e integradas (1.30.0).
-4. **Restauração a partir do plangea**: partes 2, 3 e 4 (ferramentas gerais) feitas e integradas (1.30.0); parte
-   1 (o problema de restauração, variante `R`) feita no ramo do worktree, a integrar; abertos: `C`/`D` e o
-   resto listado em "Andamento da parte 1".
-5. Sob pedido: zonas do prioritizr, `add_neighbor_penalties`.
+4. **Restauração a partir do plangea**: completa. Partes 1 a 4 integradas (1.30.0/1.31.0); os itens abertos
+   (`C`/`D`, alvos por região, curva de trade-off, intactness exata, custo mínimo por interpolação, escala
+   global) feitos na 1.37.0 (ver "Itens abertos da restauração").
+5. **Zonas do prioritizr**: plano em "Zonas de manejo do prioritizr" (fases 0 a 6), pedido em 2026-10-09.
+6. Sob pedido: `add_neighbor_penalties`.
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
