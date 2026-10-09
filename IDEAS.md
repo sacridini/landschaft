@@ -2267,6 +2267,36 @@ funcionalidades sem caminhos tortuosos para o caso comum):
    zonas (decisão 3), seção do tutorial e do Learn, página da API e guia de migração (tirar "zonas" de "o que
    não existe").
 
+**Resultados da fase 0** (2026-10-09; `tools/benchmark_optimize.py --families zones_minset,zones_maxutil,
+zones_boundary`, 3 zonas, gap 1%, 300 s, 12 threads nos P-cores; `build/benchmark_optimize/results.json`):
+
+| modelo | unidades | linhas x colunas | HiGHS embutido | Gurobi | prioritizr (Gurobi) |
+|---|---:|---|---:|---:|---:|
+| min set | 10³ | 1.054 x 3.072 | 8,4 s | 0,3 s | 0,6 s |
+| min set | 10⁴ | 1e4 x 3e4 | 1,3 s | 1,8 s | 2,6 s |
+| min set | 10⁵ | 1e5 x 3e5 | 30 s | 10 s | 25 s |
+| min set | 10⁶ | 1e6 x 3e6 | sem solução em 310 s | 220 s | 310 s |
+| max utility | 10⁴ | 1e4 x 3e4 | 2,7 s | 0,1 s | 0,7 s |
+| max utility | 10⁵ | 1e5 x 3e5 | 171 s | 3,3 s | 5,8 s |
+| max utility | 10⁶ | 1e6 x 3e6 | sem solução (ignora o limite: 582 s) | 49 s | 69 s |
+| borda | 10³ | 1,3e4 x 9e3 | 1,6% no limite (120 s) | 1,0% no limite | 3,5 s |
+| borda | 10⁴ | 1,3e5 x 9e4 | 210 s | 7,6 s | 9,2 s |
+| borda | 10⁵ | 1,3e6 x 9e5 | sem resposta em 1500 s | 121 s | 154 s |
+
+Conclusões: com zonas o HiGHS para já em 10⁵ (max utility) e 10⁶ (min set), e a borda é inviável nele de 10⁴
+para cima; o `compile()` do prioritizr leva 9-10 s em 10⁶ x 3 (o nosso compilador: fase 1). Os motores da fase 4
+são necessários: o Lagrangiano por unidade (min set), o `wide` por zona (orçamento) e o de cortes (borda).
+
+**Fase 1 feita** (1.38.0, 2026-10-09): `_zones.py` (entrada das zonas, metas, travas, limites, `category_layer`,
+`binary_stack`), `OptFeatureMatrix.add_scaled` (camadas das zonas num passe em C++), 13 casos bit a bit. Fatos de
+paridade: as unidades são as células com custo em alguma zona; NA de custo numa zona = objetivo 0 e coluna
+fixada em 0; a meta somada sobre as zonas (forma fácil) = meta manual absoluta com a lista de todas as zonas,
+o total = o da camada base (`terra::global`); a relativa de uma zona = parte do total da zona; com as feições de
+cada zona e uma lista de zonas, o `sum()` do R (80 bits) dos totais; travas por raster só onde há custo na zona
+(`intersecting_units`); `rij` com coluna `zone`: totais por (espécie, zona) somados na ordem da tabela. Bug do
+prioritizr corrigido: limites manuais reabrem uma zona sem custo (custo 0); aqui a zona fica fechada e um
+limite inferior > 0 nela é erro.
+
 `add_neighbor_penalties` (do prioritizr 9) continua um item à parte, sob pedido.
 
 ### Próximos passos (retomar daqui)

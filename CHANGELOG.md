@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.38.0] - 2026-10-09
+
 ### Added
 - Management zones in `ls.prioritize` (prioritizr's zones): every planning unit goes to at most one of
   several zones (strict protection, sustainable use, restoration...), each with its own cost and its own
