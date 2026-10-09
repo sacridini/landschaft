@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.37.0] - 2026-10-09
+
 ### Added
 - Conservation and conversion in restoration plans (plangea's `C`, `D` and `R + D`):
   `ls.prioritize.restoration_problem(restorable, conservable=, convertible=, threat=)`. Every action is a
