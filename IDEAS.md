@@ -168,8 +168,12 @@ Ficou de fora / próximos passos:
   janela de cada tarefa.
 - Velocidade: o cubic e o modo por histograma de 16 bits são os mais lentos por célula;
   as 4 linhas do cubic caberiam em SIMD (2 linhas por registro SSE2, mesma ordem por
-  linha). A janela de origem de cada tarefa lazy refaz a grade da tarefa (o dobro do
-  custo da grade, pequeno).
+  linha). **Feito (2026-10-09)**, bit a bit: 8000² float32 UTM -> 4326, 11 threads, 0,43 -> 0,27 s
+  (numa thread, 4000²: 0,68 -> 0,375 s); o perfil dava o `cubic4` em 76 %, metade em `convol4` e metade nas
+  16 verificações de NoData (agora 4 bytes da máscara por vez, ou NaN nos próprios valores carregados).
+  Fora do x86 fica o escalar. Ficam: cubic spline (0,74 s) e Lanczos (1,24 s), que passam pelo `resample`
+  genérico, e o modo por histograma. A janela de origem de cada tarefa lazy refaz a grade da tarefa (o
+  dobro do custo da grade, pequeno).
 - Operações fundidas numa passada (reprojetar + recortar + reclassificar).
 - Outras ideias: o `partial` do terra para vetores que saem do domínio da projeção
   (hoje viram coordenadas infinitas), referências do `terra::project` em R para a

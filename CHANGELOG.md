@@ -15,6 +15,11 @@ in a new major version.
   only where two pieces meet), cores at the default `edge_depth` = 1 come from the four neighbours without
   distances, circles find the hull of their corners without sorting them, and small landscapes no longer
   open (serialised) OpenMP regions. Whole maps gain too.
+- `ls.reproject` with `resampling="cubic"` is 1.6 times as fast, with the same values bit for bit (still
+  GDAL's with `tolerance=0`): 8000 x 8000 float32 cells from UTM to EPSG:4326 in 0.27 s instead of 0.43 s
+  (11 threads), now close to bilinear (0.21 s). The four rows of the 4 x 4 kernel go two at a time through
+  SSE2 registers, each summed in GDAL's order, and the cells are checked for NoData four at a time (NaN on
+  the values themselves).
 
 ### Fixed
 - `ls.window_metrics` with FRAGSTATS contrast or similarity tables (`contrast=` for `cwed` and `teci`,

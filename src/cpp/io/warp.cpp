@@ -26,6 +26,11 @@
 #include <type_traits>
 #include <vector>
 
+#if defined(_M_X64) || defined(__x86_64__) || defined(__SSE2__)
+#include <emmintrin.h>
+#define LS_WARP_SSE2 1
+#endif
+
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -474,6 +479,41 @@ inline double convol4(const double v1[4], const double v2[4]) {
     return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2] + v1[3] * v2[3];
 }
 
+#if defined(LS_WARP_SSE2)
+// Four source values of a row as doubles: (v0, v1) and (v2, v3).
+template <class T>
+inline void load4(const T* p, __m128d& lo, __m128d& hi) {
+    if constexpr (std::is_same_v<T, float>) {
+        const __m128 v = _mm_loadu_ps(p);
+        lo = _mm_cvtps_pd(v);
+        hi = _mm_cvtps_pd(_mm_movehl_ps(v, v));
+    } else if constexpr (std::is_same_v<T, double>) {
+        lo = _mm_loadu_pd(p);
+        hi = _mm_loadu_pd(p + 2);
+    } else if constexpr (std::is_same_v<T, std::int32_t>) {
+        const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i*>(p));
+        lo = _mm_cvtepi32_pd(v);
+        hi = _mm_cvtepi32_pd(_mm_shuffle_epi32(v, _MM_SHUFFLE(1, 0, 3, 2)));
+    } else {
+        lo = _mm_set_pd(static_cast<double>(p[1]), static_cast<double>(p[0]));
+        hi = _mm_set_pd(static_cast<double>(p[3]), static_cast<double>(p[2]));
+    }
+}
+
+// CONVOL4 of the weights c with rows a and b at once: lane 0 is
+// c0 a0 + c1 a1 + c2 a2 + c3 a3 summed from the left, as convol4 does, lane 1
+// the same for b (no fused multiply-add: the bits are convol4's).
+inline __m128d convol4_rows(const __m128d c[4], __m128d a_lo, __m128d a_hi, __m128d b_lo, __m128d b_hi) {
+    __m128d acc = _mm_mul_pd(c[0], _mm_unpacklo_pd(a_lo, b_lo));
+    acc = _mm_add_pd(acc, _mm_mul_pd(c[1], _mm_unpackhi_pd(a_lo, b_lo)));
+    acc = _mm_add_pd(acc, _mm_mul_pd(c[2], _mm_unpacklo_pd(a_hi, b_hi)));
+    return _mm_add_pd(acc, _mm_mul_pd(c[3], _mm_unpackhi_pd(a_hi, b_hi)));
+}
+
+// A byte of a 4-byte word is zero.
+inline bool has_zero_byte(std::uint32_t v) { return ((v - 0x01010101u) & ~v & 0x80808080u) != 0; }
+#endif
+
 // GWKCubicResample4Sample.
 template <class T>
 bool cubic4(const Src<T>& s, int band, double dfSrcX, double dfSrcY, double* pdfDensity, double* pdfReal) {
@@ -493,6 +533,41 @@ bool cubic4(const Src<T>& s, int band, double dfSrcX, double dfSrcY, double* pdf
     if (s.held(iSrcY - 1, iSrcX - 1) && s.held(iSrcY + 2, iSrcX + 2)) {
         i64 k0[4];
         for (int i = 0; i < 4; ++i) k0[i] = s.at(iSrcY - 1 + i, iSrcX - 1);
+#if defined(LS_WARP_SSE2)
+        // Two rows per register. Validity: the mask's bytes four at a time,
+        // a NaN NoData on the values themselves.
+        constexpr bool kReal = std::is_same_v<T, float> || std::is_same_v<T, double>;
+        const bool nan_nodata = s.masked && s.valid == nullptr && kReal && s.nodata.nan;
+        if (s.masked && !nan_nodata) {
+            for (int i = 0; i < 4; ++i) {
+                if (s.valid != nullptr) {
+                    std::uint32_t word;
+                    std::memcpy(&word, s.valid + k0[i], 4);
+                    if (has_zero_byte(word)) return bilinear4(s, band, dfSrcX, dfSrcY, pdfDensity, pdfReal);
+                } else {
+                    for (int k = 0; k < 4; ++k) {
+                        if (s.nodata(s.data[k0[i] + k])) return bilinear4(s, band, dfSrcX, dfSrcY, pdfDensity, pdfReal);
+                    }
+                }
+            }
+        }
+        const T* d = s.data + band * s.plane;
+        __m128d lo[4], hi[4];
+        for (int i = 0; i < 4; ++i) load4(d + k0[i], lo[i], hi[i]);
+        if (nan_nodata) {
+            __m128d any = _mm_setzero_pd();
+            for (int i = 0; i < 4; ++i) {
+                any = _mm_or_pd(any, _mm_cmpunord_pd(lo[i], lo[i]));
+                any = _mm_or_pd(any, _mm_cmpunord_pd(hi[i], hi[i]));
+            }
+            if (_mm_movemask_pd(any) != 0) return bilinear4(s, band, dfSrcX, dfSrcY, pdfDensity, pdfReal);
+        }
+        const __m128d c[4] = {_mm_set1_pd(adfCoeffsX[0]), _mm_set1_pd(adfCoeffsX[1]), _mm_set1_pd(adfCoeffsX[2]),
+                              _mm_set1_pd(adfCoeffsX[3])};
+        _mm_storeu_pd(adfValueReal, convol4_rows(c, lo[0], hi[0], lo[1], hi[1]));
+        _mm_storeu_pd(adfValueReal + 2, convol4_rows(c, lo[2], hi[2], lo[3], hi[3]));
+        for (int i = 0; i < 4; ++i) adfValueDens[i] = row_density;
+#else
         if (s.masked) {
             for (int i = 0; i < 4; ++i) {
                 for (int k = 0; k < 4; ++k) {
@@ -508,6 +583,7 @@ bool cubic4(const Src<T>& s, int band, double dfSrcX, double dfSrcY, double* pdf
             adfValueDens[i] = row_density;
             adfValueReal[i] = convol4(adfCoeffsX, adfReal);
         }
+#endif
     } else {
         for (int i = -1; i < 3; i++) {
             double adfReal[4];
