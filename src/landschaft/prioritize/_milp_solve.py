@@ -410,11 +410,14 @@ def _zone_coverage(u: Units, values: np.ndarray, targets) -> pd.DataFrame:
     with np.errstate(divide="ignore", invalid="ignore"):
         rel_target = np.where(total != 0, target / total, np.nan)
         rel_short = np.where(total != 0, shortfall / total, np.nan)
-    return pd.DataFrame({
+    out = pd.DataFrame({
         "feature": [u.feature_names[k] for k in targets.feature], "zone": list(targets.zone_label), "sense": sense,
         "total_amount": total, "absolute_target": target, "absolute_held": held, "absolute_shortfall": shortfall,
         "relative_target": rel_target, "relative_held": rel, "relative_shortfall": rel_short, "met": shortfall <= tol,
     })
+    if targets.region is not None and (targets.region >= 0).any():
+        out.insert(1, "region", list(targets.region_label))
+    return out
 
 
 def make_solution(u: Units, m: OptimizationProblem, r: dict, targets=None) -> Solution:

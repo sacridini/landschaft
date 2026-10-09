@@ -1253,6 +1253,49 @@ CASES.update({
 })
 
 
+_ZONE_WEIGHTS = "matrix(c(5, 1, 2, 0.5, 1, 4, 1, 1, 0.5, 2, 3, 0.5, 2, 1, 1), ncol = 3)"
+
+CASES.update({
+    # --- zones: objectives, budgets (one or one per zone) and weights
+    "zones_min_shortfall": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_min_shortfall_objective(2500) |> add_manual_targets(sum_targets(0.4)) |>
+                  add_binary_decisions())"""),
+    "zones_min_shortfall_budgets": _zc(ZONE_RASTER, f"""
+        reference(zp3() |> add_min_shortfall_objective(c(1200, 800, 600)) |>
+                  add_relative_targets({_ZONE_MATRIX}) |> add_binary_decisions())""", notes="a budget per zone"),
+    "zones_min_shortfall_weights": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_min_shortfall_objective(2500) |> add_manual_targets(sum_targets(0.4)) |>
+                  add_feature_weights(matrix(c(1, 2, 0.5, 3, 1), ncol = 1)) |> add_binary_decisions())""",
+                                         notes="weights per target"),
+    "zones_min_largest_shortfall": _zc((*ZONE_RASTER, "zone_locked_in"), """
+        reference(zp3() |> add_min_largest_shortfall_objective(2500) |> add_manual_targets(sum_targets(0.4)) |>
+                  add_locked_in_constraints(zone_locked_in) |> add_binary_decisions())"""),
+    "zones_max_utility": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_max_utility_objective(2500) |> add_binary_decisions())""",
+                               notes="no targets: every feature in every zone"),
+    "zones_max_utility_weights": _zc(ZONE_RASTER, f"""
+        reference(zp3() |> add_max_utility_objective(c(1200, 800, 600)) |>
+                  add_feature_weights({_ZONE_WEIGHTS}) |> add_proportion_decisions())""",
+                                       notes="weights per feature and zone, a budget per zone, an LP"),
+    "zones_max_cover": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_max_cover_objective(1500) |> add_binary_decisions())"""),
+    "zones_max_features": _zc(ZONE_RASTER, f"""
+        reference(zp3() |> add_max_features_objective(c(900, 600, 500)) |>
+                  add_relative_targets({_ZONE_MATRIX}) |> add_binary_decisions())"""),
+    "zones_max_features_weights": _zc(ZONE_RASTER, """
+        reference(zp3() |> add_max_features_objective(2000) |> add_manual_targets(sum_targets(0.3)) |>
+                  add_feature_weights(matrix(c(1, 2, 0.5, 3, 1), ncol = 1)) |> add_binary_decisions())"""),
+    "zones_max_phylo_div": _zc(ZONE_RASTER, f"""
+        reference(zp3() |> add_max_phylo_div_objective_fixed(2000, ape::read.tree(text = "{TREE_SHUFFLED}")) |>
+                  add_manual_targets(sum_targets(0.3)) |> add_binary_decisions())"""),
+    "zones_max_phylo_end": _zc(ZONE_RASTER, f"""
+        reference(zp3() |> add_max_phylo_end_objective_fixed(c(900, 600, 500),
+                                                             ape::read.tree(text = "{TREE_SHUFFLED}")) |>
+                  add_relative_targets({_ZONE_MATRIX}) |> add_binary_decisions())""",
+                                 notes="branch lengths over R's rowSums of the zones' totals"),
+})
+
+
 def _zone_matrix_targets() -> np.ndarray:
     """_ZONE_MATRIX as features x zones (R fills the matrix column by column)."""
     return np.array([0.2, 0.1, 0.15, 0.3, 0.1, 0.1, 0.1, 0.05, 0.2, 0.1, 0.05, 0, 0.1, 0.05, 0.05]).reshape(3, 5).T
@@ -1335,6 +1378,31 @@ PY_ZONES: dict[str, Callable] = {
         cost_column={z: f"cost_{z}" for z in ZONES}).add_min_set_objective()
     .add_relative_targets(_zone_matrix_targets()).add_binary_decisions(),
 }
+_ZONE_W = np.array([5, 1, 2, 0.5, 1, 4, 1, 1, 0.5, 2, 3, 0.5, 2, 1, 1.0]).reshape(3, 5).T
+_ZB = {"protect": 1200, "use": 800, "restore": 600}
+
+PY_ZONES.update({
+    "zones_min_shortfall": lambda: _zone_easy().add_min_shortfall_objective(2500).add_relative_targets(0.4)
+    .add_binary_decisions(),
+    "zones_min_shortfall_budgets": lambda: _zone_general().add_min_shortfall_objective(_ZB)
+    .add_relative_targets(_zone_matrix_targets()).add_binary_decisions(),
+    "zones_min_shortfall_weights": lambda: _zone_easy().add_min_shortfall_objective(2500).add_relative_targets(0.4)
+    .add_feature_weights([1, 2, 0.5, 3, 1]).add_binary_decisions(),
+    "zones_min_largest_shortfall": lambda: _zone_easy().add_min_largest_shortfall_objective(2500)
+    .add_relative_targets(0.4).add_locked_in_constraints(zone_locked_in()).add_binary_decisions(),
+    "zones_max_utility": lambda: _zone_general().add_max_utility_objective(2500).add_binary_decisions(),
+    "zones_max_utility_weights": lambda: _zone_general().add_max_utility_objective([1200, 800, 600])
+    .add_feature_weights(_ZONE_W).add_proportion_decisions(),
+    "zones_max_cover": lambda: _zone_general().add_max_cover_objective(1500).add_binary_decisions(),
+    "zones_max_features": lambda: _zone_general().add_max_features_objective([900, 600, 500])
+    .add_relative_targets(_zone_matrix_targets()).add_binary_decisions(),
+    "zones_max_features_weights": lambda: _zone_easy().add_max_features_objective(2000).add_relative_targets(0.3)
+    .add_feature_weights([1, 2, 0.5, 3, 1]).add_binary_decisions(),
+    "zones_max_phylo_div": lambda: _zone_easy().add_max_phylo_div_objective(2000, TREE_SHUFFLED)
+    .add_relative_targets(0.3).add_binary_decisions(),
+    "zones_max_phylo_end": lambda: _zone_general().add_max_phylo_end_objective([900, 600, 500], TREE_SHUFFLED)
+    .add_relative_targets(_zone_matrix_targets()).add_binary_decisions(),
+})
 for _name, _fn in PY_ZONES.items():
     CASES[_name].py = _fn
 

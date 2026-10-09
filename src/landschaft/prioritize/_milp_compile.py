@@ -67,8 +67,10 @@ def _concat(a: Targets | None, b: Targets) -> Targets:
     rb = b.region if b.region is not None else np.full(b.n, -1, dtype=np.int64)
     la = a.region_label if a.region_label is not None else (None,) * n
     lb = b.region_label if b.region_label is not None else (None,) * b.n
+    zone = None if a.zone is None else a.zone + b.zone
+    zlabel = None if a.zone_label is None else a.zone_label + b.zone_label
     return Targets(np.concatenate([a.feature, b.feature]), a.sense + b.sense, np.concatenate([a.value, b.value]),
-                   np.concatenate([a.total, b.total]), np.concatenate([ra, rb]), la + lb)
+                   np.concatenate([a.total, b.total]), np.concatenate([ra, rb]), la + lb, zone=zone, zone_label=zlabel)
 
 
 def region_codes(u, regions) -> tuple[np.ndarray, list]:
@@ -166,6 +168,13 @@ def resolve_subregional(u, spec, names: tuple[str, ...]) -> Targets:
     value = np.where(kinds == "relative", tot * target, target)
     unit_codes = codes[u.index]
     return Targets(feature, sense, value, tot, region, tuple(ids[k] for k in region)), unit_codes
+
+
+def _r_row_sum(v: np.ndarray) -> float:
+    """R's rowSums() of a row of a dense matrix (an 80-bit accumulation)."""
+    from ._milp import _r_sum
+
+    return _r_sum(np.asarray(v, dtype=np.float64))
 
 
 def _sum(v: np.ndarray) -> float:
@@ -304,7 +313,9 @@ def compile_problem(p):
         from ._zones import (
             check_zone_problem,
             fake_zone_targets,
+            positive_abundances,
             resolve_zone_targets,
+            sum_zone_targets,
             zone_target_matrix,
         )
 
@@ -314,19 +325,28 @@ def compile_problem(p):
     if kind in NO_TARGETS:
         if p.targets is not None or p.zone_targets:
             warnings.warn(f"targets are ignored by the {kind} objective", UserWarning, stacklevel=3)
-        # the "fake" targets prioritizr's compile() makes: one per feature (and zone)
-        t = fake_zone_targets(u) if zoned else Targets(np.arange(nf), ("?",) * nf, np.zeros(nf), u.totals.copy())
+        # the "fake" targets prioritizr's compile() makes: one per feature (and zone); the extinction risk
+        # (ours) of every feature over all its zones
+        if not zoned:
+            t = Targets(np.arange(nf), ("?",) * nf, np.zeros(nf), u.totals.copy())
+        else:
+            t = sum_zone_targets(u) if kind == "min_extinction_risk" else fake_zone_targets(u)
     elif zoned:
-        if p.targets is None and not p.zone_targets:
+        if p.targets is None and not p.zone_targets and p.subregional is None:
             raise ValueError(f"the {kind} objective needs targets (add_relative_targets, add_absolute_targets, ...)")
-        t = resolve_zone_targets(p)
+        t = resolve_zone_targets(p) if p.targets is not None or p.zone_targets else None
     else:
         if p.targets is None and p.subregional is None:
             raise ValueError(f"the {kind} objective needs targets (add_relative_targets, add_absolute_targets, ...)")
         t = resolve_targets(p.targets, u.feature_names, u.totals) if p.targets is not None else None
     unit_codes = None
     if p.subregional is not None and kind not in NO_TARGETS:
-        sub, unit_codes = resolve_subregional(u, p.subregional, u.feature_names)
+        if zoned:
+            from ._zones import resolve_zone_subregional
+
+            sub, unit_codes = resolve_zone_subregional(p)
+        else:
+            sub, unit_codes = resolve_subregional(u, p.subregional, u.feature_names)
         t = _concat(t, sub)
     nt = t.n
     # a unit without a cost in a zone: cost 0 there and the column fixed at 0 (prioritizr's objectives)
@@ -352,7 +372,7 @@ def compile_problem(p):
         rij = sp.csr_matrix(rij, copy=True)
         row = np.repeat(np.arange(t.n), np.diff(rij.indptr))
         r = t.region[row]
-        keep = (r < 0) | (unit_codes[rij.indices] == r)
+        keep = (r < 0) | (unit_codes[rij.indices % u.n] == r)
         rij.data[~keep] = 0.0
         rij.eliminate_zeros()
     import dataclasses
@@ -369,15 +389,29 @@ def compile_problem(p):
     nrow_extra = 0
     ncol_extra = 0
     weight_cols = None  # first column the feature weights replace
+    # one budget over every zone, or one per zone (a row each, zone after zone)
+    nb = 0 if budget is None else budget.size
+    bud_sense, bud_ids = ["<="] * nb, ["budget"] * nb
 
     def budget_row(row: int):
-        extra_rows.append((np.full(n, row), np.arange(n), cost))
+        if nb == 1:
+            extra_rows.append((np.full(n, row), np.arange(n), cost))
+        else:
+            extra_rows.append((row + np.repeat(np.arange(nb), u.n), np.arange(n), cost))
+
+    def positive_amounts() -> np.ndarray:
+        """Every target's positive amount in the planning units (Matrix's rowSums, in unit order)."""
+        if zoned:
+            return positive_abundances(u, t)
+        pos = u.rij.copy()
+        pos.data = np.maximum(pos.data, 0.0)
+        return np.array([_sum(pos.data[pos.indptr[i]:pos.indptr[i + 1]]) for i in range(nf)])
 
     if kind == "min_set":
         obj = [cost.copy()]
         sense, rhs, row_ids = list(t.sense), [t.value], ["spp_target"] * nt
     elif kind == "min_shortfall":
-        sense = [*t.sense, "<="]
+        sense = [*t.sense, *bud_sense]
         rhs = [t.value, budget]
         obj.append(np.where(t.value > 1.0e-5, 1.0 / np.where(t.value > 1.0e-5, t.value, 1.0), 0.0))
         lb.append(np.zeros(nt))
@@ -386,10 +420,10 @@ def compile_problem(p):
         extra_rows.append((np.arange(nt), n + np.arange(nt), np.ones(nt)))
         budget_row(nt)
         col_ids += ["spp_met"] * nt
-        row_ids = ["spp_target"] * nt + ["budget"]
-        nrow_extra, ncol_extra, weight_cols = 1, nt, n
+        row_ids = ["spp_target"] * nt + bud_ids
+        nrow_extra, ncol_extra, weight_cols = nb, nt, n
     elif kind == "min_largest_shortfall":
-        sense = [*t.sense, *([">="] * nt), "<="]
+        sense = [*t.sense, *([">="] * nt), *bud_sense]
         rhs = [t.value, np.zeros(nt), budget]
         obj += [np.zeros(nt), np.ones(1)]
         lb.append(np.zeros(nt + 1))
@@ -401,45 +435,44 @@ def compile_problem(p):
         extra_rows.append((nt + np.arange(nt), np.full(nt, n + nt), np.ones(nt)))
         budget_row(2 * nt)
         col_ids += ["spp_met"] * nt + ["max_shortfall"]
-        row_ids = ["spp_target"] * nt + ["max_shortfall"] * nt + ["budget"]
-        nrow_extra, ncol_extra = nt + 1, nt + 1
+        row_ids = ["spp_target"] * nt + ["max_shortfall"] * nt + bud_ids
+        nrow_extra, ncol_extra = nt + nb, nt + 1
     elif kind in ("max_utility", "max_cover", "max_features"):
         scale = -0.01 / _sum(cost)
         obj = [cost * scale, np.ones(nt)]
         if kind == "max_utility":
-            pos = u.rij.copy()
-            pos.data = np.maximum(pos.data, 0.0)
-            abund = np.array([_sum(pos.data[pos.indptr[i]:pos.indptr[i + 1]]) for i in range(nf)])
+            abund = positive_amounts()
             negative = u.rij.nnz > 0 and float(u.rij.data.min()) < 0
             lb.append(np.full(nt, -np.inf if negative else 0.0))
             ub.append(np.maximum(abund, 0.0))
             vtype += ["C"] * nt
             extra_rows.append((np.arange(nt), n + np.arange(nt), -np.ones(nt)))
-            sense, rhs = ["="] * nt + ["<="], [np.zeros(nt), budget]
+            sense, rhs = ["="] * nt + bud_sense, [np.zeros(nt), budget]
             col_ids += ["amount"] * nt
-            row_ids = ["spp_amount"] * nt + ["budget"]
+            row_ids = ["spp_amount"] * nt + bud_ids
         elif kind == "max_cover":
             lb.append(np.zeros(nt))
             ub.append(np.ones(nt))
             vtype += ["B"] * nt
             extra_rows.append((np.arange(nt), n + np.arange(nt), -np.ones(nt)))
-            sense, rhs = [">="] * nt + ["<="], [np.zeros(nt), budget]
+            sense, rhs = [">="] * nt + bud_sense, [np.zeros(nt), budget]
             col_ids += ["present"] * nt
-            row_ids = ["spp_present"] * nt + ["budget"]
+            row_ids = ["spp_present"] * nt + bud_ids
         else:
             lb.append(np.zeros(nt))
             ub.append(np.ones(nt))
             vtype += ["B"] * nt
             extra_rows.append((np.arange(nt), n + np.arange(nt), -1.0 * t.value))
-            sense, rhs = [*t.sense, "<="], [np.zeros(nt), budget]
+            sense, rhs = [*t.sense, *bud_sense], [np.zeros(nt), budget]
             col_ids += ["spp_met"] * nt
-            row_ids = ["spp_target"] * nt + ["budget"]
+            row_ids = ["spp_target"] * nt + bud_ids
         budget_row(nt)
-        nrow_extra, ncol_extra, weight_cols = 1, nt, n
+        nrow_extra, ncol_extra, weight_cols = nb, nt, n
     elif kind in PHYLO:
         bm, lengths = tree_branches(p.objective[2], u.feature_names)
-        if kind == "max_phylo_end":
-            lengths = endemism_lengths(bm, lengths, u.totals)
+        if kind == "max_phylo_end":  # with zones, over R's rowSums of the zones' totals
+            totals = np.array([_r_row_sum(r) for r in u.totals]) if zoned else u.totals
+            lengths = endemism_lengths(bm, lengths, totals)
         ne = lengths.size
         scale = (-0.01 * float(lengths.min())) / _sum(cost)
         obj = [cost * scale, np.zeros(nt), lengths]
@@ -454,23 +487,21 @@ def compile_problem(p):
         br_rows, br_cols = [], []
         for e in range(ne):
             ts = below.indices[below.indptr[e]:below.indptr[e + 1]]
-            br_rows += [nt + 1 + e] * (ts.size + 1)
+            br_rows += [nt + nb + e] * (ts.size + 1)
             br_cols += [*(n + ts), n + nt + e]
         br_vals = np.ones(len(br_rows))
         br_vals[np.cumsum([below.indptr[e + 1] - below.indptr[e] + 1 for e in range(ne)]) - 1] = -1.0
         extra_rows.append((np.array(br_rows), np.array(br_cols), br_vals))
-        sense, rhs = [*t.sense, "<=", *([">="] * ne)], [np.zeros(nt), budget, np.zeros(ne)]
+        sense, rhs = [*t.sense, *bud_sense, *([">="] * ne)], [np.zeros(nt), budget, np.zeros(ne)]
         col_ids += ["spp_met"] * nt + ["branch_met"] * ne
-        row_ids = ["spp_target"] * nt + ["budget"] + ["branch_target"] * ne
-        nrow_extra, ncol_extra, weight_cols = 1 + ne, nt + ne, n
+        row_ids = ["spp_target"] * nt + bud_ids + ["branch_target"] * ne
+        nrow_extra, ncol_extra, weight_cols = nb + ne, nt + ne, n
     elif kind == "min_extinction_risk":
         # risk_f >= 1 - (c_k + s_k amount_f / total_f) for every chord k of the species-area curve
         # (amount_f / total_f)^z: the least risk is 1 - the piecewise-linear r^z (Pereira & Daily 2006);
         # the amounts as in max utility, then the risks
         z_all, segments = np.broadcast_to(np.asarray(p.objective[2], dtype=np.float64), (nf,)), int(p.objective[3])
-        pos = u.rij.copy()
-        pos.data = np.maximum(pos.data, 0.0)
-        abund = np.array([_sum(pos.data[pos.indptr[i]:pos.indptr[i + 1]]) for i in range(nf)])
+        abund = positive_amounts()
         scale = 0.01 / _sum(cost)  # the cheaper of equal risks
         obj = [cost * scale, np.zeros(nt), np.ones(nt)]
         lb.append(np.zeros(2 * nt))
@@ -480,7 +511,7 @@ def compile_problem(p):
         sar_r, sar_c, sar_v, sar_rhs = [], [], [], []
         row = nt
         for f in range(nt):
-            tot = float(u.totals[f])
+            tot = float(t.total[f])
             c_k, s_k = sar_lines(float(z_all[f]), segments)
             for k in range(segments):
                 if tot > 0:
@@ -496,20 +527,18 @@ def compile_problem(p):
                 row += 1
         extra_rows.append((np.array(sar_r), np.array(sar_c), np.array(sar_v)))
         budget_row(nt + nt * segments)
-        sense = ["="] * nt + [">="] * (nt * segments) + ["<="]
+        sense = ["="] * nt + [">="] * (nt * segments) + bud_sense
         rhs = [np.zeros(nt), np.array(sar_rhs), budget]
         col_ids += ["amount"] * nt + ["extinction_risk"] * nt
-        row_ids = ["spp_amount"] * nt + ["extinction_risk"] * (nt * segments) + ["budget"]
-        nrow_extra, ncol_extra, weight_cols = nt * segments + 1, 2 * nt, n + nt
+        row_ids = ["spp_amount"] * nt + ["extinction_risk"] * (nt * segments) + bud_ids
+        nrow_extra, ncol_extra, weight_cols = nt * segments + nb, 2 * nt, n + nt
     elif kind == "min_penalties":
-        sense, rhs = [*t.sense, "<="], [t.value, budget]
+        sense, rhs = [*t.sense, *bud_sense], [t.value, budget]
         budget_row(nt)
-        row_ids = ["spp_target"] * nt + ["budget"]
-        nrow_extra = 1
+        row_ids = ["spp_target"] * nt + bud_ids
+        nrow_extra = nb
     else:
         raise ValueError(f"unknown objective {kind!r}")
-    if budget is not None and budget.size != 1:
-        raise ValueError("one budget (a single zone)")
 
     nrow = nt + nrow_extra
     ncol = n + ncol_extra
@@ -537,8 +566,19 @@ def compile_problem(p):
         if kind in NO_WEIGHTS:
             warnings.warn(f"feature weights are ignored by the {kind} objective", UserWarning, stacklevel=3)
         else:
-            if p.targets is not None and w.size != nt:
+            has_targets = p.targets is not None or bool(p.zone_targets)
+            if zoned and not (has_targets and kind not in NO_TARGETS):  # every feature in every zone
+                if w.ndim == 2:
+                    if w.shape != (nf, u.nz):
+                        raise ValueError(f"the weights need one value per feature and zone ({nf} x {u.nz})")
+                    w = w.T.ravel()  # zone after zone (prioritizr's c(matrix))
+                elif kind != "min_extinction_risk" and w.size == nf:
+                    w = np.tile(w, u.nz)  # the same weight in every zone
+            w = w.ravel()
+            if has_targets and kind not in NO_TARGETS and w.size != nt:
                 raise ValueError(f"the weights need one value per target ({nt})")
+            if w.size != nt:
+                raise ValueError(f"the weights need {nt} values")
             if kind == "min_shortfall":  # its default weights: 1 / target (R: 1 / 0 = Inf -> 0)
                 with np.errstate(divide="ignore"):
                     d = 1.0 / t.value

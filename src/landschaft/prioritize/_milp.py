@@ -98,6 +98,7 @@ class Units:
     zone_names: tuple[str, ...] = ()
     zone_rij: tuple = ()
     base_totals: object = None
+    zone_source: tuple = ()  # what the zones' layers are made of (sub-regional totals)
 
     @property
     def nz(self) -> int:
@@ -451,7 +452,12 @@ def _bound_values(u, data, what: str) -> np.ndarray:
 
 @dataclass(frozen=True)
 class Problem:
-    """A conservation planning problem (prioritizr's ``problem()``): see :func:`problem`."""
+    """A conservation planning problem (prioritizr's ``problem()``): see :func:`problem`.
+
+    Every ``add_*_objective`` that takes a ``budget`` takes one number (the most the selected units may
+    cost); with zones, also one budget per zone (a list in the zones' order, or a mapping zone ->
+    budget).
+    """
 
     units: Units = field(repr=False)
     objective: tuple | None = None
@@ -484,7 +490,10 @@ class Problem:
     def _with(self, **kw) -> Problem:
         return dataclasses.replace(self, **kw)
 
-    # --- objectives (prioritizr's; a budget is the most the selected units may cost)
+    def _budget(self, budget):
+        return _budget(budget, self.units)
+
+    # --- objectives (prioritizr's; a budget is the most the selected units may cost, with zones one or one per zone)
     def add_min_set_objective(self) -> Problem:
         """Minimum set: meet every target at the least cost."""
         return self._with(objective=("min_set",))
@@ -492,21 +501,21 @@ class Problem:
     def add_min_shortfall_objective(self, budget: float) -> Problem:
         """Minimum shortfall: within the budget, the least sum of the targets' shortfalls, each as a
         share of its target (weighted by :meth:`add_feature_weights`)."""
-        return self._with(objective=("min_shortfall", _budget(budget)))
+        return self._with(objective=("min_shortfall", self._budget(budget)))
 
     def add_min_largest_shortfall_objective(self, budget: float) -> Problem:
         """Minimum largest shortfall: within the budget, the least of the largest shortfall of any
         target, as a share of the target."""
-        return self._with(objective=("min_largest_shortfall", _budget(budget)))
+        return self._with(objective=("min_largest_shortfall", self._budget(budget)))
 
     def add_max_utility_objective(self, budget: float) -> Problem:
         """Maximum utility: within the budget, the most of the features' amounts (weighted); no
         targets."""
-        return self._with(objective=("max_utility", _budget(budget)))
+        return self._with(objective=("max_utility", self._budget(budget)))
 
     def add_max_features_objective(self, budget: float) -> Problem:
         """Maximum features: within the budget, the most targets met (weighted)."""
-        return self._with(objective=("max_features", _budget(budget)))
+        return self._with(objective=("max_features", self._budget(budget)))
 
     def add_max_wtd_sum_objective(self, budget: float) -> Problem:
         """:meth:`add_max_utility_objective` under prioritizr 9's name (the model is 8.0.6's, with the
@@ -521,18 +530,18 @@ class Problem:
     def add_max_cover_objective(self, budget: float) -> Problem:
         """Maximum cover: within the budget, the most features held at all (any amount above zero,
         weighted); no targets."""
-        return self._with(objective=("max_cover", _budget(budget)))
+        return self._with(objective=("max_cover", self._budget(budget)))
 
     def add_max_phylo_div_objective(self, budget: float, tree) -> Problem:
         """Maximum phylogenetic diversity: within the budget, the most total length of the branches
         of a phylogeny with a target met below them (Faith 1992). ``tree``: an ``ls.bio`` tree
         (:func:`landschaft.bio.read_tree`) or a Newick string, whose tips are the features."""
-        return self._with(objective=("max_phylo_div", _budget(budget), tree))
+        return self._with(objective=("max_phylo_div", self._budget(budget), tree))
 
     def add_max_phylo_end_objective(self, budget: float, tree) -> Problem:
         """Maximum phylogenetic endemism: as :meth:`add_max_phylo_div_objective`, every branch's
         length divided by the total amount of the features below it (Rosauer et al. 2009)."""
-        return self._with(objective=("max_phylo_end", _budget(budget), tree))
+        return self._with(objective=("max_phylo_end", self._budget(budget), tree))
 
     def add_min_extinction_risk_objective(self, budget: float, z=0.25, segments: int = 16) -> Problem:
         """Minimum extinction risk (our extension): within the budget, the least sum over the features
@@ -547,12 +556,12 @@ class Problem:
             raise ValueError("segments must be a whole number >= 1")
         if z.size not in (1, len(self.units.feature_names)):
             raise ValueError("z: one value or one per feature")
-        return self._with(objective=("min_extinction_risk", _budget(budget), z.copy(), int(segments)))
+        return self._with(objective=("min_extinction_risk", self._budget(budget), z.copy(), int(segments)))
 
     def add_min_penalties_objective(self, budget: float) -> Problem:
         """Minimum penalties: meet the targets within the budget with the least penalties (the
         penalties come in a later phase: until then any solution that meets them is optimal)."""
-        return self._with(objective=("min_penalties", _budget(budget)))
+        return self._with(objective=("min_penalties", self._budget(budget)))
 
     # --- targets
     def add_relative_targets(self, targets, zone=None) -> Problem:
@@ -614,7 +623,8 @@ class Problem:
         targets: one row per target, ``region``, ``feature`` (name), ``target``, optionally ``type``
         (``"relative"``, the default, or ``"absolute"``) and ``sense`` (``">="``, ``"<="``, ``"="``).
         A relative target is a share of the feature's total in the region, over every unit with or
-        without a cost, as the other relative targets are.
+        without a cost, as the other relative targets are. With zones, an optional ``zone`` column (a
+        zone or a list of zones, default every zone), as in :meth:`add_relative_targets`.
 
         Parameters
         ----------
@@ -628,7 +638,12 @@ class Problem:
         for col in ("region", "feature", "target"):
             if col not in t.columns:
                 raise ValueError(f"the targets table needs a {col!r} column")
-        extra = set(t.columns) - {"region", "feature", "type", "target", "sense"}
+        if "zone" in t.columns:
+            from ._zones import zone_key
+
+            for z in t["zone"]:
+                zone_key(self.units, z)
+        extra = set(t.columns) - {"region", "feature", "type", "target", "sense", "zone"}
         if extra:
             raise ValueError(f"unknown columns in the targets table: {sorted(extra)}")
         if not np.isfinite(t["target"].to_numpy(dtype=np.float64)).all():
@@ -665,8 +680,10 @@ class Problem:
     def add_feature_weights(self, weights) -> Problem:
         """Weights of the features (of the targets, when there are targets) in the objectives that
         add them up: min shortfall, max utility, max features, max cover (ignored, with a warning,
-        by min set and min largest shortfall)."""
-        w = np.asarray(weights, dtype=np.float64).ravel()
+        by min set and min largest shortfall). With zones and no targets (max utility, max cover): one
+        weight per feature (the same in every zone) or a features x zones matrix."""
+        w = np.asarray(weights, dtype=np.float64)
+        w = w if (w.ndim == 2 and self.units.zoned and w.shape[1] > 1) else w.ravel()
         if not np.isfinite(w).all() or (w < 0).any():
             raise ValueError("weights must be finite and >= 0")
         return self._with(weights=w)
@@ -1155,13 +1172,27 @@ def unit_mask(u: Units, locked) -> np.ndarray:
     return m
 
 
-def _budget(budget) -> float:
-    b = np.asarray(budget, dtype=np.float64).ravel()
-    if b.size != 1:
-        raise ValueError("one budget (problems have one zone)")
-    if not np.isfinite(b[0]) or b[0] <= 0:
+def _budget(budget, units=None):
+    """A budget: one number, or with zones one per zone (a sequence in the zones' order or a mapping
+    zone -> budget), the most the units selected in that zone may cost."""
+    zoned = units is not None and units.zoned
+    if isinstance(budget, Mapping):
+        if not zoned:
+            raise ValueError("budgets per zone need a problem with zones")
+        from ._zones import zone_key
+
+        b = np.full(units.nz, np.nan)
+        for z, v in budget.items():
+            b[zone_key(units, z, single=True)[0]] = float(v)
+        if np.isnan(b).any():
+            raise ValueError(f"give a budget for every zone ({list(units.zone_names)})")
+    else:
+        b = np.asarray(budget, dtype=np.float64).ravel()
+    if b.size != 1 and not (zoned and b.size == units.nz):
+        raise ValueError("one budget" + (f", or one per zone ({units.nz})" if zoned else " (problems have one zone)"))
+    if not np.isfinite(b).all() or (b <= 0).any():
         raise ValueError("the budget must be finite and > 0")
-    return float(b[0])
+    return float(b[0]) if b.size == 1 else tuple(float(v) for v in b)
 
 
 def _zonation_rank(u: Units) -> xr.DataArray:

@@ -124,11 +124,11 @@ def _zone_matrix(blocks: list[sp.csr_matrix], n: int) -> sp.csr_matrix:
 
 
 def _units(kind, names, zcost, blocks, totals, feature_names, template, index, features=None, base_totals=None,
-           all_blocks=None, r_sums=False) -> Units:
+           all_blocks=None, r_sums=False, source=()) -> Units:
     n = zcost.shape[1]
     return Units(kind, zcost.ravel().copy(), _zone_matrix(blocks, n), totals, tuple(feature_names), template, index,
                  features, None if all_blocks is None else tuple(all_blocks), r_sums, zone_names=names,
-                 zone_rij=tuple(blocks), base_totals=base_totals)
+                 zone_rij=tuple(blocks), base_totals=base_totals, zone_source=source)
 
 
 # ----------------------------------------------------------------------------- rasters
@@ -222,7 +222,8 @@ def raster_zone_units(x, features, contribution, n_threads: int | None = None) -
     totals = np.asarray(tot).reshape(nz, nf).T.copy()
     base_totals = None if general else np.asarray(base.finish()[0])
     return _units("raster", names, c[:, cells], blocks, totals, feature_names, template, cells,
-                  features=None if general else features, base_totals=base_totals)
+                  features=None if general else features, base_totals=base_totals,
+                  source=("raster", tuple(layers), None if general else tuple(contrib), nf))
 
 
 # ----------------------------------------------------------------------------- tables and polygons
@@ -294,7 +295,7 @@ def table_zone_units(x: pd.DataFrame, features, cost_column, contribution) -> Un
     blocks = [_rij(a[:, rows]) for a in amounts]
     all_blocks = [_rij(a) for a in amounts]
     return _units("table", names, c[:, rows], blocks, totals, feature_names, x, rows, base_totals=base_totals,
-                  all_blocks=all_blocks, r_sums=True)
+                  all_blocks=all_blocks, r_sums=True, source=("table", None if base_totals is None else _rij(base)))
 
 
 def polygon_zone_units(x, features, cost_column, contribution) -> Units:
@@ -344,11 +345,12 @@ def polygon_zone_units(x, features, cost_column, contribution) -> Units:
         full = _rij(a)
         totals[:, z] = [_sequential_sum(full.getrow(i).data) for i in range(nf)]  # Matrix's rowSums
         all_blocks.append(full)
+    base_full = None
     if layers:
         a = exact_sums(ref, geoms.geometry.values).T
         a[np.abs(a) < 1e-10] = 0.0
-        full = _rij(a)
-        base_totals = np.array([_sequential_sum(full.getrow(i).data) for i in range(nf)])
+        base_full = _rij(a)
+        base_totals = np.array([_sequential_sum(base_full.getrow(i).data) for i in range(nf)])
     blocks = []
     for full in all_blocks:
         m = full[:, rows].tocsr()
@@ -356,7 +358,7 @@ def polygon_zone_units(x, features, cost_column, contribution) -> Units:
         blocks.append(m)
     return _units("table", names, c[:, rows], blocks, totals, feature_names, x, rows,
                   features=None if isinstance(features, Mapping) else features, base_totals=base_totals,
-                  all_blocks=all_blocks)
+                  all_blocks=all_blocks, source=("table", base_full))
 
 
 def rij_zone_units(x: pd.DataFrame, spec: pd.DataFrame, rij: pd.DataFrame, cost_column, zones) -> Units:
@@ -415,7 +417,7 @@ def rij_zone_units(x: pd.DataFrame, spec: pd.DataFrame, rij: pd.DataFrame, cost_
         m.sort_indices()
         blocks.append(m)
     return _units("table", names, c[:, rows], blocks, totals, [str(v) for v in spec["name"]], x, rows,
-                  all_blocks=all_blocks)
+                  all_blocks=all_blocks, source=("table", None))
 
 
 def zone_units(x, features, *, cost_column=None, rij=None, contribution=None, zones=None) -> Units:
@@ -690,8 +692,149 @@ def one_zone(obj, what: str) -> None:
         raise ValueError(f"{what} does not support zones yet")
 
 
+def zone_region_totals(u: Units, codes: np.ndarray, nreg: int, features: np.ndarray):
+    """Every feature's total in every region (over all units, with or without a cost), in every zone
+    (features x regions x zones) and in the base features (features x regions; None with every zone's own
+    features), added in unit order as the problem's totals are."""
+    nf, nz = len(u.feature_names), u.nz
+    out = np.zeros((nf, nreg, nz))
+    need = np.unique(features)
+    kind = u.zone_source[0]
+    if kind == "table":
+        base_full = u.zone_source[1]
+        base = None if base_full is None else np.zeros((nf, nreg))
+
+        def add(a, f, target):
+            lo, hi = a.indptr[f], a.indptr[f + 1]
+            c = codes[a.indices[lo:hi]]
+            v = a.data[lo:hi]
+            keep = (c >= 0) & np.isfinite(v)
+            if u.r_sums:  # R's colSums of the column cut by the region
+                for r in range(nreg):
+                    target[r] = _r_sum(v[keep & (c == r)])
+            else:
+                np.add.at(target, c[keep], v[keep])
+
+        for f in need:
+            for z in range(nz):
+                col = np.zeros(nreg)
+                add(u.all_rij[z], f, col)
+                out[f, :, z] = col
+            if base is not None:
+                add(base_full, f, base[f])
+        return out, base
+    _, layers, contrib, nf = u.zone_source
+    base = None if contrib is None else np.zeros((nf, nreg))
+    ny, nx = u.template.shape
+    step = max(1, BLOCK_BYTES // (8 * nx * 2))
+
+    def block(da, y0, y1):
+        v = da.data[y0:y1]
+        if hasattr(v, "compute"):
+            v = v.compute()
+        return np.asarray(v, dtype=np.float64).ravel()
+
+    for f in need:
+        for y0 in range(0, ny, step):
+            y1 = min(ny, y0 + step)
+            c = codes[y0 * nx:y1 * nx]
+            if contrib is None:  # every zone's own features: zone z's layers z * nf ...
+                for z in range(nz):
+                    v = block(layers[z * nf + f], y0, y1)
+                    keep = (c >= 0) & np.isfinite(v)
+                    np.add.at(out[f, :, z], c[keep], v[keep])
+                continue
+            b = block(layers[f], y0, y1)
+            keep = (c >= 0) & np.isfinite(b)
+            np.add.at(base[f], c[keep], b[keep])
+            for z, (k, a) in enumerate(contrib):
+                v = b * a[f] if k == "scalar" else b * block(a[0] if a.ndim == 3 else a, y0, y1)
+                keep = (c >= 0) & np.isfinite(v)
+                np.add.at(out[f, :, z], c[keep], v[keep])
+    return out, base
+
+
+def resolve_zone_subregional(p):
+    """Sub-regional targets of a problem with zones (an extension): a ``zone`` column (a zone or a list;
+    default every zone) and relative targets as shares of the feature's total in the region (in one zone,
+    its total in that zone; summed over zones, the base features' or the sum of the zones' totals)."""
+    from ._milp_compile import Targets, region_codes
+
+    u = p.units
+    regions, t = p.subregional
+    codes, ids = region_codes(u, regions)
+    numeric = all(isinstance(r, (int, float, np.integer, np.floating)) for r in ids)
+    index = {(float(r) if numeric else str(r)): k for k, r in enumerate(ids)}
+    findex = {n: k for k, n in enumerate(u.feature_names)}
+    missing = sorted(set(map(str, t["feature"])) - set(findex))
+    if missing:
+        raise ValueError(f"unknown features in the targets: {missing}")
+    want = [float(r) if numeric else str(r) for r in t["region"]]
+    unknown = sorted({str(r) for r in want if r not in index})
+    if unknown:
+        raise ValueError(f"unknown regions in the targets: {unknown}")
+    region = np.array([index[r] for r in want], dtype=np.int64)
+    feature = np.array([findex[str(f)] for f in t["feature"]], dtype=np.int64)
+    target = t["target"].to_numpy(dtype=np.float64)
+    kinds = t["type"].astype(str).to_numpy() if "type" in t.columns else np.full(len(t), "relative")
+    if not np.isin(kinds, ("relative", "absolute")).all():
+        raise ValueError("target types must be 'relative' or 'absolute'")
+    sense = tuple(t["sense"].astype(str)) if "sense" in t.columns else (">=",) * len(t)
+    if not set(sense) <= {">=", "<=", "="}:
+        raise ValueError("target senses must be '>=', '<=' or '='")
+    every = tuple(range(u.nz))
+    zones = [zone_key(u, z) for z in t["zone"]] if "zone" in t.columns else [every] * len(t)
+    ztot, btot = zone_region_totals(u, codes, len(ids), feature)
+    total = np.empty(len(t))
+    for i, (f, r, zs) in enumerate(zip(feature, region, zones)):
+        if len(zs) == 1:
+            total[i] = ztot[f, r, zs[0]]
+        elif btot is not None:
+            total[i] = btot[f, r]
+        else:
+            total[i] = _r_sum(np.array([ztot[f, r, z] for z in zs]))
+    value = np.where(kinds == "relative", total * target, target)
+    return Targets(feature, sense, value, total, region, tuple(ids[k] for k in region), zone=tuple(zones),
+                   zone_label=tuple(_zone_label(u, zs) for zs in zones)), codes[u.index]
+
+
+def sum_zone_targets(u: Units):
+    """Every feature over all its zones (the extinction risk with zones): its total as targets summed over
+    the zones take it."""
+    from ._milp_compile import Targets
+
+    nf, nz = len(u.feature_names), u.nz
+    every = tuple(range(nz))
+    if u.base_totals is not None:
+        total = np.asarray(u.base_totals, dtype=np.float64).copy()
+    else:
+        total = np.array([_r_sum(np.asarray(u.totals[f], dtype=np.float64)) for f in range(nf)])
+    return Targets(np.arange(nf), ("?",) * nf, np.zeros(nf), total, zone=(every,) * nf,
+                   zone_label=(_zone_label(u, every),) * nf)
+
+
+def positive_abundances(u: Units, t) -> np.ndarray:
+    """Every target's positive amount in the units that have a cost in its zones (prioritizr's
+    feature_positive_abundances_in_planning_units: Matrix's rowSums of each zone, in unit order; then
+    the zones in turn)."""
+    n = u.n
+    out = np.zeros(t.n)
+    for i, (f, zs) in enumerate(zip(t.feature, t.zone)):
+        acc = 0.0
+        for k, z in enumerate(zs):
+            m = u.zone_rij[z]
+            lo, hi = m.indptr[f], m.indptr[f + 1]
+            keep = np.isfinite(u.cost[z * n + m.indices[lo:hi]])
+            v = np.maximum(m.data[lo:hi][keep], 0.0)
+            s = float(np.cumsum(v)[-1]) if v.size else 0.0
+            acc = s if k == 0 else acc + s
+        out[i] = acc
+    return out
+
+
 # what the zones support so far (prioritizr's zones, phase by phase)
-ZONE_OBJECTIVES = ("min_set",)
+ZONE_OBJECTIVES = ("min_set", "min_shortfall", "min_largest_shortfall", "max_utility", "max_features",
+                   "max_cover", "max_phylo_div", "max_phylo_end", "min_extinction_risk", "min_penalties")
 
 
 def check_zone_problem(p) -> None:
@@ -700,7 +843,6 @@ def check_zone_problem(p) -> None:
         raise ValueError(f"the {kind} objective is not supported with zones yet (supported: {list(ZONE_OBJECTIVES)})")
     if p.spatial:
         raise ValueError("spatial penalties and constraints are not supported with zones yet")
-    if p.subregional is not None:
-        raise ValueError("sub-regional targets are not supported with zones yet")
-    if p.weights is not None:
-        raise ValueError("feature weights are not supported with zones yet")
+    budget = p.objective[1] if len(p.objective) > 1 and kind != "min_set" else None
+    if budget is not None and np.size(budget) not in (1, p.units.nz):
+        raise ValueError(f"one budget, or one per zone ({p.units.nz})")

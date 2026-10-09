@@ -19,6 +19,15 @@ import landschaft as ls
 ZONE_CASES = case_ids("zones")
 
 
+def _assert_reference_optimum(ours: float, ref: float, sense: str) -> None:
+    """The reference's optimum (Gurobi, gap 0); in the max objectives the cost only breaks ties and Gurobi
+    stops within its tolerances: ours may be better by up to 1e-5, never worse (as test_prioritize_milp)."""
+    if ours == pytest.approx(ref, rel=1e-9, abs=1e-9):
+        return
+    better = ours > ref if sense == "max" else ours < ref
+    assert better and abs(ours - ref) <= 1e-5 * max(1.0, abs(ref)), (ours, ref)
+
+
 def _assert_same_model(ours, ref) -> None:
     keep = ref.A_x != 0
     order = np.lexsort((ref.A_j[keep], ref.A_i[keep]))
@@ -45,10 +54,16 @@ def test_solve_reaches_prioritizr_optimum(name):
     p = optimize_cases.CASES[name].py()
     sol = p.add_highs_solver(gap=0).solve()
     ref = result("zones", name)
+    kind = p.objective[0]
     assert sol.status == "optimal"
-    assert sol.objective == pytest.approx(ref["objective"][0], rel=1e-9)
-    assert sol.cost == pytest.approx(ref["objective"][0], rel=1e-9)
-    assert sol.coverage["met"].all()
+    _assert_reference_optimum(sol.objective, ref["objective"][0], "max" if kind.startswith("max") else "min")
+    if kind == "min_set":
+        assert sol.cost == pytest.approx(ref["objective"][0], rel=1e-9)
+        assert sol.coverage["met"].all()
+    else:  # within the budget, or every zone's
+        budget = np.atleast_1d(p.objective[1])
+        spent = np.array(list(sol.zone_costs.values())) if budget.size > 1 else np.array([sol.cost])
+        assert (spent <= budget * (1 + 1e-9)).all()
     v = sol.values
     assert v.shape == (p.units.n, len(p.zones))
     assert (v.sum(axis=1) <= 1 + 1e-9).all()
@@ -172,9 +187,91 @@ def test_errors():
         p.add_relative_targets(0.3).add_locked_in_constraints(lock).compile()
     with pytest.raises(ValueError, match="not supported with zones"):
         p.add_relative_targets(0.3).add_boundary_penalties(1.0).compile()
-    with pytest.raises(ValueError, match="not supported with zones"):
-        optimize_cases._zone_easy().add_max_utility_objective(1000).compile()
     with pytest.raises(ValueError, match="contribution: unknown zones"):
         ls.prioritize.problem(optimize_cases.zone_cost(), optimize_cases.features(), contribution={"x": 1})
     with pytest.raises(TypeError, match="mapping zone"):
         p.add_relative_targets(0.3).add_locked_in_constraints(optimize_cases.locked_in()).compile()
+
+
+ONE_ZONE = {
+    "min_set": lambda p: p.add_min_set_objective().add_relative_targets(0.3),
+    "min_shortfall": lambda p: p.add_min_shortfall_objective(2500).add_relative_targets(0.4),
+    "max_utility": lambda p: p.add_max_utility_objective(2500),
+    "max_cover": lambda p: p.add_max_cover_objective(1500),
+    "max_features": lambda p: p.add_max_features_objective(2000).add_relative_targets(0.3),
+    "max_phylo_div": lambda p: p.add_max_phylo_div_objective(2000, optimize_cases.TREE_SHUFFLED)
+    .add_relative_targets(0.3),
+    "min_extinction_risk": lambda p: p.add_min_extinction_risk_objective(2500),
+}
+
+
+@pytest.mark.parametrize("objective", list(ONE_ZONE))
+def test_one_zone_is_the_problem_without_zones(objective):
+    """A problem with a single zone is the problem without zones plus a row per unit that changes nothing."""
+    cost, feats = optimize_cases.pu_cost(), optimize_cases.features()
+    plain = ONE_ZONE[objective](ls.prioritize.problem(cost, feats)).add_highs_solver(gap=0)
+    zoned = ONE_ZONE[objective](ls.prioritize.problem({"only": cost}, feats)).add_highs_solver(gap=0)
+    a, b = plain.compile(), zoned.compile()
+    assert b.nrow == a.nrow + plain.units.n and b.ncol == a.ncol
+    assert np.array_equal(a.obj, b.obj) and np.array_equal(a.lb, b.lb) and np.array_equal(a.ub, b.ub)
+    # the same optimum, up to the small cost term that only breaks ties in the max objectives (the engines'
+    # and HiGHS's MIP stop within their tolerances there)
+    assert plain.solve().objective == pytest.approx(zoned.solve().objective, rel=1e-5, abs=1e-12)
+
+
+def test_subregional_targets_with_zones():
+    regions = np.where(np.arange(optimize_cases.NX)[None, :] < 7, 1.0, 2.0) * np.ones((optimize_cases.NY, 1))
+    t = pd.DataFrame({"region": [1, 2, 2], "feature": ["f1", "f4", "f5"], "target": [0.3, 0.2, 0.1],
+                      "zone": ["protect", ["protect", "use", "restore"], "use"]})
+    base = optimize_cases._zone_easy().add_min_set_objective().add_relative_targets(0.1)
+    p = base.add_subregional_targets(optimize_cases.grid(regions), t)
+    m = p.compile()
+    rows = [i for i, r in enumerate(m.row_ids) if r == "spp_target"][5:]
+    u = p.units
+    n = u.n
+    code = regions.ravel()[u.index]
+    zf = optimize_cases._zone_features().reshape(3, 5, -1)
+    f = optimize_cases._features().reshape(5, -1)
+
+    def tot(v, r):
+        s = 0.0
+        for x in v[regions.ravel() == r]:
+            if np.isfinite(x):
+                s += x
+        return s
+
+    # one zone: a share of the feature's total in that zone and region; every zone: of the base features'
+    expect = [0.3 * tot(zf[0, 0], 1), 0.2 * tot(f[3], 2), 0.1 * tot(zf[1, 4], 2)]
+    np.testing.assert_array_equal(m.rhs[rows], expect)
+    a = m.A.tocsr()
+    # the rows count the units of their region only, in their zones
+    cols = a[rows[0]].indices
+    assert (cols < n).all() and (code[cols] == 1).all()
+    cols = a[rows[1]].indices
+    assert (code[cols % n] == 2).all() and set(cols // n) == {0, 1, 2}
+    sol = p.solve()
+    cov = sol.coverage
+    assert list(cov["region"][-3:]) == [1, 2, 2] and cov["met"].all()
+
+
+def test_budgets_per_zone():
+    p = optimize_cases._zone_easy().add_max_utility_objective({"protect": 900, "use": 400, "restore": 300})
+    sol = p.solve()
+    spent = sol.zone_costs
+    assert spent["protect"] <= 900 and spent["use"] <= 400 and spent["restore"] <= 300
+    with pytest.raises(ValueError, match="a budget for every zone"):
+        optimize_cases._zone_easy().add_max_utility_objective({"protect": 900})
+    with pytest.raises(ValueError, match="one per zone"):
+        optimize_cases._zone_easy().add_max_utility_objective([1, 2])
+    with pytest.raises(ValueError, match="problems have one zone"):
+        ls.prioritize.problem(optimize_cases.pu_cost(), optimize_cases.features()).add_max_utility_objective([1, 2])
+
+
+def test_extinction_risk_with_zones_counts_every_zone():
+    p = optimize_cases._zone_easy().add_min_extinction_risk_objective(2500).add_highs_solver(gap=0)
+    sol = p.solve()
+    assert sol.cost <= 2500 * (1 + 1e-9)
+    cov = sol.coverage
+    assert list(cov["zone"]) == ["protect + use + restore"] * 5
+    # the amounts are summed over the zones by their contributions; the totals are the base features'
+    np.testing.assert_allclose(cov["total_amount"], p.units.base_totals)
