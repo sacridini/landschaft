@@ -147,6 +147,9 @@ def main() -> None:
         for name, spec in pc.EC_CASES.items():
             cases.append({"name": name, "kind": "ec", "oa": oa_job(tmp, name + "_oa", pc.OA_CASES["oa_past_er"]),
                           "domain": spec["domain"], "eco_file": eco_file, "x_vals": pc.ec_x(n_master).tolist()})
+        for name, spec in pc.ESYS_CASES.items():
+            cases.append({"name": name, "kind": "esys", "oa": oa_job(tmp, name + "_oa", pc.OA_CASES["oa_past_er"]),
+                          "eco_file": eco_file, **spec})
         job = {"plangea": args.plangea.joinpath("R").as_posix(), "cases": cases}
         (tmp / "job.json").write_text(json.dumps(job), encoding="utf-8")
         out = tmp / "out"

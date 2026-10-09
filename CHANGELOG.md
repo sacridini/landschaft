@@ -20,6 +20,18 @@ in a new major version.
   loss=True)` and `ecosystem_areas` give the habitat lost per unit of natural land lost (the current
   natural cover). plangea's procedure (`method="steps"`) for C and D matches its `scen` loop (plans to
   1e-12, refreshed layers to 1e-7).
+- Targets per region in restoration plans (plangea's sub-region targets): `add_projected_change` (the
+  econometric projections of natural land per region: a plan that restores and converts acts in every
+  region in the projected direction only, its net change as projected; a plan that only restores takes
+  the land demanded elsewhere from the restoration, as plangea's `harmonize_sr_sparable`, or restores what
+  each region spares); `add_area_target(..., relative=True)` (shares of the area that can be acted on, the
+  flat targets); `add_linear_target` (targets on production, opportunity cost or any value);
+  `ls.prioritize.ecosystem_targets` (a target shared among ecosystems for the least risk of collapse,
+  exactly, or by plangea's steps of `harmonize_sr_ecosys`, which it matches to 1e-12).
+- Corrected in plangea (only the correct form): its econometric targets of R + D do not work (the
+  per-region bounds are set only for C + R, which its checks forbid, and the compensation of demanded land
+  runs for R + D too, zeroing the conversion targets); with more land demanded than spared it gives
+  restoration negative targets (here none).
 - Corrected in plangea (only the correct form): under C its habitat update subtracts the natural share
   (0-1) from an area in km², and its first slopes are taken at the current habitat instead of the
   baseline's; under C and D the original cover (and so the potential habitat) is computed on the

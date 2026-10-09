@@ -61,7 +61,15 @@ load_src(patched("harmonize_bd.R", list(
 
 # the restoration procedure's pieces: scen's objective and solver (on Gurobi: Rsymphony is missing), the
 # refresh of the habitat between steps without its cluster, the risk of ecosystem collapse
-for (f in c("scen_objective_function.R", "scen_solver.R", "multi_calc_ec.R")) load_src(read_src(f))
+for (f in c("scen_objective_function.R", "scen_solver.R", "multi_calc_ec.R", "harmonize_sr_ecosys.R",
+            "harmonize_sr_sparable.R")) load_src(read_src(f))
+# harmonize_sr_ecosys calls Rsymphony (missing): the same linear program on Gurobi
+Rsymphony_solve_LP <- function(obj, mat, dir, rhs, bounds, max = FALSE) {
+  model <- list(obj = obj, modelsense = if (max) "max" else "min", A = mat, rhs = rhs, sense = dir,
+                lb = bounds$lower$val, ub = bounds$upper$val, vtype = "C")
+  r <- gurobi::gurobi(model, params = list(LogToConsole = 0))
+  list(solution = r$x, status = 0)
+}
 load_src(patched("multi_refresh_vars_update_hab.R", list(
   c("cl = snow::makeCluster(threads, outfile = '/dev/null')", "cl = NULL"),
   c("registerDoParallel(cl)", "foreach::registerDoSEQ()"),
@@ -349,6 +357,28 @@ for (case in job$cases) {
       }
       put(name, "gradient", g)
     }
+  } else if (case$kind == "esys") {
+    # the ecosystemic sub-region targets: the landscape target shared among the ecoregions in steps
+    o <- case$oa
+    lu_ras <- lapply(o$lu_files, function(f) aux_load_raster(f, na_fill = "zero"))
+    names(lu_ras) <- o$class_names
+    types <- unlist(o$class_types)
+    terrestrial_index <- which(values(Reduce("+", lu_ras[types %in% c("N", "A")])) > 0)
+    lu_terr <- lapply(lu_ras, function(x) x[terrestrial_index])
+    px_terr <- area(lu_ras[[1]])[terrestrial_index] * 1e-6
+    saveRDS(0 * lu_ras[[1]], file.path(tmp, "base_ras.rds"))
+    saveRDS(list(terrestrial_index = terrestrial_index), file.path(tmp, "lu_aux.rds"))
+    saveRDS(list(lu_terr = lu_terr), file.path(tmp, "harmonize_lu.rds"))
+    regions <- values(raster(case$eco_file))[terrestrial_index]
+    cfg <- list(dir = list(in_dir = paste0(tmp, "/")), landscape_features = list(land_use = list(class_types = types)),
+                targets = list(power_range_collapse_risk_ecosyst = FALSE,
+                               subregion_ecosystems_minimum_par = case$minimum))
+    valid <- sort(unique(regions))
+    res <- harmonize_sr_ecosys(cfg, regions = regions, valid_classes = list(valid), target = case$target,
+                               nsteps = case$steps, z = 0.25, hl = case$hl, px_terr = px_terr)
+    put(name, "codes", valid)
+    put(name, "targets", res)
+    put(name, "sparable", harmonize_sr_sparable(cfg, targets = unlist(case$change)))
   } else if (case$kind == "unc") {
     v <- unlist(case$v); a <- unlist(case$px_area); x <- unlist(case$x_vals)
     pc <- prop_closures(a, x)

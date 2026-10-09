@@ -213,3 +213,12 @@ EC_CASES = {
     "ec_master": dict(domain="master"),
     "ec_land": dict(domain="land"),
 }
+
+
+# the ecosystemic targets (harmonize_sr_ecosys) over the ecoregion codes: the landscape target, the least
+# share of every ecosystem, the damping exponent, the steps; with projected changes for
+# harmonize_sr_sparable
+ESYS_CASES = {
+    "esys_10": {"target": 8.0, "minimum": 0.5, "hl": 0.0, "steps": 10, "change": [4.0, -1.5, 2.0]},
+    "esys_damped": {"target": 15.0, "minimum": 0.2, "hl": -1.0, "steps": 5, "change": [3.0, 1.0, -5.0]},
+}

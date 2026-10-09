@@ -588,3 +588,112 @@ def test_ecosystem_areas_loss(case):
     x = np.full(p.n, 0.1)
     expected = [np.sum(0.1 * ((codes == c) & (nat > 0))) for c in np.unique(codes)]
     np.testing.assert_allclose(b.gain @ x, -np.array(expected))
+
+
+# ----------------------------------------------------------------------------- targets per region
+
+def _regions():
+    return pc.grid(np.where(np.arange(pc.SHAPE[1])[None, :] < 5, 1.0, 2.0) * np.ones(pc.SHAPE))
+
+
+@pytest.mark.parametrize("name", list(pc.ESYS_CASES))
+def test_ecosystem_targets_steps_are_plangea(ref, case, name):
+    """harmonize_sr_ecosys (on Gurobi): the target shared among the ecoregions in steps; the exact
+    shares give the most total of ((N + a) / T)^z (the KKT conditions: one marginal value among the
+    ecosystems off their bounds)."""
+    arrays, _ = ref
+    cover, *_ = case
+    spec = pc.ESYS_CASES[name]
+    ea = P.ecosystem_areas(cover, pc.NATURAL, pc.ANTHROPIC, pc.grid(pc.ecoregion_codes()))
+    steps = P.ecosystem_targets(ea, spec["target"], minimum=spec["minimum"], half_life=spec["hl"], method="steps",
+                                steps=spec["steps"])
+    np.testing.assert_array_equal(steps["region"], arrays[f"{name}/codes"])
+    np.testing.assert_allclose(steps["target"], arrays[f"{name}/targets"], rtol=1e-12)
+    exact = P.ecosystem_targets(ea, spec["target"], minimum=spec["minimum"], half_life=spec["hl"])
+    assert exact["target"].sum() == pytest.approx(spec["target"], rel=1e-12)
+    t = ea.table
+    n, pot = t["current"].to_numpy(), t["potential"].to_numpy()
+    least = np.minimum(spec["target"] / 3 * spec["minimum"], pot - n)
+    a = exact["target"].to_numpy()
+    assert (a >= least - 1e-12).all() and (a <= pot - n + 1e-12).all()
+    r = (n + a) / pot
+    marginal = 0.25 * r ** -0.75 * np.exp(spec["hl"] * r) / pot
+    free = (a > least + 1e-9) & (a < pot - n - 1e-9)
+    assert np.ptp(marginal[free]) <= 1e-7 * marginal[free].max()
+    assert (marginal[a <= least + 1e-9] <= marginal[free].min() * (1 + 1e-7)).all()
+    if spec["hl"] == 0:
+        def total(x):
+            return np.sum(((n + x) / pot) ** 0.25)
+
+        assert total(a) >= total(steps["target"].to_numpy()) - 1e-12
+    # the table is a target per region of the ecoregion raster
+    veg = case[1]
+    q = P.restoration_problem(veg).add_area_target(exact, regions=pc.grid(pc.ecoregion_codes()))
+    assert q.targets[0].rhs.tolist() == a.tolist() and q.targets[0].sense == ("<=",) * 3
+
+
+@pytest.mark.parametrize("name", list(pc.ESYS_CASES))
+def test_projected_change_compensates_like_plangea(ref, case, name):
+    """A plan that only restores takes the land demanded elsewhere from the restoration
+    (harmonize_sr_sparable); a net demand leaves nothing to restore (plangea: negative targets)."""
+    arrays, _ = ref
+    veg = case[1]
+    change = dict(zip([1.0, 2.0, 3.0], pc.ESYS_CASES[name]["change"]))
+    q = P.restoration_problem(veg).add_projected_change(change, pc.grid(pc.ecoregion_codes()), sense="<=")
+    np.testing.assert_allclose(q.targets[0].rhs, np.maximum(arrays[f"{name}/sparable"], 0.0), rtol=1e-15)
+    plain = P.restoration_problem(veg).add_projected_change(change, pc.grid(pc.ecoregion_codes()), compensate=False)
+    np.testing.assert_array_equal(plain.targets[0].rhs, np.maximum(list(change.values()), 0.0))
+
+
+def test_projected_change_with_restoration_and_conversion(case, natural_case):
+    """R + D: every region restores where land is spared and converts where it is demanded, its net
+    change as projected; a plan that only converts meets the demands."""
+    veg = case[1]
+    aoh, nat = natural_case
+    regions = _regions()
+    change = {1.0: 4.0, 2.0: -3.0}
+    p = P.restoration_problem(veg, convertible=nat).add_extinction_risk_benefit(aoh)
+    q = p.add_projected_change(change, regions)
+    reg = regions.values.ravel()[q.index]
+    r_col, d_col = q.action == 0, q.action == 2
+    assert (q.upper[(reg == 1) & d_col] == 0).all() and (q.upper[(reg == 2) & r_col] == 0).all()
+    assert (q.upper[(reg == 1) & r_col] > 0).any() and (q.upper[(reg == 2) & d_col] > 0).any()
+    sol = q.solve()
+    assert sol.status == "optimal"
+    net = np.where(r_col, 1.0, -1.0) * q.area * sol.values
+    assert net[reg == 1].sum() == pytest.approx(4.0, rel=1e-9)
+    assert net[reg == 2].sum() == pytest.approx(-3.0, rel=1e-9)
+    free = p.add_projected_change(change, regions, restrict=False)
+    assert np.array_equal(free.upper, p.upper)
+    d = P.restoration_problem(convertible=nat).add_extinction_risk_benefit(aoh).add_projected_change(change, regions)
+    assert d.targets[0].rhs.tolist() == [0.0, 3.0]
+    sol = d.solve()
+    reg = regions.values.ravel()[d.index]
+    assert np.sum(d.area[reg == 2] * sol.values[reg == 2]) == pytest.approx(3.0, rel=1e-9)
+    with pytest.raises(ValueError, match="only restore"):
+        p.add_projected_change(change, regions, compensate=True)
+    with pytest.raises(ValueError, match="restore or convert"):
+        P.restoration_problem(conservable=nat).add_projected_change(change, regions)
+
+
+def test_relative_and_linear_targets(case):
+    """Targets as shares of what can be acted on (plangea's flat targets), and on other values
+    (production, opportunity cost) per region."""
+    veg = case[1]
+    regions = _regions()
+    p = P.restoration_problem(veg)
+    reg = regions.values.ravel()[p.index]
+    q = p.add_area_target({1.0: 0.25, 2.0: 0.5}, regions=regions, relative=True)
+    avail = [float(np.sum((p.upper * p.area)[reg == c])) for c in (1.0, 2.0)]
+    np.testing.assert_allclose(q.targets[0].rhs, [0.25 * avail[0], 0.5 * avail[1]], rtol=1e-15)
+    land = p.add_area_target(0.3, relative=True)
+    assert land.targets[0].rhs[0] == pytest.approx(0.3 * float(p.upper @ p.area), rel=1e-15)
+    rng = np.random.default_rng(10)
+    prod = pc.grid(rng.random(pc.SHAPE) * 5)
+    carbon = pc.grid(rng.random(pc.SHAPE))
+    t = (p.add_linear_benefit(carbon).add_linear_target(prod, 6.0, sense="<=")
+         .add_linear_target(prod, {1.0: 1.0}, sense=">=", regions=regions))
+    sol = t.solve()
+    pv = prod.values.ravel()[p.index] * p.area * sol.values
+    assert pv.sum() <= 6.0 * (1 + 1e-9) and pv[reg == 1].sum() >= 1.0 * (1 - 1e-9)
+    assert sol.status == "optimal"

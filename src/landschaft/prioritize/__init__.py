@@ -106,6 +106,7 @@ from ._restoration import (
                               RestorationSolution,
                               RiskReduction,
                               ecosystem_areas,
+                              ecosystem_targets,
                               eval_risk_reduction,
                               restoration_problem,
 )
@@ -153,6 +154,7 @@ __all__ = [
                               "convolve",
                               "decay_connectivity",
                               "ecosystem_areas",
+                              "ecosystem_targets",
                               "eval_asym_connectivity_summary",
                               "eval_boundary_summary",
                               "eval_connectivity_summary",

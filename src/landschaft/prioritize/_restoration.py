@@ -39,7 +39,7 @@ import xarray as xr
 from .._save import Saveable
 from ._milp import OptimizationProblem
 
-__all__ = ["RestorationProblem", "RestorationSolution", "RiskReduction", "ecosystem_areas",
+__all__ = ["RestorationProblem", "RestorationSolution", "RiskReduction", "ecosystem_areas", "ecosystem_targets",
            "eval_risk_reduction", "restoration_problem"]
 
 PLANGEA_Z = 0.25  # plangea's exponent of the species-area relationship
@@ -393,7 +393,8 @@ class RestorationProblem:
             raise ValueError(f"action: the problem has no {action!r} ({', '.join(acts)})")
         return np.where(self.action == _CODE[action], self.area, 0.0)
 
-    def add_area_target(self, target, sense: str = "<=", regions=None, action: str | None = None) -> RestorationProblem:
+    def add_area_target(self, target, sense: str = "<=", regions=None, action: str | None = None,
+                        relative: bool = False) -> RestorationProblem:
         """The area acted on (km²): in the whole landscape, or in every region.
 
         Parameters
@@ -409,15 +410,107 @@ class RestorationProblem:
             The area of ``"restore"``, ``"conserve"`` or ``"convert"``, of ``"all"`` of them, or the
             ``"net"`` change of natural land (restored minus converted). Default: ``"net"`` when the
             plan restores and converts, ``"all"`` otherwise.
+        relative
+            The targets are shares (0-1) of the area that can be acted on (in the landscape or in every
+            region): plangea's flat targets.
         """
+        return self._add_rows(self._area_coef(action), target, sense, regions, relative)
+
+    def add_linear_target(self, values, target, sense: str = "<=", regions=None, per: str = "area",
+                          relative: bool = False) -> RestorationProblem:
+        """A target on a value other than the area (production, opportunity cost, carbon ...): the sum of
+        ``values`` over the plan, in the landscape or in every region.
+
+        ``values``: a raster, a number, one value per unit or a mapping action -> values; per km²
+        (``per="area"``) or per cell in full (``per="cell"``) of the action. ``target``, ``sense``,
+        ``regions`` and ``relative`` as :meth:`add_area_target` (plangea's targets of other types)."""
+        v = _per_column(self, values, "values")
+        if not np.isfinite(v).all():
+            raise ValueError("values: NaN or infinite on a planning unit")
+        if per == "area":
+            coef = v * self.area
+        elif per == "cell":
+            coef = v.copy()
+        else:
+            raise ValueError("per: 'area' or 'cell'")
+        return self._add_rows(coef, target, sense, regions, relative)
+
+    def add_projected_change(self, change, regions, sense: str = "=", restrict: bool = True,
+                             compensate: bool | None = None) -> RestorationProblem:
+        """Projected changes of natural land per region (plangea's econometric targets): positive, land
+        spared for restoration; negative, a demand for land to convert.
+
+        Parameters
+        ----------
+        change
+            A mapping region -> change (km²) or a table with columns ``region``, ``change`` and
+            optionally ``sense``.
+        regions
+            A raster of region codes on the problem's grid or one code per unit.
+        sense
+            Of every region's row (``"="``: the change as projected).
+        restrict
+            A plan that restores and converts acts in every region in the projected direction only:
+            restoring where land is spared, converting where it is demanded, neither where the change
+            is 0 (what plangea's ``harmonize_sr_r_or_c_bvals`` meant to do). Its rows are the net change.
+        compensate
+            A plan that only restores cannot convert: with ``compensate`` (the default, plangea's
+            ``harmonize_sr_sparable``) the land demanded elsewhere is taken from the restoration, every
+            region with spared land restoring its share of the net spared land; without it, the regions
+            restore what they spare. A plan that only converts converts what the regions demand.
+        """
+        acts = self.actions
+        if "conserve" in acts:
+            raise ValueError("projected changes of natural land are for plans that restore or convert")
+        codes = _on_units(self, regions, "regions")
+        if isinstance(change, Mapping):
+            tab = pd.DataFrame({"region": list(change.keys()), "change": list(change.values())})
+        else:
+            tab = pd.DataFrame(change)
+            if "region" not in tab or "change" not in tab:
+                raise ValueError("change: a mapping region -> change or a table with region and change")
+        ch = tab["change"].to_numpy(np.float64)
+        if not np.isfinite(ch).all():
+            raise ValueError("change: NaN or infinite")
+        restore, convert = "restore" in acts, "convert" in acts
+        upper = self.upper
+        if restore and convert:
+            if compensate:
+                raise ValueError("compensate is for plans that only restore")
+            target = ch
+            if restrict:
+                upper = upper.copy()
+                r_col, d_col = self.action == _CODE["restore"], self.action == _CODE["convert"]
+                for code, c in zip(tab["region"].to_numpy(np.float64), ch):
+                    inside = codes == code
+                    upper[inside & (d_col if c > 0 else (r_col if c < 0 else True))] = 0.0
+            coef = self._area_coef("net")
+        elif restore:
+            spared = ch[ch > 0].sum()
+            if compensate is None or compensate:
+                net = max(float(ch.sum()), 0.0)
+                target = np.where(ch > 0, ch * (net / spared if spared > 0 else 0.0), 0.0)
+            else:
+                target = np.where(ch > 0, ch, 0.0)
+            coef = self._area_coef("restore")
+        else:
+            if compensate:
+                raise ValueError("compensate is for plans that only restore")
+            target = np.where(ch < 0, -ch, 0.0)
+            coef = self._area_coef("convert")
+        rows = tab.assign(target=target)[["region", "target"] + (["sense"] if "sense" in tab else [])]
+        return replace(self, upper=upper)._add_rows(coef, rows, sense, regions, False)
+
+    def _add_rows(self, coef: np.ndarray, target, sense: str, regions, relative: bool) -> RestorationProblem:
+        """Target rows of the coefficients ``coef`` per column: in the landscape or per region."""
         if sense not in ("<=", ">=", "="):
             raise ValueError("sense: '<=', '>=' or '='")
-        coef = self._area_coef(action)
         if regions is None:
             if not np.isscalar(target):
                 raise ValueError("a target per region needs regions")
             rows = sp.csr_matrix(coef[None, :])
-            t = _Targets(rows, np.array([float(target)]), (sense,), ("landscape",))
+            rhs = np.array([float(target)])
+            t = _Targets(rows, rhs, (sense,), ("landscape",))
         else:
             codes = _on_units(self, regions, "regions")
             if isinstance(target, Mapping):
@@ -438,6 +531,10 @@ class RestorationProblem:
             rows = sp.csr_matrix((v, (r, c)), shape=(len(tab), self.n))
             t = _Targets(rows, tab["target"].to_numpy(np.float64), tuple(senses),
                          tuple(str(x) for x in tab["region"].tolist()))
+        if relative:
+            # shares of what can be acted on in each row
+            avail = abs(t.rows) @ self.upper
+            t = replace(t, rhs=t.rhs * avail)
         if not np.isfinite(t.rhs).all():
             raise ValueError("targets must be finite")
         return replace(self, targets=self.targets + (t,))
@@ -849,6 +946,152 @@ def ecosystem_areas(land_cover, natural, anthropic, ecoregions, *, cell_area=Non
                           "range_cells": [int(np.sum(e == c)) for c in codes], "classes": ", ".join(natural),
                           "valid": (np.array(pot) > 0)})
     return HabitatAreas(table=table, gain=gain, _template=template, loss=loss)
+
+
+def ecosystem_targets(areas, target: float, *, minimum: float = 0.0, z: float = PLANGEA_Z,
+                      half_life: float = 0.0, sense: str = "<=", method: str = "exact",
+                      steps: int = 10) -> pd.DataFrame:
+    """Share a restoration target among ecosystems for the least risk of collapse (plangea's
+    ecosystemic sub-region targets, ``harmonize_sr_ecosys``).
+
+    Every ecosystem e with natural area N_e of a potential T_e (:func:`ecosystem_areas`) gets a_e of
+    the target, between its least share and its converted area T_e - N_e, for the most total of
+    ((N_e + a_e) / T_e)^z, each ecosystem's marginal value damped by exp(``half_life`` (N_e + a_e) /
+    T_e) (plangea's "yukawa" factor; 0: none).
+
+    Parameters
+    ----------
+    areas
+        A :class:`~landschaft.sdm.HabitatAreas` of ecosystems (:func:`ecosystem_areas`).
+    target
+        The area to share (km²).
+    minimum
+        Every ecosystem's least share, as a part (0-1) of an equal split of the target (plangea's
+        ``subregion_ecosystems_minimum_par``), up to its converted area.
+    z
+        The exponent of the species-area relationship.
+    half_life
+        The damping exponent (below 1 - z, so the marginal value falls with the area).
+    sense
+        The sense of the targets returned (plangea's ``subregion_ecosystemic_targets_sense``).
+    method
+        ``"exact"``: the optimum (the marginal values equal among the ecosystems not at a bound, by
+        bisection). ``"steps"``: plangea's procedure (the target in ``steps`` parts, each a linear
+        program on the marginal values, recomputed between them).
+
+    Returns
+    -------
+    pandas.DataFrame
+        ``region`` (the ecosystem's code) and ``target``, ``sense``: a table for
+        :meth:`RestorationProblem.add_area_target` with the ecosystem raster as ``regions``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import xarray as xr
+    >>> import landschaft as ls
+    >>> cover = xr.DataArray(np.array([[[0.8, 0.2, 0.1, 0.5]], [[0.2, 0.8, 0.9, 0.5]]]),
+    ...                      dims=("band", "y", "x"), coords={"band": ["forest", "crops"]})
+    >>> eco = np.array([[1.0, 1.0, 2.0, 2.0]])
+    >>> ea = ls.prioritize.ecosystem_areas(cover, ["forest"], ["crops"], eco, cell_area=1.0)
+    >>> ls.prioritize.ecosystem_targets(ea, 1.0).round(4)
+       region  target sense
+    0     1.0     0.3    <=
+    1     2.0     0.7    <=
+    """
+    tab = areas.table
+    keep = tab["valid"].to_numpy(bool) & (tab["potential"].to_numpy(np.float64) > 0)
+    n_e = tab["current"].to_numpy(np.float64)[keep]
+    t_e = tab["potential"].to_numpy(np.float64)[keep]
+    codes = pd.to_numeric(tab["species"].astype(str)[keep], errors="coerce").to_numpy(np.float64)
+    if not 0 <= minimum <= 1:
+        raise ValueError("minimum must be in [0, 1]")
+    if not 0 < z < 1:
+        raise ValueError("z must be in (0, 1)")
+    if half_life >= 1 - z:
+        raise ValueError("half_life must be below 1 - z (the marginal value must fall with the area)")
+    if sense not in ("<=", ">=", "="):
+        raise ValueError("sense: '<=', '>=' or '='")
+    target = float(target)
+    up = np.maximum(t_e - n_e, 0.0)
+    k = n_e.size
+    if method == "steps":
+        a = _ecosystem_steps(n_e, t_e, up, target, minimum, z, half_life, int(steps))
+    elif method == "exact":
+        least = np.minimum(target / k * minimum, up)
+
+        def marginal(a):
+            r = (n_e + a) / t_e
+            with np.errstate(divide="ignore"):
+                return z * r ** (z - 1.0) * np.exp(half_life * r) / t_e
+
+        def share(lam):
+            """Every ecosystem's area where its marginal value falls to lam (within its bounds)."""
+            lo, hi = least.copy(), up.copy()
+            for _ in range(200):
+                mid = 0.5 * (lo + hi)
+                above = marginal(mid) > lam
+                lo, hi = np.where(above, mid, lo), np.where(above, hi, mid)
+            return np.where(marginal(up) >= lam, up, np.where(marginal(least) <= lam, least, 0.5 * (lo + hi)))
+
+        if up.sum() <= target:
+            a = up
+        else:
+            lam_lo, lam_hi = 0.0, float(np.max(np.where(np.isfinite(marginal(least)), marginal(least), 0.0))) + 1.0
+            if not np.isfinite(marginal(least)).all():
+                lam_hi = float(np.max(marginal(np.minimum(least + 1e-12 * np.maximum(t_e, 1.0), up)))) * 2 + 1.0
+            for _ in range(200):
+                lam = 0.5 * (lam_lo + lam_hi)
+                if share(lam).sum() > target:
+                    lam_lo = lam
+                else:
+                    lam_hi = lam
+            a = share(lam_hi)
+            # the last bit of the target to the ecosystems at the marginal value
+            free = (a > least) & (a < up)
+            rest = target - a.sum()
+            if rest > 0 and free.any():
+                room = up[free] - a[free]
+                a[free] += room * min(1.0, rest / room.sum())
+    else:
+        raise ValueError("method: 'exact' or 'steps'")
+    return pd.DataFrame({"region": codes, "target": a, "sense": sense})
+
+
+def _ecosystem_steps(n_e, t_e, up, target, minimum, z, half_life, steps) -> np.ndarray:
+    """plangea's harmonize_sr_ecosys: the target in steps, each a linear program on the ecosystems'
+    marginal values (plangea's finite difference, times the damping), every ecosystem at least its
+    share of the step; the marginal values recomputed between the steps."""
+    if steps < 1:
+        raise ValueError("steps must be at least 1")
+    k = n_e.size
+
+    def values(nat):
+        r1 = np.maximum(1.0 - (nat / t_e) ** z, 0.0)
+        r2 = np.maximum(1.0 - ((nat + PLANGEA_DELTA) / t_e) ** z, 0.0)
+        return np.abs(r2 - r1) / PLANGEA_DELTA * np.exp(half_life * nat / t_e)
+
+    obj = values(n_e)
+    ub = up.copy()
+    step = target / steps
+    least = np.minimum(np.full(k, step / k * minimum), ub)
+    total = np.zeros(k)
+    for _ in range(steps):
+        # the linear program: x >= least, sum x <= step, x <= ub; the rest of the step by value
+        x = least.copy()
+        left = step - x.sum()
+        for e in np.argsort(-obj, kind="stable"):
+            if left <= 0:
+                break
+            add = min(ub[e] - x[e], left)
+            if add > 0:
+                x[e] += add
+                left -= add
+        ub = np.maximum(ub - x, 0.0)
+        least = np.minimum(least, ub)
+        total = total + x
+        obj = values(n_e + total)
+    return total
 
 
 # ----------------------------------------------------------------------------- the benefits
