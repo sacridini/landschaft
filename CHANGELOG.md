@@ -6,6 +6,17 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.44.0] - 2026-10-10
+
+### Added
+- `Model.save(path, landscape, drivers, seed=...)` writes a fitted model as a
+  [Terraflux](https://github.com/sacridini/terraflux) graph (JSON): the fitted pieces as they are (weights of
+  evidence, logistic regressions, Markov chains, area demands, Expander/Patcher settings, lulcc's rules) and the
+  data it runs on as GeoTIFF files next to it (or the paths given). `terraflux run` gives the same maps as
+  `Model.run` with the same seed, bit for bit: CLUE-S, the ordered allocation, the Expander and Patcher and CARS,
+  with weights of evidence, logistic regressions or given maps as potential, and the dynamic variables
+  `distance_to` (Euclidean) and `share_of`. `Model.load(path)` reads such a graph back as `(model, inputs)`.
+- `ls.simulate.terraflux(path)` runs a model with the `terraflux` command and returns the simulated maps.
 ## [1.43.0] - 2026-10-10
 
 ### Added

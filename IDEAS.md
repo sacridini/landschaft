@@ -3299,6 +3299,16 @@ sim.supply; sim.shortfall; sim.trajectory()
    lulcc continuam bit a bit) e `test_simulate_kernels.py`, que guarda o código numpy anterior como referência e
    exige os mesmos bits em entradas aleatórias com empates, NaN e casos de borda (74 testes). A raiz da cadeia
    de Markov sai do Eigen em vez do `logm`/`expm` do SciPy: o mesmo erro (~1e-14), dentro das tolerâncias.
+12. Ponte com o Terraflux (fase 2 de lá, pedida em 2026-10-10). `Model.save` grava um modelo ajustado como
+   grafo do Terraflux (JSON, formato `terraflux/1`), com as peças ajustadas como valores literais (`woe.weights`,
+   `glm.coefficients`, `markov.matrix`, `demand.table`, `patches.settings`, os parâmetros das regras) e os dados
+   em GeoTIFF float64 numa pasta ao lado (ou os caminhos dados); `Model.load` lê de volta; `S.terraflux` roda o
+   executável. NaN vira `null` no JSON (coeficientes de drivers sem coeficiente).
+   **Feita** (1.44.0): `simulate/_graph.py`. Testes (`test_simulate_graph.py`): Dinamica, CLUE-S com todas as
+   regras, ordenado, variáveis dinâmicas, CARS e potencial em raster dão os mesmos mapas por `run`, por
+   `save` → `load` → `run` e, com o Terraflux instalado (`TERRAFLUX` ou PATH), por `terraflux run`, bit a bit.
+   Ainda não vão: demandas regionais, CLUMondo, FUTURES, MOLUSCE, `Estimator` (exportar as previsões como
+   `RasterPotential`) e distâncias de custo.
 
 ---
 
