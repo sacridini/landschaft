@@ -84,51 +84,11 @@ class Ordered:
         order = [_class_value(c) for c in self.order]
         if sorted(order) != sorted(classes):
             raise ValueError("'order' must contain the model's classes, each once")
-        tprob = tprob.copy()
-        area = np.array([np.sum(x == c) for c in classes], dtype=np.float64)
-        if np.sum(np.abs(demand - area)) == 0:
-            return x.copy(), {"iterations": 0, "converged": True}
-        x1 = x.copy()
-        short = 0
-        for cat in order:
-            ix = classes.index(cat)
-            n = int(demand[ix] - np.sum(x1 == cat))
-            if n == 0:
-                tprob[x == cat] = np.nan
-            elif n > 0:
-                cand = np.flatnonzero(x1 != cat)
-                p = tprob[cand, ix]
-                o = np.argsort(np.where(np.isnan(p), np.inf, -p), kind="stable")
-                o = o[~np.isnan(p[o])]
-                p, cand = p[o], cand[o]
-                sel = self._draw(p, n, rng, lambda p, u: p >= u)[:n]
-                short += n - sel.size
-                x1[cand[sel]] = cat
-                tprob[x1 == cat] = np.nan
-            else:
-                cand = np.flatnonzero(x == cat)
-                p = tprob[cand, ix]
-                o = np.argsort(np.where(np.isnan(p), np.inf, p), kind="stable")
-                o = o[~np.isnan(p[o])]
-                p, cand = p[o], cand[o]
-                sel = self._draw(p, -n, rng, lambda p, u: p < u)[:-n]
-                short += -n - sel.size
-                x1[cand[sel]] = -1
-                tprob[x1 == cat] = np.nan
-        left = x1 == -1  # released by a shrinking class and taken by none served after it: they stay
-        x1[left] = x[left]
+        r = _core.sim_ordered(np.ascontiguousarray(tprob, dtype=np.float64), np.ascontiguousarray(x, dtype=np.float64),
+                              np.ascontiguousarray(demand, dtype=np.float64), np.asarray(classes, dtype=np.float64),
+                              np.asarray(order, dtype=np.float64), bool(self.stochastic), rng)
+        short = int(r["short"])
         if short:
             warnings.warn(f"the demand was not met by {short} cells: too few cells could take a class "
                           "(no suitability, or 1000 draws without enough)", stacklevel=4)
-        return x1, {"iterations": 1, "converged": not short}
-
-    def _draw(self, p, n, rng, keep):
-        # as lulcc: up to 1001 draws for enough cells, then the cells of the last draw (fewer than n)
-        if not self.stochastic:
-            return np.arange(p.size)
-        counter = 0
-        while True:
-            counter += 1
-            sel = np.flatnonzero(keep(p, rng.runif(p.size)))
-            if sel.size >= n or counter > 1000:
-                return sel
+        return r["allocation"], {"iterations": int(r["iterations"]), "converged": bool(r["converged"])}

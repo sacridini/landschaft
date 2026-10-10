@@ -163,6 +163,18 @@ pip install -e ".[test]"
 pytest
 ```
 
+## The C++ libraries without Python
+
+Native programs can link Landschaft's C++ core directly (as
+[Terraflux](https://github.com/sacridini/terraflux) does for `ls.simulate`'s
+models). `LANDSCHAFT_PYTHON=OFF` builds and installs only the static libraries
+and their headers, without Python, pybind11 or the MILP solver:
+
+```bash
+cmake -S . -B build/native -DLANDSCHAFT_PYTHON=OFF -DCMAKE_INSTALL_PREFIX=dist/native
+cmake --build build/native --config Release --target install --parallel
+```
+
 ## Troubleshooting
 
 ??? question "`pip install` fails with *no C++ compiler found* / *CMAKE_CXX_COMPILER not set*"

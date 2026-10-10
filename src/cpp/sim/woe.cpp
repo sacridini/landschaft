@@ -144,4 +144,86 @@ std::vector<double> woe_probability(const MapView& landscape, double from, const
     return out;
 }
 
+WoeWeights woe_weights(double nb, double b, double n, double a, bool fix) {
+    WoeWeights w;
+    const bool abnormal_plus = nb == 0 || b - nb == 0 || n == 0 || a - n == 0;
+    if (abnormal_plus) {
+        if (fix && b > 0 && n > 0 && a - n > 0) w.plus = b - nb == 0 ? std::log(b * (a - n) + 1.0) : -std::log(b * n + 1.0);
+    } else {
+        w.plus = std::log((nb / n) / ((b - nb) / (a - n)));
+    }
+    const bool abnormal_minus = n - nb == 0 || a - b - n + nb == 0 || n == 0 || a - n == 0;
+    if (abnormal_plus || abnormal_minus) return w;
+    const double minus = std::log(((n - nb) / n) / ((a - b - n + nb) / (a - n)));
+    w.contrast = w.plus - minus;
+    const double sd = std::sqrt(1.0 / nb + 1.0 / (b - nb) + 1.0 / (n - nb) + 1.0 / (a - b - n + nb));
+    w.significant = std::fabs(w.contrast) > 1.96 * sd;
+    return w;
+}
+
+namespace {
+
+// Python's math.degrees(math.atan2(dy, dx))
+double angle(double dx, double dy) { return std::atan2(dy, dx) * (180.0 / 3.141592653589793); }
+
+}  // namespace
+
+std::vector<int> woe_generalise(const std::vector<std::int64_t>& possible, const std::vector<std::int64_t>& executed,
+                                double min_delta, double max_delta, double tolerance, bool fix) {
+    if (possible.size() != executed.size()) throw std::invalid_argument("possible and executed differ in length");
+    const std::size_t n = possible.size();
+    std::vector<double> cum_b(n), cum_nb(n);
+    double sb = 0, snb = 0;
+    for (std::size_t k = 0; k < n; ++k) {
+        sb += static_cast<double>(possible[k]);
+        snb += static_cast<double>(executed[k]);
+        cum_b[k] = sb;
+        cum_nb[k] = snb;
+    }
+    const double a_total = n ? cum_b[n - 1] : 0.0, n_total = n ? cum_nb[n - 1] : 0.0;
+    std::vector<double> xs{0.0}, ys{0.0};
+    for (std::size_t k = 0; k < n; ++k) {
+        const bool abnormal = cum_nb[k] == 0 || cum_b[k] - cum_nb[k] == 0;
+        // a buffer without transitions, or with nothing else: exp(W+) taken as 0
+        const double ratio = abnormal && !fix ? 0.0 : std::exp(woe_weights(cum_nb[k], cum_b[k], n_total, a_total, fix).plus);
+        xs.push_back(cum_b[k]);
+        ys.push_back(cum_b[k] * ratio);
+    }
+    std::vector<int> bounds;
+    std::size_t anchor = 0, prev = 0;
+    bool has_prev = false;
+    for (std::size_t i = 1; i <= n; ++i) {
+        const double dx = xs[i] - xs[anchor];
+        const double ref = has_prev ? angle(xs[anchor] - xs[prev], ys[anchor] - ys[prev]) : 0.0;
+        const double phi = std::fabs(angle(dx, ys[i] - ys[anchor]) - ref);
+        if ((dx >= min_delta && (dx > max_delta || phi > tolerance)) || i == n) {
+            bounds.push_back(static_cast<int>(i));
+            prev = anchor;
+            has_prev = true;
+            anchor = i;
+        }
+    }
+    return bounds;
+}
+
+void woe_normalise(double* sums, int k, std::int64_t n) {
+    lsm::parallel_for(n >= kParallelCells, n, [&](i64 i) {
+        double top = -std::numeric_limits<double>::infinity();
+        for (int j = 0; j < k; ++j) {
+            const double s = sums[static_cast<std::size_t>(j) * static_cast<std::size_t>(n) + static_cast<std::size_t>(i)];
+            if (!std::isnan(s) && s > top) top = s;
+        }
+        top = std::max(top, 0.0);
+        double total = 0.0;
+        for (int j = 0; j < k; ++j) {
+            double& s = sums[static_cast<std::size_t>(j) * static_cast<std::size_t>(n) + static_cast<std::size_t>(i)];
+            s = std::exp(s - top);
+            total = j == 0 ? s : total + s;
+        }
+        const double denom = std::exp(-top) + total;
+        for (int j = 0; j < k; ++j)
+            sums[static_cast<std::size_t>(j) * static_cast<std::size_t>(n) + static_cast<std::size_t>(i)] /= denom;
+    });
+}
+
 }  // namespace sim

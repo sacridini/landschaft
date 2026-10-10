@@ -33,4 +33,31 @@ std::vector<double> woe_probability(const MapView& landscape, double from,
                                     const std::vector<const std::int32_t*>& buckets,
                                     const std::vector<std::vector<double>>& weights, std::int64_t n);
 
+// The weights of a range with nb transitions among its b possible cells, of n
+// transitions among a possible cells: W+ = ln(P(B|D) / P(B|~D)), the
+// contrast W+ - W- and whether it exceeds 1.96 standard deviations. Ranges
+// with no transition or only transitions (and the like) are abnormal: W+ is
+// 0, or with `fix` -ln(b n + 1) and ln(b (a - n) + 1); their contrast is 0.
+struct WoeWeights {
+    double plus = 0.0;
+    double contrast = 0.0;
+    bool significant = false;
+};
+WoeWeights woe_weights(double nb, double b, double n, double a, bool fix);
+
+// The ranges of a continuous variable: the bucket indices (1..n) that end
+// each range, from the line generalisation of the curve (A, A exp(W+)) of
+// the cumulative buckets (Dinamica EGO's): a range ends where the direction
+// from its start deviates from that of the previous range by more than
+// `tolerance` degrees, or where it would exceed `max_delta` cells, never
+// below `min_delta` cells; the last bucket always ends one.
+std::vector<int> woe_generalise(const std::vector<std::int64_t>& possible, const std::vector<std::int64_t>& executed,
+                                double min_delta, double max_delta, double tolerance, bool fix);
+
+// From the sums of weights S of k transitions from the same class
+// (k x n, row-major, NaN where they do not apply) to their probabilities
+// exp(S_j) / (1 + sum_i exp(S_i)), computed as exp(S_j - t) / (exp(-t) +
+// sum_i exp(S_i - t)), t = max(0, max_i S_i), in place.
+void woe_normalise(double* sums, int k, std::int64_t n);
+
 }  // namespace sim

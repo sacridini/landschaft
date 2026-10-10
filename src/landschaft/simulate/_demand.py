@@ -6,7 +6,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ._change import _class_value, _rsum
+from .. import _core
+from ._change import _class_value
 from ._maps import read_series
 
 __all__ = ["AreaDemand"]
@@ -14,48 +15,13 @@ __all__ = ["AreaDemand"]
 
 def _approx_extrap(x: np.ndarray, y: np.ndarray, xout: np.ndarray) -> np.ndarray:
     """Hmisc::approxExtrap: R's approx (linear) inside, the end segments' lines outside."""
-    keep = ~pd.Series(x).duplicated().to_numpy()
-    x, y = x[keep], y[keep]
-    o = np.argsort(x, kind="stable")
-    x, y = x[o], y[o]
-    n = x.size
-    out = np.empty(xout.size)
-    for k, v in enumerate(xout):
-        if v < x[0]:
-            out[k] = (y[1] - y[0]) / (x[1] - x[0]) * (v - x[0]) + y[0]
-        elif v > x[-1]:
-            out[k] = (y[n - 1] - y[n - 2]) / (x[n - 1] - x[n - 2]) * (v - x[n - 2]) + y[n - 2]
-        else:  # R's approx1: bisection, then y[i] + (y[j] - y[i]) * ((v - x[i]) / (x[j] - x[i]))
-            i, j = 0, n - 1
-            while i < j - 1:
-                ij = (i + j) // 2
-                if v < x[ij]:
-                    j = ij
-                else:
-                    i = ij
-            if v == x[j]:
-                out[k] = y[j]
-            elif v == x[i]:
-                out[k] = y[i]
-            else:
-                out[k] = y[i] + (y[j] - y[i]) * ((v - x[i]) / (x[j] - x[i]))
-    return out
+    return _core.sim_approx_extrap(np.asarray(x, dtype=np.float64), np.asarray(y, dtype=np.float64),
+                                   np.asarray(xout, dtype=np.float64))
 
 
 def _round_sum(x: np.ndarray, ncell: int) -> np.ndarray:
     """lulcc's roundSum: each row scaled to sum to ncell, floored, the remainder to the largest fractions."""
-    out = np.empty_like(x)
-    for r in range(x.shape[0]):
-        y = x[r] / _rsum(x[r]) * ncell
-        xint = np.floor(y)
-        frac = y - np.floor(y)
-        ix = np.argsort(frac, kind="stable")  # R's sort(index.return = TRUE): stable, increasing
-        tot = ncell - _rsum(np.floor(y))
-        if tot > 0:
-            pick = ix[int(len(y) - tot):]
-            xint[pick] += 1
-        out[r] = xint
-    return out
+    return _core.sim_round_sum(np.asarray(x, dtype=np.float64), int(ncell))
 
 
 class AreaDemand:

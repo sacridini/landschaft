@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(LANDSCHAFT_OPENMP "Build with OpenMP" ON)
+# OFF: only the static C++ libraries (and their headers) are built and installed, without Python, for
+# native programs that link them (Terraflux); the MILP prioritization (HiGHS) is left out.
+option(LANDSCHAFT_PYTHON "Build the Python module landschaft._core" ON)
 
 # On Windows the modules are built with MSVC (the results are checked against the UCRT's maths);
 # a MinGW gcc found on PATH would make modules that need its runtime DLLs and fail to import.
@@ -14,8 +17,10 @@ if(WIN32 AND NOT MSVC)
                         "with the C++ workload. The compiler found was ${CMAKE_CXX_COMPILER}.")
 endif()
 
-find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
-find_package(pybind11 CONFIG REQUIRED)
+if(LANDSCHAFT_PYTHON)
+    find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+    find_package(pybind11 CONFIG REQUIRED)
+endif()
 
 add_library(gtbcore STATIC
     src/cpp/gtb/primitives.cpp
@@ -163,54 +168,56 @@ target_include_directories(priocore PUBLIC src/cpp)
 target_link_libraries(priocore PRIVATE eigen_headers)
 set_target_properties(priocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# HiGHS 1.15.1 (MIT), the MILP / LP solver of the MILP prioritization, built
-# here as a static library linked into _core (no executable, tests or zlib).
-# FETCHCONTENT_SOURCE_DIR_HIGHS=<path> uses a local copy (offline builds).
-set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)  # HiGHS's option() calls take these values
-set(BUILD_SHARED_LIBS OFF)
-set(BUILD_CXX_EXE OFF)
-set(BUILD_TESTING OFF)
-set(BUILD_EXAMPLES OFF)
-set(BUILD_SHARED_EXTRAS_LIB OFF)
-set(ZLIB OFF)
-set(FORTRAN OFF)
-set(CSHARP OFF)
-set(HIPO OFF)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-FetchContent_Declare(highs
-    URL https://github.com/ERGO-Code/HiGHS/archive/refs/tags/v1.15.1.tar.gz
-    URL_HASH SHA256=a840d269dff2fafb371dd247df13ad5e026d7ce3b35ad3dc1eedd59bf0c2fb16
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    # our changes to its sources (see the script)
-    PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/opt/highs_patch.cmake)
-FetchContent_MakeAvailable(highs)
-unset(CMAKE_POSITION_INDEPENDENT_CODE)
-unset(BUILD_SHARED_LIBS)
+if(LANDSCHAFT_PYTHON)
+    # HiGHS 1.15.1 (MIT), the MILP / LP solver of the MILP prioritization, built
+    # here as a static library linked into _core (no executable, tests or zlib).
+    # FETCHCONTENT_SOURCE_DIR_HIGHS=<path> uses a local copy (offline builds).
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)  # HiGHS's option() calls take these values
+    set(BUILD_SHARED_LIBS OFF)
+    set(BUILD_CXX_EXE OFF)
+    set(BUILD_TESTING OFF)
+    set(BUILD_EXAMPLES OFF)
+    set(BUILD_SHARED_EXTRAS_LIB OFF)
+    set(ZLIB OFF)
+    set(FORTRAN OFF)
+    set(CSHARP OFF)
+    set(HIPO OFF)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    FetchContent_Declare(highs
+        URL https://github.com/ERGO-Code/HiGHS/archive/refs/tags/v1.15.1.tar.gz
+        URL_HASH SHA256=a840d269dff2fafb371dd247df13ad5e026d7ce3b35ad3dc1eedd59bf0c2fb16
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        # our changes to its sources (see the script)
+        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/opt/highs_patch.cmake)
+    FetchContent_MakeAvailable(highs)
+    unset(CMAKE_POSITION_INDEPENDENT_CODE)
+    unset(BUILD_SHARED_LIBS)
 
-# MILP prioritization (prioritizr / prioriactions): the model compiler, our own
-# presolve and heuristics, and the calls to HiGHS.
-add_library(optcore STATIC
-    src/cpp/opt/actions.cpp
-    src/cpp/opt/closure.cpp
-    src/cpp/opt/cover.cpp
-    src/cpp/opt/cut.cpp
-    src/cpp/opt/eval.cpp
-    src/cpp/opt/features.cpp
-    src/cpp/opt/marxan.cpp
-    src/cpp/opt/maxflow.cpp
-    src/cpp/opt/milp.cpp
-    src/cpp/opt/proxirr.cpp
-    src/cpp/opt/wide.cpp
-    src/cpp/opt/zones.cpp
-    src/cpp/opt/zones_wide.cpp
-    src/cpp/opt/zones_cut.cpp
-)
-target_include_directories(optcore PUBLIC src/cpp)
-target_include_directories(optcore SYSTEM PRIVATE ${highs_SOURCE_DIR}/highs ${highs_BINARY_DIR})
-target_link_libraries(optcore PRIVATE highs)
-# R's x87 exp (lsm/rmath.hpp) in the evaluation's pnorm
-target_link_libraries(optcore PUBLIC lsmcore)
-set_target_properties(optcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    # MILP prioritization (prioritizr / prioriactions): the model compiler, our own
+    # presolve and heuristics, and the calls to HiGHS.
+    add_library(optcore STATIC
+        src/cpp/opt/actions.cpp
+        src/cpp/opt/closure.cpp
+        src/cpp/opt/cover.cpp
+        src/cpp/opt/cut.cpp
+        src/cpp/opt/eval.cpp
+        src/cpp/opt/features.cpp
+        src/cpp/opt/marxan.cpp
+        src/cpp/opt/maxflow.cpp
+        src/cpp/opt/milp.cpp
+        src/cpp/opt/proxirr.cpp
+        src/cpp/opt/wide.cpp
+        src/cpp/opt/zones.cpp
+        src/cpp/opt/zones_wide.cpp
+        src/cpp/opt/zones_cut.cpp
+    )
+    target_include_directories(optcore PUBLIC src/cpp)
+    target_include_directories(optcore SYSTEM PRIVATE ${highs_SOURCE_DIR}/highs ${highs_BINARY_DIR})
+    target_link_libraries(optcore PRIVATE highs)
+    # R's x87 exp (lsm/rmath.hpp) in the evaluation's pnorm
+    target_link_libraries(optcore PUBLIC lsmcore)
+    set_target_properties(optcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
 # Species distribution modelling: thinning, background sampling, partitions, evaluation, MaxNet.
 add_library(sdmcore STATIC
     src/cpp/sdm/clean.cpp
@@ -248,14 +255,20 @@ add_library(simcore STATIC
     src/cpp/sim/rglm.cpp
     src/cpp/sim/clues.cpp
     src/cpp/sim/clumondo.cpp
+    src/cpp/sim/demand.cpp
     src/cpp/sim/futures.cpp
+    src/cpp/sim/observed.cpp
+    src/cpp/sim/ordered.cpp
     src/cpp/sim/patches.cpp
     src/cpp/sim/plus.cpp
+    src/cpp/sim/rules.cpp
     src/cpp/sim/similarity.cpp
     src/cpp/sim/validation.cpp
 )
 target_include_directories(simcore PUBLIC src/cpp)
 target_link_libraries(simcore PUBLIC lsmcore nlmcore)
+# the matrix logarithm and exponential of the Markov chains (unsupported/Eigen/MatrixFunctions)
+target_link_libraries(simcore PRIVATE eigen_headers)
 set_target_properties(simcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Raster values by zone and at points (ls.zonal_stats, ls.extract), ls.reclassify, GDAL's warp
 # kernel (ls.reproject); GDAL's polygon rasterizer (lsm/rasterize.cpp); exactextract's exact cell
@@ -333,7 +346,9 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(iocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(sdmcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(simcore PUBLIC OpenMP::OpenMP_CXX)
-        target_link_libraries(optcore PUBLIC OpenMP::OpenMP_CXX)
+        if(TARGET optcore)
+            target_link_libraries(optcore PUBLIC OpenMP::OpenMP_CXX)
+        endif()
         target_link_libraries(restcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
@@ -359,7 +374,9 @@ if(MSVC)
     target_compile_options(priocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(iocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(sdmcore PRIVATE /fp:precise /W4 /permissive-)
-    target_compile_options(optcore PRIVATE /fp:precise /W4 /permissive-)
+    if(TARGET optcore)
+        target_compile_options(optcore PRIVATE /fp:precise /W4 /permissive-)
+    endif()
     target_compile_options(restcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -373,44 +390,55 @@ else()
     target_compile_options(priocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(iocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(sdmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
-    target_compile_options(optcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    if(TARGET optcore)
+        target_compile_options(optcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    endif()
     target_compile_options(restcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
-pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
-                    src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
-                    src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
-                    src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp)
-target_link_libraries(_core PRIVATE eigen_headers)
-target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
-                      iocore sdmcore simcore optcore restcore)
-if(MSVC)
-    target_compile_options(_core PRIVATE /fp:precise)
-else()
-    target_compile_options(_core PRIVATE -ffp-contract=off -fno-fast-math)
-endif()
-
-# Only this component goes into the wheel (not the headers and library HiGHS installs).
-install(TARGETS _core DESTINATION landschaft COMPONENT landschaft)
-
-# The circuit module again, built for AVX2 and FMA, as a module of its own
-# (landschaft._circuit_avx2): Python loads it only when the CPU has them
-# (_core.cpu_supports_avx2_fma), which makes the dense kernels of the
-# factorisations 1.2-1.5x faster. Same IEEE rules for the scalar code.
-option(LANDSCHAFT_CIRCUIT_AVX2 "Build the AVX2 circuit module on x86-64" ON)
-if(LANDSCHAFT_CIRCUIT_AVX2 AND CMAKE_SIZEOF_VOID_P EQUAL 8
-   AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|amd64|x86_64|X86_64)$" AND NOT CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
-    pybind11_add_module(_circuit_avx2 MODULE src/cpp/circuit/python.cpp ${CIRCUIT_SOURCES})
-    target_include_directories(_circuit_avx2 PRIVATE src/cpp)
-    target_link_libraries(_circuit_avx2 PRIVATE eigen_headers)
-    target_compile_definitions(_circuit_avx2 PRIVATE LANDSCHAFT_CIRCUIT_AVX2_MODULE)
-    if(TARGET OpenMP::OpenMP_CXX)
-        target_link_libraries(_circuit_avx2 PRIVATE OpenMP::OpenMP_CXX)
-    endif()
+if(LANDSCHAFT_PYTHON)
+    pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
+                        src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
+                        src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
+                        src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp)
+    target_link_libraries(_core PRIVATE eigen_headers)
+    target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
+                          iocore sdmcore simcore optcore restcore)
     if(MSVC)
-        target_compile_options(_circuit_avx2 PRIVATE /arch:AVX2 /fp:precise)
+        target_compile_options(_core PRIVATE /fp:precise)
     else()
-        target_compile_options(_circuit_avx2 PRIVATE -mavx2 -mfma -ffp-contract=off -fno-fast-math)
+        target_compile_options(_core PRIVATE -ffp-contract=off -fno-fast-math)
     endif()
-    install(TARGETS _circuit_avx2 DESTINATION landschaft COMPONENT landschaft)
+
+    # Only this component goes into the wheel (not the headers and library HiGHS installs).
+    install(TARGETS _core DESTINATION landschaft COMPONENT landschaft)
+
+    # The circuit module again, built for AVX2 and FMA, as a module of its own
+    # (landschaft._circuit_avx2): Python loads it only when the CPU has them
+    # (_core.cpu_supports_avx2_fma), which makes the dense kernels of the
+    # factorisations 1.2-1.5x faster. Same IEEE rules for the scalar code.
+    option(LANDSCHAFT_CIRCUIT_AVX2 "Build the AVX2 circuit module on x86-64" ON)
+    if(LANDSCHAFT_CIRCUIT_AVX2 AND CMAKE_SIZEOF_VOID_P EQUAL 8
+       AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|amd64|x86_64|X86_64)$" AND NOT CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
+        pybind11_add_module(_circuit_avx2 MODULE src/cpp/circuit/python.cpp ${CIRCUIT_SOURCES})
+        target_include_directories(_circuit_avx2 PRIVATE src/cpp)
+        target_link_libraries(_circuit_avx2 PRIVATE eigen_headers)
+        target_compile_definitions(_circuit_avx2 PRIVATE LANDSCHAFT_CIRCUIT_AVX2_MODULE)
+        if(TARGET OpenMP::OpenMP_CXX)
+            target_link_libraries(_circuit_avx2 PRIVATE OpenMP::OpenMP_CXX)
+        endif()
+        if(MSVC)
+            target_compile_options(_circuit_avx2 PRIVATE /arch:AVX2 /fp:precise)
+        else()
+            target_compile_options(_circuit_avx2 PRIVATE -mavx2 -mfma -ffp-contract=off -fno-fast-math)
+        endif()
+        install(TARGETS _circuit_avx2 DESTINATION landschaft COMPONENT landschaft)
+    endif()
+else()
+    # The static libraries and their headers, for native programs (Terraflux links simcore and what it needs).
+    install(TARGETS gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore iocore sdmcore
+                    simcore restcore
+            ARCHIVE DESTINATION lib)
+    install(DIRECTORY src/cpp/ DESTINATION include FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inc")
+    install(DIRECTORY ${eigen_SOURCE_DIR}/Eigen ${eigen_SOURCE_DIR}/unsupported DESTINATION include)
 endif()

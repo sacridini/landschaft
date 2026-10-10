@@ -55,16 +55,10 @@ class Neighbourhood:
 
     def allow(self, landscape: np.ndarray, classes: list) -> np.ndarray:
         """1 where each class may go, NaN where not: (cells of the map, classes)."""
-        out = np.ones((landscape.size, len(classes)))
-        for c, threshold in self.rules.items():
-            c = _class_value(c)
-            if c not in classes:
-                continue
-            presence = np.where(np.isnan(landscape), np.nan, (landscape == c).astype(np.float64))
-            frac = _core.sim_focal_mean(np.ascontiguousarray(presence), self.window(c)).ravel()
-            ok = frac >= threshold  # NaN (no neighbours) compares False
-            out[:, classes.index(c)] = np.where(ok, 1.0, np.nan)
-        return out
+        rules = [(float(c), float(threshold), self.window(c))
+                 for c, threshold in ((_class_value(k), v) for k, v in self.rules.items()) if c in classes]
+        land = np.ascontiguousarray(landscape, dtype=np.float64)
+        return _core.sim_neighbourhood_allow(land, np.asarray(classes, dtype=np.float64), rules)
 
 
 @dataclass
@@ -185,22 +179,9 @@ class Rules:
 
 def allow_matrix(x: np.ndarray, hist: np.ndarray, classes: list, cd: np.ndarray, rules: np.ndarray) -> np.ndarray:
     """lulcc's allow(): 1 where a conversion is allowed, NaN where not; (cells, classes)."""
-    ncode = len(classes)
-    index = {c: k for k, c in enumerate(classes)}
-    lu = np.array([index.get(v, -1) for v in x])
-    if (lu < 0).any():
-        raise ValueError("the landscape has classes the model does not know")
-    out = np.ones((x.size, ncode))
-    r = rules[lu]                       # (cells, ncode): the rules of each cell's class
-    h = hist[:, None]
-    out[r == 0] = 0
-    dec = cd[lu][:, None] < 0
-    out = np.where(r == -1, np.where(dec, 1, 0), out)
-    inc = (cd > 0)[None, :]
-    out = np.where(r == -2, np.where(inc, 1, 0), out)
-    out = np.where((r >= 100) & (r < 1000), np.where(h < (r - 100), 1, 0), out)
-    out = np.where(r >= 1000, np.where(h < (r - 1000), 0, 1), out)
-    return np.where(out == 0, np.nan, 1.0)
+    return _core.sim_allow_matrix(np.asarray(x, dtype=np.float64), np.asarray(hist, dtype=np.int64),
+                                  np.asarray(classes, dtype=np.float64), np.asarray(cd, dtype=np.float64),
+                                  np.asarray(rules, dtype=np.int64))
 
 
 def auto_convert(x: np.ndarray, prob: np.ndarray, classes: list, mask: np.ndarray) -> np.ndarray:
@@ -210,18 +191,5 @@ def auto_convert(x: np.ndarray, prob: np.ndarray, classes: list, mask: np.ndarra
     suitability (the first in case of ties; its own class if none is
     allowed); a restricted cell keeps its class.
     """
-    index = {c: k for k, c in enumerate(classes)}
-    lu = np.array([index[v] for v in x])
-    own = prob[np.arange(x.size), lu]
-    out = np.full(x.size, np.nan)
-    gone = np.isnan(own)
-    if gone.any():
-        p = prob[gone]
-        best = np.where(np.isnan(p), -np.inf, p)
-        arg = np.argmax(best, axis=1)
-        has = (best > -1).any(axis=1)  # lulcc starts the search at -1
-        values = np.asarray(classes, dtype=np.float64)[arg]
-        out[gone] = np.where(has, values, x[gone])
-    keep = ~gone & (mask == 0)
-    out[keep] = x[keep]
-    return out
+    return _core.sim_auto_convert(np.asarray(x, dtype=np.float64), np.asarray(prob, dtype=np.float64),
+                                  np.asarray(classes, dtype=np.float64), np.asarray(mask, dtype=np.int64))

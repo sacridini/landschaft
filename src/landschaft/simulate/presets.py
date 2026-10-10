@@ -80,31 +80,20 @@ def observed_patches(t0, t1, transitions=None, *, nodata=None) -> pd.DataFrame:
         cells in expansions), the number, mean and variance (cells) of the
         expansion and new patches.
     """
-    from scipy import ndimage
+    from .. import _core
 
     a, b = read_map(t0, nodata).as_float(), read_map(t1, nodata).as_float()
-    eight = np.ones((3, 3), dtype=bool)
     if transitions is None:
         ok = ~(np.isnan(a) | np.isnan(b)) & (a != b)
         transitions = sorted({(_class_value(x), _class_value(y)) for x, y in zip(a[ok], b[ok])})
+    a, b = np.ascontiguousarray(a), np.ascontiguousarray(b)
     rows = []
     for f, t in transitions:
-        changed = (a == f) & (b == t)
-        lab, n = ndimage.label(changed, eight)
-        sizes = np.bincount(lab.ravel(), minlength=n + 1)[1:].astype(np.float64)
-        near = ndimage.binary_dilation(a == t, eight)
-        touching = np.zeros(n + 1, dtype=bool)
-        touching[np.unique(lab[near & changed])] = True
-        exp, new = sizes[touching[1:]], sizes[~touching[1:]]
-
-        def stats(s):
-            return (float(s.mean()), float(s.var())) if s.size else (1.0, 0.0)
-
-        (me, ve), (mn, vn) = stats(exp), stats(new)
-        rows.append({"from": f, "to": t, "cells": int(changed.sum()),
-                     "expansion": float(exp.sum() / sizes.sum()) if sizes.sum() else 0.0,
-                     "expansion_patches": int(exp.size), "expansion_mean": me, "expansion_variance": ve,
-                     "new_patches": int(new.size), "new_mean": mn, "new_variance": vn})
+        r = _core.sim_observed_patches(a, b, float(f), float(t))
+        rows.append({"from": f, "to": t, "cells": int(r["cells"]), "expansion": float(r["expansion"]),
+                     "expansion_patches": int(r["expansion_patches"]), "expansion_mean": r["expansion_mean"],
+                     "expansion_variance": r["expansion_variance"], "new_patches": int(r["new_patches"]),
+                     "new_mean": r["new_mean"], "new_variance": r["new_variance"]})
     return pd.DataFrame(rows)
 
 

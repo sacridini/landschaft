@@ -3,11 +3,10 @@
 
 from __future__ import annotations
 
-import warnings
-
 import numpy as np
 import pandas as pd
 
+from .. import _core
 from .._threads import threaded
 from ._change import _class_value, _classes, _count
 from ._maps import read_map
@@ -26,25 +25,7 @@ def _matrix_root(p: np.ndarray, n: int) -> np.ndarray:
     have no logarithm: their root comes from the eigendecomposition.
     Negative real eigenvalues have no real root: an error.
     """
-    if n == 1:
-        return p.copy()
-    w = np.linalg.eigvals(p)
-    on_axis = np.abs(w.imag) <= 1e-12 * max(1.0, np.abs(w).max())
-    if np.any(on_axis & (w.real < -1e-12)):
-        raise ValueError("the transition matrix has a negative eigenvalue: no real matrix of rates per time step "
-                         "gives it (the change is not a Markov chain of equal steps)")
-    from scipy.linalg import expm, logm
-
-    if np.any(np.abs(w) <= 1e-12):
-        w, v = np.linalg.eig(p)
-        if np.linalg.cond(v) > 1e8:
-            raise ValueError("the transition matrix is singular and not diagonalisable: no root computed")
-        wr = np.where(np.abs(w) <= 1e-12, 0.0, w)
-        return (v @ np.diag(wr.astype(complex) ** (1.0 / n)) @ np.linalg.inv(v)).real
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        log = logm(p)
-    return expm(np.real(log) / n)
+    return _core.sim_markov_root(np.ascontiguousarray(p, dtype=np.float64), int(n))
 
 
 class Markov:
@@ -85,19 +66,8 @@ class Markov:
     @classmethod
     def from_counts(cls, counts, classes, steps: int = 1) -> Markov:
         """From a matrix of cell counts (rows: classes at the start); classes without cells at the start are dropped."""
-        c = np.asarray(counts, dtype=np.float64)
-        rows = c.sum(axis=1)
-        keep = rows > 0
-        # a class only found at the end has no row: it is kept as a column only if a row reaches it
-        cls_all = np.asarray(classes)
-        reached = keep | (c[keep].sum(axis=0) > 0)
-        sub = c[np.ix_(reached, reached)]
-        p = np.zeros_like(sub)
-        r = sub.sum(axis=1)
-        ok = r > 0
-        p[ok] = sub[ok] / r[ok, None]
-        p[~ok, np.flatnonzero(~ok)] = 1.0  # classes without cells at the start stay as they are
-        return cls(p, cls_all[reached], steps)
+        p, kept = _core.sim_markov_from_counts(np.ascontiguousarray(counts, dtype=np.float64))
+        return cls(p, np.asarray(classes)[kept], steps)
 
     @classmethod
     @threaded
@@ -170,10 +140,8 @@ class Markov:
                 raise ValueError(f"{a.size} areas for {len(self.classes)} classes")
         p = (self.multi if multi else self.single).to_numpy()
         n = (self.steps if multi else 1) if steps is None else int(steps)
-        out = [a]
-        for _ in range(n):
-            out.append(out[-1] @ p)
-        return pd.DataFrame(np.array(out), index=pd.Index(range(n + 1), name="step"), columns=self.classes)
+        out = _core.sim_markov_project(a, np.ascontiguousarray(p, dtype=np.float64), n)
+        return pd.DataFrame(out, index=pd.Index(range(n + 1), name="step"), columns=self.classes)
 
     def __repr__(self) -> str:
         return f"Markov({len(self.classes)} classes, steps={self.steps})"

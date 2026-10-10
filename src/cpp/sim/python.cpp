@@ -10,16 +10,21 @@
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
+#include <tuple>
 #include <vector>
 
 #include "lsm/rmath.hpp"
 #include "sim/change.hpp"
 #include "sim/clues.hpp"
 #include "sim/clumondo.hpp"
+#include "sim/demand.hpp"
 #include "sim/futures.hpp"
+#include "sim/observed.hpp"
+#include "sim/ordered.hpp"
 #include "sim/patches.hpp"
 #include "sim/plus.hpp"
 #include "sim/rglm.hpp"
+#include "sim/rules.hpp"
 #include "sim/rng.hpp"
 #include "sim/similarity.hpp"
 #include "sim/validation.hpp"
@@ -694,6 +699,177 @@ py::dict sim_cars(const IArray& landscape, const py::object& fixed, const py::ob
     return out;
 }
 
+
+// -- decision rules, ordered allocation, demands, Markov chains, WoE ranges ---
+
+using LArray = py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>;
+
+py::array_t<double> cells_by_classes(const std::vector<double>& v, i64 ncell, int ncode) {
+    py::array_t<double> out({static_cast<py::ssize_t>(ncell), static_cast<py::ssize_t>(ncode)});
+    std::copy(v.begin(), v.end(), out.mutable_data());
+    return out;
+}
+
+py::array_t<double> sim_allow_matrix(const DArray& x, const LArray& hist, const DArray& classes, const DArray& cd,
+                                     const LArray& rules) {
+    const i64 ncell = static_cast<i64>(x.size());
+    const int ncode = static_cast<int>(classes.size());
+    if (hist.size() != x.size()) throw std::invalid_argument("one history value per cell");
+    if (cd.size() != ncode) throw std::invalid_argument("one demand change per class");
+    if (rules.size() != static_cast<py::ssize_t>(ncode) * ncode) throw std::invalid_argument("the rules must be (classes, classes)");
+    std::vector<double> out;
+    {
+        py::gil_scoped_release release;
+        out = sim::allow_matrix(x.data(), hist.data(), ncell, classes.data(), ncode, cd.data(), rules.data());
+    }
+    return cells_by_classes(out, ncell, ncode);
+}
+
+py::array_t<double> sim_auto_convert(const DArray& x, const DArray& prob, const DArray& classes, const LArray& mask) {
+    const i64 ncell = static_cast<i64>(x.size());
+    const int ncode = static_cast<int>(classes.size());
+    if (prob.size() != static_cast<py::ssize_t>(ncell) * ncode) throw std::invalid_argument("prob must be (cells, classes)");
+    if (mask.size() != x.size()) throw std::invalid_argument("one mask value per cell");
+    std::vector<double> out;
+    {
+        py::gil_scoped_release release;
+        out = sim::auto_convert(x.data(), prob.data(), ncell, classes.data(), ncode, mask.data());
+    }
+    return to_array(out);
+}
+
+py::array_t<double> sim_neighbourhood_allow(const DArray& landscape, const DArray& classes,
+                                            const std::vector<std::tuple<double, double, DArray>>& rules) {
+    if (landscape.ndim() != 2) throw std::invalid_argument("the landscape must be 2-D");
+    std::vector<sim::NeighbourhoodRule> r;
+    for (const auto& [cls, threshold, w] : rules) {
+        if (w.ndim() != 2) throw std::invalid_argument("a neighbourhood window must be 2-D");
+        sim::NeighbourhoodRule x;
+        x.cls = cls;
+        x.threshold = threshold;
+        x.wy = static_cast<int>(w.shape(0));
+        x.wx = static_cast<int>(w.shape(1));
+        x.weights.assign(w.data(), w.data() + w.size());
+        r.push_back(std::move(x));
+    }
+    const int ncode = static_cast<int>(classes.size());
+    std::vector<double> out;
+    {
+        py::gil_scoped_release release;
+        out = sim::neighbourhood_allow(landscape.data(), landscape.shape(0), landscape.shape(1), classes.data(), ncode, r);
+    }
+    return cells_by_classes(out, landscape.shape(0) * landscape.shape(1), ncode);
+}
+
+py::dict sim_ordered(const DArray& tprob, const DArray& x, const DArray& demand, const DArray& classes,
+                     const DArray& order, bool stochastic, nlm::RRng& rng) {
+    const i64 ncell = static_cast<i64>(x.size());
+    const int ncode = static_cast<int>(classes.size());
+    if (tprob.size() != static_cast<py::ssize_t>(ncell) * ncode) throw std::invalid_argument("tprob must be (cells, classes)");
+    if (demand.size() != ncode || order.size() != ncode) throw std::invalid_argument("one demand and order per class");
+    sim::OrderedResult r;
+    {
+        py::gil_scoped_release release;
+        r = sim::ordered_allocate(tprob.data(), x.data(), ncell, demand.data(), classes.data(), ncode, order.data(),
+                                  stochastic, rng);
+    }
+    py::dict d;
+    d["allocation"] = to_array(r.allocation);
+    d["iterations"] = r.iterations;
+    d["converged"] = r.converged;
+    d["short"] = r.short_cells;
+    return d;
+}
+
+py::array_t<double> sim_approx_extrap(const DArray& x, const DArray& y, const DArray& xout) {
+    return to_array(sim::approx_extrap({x.data(), x.data() + x.size()}, {y.data(), y.data() + y.size()},
+                                       {xout.data(), xout.data() + xout.size()}));
+}
+
+py::array_t<double> sim_round_sum(const DArray& x, i64 ncell) {
+    if (x.ndim() != 2) throw std::invalid_argument("x must be 2-D");
+    const auto out = sim::round_sum({x.data(), x.data() + x.size()}, x.shape(0), x.shape(1), ncell);
+    py::array_t<double> r({x.shape(0), x.shape(1)});
+    std::copy(out.begin(), out.end(), r.mutable_data());
+    return r;
+}
+
+py::array_t<double> square(const std::vector<double>& v, int k) {
+    py::array_t<double> r({static_cast<py::ssize_t>(k), static_cast<py::ssize_t>(k)});
+    std::copy(v.begin(), v.end(), r.mutable_data());
+    return r;
+}
+
+int square_side(const DArray& m) {
+    if (m.ndim() != 2 || m.shape(0) != m.shape(1)) throw std::invalid_argument("the transition matrix must be square");
+    return static_cast<int>(m.shape(0));
+}
+
+py::tuple sim_markov_from_counts(const DArray& counts) {
+    const int k = square_side(counts);
+    std::vector<int> kept;
+    const auto p = sim::markov_from_counts({counts.data(), counts.data() + counts.size()}, k, kept);
+    return py::make_tuple(square(p, static_cast<int>(kept.size())), to_array(kept));
+}
+
+py::array_t<double> sim_markov_root(const DArray& p, int n) {
+    const int k = square_side(p);
+    return square(sim::markov_root({p.data(), p.data() + p.size()}, k, n), k);
+}
+
+py::array_t<double> sim_markov_project(const DArray& areas, const DArray& p, int steps) {
+    const int k = square_side(p);
+    if (steps < 0) throw std::invalid_argument("steps must be >= 0");
+    const auto out = sim::markov_project({areas.data(), areas.data() + areas.size()}, {p.data(), p.data() + p.size()},
+                                         k, steps);
+    py::array_t<double> r({static_cast<py::ssize_t>(steps + 1), static_cast<py::ssize_t>(k)});
+    std::copy(out.begin(), out.end(), r.mutable_data());
+    return r;
+}
+
+py::tuple sim_woe_weights(double nb, double b, double n, double a, bool fix) {
+    const auto w = sim::woe_weights(nb, b, n, a, fix);
+    return py::make_tuple(w.plus, w.contrast, w.significant);
+}
+
+std::vector<int> sim_woe_generalise(const LArray& possible, const LArray& executed, double min_delta,
+                                    double max_delta, double tolerance, bool fix) {
+    return sim::woe_generalise({possible.data(), possible.data() + possible.size()},
+                               {executed.data(), executed.data() + executed.size()}, min_delta, max_delta, tolerance,
+                               fix);
+}
+
+py::dict sim_observed_patches(const DArray& a, const DArray& b, double from, double to) {
+    if (a.ndim() != 2 || b.ndim() != 2 || a.shape(0) != b.shape(0) || a.shape(1) != b.shape(1))
+        throw std::invalid_argument("the maps must be 2-D and of the same shape");
+    sim::ObservedPatches r;
+    {
+        py::gil_scoped_release release;
+        r = sim::observed_patches(a.data(), b.data(), a.shape(0), a.shape(1), from, to);
+    }
+    py::dict d;
+    d["cells"] = r.cells;
+    d["expansion"] = r.expansion;
+    d["expansion_patches"] = r.expansion_patches;
+    d["expansion_mean"] = r.expansion_mean;
+    d["expansion_variance"] = r.expansion_variance;
+    d["new_patches"] = r.new_patches;
+    d["new_mean"] = r.new_mean;
+    d["new_variance"] = r.new_variance;
+    return d;
+}
+
+py::array_t<double> sim_woe_normalise(const DArray& sums) {
+    if (sums.ndim() != 2) throw std::invalid_argument("sums must be (transitions, cells)");
+    py::array_t<double> out({sums.shape(0), sums.shape(1)});
+    std::copy(sums.data(), sums.data() + sums.size(), out.mutable_data());
+    {
+        py::gil_scoped_release release;
+        sim::woe_normalise(out.mutable_data(), static_cast<int>(sums.shape(0)), sums.shape(1));
+    }
+    return out;
+}
+
 }  // namespace
 
 namespace sim {
@@ -770,6 +946,34 @@ void register_python(py::module_& m) {
           "R's rowSums (80-bit accumulation; na_rm skips NaN).");
     m.def("sim_futures_mfilter", &sim_futures_mfilter, py::arg("input"), py::arg("matrix"),
           "r.mfilter as r.futures.devpressure runs it (edges keep their values, nulls give null).");
+    m.def("sim_allow_matrix", &sim_allow_matrix, py::arg("x"), py::arg("hist"), py::arg("classes"), py::arg("cd"),
+          py::arg("rules"), "lulcc's allow(): 1 where a conversion is allowed, NaN where not; (cells, classes).");
+    m.def("sim_auto_convert", &sim_auto_convert, py::arg("x"), py::arg("prob"), py::arg("classes"), py::arg("mask"),
+          "lulcc's autoconvert: the class each cell is forced to take (NaN: none).");
+    m.def("sim_neighbourhood_allow", &sim_neighbourhood_allow, py::arg("landscape"), py::arg("classes"),
+          py::arg("rules"), "lulcc's neighbourhood rules [(class, threshold, window)]: 1 or NaN; (cells, classes).");
+    m.def("sim_ordered", &sim_ordered, py::arg("tprob"), py::arg("x"), py::arg("demand"), py::arg("classes"),
+          py::arg("order"), py::arg("stochastic"), py::arg("rng"),
+          "The ordered allocation (lulcc's OrderedModel) with R's generator.");
+    m.def("sim_approx_extrap", &sim_approx_extrap, py::arg("x"), py::arg("y"), py::arg("xout"),
+          "Hmisc::approxExtrap: linear interpolation, the end segments extrapolated.");
+    m.def("sim_round_sum", &sim_round_sum, py::arg("x"), py::arg("ncell"),
+          "lulcc's roundSum: each row to integers that add up to ncell.");
+    m.def("sim_markov_from_counts", &sim_markov_from_counts, py::arg("counts"),
+          "Transition probabilities from a matrix of cell counts: (matrix, indices of the classes kept).");
+    m.def("sim_markov_root", &sim_markov_root, py::arg("p"), py::arg("n"),
+          "The principal n-th root of a transition matrix.");
+    m.def("sim_markov_project", &sim_markov_project, py::arg("areas"), py::arg("p"), py::arg("steps"),
+          "Areas after each step: (steps + 1, classes).");
+    m.def("sim_woe_weights", &sim_woe_weights, py::arg("nb"), py::arg("b"), py::arg("n"), py::arg("a"),
+          py::arg("fix") = false, "W+, contrast and significance of a range of weights of evidence.");
+    m.def("sim_woe_generalise", &sim_woe_generalise, py::arg("possible"), py::arg("executed"), py::arg("min_delta"),
+          py::arg("max_delta"), py::arg("tolerance"), py::arg("fix") = false,
+          "The bucket indices ending each range of a continuous variable (Dinamica EGO's line generalisation).");
+    m.def("sim_observed_patches", &sim_observed_patches, py::arg("a"), py::arg("b"), py::arg("from_class"),
+          py::arg("to_class"), "The expansion and new patches of an observed transition (8 neighbours).");
+    m.def("sim_woe_normalise", &sim_woe_normalise, py::arg("sums"),
+          "Probabilities exp(S_j) / (1 + sum exp(S_i)) of transitions from one class, (transitions, cells).");
 }
 
 }  // namespace sim

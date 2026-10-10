@@ -83,54 +83,13 @@ def _drivers(drivers, nodata=None) -> dict[str, Map]:
 
 def _weights(nb, b, n, a, fix):
     """W+, W-, contrast and significance of a range: nb transitions in b possible cells, of n in a."""
-    nb, b, n, a = float(nb), float(b), float(n), float(a)
-    abnormal_plus = nb == 0 or b - nb == 0 or n == 0 or a - n == 0
-    if abnormal_plus:
-        if fix and b > 0 and n > 0 and a - n > 0:
-            wp = math.log(b * (a - n) + 1.0) if b - nb == 0 else -math.log(b * n + 1.0)
-        else:
-            wp = 0.0
-    else:
-        wp = math.log((nb / n) / ((b - nb) / (a - n)))
-    abnormal_minus = n - nb == 0 or a - b - n + nb == 0 or n == 0 or a - n == 0
-    if abnormal_plus or abnormal_minus:
-        return wp, 0.0, False
-    wm = math.log(((n - nb) / n) / ((a - b - n + nb) / (a - n)))
-    contrast = wp - wm
-    sd = math.sqrt(1.0 / nb + 1.0 / (b - nb) + 1.0 / (n - nb) + 1.0 / (a - b - n + nb))
-    return wp, contrast, abs(contrast) > 1.96 * sd
-
-
-def _angle(dx, dy):
-    return math.degrees(math.atan2(dy, dx))
+    return _core.sim_woe_weights(float(nb), float(b), float(n), float(a), bool(fix))
 
 
 def _generalise(possible: np.ndarray, executed: np.ndarray, v: _Variable, fix: bool) -> list[int]:
     """Range limits (bucket indices) of a continuous variable: the line generalisation of (A, A exp(W+))."""
-    n = possible.size
-    cum_b = np.cumsum(possible, dtype=np.float64)
-    cum_nb = np.cumsum(executed, dtype=np.float64)
-    a_total, n_total = cum_b[-1] if n else 0.0, cum_nb[-1] if n else 0.0
-    xs, ys = [0.0], [0.0]
-    for k in range(n):
-        abnormal = cum_nb[k] == 0 or cum_b[k] - cum_nb[k] == 0
-        if abnormal and not fix:
-            ratio = 0.0  # a buffer without transitions, or with nothing else: exp(W+) taken as 0
-        else:
-            w, _, _ = _weights(cum_nb[k], cum_b[k], n_total, a_total, fix)
-            ratio = math.exp(w)
-        xs.append(cum_b[k])
-        ys.append(cum_b[k] * ratio)
-    bounds = []
-    anchor, prev = 0, None
-    for i in range(1, n + 1):
-        dx = xs[i] - xs[anchor]
-        ref = 0.0 if prev is None else _angle(xs[anchor] - xs[prev], ys[anchor] - ys[prev])
-        phi = abs(_angle(dx, ys[i] - ys[anchor]) - ref)
-        if (dx >= v.min_delta and (dx > v.max_delta or phi > v.tolerance)) or i == n:
-            bounds.append(i)
-            prev, anchor = anchor, i
-    return bounds
+    return _core.sim_woe_generalise(np.asarray(possible, dtype=np.int64), np.asarray(executed, dtype=np.int64),
+                                    float(v.min_delta), float(v.max_delta), float(v.tolerance), bool(fix))
 
 
 @dataclass
@@ -525,11 +484,8 @@ class WeightsOfEvidence:
         froms = [f for f, _ in trans]
         for f in dict.fromkeys(froms):
             idx = [k for k, g in enumerate(froms) if g == f]
-            s = sums[idx]
-            top = np.maximum(np.max(np.where(np.isnan(s), -np.inf, s), axis=0), 0.0)  # exp(S - top): no overflow
-            with np.errstate(invalid="ignore"):
-                e = np.exp(s - top)
-                out[idx] = e / (np.exp(-top) + e.sum(axis=0))
+            s = sums[idx].reshape(len(idx), -1)
+            out[idx] = _core.sim_woe_normalise(s).reshape((len(idx), *land.shape))
         if dtype in ("uint8", "uint16"):
             top = np.iinfo(dtype).max
             out = np.where(np.isnan(out), 0, np.trunc(out * top)).astype(dtype)
