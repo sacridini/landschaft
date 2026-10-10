@@ -223,6 +223,15 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.presets
 
+## Running models with Terraflux
+
+[Terraflux](https://github.com/sacridini/terraflux) runs land change models as graphs of operators, with the
+same C++ kernels: `Model.save` writes a fitted model as its graph (with the data it runs on), `Model.load` reads
+it back, and `terraflux` runs it with the `terraflux` command, giving the same maps as `Model.run` with the same
+seed.
+
+::: landschaft.simulate.terraflux
+
 ## Scenarios and replicates
 
 ::: landschaft.simulate.scenarios

@@ -329,6 +329,63 @@ class Model:
         hist_map[cells] = hist
         return Simulation(da, pd.DataFrame(rows).set_index("step"), int(seed), hist_map.reshape(land.shape))
 
+    def save(self, path, landscape, drivers=None, *, seed=None, nodata=None, name=None, description=None):
+        """Write the fitted model as a `Terraflux <https://github.com/sacridini/terraflux>`_ graph (JSON).
+
+        The fitted pieces are written as they are (weights of evidence,
+        regressions, Markov chains, demands, patch settings, rules), the data
+        the model runs on as GeoTIFF files in a folder next to it (``<name>_data``),
+        so that ``terraflux run`` gives the same maps as :meth:`run` with the
+        same seed. Terraflux runs the CLUE-S, ordered, Expander/Patcher and
+        CARS allocations with weights of evidence, logistic regressions or
+        given maps as potential, area demands or Markov chains, lulcc's rules
+        and the dynamic variables :func:`distance_to` and :func:`share_of`.
+
+        Parameters
+        ----------
+        path
+            The model file (``.json``).
+        landscape
+            The map the simulation starts from (as for :meth:`run`), or the path of a raster (relative to
+            the model file).
+        drivers
+            The explanatory variables, or the path of a raster with a band per variable (relative to the
+            model file).
+        seed
+            The seed (default: drawn at random and written in the model).
+        nodata
+            Value marking missing cells in the landscape.
+
+        Returns
+        -------
+        pathlib.Path
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> S = ls.simulate
+        >>> lu = ls.load_raster(S.example_data("sibuyan_landuse"))
+        >>> dr = ls.load_raster(S.example_data("sibuyan_drivers"))
+        >>> model = S.presets.dinamica(lu[0], lu[1], dr, steps=14, woe=250)
+        >>> path = model.save(tmp_path / "dinamica.json", lu[0], dr, seed=1)   # doctest: +SKIP
+        >>> again, inputs = S.Model.load(path)                                  # doctest: +SKIP
+        """
+        from ._graph import save_model
+
+        return save_model(self, path, landscape, drivers, seed=seed, nodata=nodata, name=name, description=description)
+
+    @classmethod
+    def load(cls, path):
+        """Read a Terraflux graph written by :meth:`save`: ``(model, inputs)``, the inputs by name.
+
+        Run it as before with ``model.run(inputs["start"], inputs.get("drivers"), seed=inputs["seed"])``;
+        graphs that are not made of ``ls.simulate``'s pieces are run with
+        :func:`terraflux`.
+        """
+        from ._graph import load_model
+
+        return load_model(path)
+
     def __repr__(self) -> str:
         return (f"Model(potential={type(self.potential).__name__}, demand={self.demand!r}, "
                 f"allocation={type(self.allocation).__name__})")

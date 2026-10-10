@@ -53,6 +53,7 @@ from ._futures import (
     patch_library,
 )
 from ._glm import LogisticRegression
+from ._graph import terraflux
 from ._landsystems import Cap, LandSystemStack, Roles, Succession
 from ._markov import Markov
 from ._mce import MultiCriteria
@@ -145,6 +146,7 @@ __all__ = [
     "scenarios",
     "share_of",
     "similarity_of_differences",
+    "terraflux",
     "three_map_comparison",
     "validate",
     "weights_of_evidence",
