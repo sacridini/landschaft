@@ -2318,6 +2318,26 @@ somem todas quando a de uma zona é 0 (`min(abs(p)) > 1e-50`). Borda e contiguid
 MIP do HiGHS mesmo em 168 unidades (testes com limite de tempo: limite <= ótimo do prioritizr <= o nosso) até a
 fase 4. Ficam de fora (decisão 2): contiguidade por feição e corredores com zonas, arrays 4D.
 
+**Fase 4 feita** (1.41.0, 2026-10-10): três motores em C++ com zonas, escolhidos em `_milp_solve.solve_model`
+(`zone_units`): (a) `opt/zones.cpp` para min set (Lagrangiano das metas por unidade em forma fechada, bundle,
+sifting por unidades, arredondamento + reparo + aparo, parada assim que a solução reparada do Lagrangiano fica no
+gap, fixação Lagrangiana antes do MIP do HiGHS); (b) `opt/zones_wide.cpp` para os objetivos com orçamento (duais
+de um LP numa amostra de 2% com limites escalados, sifting com as poucas outras colunas sempre dentro,
+arredondamento para baixo e para cima com as outras colunas reotimizadas, unidades acrescentadas por custo
+reduzido; até 20 mil outras colunas e 5 mil outras linhas); (c) `opt/zones_cut.cpp` para borda e conectividade
+(matriz de zonas >= 0): Lagrangiano das metas = um corte mínimo sobre todas as colunas unidade-zona, com
+multiplicadores das linhas de uma zona por unidade (subgradiente dentro de cada avaliação, partida quente),
+reparo com GUB e borda, busca local e alfa-expansão (três modos: todas as unidades, só as selecionadas, as
+selecionadas e as vizinhas da zona; duais escalados 1-3x porque a penalidade Lagrangiana não satura nas metas);
+o HiGHS continua dele até 50 mil colunas; (d) portfólios com zonas (cortes nas colunas unidade-zona; o
+embaralhamento permuta as unidades igualmente em todas as zonas). Benchmark (3 zonas, gap 1%, 300 s): min set
+10⁶ em 4 s (Gurobi 220 s), max utility 10⁶ em 13 s (Gurobi 49 s), borda 10⁴ em 1,9 s com objetivo melhor que o
+do Gurobi e 10⁵ em 22 s a 1,1% do limite (0,4% acima do Gurobi, que levou 121 s). Limites: com borda o LP (e o
+Lagrangiano, que o iguala: pares submodulares) é fraco quando a borda domina o custo (penalidade 2 em células de
+100 m: 39% de gap), e provar gap 0 em instâncias pequenas continua sendo o MIP do HiGHS (dezenas de segundos).
+Bug achado: o reparo entrava em laço com chaves negativas iguais (`k > topo * (1 + 1e-12)`); a tolerância é pelo
+módulo.
+
 `add_neighbor_penalties` (do prioritizr 9) continua um item à parte, sob pedido.
 
 ### Próximos passos (retomar daqui)

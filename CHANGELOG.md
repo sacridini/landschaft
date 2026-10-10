@@ -6,6 +6,29 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.41.0] - 2026-10-10
+
+### Added
+- Landschaft's own engines for problems with management zones, used by the HiGHS solver (HiGHS's MIP stalls on
+  them from 1e5 units: the zones make n_zones times more columns and a row per unit):
+  - minimum sets (`src/cpp/opt/zones.cpp`): the Lagrangian of the targets decomposes by planning unit (every
+    unit takes the zone of least reduced cost, or none; with mandatory allocation the best zone), a bundle
+    method finds its duals, sifting over units solves the linear relaxation exactly (its bound), fractional
+    units are rounded to their largest share, the targets left unmet repaired and the units not needed dropped
+    or moved to cheaper zones; it stops as soon as a repaired Lagrangian solution is within the gap of the
+    bound, and HiGHS's MIP goes on from the solution after Lagrangian fixing only when the gap is not reached.
+    1e6 units x 3 zones at a 1% gap in 4 s (Gurobi 220 s; HiGHS no solution in 300 s);
+  - budgeted objectives (`src/cpp/opt/zones_wide.cpp`: max utility, min shortfall, max features, one budget or
+    one per zone...): duals from the LP on a 2% sample of the units, sifting over units with the few other
+    columns always in, the fractional units rounded down and up with the other columns re-optimised, units
+    added by reduced cost while the budgets allow. Max utility on 1e6 units x 3 zones in 13 s (Gurobi 49 s);
+  - boundary penalties and connectivity rewards (`src/cpp/opt/zones_cut.cpp`, zones matrices >= 0): the
+    Lagrangian of the targets is one minimum cut over every unit-zone column (with multipliers of the
+    one-zone-per-unit rows), its solutions repaired and improved by local search and by expansion moves (every
+    unit keeps its zone or moves to a given zone, by a minimum cut over the units; Boykov, Veksler & Zabih).
+    1e5 units x 3 zones within 1.1% of the bound in 22 s (Gurobi 121 s to 0.25%; HiGHS no answer in 1500 s).
+- Portfolios with zones (cuts, top, gap and shuffle): every solution's zone map and how often every unit goes to
+  every zone.
 ## [1.40.0] - 2026-10-09
 
 ### Added
