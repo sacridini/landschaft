@@ -589,6 +589,26 @@ void register_python(py::module_& m) {
           },
           py::arg("start"), py::arg("index"), py::arg("value"), py::arg("solution"), py::arg("asym"),
           "prioritizr's rcpp_connectivity / rcpp_asym_connectivity (one zone).");
+    m.def("opt_eval_boundary_zones",
+          [](const Doubles& edge_factor, const Doubles& zones, const Ints& start, const Ints& index, const Doubles& value,
+             const Doubles& exposed, const Doubles& total, const Doubles& solution) {
+              const i64 n = static_cast<i64>(total.size());
+              return eval::boundary_zones(vec<double>(edge_factor), vec<double>(zones), csc_of(start, index, value, n, n),
+                                          vec<double>(exposed), vec<double>(total), vec<double>(solution));
+          },
+          py::arg("edge_factor"), py::arg("zones"), py::arg("start"), py::arg("index"), py::arg("value"),
+          py::arg("exposed"), py::arg("total"), py::arg("solution"), "prioritizr's rcpp_boundary with zones.");
+    m.def("opt_eval_connectivity_zones",
+          [](const Ints& start, const Ints& index, const Doubles& value, const Doubles& zones, const Doubles& solution,
+             bool asym) {
+              const i64 nz = static_cast<i64>(std::llround(std::sqrt(static_cast<double>(zones.size()))));
+              const i64 n = static_cast<i64>(solution.size()) / std::max<i64>(1, nz);
+              const eval::Csc d = csc_of(start, index, value, n, n);
+              const std::vector<double> s = vec<double>(solution), z = vec<double>(zones);
+              return asym ? eval::asym_connectivity_zones(d, z, s) : eval::connectivity_zones(d, z, s);
+          },
+          py::arg("start"), py::arg("index"), py::arg("value"), py::arg("zones"), py::arg("solution"), py::arg("asym"),
+          "prioritizr's rcpp_connectivity / rcpp_asym_connectivity with zones.");
     m.def("opt_eval_ferrier",
           [](const Ints& start, const Ints& index, const Doubles& value, i64 nrow, const Doubles& targets,
              const Bytes& selected) {

@@ -544,9 +544,43 @@ def _coverage_chart(coverage: pd.DataFrame, title="Targets"):
                   title)
 
 
+def _zone_style(names) -> dict:
+    from ._palettes import ZONE_COLOURS
+
+    cmap = {0: "#d9d9d9", **{k + 1: ZONE_COLOURS[k % len(ZONE_COLOURS)] for k in range(len(names))}}
+    labels = {0: "no zone", **{k + 1: str(z) for k, z in enumerate(names)}}
+    return {"cmap": cmap, "labels": labels, "categorical": True}
+
+
+def _zone_panels(sol, opts, title):
+    """The zone of every planning unit on a map (a colour per zone)."""
+    from ._core import _is_geo_raster, _is_vector, _map
+
+    zones = sol.zones
+    style = _zone_style(sol.zone_names)
+    if _is_geo_raster(zones):
+        return _map([(title, zones)], {**opts, **style}, title)
+    if _is_vector(sol.selection):
+        return _map([(title, sol.selection, {"column": "zone"})], opts, title)
+    return []
+
+
 @register("Solution")
 def _prio_solution(sol, opts, title):
-    """The selection, the targets' coverage and the solution's figures."""
+    """The selection (with zones: the zone of every unit), the targets' coverage and the solution's figures."""
+    if getattr(sol, "zone_names", ()):
+        panels = _zone_panels(sol, opts, title or "Zones of the planning units")
+        cov = sol.coverage.copy()
+        cov["feature"] = [f"{f} ({z})" for f, z in zip(cov["feature"], cov["zone"])]
+        panels.append(_coverage_chart(cov, "Representation of the features"))
+        met = cov.get("met")
+        extra = {"targets met": f"{int(met.sum())} of {len(met)}"} if met is not None else {}
+        per_zone = {f"cost: {z}": c for z, c in sol.zone_costs.items()}
+        units = {f"units: {z}": float(np.nansum(sol.values[:, k])) for k, z in enumerate(sol.zone_names)}
+        panels.append(_summary({"objective": sol.objective, "cost": sol.cost, **per_zone, **units, **extra,
+                                "status": sol.status, "gap": sol.gap, "solver": sol.solver,
+                                "seconds": sol.seconds}))
+        return panels
     panels = _selection_panels(sol.selection, opts, title or "Selected planning units")
     panels.append(_coverage_chart(sol.coverage, "Representation of the features"))
     met = sol.coverage.get("met")
@@ -565,7 +599,11 @@ def _prio_portfolio(port, opts, title):
 
     panels = []
     freq = port.frequency
-    if _is_geo_raster(freq):
+    if _is_geo_raster(freq) and freq.ndim == 3 and freq.dims[0] == "zone":  # how often in every zone
+        layers = [(f"frequency: {z}", freq[k]) for k, z in enumerate(freq["zone"].values)]
+        panels += _map(layers, {**opts, "cmap": opts.get("cmap") or "greens", "categorical": False, "vmin": 0.0,
+                                "vmax": 1.0}, title or "Zone frequency")
+    elif _is_geo_raster(freq):
         panels += _map([("selection frequency", freq)], {**opts, "cmap": opts.get("cmap") or "greens",
                                                        "categorical": False, "vmin": 0.0, "vmax": 1.0},
                        title or "Selection frequency")

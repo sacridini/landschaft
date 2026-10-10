@@ -205,10 +205,33 @@ solution's pattern), `P.compare_zonation` (a Zonation ranking cut at the solutio
 | a loop over budgets | `P.pareto_front(p, n=10)` |
 | any other parameter | `P.calibrate(make, values, criterion)`, then `.best("knee")` or `.best("topsis")` |
 
+### Management zones
+
+| prioritizr | `ls.prioritize` |
+|---|---|
+| `problem(costs, zones(f_a, f_b, zone_names = c("a", "b")))` | `P.problem({"a": cost_a, "b": cost_b}, features={"a": f_a, "b": f_b})` |
+| `zones(f, f * 0.5, ...)` (the same features scaled per zone) | `P.problem({"a": cost_a, "b": cost_b}, f, contribution={"b": 0.5})` (a number, one per feature, or a raster) |
+| `problem(x, zones(c("f1", ...), c("g1", ...)), cost_column = c("ca", "cb"))` | `P.problem(x, features={"a": ["f1", ...], "b": ["g1", ...]}, cost_column={"a": "ca", "b": "cb"})` |
+| `problem(x, spec, rij, cost_column, zones = z)` (`rij$zone`) | `P.problem(x, spec, rij=rij, zones=z, cost_column=[...])` |
+| `add_relative_targets(matrix(...))` (features x zones) | the same matrix, or `add_relative_targets(0.3)` (summed over the zones) and `add_relative_targets(0.1, zone="a")` |
+| `add_manual_targets()` with `zone = list(c("a", "b"))` | the same table (a zone or a list per row; no column: every zone) |
+| `add_mandatory_allocation_constraints()` | `p.add_mandatory_allocation_constraints()` |
+| `add_locked_in_constraints(matrix / stack)` | `p.add_locked_in_constraints({"a": raster_a, ...})` (or the stack, or `P.binary_stack(map)`) |
+| budgets `c(b_a, b_b)` | `[b_a, b_b]` or `{"a": b_a, "b": b_b}` |
+| `add_feature_weights(matrix(...))` | the same matrix (or one weight per feature, the same in every zone) |
+| `add_boundary_penalties(p, edge_factor, zones = m)` | `p.add_boundary_penalties(p, edge_factor=[...], zones=m)` (`"same"` is the identity) |
+| `add_connectivity_penalties(p, zones = m, data)`, `add_asym_connectivity_penalties` | the same with `zones=m` |
+| `add_linear_penalties(c(...), data)` | `p.add_linear_penalties([...], {"a": data_a, ...})` |
+| `add_neighbor_constraints(k = c(...), zones = m)`, `add_contiguity_constraints(zones = m)` | the same with `k=[...]` and `zones=m` |
+| `category_layer(s)`, `binary_stack(x)` | `P.category_layer(s)`, `P.binary_stack(x)`; a solution's `zones` is already the map |
+| `eval_*_summary(p, s)` with zones | the same functions: a row `overall` and one per zone |
+
+Not with zones: arrays of connectivity or neighbours by pairs of zones (4-D), feature contiguity and the
+corridors (an extension of Landschaft), Ferrier and rarity-weighted importance (as in prioritizr).
+
 ### Not available
 
-Multiple zones (`zones()`, `add_mandatory_allocation_constraints()`, the `zone` column of the
-manual constraints), neighbour penalties (`add_neighbor_penalties()`), the
+Neighbour penalties (`add_neighbor_penalties()`), the
 weighted-sum and reference-point approaches of `multi_problem()` (9), `presolve_check()` and the target
 methods of 8.1 (`spec_*_targets()`). Open an issue if you need one of them.
 
@@ -224,6 +247,17 @@ methods of 8.1 (`spec_*_targets()`). Open an issue if you need one of them.
   one. Landschaft uses an exact model (a spanning arborescence with a flow), so its patches are as cheap
   or cheaper, and a problem prioritizr calls infeasible may have a solution here. The restricted model
   is still used, as a quick first patch.
+- **Zones: targets summed over the zones are shares of the features' totals.** With the easy form
+  (`contribution=`), `add_relative_targets(0.3)` asks for 30% of every feature's total, its amounts in
+  every zone counted by the zone's contribution: prioritizr's manual absolute target with the list of
+  every zone. A relative target of one zone is a share of the feature's total in that zone, as in
+  prioritizr; with every zone's own features (as `zones()`), a target over several zones is a share of
+  the sum of their totals, as in prioritizr.
+- **Three prioritizr bugs with zones are fixed here.** Manual bounds or locks no longer open a zone where
+  a unit has no cost (prioritizr gives it cost 0 there); the default adjacency (neighbour and contiguity
+  constraints) takes the cells with a cost in any zone (prioritizr's takes those with a cost in every
+  zone, so a unit missing from one zone has no neighbours); linear penalties keep the other zones' when
+  one zone's is 0 (prioritizr drops them all).
 - **prioritizr 9 changed three things.** It rescales the boundary data it computes so that their largest
   value is 1, so a penalty from a prioritizr 9 script corresponds here to that penalty divided by
   `P.boundary_matrix(cost).max()`. It dropped the small cost term that breaks ties in the maximum

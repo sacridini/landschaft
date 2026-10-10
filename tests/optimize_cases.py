@@ -722,6 +722,48 @@ def zone_status_cells():
                          "status": [1.0, 0.0, 1.0, 0.0, 0.0]})
 
 
+def zone_sol():
+    """A fixed allocation of the zone problem's units (a layer per zone, 1 / 0, NaN where a cell has no cost in
+    the zone): protection where a smooth field is high, use below it, restoration below that."""
+    f = smooth_field(61)
+    c = _zone_costs()
+    out = np.stack([(f > 0.62), (f > 0.52) & (f <= 0.62), (f > 0.45) & (f <= 0.52)]).astype(np.float64)
+    out = np.where(np.isfinite(c), out, np.nan)
+    return grid(out, names=ZONES)
+
+
+def zone_solp():
+    """Shares of the zones (proportion decisions): the allocation halved, plus a quarter of use everywhere open."""
+    v = zone_sol().values.copy()
+    v = 0.5 * v
+    v[1] = np.where(np.isfinite(v[1]), np.minimum(v[1] + 0.25, 1.0 - np.nan_to_num(v[0]) - np.nan_to_num(v[2])), np.nan)
+    return grid(v, names=ZONES)
+
+
+def zone_bnd():
+    """The boundary matrix of all the grid's cells as triplets (4 neighbours, perimeters on the diagonal; lengths
+    with 7 decimals that round(, 6) changes)."""
+    n = NY * NX
+    i, j, x = [], [], []
+    for r in range(NY):
+        for cc in range(NX):
+            k = r * NX + cc
+            per = 0.0
+            for dr, dc in ((0, 1), (1, 0), (0, -1), (-1, 0)):
+                rr, c2 = r + dr, cc + dc
+                w = 100.0 + 0.0000004 * ((k + rr * NX + c2) % 7)
+                per += w
+                if 0 <= rr < NY and 0 <= c2 < NX:
+                    i.append(k)
+                    j.append(rr * NX + c2)
+                    x.append(w)
+            i.append(k)
+            j.append(k)
+            x.append(per)
+    del n
+    return _triplets(i, j, x)
+
+
 INPUTS = {f.__name__: f for f in (
     pu_cost, features, shapes, locked_in, locked_out, pu_table, spec_table, rij_table, pu_polygons,
     pu_polygons_partial, pa_pu, pa_features, pa_dist_features, pa_threats, pa_dist_threats, pa_sensitivity,
@@ -729,7 +771,7 @@ INPUTS = {f.__name__: f for f in (
     bounds_cells, status_cells, bounds_rows, proxirr_entries, marxan_pu, marxan_puvspr, marxan_spec,
     marxan_puvspr_ids, marxan_pu_ids, marxan_spec_ids, proxirr_many, zone_cost, zone_cost2, zf_protect, zf_use,
     zf_restore, zone_locked_in, zone_locked_out, zone_table, zone_rij, zone_ids, zone_polygons,
-    zone_bounds_cells, zone_status_cells, cell_conn, cell_asym, zone_linear)}
+    zone_bounds_cells, zone_status_cells, cell_conn, cell_asym, zone_linear, zone_sol, zone_solp, zone_bnd)}
 
 
 def build_input(name: str):
@@ -1395,6 +1437,44 @@ CASES.update({
         reference(zp3() |> add_min_set_objective() |> add_manual_targets(sum_targets(0.15)) |>
                   add_contiguity_constraints(zones = {_ZONES_N}) |> add_binary_decisions())""",
                               notes="prioritizr's formulation (a restriction): ours is exact, the optimum <= this"),
+})
+
+
+_ZONES_E = "matrix(c(1, 0.5, 0.2, 0.5, 1, 0, 0.2, 0, 0.8), ncol = 3)"
+
+CASES.update({
+    # --- zones: evaluation of fixed solutions (summaries: overall and per zone)
+    "zones_eval_summaries": _zc((*ZONE_RASTER, "zone_sol"), """
+        p <- zp3() |> add_min_set_objective() |> add_relative_targets(matrix(0.2, nrow = 5, ncol = 3)) |>
+             add_binary_decisions()
+        list(n = eval_n_summary(p, zone_sol), cost = eval_cost_summary(p, zone_sol),
+             boundary = eval_boundary_summary(p, zone_sol),
+             representation = eval_feature_representation_summary(p, zone_sol),
+             coverage = eval_target_coverage_summary(p, zone_sol, include_zone = FALSE, include_sense = TRUE))"""),
+    "zones_eval_proportion": _zc((*ZONE_RASTER, "zone_solp"), """
+        p <- zp3() |> add_min_set_objective() |> add_relative_targets(matrix(0.2, nrow = 5, ncol = 3)) |>
+             add_proportion_decisions()
+        list(n = eval_n_summary(p, zone_solp), cost = eval_cost_summary(p, zone_solp),
+             boundary = eval_boundary_summary(p, zone_solp, edge_factor = c(0.5, 1, 0.2)),
+             representation = eval_feature_representation_summary(p, zone_solp))"""),
+    "zones_eval_spatial": _zc((*ZONE_RASTER, "zone_sol", "cell_conn", "cell_asym", "zone_bnd"), f"""
+        p <- zp3() |> add_min_set_objective() |> add_relative_targets(matrix(0.2, nrow = 5, ncol = 3)) |>
+             add_binary_decisions()
+        cm <- Matrix::sparseMatrix(i = cell_conn$i, j = cell_conn$j, x = cell_conn$x, {_CELLS})
+        am <- Matrix::sparseMatrix(i = cell_asym$i, j = cell_asym$j, x = cell_asym$x, {_CELLS})
+        bm <- Matrix::sparseMatrix(i = zone_bnd$i, j = zone_bnd$j, x = zone_bnd$x, {_CELLS})
+        list(boundary = eval_boundary_summary(p, zone_sol, edge_factor = c(0.5, 1, 0.2), zones = {_ZONES_B}, data = bm),
+             connectivity = eval_connectivity_summary(p, zone_sol, zones = {_ZONES_E}, data = cm),
+             asym = eval_asym_connectivity_summary(p, zone_sol, zones = {_ZONES_A}, data = am))"""),
+    "zones_eval_coverage_lists": _zc((*ZONE_RASTER, "zone_sol"), """
+        t <- tibble::tibble(
+          feature = c("f1", "f2", "f3", "f4", "f4", "f5", "f5"),
+          zone = list(c("protect", "use"), "protect", zn, "use", c("protect", "restore"), "restore", "use"),
+          type = c("relative", "absolute", "relative", "relative", "relative", "absolute", "relative"),
+          sense = c(">=", ">=", ">=", "<=", ">=", ">=", "<="),
+          target = c(0.2, 1, 0.25, 0.4, 0.2, 2, 0.3))
+        p <- zp3() |> add_min_set_objective() |> add_manual_targets(t) |> add_binary_decisions()
+        list(coverage = eval_target_coverage_summary(p, zone_sol, include_zone = FALSE, include_sense = TRUE))"""),
 })
 
 

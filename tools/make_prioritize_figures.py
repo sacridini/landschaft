@@ -448,6 +448,45 @@ def prio_actions():
     save(fig, "prio_actions")
 
 
+def zone_problem():
+    """The tutorial's zones: strict protection, sustainable use (half of every feature counts) and restoration
+    of the anthropic land (pasture and cropland: that share of every feature comes back)."""
+    lc = load("land_cover")
+    anthropic = lc.sel(band="pasture") + lc.sel(band="cropland")
+    costs = {"protect": COST, "use": COST * 0.45, "restore": (COST * 0.2).where(anthropic > 0.2)}
+    return (P.problem(costs, FEATURES, contribution={"use": 0.5, "restore": anthropic})
+            .add_min_set_objective()
+            .add_relative_targets(0.3)
+            .add_relative_targets(0.1, zone="protect")
+            .add_locked_in_constraints({"protect": PROTECTED_R})
+            .add_locked_out_constraints({z: URBAN_R for z in costs})
+            .add_boundary_penalties(0.0005)
+            .add_highs_solver(gap=0.02)), anthropic
+
+
+@figure
+def prio_zones():
+    p, anthropic = zone_problem()
+    sol = p.solve()
+    colours = {1: "#1b9e77", 2: "#d95f02", 3: "#7570b3"}
+    fig, axes = plt.subplots(1, 3, figsize=(13, 3.6))
+    continuous(axes[0], COST.values, CMAP_COST, "Cost of protection", label="thousand USD per km²")
+    continuous(axes[1], anthropic.where(anthropic > 0.2).values, CMAP_VALUE, "Restorable land",
+               label="share of the cell", vmin=0, vmax=1)
+    ax = axes[2]
+    base_map(ax, "The plan: a zone for every unit")
+    z = np.asarray(sol.zones.values)
+    for code, colour in colours.items():
+        overlay(ax, z == code, colour)
+    overlay(ax, np.nan_to_num(URBAN_R.values), URBAN, 0.9)
+    ax.legend(handles=[Patch(color=c, label=n) for c, n in zip(colours.values(),
+                                                                ("strict protection", "sustainable use", "restoration"))],
+              loc="upper left", bbox_to_anchor=(1.0, 1.0), fontsize=8)
+    NUM["zones"] = {"status": sol.status, "gap": sol.gap, "cost": sol.cost, "zone_costs": sol.zone_costs,
+                    "units": {zn: float(sol.values[:, k].sum()) for k, zn in enumerate(sol.zone_names)}}
+    save(fig, "prio_zones")
+
+
 @figure
 def prio_response_curves():
     x = np.linspace(0, 1, 200)

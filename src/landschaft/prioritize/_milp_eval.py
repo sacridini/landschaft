@@ -18,8 +18,6 @@ import pandas as pd
 import scipy.sparse as sp
 import xarray as xr
 
-from ._zones import one_zone
-
 __all__ = [
     "eval_asym_connectivity_summary",
     "eval_boundary_summary",
@@ -154,7 +152,10 @@ def eval_n_summary(p, solution) -> pd.DataFrame:
        summary      n
     0  overall  534.0
     """
-    one_zone(p, "eval_n_summary")
+    if p.units.zoned:  # a row overall and one per zone
+        from ._zones_eval import n_summary
+
+        return n_summary(p, solution)
     return pd.DataFrame({"summary": ["overall"], "n": [_r_sum(_values(p, solution))]})
 
 
@@ -172,17 +173,22 @@ def eval_cost_summary(p, solution) -> pd.DataFrame:
     >>> round(P.eval_cost_summary(p, sol)["cost"].item(), 1) == round(sol.cost, 1)
     True
     """
-    one_zone(p, "eval_cost_summary")
+    if p.units.zoned:
+        from ._zones_eval import cost_summary
+
+        return cost_summary(p, solution)
     s = _values(p, solution)
     return pd.DataFrame({"summary": ["overall"], "cost": [_r_sum(p.units.cost * s)]})
 
 
-def eval_boundary_summary(p, solution, edge_factor: float = 0.5, data=None) -> pd.DataFrame:
+def eval_boundary_summary(p, solution, edge_factor: float = 0.5, data=None, zones=None) -> pd.DataFrame:
     """The solution's boundary length: the edges between selected and other units, plus
     ``edge_factor`` x the selected units' edges on the outside of the planning units.
 
     ``data``: the boundary matrix (every unit's shared lengths and its perimeter on the diagonal;
-    default :func:`boundary_matrix` of the planning units).
+    default :func:`boundary_matrix` of the planning units). With zones: ``edge_factor`` one or one per
+    zone and ``zones`` the zones matrix (as :meth:`Problem.add_boundary_penalties`); the rows are the
+    boundary overall (with the zones matrix) and of every zone's units alone.
 
     Examples
     --------
@@ -196,7 +202,12 @@ def eval_boundary_summary(p, solution, edge_factor: float = 0.5, data=None) -> p
        summary  boundary
     0  overall  382500.0
     """
-    one_zone(p, "eval_boundary_summary")
+    if p.units.zoned:
+        from ._zones_eval import boundary_summary
+
+        return boundary_summary(p, solution, edge_factor, zones, data)
+    if zones is not None:
+        raise ValueError("zones are given but the problem has none")
     from .. import _core
     from ._milp_matrices import boundary_matrix
     from ._milp_spatial import r_round
@@ -250,9 +261,10 @@ def _connectivity(p, solution, data, asym: bool) -> float:
                                        _values(p, solution), asym)
 
 
-def eval_connectivity_summary(p, solution, data) -> pd.DataFrame:
+def eval_connectivity_summary(p, solution, data, zones=None) -> pd.DataFrame:
     """The connectivity among the selected units: the sum of ``data[i, j]`` x the solution's values of
-    units i and j (a symmetric matrix over the units).
+    units i and j (a symmetric matrix over the units). With zones, ``zones`` the zones matrix (default the
+    identity): the rows are the connectivity overall and within every zone.
 
     Examples
     --------
@@ -266,11 +278,14 @@ def eval_connectivity_summary(p, solution, data) -> pd.DataFrame:
     >>> round(P.eval_connectivity_summary(p, sol, cm)["connectivity"].item(), 2)
     1276348.0
     """
-    one_zone(p, "eval_connectivity_summary")
+    if p.units.zoned:
+        from ._zones_eval import connectivity_summary
+
+        return connectivity_summary(p, solution, data, zones, False)
     return pd.DataFrame({"summary": ["overall"], "connectivity": [_connectivity(p, solution, data, False)]})
 
 
-def eval_asym_connectivity_summary(p, solution, data) -> pd.DataFrame:
+def eval_asym_connectivity_summary(p, solution, data, zones=None) -> pd.DataFrame:
     """As :func:`eval_connectivity_summary` for an asymmetric matrix (its diagonal counted once).
 
     Examples
@@ -287,7 +302,10 @@ def eval_asym_connectivity_summary(p, solution, data) -> pd.DataFrame:
     >>> round(P.eval_asym_connectivity_summary(p, sol, asym)["asym_connectivity"].item(), 2)
     638174.0
     """
-    one_zone(p, "eval_asym_connectivity_summary")
+    if p.units.zoned:
+        from ._zones_eval import connectivity_summary
+
+        return connectivity_summary(p, solution, data, zones, True)
     return pd.DataFrame({"summary": ["overall"], "asym_connectivity": [_connectivity(p, solution, data, True)]})
 
 
@@ -327,7 +345,10 @@ def eval_feature_representation_summary(p, solution) -> pd.DataFrame:
     6     araucaria_forest          0.428
     7             mangrove          0.210
     """
-    one_zone(p, "eval_feature_representation_summary")
+    if p.units.zoned:  # rows overall (the zones summed) and per zone
+        from ._zones_eval import feature_representation_summary
+
+        return feature_representation_summary(p, solution)
     u = p.units
     held = _held(p, _values(p, solution))
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -336,7 +357,7 @@ def eval_feature_representation_summary(p, solution) -> pd.DataFrame:
                          "absolute_held": held, "relative_held": rel})
 
 
-def eval_target_coverage_summary(p, solution, include_sense: bool = False) -> pd.DataFrame:
+def eval_target_coverage_summary(p, solution, include_sense: bool = False, include_zone: bool | None = None) -> pd.DataFrame:
     """Every target's feature, whether it is met, the feature's total, and the target, the amount held
     and the shortfall, absolute and relative (shares of the total; 0 when the total is 0).
 
@@ -352,7 +373,10 @@ def eval_target_coverage_summary(p, solution, include_sense: bool = False) -> pd
     >>> bool(cov["met"].all())
     True
     """
-    one_zone(p, "eval_target_coverage_summary")
+    if p.units.zoned:  # with a column of every target's zones
+        from ._zones_eval import target_coverage_summary
+
+        return target_coverage_summary(p, solution, include_sense, True if include_zone is None else include_zone)
     from .. import _core
     from ._milp_compile import NO_TARGETS, compile_problem
 
@@ -413,8 +437,12 @@ def eval_extinction_risk(p, solution, z=0.25) -> pd.DataFrame:
     >>> round(float(risk["extinction_risk"].iloc[-1]), 3)
     2.423
     """
-    one_zone(p, "eval_extinction_risk")
     rep = eval_feature_representation_summary(p, solution)
+    if p.units.zoned:  # every feature over all its zones (the totals: the base features', as the targets')
+        rep = rep[rep["summary"] == "overall"].reset_index(drop=True)
+        if p.units.base_totals is not None:
+            rep["total_amount"] = p.units.base_totals
+            rep["relative_held"] = rep["absolute_held"] / rep["total_amount"]
     z = np.broadcast_to(np.asarray(z, dtype=np.float64), (len(rep),))
     rel = np.clip(np.nan_to_num(rep["relative_held"].to_numpy(dtype=np.float64)), 0.0, 1.0)
     risk = 1.0 - rel ** z
@@ -454,7 +482,8 @@ def eval_ferrier_importance(p, solution):
     >>> float(fi.sel(band="total").max()) > 0
     True
     """
-    one_zone(p, "eval_ferrier_importance")
+    if p.units.zoned:
+        raise ValueError("eval_ferrier_importance needs a problem with a single zone (as prioritizr)")
     from .. import _core
     from ._milp_compile import NO_TARGETS, compile_problem
 
@@ -502,7 +531,8 @@ def eval_rare_richness_importance(p, solution, rescale: bool = True):
     >>> float(rwr.max())
     1.0
     """
-    one_zone(p, "eval_rare_richness_importance")
+    if p.units.zoned:
+        raise ValueError("eval_rare_richness_importance needs a problem with a single zone (as prioritizr)")
     u = p.units
     s = _values(p, solution)
     sel = _selected(s)
@@ -550,7 +580,10 @@ def eval_replacement_importance(p, solution, rescale: bool = True, n_threads: in
     >>> float(rc.max())
     1.0
     """
-    one_zone(p, "eval_replacement_importance")
+    if p.units.zoned:  # every selected unit-zone column in turn; a layer per zone
+        from ._zones_eval import replacement_importance
+
+        return replacement_importance(p, solution, rescale, n_threads)
     from concurrent.futures import ThreadPoolExecutor
 
     from .. import _threads
@@ -619,7 +652,8 @@ def _r_seq(lo: float, hi: float, n: int) -> np.ndarray:
     return np.concatenate([[lo], lo + np.arange(1, n1) * ((hi - lo) / n1), [hi]])
 
 
-def eval_rank_importance(p, solution, n: int | None = None, budgets=None, rescale: bool = True):
+def eval_rank_importance(p, solution, n: int | None = None, budgets=None, rescale: bool = True,
+                         by_zone: bool = True):
     """Rank importance (Jung et al. 2021, prioritizr's eval_rank_importance): the problem is solved
     with increasing budgets (the min set objective becomes min shortfall), only the solution's units
     allowed and each step keeping the units of the step before; a unit's rank is how early it enters
@@ -627,7 +661,8 @@ def eval_rank_importance(p, solution, n: int | None = None, budgets=None, rescal
     the locked-in units' cost and the solution's, or the ``budgets`` themselves.
 
     Returns the per-unit ranks (a raster or the units' table) and a table of every budget's objective,
-    status and gap.
+    status and gap. With zones, a layer per zone, and ``by_zone``: a budget per zone (every zone's cost in
+    equal steps), else one budget over every zone; ``budgets`` may then be steps x zones.
 
     Examples
     --------
@@ -645,7 +680,10 @@ def eval_rank_importance(p, solution, n: int | None = None, budgets=None, rescal
     2  17695.4  optimal
     3  23593.9  optimal
     """
-    one_zone(p, "eval_rank_importance")
+    if p.units.zoned:
+        from ._zones_eval import rank_importance
+
+        return rank_importance(p, solution, n, budgets, rescale, by_zone)
     from ._milp import OptimizationProblem
     from ._milp_compile import compile_problem
 
@@ -720,10 +758,13 @@ def _selection_map(solution) -> xr.DataArray:
     return sel.copy(data=np.where(np.isfinite(v), (v > 0.5).astype(np.float64), np.nan))
 
 
-def eval_landscape_metrics(solution, level: str | None = "class", metric=None, **kw) -> pd.DataFrame:
+def eval_landscape_metrics(solution, level: str | None = "class", metric=None, zone=None, **kw) -> pd.DataFrame:
     """Landscape metrics of a raster solution (:func:`landschaft.lsm.landscape_metrics` of the map of
     the selected cells: class 1 selected, 0 not, outside the planning units no data): e.g. the number,
     sizes and shapes of the selected patches. Class-level and patch-level rows of the selected class only.
+
+    With zones, the map of the zones (a class per zone, 0 for the units in none; class and patch rows of
+    the zones, with a ``zone`` column), or with ``zone`` that zone's units against the others.
 
     Examples
     --------
@@ -738,20 +779,44 @@ def eval_landscape_metrics(solution, level: str | None = "class", metric=None, *
     0     ca  53400.0
     1     np     13.0
     """
-    one_zone(solution, "eval_landscape_metrics")
     from .. import lsm
 
-    m = _selection_map(solution)
+    names = getattr(solution, "zone_names", ())
+    if names and zone is None:  # the zones as classes
+        zmap = solution.zones
+        t = lsm.landscape_metrics(zmap, level=level, metric=metric, nodata=np.nan, **kw)
+        if "class" in t.columns and level in ("class", "patch"):
+            t = t[t["class"] >= 1].reset_index(drop=True)
+            t.insert(t.columns.get_loc("class") + 1, "zone", [names[int(c) - 1] for c in t["class"]])
+        return t
+    m = _zone_map(solution, zone) if names else _selection_map(solution)
+    if zone is not None and not names:
+        raise ValueError("zone is given but the solution has no zones")
     t = lsm.landscape_metrics(m, level=level, metric=metric, nodata=np.nan, **kw)
     if "class" in t.columns and level in ("class", "patch"):
         t = t[t["class"] == 1].reset_index(drop=True)
     return t
 
 
-def eval_mspa(solution, **kw):
+def _zone_map(solution, zone) -> xr.DataArray:
+    """One zone of a solution with zones as 1 (the units in it), 0 (the other units), NaN outside them."""
+    names = list(solution.zone_names)
+    if zone is None:
+        raise ValueError(f"with zones, give the zone (one of {names})")
+    if str(zone) not in names:
+        raise ValueError(f"unknown zone {zone!r} (zones: {names})")
+    z = names.index(str(zone)) + 1
+    zm = solution.zones
+    if not isinstance(zm, xr.DataArray):
+        raise ValueError("the landscape of a solution needs raster planning units")
+    v = np.asarray(zm.values, dtype=np.float64)
+    return zm.copy(data=np.where(np.isfinite(v), (v == z).astype(np.float64), np.nan))
+
+
+def eval_mspa(solution, zone=None, **kw):
     """MSPA (:func:`landschaft.mspa`) of a raster solution: the selected cells as foreground, the other
     planning units as background, the cells outside them missing. Returns (the MSPA map, its class
-    areas).
+    areas). With zones, give the ``zone`` whose units are the foreground.
 
     Examples
     --------
@@ -765,10 +830,14 @@ def eval_mspa(solution, **kw):
     >>> int(areas.loc["Core", "pixels"]) >= 0
     True
     """
-    one_zone(solution, "eval_mspa")
     import landschaft as ls
 
-    m = _selection_map(solution)
+    if getattr(solution, "zone_names", ()):
+        m = _zone_map(solution, zone)
+    elif zone is not None:
+        raise ValueError("zone is given but the solution has no zones")
+    else:
+        m = _selection_map(solution)
     v = m.values
     data = m.copy(data=np.where(np.isnan(v), 0, np.where(v > 0.5, 2, 1)).astype(np.uint8))
     res = ls.mspa(data, **kw)

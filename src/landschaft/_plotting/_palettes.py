@@ -98,12 +98,23 @@ LEGEND_ORDER = {
 }
 
 
+#: The colours of the zones of a prioritization (Dark2, colour-blind safe for the first ones).
+ZONE_COLOURS = ("#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e", "#e6ab02", "#a6761d", "#666666")
+
+
 def product_style(attrs: dict) -> tuple[dict | None, dict | None]:
     """The colour table {value: (r, g, b, a)} and the class names {value: name} of a
     landschaft product (from its ``landschaft_product`` attribute), or (None, None)."""
     product = attrs.get("landschaft_product")
     if not product:
         return None, None
+    if product == "ZONES":  # the zones of a prioritization (ls.prioritize, zone numbers 1.., 0 none)
+        names = {int(k): str(v) for k, v in dict(attrs.get("zones", {})).items()}
+        table = {0: (217, 217, 217, 255)}
+        for k in names:
+            h = ZONE_COLOURS[(k - 1) % len(ZONE_COLOURS)].lstrip("#")
+            table[k] = (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 255)
+        return table, {0: "no zone", **names}
     if product == "FAD_CLASSES":
         return dict(FAD_CLASS_COLOURS), class_names(product, attrs)
     from .. import io

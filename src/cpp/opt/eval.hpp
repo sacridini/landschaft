@@ -37,6 +37,14 @@ double connectivity(const Csc& data, const std::vector<double>& solution);
 // rcpp_asym_connectivity for one zone.
 double asym_connectivity(const Csc& data, const std::vector<double>& solution);
 
+// With management zones (prioritizr's loops over pairs of zones): zones is nz x nz (row-major), the
+// solution n x nz (column after column: unit i in zone z at z * n + i).
+double boundary_zones(const std::vector<double>& edge_factor, const std::vector<double>& zones, const Csc& lower,
+                      const std::vector<double>& exposed, const std::vector<double>& total,
+                      const std::vector<double>& solution);
+double connectivity_zones(const Csc& data, const std::vector<double>& zones, const std::vector<double>& solution);
+double asym_connectivity_zones(const Csc& data, const std::vector<double>& zones, const std::vector<double>& solution);
+
 // rcpp_ferrier_score: rij features x units; selected: the units of the solution (portfolio); the
 // scores of the (feature, selected unit) pairs with an amount, as features x units in compressed columns.
 Csc ferrier_score(const Csc& rij, const std::vector<double>& targets, const std::vector<std::uint8_t>& selected);

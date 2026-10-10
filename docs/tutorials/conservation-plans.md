@@ -14,6 +14,7 @@ complete plan for Serra Verde, the example region of the course chapters
 - see what each budget buys;
 - find the places that matter most, and the alternatives;
 - plan actions against threats;
+- give every unit a zone: protection, sustainable use or restoration;
 - compare with a Zonation ranking, and share the results.
 
 ## The data
@@ -142,6 +143,42 @@ acts.cost()
 ```
 
 ![A multi-action plan](../assets/figures/prio_actions.png)
+
+## Zones of management
+
+A plan can also give every unit a **zone**: strict protection, sustainable use or restoration, each with its
+own cost and its own worth for the features. Sustainable use is cheaper but counts half of every feature;
+restoring pasture and cropland brings back their share of the cell; the targets are met by the sum over the
+zones, and 10 % of every feature must be under strict protection
+([chapter 12.8](../learn/prioritization/actions.md#zones-actions-or-restoration)):
+
+```python
+lc = ls.load_raster(P.example_data("land_cover"))
+anthropic = lc.sel(band="pasture") + lc.sel(band="cropland")      # restorable share of every cell
+costs = {"protect": cost,
+         "use": cost * 0.45,
+         "restore": (cost * 0.2).where(anthropic > 0.2)}         # no cost: the unit cannot go there
+pz = (P.problem(costs, features, contribution={"use": 0.5, "restore": anthropic})
+        .add_min_set_objective()
+        .add_relative_targets(0.3)                    # 30 % of every feature, counted in every zone
+        .add_relative_targets(0.1, zone="protect")    # and 10 % of it strictly protected
+        .add_locked_in_constraints({"protect": protected})
+        .add_locked_out_constraints({z: urban for z in costs})
+        .add_boundary_penalties(0.0005)               # compact zones
+        .add_highs_solver(gap=0.02))
+zplan = pz.solve()
+{z: round(c) for z, c in zplan.zone_costs.items()}
+```
+
+The plan keeps the reserves under protection, puts 560 cells under strict protection, 450 under sustainable
+use and restores 284, for 40 450 thousand USD. `zplan.zones` is the map of the zones, and every evaluation
+gives a row overall and one per zone:
+
+```python
+P.eval_n_summary(pz, zplan)
+```
+
+![A plan with zones](../assets/figures/prio_zones.png)
 
 ## Compared with a Zonation ranking
 

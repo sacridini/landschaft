@@ -168,6 +168,8 @@ def report(p, solution=None, *, importance: bool = True, zonation: bool = False,
     ``importance`` the Ferrier irreplaceability of the selected units (problems with one target per
     feature) or else their rarity-weighted richness; with ``extinction_z`` the species-area extinction
     risk; with ``zonation`` the comparison with a Zonation ranking at the same cost (raster units).
+    With zones, every summary has a row overall and one per zone (no irreplaceability, rarity or Zonation
+    comparison: they need a single zone).
 
     Examples
     --------
@@ -182,7 +184,6 @@ def report(p, solution=None, *, importance: bool = True, zonation: bool = False,
     ['representation', 'summary', 'targets']
     >>> page = ls.plot(r, show=False).save("report.html")
     """
-    one_zone(p, "report")
     from ._milp_compile import NO_TARGETS
     from ._milp_eval import (
         eval_boundary_summary,
@@ -197,13 +198,22 @@ def report(p, solution=None, *, importance: bool = True, zonation: bool = False,
 
     sol = p.solve() if solution is None else solution
     u = p.units
-    summary = {"units": float(eval_n_summary(p, sol)["n"].iloc[0]),
+    if u.zoned:
+        if zonation:
+            raise ValueError("the comparison with Zonation needs a problem with a single zone")
+        importance = False  # Ferrier and rarity: a single zone
+        summary = eval_n_summary(p, sol).rename(columns={"n": "units"})
+        summary["cost"] = eval_cost_summary(p, sol)["cost"].to_numpy()
+        if u.kind == "raster" or hasattr(u.template, "geometry"):
+            summary["boundary"] = eval_boundary_summary(p, sol)["boundary"].to_numpy()
+    else:
+        row = {"units": float(eval_n_summary(p, sol)["n"].iloc[0]),
                "cost": float(eval_cost_summary(p, sol)["cost"].iloc[0])}
-    if u.kind == "raster" or hasattr(u.template, "geometry"):  # tables without geometry have no boundary
-        summary["boundary"] = float(eval_boundary_summary(p, sol)["boundary"].iloc[0])
-    tables = {"summary": pd.DataFrame([summary]),
-              "representation": eval_feature_representation_summary(p, sol)}
-    has_targets = (p.targets is not None or p.subregional is not None) and (
+        if u.kind == "raster" or hasattr(u.template, "geometry"):  # tables without geometry have no boundary
+            row["boundary"] = float(eval_boundary_summary(p, sol)["boundary"].iloc[0])
+        summary = pd.DataFrame([row])
+    tables = {"summary": summary, "representation": eval_feature_representation_summary(p, sol)}
+    has_targets = (p.targets is not None or bool(p.zone_targets) or p.subregional is not None) and (
         p.objective is None or p.objective[0] not in NO_TARGETS)
     if has_targets:
         tables["targets"] = eval_target_coverage_summary(p, sol)

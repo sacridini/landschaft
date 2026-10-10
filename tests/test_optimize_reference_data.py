@@ -15,7 +15,9 @@ import optimize_cases
 import pytest
 from optimize_reference import case_ids, model, result, solve_gurobi, solve_highs
 
-CASES = [(g, c) for g in ("core", "objectives", "spatial", "actions", "zones") for c in case_ids(g)]
+# the zones group's evaluation cases hold summaries of fixed solutions, no model
+CASES = [(g, c) for g in ("core", "objectives", "spatial", "actions", "zones") for c in case_ids(g)
+         if not c.startswith("zones_eval")]
 IDS = [c for _, c in CASES]
 
 

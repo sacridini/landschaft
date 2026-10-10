@@ -58792,6 +58792,344 @@
     "OPTIMAL"
    ]
   },
+  "zones_eval_coverage_lists/coverage/absolute_held": {
+   "kind": "vector"
+  },
+  "zones_eval_coverage_lists/coverage/absolute_shortfall": {
+   "kind": "vector"
+  },
+  "zones_eval_coverage_lists/coverage/absolute_target": {
+   "kind": "vector"
+  },
+  "zones_eval_coverage_lists/coverage/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f4",
+    "f5",
+    "f5"
+   ]
+  },
+  "zones_eval_coverage_lists/coverage/met": {
+   "kind": "vector"
+  },
+  "zones_eval_coverage_lists/coverage/relative_held": {
+   "kind": "vector"
+  },
+  "zones_eval_coverage_lists/coverage/relative_shortfall": {
+   "kind": "vector"
+  },
+  "zones_eval_coverage_lists/coverage/relative_target": {
+   "kind": "vector"
+  },
+  "zones_eval_coverage_lists/coverage/sense": {
+   "kind": "text",
+   "values": [
+    ">=",
+    ">=",
+    ">=",
+    "<=",
+    ">=",
+    ">=",
+    "<="
+   ]
+  },
+  "zones_eval_coverage_lists/coverage/total_amount": {
+   "kind": "vector"
+  },
+  "zones_eval_proportion/boundary/boundary": {
+   "kind": "vector"
+  },
+  "zones_eval_proportion/boundary/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "protect",
+    "use",
+    "restore"
+   ]
+  },
+  "zones_eval_proportion/cost/cost": {
+   "kind": "vector"
+  },
+  "zones_eval_proportion/cost/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "protect",
+    "use",
+    "restore"
+   ]
+  },
+  "zones_eval_proportion/n/n": {
+   "kind": "vector"
+  },
+  "zones_eval_proportion/n/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "protect",
+    "use",
+    "restore"
+   ]
+  },
+  "zones_eval_proportion/representation/absolute_held": {
+   "kind": "vector"
+  },
+  "zones_eval_proportion/representation/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5"
+   ]
+  },
+  "zones_eval_proportion/representation/relative_held": {
+   "kind": "vector"
+  },
+  "zones_eval_proportion/representation/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "overall",
+    "overall",
+    "overall",
+    "overall",
+    "protect",
+    "protect",
+    "protect",
+    "protect",
+    "protect",
+    "use",
+    "use",
+    "use",
+    "use",
+    "use",
+    "restore",
+    "restore",
+    "restore",
+    "restore",
+    "restore"
+   ]
+  },
+  "zones_eval_proportion/representation/total_amount": {
+   "kind": "vector"
+  },
+  "zones_eval_spatial/asym/asym_connectivity": {
+   "kind": "vector"
+  },
+  "zones_eval_spatial/asym/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "protect",
+    "use",
+    "restore"
+   ]
+  },
+  "zones_eval_spatial/boundary/boundary": {
+   "kind": "vector"
+  },
+  "zones_eval_spatial/boundary/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "protect",
+    "use",
+    "restore"
+   ]
+  },
+  "zones_eval_spatial/connectivity/connectivity": {
+   "kind": "vector"
+  },
+  "zones_eval_spatial/connectivity/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "protect",
+    "use",
+    "restore"
+   ]
+  },
+  "zones_eval_summaries/boundary/boundary": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/boundary/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "protect",
+    "use",
+    "restore"
+   ]
+  },
+  "zones_eval_summaries/cost/cost": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/cost/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "protect",
+    "use",
+    "restore"
+   ]
+  },
+  "zones_eval_summaries/coverage/absolute_held": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/coverage/absolute_shortfall": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/coverage/absolute_target": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/coverage/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5"
+   ]
+  },
+  "zones_eval_summaries/coverage/met": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/coverage/relative_held": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/coverage/relative_shortfall": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/coverage/relative_target": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/coverage/sense": {
+   "kind": "text",
+   "values": [
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">=",
+    ">="
+   ]
+  },
+  "zones_eval_summaries/coverage/total_amount": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/n/n": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/n/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "protect",
+    "use",
+    "restore"
+   ]
+  },
+  "zones_eval_summaries/representation/absolute_held": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/representation/feature": {
+   "kind": "text",
+   "values": [
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5"
+   ]
+  },
+  "zones_eval_summaries/representation/relative_held": {
+   "kind": "vector"
+  },
+  "zones_eval_summaries/representation/summary": {
+   "kind": "text",
+   "values": [
+    "overall",
+    "overall",
+    "overall",
+    "overall",
+    "overall",
+    "protect",
+    "protect",
+    "protect",
+    "protect",
+    "protect",
+    "use",
+    "use",
+    "use",
+    "use",
+    "use",
+    "restore",
+    "restore",
+    "restore",
+    "restore",
+    "restore"
+   ]
+  },
+  "zones_eval_summaries/representation/total_amount": {
+   "kind": "vector"
+  },
   "zones_linear_constraints/model/A_i": {
    "kind": "vector"
   },

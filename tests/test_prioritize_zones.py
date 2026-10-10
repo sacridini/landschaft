@@ -16,7 +16,7 @@ from optimize_reference import case_ids, model, result
 
 import landschaft as ls
 
-ZONE_CASES = case_ids("zones")
+ZONE_CASES = [c for c in case_ids("zones") if optimize_cases.CASES[c].py is not None]
 # contiguity: prioritizr's formulation is a restriction, ours exact (not the same model; the optimum <= theirs)
 EXACT = [c for c in ZONE_CASES if "contiguity" not in c]
 # boundary penalties and contiguity take minutes on HiGHS's MIP (even to a 1% gap): a time limit
@@ -418,3 +418,126 @@ def test_zones_cut_engine_on_boundary_penalties():
         units = [m.A[r].indices[m.A[r].indices != c][0] for r in rows[:2]]
         x[c] = x[units[0]] * x[units[1]]
     assert float(m.obj @ x) == pytest.approx(sol.objective, rel=1e-9)
+
+
+# ----------------------------------------------------------------------------- evaluation with zones
+
+def _eval_problem(decisions="binary"):
+    p = optimize_cases._zone_general().add_min_set_objective().add_relative_targets(np.full((5, 3), 0.2))
+    return p.add_proportion_decisions() if decisions == "proportion" else p.add_binary_decisions()
+
+
+def _same_table(ours: pd.DataFrame, ref: dict, prefix: str, columns) -> None:
+    for c in columns:
+        r = ref[f"{prefix}/{c}"]
+        o = ours[c].tolist() if isinstance(r, list) else ours[c].to_numpy(dtype=float)
+        if isinstance(r, list):
+            assert [str(v) for v in o] == r, (prefix, c)
+        else:
+            np.testing.assert_array_equal(o, r, err_msg=f"{prefix}/{c}")
+
+
+def test_eval_summaries_with_zones():
+    P = ls.prioritize
+    ref = result("zones", "zones_eval_summaries")
+    p, sol = _eval_problem(), optimize_cases.zone_sol()
+    _same_table(P.eval_n_summary(p, sol), ref, "n", ["summary", "n"])
+    _same_table(P.eval_cost_summary(p, sol), ref, "cost", ["summary", "cost"])
+    _same_table(P.eval_boundary_summary(p, sol), ref, "boundary", ["summary", "boundary"])
+    _same_table(P.eval_feature_representation_summary(p, sol), ref, "representation",
+                ["summary", "feature", "total_amount", "absolute_held", "relative_held"])
+    _same_table(P.eval_target_coverage_summary(p, sol, include_sense=True, include_zone=False), ref, "coverage",
+                ["feature", "sense", "met", "total_amount", "absolute_target", "absolute_held", "absolute_shortfall",
+                 "relative_target", "relative_held", "relative_shortfall"])
+
+
+def test_eval_proportion_with_zones():
+    P = ls.prioritize
+    ref = result("zones", "zones_eval_proportion")
+    p, sol = _eval_problem("proportion"), optimize_cases.zone_solp()
+    _same_table(P.eval_n_summary(p, sol), ref, "n", ["summary", "n"])
+    _same_table(P.eval_cost_summary(p, sol), ref, "cost", ["summary", "cost"])
+    _same_table(P.eval_boundary_summary(p, sol, edge_factor=[0.5, 1, 0.2]), ref, "boundary", ["summary", "boundary"])
+    _same_table(P.eval_feature_representation_summary(p, sol), ref, "representation",
+                ["summary", "feature", "total_amount", "absolute_held", "relative_held"])
+
+
+def test_eval_spatial_with_zones():
+    P = ls.prioritize
+    ref = result("zones", "zones_eval_spatial")
+    p, sol = _eval_problem(), optimize_cases.zone_sol()
+    cm, am = optimize_cases._cells(optimize_cases.cell_conn()), optimize_cases._cells(optimize_cases.cell_asym())
+    bm = optimize_cases._cells(optimize_cases.zone_bnd())
+    ze = np.array([1, 0.5, 0.2, 0.5, 1, 0, 0.2, 0, 0.8]).reshape(3, 3)
+    _same_table(P.eval_boundary_summary(p, sol, edge_factor=[0.5, 1, 0.2], zones=optimize_cases._ZM_B, data=bm),
+                ref, "boundary", ["summary", "boundary"])
+    _same_table(P.eval_connectivity_summary(p, sol, cm, zones=ze), ref, "connectivity", ["summary", "connectivity"])
+    a = P.eval_asym_connectivity_summary(p, sol, am, zones=optimize_cases._ZM_A)
+    _same_table(a, ref, "asym", ["summary", "asym_connectivity"])
+
+
+def test_eval_coverage_of_zone_lists():
+    ref = result("zones", "zones_eval_coverage_lists")
+    p = optimize_cases._zone_general().add_min_set_objective().add_manual_targets(optimize_cases._zone_manual_table())
+    cov = ls.prioritize.eval_target_coverage_summary(p.add_binary_decisions(), optimize_cases.zone_sol(),
+                                                     include_sense=True, include_zone=False)
+    _same_table(cov, ref, "coverage", ["feature", "sense", "met", "total_amount", "absolute_target", "absolute_held",
+                                       "absolute_shortfall", "relative_target", "relative_held", "relative_shortfall"])
+
+
+def test_eval_of_a_solution_object_and_importance():
+    P = ls.prioritize
+    p = _random_zone_problem(8, 21).add_highs_solver(gap=0)
+    sol = p.solve()
+    n = P.eval_n_summary(p, sol)
+    assert list(n["summary"]) == ["overall", "protect", "use", "restore"]
+    assert n["n"][0] == pytest.approx(sol.values.sum())
+    cost = P.eval_cost_summary(p, sol)
+    assert cost["cost"][0] == pytest.approx(sol.cost) and list(cost["cost"][1:]) == pytest.approx(
+        list(sol.zone_costs.values()))
+    rc = P.eval_replacement_importance(p, sol, n_threads=2)
+    assert rc.dims[0] == "zone"
+    v = rc.values.reshape(3, -1)[:, p.units.index].T
+    assert ((v > 0) == (sol.values > 0.5)).all()  # every selected unit-zone column, and no other
+    ranks, steps = P.eval_rank_importance(p, sol, n=3)
+    assert list(steps.columns[:3]) == ["budget_protect", "budget_use", "budget_restore"]
+    rv = ranks.values.reshape(3, -1)[:, p.units.index].T
+    assert ((rv > 0) <= (sol.values > 0.5)).all()
+    with pytest.raises(ValueError, match="single zone"):
+        P.eval_ferrier_importance(p, sol)
+    risk = P.eval_extinction_risk(p, sol)
+    assert len(risk) == 7  # the features and their sum
+
+
+def test_landscape_metrics_and_mspa_with_zones():
+    P = ls.prioritize
+    sol = optimize_cases.CASES["zones_minset_sum"].py().solve()
+    t = P.eval_landscape_metrics(sol, metric=["np", "ca"])
+    assert set(t["zone"]) <= set(optimize_cases.ZONES) and (t["class"] >= 1).all()
+    ca = t[t["metric"] == "ca"].set_index("zone")["value"]
+    cell_ha = (optimize_cases.RES ** 2) / 1e4
+    for k, z in enumerate(optimize_cases.ZONES):
+        if z in ca.index:
+            assert ca[z] == pytest.approx(sol.values[:, k].sum() * cell_ha)
+    one = P.eval_landscape_metrics(sol, metric=["np"], zone="protect")
+    assert len(one) == 1
+    mspa, _ = P.eval_mspa(sol, zone="use")
+    assert mspa.shape == sol.zones.shape
+    with pytest.raises(ValueError, match="give the zone"):
+        P.eval_mspa(sol)
+
+
+def test_report_and_plot_with_zones():
+    import os
+
+    os.environ.setdefault("LANDSCHAFT_PLOT_SHOW", "0")
+    p = optimize_cases.CASES["zones_minset_sum"].py()
+    sol = p.solve()
+    r = ls.prioritize.report(p, sol)
+    assert list(r.tables["summary"]["summary"]) == ["overall", *optimize_cases.ZONES]
+    assert "zone" in r.tables["targets"].columns
+    assert sol.zones.attrs["landschaft_product"] == "ZONES"
+    pl = ls.plot(sol, show=False)
+    assert pl.panels[0].kind == "map"
+    with pytest.raises(ValueError, match="single zone"):
+        ls.prioritize.report(p, sol, zonation=True)

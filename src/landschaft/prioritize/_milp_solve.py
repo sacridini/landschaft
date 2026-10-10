@@ -383,7 +383,8 @@ def zone_selection(u: Units, values: np.ndarray):
         zmap[u.index] = code
         zones = u.template.copy(data=zmap.reshape(ny, nx))
         zones.name = "zone"
-        zones.attrs = {**zones.attrs, "zones": {k + 1: z for k, z in enumerate(u.zone_names)}}
+        zones.attrs = {**zones.attrs, "zones": {k + 1: z for k, z in enumerate(u.zone_names)},
+                       "landschaft_product": "ZONES"}
         return da, zones
     t = u.template.copy()
     for k, z in enumerate(u.zone_names):

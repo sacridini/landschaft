@@ -14,7 +14,8 @@ least cost or with the most benefit (Cattarino et al. 2015; Salgado-Rojas et al.
     - recovery and conservation targets, and maximizing benefit with a budget;
     - response curves: how features respond to threats and to their removal;
     - dependencies between places, such as along a river;
-    - inputs as tables, for any planning units.
+    - inputs as tables, for any planning units;
+    - zones of management, and when to use zones, actions or restoration.
 
 ## From places to actions
 
@@ -172,7 +173,56 @@ their distribution, sensitivity and boundary. Its results are identical to prior
 faster on large problems: Landschaft solves a multi-action problem of 100 000 units to a 1 % gap in under a
 second, where a general solver needs about a minute.
 
+## Zones, actions or restoration
+
+Three questions about *what to do where* look alike and lead to different models:
+
+| | The question | Per planning unit | In Landschaft |
+|---|---|---|---|
+| **Zones** | which use does every place get? | one zone at most, exclusive | `problem({zone: cost}, ..., contribution=)` |
+| **Actions** | which threats are fought where? | several actions, with monitoring | `actions_raster_data`, `actions_data` |
+| **Restoration** | how much of every converted place to restore? | a share of the cell | `restoration_problem` |
+
+**Zoning** is the oldest of them in practice: protected-area plans, marine spatial plans and land-use
+zoning divide a region into zones with different rules, such as no-take, sustainable use or restoration
+(Watts et al. 2009). Every zone has its own cost (often an opportunity cost that falls when some use goes
+on) and its own worth for the features: a feature may count fully under strict protection, partly where
+sustainable use goes on, and only by the habitat that comes back where land is restored. The targets are
+then met by the sum over the zones, each zone's amounts counted by its contribution, and some targets may
+ask for a zone of their own, such as a share of every feature under strict protection. The model is the
+minimum set of chapter 12.4 with one decision per unit and zone and one row per unit that keeps it in one
+zone at most: `add_mandatory_allocation_constraints` makes it exactly one, for plans that zone a whole region.
+
+```python
+import numpy as np
+import landschaft as ls
+
+P = ls.prioritize
+cost = ls.load_raster(P.example_data("cost"))
+features = ls.load_raster(P.example_data("features"))
+pz = (P.problem({"protect": cost, "use": cost * 0.45}, features, contribution={"use": 0.5})
+        .add_min_set_objective()
+        .add_relative_targets(0.3)
+        .add_relative_targets(0.1, zone="protect"))
+zplan = pz.solve()
+
+# by hand: every unit in one zone at most, and the plan's cost is the sum of its units' costs in their zones
+v = zplan.values                                   # units x zones
+c = np.stack([cost.values.ravel()[pz.units.index], 0.45 * cost.values.ravel()[pz.units.index]], axis=1)
+bool(v.sum(axis=1).max() <= 1), round(float((v * c).sum()), 2) == round(zplan.cost, 2)
+```
+
+Boundary penalties keep each zone compact; a matrix of zones says how much the edge between two zones
+costs, and the neighbour and contiguity constraints of chapter 12.5 take one as well. Zones are an
+exclusive choice per unit; actions against threats are not (a unit may be monitored, burnt less and
+weeded at once), and restoration decides a share of every cell, its benefit growing with the habitat it
+gives back. When a plan mixes them, the zones' contributions can come from the other two: the restoration
+zone of the [tutorial](../../tutorials/conservation-plans.md#zones-of-management) counts the share of every
+cell that is pasture or cropland, the land `restoration_problem` would restore.
+
 !!! success "Key points"
+    - Zoning gives every unit at most one zone, each with its own cost and contribution to the features.
+    - Targets are summed over the zones by default; a target of a zone asks for that zone alone.
     - Multi-action planning decides which action to take where: monitoring, and actions against threats.
     - Benefit comes from conservation (managed, unthreatened) and recovery (threats removed).
     - Sensitivity says how features suffer from threats; the curve how removing threats becomes benefit.
@@ -203,6 +253,7 @@ second, where a general solver needs about a minute.
 - Cattarino, L., Hermoso, V., Carwardine, J., Kennard, M. J., & Linke, S. (2015). Multi-action planning for threat management: a novel approach for the spatial prioritization of conservation actions. *PLoS ONE*, 10(5), e0128027.
 - Hermoso, V., Linke, S., Prenda, J., & Possingham, H. P. (2011). Addressing longitudinal connectivity in the systematic conservation planning of fresh waters. *Freshwater Biology*, 56(1), 57–70.
 - Salgado-Rojas, J., Álvarez-Miranda, E., Hermoso, V., Garcia-Gonzalo, J., & Weintraub, A. (2020). A mixed integer programming approach for multi-action planning for threat management. *Ecological Modelling*, 418, 108901.
+- Watts, M. E., Ball, I. R., Stewart, R. S., Klein, C. J., Wilson, K., Steinback, C., Lourival, R., Kircher, L., & Possingham, H. P. (2009). Marxan with Zones: software for optimal conservation based land- and sea-use zoning. *Environmental Modelling & Software*, 24(12), 1513–1521.
 - Wilson, K. A., Underwood, E. C., Morrison, S. A., Klausmeyer, K. R., Murdoch, W. W., Reyers, B., et al. (2007). Conserving biodiversity efficiently: what to do, where, and when. *PLoS Biology*, 5(9), e223.
 
 </div>

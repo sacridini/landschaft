@@ -142,6 +142,86 @@ double asym_connectivity(const Csc& data, const std::vector<double>& solution) {
     return out;
 }
 
+double boundary_zones(const std::vector<double>& edge_factor, const std::vector<double>& zones, const Csc& lower,
+                      const std::vector<double>& exposed, const std::vector<double>& total,
+                      const std::vector<double>& solution) {
+    const std::size_t n = total.size(), nz = edge_factor.size();
+    if (exposed.size() != n || solution.size() != n * nz || zones.size() != nz * nz || lower.ncol != static_cast<i64>(n))
+        throw std::invalid_argument("boundary_zones: sizes");
+    auto s = [&](i64 i, std::size_t z) { return solution[z * n + static_cast<std::size_t>(i)]; };
+    double c1 = 0.0, c2 = 0.0, c3 = 0.0;
+    for (std::size_t z = 0; z < nz; ++z)
+        for (std::size_t i = 0; i < n; ++i)
+            c1 += s(static_cast<i64>(i), z) * zones[z * nz + z] * ((total[i] - exposed[i]) + (exposed[i] * edge_factor[z]));
+    for (std::size_t z1 = 0; z1 < nz; ++z1)
+        for (std::size_t z2 = z1; z2 < nz; ++z2) {
+            const double zm = zones[z1 * nz + z2];
+            for (i64 col = 0; col < lower.ncol; ++col)
+                for (i64 k = lower.start[static_cast<std::size_t>(col)]; k < lower.start[static_cast<std::size_t>(col) + 1]; ++k) {
+                    const double v = lower.value[static_cast<std::size_t>(k)] * zm;
+                    if (!(std::abs(v) > 1.0e-15)) continue;
+                    const i64 row = lower.index[static_cast<std::size_t>(k)];
+                    if (z1 == z2) {
+                        c2 -= (2.0 * v * s(row, z1) * s(col, z2));
+                    } else {
+                        c3 -= (2.0 * v * s(row, z1) * s(col, z2));
+                        c3 -= (2.0 * v * s(row, z2) * s(col, z1));
+                    }
+                }
+        }
+    return c1 + c2 + c3;
+}
+
+double connectivity_zones(const Csc& data, const std::vector<double>& zones, const std::vector<double>& solution) {
+    const std::size_t n = static_cast<std::size_t>(data.ncol);
+    const std::size_t nz = static_cast<std::size_t>(std::llround(std::sqrt(static_cast<double>(zones.size()))));
+    if (nz * nz != zones.size() || solution.size() != n * nz) throw std::invalid_argument("connectivity_zones: sizes");
+    double out = 0.0;
+    std::vector<double> kept;
+    for (std::size_t z1 = 0; z1 < nz; ++z1)
+        for (std::size_t z2 = 0; z2 < nz; ++z2) {
+            // data * zones[z1, z2] (R), the diagonal zeroed between zones, then row(i) *= s_z1[i] and
+            // col(i) *= s_z2[i] for i = 0, 1, ...; the entries left summed (Armadillo's accu)
+            const double zm = zones[z1 * nz + z2];
+            kept.clear();
+            for (i64 col = 0; col < data.ncol; ++col)
+                for (i64 k = data.start[static_cast<std::size_t>(col)]; k < data.start[static_cast<std::size_t>(col) + 1]; ++k) {
+                    const i64 row = data.index[static_cast<std::size_t>(k)];
+                    if (z1 != z2 && row == col) continue;
+                    const double sr = solution[z1 * n + static_cast<std::size_t>(row)];
+                    const double sc = solution[z2 * n + static_cast<std::size_t>(col)];
+                    double v = data.value[static_cast<std::size_t>(k)] * zm;
+                    v = row <= col ? (v * sr) * sc : (v * sc) * sr;
+                    if (v != 0.0) kept.push_back(v);
+                }
+            out += accumulate(kept.data(), static_cast<i64>(kept.size()));
+        }
+    return out;
+}
+
+double asym_connectivity_zones(const Csc& data, const std::vector<double>& zones, const std::vector<double>& solution) {
+    const std::size_t n = static_cast<std::size_t>(data.ncol);
+    const std::size_t nz = static_cast<std::size_t>(std::llround(std::sqrt(static_cast<double>(zones.size()))));
+    if (nz * nz != zones.size() || solution.size() != n * nz) throw std::invalid_argument("asym_connectivity_zones: sizes");
+    double out = 0.0;
+    for (std::size_t z1 = 0; z1 < nz; ++z1)
+        for (std::size_t z2 = 0; z2 < nz; ++z2) {
+            const double zm = zones[z1 * nz + z2];
+            for (i64 col = 0; col < data.ncol; ++col)
+                for (i64 k = data.start[static_cast<std::size_t>(col)]; k < data.start[static_cast<std::size_t>(col) + 1]; ++k) {
+                    const i64 row = data.index[static_cast<std::size_t>(k)];
+                    const double v = data.value[static_cast<std::size_t>(k)] * zm;
+                    if (v == 0.0) continue;  // a zero entry adds nothing
+                    const double sr = solution[z1 * n + static_cast<std::size_t>(row)];
+                    if (row == col && z1 == z2)
+                        out += (v * sr);
+                    else
+                        out += (v * sr * solution[z2 * n + static_cast<std::size_t>(col)]);
+                }
+        }
+    return out;
+}
+
 namespace {
 
 bool approx_equal(double x, double y) { return std::abs(x - y) < 1.0e-15; }

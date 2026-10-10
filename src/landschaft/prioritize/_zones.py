@@ -638,7 +638,7 @@ def category_layer(stack) -> xr.DataArray:
     out = stack[0].copy(data=code).drop_vars(dim, errors="ignore")
     out.name = "zone"
     names = [str(z) for z in stack[dim].values] if dim in stack.coords else [str(k + 1) for k in range(v.shape[0])]
-    out.attrs = {**out.attrs, "zones": {k + 1: z for k, z in enumerate(names)}}
+    out.attrs = {**out.attrs, "zones": {k + 1: z for k, z in enumerate(names)}, "landschaft_product": "ZONES"}
     return out
 
 
