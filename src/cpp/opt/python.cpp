@@ -26,6 +26,9 @@
 #include "opt/milp.hpp"
 #include "opt/proxirr.hpp"
 #include "opt/wide.hpp"
+#include "opt/zones.hpp"
+#include "opt/zones_wide.hpp"
+#include "opt/zones_cut.hpp"
 
 namespace py = pybind11;
 
@@ -105,8 +108,12 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
     o.verbose = verbose;
     o.relaxation = relaxation;
     if (!initial.is_none()) o.start = vec<double>(initial.cast<Doubles>());
-    if (method != "highs" && method != "covering" && method != "wide")
-        throw std::invalid_argument("method must be 'highs', 'covering' or 'wide'");
+    if (method != "highs" && method != "covering" && method != "wide" && method != "zones" && method != "zones_wide")
+        throw std::invalid_argument("method must be 'highs', 'covering', 'wide', 'zones' or 'zones_wide'");
+    if (method == "zones_wide" && !opt::is_zone_wide(m, n_units))
+        throw std::invalid_argument("not a wide model with zones (n_units units with a GUB row each, few other columns)");
+    if (method == "zones" && !opt::is_zone_covering(m, n_units))
+        throw std::invalid_argument("not a covering model with zones (n_units units, target rows and one row per unit)");
     if (method == "covering" && !opt::is_covering(m))
         throw std::invalid_argument("not a covering model (a minimisation with only >= rows and finite bounds)");
     if (method == "wide" && !opt::is_wide(m, n_units))
@@ -116,6 +123,8 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
         py::gil_scoped_release release;
         r = method == "covering" ? opt::solve_covering(m, o)
             : method == "wide"   ? opt::solve_wide(m, n_units, o)
+            : method == "zones"  ? opt::solve_zone_covering(m, n_units, o)
+            : method == "zones_wide" ? opt::solve_zone_wide(m, n_units, o)
                                  : opt::solve_highs(m, o);
     }
     return result_dict(std::move(r));
@@ -641,13 +650,60 @@ void register_python(py::module_& m) {
         py::arg("pen_w"), py::arg("rhs"), py::arg("geq"), py::arg("col_start"), py::arg("col_row"), py::arg("col_val"),
         py::arg("gap"), py::arg("time_limit"), py::arg("threads"), py::arg("verbose"), py::arg("initial") = py::none(),
         "The closure engine (opt/closure.hpp): Lagrangian bound by closed forms or minimum cuts, repaired selections.");
+    m.def(
+        "opt_zone_cut",
+        [](std::int64_t n, std::int64_t nz, const Doubles& cost, const Doubles& lb, const Doubles& ub, bool mandatory,
+           const Ints& t_start, const Ints& t_index, const Doubles& t_value, const Doubles& target, const IntArr& pi,
+           const IntArr& pj, const Doubles& pw, double gap, double time_limit, bool verbose, py::object start) {
+            opt::zcut::Input in;
+            in.n = n;
+            in.nz = nz;
+            in.cost = vec<double>(cost);
+            in.lb = vec<double>(lb);
+            in.ub = vec<double>(ub);
+            in.mandatory = mandatory;
+            in.t_start = vec<std::int64_t>(t_start);
+            in.t_index = vec<std::int64_t>(t_index);
+            in.t_value = vec<double>(t_value);
+            in.target = vec<double>(target);
+            in.pi.assign(pi.data(), pi.data() + pi.size());
+            in.pj.assign(pj.data(), pj.data() + pj.size());
+            in.pw = vec<double>(pw);
+            opt::zcut::Options o;
+            o.gap = gap;
+            o.time_limit = std::isfinite(time_limit) ? time_limit : -1.0;
+            o.verbose = verbose;
+            std::vector<double> st;
+            if (!start.is_none()) st = vec<double>(start.cast<Doubles>());
+            opt::zcut::Result r;
+            {
+                py::gil_scoped_release release;
+                r = opt::zcut::solve(in, o, st);
+            }
+            py::dict d;
+            d["status"] = r.status;
+            d["has_solution"] = !r.x.empty();
+            d["x"] = r.x.empty() ? py::object(py::none()) : py::object(to_array(std::move(r.x)));
+            d["objective"] = r.objective;
+            d["bound"] = r.bound;
+            d["gap"] = r.gap;
+            d["evaluations"] = r.evaluations;
+            d["seconds"] = r.seconds;
+            return d;
+        },
+        py::arg("n"), py::arg("nz"), py::arg("cost"), py::arg("lb"), py::arg("ub"), py::arg("mandatory"),
+        py::arg("t_start"), py::arg("t_index"), py::arg("t_value"), py::arg("target"), py::arg("pi"), py::arg("pj"),
+        py::arg("pw"), py::arg("gap"), py::arg("time_limit"), py::arg("verbose"), py::arg("start"),
+        "The zones cut engine (opt/zones_cut.hpp): minimum sets with zones and pair terms in Marxan's form.");
     m.def("opt_solve_highs", &py_solve_highs, py::arg("start"), py::arg("index"), py::arg("value"), py::arg("obj"),
           py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"),
           py::arg("maximize"), py::arg("offset"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),
           py::arg("presolve"), py::arg("verbose"), py::arg("relaxation"), py::arg("initial"),
           py::arg("method") = "highs", py::arg("n_units") = -1,
           "Solve a model (rows in CSR) on HiGHS ('highs'), with the covering engine ('covering': sifted LP, "
-          "rounding, then HiGHS) or the wide engine ('wide': the first n_units columns are the planning units): "
+          "rounding, then HiGHS), the wide engine ('wide': the first n_units columns are the planning units) or the "
+          "zones engines ('zones': minimum sets, 'zones_wide': budgeted objectives; n_units units in every zone, "
+          "one row per unit): "
           "status, has_solution, x, objective, bound, gap, nodes, seconds.");
 }
 

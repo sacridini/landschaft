@@ -685,6 +685,115 @@ def binary_stack(categories: xr.DataArray, zones=None) -> dict:
     return out
 
 
+def zone_cut_model(m, n: int, nz: int) -> dict | None:
+    """A compiled minimum set with zones and pair terms (boundary penalties, connectivity rewards) in the
+    form of the zones cut engine (opt/zones_cut.hpp): unit-zone columns with their costs, the pairs as
+    w [x_a != x_b] (each pair column q x_a x_b with q < 0 becomes w = -q / 2 and q / 2 on both columns),
+    the targets by column. None when the model has another form (pair terms that are not submodular,
+    other rows or columns, continuous units)."""
+    ncol = n * nz
+    if m.modelsense != "min" or m.ncol <= ncol:
+        return None
+    vt = np.asarray(m.vtype)
+    if not (vt[:ncol] == "B").all():
+        return None
+    ids = np.asarray(m.row_ids)
+    a = m.A.tocsr()
+    a.sort_indices()
+    nnz = np.diff(a.indptr)
+    row = np.repeat(np.arange(a.shape[0]), nnz)
+    col, val = a.indices, a.data
+    target_rows = np.flatnonzero(ids == "spp_target")
+    gub_rows = np.flatnonzero(ids == "pu_zone")
+    pair_rows = np.setdiff1d(np.arange(a.shape[0]), np.concatenate([target_rows, gub_rows]))
+    sense = np.asarray(m.sense)
+    if (sense[target_rows] != ">=").any() or gub_rows.size != n:
+        return None
+    # the target rows on unit columns only, amounts >= 0
+    tmask = np.isin(row, target_rows)
+    if (col[tmask] >= ncol).any() or (val[tmask] < 0).any():
+        return None
+    # pair rows: pair - unit <= 0 (two entries); every pair column in exactly two of them
+    pr = pair_rows
+    if not ((sense[pr] == "<=") & (nnz[pr] == 2) & (m.rhs[pr] == 0)).all():
+        return None
+    first = a.indptr[pr]
+    c0, c1 = col[first], col[first + 1]
+    v0, v1 = val[first], val[first + 1]
+    unit, pcol = np.where(c0 < ncol, c0, c1), np.where(c0 < ncol, c1, c0)
+    uval, pval = np.where(c0 < ncol, v0, v1), np.where(c0 < ncol, v1, v0)
+    if (unit >= ncol).any() or (pcol < ncol).any() or (uval != -1.0).any() or (pval != 1.0).any():
+        return None
+    order = np.lexsort((unit, pcol))
+    unit, pcol = unit[order], pcol[order]
+    cols, counts = np.unique(pcol, return_counts=True)
+    if (counts != 2).any() or cols.size != m.ncol - ncol:
+        return None
+    pa, pb = unit[0::2], unit[1::2]
+    q = m.obj[cols]
+    if (q >= 0).any() or (pa == pb).any():
+        return None
+    cost = m.obj[:ncol].copy()
+    np.add.at(cost, pa, q / 2.0)
+    np.add.at(cost, pb, q / 2.0)
+    t = a[target_rows][:, :ncol].tocsc()
+    t.sort_indices()
+    return {"n": n, "nz": nz, "cost": cost, "lb": m.lb[:ncol].copy(), "ub": m.ub[:ncol].copy(),
+            "mandatory": bool((sense[gub_rows] == "=").all()), "t_start": t.indptr.astype(np.int64),
+            "t_index": t.indices.astype(np.int64), "t_value": t.data.astype(np.float64),
+            "target": m.rhs[target_rows].astype(np.float64), "pi": pa.astype(np.int32), "pj": pb.astype(np.int32),
+            "pw": (-q / 2.0).astype(np.float64), "pair_cols": cols, "offset": 0.0}
+
+
+def solve_zone_cut(m, zm: dict, gap: float, time_limit: float, verbose: bool, start, threads: int,
+                   presolve: str) -> dict:
+    """The zones cut engine, then HiGHS's MIP from its solution when the gap is not reached and the model
+    is small enough; the result as solve_model gives it (over every column of the model)."""
+    import math
+    import time
+
+    from .. import _core
+    from ._milp_solve import CUT_HIGHS_COLUMNS, _highs
+
+    ncol = zm["n"] * zm["nz"]
+    t0 = time.perf_counter()
+    r = _core.opt_zone_cut(zm["n"], zm["nz"], zm["cost"], zm["lb"], zm["ub"], zm["mandatory"], zm["t_start"],
+                           zm["t_index"], zm["t_value"], zm["target"], zm["pi"], zm["pj"], zm["pw"], gap,
+                           time_limit, verbose, None if start is None else np.asarray(start, dtype=np.float64)[:ncol])
+
+    def full(xu):
+        x = np.zeros(m.ncol)
+        x[:ncol] = xu
+        x[zm["pair_cols"]] = xu[zm["pi"]] * xu[zm["pj"]]
+        return x
+
+    out = {"status": r["status"], "has_solution": r["has_solution"], "x": None, "objective": math.nan,
+           "bound": r["bound"], "gap": r["gap"], "nodes": 0, "seconds": r["seconds"]}
+    if r["has_solution"]:
+        out["x"] = full(np.asarray(r["x"]))
+        out["objective"] = float(m.obj @ out["x"])
+    if r["status"] in ("optimal", "infeasible") or m.ncol > CUT_HIGHS_COLUMNS:
+        if out["status"] not in ("optimal", "infeasible", "time_limit"):
+            out["status"] = "heuristic"
+        return out
+    left = time_limit - (time.perf_counter() - t0)
+    if left <= 0:
+        out["status"] = "time_limit"
+        return out
+    h = _highs(m, gap, left, threads, presolve, verbose, out["x"])
+    res = dict(h)
+    if not h["has_solution"] or (out["has_solution"] and h["objective"] > out["objective"]):
+        res.update({k: out[k] for k in ("has_solution", "x", "objective")})
+    bound = max(out["bound"], h["bound"]) if math.isfinite(h.get("bound", math.nan)) else out["bound"]
+    res["bound"] = bound
+    if res["has_solution"]:
+        g = res["objective"] - bound
+        res["gap"] = 0.0 if g <= 0 else g / max(abs(res["objective"]), 1e-10)
+        res["status"] = "optimal" if res["gap"] <= gap else h["status"]
+    res["seconds"] = time.perf_counter() - t0
+    return res
+
+
 def one_zone(obj, what: str) -> None:
     """Refuse problems and solutions with zones in the tools that do not support them yet."""
     units = getattr(obj, "units", None)

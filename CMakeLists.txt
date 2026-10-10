@@ -201,6 +201,9 @@ add_library(optcore STATIC
     src/cpp/opt/milp.cpp
     src/cpp/opt/proxirr.cpp
     src/cpp/opt/wide.cpp
+    src/cpp/opt/zones.cpp
+    src/cpp/opt/zones_wide.cpp
+    src/cpp/opt/zones_cut.cpp
 )
 target_include_directories(optcore PUBLIC src/cpp)
 target_include_directories(optcore SYSTEM PRIVATE ${highs_SOURCE_DIR}/highs ${highs_BINARY_DIR})

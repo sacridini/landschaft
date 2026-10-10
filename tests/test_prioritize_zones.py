@@ -295,3 +295,126 @@ def test_extinction_risk_with_zones_counts_every_zone():
     # the amounts are summed over the zones by their contributions; the totals are the base features'
     np.testing.assert_allclose(cov["total_amount"], p.units.base_totals)
 
+
+def _random_zone_problem(n_side: int, seed: int, mandatory: bool = False, decisions: str = "binary"):
+    rng = np.random.default_rng(seed)
+    shape = (n_side, n_side)
+    cost = {z: optimize_cases.grid(rng.uniform(lo, hi, shape)) for z, lo, hi in
+            (("protect", 5, 50), ("use", 2, 30), ("restore", 4, 40))}
+    feats = optimize_cases.grid(np.where(rng.random((6, *shape)) < 0.3, rng.random((6, *shape)), 0.0))
+    p = ls.prioritize.problem(cost, feats, contribution={"use": 0.5, "restore": 0.7})
+    p = p.add_min_set_objective().add_relative_targets(0.3).add_relative_targets(0.05, zone="protect")
+    if mandatory:
+        p = p.add_mandatory_allocation_constraints()
+    return p.add_proportion_decisions() if decisions == "proportion" else p.add_binary_decisions()
+
+
+@pytest.mark.parametrize(("mandatory", "decisions"), [(False, "binary"), (True, "binary"), (False, "proportion")])
+def test_zones_engine_reaches_the_mip_optimum(mandatory, decisions):
+    """The zones engine (Lagrangian by unit, sifting, repair) proves the optimum HiGHS's MIP finds."""
+    from landschaft.prioritize._milp_solve import _highs, _is_zone_covering
+
+    p = _random_zone_problem(12, 3, mandatory, decisions).add_highs_solver(gap=0)
+    m = p.compile()
+    assert _is_zone_covering(m, p.units.n)
+    sol = p.solve()
+    ref = _highs(m, 0.0, np.inf, 1, "choose", False, None)
+    assert sol.status == "optimal"
+    assert sol.objective == pytest.approx(ref["objective"], rel=1e-9)
+    assert sol.coverage["met"].all()
+    if mandatory:
+        assert np.allclose(sol.values.sum(axis=1), 1.0)
+
+
+def test_zones_engine_on_a_wide_problem_keeps_the_time_limit():
+    import time
+
+    p = _random_zone_problem(150, 5).add_highs_solver(gap=0.001, time_limit=20)
+    t0 = time.perf_counter()
+    sol = p.solve()
+    assert time.perf_counter() - t0 < 60
+    assert sol.coverage["met"].all() and sol.gap < 0.05
+
+
+def _random_budget_problem(n_side: int, seed: int, objective: str, per_zone: bool, decisions: str = "binary"):
+    rng = np.random.default_rng(seed)
+    shape = (n_side, n_side)
+    cost = {z: optimize_cases.grid(rng.uniform(lo, hi, shape)) for z, lo, hi in
+            (("protect", 5, 50), ("use", 2, 30), ("restore", 4, 40))}
+    feats = optimize_cases.grid(np.where(rng.random((6, *shape)) < 0.3, rng.random((6, *shape)), 0.0))
+    p = ls.prioritize.problem(cost, feats, contribution={"use": 0.5, "restore": 0.7})
+    total = n_side * n_side * 25.0
+    budget = [0.08 * total, 0.05 * total, 0.04 * total] if per_zone else 0.15 * total
+    if objective == "max_utility":
+        p = p.add_max_utility_objective(budget)
+    elif objective == "min_shortfall":
+        p = p.add_min_shortfall_objective(budget).add_relative_targets(0.3)
+    else:
+        p = p.add_max_features_objective(budget).add_relative_targets(0.2)
+    return p.add_proportion_decisions() if decisions == "proportion" else p.add_binary_decisions()
+
+
+@pytest.mark.parametrize(("objective", "per_zone", "decisions"), [
+    ("max_utility", False, "binary"), ("max_utility", True, "binary"), ("max_utility", True, "proportion"),
+    ("min_shortfall", True, "binary"), ("max_features", False, "binary")])
+def test_zones_wide_engine_reaches_the_mip_optimum(objective, per_zone, decisions):
+    from landschaft.prioritize._milp_solve import _highs
+
+    p = _random_budget_problem(10, 7, objective, per_zone, decisions).add_highs_solver(gap=0)
+    m = p.compile()
+    sol = p.solve()
+    ref = _highs(m, 0.0, np.inf, 1, "choose", False, None)
+    assert sol.status == "optimal"
+    # the max objectives' cost term only breaks ties: within its tolerance (as test_prioritize_milp)
+    assert sol.objective == pytest.approx(ref["objective"], rel=1e-6, abs=1e-9)
+    budget = np.atleast_1d(p.objective[1])
+    spent = np.array(list(sol.zone_costs.values())) if budget.size > 1 else np.array([sol.cost])
+    assert (spent <= budget * (1 + 1e-9)).all()
+
+
+def test_zones_wide_engine_on_a_wide_problem():
+    import time
+
+    p = _random_budget_problem(150, 9, "max_utility", True).add_highs_solver(gap=0.001, time_limit=30)
+    t0 = time.perf_counter()
+    sol = p.solve()
+    assert time.perf_counter() - t0 < 90
+    assert sol.status == "optimal" and sol.gap <= 0.001
+
+
+@pytest.mark.parametrize("kind", ["cuts", "shuffle"])
+def test_portfolios_with_zones(kind):
+    p = _random_zone_problem(8, 11).add_highs_solver(gap=0)
+    p = p.add_cuts_portfolio(3) if kind == "cuts" else p.add_shuffle_portfolio(3, seed=2)
+    port = p.solve()
+    assert len(port) >= 1
+    keys = {tuple(s.values.ravel()) for s in port}
+    if kind == "cuts":
+        assert len(keys) == len(port) == 3  # distinct allocations, the first the optimum
+        objs = [s.objective for s in port]
+        assert objs == sorted(objs)
+    assert port.frequency.dims[0] == "zone" and port.frequency.shape[0] == 3
+    assert port.selection.attrs["zones"] == {1: "protect", 2: "use", 3: "restore"}
+    for s in port:
+        assert s.coverage["met"].all() and (s.values.sum(axis=1) <= 1 + 1e-9).all()
+
+
+def test_zones_cut_engine_on_boundary_penalties():
+    """Minimum sets with zones and boundary penalties go to the zones cut engine: a solution that meets every
+    target and keeps one zone per unit, within a few percent of the bound (the linear relaxation's)."""
+    from landschaft.prioritize._zones import zone_cut_model
+
+    p = _random_zone_problem(40, 13).add_boundary_penalties(0.05).add_highs_solver(gap=0.01, time_limit=30)
+    m = p.compile()
+    assert zone_cut_model(m, p.units.n, 3) is not None
+    sol = p.solve()
+    assert sol.coverage["met"].all() and (sol.values.sum(axis=1) <= 1 + 1e-9).all()
+    assert sol.bound <= sol.objective and sol.gap < 0.05
+    # the reported objective is the compiled model's at the solution (the pair columns: x_a x_b)
+    x = np.concatenate([sol.values.T.ravel(), np.zeros(m.ncol - p.units.cost.size)])
+    a = m.A.tocsc()
+    for c in np.flatnonzero(np.asarray(m.col_ids) == "b"):
+        rows = a[:, c].indices
+        units = [m.A[r].indices[m.A[r].indices != c][0] for r in rows[:2]]
+        x[c] = x[units[0]] * x[units[1]]
+    assert float(m.obj @ x) == pytest.approx(sol.objective, rel=1e-9)

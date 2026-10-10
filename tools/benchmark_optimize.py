@@ -25,7 +25,8 @@ a global thread scheduler per process). Families:
   features' totals), max utility with one budget.
 
 Solvers: ``highs`` (highspy, development environment only), ``builtin`` (the
-HiGHS built into landschaft, patched, on the compiled model), ``gurobi``
+HiGHS built into landschaft, patched, on the compiled model), ``zones`` (landschaft's
+zones engine, zone minimum sets), ``gurobi``
 (gurobipy) and ``prioritizr`` (the package's own solve on Gurobi, build +
 solve). Experiments, at ``--experiment-gap`` (10% by default, prioritizr's
 default): ``threads`` (HiGHS and Gurobi on 1, 2, 4 and N threads on one
@@ -333,6 +334,52 @@ def solve_builtin(m, threads: int, gap: float, time_limit: float, log: bool = Fa
             "bound": r["bound"], "gap": r["gap"], "nodes": r["nodes"], "seconds": t1 - t0}
 
 
+def solve_zones_engine(m, threads: int, gap: float, time_limit: float, log: bool = False, log_file: str = "") -> dict:
+    """landschaft's zones engines on a three-zone model: opt/zones.cpp (minimum sets), else opt/zones_wide.cpp."""
+    from landschaft import _core
+
+    a = m.csr()
+    lo, hi = _row_bounds_of(m)
+    t0 = time.perf_counter()
+    kw = {"start": a.indptr.astype(np.int64), "index": a.indices.astype(np.int64), "value": a.data, "obj": m.obj,
+          "lb": m.lb, "ub": m.ub, "row_lo": lo, "row_hi": hi,
+          "integer": np.isin(np.asarray(m.vtype), ("B", "I")).astype(np.uint8), "maximize": m.modelsense == "max",
+          "offset": 0.0, "gap": gap, "time_limit": time_limit, "threads": threads, "presolve": "choose",
+          "verbose": log, "relaxation": False, "initial": None}
+    units = _zone_units_of(m)
+    if m.obj.size > 3 * units:  # pair columns (boundary penalties): the zones cut engine
+        from landschaft.prioritize._milp import OptimizationProblem
+        from landschaft.prioritize._zones import solve_zone_cut, zone_cut_model
+
+        nnz = np.diff(a.indptr)
+        ids = np.where((nnz == 3) & (hi == 1.0), "pu_zone", np.where(nnz == 2, "b1", "spp_target"))
+        cols = np.array(["pu"] * (3 * units) + ["b"] * (m.obj.size - 3 * units))
+        om = OptimizationProblem(A=a, obj=m.obj, lb=m.lb, ub=m.ub, rhs=m.rhs, sense=tuple(m.sense),
+                                 vtype=tuple(m.vtype), modelsense=m.modelsense, row_ids=tuple(ids), col_ids=tuple(cols))
+        zm = zone_cut_model(om, units, 3)
+        if zm is not None:
+            r = solve_zone_cut(om, zm, gap, time_limit, log, None, threads, "choose")
+            t1 = time.perf_counter()
+            return {"status": "Optimal" if r["status"] == "optimal" else r["status"], "objective": r["objective"],
+                    "bound": r["bound"], "gap": r["gap"], "nodes": r.get("nodes", 0), "seconds": t1 - t0}
+    try:
+        r = _core.opt_solve_highs(**kw, method="zones", n_units=units)
+    except ValueError:  # budgeted objectives
+        r = _core.opt_solve_highs(**kw, method="zones_wide", n_units=units)
+    t1 = time.perf_counter()
+    return {"status": "Optimal" if r["status"] == "optimal" else r["status"], "objective": r["objective"],
+            "bound": r["bound"], "gap": r["gap"], "nodes": r["nodes"], "seconds": t1 - t0}
+
+
+def _zone_units_of(m) -> int:
+    """The units of a three-zone model: the rows that hold three columns of 1 with an upper bound of 1."""
+    a = m.csr()
+    nnz = np.diff(a.indptr)
+    _, hi = _row_bounds_of(m)
+    gub = (nnz == 3) & (hi == 1.0)
+    return int(gub.sum())
+
+
 def _row_bounds_of(m):
     from optimize_reference import _row_bounds
 
@@ -342,7 +389,8 @@ def _row_bounds_of(m):
 def run_one(args) -> None:
     """--run-one: solve a model directory in this process and print the result as JSON."""
     m = load_model(Path(args.model))
-    fn = {"highs": solve_highs, "gurobi": solve_gurobi, "builtin": solve_builtin}[args.solver]
+    fn = {"highs": solve_highs, "gurobi": solve_gurobi, "builtin": solve_builtin,
+          "zones": solve_zones_engine}[args.solver]
     log_file = Path(args.model) / f"{args.solver}_t{args.threads}.log"
     log_file.unlink(missing_ok=True)
     print(json.dumps(fn(m, args.threads, args.gap, args.time_limit, log_file=str(log_file))))

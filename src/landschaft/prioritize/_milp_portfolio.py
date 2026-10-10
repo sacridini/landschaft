@@ -96,12 +96,41 @@ def _permuted(m, perm: np.ndarray):
                                col_ids=tuple(np.asarray(m.col_ids)[perm]))
 
 
+def _zone_portfolio_maps(u, sols, names, values):
+    """With zones: every solution's zone map (a layer per solution, or a column of zone names per solution)
+    and how often every unit goes to every zone (a layer per zone, or a column ``frequency_<zone>`` per zone)."""
+    freq = values.mean(axis=0)  # units x zones
+    if u.kind == "raster":
+        import xarray as xr
+
+        layers = [s.zones.rename(None) for s in sols]
+        selection = xr.concat(layers, dim="band").assign_coords(band=names)
+        selection.attrs = dict(sols[0].zones.attrs)
+        ny, nx = u.template.shape
+        out = np.full((u.nz, ny * nx), np.nan)
+        out[:, u.index] = freq.T
+        frequency = sols[0].selection.copy(data=out.reshape(u.nz, ny, nx))
+        frequency.name = "frequency"
+        return selection, frequency
+    selection = u.template.copy()
+    for nm, s in zip(names, sols):
+        selection[nm] = s.zones.to_numpy()
+    frequency = u.template.copy()
+    for k, z in enumerate(u.zone_names):
+        col = np.full(len(frequency), np.nan)
+        col[u.index] = freq[:, k]
+        frequency[f"frequency_{z}"] = col
+    return selection, frequency
+
+
 def solve_portfolio(problem, m, targets) -> Portfolio:
     from ._milp_solve import make_solution, solve_model
 
     kind, opts = problem.portfolio
     u = problem.units
-    n = u.n
+    zoned = u.zoned
+    n = u.cost.size  # the units' columns (with zones: of every unit and zone)
+    zkw = {"n_units": None, "engines": False, "zone_units": u.n} if zoned else {"n_units": n}
     integer = np.isin(np.asarray(m.vtype[:n]), ("B", "I"))
     k_max = int(opts["number_solutions"])
     solver, sopts = problem.solver
@@ -114,7 +143,7 @@ def solve_portfolio(problem, m, targets) -> Portfolio:
         cur = m
         best = None
         for _ in range(k_max):
-            r = solve_model(cur, solver, sopts, n_units=n)
+            r = solve_model(cur, solver, sopts, **zkw)
             if not r["has_solution"] or r["status"] == "infeasible":
                 break
             raw.append(r)
@@ -136,9 +165,14 @@ def solve_portfolio(problem, m, targets) -> Portfolio:
             tries += 1
             # the units in a random order, then the other columns in a random order (the engines want the
             # units first)
-            perm = np.concatenate([rng.permutation(n), n + rng.permutation(m.ncol - n)])
+            if zoned:  # the same order of the units in every zone (the engines want zone after zone)
+                pu = rng.permutation(u.n)
+                units = (np.arange(u.nz)[:, None] * u.n + pu[None, :]).ravel()
+            else:
+                units = rng.permutation(n)
+            perm = np.concatenate([units, n + rng.permutation(m.ncol - n)])
             pm = _permuted(m, perm)
-            r = solve_model(pm, solver, sopts, n_units=n)
+            r = solve_model(pm, solver, sopts, **zkw)
             if not r["has_solution"]:
                 break
             x = np.empty(m.ncol)
@@ -160,7 +194,9 @@ def solve_portfolio(problem, m, targets) -> Portfolio:
         warnings.warn(f"the {kind} portfolio found {len(sols)} of {k_max} solutions", UserWarning, stacklevel=3)
     values = np.stack([s.values for s in sols])
     names = [f"solution_{k + 1}" for k in range(len(sols))]
-    if u.kind == "raster":
+    if zoned:
+        selection, frequency = _zone_portfolio_maps(u, sols, names, values)
+    elif u.kind == "raster":
         import xarray as xr
 
         layers = [s.selection.rename(None) for s in sols]

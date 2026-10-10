@@ -1139,8 +1139,6 @@ class Problem:
         zoned = self.units.zoned
         if zoned and self.solver[0] == "anneal":
             raise ValueError("the anneal solver does not support zones yet: use HiGHS or Gurobi")
-        if zoned and self.portfolio is not None:
-            raise ValueError("portfolios do not support zones yet")
         if self.portfolio is not None:
             if start is not None:
                 raise ValueError("a start solution and a portfolio cannot be combined")
@@ -1152,7 +1150,7 @@ class Problem:
         if start is not None:
             start = self._start(start, m)
         r = solve_model(m, self.solver[0], self.solver[1], start, n_units=None if zoned else self.units.n,
-                        engines=not zoned)
+                        engines=not zoned, zone_units=self.units.n if zoned else None)
         return make_solution(self.units, m, r, targets)
 
     def _start(self, start, m: OptimizationProblem) -> np.ndarray:

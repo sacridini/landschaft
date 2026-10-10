@@ -38,8 +38,25 @@ def _method(m: OptimizationProblem, n_units: int | None) -> str:
     return "highs"
 
 
+# the most columns besides the units' that the zones wide engine takes (opt/zones_wide.cpp, kMaxOther)
+ZONE_WIDE_OTHER = 20000
+# ... and the most rows besides the units' (a few per target and the budgets: the engine prices with their duals)
+ZONE_WIDE_ROWS = 5000
+
+
+def _is_zone_covering(m: OptimizationProblem, n_units: int) -> bool:
+    """A minimum set with zones: target rows (>=) and one row per unit (pu_zone) over the units' columns only."""
+    if m.modelsense != "min" or n_units <= 0 or m.ncol % n_units:
+        return False
+    ids = set(m.row_ids)
+    if not ids <= {"spp_target", "pu_zone"} or m.col_ids.count("pu") != m.ncol:
+        return False
+    return all(s == ">=" for s, r in zip(m.sense, m.row_ids) if r == "spp_target")
+
+
 def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, presolve: str, verbose: bool,
-           start: np.ndarray | None, relaxation: bool = False, n_units: int | None = None) -> dict:
+           start: np.ndarray | None, relaxation: bool = False, n_units: int | None = None,
+           method: str | None = None) -> dict:
     """HiGHS, behind landschaft's own engines: covering models (min set) and wide models with a budget
     (min shortfall, max utility, ...) get a sifted LP, rounding and a greedy step, and HiGHS's MIP only
     if the gap is still too wide and the model narrow enough for it to keep the time limit."""
@@ -52,7 +69,7 @@ def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, 
         ub=m.ub, row_lo=lo, row_hi=hi, integer=_integer(m.vtype),
         maximize=m.modelsense == "max", offset=0.0, gap=gap, time_limit=time_limit, threads=threads,
         presolve=presolve, verbose=verbose, relaxation=relaxation, initial=start,
-        method=_method(m, n_units), n_units=-1 if n_units is None else int(n_units))
+        method=method or _method(m, n_units), n_units=-1 if n_units is None else int(n_units))
 
 
 class Prepared:
@@ -201,9 +218,10 @@ def _wide_then_subset(m: OptimizationProblem, sm, gap: float, time_limit: float,
 
 
 def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.ndarray | None = None,
-                n_units: int | None = None, engines: bool = True) -> dict:
+                n_units: int | None = None, engines: bool = True, zone_units: int | None = None) -> dict:
     """Solve a compiled model on a solver; the result's status, solution and bounds. ``engines``: False
-    solves on HiGHS's own MIP, without landschaft's engines (the models with zones, until they take them)."""
+    solves on HiGHS's own MIP, without landschaft's engines; ``zone_units``: the units of a problem with
+    zones (its minimum sets go to the zones engine)."""
     from .. import _threads
 
     gap = float(options.get("gap", 0.1))
@@ -211,7 +229,28 @@ def solve_model(m: OptimizationProblem, solver: str, options: dict, start: np.nd
     time_limit = math.inf if tl is None else float(tl)
     threads = _threads.resolve(options.get("n_threads"))
     verbose = bool(options.get("verbose", False))
-    if solver == "highs" and not engines:
+    zm = None
+    if solver == "highs" and zone_units is not None and m.ncol > m.col_ids.count("pu"):
+        from ._zones import zone_cut_model
+
+        zm = zone_cut_model(m, zone_units, m.col_ids.count("pu") // zone_units)
+    if zm is not None:  # minimum sets with boundary penalties or connectivity rewards: the zones cut engine
+        from ._zones import solve_zone_cut
+
+        r = solve_zone_cut(m, zm, gap, time_limit, verbose, start, threads, options.get("presolve", "choose"))
+    elif solver == "highs" and zone_units is not None:
+        # minimum sets: the zones engine; models with few columns besides the units': the zones wide engine
+        nu = m.col_ids.count("pu")
+        rows = m.nrow - m.row_ids.count("pu_zone")
+        method = ("zones" if _is_zone_covering(m, zone_units) else
+                  "zones_wide" if (m.ncol - nu <= ZONE_WIDE_OTHER and rows <= ZONE_WIDE_ROWS
+                                   and "pu_zone" in m.row_ids) else "highs")
+        try:
+            r = _highs(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start,
+                       n_units=zone_units if method != "highs" else None, method=method)
+        except ValueError:  # not of the engine's form after all
+            r = _highs(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start)
+    elif solver == "highs" and not engines:
         r = _highs(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start)
     elif solver == "highs":
         r = _highs_or_cut(m, gap, time_limit, threads, options.get("presolve", "choose"), verbose, start, n_units)
