@@ -6,6 +6,21 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.43.0] - 2026-10-10
+
+### Added
+- `LANDSCHAFT_PYTHON=OFF` (CMake) builds and installs only the static C++ libraries and their headers, without
+  Python, pybind11 or the MILP solver: for native programs that link them, such as
+  [Terraflux](https://github.com/sacridini/terraflux), which runs `ls.simulate`'s models without Python.
+
+### Changed
+- The steps of `ls.simulate` that were numpy code run in C++ (`src/cpp/sim/rules.cpp`, `ordered.cpp`,
+  `demand.cpp` and `woe.cpp`), so that native programs share them: lulcc's conversion rules, automatic
+  conversions and neighbourhood rules, the ordered allocation, the linear demand (`approxExtrap`, `roundSum`),
+  Markov chains (transition matrices from counts, the matrix root with Eigen's matrix logarithm and exponential
+  instead of SciPy's, projections), the ranges, weights and probabilities of weights of evidence, and the
+  patches observed between two maps (`presets.observed_patches`, without `scipy.ndimage`). The results are the
+  same bits as before (lulcc's reference cases included), the Markov roots within 1e-14 as before.
 ## [1.42.0] - 2026-10-10
 
 ### Added

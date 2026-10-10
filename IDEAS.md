@@ -3280,6 +3280,25 @@ sim.supply; sim.shortfall; sim.trajectory()
    e FUTURES das fases 4 e 5). Todos os exemplos das páginas e das docstrings rodam (`tools/check_docs.py`),
    `mkdocs build --strict` sem avisos (docstrings com parágrafos soltos depois de `Parameters` passaram para
    `Notes`).
+11. Núcleo nativo para o Terraflux (pedido em 2026-10-10). O Terraflux (repositório `sacridini/terraflux`,
+   aplicativo em Rust com GUI egui e execução distribuída, sucessor espiritual do Dinamica EGO) roda os modelos
+   do `ls.simulate` sem Python, linkando o `simcore`. Plano (fase 0 do Terraflux, `docs/PLAN.md` de lá): portar
+   para C++ as peças de cada passo que só existiam em numpy, com o Python passando a chamá-las (uma única
+   implementação, os testes bit a bit inalterados), e uma opção do CMake que compila só as bibliotecas
+   estáticas. O laço de passos continua no Python daqui e vira o grafo do modelo no Terraflux (uma terceira
+   cópia do laço em C++ não traria nada).
+   **Feita** (1.43.0): `sim/rules.cpp` (`allow_matrix`, `auto_convert`, `neighbourhood_allow`),
+   `sim/ordered.cpp` (`ordered_allocate`, os sorteios do R na mesma ordem), `sim/demand.cpp` (`approx_extrap`,
+   `round_sum` com a soma de 80 bits do R, `markov_from_counts`, `markov_root` com o `log()`/`exp()` de matriz do
+   Eigen, `markov_project`), `sim/observed.cpp` (`observed_patches`: componentes de 8 vizinhos numerados pela
+   primeira célula, como o `scipy.ndimage.label`, média e variância com a soma par a par do numpy) e, em
+   `sim/woe.cpp`, `woe_weights`, `woe_generalise` e `woe_normalise`; bindings `sim_*` e `_rules.py`,
+   `_allocation.py` (`Ordered`), `_demand.py`, `_markov.py`, `_woe.py` e `presets.observed_patches` chamando-os.
+   `LANDSCHAFT_PYTHON=OFF` compila e instala as bibliotecas estáticas e os headers (com os do Eigen), sem
+   Python, pybind11, HiGHS nem `optcore`. Testes: os 238 do `ls.simulate` sem mudar tolerâncias (os casos do
+   lulcc continuam bit a bit) e `test_simulate_kernels.py`, que guarda o código numpy anterior como referência e
+   exige os mesmos bits em entradas aleatórias com empates, NaN e casos de borda (74 testes). A raiz da cadeia
+   de Markov sai do Eigen em vez do `logm`/`expm` do SciPy: o mesmo erro (~1e-14), dentro das tolerâncias.
 
 ---
 
