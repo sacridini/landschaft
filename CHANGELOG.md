@@ -6,6 +6,26 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.42.0] - 2026-10-10
+
+### Added
+- Evaluation of solutions with management zones: `eval_n_summary`, `eval_cost_summary`,
+  `eval_boundary_summary` (`edge_factor` per zone, `zones=` matrix), `eval_connectivity_summary` and
+  `eval_asym_connectivity_summary` (`zones=`), `eval_feature_representation_summary` and
+  `eval_target_coverage_summary` give a row `overall` and one per zone (the coverage a `zone` column), bit
+  for bit as prioritizr 8.0.6's (4 more reference cases, proportion decisions included);
+  `eval_replacement_importance` (every selected unit-zone column left out in turn) and
+  `eval_rank_importance` (`by_zone`: a budget per zone in equal steps) give a layer per zone;
+  `eval_extinction_risk` sums the zones; `eval_landscape_metrics` takes the map of the zones (a class per
+  zone, with a `zone` column) or one `zone`, `eval_mspa` one `zone`; `report()` works with zones. Ferrier and
+  rarity-weighted importance refuse zones, as prioritizr does.
+- `ls.plot` of a solution with zones: the map of the zones with their names and colours (the zone map is a
+  `ZONES` product, also in static figures), the coverage of every target with its zones, the cost and units
+  of every zone; portfolios with zones map how often every unit goes to every zone.
+- Documentation: a section on zones in the tutorial "Optimized conservation plans" (Serra Verde: strict
+  protection, sustainable use and restoration of pasture and cropland), "Zones, actions or restoration" in
+  chapter 12.8 of the course, zones in the API reference and the migration guide.
+
 ## [1.41.0] - 2026-10-10
 
 ### Added

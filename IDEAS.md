@@ -2338,6 +2338,19 @@ Lagrangiano, que o iguala: pares submodulares) é fraco quando a borda domina o 
 Bug achado: o reparo entrava em laço com chaves negativas iguais (`k > topo * (1 + 1e-12)`); a tolerância é pelo
 módulo.
 
+**Fase 5 feita** (1.42.0, 2026-10-10): `_zones_eval.py` (resumos com linha `overall` + zonas bit a bit: `n` =
+`sum()` do R da matriz e `colSums` por zona; custo = `colSums(custo * status, na.rm)` e a soma delas; borda e
+conectividades pelas funções C++ `boundary_zones`/`connectivity_zones`/`asym_connectivity_zones` de
+`opt/eval.cpp`, que seguem os laços de `rcpp_boundary`/`rcpp_connectivity`/`rcpp_asym_connectivity`, e por zona as
+de uma zona com os dados sem escala; representação com `rowSums` de 80 bits; cobertura com o `accu` de cada zona
+somado na ordem da lista), importância por substituição e por ranking (`by_zone`) por re-solves, recusa de
+Ferrier e raridade, métricas de paisagem no mapa das zonas, MSPA por zona, `report()`, `ls.plot` (produto `ZONES`
+com nomes e cores em `_palettes.product_style`), exemplo de Serra Verde (proteção, uso a 0,45 do custo valendo
+metade, restauração a 0,2 do custo valendo a fração antrópica da célula) no tutorial, seção "Zones, actions or
+restoration" no capítulo 12.8, guia de migração. Pendências (decisão 2, sob pedido): arrays 4D, contiguidade por
+feição e corredores com zonas, `anneal` com zonas; calibrações (`calibrate_*`, `pareto_front`) e ProxIRR seguem
+recusando zonas.
+
 `add_neighbor_penalties` (do prioritizr 9) continua um item à parte, sob pedido.
 
 ### Próximos passos (retomar daqui)
@@ -2350,8 +2363,7 @@ módulo.
 4. **Restauração a partir do plangea**: completa. Partes 1 a 4 integradas (1.30.0/1.31.0); os itens abertos
    (`C`/`D`, alvos por região, curva de trade-off, intactness exata, custo mínimo por interpolação, escala
    global) feitos na 1.37.0 (ver "Itens abertos da restauração").
-5. **Zonas do prioritizr**: plano em "Zonas de manejo do prioritizr" (fases 0 a 5, revistas com as decisões de
-   2026-10-09), pedido em 2026-10-09.
+5. **Zonas do prioritizr**: feitas (fases 0 a 5, 1.38.0 a 1.42.0); ver "Zonas de manejo do prioritizr".
 6. Sob pedido: `add_neighbor_penalties`.
 
 ### Decisões
