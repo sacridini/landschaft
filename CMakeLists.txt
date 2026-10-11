@@ -7,8 +7,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(LANDSCHAFT_OPENMP "Build with OpenMP" ON)
 # OFF: only the static C++ libraries (and their headers) are built and installed, without Python, for
-# native programs that link them (Terraflux); the MILP prioritization (HiGHS) is left out.
+# native programs that link them (Terraflux); the MILP prioritization (HiGHS) only with LANDSCHAFT_MILP.
 option(LANDSCHAFT_PYTHON "Build the Python module landschaft._core" ON)
+# The MILP prioritization (optcore, with HiGHS fetched and built): always with Python, on demand without it.
+include(CMakeDependentOption)
+cmake_dependent_option(LANDSCHAFT_MILP "Build the MILP prioritization (optcore and HiGHS)" OFF
+                       "NOT LANDSCHAFT_PYTHON" ON)
 
 # On Windows the modules are built with MSVC (the results are checked against the UCRT's maths);
 # a MinGW gcc found on PATH would make modules that need its runtime DLLs and fail to import.
@@ -168,7 +172,7 @@ target_include_directories(priocore PUBLIC src/cpp)
 target_link_libraries(priocore PRIVATE eigen_headers)
 set_target_properties(priocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-if(LANDSCHAFT_PYTHON)
+if(LANDSCHAFT_MILP)
     # HiGHS 1.15.1 (MIT), the MILP / LP solver of the MILP prioritization, built
     # here as a static library linked into _core (no executable, tests or zlib).
     # FETCHCONTENT_SOURCE_DIR_HIGHS=<path> uses a local copy (offline builds).
@@ -439,6 +443,10 @@ else()
     install(TARGETS gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore iocore sdmcore
                     simcore restcore
             ARCHIVE DESTINATION lib)
+    # with HiGHS's library, which its own rules install
+    if(LANDSCHAFT_MILP)
+        install(TARGETS optcore ARCHIVE DESTINATION lib)
+    endif()
     install(DIRECTORY src/cpp/ DESTINATION include FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h" PATTERN "*.inc")
     install(DIRECTORY ${eigen_SOURCE_DIR}/Eigen ${eigen_SOURCE_DIR}/unsupported DESTINATION include)
 endif()
