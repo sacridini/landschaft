@@ -18,6 +18,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from .. import _core
 from ._change import _class_value
 from ._maps import read_map
 
@@ -107,8 +108,8 @@ class MolusceWoE:
     def _categories(self, name: str, v: np.ndarray) -> np.ndarray:
         """A factor's categories (NaN stays NaN)."""
         if name in self.bins:
-            out = np.searchsorted(np.asarray(self.bins[name], dtype=np.float64), v, side="right") + 1.0
-            return np.where(np.isnan(v), np.nan, out)
+            v = np.asarray(v, dtype=np.float64)
+            return _core.sim_molusce_categories(v.ravel(), self.bins[name]).reshape(v.shape)
         ok = ~np.isnan(v)
         if (np.abs(v[ok] - np.round(v[ok])) > 0).any():
             raise ValueError(f"the driver {name!r} has fractional values: give its bins")
@@ -197,19 +198,13 @@ class MolusceWoE:
         missing = set(self.drivers) - set(maps)
         if missing:
             raise ValueError(f"drivers lack {sorted(missing)}")
-        out = {}
-        for code, per in self.weights.items():
-            total, nan = None, None
-            for k in self.drivers:
-                f = self._categories(k, maps[k].as_float())
-                cats, w = per[k]
-                layer = np.zeros(f.shape)
-                for c, x in zip(cats, w):
-                    layer[f == c] = x
-                total = layer if total is None else total + layer
-                nan = np.isnan(f) if nan is None else nan | np.isnan(f)
-            out[code] = np.where(nan, np.nan, total)
-        return out
+        factors = [self._categories(k, maps[k].as_float()) for k in self.drivers]
+        shape = factors[0].shape
+        weights = [[(np.asarray(self.weights[c][k][0], dtype=np.float64).tolist(),
+                     np.asarray(self.weights[c][k][1], dtype=np.float64).tolist()) for k in self.drivers]
+                   for c in self.weights]
+        totals = _core.sim_molusce_total(np.stack([f.ravel() for f in factors]), weights)
+        return {c: totals[j].reshape(shape) for j, c in enumerate(self.weights)}
 
     def potentials(self) -> dict:
         """MOLUSCE's transition potentials: ``sigmoid(total weight) x 100`` as 8-bit integers, per (from, to)."""
@@ -229,28 +224,11 @@ class MolusceWoE:
             raise RuntimeError("fit the model first")
         s = read_map(state, nodata).as_float()
         total = self.total(drivers)
-        m = len(self.classes)
-        pred = np.full(s.shape, np.nan)
-        conf = np.full(s.shape, np.nan)
-        for i, c in enumerate(self.classes):
-            cells = s == c
-            if not cells.any():
-                continue
-            cand = [i * m + j for j in range(m) if i * m + j in total]
-            best = np.full(int(cells.sum()), -1000.0)
-            second = np.full(best.size, -1000.0)
-            arg = np.full(best.size, -1)
-            for code in cand:
-                w = total[code][cells]
-                valid = ~np.isnan(w)
-                up = valid & (w > best)
-                mid = valid & ~up & (w > second)
-                second = np.where(up, best, np.where(mid, w, second))
-                best = np.where(up, w, best)
-                arg = np.where(up, code, arg)
-            pred[cells] = np.where(arg >= 0, np.asarray(self.classes, dtype=np.float64)[arg % m], np.nan)
-            conf[cells] = np.trunc(100 * (_sigmoid(best) - _sigmoid(second)))
-        return pred, conf
+        codes = list(total)
+        pred, conf = _core.sim_molusce_prediction_woe(
+            s.ravel(), [float(c) for c in self.classes], [int(c) for c in codes],
+            np.stack([np.asarray(total[c], dtype=np.float64).ravel() for c in codes]))
+        return pred.reshape(s.shape), conf.reshape(s.shape)
 
     def predict(self, drivers=None, *, landscape=None, nodata=None):
         """Total weight per transition as ``probability_i_to_j`` layers (``sigmoid``), for the other allocations."""
@@ -304,7 +282,9 @@ class MolusceCA:
     Notes
     -----
     The random numbers are numpy's legacy generator (``RandomState(seed)``),
-    as MOLUSCE draws them after ``numpy.random.seed(seed)``.
+    as MOLUSCE draws them after ``numpy.random.seed(seed)``. Among cells of
+    equal confidence and draw (which the 1/1000 rarely leaves), the later
+    cells change first (MOLUSCE leaves the order to numpy's quicksort).
     """
 
     iterations: int = 1
@@ -315,15 +295,11 @@ class MolusceCA:
         p = potential.predict(drivers, landscape=state) if drivers is not None else potential.predict(landscape=state)
         names = [_class_value(c) for c in p[p.dims[0]].values]
         s = read_map(state).as_float()
-        layers = np.stack([np.nan_to_num(np.asarray(p.values[names.index(c)], dtype=np.float64), nan=-np.inf)
-                           if c in names else np.full(s.shape, -np.inf) for c in classes])
-        order = np.argsort(-layers, axis=0, kind="stable")
-        top = np.take_along_axis(layers, order[:1], 0)[0]
-        sec = np.take_along_axis(layers, order[1:2], 0)[0] if len(classes) > 1 else np.zeros(s.shape)
-        pred = np.asarray(classes, dtype=np.float64)[order[0]]
-        conf = np.trunc(100 * (top - np.where(np.isfinite(sec), sec, 0)))
-        bad = np.isnan(s) | ~np.isfinite(top)
-        return np.where(bad, np.nan, pred), np.where(np.isnan(s), np.nan, np.where(bad, 0, conf))
+        # a class without a layer: NaN (-inf, as a layer without values)
+        layers = np.stack([np.asarray(p.values[names.index(c)], dtype=np.float64).ravel() if c in names
+                           else np.full(s.size, np.nan) for c in classes])
+        pred, conf = _core.sim_molusce_prediction_classes(s.ravel(), layers, [float(c) for c in classes])
+        return pred.reshape(s.shape), conf.reshape(s.shape)
 
     def simulate(self, model, landscape, drivers=None, *, seed=None, nodata=None):
         from ._dynamic import current_map, with_dynamic
@@ -337,7 +313,8 @@ class MolusceCA:
                            state[~np.isnan(state)])}))
         if seed is None:
             seed = int(np.random.default_rng().integers(1, 2**31 - 1))
-        rng = np.random.RandomState(int(seed) % 2**32)
+        rng = _core.NumpyRandomState(int(seed) % 2**32)
+        pairs = [(float(f), float(t), int(n)) for (f, t), n in counts.items()]
         maps = [state.copy()]
         rows = []
         for it in range(1, int(self.iterations) + 1):
@@ -347,27 +324,10 @@ class MolusceCA:
             else:  # MOLUSCE's WoE keeps the maps of its fit (the factors it got at the start)
                 drv = None if isinstance(model.potential, MolusceWoE) else drivers
             pred, conf = self._prediction(model.potential, lmap, drv, classes)
-            conf_filled = np.nan_to_num(conf, nan=0.0)
-            new = state.copy()
-            present = sorted({_class_value(c) for c in np.unique(state[~np.isnan(state)])})
-            row = {"step": it}
-            for f in present:
-                for t in present:
-                    if f == t:
-                        continue
-                    n = counts.get((f, t), 0)
-                    if n == 0:
-                        continue
-                    places = (state == f) & (pred == t)
-                    n = min(n, int(places.sum()))
-                    if n > 0:
-                        c = (conf_filled + rng.random_sample(size=state.shape) / 1000) * places
-                        n = min(n, int((c > 0).sum()))
-                        if n > 0:
-                            ind = c.argsort(axis=None)[-n:]
-                            new.flat[ind] = t
-                    row[f"changed_{f:g}_{t:g}"] = n
-            state = new
+            new, changed = _core.sim_molusce_ca_step(state.ravel(), np.asarray(pred, dtype=np.float64).ravel(),
+                                                     np.asarray(conf, dtype=np.float64).ravel(), pairs, rng)
+            row = {"step": it, **{f"changed_{f:g}_{t:g}": int(n) for f, t, n in changed}}
+            state = new.reshape(state.shape)
             maps.append(state.copy())
             rows.append(row)
         return Simulation(_as_maps(np.stack(maps), land.template, "landuse"),

@@ -17,6 +17,15 @@ in a new major version.
 - `Model.save` writes the dynamic variable `distance_to(classes, cost=transition)`: the transition's values, a
   layer per direction, and its layout; Terraflux computes the same accumulated costs (gdistance's `accCost`, the
   C++ of `ls.cost`).
+- `Model.save` writes MOLUSCE's simulator (`MolusceCA`): `MolusceWoE`'s fitted maps, or its weights when the
+  drivers move (dynamic variables), or a potential per class; numpy's generator and the cross table. Terraflux
+  (`rng.numpy`, `molusce.total`, `molusce.step`) gives the same maps.
+
+### Changed
+- MOLUSCE's prediction, total weights and simulator step run in C++ (`src/cpp/sim/molusce.cpp`, with numpy's
+  legacy `RandomState.random_sample`), so that Terraflux shares them; the same bits as before and as the patched
+  MOLUSCE. Among cells of equal confidence and draw the later cells change first (numpy's quicksort left the
+  order to its implementation).
 
 ## [1.44.0] - 2026-10-10
 

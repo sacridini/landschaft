@@ -197,7 +197,7 @@ def test_regional_cars(pie, tmp_path):
 
 
 def test_regional_expander_and_patcher(sibuyan, tmp_path):
-    lu, dr = sibuyan
+    lu, _ = sibuyan
     regions = lu[0].copy(data=_regions(lu[0].shape))
     demand = S.Regional.markov(regions, lu[0], lu[1], steps=6)
     rng = np.random.default_rng(3)
@@ -212,6 +212,42 @@ def test_regional_expander_and_patcher(sibuyan, tmp_path):
         expansion=0.5, expander=(4, 2, 1.5), patcher=(6, 4, 1.5), steps=3)), lu[0], None, 7, tmp_path / "rates")
 
 
+def _molusce_world():
+    import simulate_cases
+
+    w = simulate_cases.molusce_world()
+    return w.sel(band="t0"), w.sel(band="t1"), {k: w.sel(band=k) for k in ("dist", "soil", "slope")},         simulate_cases._MOL_BINS
+
+
+def test_molusce(tmp_path):
+    t0, t1, drivers, bins = _molusce_world()
+    woe = S.MolusceWoE(bins=bins).fit(t0, t1, drivers)
+    counts = {(1, 2): 30, (2, 3): 12, (3, 1): 5, (1, 3): 8}
+    # the fitted maps
+    path = _check(S.Model(woe, counts, S.MolusceCA(iterations=3)), t1, drivers, 7, tmp_path / "maps")
+    again, _ = S.Model.load(path)
+    assert isinstance(again.potential, S.MolusceWoE) and again.potential.classes == woe.classes
+    # the weights on drivers that move: the distance to class 2 at every iteration
+    dyn = S.Model(woe, counts, S.MolusceCA(iterations=3), dynamic={"dist": S.distance_to(2)})
+    path = _check(dyn, t1, drivers, 2, tmp_path / "dynamic")
+    g = json.loads(path.read_text())
+    assert any(n["op"] == "molusce.total" for n in next(n for n in g["nodes"] if n["id"] == "simulation")["body"]["nodes"])
+    # the observed cross table as demand
+    _check(S.Model(woe, S.crosstab(t0, t1), S.MolusceCA(iterations=2)), t1, drivers, 3, tmp_path / "cross")
+
+
+def test_molusce_with_a_potential_per_class(pie, tmp_path):
+    lu, dr = pie
+    counts = {(1, 2): 400, (3, 2): 150, (1, 3): 50}
+    lr = S.LogisticRegression(PIE_FORMS).fit(lu[0], dr)
+    _check(S.Model(lr, counts, S.MolusceCA(iterations=3)), lu[0], dr, 5, tmp_path / "glm")
+    moving = S.Model(lr, counts, S.MolusceCA(iterations=2),
+                     dynamic={"dist_built_1985": S.distance_to(2, unit="cells")})
+    _check(moving, lu[0], dr, 6, tmp_path / "dynamic")
+    _check(S.Model(S.RasterPotential(lr.predict(dr)), counts, S.MolusceCA(iterations=2)), lu[0], None, 8,
+           tmp_path / "raster")
+
+
 def test_what_terraflux_cannot_run(pie, tmp_path):
     lu, dr = pie
     with pytest.raises(ValueError, match="JSON"):
@@ -222,7 +258,7 @@ def test_what_terraflux_cannot_run(pie, tmp_path):
         bad.save(tmp_path / "m.json", lu[0], dr, seed=1)
     p = S.LogisticRegression(PIE_FORMS).fit(lu[0], dr).predict(dr)
     moving = S.Model(S.RasterPotential(p), S.AreaDemand.from_maps(lu, times=[0, 6, 14]), S.CLUE(),
-                     dynamic={"dist_built_1985": S.distance_to(2)})
+                     dynamic={"dist_built_1985": S.distance_to(2, unit="cells")})
     moving.potential = type("Fitted", (), {"predict": lambda self, *a, **k: p})()
     with pytest.raises(ValueError, match="at every step"):
         moving.save(tmp_path / "m.json", lu[0], dr, seed=1)

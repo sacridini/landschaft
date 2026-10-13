@@ -261,6 +261,7 @@ add_library(simcore STATIC
     src/cpp/sim/clumondo.cpp
     src/cpp/sim/demand.cpp
     src/cpp/sim/futures.cpp
+    src/cpp/sim/molusce.cpp
     src/cpp/sim/observed.cpp
     src/cpp/sim/ordered.cpp
     src/cpp/sim/patches.cpp

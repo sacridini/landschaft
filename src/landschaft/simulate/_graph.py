@@ -337,6 +337,7 @@ def _regions_map(demand, w: _Writer, landscape, nodata) -> str:
 def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, name=None, description=None) -> dict:
     """The graph of a fitted model (see :meth:`Model.save`)."""
     from ._allocation import CLUE, Ordered
+    from ._molusce import MolusceCA
     from ._patches import ExpanderPatcher
     from ._plus import CARS
     from ._regional import Regional
@@ -506,14 +507,83 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
         nodes.append(_node("simulation", "control.repeat", {"times": "cars_demand.steps", "landscape": start},
                            body={"nodes": body, "carry": {"landscape": "allocate.landscape"},
                                  "collect": {"maps": "allocate.landscape", "info": "allocate.info"}}))
+    elif isinstance(alloc, MolusceCA):
+        nodes += _molusce_nodes(model, w, landscape, nodata, drivers, start, seed_ref, loop_drivers)
     else:
         raise TypeError(f"Terraflux cannot run the allocation {type(alloc).__name__} yet "
-                         "(CLUE, Ordered, ExpanderPatcher or CARS)")
+                         "(CLUE, Ordered, ExpanderPatcher, CARS or MolusceCA)")
     outputs = {"maps": {"from": "simulation.maps"}, "steps": {"from": "simulation.info"}}
     g = {"format": FORMAT, "name": name or f"landschaft {type(alloc).__name__} model",
          "description": description or "Written by landschaft's Model.save.", "inputs": w.inputs, "nodes": nodes,
          "outputs": outputs}
     return _clean(g)
+
+
+def _molusce_json(woe) -> dict:
+    """MolusceWoE's weights as molusce.total's settings."""
+    entries = []
+    for code, per in woe.weights.items():
+        f, t = woe.decode(code)
+        for k in woe.drivers:
+            cats, ws = per[k]
+            entries.append({"from": _num(f), "to": _num(t), "driver": k,
+                            "categories": np.asarray(cats, dtype=np.float64), "weights": np.asarray(ws, dtype=np.float64)})
+    return {"classes": [_num(c) for c in woe.classes], "drivers": list(woe.drivers),
+            "bins": {k: list(v) for k, v in woe.bins.items()}, "weights": entries}
+
+
+def _molusce_nodes(model, w: _Writer, landscape, nodata, drivers, start: str, seed_ref: str, loop_drivers) -> list:
+    """MOLUSCE's simulator: the weights' totals (fitted maps, or from the drivers at every step with dynamic
+    variables) or a potential per class, numpy's generator and the iterations."""
+    from ._maps import read_map
+    from ._molusce import MolusceWoE, _counts
+
+    alloc, p = model.allocation, model.potential
+    counts = _counts(model.demand)
+    land = read_map(_read_given(landscape, w, "map"), nodata).as_float()
+    found = {_class_value(c) for c in np.unique(land[~np.isnan(land)])}
+    classes = list(getattr(p, "classes", None) or sorted({c for pair in counts for c in pair} | found))
+    nodes, body = [], []
+    dyn, dref = loop_drivers()
+    if isinstance(p, MolusceWoE):
+        if not p.codes:
+            raise RuntimeError("fit the MolusceWoE first")
+        if dyn:
+            body.append(_node("total", "molusce.total", {"drivers": dref}, _molusce_json(p),
+                              note="MOLUSCE's weights of evidence fitted with landschaft, on the drivers of the step."))
+            forecast = {"total": "total.total"}
+        else:
+            layers = {}
+            for code, v in p._maps.items():
+                f, t = p.decode(code)
+                layers[f"{_num(f)}_to_{_num(t)}"] = v
+            ref = w.stack("potential", layers, note="the total weight of each transition, as fitted (MOLUSCE's maps)")
+            nodes.append(_node("potential", "stack.classes", {"stack": ref},
+                               note="MOLUSCE's weights of evidence fitted with landschaft, as their maps."))
+            forecast = {"total": "potential.stack"}
+    else:
+        pot, kind = _potential_node(model, w, drivers, landscape, "class")
+        nodes += pot
+        if kind == "woe":
+            raise ValueError("MOLUSCE's simulator takes MOLUSCE's weights or a potential per class")
+        if kind == "glm":
+            predict = _node("suitability", "glm.predict", {"model": "potential.model", "drivers": dref,
+                                                           "landscape": "@landscape" if dyn else start})
+            (body if dyn else nodes).append(predict)
+            forecast = {"potential": "suitability.suitability"}
+        else:
+            forecast = {"potential": "potential.stack"}
+    nodes.append(_node("rng", "rng.numpy", {"seed": seed_ref}, note="numpy's legacy generator after "
+                                                                    "numpy.random.seed(seed), as MOLUSCE draws."))
+    body = dyn + body
+    body.append(_node("allocate", "molusce.step",
+                      {"landscape": "@landscape", **forecast, "rng": "rng.rng", "step": "@step"},
+                      {"classes": [_num(c) for c in classes],
+                       "counts": [{"from": _num(f), "to": _num(t), "cells": int(n)} for (f, t), n in counts.items()]}))
+    nodes.append(_node("simulation", "control.repeat", {"times": int(alloc.iterations), "landscape": start},
+                       body={"nodes": body, "carry": {"landscape": "allocate.landscape"},
+                             "collect": {"maps": "allocate.landscape", "info": "allocate.info"}}))
+    return nodes
 
 
 def _template_of(landscape, nodata):
@@ -651,14 +721,8 @@ def _transition_from(stack, layout: dict):
 
 def load_model(path):
     """Read a Terraflux graph of ls.simulate's pieces: ``(Model, inputs)``, inputs by name (maps read)."""
-    from ._allocation import CLUE, Ordered
-    from ._dynamic import distance_to, share_of
     from ._estimator import RasterPotential
-    from ._model import Model
-    from ._patches import ExpanderPatcher
-    from ._plus import CARS
     from ._regional import Regional
-    from ._rules import Neighbourhood, Rules
 
     path = Path(path)
     g = _read_graph(path)
@@ -675,6 +739,11 @@ def load_model(path):
     def ref_input(r):
         return r[1:] if isinstance(r, str) and r.startswith("$") else None
 
+    def dynamic_of(sim):
+        return _dynamic_from(sim, inputs, ref_input)
+
+    if alloc_node["op"] == "molusce.step":
+        return _molusce_from(nodes, body, sim, alloc_node, inputs, ref_input, dynamic_of(sim)), inputs
     # the potential
     pn = nodes.get("potential")
     if pn is None:
@@ -712,7 +781,15 @@ def load_model(path):
         demand = Regional(inputs[ref_input(dn["inputs"]["regions"])], parts)
     else:
         raise ValueError(f"unknown demand {dn['op']}")
-    # the dynamic variables
+    dynamic = dynamic_of(sim)
+    # the allocation and rules
+    return _ls_model(nodes, sim, alloc_node, inputs, ref_input, potential, demand, dynamic), inputs
+
+
+def _dynamic_from(sim, inputs, ref_input) -> dict:
+    """The dynamic variables of a loop."""
+    from ._dynamic import distance_to, share_of
+
     dynamic = {}
     for n in sim["body"]["nodes"]:
         if n["op"] in ("dynamic.distance_to", "dynamic.share_of"):
@@ -727,7 +804,17 @@ def load_model(path):
                 dynamic[name] = distance_to(prm["classes"], unit=prm.get("unit", "map"))
             else:
                 dynamic[name] = share_of(prm["classes"], prm.get("window", 3))
-    # the allocation and rules
+    return dynamic
+
+
+def _ls_model(nodes, sim, alloc_node, inputs, ref_input, potential, demand, dynamic):
+    """The model of a lulcc, Dinamica or CARS loop."""
+    from ._allocation import CLUE, Ordered
+    from ._model import Model
+    from ._patches import ExpanderPatcher
+    from ._plus import CARS
+    from ._rules import Neighbourhood, Rules
+
     op, prm, ins = alloc_node["op"], alloc_node.get("params", {}), alloc_node["inputs"]
     rules = Rules()
     if op == "lulcc.step":
@@ -770,8 +857,53 @@ def load_model(path):
         raise ValueError(f"unknown allocation {op}")
     if "restrictions" in ins:
         rules.restrictions = inputs[ref_input(ins["restrictions"])]
-    model = Model(potential, demand, allocation, rules, dynamic or None)
-    return model, inputs
+    return Model(potential, demand, allocation, rules, dynamic or None)
+
+
+def _molusce_from(nodes, body, sim, alloc_node, inputs, ref_input, dynamic):
+    """The model of a MOLUSCE loop: MolusceWoE (its maps or weights) or a potential per class."""
+    from ._model import Model
+    from ._molusce import MolusceCA, MolusceWoE
+
+    prm, ins = alloc_node.get("params", {}), alloc_node["inputs"]
+    classes = [_class_value(c) for c in prm["classes"]]
+    counts = {(_class_value(c["from"]), _class_value(c["to"])): int(c["cells"]) for c in prm["counts"]}
+
+    def woe_of(classes):
+        woe = MolusceWoE()
+        woe.classes = classes
+        return woe
+    if "total" in ins:
+        src = ins["total"].split(".")[0]
+        woe = woe_of(classes)
+        if src in body and body[src]["op"] == "molusce.total":
+            j = body[src]["params"]
+            woe.bins = {k: list(v) for k, v in j.get("bins", {}).items()}
+            woe.drivers = list(j["drivers"])
+            for e in j["weights"]:
+                code = woe.encode(e["from"], e["to"])
+                woe.weights.setdefault(code, {})[e["driver"]] = (np.asarray(e["categories"], dtype=np.float64),
+                                                                 _floats(e["weights"]))
+            woe.codes = sorted(woe.weights)
+        else:
+            stack = inputs[ref_input(nodes[src]["inputs"]["stack"])]
+            for k, name in enumerate(str(v) for v in stack[stack.dims[0]].values):
+                f, t = name.split("_to_")
+                woe._maps[woe.encode(float(f), float(t))] = np.asarray(stack[k].values, dtype=np.float64)
+            woe.codes = sorted(woe._maps)
+            woe.weights = {c: {} for c in woe.codes}
+        potential = woe
+    else:
+        pn = nodes["potential"]
+        if pn["op"] == "glm.coefficients":
+            potential = _glm_from(pn["params"]["fits"])
+        else:
+            stack = inputs[ref_input(pn["inputs"]["stack"])]
+            from ._estimator import RasterPotential
+
+            potential = RasterPotential({_class_value(float(n)): stack[k]
+                                         for k, n in enumerate(str(v) for v in stack[stack.dims[0]].values)})
+    return Model(potential, counts, MolusceCA(int(sim["inputs"]["times"])), None, dynamic or None)
 
 
 # ----------------------------------------------------------------------------- running

@@ -407,3 +407,150 @@ def test_observed_patches_many():
     a[rng.random(a.shape) < 0.02] = 2.0
     b = np.where(rng.random(a.shape) < 0.08, 2.0, a)
     assert _core.sim_observed_patches(a, b, 1.0, 2.0) == ref_observed_patches(a, b, 1.0, 2.0)
+
+
+# ----------------------------------------------------------------------------- MOLUSCE (phase 13 D)
+
+def _sigmoid(x):
+    x = np.maximum(-100, np.minimum(x, 100))
+    return 1 / (1 + np.exp(-x))
+
+
+def ref_molusce_total(factors, weights):
+    out = []
+    for per in weights:
+        total, nan = None, None
+        for f, (cats, w) in zip(factors, per):
+            layer = np.zeros(f.shape)
+            for c, x in zip(cats, w):
+                layer[f == c] = x
+            total = layer if total is None else total + layer
+            nan = np.isnan(f) if nan is None else nan | np.isnan(f)
+        out.append(np.where(nan, np.nan, total))
+    return np.stack(out)
+
+
+def ref_molusce_prediction_woe(s, classes, total):
+    m = len(classes)
+    pred = np.full(s.shape, np.nan)
+    conf = np.full(s.shape, np.nan)
+    for i, c in enumerate(classes):
+        cells = s == c
+        if not cells.any():
+            continue
+        cand = [i * m + j for j in range(m) if i * m + j in total]
+        best = np.full(int(cells.sum()), -1000.0)
+        second = np.full(best.size, -1000.0)
+        arg = np.full(best.size, -1)
+        for code in cand:
+            w = total[code][cells]
+            valid = ~np.isnan(w)
+            up = valid & (w > best)
+            mid = valid & ~up & (w > second)
+            second = np.where(up, best, np.where(mid, w, second))
+            best = np.where(up, w, best)
+            arg = np.where(up, code, arg)
+        pred[cells] = np.where(arg >= 0, np.asarray(classes, dtype=np.float64)[arg % m], np.nan)
+        conf[cells] = np.trunc(100 * (_sigmoid(best) - _sigmoid(second)))
+    return pred, conf
+
+
+def ref_molusce_prediction_classes(s, given, classes):
+    layers = np.stack([np.nan_to_num(given[c], nan=-np.inf) if c in given else np.full(s.shape, -np.inf)
+                       for c in classes])
+    order = np.argsort(-layers, axis=0, kind="stable")
+    top = np.take_along_axis(layers, order[:1], 0)[0]
+    sec = np.take_along_axis(layers, order[1:2], 0)[0] if len(classes) > 1 else np.zeros(s.shape)
+    pred = np.asarray(classes, dtype=np.float64)[order[0]]
+    with np.errstate(invalid="ignore", over="ignore"):
+        conf = np.trunc(100 * (top - np.where(np.isfinite(sec), sec, 0)))
+    bad = np.isnan(s) | ~np.isfinite(top)
+    return np.where(bad, np.nan, pred), np.where(np.isnan(s), np.nan, np.where(bad, 0, conf))
+
+
+def ref_molusce_ca_step(state, pred, conf, counts, rng):
+    """landschaft's numpy step, with the cells of equal value taken in a stable order (the later first)."""
+    conf_filled = np.nan_to_num(conf, nan=0.0)
+    new = state.copy()
+    present = sorted(set(np.unique(state[~np.isnan(state)]).tolist()))
+    changed = []
+    for f in present:
+        for t in present:
+            if f == t:
+                continue
+            n = counts.get((f, t), 0)
+            if n == 0:
+                continue
+            places = (state == f) & (pred == t)
+            n = min(n, int(places.sum()))
+            if n > 0:
+                c = (conf_filled + rng.random_sample(size=state.shape) / 1000) * places
+                n = min(n, int((c > 0).sum()))
+                if n > 0:
+                    ind = c.argsort(axis=None, kind="stable")[-n:]
+                    new.flat[ind] = t
+            changed.append((f, t, n))
+    return new, changed
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_molusce_total_and_prediction(seed):
+    rng = np.random.default_rng(seed)
+    shape = (23, 31)
+    classes = [1.0, 2.0, 3.0]
+    factors = [rng.integers(1, 5, shape).astype(float) for _ in range(3)]
+    for f in factors:
+        f[rng.random(shape) < 0.05] = np.nan
+    codes = sorted(rng.choice(9, size=int(rng.integers(3, 10)), replace=False).tolist())
+    weights = [[(sorted(rng.choice([1.0, 2.0, 3.0, 4.0], size=int(rng.integers(1, 5)), replace=False).tolist()),
+                 np.round(rng.normal(0, 3, 4), 1).tolist()) for _ in factors] for _ in codes]
+    weights = [[(c, w[:len(c)]) for c, w in per] for per in weights]
+    ref = ref_molusce_total(factors, weights)
+    got = _core.sim_molusce_total(np.stack([f.ravel() for f in factors]), weights)
+    np.testing.assert_array_equal(got, ref.reshape(len(codes), -1))
+    s = rng.choice([1.0, 2.0, 3.0, 4.0, np.nan], size=shape)
+    total = {c: ref[j] for j, c in enumerate(codes)}
+    p_ref, c_ref = ref_molusce_prediction_woe(s, classes, total)
+    p, c = _core.sim_molusce_prediction_woe(s.ravel(), classes, codes, ref.reshape(len(codes), -1))
+    np.testing.assert_array_equal(p, p_ref.ravel())
+    np.testing.assert_array_equal(c, c_ref.ravel())
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_molusce_prediction_classes(seed):
+    rng = np.random.default_rng(seed)
+    shape = (19, 27)
+    classes = [1.0, 2.0, 3.0][: 1 + seed % 3]
+    s = rng.choice([1.0, 2.0, np.nan], size=shape)
+    given = {}
+    for c in classes:
+        if rng.random() < 0.2:
+            continue  # a class without a layer
+        v = rng.choice([0.0, 0.25, 0.5, 1.0, np.nan, np.inf, -np.inf], size=shape, p=[.3, .2, .2, .1, .1, .05, .05])
+        given[c] = v
+    p_ref, c_ref = ref_molusce_prediction_classes(s, given, classes)
+    layers = np.stack([given[c].ravel() if c in given else np.full(s.size, np.nan) for c in classes])
+    p, c = _core.sim_molusce_prediction_classes(s.ravel(), layers, classes)
+    np.testing.assert_array_equal(p, p_ref.ravel())
+    np.testing.assert_array_equal(c, c_ref.ravel())
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_molusce_ca_step(seed):
+    rng = np.random.default_rng(seed)
+    shape = (21, 33)
+    state = rng.choice([1.0, 2.0, 3.0, np.nan], size=shape, p=[.4, .3, .2, .1])
+    pred = rng.choice([1.0, 2.0, 3.0, np.nan], size=shape)
+    conf = rng.choice([0.0, 5.0, 50.0, 100.0, np.nan], size=shape)
+    counts = {(1.0, 2.0): int(rng.integers(0, 40)), (2.0, 3.0): int(rng.integers(-2, 400)),
+              (3.0, 1.0): int(rng.integers(1, 10)), (1.0, 3.0): 0, (4.0, 1.0): 5}
+    r = np.random.RandomState(seed)
+    new_ref, ch_ref = ref_molusce_ca_step(state, pred, conf, counts, r)
+    ours = _core.NumpyRandomState(seed)
+    new, ch = _core.sim_molusce_ca_step(state.ravel(), pred.ravel(), conf.ravel(),
+                                        [(f, t, n) for (f, t), n in counts.items()], ours)
+    np.testing.assert_array_equal(new, new_ref.ravel())
+    assert [tuple(x) for x in ch] == ch_ref
+    # the two generators went through the same draws
+    np.testing.assert_array_equal(ours.random_sample(5), r.random_sample(5))
+

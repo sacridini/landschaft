@@ -7,6 +7,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -19,6 +20,7 @@
 #include "sim/clumondo.hpp"
 #include "sim/demand.hpp"
 #include "sim/futures.hpp"
+#include "sim/molusce.hpp"
 #include "sim/observed.hpp"
 #include "sim/ordered.hpp"
 #include "sim/patches.hpp"
@@ -870,11 +872,103 @@ py::array_t<double> sim_woe_normalise(const DArray& sums) {
     return out;
 }
 
+py::tuple forecast_tuple(const sim::MolusceForecast& f) {
+    return py::make_tuple(to_array(f.prediction), to_array(f.confidence));
+}
+
+py::array_t<double> sim_molusce_categories(const DArray& values, const std::vector<double>& bounds) {
+    if (!std::is_sorted(bounds.begin(), bounds.end())) throw std::invalid_argument("the bounds must be sorted");
+    return to_array(sim::molusce_categories(values.data(), static_cast<i64>(values.size()), bounds));
+}
+
+py::array_t<double> sim_molusce_total(const DArray& factors,
+                                      const std::vector<std::vector<std::pair<std::vector<double>, std::vector<double>>>>& weights) {
+    if (factors.ndim() != 2) throw std::invalid_argument("the factors must be (factors, cells)");
+    const int nf = static_cast<int>(factors.shape(0));
+    const i64 n = factors.shape(1);
+    std::vector<std::vector<sim::MolusceFactorWeights>> w(weights.size());
+    for (std::size_t c = 0; c < weights.size(); ++c) {
+        for (const auto& [cats, ws] : weights[c]) {
+            if (cats.size() != ws.size()) throw std::invalid_argument("one weight per category");
+            w[c].push_back({cats, ws});
+        }
+    }
+    std::vector<double> out;
+    {
+        py::gil_scoped_release release;
+        out = sim::molusce_total(factors.data(), nf, n, w);
+    }
+    auto a = to_array(out);
+    a.resize({static_cast<py::ssize_t>(weights.size()), static_cast<py::ssize_t>(n)});
+    return a;
+}
+
+py::tuple sim_molusce_prediction_woe(const DArray& state, const std::vector<double>& classes,
+                                     const std::vector<i64>& codes, const DArray& totals) {
+    const i64 n = static_cast<i64>(state.size());
+    if (totals.size() != static_cast<py::ssize_t>(codes.size()) * n)
+        throw std::invalid_argument("the totals must be (codes, cells)");
+    sim::MolusceForecast f;
+    {
+        py::gil_scoped_release release;
+        f = sim::molusce_prediction_woe(state.data(), n, classes, codes, totals.data());
+    }
+    return forecast_tuple(f);
+}
+
+py::tuple sim_molusce_prediction_classes(const DArray& state, const DArray& layers, const std::vector<double>& classes) {
+    const i64 n = static_cast<i64>(state.size());
+    const int m = static_cast<int>(classes.size());
+    if (layers.size() != static_cast<py::ssize_t>(m) * n) throw std::invalid_argument("the layers must be (classes, cells)");
+    sim::MolusceForecast f;
+    {
+        py::gil_scoped_release release;
+        f = sim::molusce_prediction_classes(state.data(), n, m, layers.data(), classes);
+    }
+    return forecast_tuple(f);
+}
+
+py::tuple sim_molusce_ca_step(const DArray& state, const DArray& prediction, const DArray& confidence,
+                              const std::vector<std::tuple<double, double, i64>>& counts, sim::NumpyRandomState& rng) {
+    const i64 n = static_cast<i64>(state.size());
+    if (prediction.size() != state.size() || confidence.size() != state.size())
+        throw std::invalid_argument("the prediction and confidence differ in size from the state");
+    std::vector<sim::MolusceTransition> c;
+    for (const auto& [f, t, k] : counts) c.push_back({f, t, k});
+    sim::MolusceStep r;
+    {
+        py::gil_scoped_release release;
+        r = sim::molusce_ca_step(state.data(), n, prediction.data(), confidence.data(), c, rng);
+    }
+    std::vector<std::tuple<double, double, i64>> changed;
+    for (const auto& x : r.changed) changed.emplace_back(x.from, x.to, x.cells);
+    return py::make_tuple(to_array(r.state), changed);
+}
+
 }  // namespace
 
 namespace sim {
 
 void register_python(py::module_& m) {
+    // numpy's legacy RandomState(seed) and its random_sample, as MOLUSCE draws
+    py::class_<sim::NumpyRandomState>(m, "NumpyRandomState")
+        .def(py::init<std::uint32_t>(), py::arg("seed"))
+        .def("random_sample", [](sim::NumpyRandomState& r, i64 n) {
+            std::vector<double> v(static_cast<std::size_t>(n));
+            for (auto& x : v) x = r.random_sample();
+            return to_array(v);
+        }, py::arg("n"));
+    m.def("sim_molusce_categories", &sim_molusce_categories, py::arg("values"), py::arg("bounds"),
+          "MOLUSCE's categories of a factor: searchsorted(bounds, v, 'right') + 1, or the values without bounds.");
+    m.def("sim_molusce_total", &sim_molusce_total, py::arg("factors"), py::arg("weights"),
+          "MOLUSCE's total weight of each transition code: (codes, cells), NaN where a factor has none.");
+    m.def("sim_molusce_prediction_woe", &sim_molusce_prediction_woe, py::arg("state"), py::arg("classes"),
+          py::arg("codes"), py::arg("totals"), "MolusceWoE.prediction: (predicted class, confidence).");
+    m.def("sim_molusce_prediction_classes", &sim_molusce_prediction_classes, py::arg("state"), py::arg("layers"),
+          py::arg("classes"), "MolusceCA's prediction from a potential per class: (predicted class, confidence).");
+    m.def("sim_molusce_ca_step", &sim_molusce_ca_step, py::arg("state"), py::arg("prediction"),
+          py::arg("confidence"), py::arg("counts"), py::arg("rng"),
+          "One iteration of MOLUSCE's Simulator: (new state, [(from, to, cells changed)]).");
     m.def("sim_crt_rand", &sim_crt_rand, py::arg("seed"), py::arg("n"),
           "n values of the Microsoft C runtime's rand() after srand(seed) (CLUMondo's generator).");
     m.def("sim_drand48", &sim_drand48, py::arg("seed"), py::arg("n"),

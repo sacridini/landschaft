@@ -3332,6 +3332,11 @@ sim.supply; sim.shortfall; sim.trajectory()
    * **D. MOLUSCE**: `MolusceWoE.total`/`prediction` e o passo do `MolusceCA` em C++ (`sim/molusce.cpp`, com o
      `random_sample` do `RandomState` do numpy sobre o `StdMt19937`); nós `molusce.weights` (os pesos por
      transição, fator e categoria), `rng.numpy` e `molusce.step`.
+     **Feita**: sem variáveis dinâmicas vão os mapas do ajuste (`_maps`, que têm NaN onde t0 ou t1 não têm valor,
+     diferente dos pesos aplicados aos fatores), com elas os pesos (`molusce.total` no laço); potenciais por
+     classe também (regressões, rasters). Empates de confiança + sorteio: as células posteriores primeiro (a
+     ordem estável; o quicksort do numpy deixava a ordem à implementação). `test_simulate_kernels.py` guarda o
+     numpy anterior (com a ordem estável) e exige os mesmos bits; o caso do MOLUSCE corrigido continua bit a bit.
    * **E. CLUMondo**: o preparo da adequabilidade de cada ano (vizinhança, preferências, logit) em C++; nós
      `clumondo.supply`, `clumondo.demand` e `clumondo.step` (ocupação, idades e elasticidades da demanda
      carregadas de ano a ano).
