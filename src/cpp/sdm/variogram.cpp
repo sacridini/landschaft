@@ -77,6 +77,99 @@ SampleVariogram sample_variogram(const double* x, const double* y, const double*
 
 namespace {
 
+#if defined(__cpp_lib_math_special_functions)
+double bessel_k(double nu, double x) { return std::cyl_bessel_k(nu, x); }
+#else
+// Apple's libc++ has none of C++17's special functions: libstdc++'s
+// cyl_bessel_k (__bessel_ik, Temme's method), for K only, nu >= 0.
+double bessel_k(double nu, double x) {
+    if (std::isnan(nu) || std::isnan(x)) return std::numeric_limits<double>::quiet_NaN();
+    if (nu < 0.0 || x < 0.0) return std::numeric_limits<double>::quiet_NaN();
+    if (x == 0.0) return std::numeric_limits<double>::infinity();
+    const double pi = 3.14159265358979323846;
+    const double eps = std::numeric_limits<double>::epsilon();
+    const int max_iter = 15000;
+    const double x_min = 2.0;
+    const int nl = static_cast<int>(nu + 0.5);
+    const double mu = nu - nl;
+    const double mu2 = mu * mu;
+    const double xi = 1.0 / x;
+    const double xi2 = 2.0 * xi;
+    double kmu, knu1;
+    if (x < x_min) {
+        const double x2 = x / 2.0;
+        const double pimu = pi * mu;
+        const double fact = (std::abs(pimu) < eps ? 1.0 : pimu / std::sin(pimu));
+        double d = -std::log(x2);
+        double e = mu * d;
+        const double fact2 = (std::abs(e) < eps ? 1.0 : std::sinh(e) / e);
+        // __gamma_temme
+        const double gampl = 1.0 / std::tgamma(1.0 + mu);
+        const double gammi = 1.0 / std::tgamma(1.0 - mu);
+        const double gam1 =
+            std::abs(mu) < std::numeric_limits<double>::min() ? -0.5772156649015328606 : (gammi - gampl) / (2.0 * mu);
+        const double gam2 = (gammi + gampl) / 2.0;
+        double ff = fact * (gam1 * std::cosh(e) + gam2 * fact2 * d);
+        double sum = ff;
+        e = std::exp(e);
+        double p = e / (2.0 * gampl);
+        double q = 1.0 / (2.0 * e * gammi);
+        double c = 1.0;
+        d = x2 * x2;
+        double sum1 = p;
+        for (int i = 1; i <= max_iter; ++i) {
+            ff = (i * ff + p + q) / (i * i - mu2);
+            c *= d / i;
+            p /= i - mu;
+            q /= i + mu;
+            const double del = c * ff;
+            sum += del;
+            const double del1 = c * (p - i * ff);
+            sum1 += del1;
+            if (std::abs(del) < eps * std::abs(sum)) break;
+        }
+        kmu = sum;
+        knu1 = sum1 * xi2;
+    } else {
+        double b = 2.0 * (1.0 + x);
+        double d = 1.0 / b;
+        double delh = d;
+        double h = d;
+        double q1 = 0.0;
+        double q2 = 1.0;
+        const double a1 = 0.25 - mu2;
+        double c = a1;
+        double q = a1;
+        double a = -a1;
+        double s = 1.0 + q * delh;
+        for (int i = 2; i <= max_iter; ++i) {
+            a -= 2 * (i - 1);
+            c = -a * c / i;
+            const double qnew = (q1 - b * q2) / a;
+            q1 = q2;
+            q2 = qnew;
+            q += c * qnew;
+            b += 2.0;
+            d = 1.0 / (b + a * d);
+            delh = (b * d - 1.0) * delh;
+            h += delh;
+            const double dels = q * delh;
+            s += dels;
+            if (std::abs(dels / s) < eps) break;
+        }
+        h = a1 * h;
+        kmu = std::sqrt(pi / (2.0 * x)) * std::exp(-x) / s;
+        knu1 = kmu * (mu + x + 0.5 - h) * xi;
+    }
+    for (int i = 1; i <= nl; ++i) {
+        const double knutemp = (mu + i) * xi2 * knu1 + kmu;
+        kmu = knu1;
+        knu1 = knutemp;
+    }
+    return kmu;
+}
+#endif
+
 enum class Model { Sph, Exp, Gau, Ste };
 
 // gstat's unit semivariances (vario_fn.c), 0 at distance 0
@@ -96,7 +189,7 @@ double unit(Model m, double h, double r, double kappa) {
         }
         default: {  // fn_matern2: Matern, M. Stein's parameterisation
             const double arg = 2.0 * std::sqrt(kappa) * (h / r);
-            const double bes = std::cyl_bessel_k(kappa, arg);
+            const double bes = bessel_k(kappa, arg);
             if (!std::isfinite(bes)) return 0.0;
             if (bes == 0.0) return 1.0;
             const double mult = std::pow(2.0, 1.0 - kappa) / std::tgamma(kappa) * std::pow(arg, kappa);
