@@ -3350,6 +3350,14 @@ sim.supply; sim.shortfall; sim.trajectory()
    * **F. FUTURES**: o preparo (soma dos preditores em float32, pressão inicial) em C++; o laço já está em C++
      (`sim_futures_run`) e vira um nó só, `futures.simulation` (sem variáveis dinâmicas, como aqui), com o
      `Flooding`.
+     **Feita**, por outro caminho no preparo: o grafo leva as peças do modelo (coeficientes por sub-região,
+     demanda, bibliotecas, zoneamento, mapas e tabelas das enchentes) e a pressão inicial como mapa (o campo
+     `pressure` do `PatchGrowing`, calculado pelo `development_pressure` quando não dado: assim o Terraflux não
+     precisa dos pesos do filtro, que dependem do `pow`/`exp` do numpy); o preparo (sub-regiões por primeira
+     aparição, células excluídas, a soma dos preditores em float32, `_zoning`, `_patches`, `Flooding._inputs`)
+     é só manipulação de dados e foi espelhado no operador Rust `futures.simulation`, que chama o
+     `futures_run` do C++. Os cinco casos de referência do GRASS e os dois de enchentes dão os mesmos mapas
+     pelo `terraflux run`.
 
 ---
 

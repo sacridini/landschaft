@@ -21,6 +21,7 @@ import subprocess
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 from ._change import _class_value
@@ -338,6 +339,7 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
     """The graph of a fitted model (see :meth:`Model.save`)."""
     from ._allocation import CLUE, Ordered
     from ._clumondo import CLUMondo
+    from ._futures import PatchGrowing
     from ._landsystems import LandSystemStack
     from ._molusce import MolusceCA
     from ._patches import ExpanderPatcher
@@ -516,9 +518,11 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
         nodes += _molusce_nodes(model, w, landscape, nodata, drivers, start, seed_ref, loop_drivers)
     elif isinstance(alloc, CLUMondo):
         nodes += _clumondo_nodes(model, w, landscape, nodata, drivers, start, seed, seed_ref, loop_drivers)
+    elif isinstance(alloc, PatchGrowing):
+        nodes += _futures_nodes(model, w, landscape, nodata, drivers, start, seed_ref, drv_ref)
     else:
         raise TypeError(f"Terraflux cannot run the allocation {type(alloc).__name__} yet "
-                         "(CLUE, Ordered, ExpanderPatcher, CARS, MolusceCA or CLUMondo)")
+                         "(CLUE, Ordered, ExpanderPatcher, CARS, MolusceCA, CLUMondo or PatchGrowing)")
     outputs = {"maps": {"from": "simulation.maps"}, "steps": {"from": "simulation.info"}}
     g = {"format": FORMAT, "name": name or f"landschaft {type(alloc).__name__} model",
          "description": description or "Written by landschaft's Model.save.", "inputs": w.inputs, "nodes": nodes,
@@ -692,6 +696,124 @@ def _clumondo_nodes(model, w: _Writer, landscape, nodata, drivers, start: str, s
     return nodes
 
 
+def _futures_nodes(model, w: _Writer, landscape, nodata, drivers, start: str, seed_ref: str, drv_ref) -> list:
+    """FUTURES: its pieces as given (the starting pressure as a map, computed when not given), one node."""
+    from ._futures import (
+        _APPROACHES,
+        DevelopmentDemand,
+        DevelopmentPotential,
+        development_pressure,
+    )
+
+    alloc, pot, demand = model.allocation, model.potential, model.demand
+    if model.dynamic:
+        raise ValueError("PatchGrowing updates its development pressure itself: it takes no dynamic variables")
+    if not isinstance(pot, DevelopmentPotential):
+        raise TypeError("PatchGrowing needs a DevelopmentPotential")
+    if not isinstance(demand, DevelopmentDemand):
+        raise TypeError("PatchGrowing needs a DevelopmentDemand")
+    ins = {"landscape": start, "seed": seed_ref}
+    if drv_ref is not None:
+        ins["drivers"] = drv_ref
+    elif pot.predictors:
+        raise ValueError("the potential's predictors need the drivers")
+    for name in ("subregions", "potential_subregions", "weight", "zoning"):
+        v = getattr(alloc, name)
+        if v is not None:
+            ins[name] = w.map(name, v, note=f"PatchGrowing's {name.replace('_', ' ')}")
+    if model.rules.restrictions is not None:
+        ins["restrictions"] = w.map("restrictions", model.rules.restrictions, note="cells never developed")
+    pressure = alloc.pressure
+    if pressure is None:
+        dev = _read_given(landscape, w, "map")
+        from ._maps import read_map
+
+        v = read_map(dev, nodata)
+        pressure = development_pressure(v.template.copy(data=v.as_float()) if v.template is not None else v.as_float(),
+                                         alloc.neighborhood, method=alloc.approach, gamma=alloc.gamma,
+                                         scaling_factor=alloc.scaling_factor)
+    ins["pressure"] = w.map("pressure", pressure, note="the development pressure at the start")
+    t = pot.table
+    single = None in t.index
+    params = {
+        "potential": {"ids": None if single else [int(i) for i in t.index], "intercept": t["intercept"].to_numpy(),
+                      "devpressure": t["devpressure"].to_numpy(), "predictors": list(pot.predictors),
+                      "coefficients": t[pot.predictors].to_numpy(dtype=np.float64) if pot.predictors
+                      else [[] for _ in range(len(t))]},
+        "demand": {"subregions": [int(c) for c in demand.table.columns],
+                   "rows": demand.table.to_numpy(dtype=np.float64),
+                   "years": [float(y) for y in demand.table.index] if np.issubdtype(
+                       np.asarray(demand.table.index).dtype, np.number) else None,
+                   "population": None if demand.population is None else
+                   demand.population[[int(c) for c in demand.table.columns]].to_numpy(dtype=np.float64)},
+        "neighborhood": int(alloc.neighborhood), "approach": alloc.approach, "gamma": float(alloc.gamma),
+        "scaling_factor": float(alloc.scaling_factor), "discount_factor": float(alloc.discount_factor),
+        "compactness_mean": float(alloc.compactness_mean), "compactness_range": float(alloc.compactness_range),
+        "num_neighbors": int(alloc.num_neighbors), "seed_search": alloc.seed_search,
+        "incentive_power": float(alloc.incentive_power)}
+    assert alloc.approach in _APPROACHES
+    ps = alloc.patch_sizes
+    if isinstance(ps, pd.DataFrame):
+        ps = {int(c): ps[c].dropna().tolist() for c in ps.columns}
+    if isinstance(ps, dict):
+        params["patch_sizes"] = {"ids": [int(k) for k in ps], "lists": [list(map(float, v)) for v in ps.values()]}
+    else:
+        params["patch_sizes"] = {"ids": None, "lists": [list(map(float, ps))]}
+    if alloc.zoning_effects is not None:
+        ze = pd.DataFrame(alloc.zoning_effects).copy()
+        ze.index = [int(i) for i in ze.index]
+        zones = [c for c in ze.columns if c != "stringency"]
+        params["zoning_effects"] = {"ids": list(ze.index), "stringency": ze["stringency"].astype(float).to_numpy(),
+                                    "zones": [int(z) for z in zones],
+                                    "effects": ze[zones].astype(float).to_numpy() if zones else [[] for _ in ze.index]}
+    if alloc.climate is not None:
+        params["climate"] = _flooding_json(alloc.climate, w, ins)
+    return [_node("simulation", "futures.simulation", ins, params,
+                  note="FUTURES' patch growing (r.futures.simulation), every step in one run.")]
+
+
+def _flooding_json(f, w: _Writer, ins: dict) -> dict:
+    """FUTURES' flood submodel: its maps as inputs, the rest as settings."""
+    ins["catchments"] = w.map("catchments", f.catchments, note="the catchments (HUCs) floods are drawn in")
+    ins["adaptive_capacity"] = w.map("adaptive_capacity", f.adaptive_capacity, note="adaptive capacity, -1 to 1")
+    dmg = pd.DataFrame(f.damage)
+    c = {"damage": {"levels": [float(x) for x in dmg.columns], "ids": [int(i) for i in dmg.index],
+                    "rows": dmg.to_numpy(dtype=np.float64)},
+         "response": [float(x) for x in f.response], "stddev": float(f.response_stddev), "depths": None,
+         "probabilities": None, "hand_percentile": None, "redistribution": None}
+    src = f.damage_regions
+    if src is None or isinstance(src, str):
+        c["damage_regions"] = src
+    else:
+        c["damage_regions"] = "map"
+        ins["damage_regions"] = w.map("damage_regions", src, note="the depth-damage region of each cell")
+    layers = {}
+    if f.depths is not None:
+        c["depths"] = []
+        for st in sorted(int(k) for k in f.depths):
+            given = {float(p): m for p, m in f.depths[st].items()}
+            refs = []
+            for p_, m in sorted(given.items()):
+                refs.append(len(layers))
+                layers[f"depth_{st}_{len(refs)}"] = m
+            c["depths"].append({"step": st, "probabilities": sorted(given), "layers": refs})
+    else:
+        c["probabilities"] = []
+        for st in sorted(int(k) for k in f.probabilities):
+            c["probabilities"].append({"step": st, "layer": len(layers)})
+            layers[f"probability_{st}"] = f.probabilities[st]
+        ins["hand"] = w.map("hand", f.hand, note="height above the nearest drainage")
+        c["hand_percentile"] = float(f.hand_percentile)
+    ins["floods"] = w.stack("floods", layers, note="the flood maps (depths or probabilities) by step")
+    if f.adaptation is not None:
+        ins["adaptation"] = w.map("adaptation", f.adaptation, note="the return period each cell is protected against")
+    if f.redistribution is not None:
+        m = pd.DataFrame(f.redistribution)
+        c["redistribution"] = {"from": [int(i) for i in m.index], "to": [int(i) for i in m.columns],
+                               "rows": m.to_numpy(dtype=np.float64)}
+    return c
+
+
 def _template_of(landscape, nodata):
     from ._maps import read_map
 
@@ -837,6 +959,8 @@ def load_model(path):
     inputs = {k: _load_input(v, path.parent) for k, v in g.get("inputs", {}).items()}
     nodes = {n["id"]: n for n in g.get("nodes", [])}
     sim = nodes.get("simulation")
+    if sim is not None and sim.get("op") == "futures.simulation":
+        return _futures_from(sim, inputs), inputs
     if sim is None or sim.get("op") != "control.repeat":
         raise ValueError("not a graph of ls.simulate's pieces: run it with terraflux")
     body = {n["id"]: n for n in sim["body"]["nodes"]}
@@ -968,6 +1092,72 @@ def _ls_model(nodes, sim, alloc_node, inputs, ref_input, potential, demand, dyna
     if "restrictions" in ins:
         rules.restrictions = inputs[ref_input(ins["restrictions"])]
     return Model(potential, demand, allocation, rules, dynamic or None)
+
+
+def _futures_from(node, inputs):
+    """The model of a FUTURES node."""
+    from ._futures import (
+        DevelopmentDemand,
+        DevelopmentPotential,
+        Flooding,
+        PatchGrowing,
+    )
+    from ._model import Model
+    from ._rules import Rules
+
+    prm, ins = node["params"], node["inputs"]
+
+    def given(name):
+        r = ins.get(name)
+        return inputs[r[1:]] if isinstance(r, str) and r.startswith("$") else None
+    pt = prm["potential"]
+    cols = {"intercept": pt["intercept"], "devpressure": pt["devpressure"],
+            **{n: [row[k] for row in pt["coefficients"]] for k, n in enumerate(pt["predictors"])}}
+    idx = pd.Index([None] if pt["ids"] is None else pt["ids"], name="subregion")
+    pot = DevelopmentPotential(pd.DataFrame(cols, index=idx))
+    d = prm["demand"]
+    index = pd.Index([int(y) if float(y).is_integer() else y for y in d["years"]]) if d.get("years") else None
+    table = pd.DataFrame(np.asarray(d["rows"], dtype=np.float64), index=index, columns=d["subregions"])
+    population = None if d.get("population") is None else \
+        pd.DataFrame(np.asarray(d["population"], dtype=np.float64), index=index, columns=d["subregions"])
+    demand = DevelopmentDemand(table, population=population)
+    ps = prm["patch_sizes"]
+    patches = ps["lists"][0] if ps["ids"] is None else dict(zip(ps["ids"], ps["lists"]))
+    ze = prm.get("zoning_effects")
+    effects = None
+    if ze is not None:
+        effects = pd.DataFrame({"stringency": ze["stringency"],
+                                **{z: [row[k] for row in ze["effects"]] for k, z in enumerate(ze["zones"])}},
+                               index=ze["ids"])
+    climate = None
+    if prm.get("climate") is not None:
+        c = prm["climate"]
+        floods = given("floods")
+        dm = c["damage"]
+        damage = pd.DataFrame(np.asarray(dm["rows"], dtype=np.float64), index=dm["ids"], columns=dm["levels"])
+        kw = {}
+        if c.get("depths") is not None:
+            kw["depths"] = {e["step"]: {p_: floods[k] for p_, k in zip(e["probabilities"], e["layers"])}
+                            for e in c["depths"]}
+        else:
+            kw.update(probabilities={e["step"]: floods[e["layer"]] for e in c["probabilities"]}, hand=given("hand"),
+                      hand_percentile=c["hand_percentile"])
+        regions = c.get("damage_regions")
+        redistribution = None
+        if c.get("redistribution") is not None:
+            r = c["redistribution"]
+            redistribution = pd.DataFrame(np.asarray(r["rows"], dtype=np.float64), index=r["from"], columns=r["to"])
+        climate = Flooding(given("catchments"), given("adaptive_capacity"), damage, tuple(c["response"]),
+                           response_stddev=c["stddev"], damage_regions=given("damage_regions") if regions == "map"
+                           else regions, adaptation=given("adaptation"), redistribution=redistribution, **kw)
+    alloc = PatchGrowing(patches, subregions=given("subregions"), potential_subregions=given("potential_subregions"),
+                         pressure=given("pressure"), neighborhood=prm["neighborhood"], approach=prm["approach"],
+                         gamma=prm["gamma"], scaling_factor=prm["scaling_factor"],
+                         discount_factor=prm["discount_factor"], compactness_mean=prm["compactness_mean"],
+                         compactness_range=prm["compactness_range"], num_neighbors=prm["num_neighbors"],
+                         seed_search=prm["seed_search"], incentive_power=prm["incentive_power"],
+                         weight=given("weight"), zoning=given("zoning"), zoning_effects=effects, climate=climate)
+    return Model(pot, demand, alloc, Rules(restrictions=given("restrictions")))
 
 
 def _clumondo_from(nodes, alloc_node, inputs, ref_input, dynamic):

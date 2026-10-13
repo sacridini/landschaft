@@ -313,6 +313,79 @@ def test_clumondo_land_system_roles(tmp_path):
             np.testing.assert_array_equal(S.terraflux(path).values, expected[1:])
 
 
+def _futures(opts, flood=None):
+    """The models of FUTURES' reference cases (simulate_cases.futures_py / futures_flood_py)."""
+    import pandas as pd
+    import simulate_cases as sc
+
+    world = sc.futures_world()
+    regions = opts.get("regions", [30, 10, 20])
+    w = {b: world.sel(band=b).drop_vars("band") for b in world.band.values}
+    subr = w["sub"] if regions != [1] else w["sub"].copy(data=np.ones(w["sub"].shape))
+    pot = S.DevelopmentPotential(pd.DataFrame(sc._FUT_POT_PSUB if opts.get("potential_subregions") else sc._FUT_POT,
+                                              columns=["ID", "Intercept", "development_pressure", "slope", "road",
+                                                       "forest"]).set_index("ID"))
+    years = list(range(2021, 2021 + sc._FUT_STEPS))
+    pop = pd.DataFrame({r: sc._FLOOD_POP[r] for r in regions}, index=years) if flood else None
+    demand = S.DevelopmentDemand(pd.DataFrame({r: sc._FUT_DEMAND[r] for r in regions}, index=years), population=pop)
+    pr = opts.get("pressure", {"method": "gravity", "size": 8, "gamma": 1.5, "scaling_factor": 1.0})
+    effects = None
+    if opts.get("zoning_effects"):
+        ze = sc._ZONING
+        effects = pd.DataFrame({"stringency": [ze["stringency"][r] for r in regions],
+                                **{z: [ze["effects"][r][k] for r in regions] for k, z in enumerate(ze["zones"])}},
+                               index=regions)
+    climate = None
+    if flood:
+        f = {str(b): sc.futures_flood_world().sel(band=b).drop_vars("band") for b in sc.futures_flood_world().band.values}
+        if flood["ddf_regions"]:
+            damage = pd.DataFrame([sc._DDF["curves"][r] for r in regions], index=regions, columns=list(sc._DDF["levels"]))
+        else:
+            damage = pd.DataFrame([sc._DDF["curves"][10]], index=[1], columns=list(sc._DDF["levels"]))
+        kw = {}
+        if flood["mode"] == "depth":
+            kw["depths"] = {st: {p_: f[f"fd_{st}_{int(p_ * 1000):03d}"] for p_ in sc._FLOOD_PROBS} for st in (1, 3)}
+        else:
+            kw.update(probabilities={st: f[f"fp_{st}"] for st in (1, 4)}, hand=f["hand"],
+                      hand_percentile=flood["percentile"])
+        climate = S.Flooding(f["huc"], f["ac"], damage, flood["response"], response_stddev=flood["stddev"],
+                             damage_regions="subregions" if flood["ddf_regions"] else None,
+                             redistribution=pd.DataFrame(sc._REDIST, index=[30, 10, 20, 99]).T, **kw)
+    alloc = S.PatchGrowing(
+        {r: sc._FUT_PATCHES[r] for r in regions} if opts.get("patch_columns") or flood else sc._all_patches(),
+        subregions=subr, potential_subregions=w["psub"] if opts.get("potential_subregions") else None,
+        neighborhood=pr["size"], approach=pr["method"], gamma=pr.get("gamma", 1.5),
+        scaling_factor=pr.get("scaling_factor", 1.0), discount_factor=opts.get("discount_factor", 1.0),
+        compactness_mean=opts.get("compactness_mean", 0.4), compactness_range=opts.get("compactness_range", 0.05),
+        num_neighbors=opts.get("num_neighbors", 4), seed_search=opts.get("seed_search", "probability"),
+        incentive_power=opts.get("incentive_power", 1.0), weight=w["weight"] if opts.get("weight") else None,
+        zoning=w["zone"] if opts.get("zoning") else None, zoning_effects=effects, climate=climate)
+    return S.Model(pot, demand, alloc), w["developed"], {k: w[k] for k in ("slope", "road", "forest")}
+
+
+@pytest.mark.parametrize("opts", [
+    {"regions": [1]},
+    {"patch_columns": True, "num_neighbors": 8, "discount_factor": 0.7},
+    {"seed_search": "random", "incentive_power": 2.0, "weight": True,
+     "pressure": {"method": "kernel", "size": 6, "gamma": 2.0, "scaling_factor": 3.0},
+     "compactness_mean": 0.6, "compactness_range": 0.3},
+    {"zoning": True, "potential_subregions": True, "pressure": {"method": "occurrence", "size": 5}},
+    {"zoning": True, "zoning_effects": True, "incentive_power": 0.5}])
+def test_futures(opts, tmp_path):
+    model, land, drivers = _futures(opts)
+    path = _check(model, land, drivers, 3, tmp_path)
+    g = json.loads(path.read_text())
+    assert g["nodes"][-1]["op"] == "futures.simulation"
+
+
+@pytest.mark.parametrize("flood", [
+    {"mode": "depth", "ddf_regions": True, "response": (0.5, 0.35, 0.3, 0.5), "stddev": 0.1},
+    {"mode": "probability", "ddf_regions": False, "response": (0.4, 0.3, 0.2, 0.4), "stddev": 0.0, "percentile": 90}])
+def test_futures_with_floods(flood, tmp_path):
+    model, land, drivers = _futures({}, flood)
+    _check(model, land, drivers, 2, tmp_path)
+
+
 def test_what_terraflux_cannot_run(pie, tmp_path):
     lu, dr = pie
     with pytest.raises(ValueError, match="JSON"):

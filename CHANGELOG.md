@@ -26,6 +26,11 @@ in a new major version.
   successions), the regressions or suitabilities, neighbourhood functions, location preferences and ages.
   Terraflux (`clumondo.ages`, `clumondo.step`) runs them as `Model.run` does, a year without solution included
   (the simulation stops there). Drivers given per step are not written.
+- `Model.save` writes FUTURES models (`PatchGrowing` with `DevelopmentPotential` and `DevelopmentDemand`):
+  subregions, potential subregions, patch libraries, the starting development pressure (computed when not given),
+  weights, zoning and its effects, restrictions and the flood submodel (`Flooding`: depths or flood probabilities
+  and HAND, damage curves and regions, response, adaptation, redistribution); `Model.load` reads them back.
+  Terraflux (`futures.simulation`) gives the same maps.
 
 ### Changed
 - MOLUSCE's prediction, total weights and simulator step run in C++ (`src/cpp/sim/molusce.cpp`, with numpy's
