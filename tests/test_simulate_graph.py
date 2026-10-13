@@ -98,6 +98,24 @@ def test_dynamic_variables(pie, tmp_path):
     _check(model, lu[0], dr, 2, tmp_path)
 
 
+def test_cost_distance(pie, tmp_path):
+    # the accumulated cost from built land over the slope (a dynamic variable), 8 and 16 directions
+    lu, dr = pie
+    slope = dr.sel(band="slope")
+    for k, directions in enumerate((8, 16)):
+        tr = ls.cost.geo_correction(1 / ls.cost.transition(slope.fillna(0) + 1, "mean", directions))
+        cost = S.distance_to(2, cost=tr)
+        drivers = {**{str(n): dr[j] for j, n in enumerate(dr.band.values)}, "cost_built": cost(lu[0])}
+        lr = S.LogisticRegression({**PIE_FORMS, 2: ["elevation", "slope", "cost_built"]}).fit(lu[0], drivers)
+        model = S.Model(lr, S.AreaDemand.from_maps(lu[:2], times=[0, 6]), S.CLUE(**VIGNETTE),
+                        S.Rules(elasticity=0.2), dynamic={"cost_built": cost})
+        path = _check(model, lu[0], drivers, 2, tmp_path / str(directions))
+        again, _ = S.Model.load(path)
+        tr2 = again.dynamic["cost_built"].cost
+        assert (tr2.directions, tr2.symmetric) == (tr.directions, tr.symmetric)
+        np.testing.assert_array_equal(tr2.values, tr.values)
+
+
 def test_cars(pie, tmp_path):
     lu, dr = pie
     lr = S.LogisticRegression(PIE_FORMS).fit(lu[0], dr)

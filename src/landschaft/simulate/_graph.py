@@ -162,7 +162,18 @@ def _drivers_of(drivers) -> dict:
     return {k: m for k, m in _drivers(drivers).items()}
 
 
-def _dynamic_nodes(model, drivers_ref: str) -> tuple[list, str]:
+def _transition_input(w: _Writer, name: str, tr, template) -> tuple[str, dict]:
+    """A cost transition as an input (a layer per direction, as ``Transition.values``) and its layout."""
+    layers = {}
+    for j in range(tr.values.shape[0]):
+        v = tr.values[j].reshape(tr.shape)
+        layers[f"direction_{j + 1}"] = template.copy(data=v) if template is not None else v
+    ref = w.stack(name, layers, note="a transition of conductances, a layer per direction of gdistance's layout")
+    return ref, {"directions": tr.directions, "symmetric": tr.symmetric, "extent": list(tr.grid.extent),
+                 "wrap": bool(tr.grid.wrap)}
+
+
+def _dynamic_nodes(model, drivers_ref: str, w: _Writer, template=None) -> tuple[list, str]:
     """The nodes of the dynamic variables in a loop: each computed from @landscape and set in the drivers."""
     from ._dynamic import distance_to, share_of
 
@@ -170,10 +181,15 @@ def _dynamic_nodes(model, drivers_ref: str) -> tuple[list, str]:
     for k, (name, piece) in enumerate((model.dynamic or {}).items()):
         if isinstance(piece, distance_to):
             if piece.cost is not None:
-                raise ValueError(f"the dynamic variable {name!r}: Terraflux has no cost distances yet")
-            nodes.append(_node(f"dynamic_{k}", "dynamic.distance_to", {"landscape": "@landscape"},
-                               {"classes": [_num(c) for c in piece.classes], "unit": piece.unit},
-                               f"The dynamic variable {name!r}: the distance to classes {piece.classes}."))
+                cost, layout = _transition_input(w, f"cost_{k}", piece.cost, template)
+                nodes.append(_node(f"dynamic_{k}", "dynamic.distance_to", {"landscape": "@landscape", "cost": cost},
+                                   {"classes": [_num(c) for c in piece.classes], "layout": layout},
+                                   f"The dynamic variable {name!r}: the accumulated cost from classes "
+                                   f"{piece.classes}."))
+            else:
+                nodes.append(_node(f"dynamic_{k}", "dynamic.distance_to", {"landscape": "@landscape"},
+                                   {"classes": [_num(c) for c in piece.classes], "unit": piece.unit},
+                                   f"The dynamic variable {name!r}: the distance to classes {piece.classes}."))
             port = "distance"
         elif isinstance(piece, share_of):
             nodes.append(_node(f"dynamic_{k}", "dynamic.share_of", {"landscape": "@landscape"},
@@ -346,7 +362,8 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
             return [], drv_ref
         if drv_ref is None:
             raise ValueError("dynamic variables need the drivers")
-        return _dynamic_nodes(model, drv_ref)
+        tpl = None if isinstance(landscape, (str, os.PathLike)) else _template_of(landscape, nodata)
+        return _dynamic_nodes(model, drv_ref, w, tpl)
 
     if isinstance(alloc, (CLUE, Ordered)):
         pot, kind = _potential_node(model, w, drivers, landscape, "class")
@@ -499,6 +516,12 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
     return _clean(g)
 
 
+def _template_of(landscape, nodata):
+    from ._maps import read_map
+
+    return read_map(landscape, nodata).template
+
+
 def _per_class_of(value, classes, default):
     from ._plus import _per_class
 
@@ -617,6 +640,15 @@ def _markov_from(p):
     return m
 
 
+def _transition_from(stack, layout: dict):
+    """A cost transition from its layers (one per direction) and layout."""
+    from ..cost._transition import GridInfo, Transition
+
+    values = np.asarray(stack.values, dtype=np.float64).reshape(stack.shape[0], -1)
+    grid = GridInfo(tuple(stack.shape[1:]), tuple(float(v) for v in layout["extent"]), wrap=bool(layout.get("wrap")))
+    return Transition(values, grid, int(layout["directions"]), bool(layout["symmetric"]))
+
+
 def load_model(path):
     """Read a Terraflux graph of ls.simulate's pieces: ``(Model, inputs)``, inputs by name (maps read)."""
     from ._allocation import CLUE, Ordered
@@ -688,8 +720,13 @@ def load_model(path):
                           and x["inputs"]["map"].startswith(n["id"] + "."))
             name = setter["params"]["name"]
             prm = n.get("params", {})
-            dynamic[name] = (distance_to(prm["classes"], unit=prm.get("unit", "map")) if n["op"] == "dynamic.distance_to"
-                             else share_of(prm["classes"], prm.get("window", 3)))
+            if n["op"] == "dynamic.distance_to" and "cost" in n.get("inputs", {}):
+                cost = _transition_from(inputs[ref_input(n["inputs"]["cost"])], prm["layout"])
+                dynamic[name] = distance_to(prm["classes"], cost=cost)
+            elif n["op"] == "dynamic.distance_to":
+                dynamic[name] = distance_to(prm["classes"], unit=prm.get("unit", "map"))
+            else:
+                dynamic[name] = share_of(prm["classes"], prm.get("window", 3))
     # the allocation and rules
     op, prm, ins = alloc_node["op"], alloc_node.get("params", {}), alloc_node["inputs"]
     rules = Rules()

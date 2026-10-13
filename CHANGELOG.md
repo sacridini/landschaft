@@ -14,6 +14,9 @@ in a new major version.
 - `Model.save` writes regional demands (`Regional`: the regions map and each region's area demand, Markov chain
   or rate table) for the CLUE-S, ordered, CARS and Expander/Patcher allocations; `Model.load` reads them back.
   Terraflux (`demand.regional`) allocates region by region as `Model.run` does: the same maps.
+- `Model.save` writes the dynamic variable `distance_to(classes, cost=transition)`: the transition's values, a
+  layer per direction, and its layout; Terraflux computes the same accumulated costs (gdistance's `accCost`, the
+  C++ of `ls.cost`).
 
 ## [1.44.0] - 2026-10-10
 

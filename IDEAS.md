@@ -3327,6 +3327,8 @@ sim.supply; sim.shortfall; sim.trajectory()
    * **C. `distance_to` com custo**: a `Transition` gravada como GeoTIFF (uma banda por direção) com
      `directions`/`symmetric`; `dynamic.distance_to` com a entrada `cost` chama o `accumulated_cost` do
      `costcore` (ligado no ls-sys).
+     **Feita**: os valores da `Transition` vão como pilha float64 (`direction_1`...), o `layout` com
+     `directions`, `symmetric`, `extent` e `wrap`; teste com 8 e 16 direções bit a bit pelo `terraflux run`.
    * **D. MOLUSCE**: `MolusceWoE.total`/`prediction` e o passo do `MolusceCA` em C++ (`sim/molusce.cpp`, com o
      `random_sample` do `RandomState` do numpy sobre o `StdMt19937`); nós `molusce.weights` (os pesos por
      transição, fator e categoria), `rng.numpy` e `molusce.step`.
