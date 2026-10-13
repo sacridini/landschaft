@@ -337,6 +337,8 @@ def _regions_map(demand, w: _Writer, landscape, nodata) -> str:
 def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, name=None, description=None) -> dict:
     """The graph of a fitted model (see :meth:`Model.save`)."""
     from ._allocation import CLUE, Ordered
+    from ._clumondo import CLUMondo
+    from ._landsystems import LandSystemStack
     from ._molusce import MolusceCA
     from ._patches import ExpanderPatcher
     from ._plus import CARS
@@ -345,9 +347,12 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
     path = Path(path)
     w = _Writer(path)
     regional = isinstance(model.demand, Regional)
+    if isinstance(drivers, dict) and drivers and all(isinstance(k, (int, np.integer)) for k in drivers):
+        raise ValueError("Terraflux takes the drivers fixed, not given per step")
     if seed is None:
         seed = int(np.random.default_rng().integers(1, 2**31 - 1))
-    start = w.map("start", landscape, nodata, "the map the simulation starts from")
+    start = w.map("start", landscape.map if isinstance(landscape, LandSystemStack) else landscape, nodata,
+                  "the map the simulation starts from")
     seed_ref = w.value("seed", int(seed), "the seed of the simulation")
     if drivers is None:
         drv_ref = None
@@ -509,9 +514,11 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
                                  "collect": {"maps": "allocate.landscape", "info": "allocate.info"}}))
     elif isinstance(alloc, MolusceCA):
         nodes += _molusce_nodes(model, w, landscape, nodata, drivers, start, seed_ref, loop_drivers)
+    elif isinstance(alloc, CLUMondo):
+        nodes += _clumondo_nodes(model, w, landscape, nodata, drivers, start, seed, seed_ref, loop_drivers)
     else:
         raise TypeError(f"Terraflux cannot run the allocation {type(alloc).__name__} yet "
-                         "(CLUE, Ordered, ExpanderPatcher, CARS or MolusceCA)")
+                         "(CLUE, Ordered, ExpanderPatcher, CARS, MolusceCA or CLUMondo)")
     outputs = {"maps": {"from": "simulation.maps"}, "steps": {"from": "simulation.info"}}
     g = {"format": FORMAT, "name": name or f"landschaft {type(alloc).__name__} model",
          "description": description or "Written by landschaft's Model.save.", "inputs": w.inputs, "nodes": nodes,
@@ -583,6 +590,105 @@ def _molusce_nodes(model, w: _Writer, landscape, nodata, drivers, start: str, se
     nodes.append(_node("simulation", "control.repeat", {"times": int(alloc.iterations), "landscape": start},
                        body={"nodes": body, "carry": {"landscape": "allocate.landscape"},
                              "collect": {"maps": "allocate.landscape", "info": "allocate.info"}}))
+    return nodes
+
+
+def _f32(v) -> float:
+    return float(np.float32(v))
+
+
+def _clumondo_nodes(model, w: _Writer, landscape, nodata, drivers, start: str, seed: int, seed_ref: str,
+                    loop_drivers) -> list:
+    """CLUMondo: its settings as the simulation compiles them (CLUMondo._setup), the ages, the years."""
+    from ._landsystems import LandSystemStack
+
+    alloc, rules = model.allocation, model.rules
+    land = landscape if isinstance(landscape, LandSystemStack) else _read_given(landscape, w, "map")
+    c = alloc._setup(model, land, seed, nodata)
+    tpl = c.land.template
+    systems, services = c.systems, c.services
+
+    def like(v):
+        v = np.asarray(v, dtype=np.float64).reshape(c.shape)
+        return tpl.copy(data=v) if tpl is not None else v
+
+    nodes, ins = [], {}
+    # the potential
+    dyn, dref = loop_drivers()
+    if c.lr is not None:
+        nodes.append(_node("potential", "glm.coefficients", params={"fits": _glm_json(c.lr)},
+                           note="CLUMondo's logistic regressions fitted with landschaft (computed in floats)."))
+        ins.update(model="potential.model", drivers=dref)
+    else:
+        pot, kind = _potential_node(model, w, drivers, landscape if not isinstance(landscape, LandSystemStack)
+                                    else landscape.map, "class")
+        if kind != "raster":
+            raise ValueError("CLUMondo takes logistic regressions or a suitability per land system")
+        nodes += pot
+        ins["suitability"] = "potential.stack"
+    if rules.restrictions is not None:
+        ins["restrictions"] = w.map("restrictions", rules.restrictions, note="restricted cells keep their system")
+    if c.allow_maps.shape[0]:
+        ins["allow"] = w.stack("allow", {f"map_{k + 2}": like(m) for k, m in enumerate(c.allow_maps)},
+                               note="the conversion maps (codes 2, 3... of the conversion matrix)")
+    # the ages at the start
+    h = rules.history
+    age_in = {"landscape": start}
+    age_params = None
+    if h is not None and np.isscalar(h):
+        age_in["seed"] = seed_ref
+        age_params = {"max_age": int(h)}
+    elif h is not None:
+        age_in["history"] = w.map("history", h, note="the years each cell has had its system")
+    nodes.append(_node("ages", "clumondo.ages", age_in, age_params))
+    # the settings
+    x = c.extra
+    settings = {
+        "systems": [_num(v) for v in systems], "services": list(services),
+        "supply": [{"step": int(k), "rows": t.loc[systems, services].to_numpy(dtype=np.float64)}
+                   for k, t in alloc.supply.tables.items()],
+        "demand": model.demand.table[services].to_numpy(dtype=np.float64),
+        "order": c.lusconv, "weights": [_f32(v) for v in c.weight], "resistance": [_f32(v) for v in c.resistance],
+        "allowed": c.allowed, "deviation": alloc.deviation, "mean_deviation": _f32(alloc.mean_deviation),
+        "max_deviation": float(c.max_dev), "speed": _f32(alloc.speed), "max_loops": int(alloc.max_loops)}
+    if "kind" in x:
+        settings["kind"] = x["kind"]
+    if "dev_limit" in x:
+        settings["dev_limit"] = [float(v) for v in x["dev_limit"]]
+    if "patch_radius" in x:
+        settings["patches"] = {"radius": x["patch_radius"], "threshold": [float(v) for v in x["patch_threshold"]],
+                               "min": x["patch_min"]}
+    if "pair_resistance" in x:
+        settings["pair_resistance"] = x["pair_resistance"].astype(np.float64)
+    if "cap_cells" in x:
+        settings["caps"] = [{"pairs": x["cap_pairs"][k], "cells": int(n)} for k, n in enumerate(x["cap_cells"])]
+    if c.nb:
+        settings["neighbourhood"] = [
+            {"system": int(i), "weight": float(p["weight"]), "kernel": p["kernel"].astype(np.float64),
+             "from": [bool(f) for f in p["from"]], "constant": _f32(p["constant"]),
+             "coefficients": [[int(k), float(b)] for k, b in p["coefficients"]]} for i, p in c.nb.items()]
+    if alloc.preferences:
+        layers, prefs = {}, []
+        for key, (mp, wt) in alloc.preferences.items():
+            given = mp.items() if isinstance(mp, dict) and mp and all(isinstance(k, (int, np.integer)) for k in mp)                 else [(None, mp)]
+            refs = []
+            for st, m in given:
+                refs.append([None if st is None else int(st), len(layers)])
+                layers[f"preference_{len(layers) + 1}"] = m
+            prefs.append({"system": systems.index(_class_value(key)), "weight": _f32(wt), "layers": refs})
+        ins["preferences"] = w.stack("preferences", layers, note="the location preferences' maps")
+        settings["preferences"] = prefs
+    body = dyn + [_node("allocate", "clumondo.step",
+                        {"landscape": "@landscape", "age": "@age", "elasticity": "@elasticity", "step": "@step",
+                         **ins}, {"settings": settings})]
+    nodes.append(_node("simulation", "control.repeat",
+                       {"times": int(model.demand.steps), "landscape": start, "age": "ages.age",
+                        "elasticity": [0.0] * len(services)},
+                       body={"nodes": body,
+                             "carry": {"landscape": "allocate.landscape", "age": "allocate.age",
+                                       "elasticity": "allocate.elasticity"},
+                             "collect": {"maps": "allocate.landscape", "info": "allocate.info"},
+                             "until": "allocate.stop"}))
     return nodes
 
 
@@ -684,6 +790,8 @@ def _load_input(spec: dict, base: Path):
             k = names.index(band) if band in names else int(band) if band is not None else 0
             da = da[k]
         return da
+    if da.ndim == 2:  # a stack of one layer read as a map
+        da = da.expand_dims("band") if "band" in da.coords else da.expand_dims(band=[1])
     bands = spec.get("bands")
     if bands is not None and da.ndim == 3:
         names = [str(v) for v in da[da.dims[0]].values]
@@ -744,6 +852,8 @@ def load_model(path):
 
     if alloc_node["op"] == "molusce.step":
         return _molusce_from(nodes, body, sim, alloc_node, inputs, ref_input, dynamic_of(sim)), inputs
+    if alloc_node["op"] == "clumondo.step":
+        return _clumondo_from(nodes, alloc_node, inputs, ref_input, dynamic_of(sim)), inputs
     # the potential
     pn = nodes.get("potential")
     if pn is None:
@@ -858,6 +968,86 @@ def _ls_model(nodes, sim, alloc_node, inputs, ref_input, potential, demand, dyna
     if "restrictions" in ins:
         rules.restrictions = inputs[ref_input(ins["restrictions"])]
     return Model(potential, demand, allocation, rules, dynamic or None)
+
+
+def _clumondo_from(nodes, alloc_node, inputs, ref_input, dynamic):
+    """The model of a CLUMondo loop, its rules from the compiled settings."""
+    import pandas as pd
+
+    from ._clumondo import CLUMondo, NeighbourhoodEffect, ServiceDemand, Supply
+    from ._estimator import RasterPotential
+    from ._landsystems import Cap
+    from ._model import Model
+    from ._rules import Rules
+
+    st, ins = alloc_node["params"]["settings"], alloc_node["inputs"]
+    systems = [_class_value(v) for v in st["systems"]]
+    services = list(st["services"])
+
+    def frame(rows, index=None):
+        return pd.DataFrame(np.asarray(rows, dtype=np.float64), index=index, columns=services)
+    tables = {int(t["step"]): frame(t["rows"], systems) for t in st["supply"]}
+    supply = Supply(tables if len(tables) > 1 else tables[1])
+    demand = ServiceDemand(frame(st["demand"]))
+    kinds = None
+    if st.get("kind") is not None:
+        names = {0: "exact", 1: "minimum", 2: "maximum"}
+        kinds = {sv: names[int(k)] for sv, k in zip(services, st["kind"])}
+    max_dev = st["max_deviation"]
+    if st.get("dev_limit") is not None:
+        max_dev = dict(zip(services, st["dev_limit"]))
+    nb = None
+    if st.get("neighbourhood"):
+        nb = NeighbourhoodEffect({systems[p["system"]]: {
+            "weight": p["weight"], "kernel": np.asarray(p["kernel"], dtype=np.float32),
+            "from": [systems[k] for k, f in enumerate(p["from"]) if f], "constant": p["constant"],
+            "coefficients": {systems[k]: b for k, b in p["coefficients"]}} for p in st["neighbourhood"]})
+    prefs = None
+    if st.get("preferences"):
+        stack = inputs[ref_input(ins["preferences"])]
+        prefs = {}
+        for p in st["preferences"]:
+            maps = {stp: stack[k] for stp, k in p["layers"]}
+            prefs[systems[p["system"]]] = (maps.get(None, maps), p["weight"])
+    patches = None
+    if st.get("patches"):
+        pt = st["patches"]
+        patches = {systems[i]: (pt["radius"][i], pt["threshold"][i], pt["min"][i])
+                   for i in range(len(systems)) if pt["radius"][i] > 0}
+    alloc = CLUMondo(supply, order=pd.DataFrame(st["order"], index=systems, columns=services),
+                     weights=list(st["weights"]), deviation=st["deviation"], mean_deviation=st["mean_deviation"],
+                     max_deviation=max_dev, speed=st["speed"], max_loops=int(st["max_loops"]), kinds=kinds,
+                     neighbourhood=nb, preferences=prefs, patches=patches)
+    allowed = np.asarray(st["allowed"], dtype=np.int64)
+    rules = Rules(allowed=allowed, elasticity=list(st["resistance"]))
+    if "restrictions" in ins:
+        rules.restrictions = inputs[ref_input(ins["restrictions"])]
+    if "allow" in ins:
+        stack = inputs[ref_input(ins["allow"])]
+        maps = {}
+        for k in range(stack.shape[0]):
+            i, j = map(int, np.argwhere(allowed == k + 2)[0])
+            maps[(systems[i], systems[j])] = stack[k]
+        rules.allow_maps = maps
+    if st.get("pair_resistance") is not None:
+        pr = np.asarray(st["pair_resistance"], dtype=np.float64)
+        rules.transition_resistance = {(systems[i], systems[j]): pr[i, j] for i, j in np.argwhere(pr != 0)}
+    if st.get("caps"):
+        rules.caps = [Cap(role=None, cells=int(cp["cells"]),
+                          pairs=[(systems[i], systems[j]) for i, j in np.argwhere(np.asarray(cp["pairs"]) != 0)])
+                      for cp in st["caps"]]
+    an = nodes.get("ages", {})
+    if an.get("params", {}).get("max_age") is not None:
+        rules.history = int(an["params"]["max_age"])
+    elif "history" in an.get("inputs", {}):
+        rules.history = inputs[ref_input(an["inputs"]["history"])]
+    if "model" in ins:
+        potential = _glm_from(nodes["potential"]["params"]["fits"])
+    else:
+        stack = inputs[ref_input(nodes["potential"]["inputs"]["stack"])]
+        potential = RasterPotential({_class_value(float(n)): stack[k]
+                                     for k, n in enumerate(str(v) for v in stack[stack.dims[0]].values)})
+    return Model(potential, demand, alloc, rules, dynamic or None)
 
 
 def _molusce_from(nodes, body, sim, alloc_node, inputs, ref_input, dynamic):

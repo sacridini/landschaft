@@ -336,8 +336,8 @@ class Model:
         regressions, Markov chains, demands, patch settings, rules), the data
         the model runs on as GeoTIFF files in a folder next to it (``<name>_data``),
         so that ``terraflux run`` gives the same maps as :meth:`run` with the
-        same seed. Terraflux runs the CLUE-S, ordered, Expander/Patcher, CARS
-        and MOLUSCE allocations with weights of evidence, logistic regressions or
+        same seed. Terraflux runs the CLUE-S, ordered, Expander/Patcher, CARS,
+        MOLUSCE and CLUMondo allocations with weights of evidence, logistic regressions or
         given maps as potential, area demands or Markov chains (or a
         :class:`Regional` of them), lulcc's rules and the dynamic variables
         :func:`distance_to` (Euclidean or the accumulated cost over a

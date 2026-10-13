@@ -309,11 +309,12 @@ class CLUMondo:
 
     # ------------------------------------------------------------------ simulation
 
-    def simulate(self, model, landscape, drivers=None, *, seed=None, nodata=None):
-        from ._dynamic import current_map, with_dynamic
+    def _setup(self, model, landscape, seed, nodata):
+        """What a run fixes before its first year (also what ``Model.save`` writes)."""
+        from types import SimpleNamespace
+
         from ._glm import LogisticRegression
         from ._landsystems import LandSystemStack
-        from ._model import Simulation, _as_maps
 
         stack = landscape if isinstance(landscape, LandSystemStack) else None
         if stack is not None:
@@ -328,8 +329,7 @@ class CLUMondo:
         found = {_class_value(c) for c in _classes([land])}
         if not found <= set(systems):
             raise ValueError(f"the landscape has land systems without supply: {sorted(found - set(systems))}")
-        demand = model.demand
-        if not isinstance(demand, ServiceDemand):
+        if not isinstance(model.demand, ServiceDemand):
             raise TypeError("CLUMondo needs a ServiceDemand")
         rules = model.rules
         nan = np.isnan(values)
@@ -346,15 +346,28 @@ class CLUMondo:
             seed = int(np.random.default_rng().integers(1, 2**31 - 1))
         age = self._ages(rules, ncell, seed)
         allowed, allow_maps = self._allowed(rules, systems, ncell)
-        resistance = rules.elasticities(systems).astype(np.float32)
-        lusconv = np.ascontiguousarray(self.lusconv().to_numpy(), dtype=np.int32)
-        weight = self._weights()
-        dem_elas = np.zeros(len(services), dtype=np.float32)
-        nb = self.neighbourhood._parts(systems) if self.neighbourhood is not None else {}
-        lr = model.potential if isinstance(model.potential, LogisticRegression) else None
         extra = self._extensions(systems, services, shape)
         extra.update(self._role_rules(rules, systems, allowed, stack, land))
-        max_dev = np.float32(extra.pop("max_dev"))
+        return SimpleNamespace(
+            stack=stack, landscape=landscape, land=land, shape=shape, values=values, ncell=ncell, systems=systems,
+            services=services, nan=nan, region=region, oldco=oldco, seed=seed, age=age, allowed=allowed,
+            allow_maps=allow_maps, resistance=rules.elasticities(systems).astype(np.float32),
+            lusconv=np.ascontiguousarray(self.lusconv().to_numpy(), dtype=np.int32), weight=self._weights(),
+            nb=self.neighbourhood._parts(systems) if self.neighbourhood is not None else {},
+            lr=model.potential if isinstance(model.potential, LogisticRegression) else None,
+            max_dev=np.float32(extra.pop("max_dev")), extra=extra)
+
+    def simulate(self, model, landscape, drivers=None, *, seed=None, nodata=None):
+        from ._dynamic import current_map, with_dynamic
+        from ._model import Simulation, _as_maps
+
+        c = self._setup(model, landscape, seed, nodata)
+        stack, landscape, land, shape, values, ncell = c.stack, c.landscape, c.land, c.shape, c.values, c.ncell
+        systems, services, nan, region, oldco, seed, age = c.systems, c.services, c.nan, c.region, c.oldco, c.seed, c.age
+        allowed, allow_maps, resistance, lusconv, weight = c.allowed, c.allow_maps, c.resistance, c.lusconv, c.weight
+        nb, lr, extra, max_dev = c.nb, c.lr, c.extra, c.max_dev
+        demand, rules = model.demand, model.rules
+        dem_elas = np.zeros(len(services), dtype=np.float32)
         maps = [values.reshape(shape)]
         ages = [age.copy()]
         rows = []
@@ -563,27 +576,16 @@ class CLUMondo:
 
     @staticmethod
     def _add_neighbourhood(suit, nb, oldco, region, shape):
-        o2, r2 = oldco.reshape(shape), region.reshape(shape)
-        shares = {u: _core.sim_clumondo_fraction(o2, r2, u, p["kernel"]).ravel()
-                  for u, p in nb.items() if p["weight"] > 0}
-        zero = np.zeros(oldco.size, dtype=np.float32)
-        inside = region >= 0
-        for i, p in nb.items():
-            if not p["weight"] > 0:
-                continue
-            t = np.full(oldco.size, np.float32(p["constant"]), dtype=np.float32)
-            for k, b in p["coefficients"]:
-                t = t + b * shares.get(k, zero)
-            cells = inside & p["from"][np.clip(oldco, 0, None)]
-            suit[i, cells] = suit[i, cells] + p["weight"] * t[cells]
+        parts = [(int(i), float(p["weight"]), p["kernel"], [bool(x) for x in p["from"]], float(np.float32(p["constant"])),
+                  [(int(k), float(b)) for k, b in p["coefficients"]]) for i, p in nb.items()]
+        suit[:] = _core.sim_clumondo_add_neighbourhood(suit, oldco.reshape(shape), region.reshape(shape), parts)
 
     def _add_preferences(self, suit, systems, region, step):
-        inside = region >= 0
         for key, (mp, w) in self.preferences.items():
             i = systems.index(_class_value(key))
             m = _at_step(mp, step) if isinstance(mp, dict) else mp
             v = read_map(m).as_float().ravel().astype(np.float32)
-            suit[i, inside] = suit[i, inside] + v[inside] * np.float32(w)
+            suit[i] = _core.sim_clumondo_add_preference(suit[i], region, v, float(np.float32(w)))
 
     def __repr__(self) -> str:
         return (f"CLUMondo({len(self.supply.systems)} systems, {len(self.supply.services)} services, "

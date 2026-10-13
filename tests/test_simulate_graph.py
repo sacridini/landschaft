@@ -248,6 +248,71 @@ def test_molusce_with_a_potential_per_class(pie, tmp_path):
            tmp_path / "raster")
 
 
+def _clumondo(spec, options=None):
+    import simulate_cases
+
+    if isinstance(spec, str):
+        spec = simulate_cases._CLUMONDO_SPECS[spec]()
+    return simulate_cases.clumondo_model(spec, options)
+
+
+@pytest.mark.parametrize("case", ["basic", "services", "ages", "neighbourhood", "stops"])
+def test_clumondo(case, tmp_path):
+    # CLUMondo's reference cases: regressions in floats, random ages, restrictions, conversion maps and codes,
+    # absolute deviations, neighbourhood functions, location preferences, a year without solution
+    model, land, drivers = _clumondo(case)
+    path = _check(model, land, drivers, 1, tmp_path)
+    g = json.loads(path.read_text())
+    sim = next(n for n in g["nodes"] if n["id"] == "simulation")
+    assert sim["body"]["until"] == "allocate.stop"
+
+
+def test_clumondo_dynamic_supply_and_ages(tmp_path):
+    import simulate_cases
+
+    spec = simulate_cases._clumondo_dynamic()
+    spec.pop("dynamic_drivers")  # Terraflux takes the drivers fixed
+    model, land, drivers = _clumondo(spec)
+    assert len(model.allocation.supply.tables) == 2
+    _check(model, land, drivers, 4, tmp_path)
+    with pytest.raises(ValueError, match="per step"):
+        model.save(tmp_path / "m.json", land, {1: drivers, 3: drivers}, seed=1)
+
+
+@pytest.mark.parametrize("options", [{"kinds": {"s1": "minimum", "s2": "maximum"}},
+                                     {"max_deviation": {"s0": 0.5, "s1": 2.0, "s2": 5.0}}])
+def test_clumondo_2017_extensions(options, tmp_path):
+    import simulate_cases
+
+    model, land, drivers = _clumondo(simulate_cases._services_2017(), options)
+    _check(model, land, drivers, 2, tmp_path)
+
+
+def test_clumondo_patches_and_given_suitability(tmp_path):
+    model, land, drivers = _clumondo("basic", {"patches": {2: (1, 0.3, 4)}})
+    p = model.potential.predict(drivers)
+    model.potential = S.RasterPotential({k: p.values[k] for k in range(p.shape[0])})
+    _check(model, land, None, 3, tmp_path)
+
+
+def test_clumondo_land_system_roles(tmp_path):
+    from test_simulate_landsystems import _model, _world
+
+    layers, suit = _world()
+    st = S.LandSystemStack(layers)
+    for k, rules in enumerate([
+            S.Rules(caps=[S.Cap("expansion", cells=3)]),
+            S.Rules(conversion_order=["intensification", "expansion"], transition_resistance={"expansion": 0.3}),
+            S.Rules(succession=[S.Succession(3, from_=("extensive",), to=("forest",))], history=2)]):
+        model = _model(st, suit, rules)
+        path = model.save(tmp_path / f"roles_{k}.json", st, seed=1)
+        expected = _maps(model, st, None, 1)
+        again, inputs = S.Model.load(path)
+        np.testing.assert_array_equal(_maps(again, inputs["start"], None, 1), expected)
+        if HAS_TERRAFLUX:
+            np.testing.assert_array_equal(S.terraflux(path).values, expected[1:])
+
+
 def test_what_terraflux_cannot_run(pie, tmp_path):
     lu, dr = pie
     with pytest.raises(ValueError, match="JSON"):

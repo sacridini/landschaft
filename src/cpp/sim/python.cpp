@@ -872,6 +872,50 @@ py::array_t<double> sim_woe_normalise(const DArray& sums) {
     return out;
 }
 
+using FArray2 = py::array_t<float, py::array::c_style | py::array::forcecast>;
+using NbPart = std::tuple<int, float, FArray2, std::vector<bool>, float, std::vector<std::pair<int, float>>>;
+
+py::array_t<float> sim_clumondo_add_neighbourhood(const FArray2& suit, const IArray& oldco, const IArray& region,
+                                                  const std::vector<NbPart>& parts) {
+    if (oldco.ndim() != 2 || region.ndim() != 2) throw std::invalid_argument("oldco and region must be 2-D");
+    const i64 ny = oldco.shape(0), nx = oldco.shape(1);
+    if (region.shape(0) != ny || region.shape(1) != nx) throw std::invalid_argument("region differs from oldco");
+    if (suit.size() % (ny * nx)) throw std::invalid_argument("suit must be (systems, cells)");
+    const int nsys = static_cast<int>(suit.size() / (ny * nx));
+    std::vector<sim::ClumondoNeighbourhood> nb;
+    for (const auto& [system, weight, kernel, from, constant, coefs] : parts) {
+        if (kernel.ndim() != 2 || kernel.shape(0) != kernel.shape(1) || kernel.shape(0) % 2 == 0)
+            throw std::invalid_argument("a kernel must be square with an odd side");
+        sim::ClumondoNeighbourhood x;
+        x.system = system;
+        x.weight = weight;
+        x.kernel.assign(kernel.data(), kernel.data() + kernel.size());
+        x.radius = static_cast<int>((kernel.shape(0) - 1) / 2);
+        x.from.assign(from.begin(), from.end());
+        x.constant = constant;
+        x.coefficients = coefs;
+        nb.push_back(std::move(x));
+    }
+    py::array_t<float> out(suit.size());
+    std::copy(suit.data(), suit.data() + suit.size(), out.mutable_data());
+    {
+        py::gil_scoped_release release;
+        sim::clumondo_add_neighbourhood(out.mutable_data(), nsys, ny, nx, oldco.data(), region.data(), nb);
+    }
+    out.resize({static_cast<py::ssize_t>(nsys), static_cast<py::ssize_t>(ny * nx)});
+    return out;
+}
+
+py::array_t<float> sim_clumondo_add_preference(const FArray2& row, const IArray& region, const FArray2& values,
+                                               float weight) {
+    if (region.size() != row.size() || values.size() != row.size())
+        throw std::invalid_argument("the preference differs in size from the suitability");
+    py::array_t<float> out(row.size());
+    std::copy(row.data(), row.data() + row.size(), out.mutable_data());
+    sim::clumondo_add_preference(out.mutable_data(), static_cast<i64>(row.size()), region.data(), values.data(), weight);
+    return out;
+}
+
 py::tuple forecast_tuple(const sim::MolusceForecast& f) {
     return py::make_tuple(to_array(f.prediction), to_array(f.confidence));
 }
@@ -958,6 +1002,13 @@ void register_python(py::module_& m) {
             for (auto& x : v) x = r.random_sample();
             return to_array(v);
         }, py::arg("n"));
+    m.def("sim_clumondo_add_neighbourhood", &sim_clumondo_add_neighbourhood, py::arg("suit"), py::arg("oldco"),
+          py::arg("region"), py::arg("parts"),
+          "CLUMondo's neighbourhood functions [(system, weight, kernel, from, constant, [(k, b)])] added to the "
+          "suitability (systems, cells), in floats.");
+    m.def("sim_clumondo_add_preference", &sim_clumondo_add_preference, py::arg("row"), py::arg("region"),
+          py::arg("values"), py::arg("weight"),
+          "A location-specific preference (values x weight) added to one system's suitability, in floats.");
     m.def("sim_molusce_categories", &sim_molusce_categories, py::arg("values"), py::arg("bounds"),
           "MOLUSCE's categories of a factor: searchsorted(bounds, v, 'right') + 1, or the values without bounds.");
     m.def("sim_molusce_total", &sim_molusce_total, py::arg("factors"), py::arg("weights"),

@@ -3340,6 +3340,13 @@ sim.supply; sim.shortfall; sim.trajectory()
    * **E. CLUMondo**: o preparo da adequabilidade de cada ano (vizinhança, preferências, logit) em C++; nós
      `clumondo.supply`, `clumondo.demand` e `clumondo.step` (ocupação, idades e elasticidades da demanda
      carregadas de ano a ano).
+     **Feita**: o preparo de cada execução saiu do `CLUMondo.simulate` para `CLUMondo._setup`, que o `Model.save`
+     usa (as configurações compiladas: matriz com códigos e mapas, papéis, tetos, sucessões, extensões de 2017);
+     `clumondo.ages` e `clumondo.step` (as variáveis de iteração da demanda carregadas como lista). O ano sem
+     solução encerra o laço: o `control.repeat` do Terraflux ganhou `until` (uma referência booleana; o passo
+     em que é verdadeira não é coletado nem carregado). Os casos de referência do CLUMondo (básico, serviços,
+     idades, vizinhança, parada), as extensões de 2017, patches, oferta por ano e os papéis dão os mesmos mapas
+     pelo `terraflux run`. Drivers dados por passo não vão.
    * **F. FUTURES**: o preparo (soma dos preditores em float32, pressão inicial) em C++; o laço já está em C++
      (`sim_futures_run`) e vira um nó só, `futures.simulation` (sem variáveis dinâmicas, como aqui), com o
      `Flooding`.

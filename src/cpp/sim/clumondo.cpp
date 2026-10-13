@@ -402,6 +402,38 @@ std::vector<float> clumondo_fraction(std::int64_t ny, std::int64_t nx, const int
     return out;
 }
 
+void clumondo_add_neighbourhood(float* suit, int nsys, std::int64_t ny, std::int64_t nx, const int* oldco,
+                                const int* region, const std::vector<ClumondoNeighbourhood>& parts) {
+    const std::int64_t ncell = ny * nx;
+    // the shares of the systems with a function of positive weight, each in its own kernel
+    std::vector<std::vector<float>> share(static_cast<std::size_t>(nsys));
+    for (const auto& p : parts) {
+        if (p.system < 0 || p.system >= nsys) throw std::invalid_argument("a neighbourhood for an unknown system");
+        if (static_cast<int>(p.from.size()) != nsys) throw std::invalid_argument("from: one flag per system");
+        const auto side = static_cast<std::size_t>(2 * p.radius + 1);
+        if (p.radius < 0 || p.kernel.size() != side * side) throw std::invalid_argument("the kernel's side is 2r + 1");
+        if (p.weight > 0) share[p.system] = clumondo_fraction(ny, nx, oldco, region, p.system, p.kernel.data(), p.radius);
+    }
+    for (const auto& p : parts) {
+        if (!(p.weight > 0)) continue;
+        float* row = suit + static_cast<std::int64_t>(p.system) * ncell;
+        for (const auto& kb : p.coefficients)
+            if (kb.first < 0 || kb.first >= nsys)
+                throw std::invalid_argument("a neighbourhood coefficient of an unknown system");
+        lsm::parallel_for(ncell >= (1 << 14), ncell, [&](std::int64_t c) {
+            if (region[c] < 0 || !p.from[oldco[c] < 0 ? 0 : oldco[c]]) return;
+            float t = p.constant;
+            for (const auto& [k, b] : p.coefficients) t = t + b * (share[k].empty() ? 0.0f : share[k][c]);
+            row[c] = row[c] + p.weight * t;
+        });
+    }
+}
+
+void clumondo_add_preference(float* suit_row, std::int64_t ncell, const int* region, const float* values, float weight) {
+    for (std::int64_t c = 0; c < ncell; ++c)
+        if (region[c] >= 0) suit_row[c] = suit_row[c] + values[c] * weight;
+}
+
 std::vector<int> clumondo_random_age(std::int64_t ncell, int max_age, std::uint32_t seed) {
     if (max_age < 1) throw std::invalid_argument("the maximum age must be at least 1");
     CrtRand crt(seed);

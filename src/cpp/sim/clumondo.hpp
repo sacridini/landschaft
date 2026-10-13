@@ -13,6 +13,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace sim {
@@ -73,6 +74,29 @@ std::vector<float> clumondo_logit(std::int64_t ncell, const int* region, const f
 // where the weights add up to 0.
 std::vector<float> clumondo_fraction(std::int64_t ny, std::int64_t nx, const int* oldco, const int* region, int u,
                                      const float* kernel, int radius);
+
+// A neighbourhood function of CLUMondo (neighmat.txt and alloc2.reg, ls.simulate's NeighbourhoodEffect): the
+// suitability of `system` at the cells whose current system is in `from` gets weight x (constant + sum b_k x
+// share_k), share_k the weighted share of system k in its own kernel (0 for a system without a function of
+// positive weight), all in floats.
+struct ClumondoNeighbourhood {
+    int system = 0;
+    float weight = 1.0f;
+    std::vector<float> kernel;  // (2 radius + 1)^2
+    int radius = 1;
+    std::vector<unsigned char> from;  // nsys
+    float constant = 0.0f;
+    std::vector<std::pair<int, float>> coefficients;  // (system k, b_k)
+};
+
+// The neighbourhood functions added to suit (nsys x ny * nx) from the systems at the start of the year, in the
+// order given, at the cells inside the study area (region >= 0).
+void clumondo_add_neighbourhood(float* suit, int nsys, std::int64_t ny, std::int64_t nx, const int* oldco,
+                                const int* region, const std::vector<ClumondoNeighbourhood>& parts);
+
+// A location-specific preference (locspec): values x weight added to one system's suitability (a row of ncell)
+// at the cells inside the study area, in floats.
+void clumondo_add_preference(float* suit_row, std::int64_t ncell, const int* region, const float* values, float weight);
 
 // The ages at the start: rand() % max_age + 1 for every cell in row order,
 // from the runtime generator seeded with seed (CLUMondo's default: 1).

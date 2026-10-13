@@ -20,12 +20,20 @@ in a new major version.
 - `Model.save` writes MOLUSCE's simulator (`MolusceCA`): `MolusceWoE`'s fitted maps, or its weights when the
   drivers move (dynamic variables), or a potential per class; numpy's generator and the cross table. Terraflux
   (`rng.numpy`, `molusce.total`, `molusce.step`) gives the same maps.
+- `Model.save` writes CLUMondo models: the settings as a run compiles them (supply, possibly by step, demand for
+  goods and services, conversion order and resistances, the conversion matrix with its codes and maps, the 2017
+  executable's demand kinds, deviations per service and patches, land system roles' caps, conversion orders and
+  successions), the regressions or suitabilities, neighbourhood functions, location preferences and ages.
+  Terraflux (`clumondo.ages`, `clumondo.step`) runs them as `Model.run` does, a year without solution included
+  (the simulation stops there). Drivers given per step are not written.
 
 ### Changed
 - MOLUSCE's prediction, total weights and simulator step run in C++ (`src/cpp/sim/molusce.cpp`, with numpy's
   legacy `RandomState.random_sample`), so that Terraflux shares them; the same bits as before and as the patched
   MOLUSCE. Among cells of equal confidence and draw the later cells change first (numpy's quicksort left the
   order to its implementation).
+- The neighbourhood functions and location preferences of CLUMondo's yearly suitability run in C++
+  (`clumondo_add_neighbourhood`, `clumondo_add_preference`), the same floats as before.
 
 ## [1.44.0] - 2026-10-10
 

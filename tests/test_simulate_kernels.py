@@ -554,3 +554,50 @@ def test_molusce_ca_step(seed):
     # the two generators went through the same draws
     np.testing.assert_array_equal(ours.random_sample(5), r.random_sample(5))
 
+
+
+# ----------------------------------------------------------------------------- CLUMondo's yearly suitability
+
+def ref_clumondo_neighbourhood(suit, nb, oldco, region, shape):
+    suit = suit.copy()
+    o2, r2 = oldco.reshape(shape), region.reshape(shape)
+    shares = {u: _core.sim_clumondo_fraction(o2, r2, u, p["kernel"]).ravel()
+              for u, p in nb.items() if p["weight"] > 0}
+    zero = np.zeros(oldco.size, dtype=np.float32)
+    inside = region >= 0
+    for i, p in nb.items():
+        if not p["weight"] > 0:
+            continue
+        t = np.full(oldco.size, np.float32(p["constant"]), dtype=np.float32)
+        for k, b in p["coefficients"]:
+            t = t + b * shares.get(k, zero)
+        cells = inside & p["from"][np.clip(oldco, 0, None)]
+        suit[i, cells] = suit[i, cells] + p["weight"] * t[cells]
+    return suit
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_clumondo_neighbourhood_and_preference(seed):
+    rng = np.random.default_rng(seed)
+    shape, nsys = (17, 23), 4
+    region = rng.choice([0, 0, 0, -9998, -9999], size=shape).astype(np.int32).ravel()
+    oldco = np.where(region == -9999, -9999, rng.integers(0, nsys, region.size)).astype(np.int32)
+    suit = rng.normal(0, 1, (nsys, region.size)).astype(np.float32)
+    nb = {}
+    for i in rng.choice(nsys, size=3, replace=False):
+        r = int(rng.integers(1, 3))
+        nb[int(i)] = {"weight": np.float32(rng.choice([0.0, 0.7, 1.3])),
+                      "kernel": rng.choice([0.0, 0.5, 1.0], size=(2 * r + 1, 2 * r + 1)).astype(np.float32),
+                      "from": rng.random(nsys) < 0.7, "constant": float(rng.normal()),
+                      "coefficients": [(int(k), np.float32(rng.normal())) for k in rng.choice(nsys, 2, replace=False)]}
+    ref = ref_clumondo_neighbourhood(suit, nb, oldco, region, shape)
+    parts = [(i, float(p["weight"]), p["kernel"], [bool(x) for x in p["from"]], float(np.float32(p["constant"])),
+              [(k, float(b)) for k, b in p["coefficients"]]) for i, p in nb.items()]
+    got = _core.sim_clumondo_add_neighbourhood(suit, oldco.reshape(shape), region.reshape(shape), parts)
+    np.testing.assert_array_equal(got, ref)
+    v = rng.normal(0, 2, region.size).astype(np.float32)
+    w = np.float32(rng.normal())
+    inside = region >= 0
+    want = suit[1].copy()
+    want[inside] = want[inside] + v[inside] * w
+    np.testing.assert_array_equal(_core.sim_clumondo_add_preference(suit[1], region, v, float(w)), want)
