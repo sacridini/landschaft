@@ -259,22 +259,63 @@ def _predicted(model, w: _Writer, drivers, landscape, kind: str) -> dict:
     return layers
 
 
-def _demand_node(demand, classes_hint=None) -> dict:
+def _table_json(demand) -> dict:
+    t = demand.table
+    times = [float(x) for x in t.index] if np.issubdtype(np.asarray(t.index).dtype, np.number) else None
+    return {"classes": [_num(c) for c in t.columns], "rows": t.to_numpy(dtype=np.float64), "times": times}
+
+
+def _markov_json(demand) -> dict:
+    """A Markov chain as markov.matrix's settings; a rate table (the Expander and Patcher's) as a chain of one
+    step whose rates are the table."""
+    from ._markov import Markov
+    from ._patches import ExpanderPatcher
+
+    if isinstance(demand, Markov):
+        return {"classes": [_num(c) for c in demand.classes], "single": demand._single,
+                "multi": demand.multi.to_numpy(), "steps": demand.steps}
+    rates = ExpanderPatcher._rates(None, demand)
+    if list(rates.index) != list(rates.columns):
+        raise ValueError("Terraflux takes a rate table with the classes of its rows and columns in the same order")
+    m = rates.to_numpy(dtype=np.float64)
+    return {"classes": [_num(c) for c in rates.index], "single": m, "multi": m, "steps": 1}
+
+
+def _demand_node(demand, w: _Writer | None = None, landscape=None, nodata=None) -> dict:
     from ._demand import AreaDemand
     from ._markov import Markov
+    from ._regional import Regional
 
     if isinstance(demand, AreaDemand):
-        t = demand.table
-        times = [float(x) for x in t.index] if np.issubdtype(np.asarray(t.index).dtype, np.number) else None
-        return _node("demand", "demand.table", params={"table": {
-            "classes": [_num(c) for c in t.columns], "rows": t.to_numpy(dtype=np.float64), "times": times}},
-            note="The demand given (cells of each class at each step).")
+        return _node("demand", "demand.table", params={"table": _table_json(demand)},
+                     note="The demand given (cells of each class at each step).")
     if isinstance(demand, Markov):
-        return _node("demand", "markov.matrix", params={"classes": [_num(c) for c in demand.classes],
-                                                       "single": demand._single, "multi": demand.multi.to_numpy(),
-                                                       "steps": demand.steps},
+        return _node("demand", "markov.matrix", params=_markov_json(demand),
                      note="The Markov chain fitted with landschaft (its matrix per step included).")
-    raise TypeError(f"Terraflux cannot run a demand {type(demand).__name__} yet (AreaDemand or Markov)")
+    if isinstance(demand, Regional):
+        parts = []
+        for d in demand.demands.values():
+            if isinstance(d, AreaDemand):
+                parts.append({"table": _table_json(d)})
+            else:
+                parts.append({"markov": _markov_json(d)})
+        regions = _regions_map(demand, w, landscape, nodata)
+        return _node("demand", "demand.regional", {"regions": regions},
+                     {"ids": [int(i) for i in demand.ids], "demands": parts},
+                     note="A demand per region (each region's cells meet its own).")
+    raise TypeError(f"Terraflux cannot run a demand {type(demand).__name__} yet (AreaDemand, Markov or Regional)")
+
+
+def _regions_map(demand, w: _Writer, landscape, nodata) -> str:
+    """The regions written on the landscape's grid (their own when they have one)."""
+    from ._maps import read_map
+
+    if demand.template is not None or isinstance(landscape, (str, os.PathLike)):
+        tpl = demand.template
+    else:
+        tpl = read_map(landscape, nodata).template
+    x = demand.map if tpl is None else tpl.copy(data=demand.map)
+    return w.map("regions", x, note="the region of each cell (its id)")
 
 
 def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, name=None, description=None) -> dict:
@@ -286,8 +327,7 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
 
     path = Path(path)
     w = _Writer(path)
-    if isinstance(model.demand, Regional):
-        raise TypeError("Terraflux runs no regional demands yet")
+    regional = isinstance(model.demand, Regional)
     if seed is None:
         seed = int(np.random.default_rng().integers(1, 2**31 - 1))
     start = w.map("start", landscape, nodata, "the map the simulation starts from")
@@ -311,7 +351,7 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
     if isinstance(alloc, (CLUE, Ordered)):
         pot, kind = _potential_node(model, w, drivers, landscape, "class")
         nodes += pot
-        nodes.append(_demand_node(model.demand))
+        nodes.append(_demand_node(model.demand, w, landscape, nodata))
         if kind == "woe":
             raise ValueError("CLUE and the ordered allocation take suitabilities of classes, not weights of evidence")
         dyn, dref = loop_drivers()
@@ -344,7 +384,8 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
             params["neighbourhood"] = {"rules": {str(_num(c)): float(v) for c, v in nb.rules.items()},
                                        "weights": ({str(_num(c)): nb.window(c) for c in nb.rules}
                                                    if nb.weights is not None else None)}
-        step_in = {"landscape": "@landscape", "history": "@history", "suitability": suit, "demand": "demand.demand",
+        step_in = {"landscape": "@landscape", "history": "@history", "suitability": suit,
+                   **({"regional": "demand.regional"} if regional else {"demand": "demand.demand"}),
                    "step": "@step", "rng": "rng.rng"}
         if rules.restrictions is not None:
             step_in["restrictions"] = w.map("restrictions", rules.restrictions, note="restricted cells keep their class")
@@ -360,9 +401,12 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
 
         pot, kind = _potential_node(model, w, drivers, landscape, "transition")
         nodes += pot
-        nodes.append(_demand_node(model.demand))
-        rates = alloc._rates(model.demand)
-        trs = [(f, t) for f in rates.index for t in rates.columns if f != t and rates.loc[f, t] > 0]
+        nodes.append(_demand_node(model.demand, w, landscape, nodata))
+        trs = []
+        for d in (model.demand.demands.values() if regional else [model.demand]):
+            rates = alloc._rates(d)
+            trs += [(f, t) for f in rates.index for t in rates.columns if f != t and rates.loc[f, t] > 0]
+        trs = list(dict.fromkeys(trs))
         from ._maps import read_map
         from ._patches import _per_transition
 
@@ -381,9 +425,9 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
                      "patcher": [cells(p_par[(f, t)][0]), cells(p_par[(f, t)][1]) * cells(1), p_par[(f, t)][2]]}
                     for f, t in trs]
         nodes.append(_node("patches", "patches.settings", params={"transitions": settings}))
-        if model.demand.__class__.__name__ != "Markov":
-            raise ValueError("Terraflux's Expander and Patcher take a Markov chain as demand")
-        steps = alloc.steps if alloc.steps is not None else model.demand.steps
+        steps = alloc.steps if alloc.steps is not None else getattr(model.demand, "steps", None)
+        if steps is None:
+            raise ValueError("give the steps (ExpanderPatcher(steps=...))")
         dyn, dref = loop_drivers()
         if kind == "woe":
             prob = _node("probability", "woe.probability", {"model": "potential.model", "landscape": "@landscape",
@@ -397,7 +441,9 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
         else:
             raise ValueError("the Expander and Patcher take transition probabilities (weights of evidence or maps)")
         body.append(_node("allocate", "dinamica.step", {"landscape": "@landscape", "probability": prob_ref,
-                                                         "rates": "demand.markov", "patches": "patches.patches",
+                                                         **({"regional": "demand.regional"} if regional
+                                                            else {"rates": "demand.markov"}),
+                                                         "patches": "patches.patches",
                                                          "step": "@step", "seed": seed_ref},
                           {"prune_factor": alloc.prune_factor, "window": list(alloc.window)}))
         nodes.append(_node("simulation", "control.repeat", {"times": int(steps), "landscape": start},
@@ -407,10 +453,11 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
         CARS._check_rules(rules)
         pot, kind = _potential_node(model, w, drivers, landscape, "class")
         nodes += pot
-        d = _demand_node(model.demand)
+        d = _demand_node(model.demand, w, landscape, nodata)
         nodes.append(d)
-        dem_in = {"start": start, ("markov" if d["op"] == "markov.matrix" else "demand"):
-                  "demand.markov" if d["op"] == "markov.matrix" else "demand.demand"}
+        port = {"markov.matrix": ("markov", "demand.markov"), "demand.table": ("demand", "demand.demand"),
+                "demand.regional": ("regional", "demand.regional")}[d["op"]]
+        dem_in = {"start": start, port[0]: port[1]}
         nodes.append(_node("cars_demand", "plus.demand", dem_in, {"steps": alloc.steps} if alloc.steps else None))
         dyn, dref = loop_drivers()
         if kind == "glm":
@@ -432,7 +479,8 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
         m = rules.matrix(classes) if rules is not None else None
         if m is not None:
             params["allowed"] = m
-        step_in = {"landscape": "@landscape", "probability": prob_ref, "demand": "cars_demand.demand",
+        step_in = {"landscape": "@landscape", "probability": prob_ref,
+                   **({"regional": "cars_demand.regional"} if regional else {"demand": "cars_demand.demand"}),
                    "step": "@step", "seed": seed_ref}
         if rules is not None and rules.restrictions is not None:
             step_in["restrictions"] = w.map("restrictions", rules.restrictions, note="restricted cells keep their class")
@@ -550,16 +598,34 @@ def _load_input(spec: dict, base: Path):
     return da
 
 
+def _area_from(t):
+    import pandas as pd
+
+    from ._demand import AreaDemand
+
+    idx = pd.Index(t["times"], name="time") if t.get("times") else None
+    return AreaDemand(pd.DataFrame(np.asarray(t["rows"], dtype=np.float64), index=idx,
+                                   columns=[_class_value(c) for c in t["classes"]]))
+
+
+def _markov_from(p):
+    from ._markov import Markov
+
+    m = Markov(np.asarray(p["single"], dtype=np.float64), p["classes"], int(p.get("steps", 1)))
+    if p.get("multi") is not None:
+        m._multi = np.asarray(p["multi"], dtype=np.float64)
+    return m
+
+
 def load_model(path):
     """Read a Terraflux graph of ls.simulate's pieces: ``(Model, inputs)``, inputs by name (maps read)."""
     from ._allocation import CLUE, Ordered
-    from ._demand import AreaDemand
     from ._dynamic import distance_to, share_of
     from ._estimator import RasterPotential
-    from ._markov import Markov
     from ._model import Model
     from ._patches import ExpanderPatcher
     from ._plus import CARS
+    from ._regional import Regional
     from ._rules import Neighbourhood, Rules
 
     path = Path(path)
@@ -604,17 +670,14 @@ def load_model(path):
     # the demand
     dn = nodes["demand"]
     if dn["op"] == "demand.table":
-        t = dn["params"]["table"]
-        import pandas as pd
-
-        idx = pd.Index(t["times"], name="time") if t.get("times") else None
-        demand = AreaDemand(pd.DataFrame(np.asarray(t["rows"], dtype=np.float64), index=idx,
-                                         columns=[_class_value(c) for c in t["classes"]]))
+        demand = _area_from(dn["params"]["table"])
     elif dn["op"] == "markov.matrix":
+        demand = _markov_from(dn["params"])
+    elif dn["op"] == "demand.regional":
         p = dn["params"]
-        demand = Markov(np.asarray(p["single"], dtype=np.float64), p["classes"], int(p.get("steps", 1)))
-        if p.get("multi") is not None:
-            demand._multi = np.asarray(p["multi"], dtype=np.float64)
+        parts = {int(i): (_area_from(d["table"]) if "table" in d else _markov_from(d["markov"]))
+                 for i, d in zip(p["ids"], p["demands"])}
+        demand = Regional(inputs[ref_input(dn["inputs"]["regions"])], parts)
     else:
         raise ValueError(f"unknown demand {dn['op']}")
     # the dynamic variables

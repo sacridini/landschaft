@@ -11,6 +11,9 @@ in a new major version.
   MOLUSCE's weights or any piece with `predict`, or `probability` for the Expander and Patcher) as their
   predictions on the starting map, the layers `Model.run` reads from them; `terraflux run` gives the same maps.
   A model with dynamic variables needs a potential Terraflux computes (logistic regressions, weights of evidence).
+- `Model.save` writes regional demands (`Regional`: the regions map and each region's area demand, Markov chain
+  or rate table) for the CLUE-S, ordered, CARS and Expander/Patcher allocations; `Model.load` reads them back.
+  Terraflux (`demand.regional`) allocates region by region as `Model.run` does: the same maps.
 
 ## [1.44.0] - 2026-10-10
 

@@ -338,8 +338,9 @@ class Model:
         so that ``terraflux run`` gives the same maps as :meth:`run` with the
         same seed. Terraflux runs the CLUE-S, ordered, Expander/Patcher and
         CARS allocations with weights of evidence, logistic regressions or
-        given maps as potential, area demands or Markov chains, lulcc's rules
-        and the dynamic variables :func:`distance_to` and :func:`share_of`.
+        given maps as potential, area demands or Markov chains (or a
+        :class:`Regional` of them), lulcc's rules and the dynamic variables
+        :func:`distance_to` and :func:`share_of`.
         Other potentials (an :class:`Estimator`, :class:`MultiCriteria`...)
         are written as their predictions on the starting map, which needs a
         model without dynamic variables.

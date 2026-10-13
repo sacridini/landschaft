@@ -3316,10 +3316,14 @@ sim.supply; sim.shortfall; sim.trajectory()
    Fases, nesta ordem:
    * **A. Potenciais sem forma fechada** (`Estimator`, `MultiCriteria`, qualquer peça com `predict`): sem
      variáveis dinâmicas, as previsões gravadas como `RasterPotential` (camadas por classe); com elas, erro.
+     **Feita** (9271a39; Terraflux a4c566b, caso `estimator`).
    * **B. Demandas regionais**: tipo `Regional` no Terraflux (`demand.regional`: o mapa das regiões, os ids e a
      demanda de cada uma, tabela ou Markov); `lulcc.step` aloca região por região com o mesmo gerador,
      `plus.demand`/`cars.step` com a tabela (passos, regiões, classes), `dinamica.step` com as taxas e a
      semente de cada região.
+     **Feita**: as tabelas de taxas do Expander/Patcher vão como cadeias de um passo (`single = multi`);
+     testes com três regiões (uma parte do mapa fora delas) para CLUE-S com regras, ordenado com vizinhança,
+     CARS com Markov e com áreas, Expander/Patcher com Markov e com taxas, bit a bit pelo `terraflux run`.
    * **C. `distance_to` com custo**: a `Transition` gravada como GeoTIFF (uma banda por direção) com
      `directions`/`symmetric`; `dynamic.distance_to` com a entrada `cost` chama o `accumulated_cost` do
      `costcore` (ligado no ls-sys).

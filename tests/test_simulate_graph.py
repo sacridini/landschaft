@@ -142,12 +142,60 @@ def test_estimator_for_the_expander_and_patcher(sibuyan, tmp_path):
     _check(model, lu[0], None, 3, tmp_path)
 
 
+def _regions(shape):
+    # three regions in vertical bands, the last one partly left out (no id)
+    r = np.ones(shape)
+    r[:, shape[1] // 3:] = 2
+    r[:, 2 * shape[1] // 3:] = 3
+    r[: shape[0] // 4, 2 * shape[1] // 3:] = np.nan
+    return r
+
+
+def test_regional_clue_and_ordered(pie, tmp_path):
+    lu, dr = pie
+    regions = lu[0].copy(data=_regions(lu[0].shape))
+    demand = S.Regional.from_maps(regions, lu, times=[0, 6, 14])
+    lr = S.LogisticRegression(PIE_FORMS).fit(lu[0], dr)
+    clue = S.Model(lr, demand, S.CLUE(**VIGNETTE), S.Rules(elasticity=[0.2, 0.6, 0.1],
+                                                        allowed=np.array([[1, 1008, 105], [0, 1, 0], [-1, -2, 1]])))
+    path = _check(clue, lu[0], dr, 4, tmp_path)
+    g = json.loads(path.read_text())
+    assert next(n for n in g["nodes"] if n["id"] == "demand")["op"] == "demand.regional"
+    again, _ = S.Model.load(path)
+    assert isinstance(again.demand, S.Regional) and again.demand.ids == [1, 2, 3]
+    ordered = S.Model(lr, S.Regional(_regions(lu[0].shape), demand.demands), S.Ordered([2, 1, 3]),
+                      S.Rules(neighbourhood=S.Neighbourhood({1: 0.3, 2: 0.2, 3: 0.3})))
+    _check(ordered, lu[0], dr, 8, tmp_path / "ordered")
+
+
+def test_regional_cars(pie, tmp_path):
+    lu, dr = pie
+    regions = _regions(lu[0].shape)
+    lr = S.LogisticRegression(PIE_FORMS).fit(lu[0], dr)
+    markov = S.Regional.markov(regions, lu[0], lu[2], steps=4)
+    _check(S.Model(lr, markov, S.CARS(seeds={2: 0.3}, step_size=50, max_iter=300)), lu[0], dr, 4, tmp_path)
+    area = S.Regional.from_maps(regions, lu, times=[0, 6, 14])
+    _check(S.Model(lr, area, S.CARS(steps=3, step_size=50, max_iter=300)), lu[0], dr, 5, tmp_path / "area")
+
+
+def test_regional_expander_and_patcher(sibuyan, tmp_path):
+    lu, dr = sibuyan
+    regions = lu[0].copy(data=_regions(lu[0].shape))
+    demand = S.Regional.markov(regions, lu[0], lu[1], steps=6)
+    rng = np.random.default_rng(3)
+    trs = {(f, t) for d in demand.demands.values() for f in d.classes for t in d.classes if f != t}
+    potential = {tr: lu[0].copy(data=rng.random(lu[0].shape)) for tr in sorted(trs)}
+    alloc = S.ExpanderPatcher(expansion=0.5, expander=(4, 2, 1.5), patcher=(6, 4, 1.5))
+    _check(S.Model(potential, demand, alloc), lu[0], None, 2, tmp_path)
+    # rate tables (one step each) for two regions
+    rates = {1: {(1, 2): 0.01, (2, 1): 0.02}, 2: {(1, 2): 0.03}}
+    regions2 = np.where(_regions(lu[0].shape) == 3, np.nan, _regions(lu[0].shape))
+    _check(S.Model(potential, S.Regional(lu[0].copy(data=regions2), rates), S.ExpanderPatcher(
+        expansion=0.5, expander=(4, 2, 1.5), patcher=(6, 4, 1.5), steps=3)), lu[0], None, 7, tmp_path / "rates")
+
+
 def test_what_terraflux_cannot_run(pie, tmp_path):
     lu, dr = pie
-    regional = S.Regional(np.ones(lu[0].shape), {1: S.AreaDemand.from_maps(lu, times=[0, 6, 14])})
-    model = S.Model(S.LogisticRegression(PIE_FORMS).fit(lu[0], dr), regional, S.CLUE())
-    with pytest.raises(TypeError, match="regional"):
-        model.save(tmp_path / "m.json", lu[0], dr, seed=1)
     with pytest.raises(ValueError, match="JSON"):
         _lulcc(pie, S.CLUE()).save(tmp_path / "m.toml", lu[0], dr, seed=1)
     bad = _lulcc(pie, S.CLUE())
