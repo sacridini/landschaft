@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.45.0] - 2026-10-13
+
 ### Added
 - `Model.save` writes potentials Terraflux has no form for (an `Estimator` of scikit-learn, `MultiCriteria`,
   MOLUSCE's weights or any piece with `predict`, or `probability` for the Expander and Patcher) as their

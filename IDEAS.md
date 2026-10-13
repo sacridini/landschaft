@@ -3309,7 +3309,7 @@ sim.supply; sim.shortfall; sim.trajectory()
    `save` → `load` → `run` e, com o Terraflux instalado (`TERRAFLUX` ou PATH), por `terraflux run`, bit a bit.
    Ainda não vão: demandas regionais, CLUMondo, FUTURES, MOLUSCE, `Estimator` (exportar as previsões como
    `RasterPotential`) e distâncias de custo.
-13. O resto da ponte com o Terraflux (pedido em 2026-10-13). O que cada passo ainda faz em numpy vai para C++
+13. O resto da ponte com o Terraflux (pedido em 2026-10-13; todas as fases feitas, 1.45.0). O que cada passo ainda faz em numpy vai para C++
    (uma só implementação, os testes bit a bit inalterados); `Model.save`/`load` escrevem e leem os nós; os
    operadores Rust ficam num branch do Terraflux (`simulate-bridge`, worktree próprio), integrado depois com a
    sessão de lá; cada parte com um caso em `tests/data/bridge` de lá (os mesmos mapas por `terraflux run`).
