@@ -3309,6 +3309,29 @@ sim.supply; sim.shortfall; sim.trajectory()
    `save` → `load` → `run` e, com o Terraflux instalado (`TERRAFLUX` ou PATH), por `terraflux run`, bit a bit.
    Ainda não vão: demandas regionais, CLUMondo, FUTURES, MOLUSCE, `Estimator` (exportar as previsões como
    `RasterPotential`) e distâncias de custo.
+13. O resto da ponte com o Terraflux (pedido em 2026-10-13). O que cada passo ainda faz em numpy vai para C++
+   (uma só implementação, os testes bit a bit inalterados); `Model.save`/`load` escrevem e leem os nós; os
+   operadores Rust ficam num branch do Terraflux (`simulate-bridge`, worktree próprio), integrado depois com a
+   sessão de lá; cada parte com um caso em `tests/data/bridge` de lá (os mesmos mapas por `terraflux run`).
+   Fases, nesta ordem:
+   * **A. Potenciais sem forma fechada** (`Estimator`, `MultiCriteria`, qualquer peça com `predict`): sem
+     variáveis dinâmicas, as previsões gravadas como `RasterPotential` (camadas por classe); com elas, erro.
+   * **B. Demandas regionais**: tipo `Regional` no Terraflux (`demand.regional`: o mapa das regiões, os ids e a
+     demanda de cada uma, tabela ou Markov); `lulcc.step` aloca região por região com o mesmo gerador,
+     `plus.demand`/`cars.step` com a tabela (passos, regiões, classes), `dinamica.step` com as taxas e a
+     semente de cada região.
+   * **C. `distance_to` com custo**: a `Transition` gravada como GeoTIFF (uma banda por direção) com
+     `directions`/`symmetric`; `dynamic.distance_to` com a entrada `cost` chama o `accumulated_cost` do
+     `costcore` (ligado no ls-sys).
+   * **D. MOLUSCE**: `MolusceWoE.total`/`prediction` e o passo do `MolusceCA` em C++ (`sim/molusce.cpp`, com o
+     `random_sample` do `RandomState` do numpy sobre o `StdMt19937`); nós `molusce.weights` (os pesos por
+     transição, fator e categoria), `rng.numpy` e `molusce.step`.
+   * **E. CLUMondo**: o preparo da adequabilidade de cada ano (vizinhança, preferências, logit) em C++; nós
+     `clumondo.supply`, `clumondo.demand` e `clumondo.step` (ocupação, idades e elasticidades da demanda
+     carregadas de ano a ano).
+   * **F. FUTURES**: o preparo (soma dos preditores em float32, pressão inicial) em C++; o laço já está em C++
+     (`sim_futures_run`) e vira um nó só, `futures.simulation` (sem variáveis dinâmicas, como aqui), com o
+     `Flooding`.
 
 ---
 

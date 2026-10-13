@@ -188,7 +188,7 @@ def _dynamic_nodes(model, drivers_ref: str) -> tuple[list, str]:
     return nodes, ref
 
 
-def _potential_node(model, w: _Writer, drivers, landscape_ref: str, kind: str):
+def _potential_node(model, w: _Writer, drivers, landscape, kind: str):
     """The node(s) of the potential: fitted pieces as given, rasters as inputs. kind: 'class' or 'transition'."""
     from ._estimator import RasterPotential
     from ._glm import LogisticRegression
@@ -209,8 +209,54 @@ def _potential_node(model, w: _Writer, drivers, landscape_ref: str, kind: str):
         layers = {f"{_num(f)}_to_{_num(t)}": v for (f, t), v in p.items()}
         ref = w.stack("potential", layers, note="the probability of each transition")
         return [_node("potential", "stack.classes", {"stack": ref})], "raster"
+    if hasattr(p, "predict" if kind == "class" else "probability"):
+        layers = _predicted(model, w, drivers, landscape, kind)
+        ref = w.stack("potential", layers, note=f"the predictions of the {type(p).__name__} on the start, one "
+                                                f"layer per {kind}")
+        return [_node("potential", "stack.classes", {"stack": ref},
+                      note=f"The {type(p).__name__} fitted with landschaft, as its predictions.")], "raster"
     raise TypeError(f"Terraflux cannot run a potential {type(p).__name__}: use WeightsOfEvidence, "
-                     "LogisticRegression or RasterPotential (e.g. of an estimator's predictions)")
+                     "LogisticRegression, RasterPotential or a piece with predict()")
+
+
+def _read_given(x, w: _Writer, what: str):
+    """A map or stack given to save: as is, or read from its path (relative to the model file)."""
+    import landschaft as ls
+
+    if not isinstance(x, (str, os.PathLike)):
+        return x
+    p = Path(x)
+    da = ls.load_raster(p if p.is_absolute() else w.path.parent / p)
+    if what == "map" and da.ndim == 3:
+        da = da[0]
+    return da
+
+
+def _predicted(model, w: _Writer, drivers, landscape, kind: str) -> dict:
+    """A potential without a form Terraflux knows (an estimator...), as its predictions on the start.
+
+    The same layers ``Model.run`` reads from it when the drivers do not change: per class (``predict``) or
+    per transition (``probability``, as the Expander and Patcher read it).
+    """
+    p = model.potential
+    if model.dynamic:
+        raise ValueError(f"Terraflux cannot predict with a {type(p).__name__} at every step: save it without "
+                         "dynamic variables (its predictions are written as maps), or use a LogisticRegression "
+                         "or WeightsOfEvidence")
+    land = _read_given(landscape, w, "map")
+    drv = None if drivers is None else _read_given(drivers, w, "stack")
+    if kind == "class":
+        out = p.predict(drv, landscape=land) if drv is not None else p.predict(landscape=land)
+        names = [_class_value(c) for c in out[out.dims[0]].values]
+        return {str(_num(c)): out[k] for k, c in enumerate(names)}
+    out = p.probability(land, drv) if drv is not None else p.probability(land)
+    layers = {}
+    for k, name in enumerate(str(v) for v in out[out.dims[0]].values):
+        if not name.startswith("probability_") or "_to_" not in name:
+            raise ValueError(f"the {type(p).__name__} gives a layer {name!r}, not probability_<from>_to_<to>")
+        f, t = name[len("probability_"):].split("_to_")
+        layers[f"{_num(float(f))}_to_{_num(float(t))}"] = out[k]
+    return layers
 
 
 def _demand_node(demand, classes_hint=None) -> dict:
@@ -263,7 +309,7 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
         return _dynamic_nodes(model, drv_ref)
 
     if isinstance(alloc, (CLUE, Ordered)):
-        pot, kind = _potential_node(model, w, drivers, start, "class")
+        pot, kind = _potential_node(model, w, drivers, landscape, "class")
         nodes += pot
         nodes.append(_demand_node(model.demand))
         if kind == "woe":
@@ -312,7 +358,7 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
     elif isinstance(alloc, ExpanderPatcher):
         from ._model import Model  # noqa: F401
 
-        pot, kind = _potential_node(model, w, drivers, start, "transition")
+        pot, kind = _potential_node(model, w, drivers, landscape, "transition")
         nodes += pot
         nodes.append(_demand_node(model.demand))
         rates = alloc._rates(model.demand)
@@ -359,7 +405,7 @@ def to_graph(model, path, landscape, drivers=None, *, seed=None, nodata=None, na
                                  "collect": {"maps": "allocate.landscape", "info": "allocate.info"}}))
     elif isinstance(alloc, CARS):
         CARS._check_rules(rules)
-        pot, kind = _potential_node(model, w, drivers, start, "class")
+        pot, kind = _potential_node(model, w, drivers, landscape, "class")
         nodes += pot
         d = _demand_node(model.demand)
         nodes.append(d)

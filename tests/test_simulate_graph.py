@@ -112,6 +112,36 @@ def test_raster_potential_and_paths(pie, tmp_path):
     _check(model, lu[0], None, 9, tmp_path)
 
 
+def test_estimator_as_its_predictions(pie, tmp_path):
+    # a scikit-learn estimator goes as its predictions on the start (the drivers given as a path too)
+    pytest.importorskip("sklearn")
+    from sklearn.linear_model import LogisticRegression as SkLogit
+
+    lu, dr = pie
+    est = S.Estimator(SkLogit(max_iter=500), sample=4000, seed=1).fit(lu[0], dr)
+    model = S.Model(est, S.AreaDemand.from_maps(lu, times=[0, 6, 14]), S.CLUE(**VIGNETTE), S.Rules(elasticity=0.2))
+    path = _check(model, lu[0], dr, 6, tmp_path)
+    g = json.loads(path.read_text())
+    pot = next(n for n in g["nodes"] if n["id"] == "potential")
+    assert pot["op"] == "stack.classes" and "Estimator" in pot["note"]
+    again, _ = S.Model.load(path)
+    assert isinstance(again.potential, S.RasterPotential)
+    ls.write_raster(dr, tmp_path / "drivers.tif")
+    model.save(tmp_path / "paths.json", lu[0], "drivers.tif", seed=6)
+    again, inputs = S.Model.load(tmp_path / "paths.json")
+    np.testing.assert_array_equal(_maps(again, inputs["start"], None, 6), _maps(model, lu[0], dr, 6))
+
+
+def test_estimator_for_the_expander_and_patcher(sibuyan, tmp_path):
+    # transition probabilities of a piece with probability() (MOLUSCE's weights here)
+    lu, dr = sibuyan
+    woe = S.MolusceWoE().fit(lu[0], lu[1], {"slope": dr.sel(band="slope") // 5,
+                                             "elevation": dr.sel(band="elevation") // 100})
+    dyn = S.presets.dinamica(lu[0], lu[1], dr, steps=4, woe=250)
+    model = S.Model(woe, dyn.demand, dyn.allocation)
+    _check(model, lu[0], None, 3, tmp_path)
+
+
 def test_what_terraflux_cannot_run(pie, tmp_path):
     lu, dr = pie
     regional = S.Regional(np.ones(lu[0].shape), {1: S.AreaDemand.from_maps(lu, times=[0, 6, 14])})
@@ -124,6 +154,12 @@ def test_what_terraflux_cannot_run(pie, tmp_path):
     bad.dynamic = {"x": lambda m: m}
     with pytest.raises(TypeError, match="does not know"):
         bad.save(tmp_path / "m.json", lu[0], dr, seed=1)
+    p = S.LogisticRegression(PIE_FORMS).fit(lu[0], dr).predict(dr)
+    moving = S.Model(S.RasterPotential(p), S.AreaDemand.from_maps(lu, times=[0, 6, 14]), S.CLUE(),
+                     dynamic={"dist_built_1985": S.distance_to(2)})
+    moving.potential = type("Fitted", (), {"predict": lambda self, *a, **k: p})()
+    with pytest.raises(ValueError, match="at every step"):
+        moving.save(tmp_path / "m.json", lu[0], dr, seed=1)
 
 
 @pytest.mark.skipif(HAS_TERRAFLUX, reason="terraflux is installed")

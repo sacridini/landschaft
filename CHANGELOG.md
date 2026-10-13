@@ -6,6 +6,12 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `Model.save` writes potentials Terraflux has no form for (an `Estimator` of scikit-learn, `MultiCriteria`,
+  MOLUSCE's weights or any piece with `predict`, or `probability` for the Expander and Patcher) as their
+  predictions on the starting map, the layers `Model.run` reads from them; `terraflux run` gives the same maps.
+  A model with dynamic variables needs a potential Terraflux computes (logistic regressions, weights of evidence).
+
 ## [1.44.0] - 2026-10-10
 
 ### Added

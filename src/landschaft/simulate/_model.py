@@ -340,6 +340,9 @@ class Model:
         CARS allocations with weights of evidence, logistic regressions or
         given maps as potential, area demands or Markov chains, lulcc's rules
         and the dynamic variables :func:`distance_to` and :func:`share_of`.
+        Other potentials (an :class:`Estimator`, :class:`MultiCriteria`...)
+        are written as their predictions on the starting map, which needs a
+        model without dynamic variables.
 
         Parameters
         ----------
