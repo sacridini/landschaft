@@ -6,6 +6,12 @@ in a new major version.
 
 ## [Unreleased]
 
+### Fixed
+- The names of the landscape mosaic's classes 6 to 12 (`LM19_CLASSES`): they did not match the classes
+  `landscape_mosaic` gives (two of them had one name). Each name lists the dominant cover first (above 60%), then
+  those at 10% or more: 6 Developed-Forest, 7 Developed-Agriculture, 8 Forest-Agriculture, 9 Forest-Developed,
+  10 Agriculture-Forest-Developed, 11 Developed-Agriculture-Forest, 12 Forest-Agriculture-Developed.
+
 ## [1.45.0] - 2026-10-13
 
 ### Added
