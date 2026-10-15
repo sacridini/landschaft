@@ -160,4 +160,15 @@ std::vector<double> tpi(const Grid& g, int wr, int wc, const std::vector<char>& 
 std::vector<double> hsp(const Grid& g, const std::vector<int>& rows, const std::vector<int>& cols,
                         const std::vector<std::vector<char>>& masks, bool normalize);
 
+// -- gravitational interaction potential (Dinamica EGO's CalcInteractionPotentialMap)
+
+// The table of 1 / d^beta by offset: entry (a, b) for |di| = a, |dj| = b, d the
+// distance between centres of cells dx wide and dy tall, (0, 0) at self_distance.
+std::vector<double> gravity_weights(int ny, int nx, double beta, double dx, double dy, double self_distance);
+
+// sum_k m_k / d_k^beta in every cell over the sources (cells with a mass that is
+// neither NaN nor 0, added in row order); NaN where `mask` (optional) is NaN.
+std::vector<double> gravity(const double* mass, const double* mask, int ny, int nx, double beta, double dx,
+                            double dy, double self_distance);
+
 }  // namespace surf

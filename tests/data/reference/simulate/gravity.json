@@ -1,0 +1,79 @@
+{
+ "arrays": {
+  "gravity_dinamica/all_0.5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "gravity_dinamica/all_1.5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "gravity_dinamica/all_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "gravity_dinamica/all_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "gravity_dinamica/all_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "gravity_dinamica/masked_0.5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "gravity_dinamica/masked_1.5.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "gravity_dinamica/masked_1.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "gravity_dinamica/masked_2.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  },
+  "gravity_dinamica/masked_3.tif": {
+   "dim": [
+    60,
+    80
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "dinamica": {
+   "dinamica": "8130"
+  }
+ }
+}

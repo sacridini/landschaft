@@ -198,7 +198,7 @@ def _dynamic_nodes(model, drivers_ref: str, w: _Writer, template=None) -> tuple[
                                f"The dynamic variable {name!r}: the share of classes {piece.classes} around."))
             port = "share"
         else:
-            raise TypeError(f"the dynamic variable {name!r} is a function Terraflux does not know: use "
+            raise TypeError(f"the dynamic variable {name!r} is a function Terraflux does not know (yet): use "
                              "distance_to or share_of")
         nodes.append(_node(f"drivers_{k}", "stack.set", {"stack": ref, "map": f"dynamic_{k}.{port}"}, {"name": str(name)}))
         ref = f"drivers_{k}.stack"

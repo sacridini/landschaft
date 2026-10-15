@@ -2744,3 +2744,60 @@ CASES.update({
         notes="Dinamica EGO's CalcReciprocalSimilarityMap (observed against simulated) and "
               "CalcSimilarityOfDifferences, windows 1-11, exponential and constant decay, a missing block."),
 })
+
+
+# ============================================================================= Dinamica EGO's other functors
+
+GROUPS += ["gravity"]
+
+_GRAVITY_EXPONENTS = (2.0, 1.0, 1.5, 0.5, 3.0)
+
+
+@cache
+def gravity_world():
+    """Masses on 300 cells of a 60 x 80 grid and a mask with a missing block."""
+    import xarray as xr
+
+    rng = np.random.default_rng(71)
+    ny, nx = 60, 80
+    src = np.full((ny, nx), np.nan)
+    idx = rng.choice(ny * nx, 300, replace=False)
+    src.flat[idx] = rng.integers(1, 1000, 300)
+    mask = np.ones((ny, nx))
+    mask[5:20, 30:50] = np.nan
+    return xr.concat([grid(src), grid(mask)], dim="band").assign_coords(band=["sources", "mask"])
+
+
+def _gravity_job(world):
+    # NaN = no value: the harness writes float maps with -9999 as no data
+    src, mask = world.sel(band="sources"), world.sel(band="mask")
+    lines = ['  s := LoadMap "sources.tif";', '  m := LoadMap "mask.tif";']
+    outputs = []
+    for k, beta in enumerate(_GRAVITY_EXPONENTS):
+        for tag, m in (("all", ".none"), ("masked", "m")):
+            lines += [f"  p{tag}{k} := CalcInteractionPotentialMap s {m} {beta} .float32 .default;",
+                      f'  SaveMap p{tag}{k} "{tag}_{beta:g}.tif";']
+            outputs.append(f"{tag}_{beta:g}.tif")
+    return {"rasters": {"sources": src, "mask": mask}, "script": "Script {{\n" + "\n".join(lines) + "\n}};\n",
+            "outputs": outputs}
+
+
+def _gravity_py(world) -> dict:
+    ls = _ls()
+    src, mask = world.sel(band="sources"), world.sel(band="mask")
+    out = {}
+    for beta in _GRAVITY_EXPONENTS:
+        out[f"all_{beta:g}.tif"] = np.asarray(ls.surface.gravity(src, beta, method="direct"))
+        out[f"masked_{beta:g}.tif"] = np.asarray(ls.surface.gravity(src, beta, mask=mask, method="direct"))
+    return out
+
+
+INPUTS.update({"gravity_world": gravity_world})
+
+CASES.update({
+    "gravity_dinamica": Case(
+        "gravity", "dinamica", ("gravity_world",), job=lambda gravity_world: _gravity_job(gravity_world),
+        py=lambda gravity_world: _gravity_py(gravity_world),
+        notes="Dinamica EGO's CalcInteractionPotentialMap (float32 output), five exponents, with and without "
+              "a mask; Dinamica sums float32 terms in float32."),
+})

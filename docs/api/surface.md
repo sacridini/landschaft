@@ -133,6 +133,10 @@ terra's slope and aspect), corrected where it errs.
 
 ::: landschaft.surface.hli
 
+## Spatial interaction
+
+::: landschaft.surface.gravity
+
 ## Trend surfaces
 
 ::: landschaft.surface.fit_plane

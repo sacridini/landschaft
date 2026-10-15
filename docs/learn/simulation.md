@@ -127,9 +127,10 @@ print(leas.importance().round(3))     # which drivers explain where coconut (2) 
 ```
 
 Variables that the simulation itself changes, such as the distance to the
-nearest forest or the share of built land around a cell, should be
-recomputed at every step: these are the **dynamic variables** of
-`Model(dynamic={...})` (`S.distance_to`, `S.share_of`).
+nearest forest, the share of built land around a cell or the gravitational
+pull of the towns, should be recomputed at every step: these are the
+**dynamic variables** of `Model(dynamic={...})` (`S.distance_to`,
+`S.share_of`, `S.gravity_of`).
 
 ## With what shape: allocation
 

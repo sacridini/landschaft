@@ -3361,6 +3361,91 @@ sim.supply; sim.shortfall; sim.trajectory()
 
 ---
 
+## Mais functores do Dinamica EGO (pedido em 2026-10-15)
+
+Quatro functores do Dinamica EGO que ainda não têm equivalente no landschaft. Mesma regra do `ls.simulate`:
+clean-room pelos artigos, pela documentação pública e (no `CalcHilltop`) pelo texto da lei; o Dinamica EGO 8
+instalado (`dev/dinamica_ego/install`, `DinamicaConsole8.exe -processors 1 -predefined-seed model.ego`) só
+como caixa-preta para medir o comportamento e conferir as saídas; nada descompilado (termo de uso). Núcleos em
+C++/OpenMP com `n_threads`, testes unitários, paridade com o Dinamica onde o functor é determinístico e
+comparação estatística onde é estocástico; o que o Dinamica fizer de errado entra só na forma correta. Os nomes
+abaixo são os do pedido; o lugar no `ls` é sugestão. Cada um ganha também um nó no Terraflux (`Model.save`).
+
+### Prioridade imediata (fácil e alto impacto)
+
+1. **`surface.gravity` (`CalcInteractionPotentialMap`)**: potencial de interação gravitacional contínuo, para
+   gerar variáveis explicativas (pressão de cidades, mercados, portos). Forma geral P_i = Σ_j M_j f(d_ij), com
+   M_j a massa do atrator j (população, área urbana, produção) e f um decaimento por potência (d^-β) ou
+   exponencial. Medir no binário: o decaimento exato, a distância (euclidiana ou de custo), o tratamento de
+   d = 0 (a célula do próprio atrator), a normalização e o nodata.
+   * Distância euclidiana: convolução com o núcleo de decaimento por FFT (o mesmo caminho dos kernels de
+     conectividade do `ls.prioritize`), ou soma direta em C++ quando há poucos atratores e a paridade bit a bit
+     pedir a ordem do Dinamica.
+   * Distância de custo: um custo acumulado por atrator (`accumulated_cost` do `costcore`), em paralelo por
+     atrator, com corte opcional por distância máxima.
+   * Lugar: `ls.surface.gravity` e uma variável dinâmica do `ls.simulate` (`dynamic.gravity`, recalculada a cada
+     passo com as massas do mapa simulado).
+   * Medido no Dinamica EGO 8.13 (`CalcInteractionPotentialMap source mask exponent cellType nullValue`; doc na
+     wiki, `calc_interaction_potential_map`): P = Σ m_k / d^β com d **em células** (a resolução não entra) e a
+     própria célula de uma fonte a d = 1; termos em float32 (`powf` de uma distância float32) somados em float32,
+     quase na ordem das linhas (79-100 % dos bits; o resto a 1 ulp); fontes sob a máscara contam; tipos inteiros
+     escalados para a faixa do tipo (não portado: aqui sempre float64); `.float64` como tipo de saída quebra
+     ("1.79e308 does not fit Signed 32 Bit Integer").
+   * **Feita**: `ls.surface.gravity` (`src/cpp/surf/gravity.cpp`: uma tabela de pesos por deslocamento, cada linha
+     de saída soma as fontes em ordem, mesmos bits com qualquer número de threads; FFT do scipy para muitas
+     fontes, `method="auto"` direto até 2000 fontes) e `ls.simulate.gravity_of` (variável dinâmica, com massa
+     opcional). Teste contra o Dinamica (5 expoentes, com e sem máscara) com rtol 3e-6 (o erro do float32 dele).
+     1000 x 1000 com 1000 fontes, 4 cores: 0,10 s contra 0,37 s do Dinamica. Falta: o nó do Terraflux
+     (`Model.save` recusa `gravity_of` por enquanto).
+
+2. **`patches.continuous` (`PatcherContinuousState`)**: alocação de cotas contínuas de estoque (biomassa,
+   carbono) por manchas, em vez de trocar a classe das células. Reaproveita quase todo o Patcher de
+   `sim/patches.cpp` (sementes pela probabilidade, crescimento da mancha, tamanho e isometria): muda só o que se
+   aloca (uma quantidade por célula, até a cota do passo) e a regra de parada. Medir no binário: como a cota é
+   repartida entre as células da mancha, o que acontece com o resto quando a mancha não cabe e os limites do
+   estado (mínimo e máximo por célula).
+   * Lugar: uma peça de alocação do `ls.simulate` (`S.ContinuousPatcher` ou um modo do `ExpanderPatcher`),
+     com demanda em unidades do estoque.
+
+### Prioridade estrutural (diferencial)
+
+3. **`roads.constructor` (`CalcDestinationMap` + `CalcPathwayMap`)**: malha viária endógena, como o construtor
+   de estradas do SimAmazonia (Soares-Filho et al. 2004, 2006). `CalcDestinationMap` escolhe os destinos das
+   estradas novas (células atrativas sorteadas pela probabilidade); `CalcPathwayMap` traça o caminho de cada
+   destino até a malha existente pelo menor custo acumulado, com caminhamento estocástico. Medir no binário: o
+   sorteio dos destinos, a regra de cada passo do caminho (o vizinho de menor custo, sorteio entre os melhores
+   ou ruído no custo), o que interrompe um caminho e como a malha nova entra no custo do passo seguinte.
+   * Base: o custo acumulado e o traçado de menor caminho do `ls.cost` (`_lcp.py`, `costcore`), com o gerador
+     do `ls.simulate` para os sorteios.
+   * No `ls.simulate`: um passo `RoadBuilder` que atualiza o mapa de estradas a cada ano, e as variáveis
+     dinâmicas `distance_to` das estradas passam a ver as novas (o ciclo estrada → desmatamento → estrada).
+   * Paridade: estocástica (número de estradas, comprimento total, distribuição das distâncias aos destinos,
+     sinuosidade) em várias sementes; o determinístico (custo acumulado, caminho sem ruído) bit a bit.
+
+### Projeto especial (alto valor para o Brasil)
+
+4. **`terrain.hilltop` (`CalcHilltop`)**: reimplementação clean-room da delimitação de topos de morro e do terço
+   superior como APP do Código Florestal (Lei 12.651/2012, art. 4º, IX): morros, montes, montanhas e serras com
+   altura mínima de 100 m e inclinação média maior que 25°; a APP é a área acima da curva de nível de 2/3 da
+   altura em relação à base, que é o plano da planície ou do espelho d'água adjacente ou, no relevo ondulado,
+   a cota do ponto de sela mais próximo da elevação. Hoje os laboratórios ambientais dependem do executável do
+   Dinamica para isso; uma versão aberta, documentada e rápida no landschaft acaba com essa dependência.
+   * Algoritmo: a base pela proeminência topográfica (o ponto de sela que liga cada cume a um terreno mais
+     alto), com union-find sobre as células em ordem decrescente de elevação, O(n log n), em C++; altura =
+     cume − base; inclinação média (Horn, em graus) da elevação entre a base e o cume; terço superior = as
+     células da elevação acima de base + 2/3 da altura. Planície e espelho d'água adjacentes como entrada
+     opcional (máscara) que fixa a base.
+   * Ambiguidades da lei a decidir e documentar: "ponto de sela mais próximo" (o de maior cota, que define a
+     proeminência, ou o mais próximo em distância), "inclinação média" (de qual área), elevações aninhadas
+     (serras com vários cumes) e o efeito da resolução do MDE. Comparar com o `CalcHilltop` em MDEs reais
+     (SRTM/Copernicus de 30 m, áreas de serra e de mar de morros) e com a literatura de delimitação de APPs de
+     topo de morro; onde a escolha do Dinamica fugir do texto da lei, só a forma da lei, com a diferença
+     anotada.
+   * Saídas: o mapa da APP, os cumes com base, altura, inclinação média e o ponto de sela de cada elevação
+     (tabela), e as elevações que não passam nos critérios (para conferência). Lugar: `ls.surface.hilltop`.
+
+---
+
 ## Modelagem de distribuição de espécies (`ls.sdm`)
 
 Plano acordado em 2026-10-02 (substitui a análise inicial de 2026-09-30). Submódulo `landschaft.sdm` (`ls.sdm`) com

@@ -6,6 +6,14 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.surface.gravity`: the gravitational interaction potential of source cells, sum of m / d^beta (Dinamica EGO's
+  `CalcInteractionPotentialMap`, clean-room): distances in cells (a source's own cell at 1) or map units, a mask,
+  direct sums in C++ (one table of weights by offset, the same bits with any thread count) or by FFT for many
+  sources. Within 3e-6 of Dinamica EGO 8.13 (which sums float32 terms in float32), 3.7x faster on 4 cores.
+- `ls.simulate.gravity_of`: the potential of the cells of some classes (optionally weighted by a mass map) as a
+  dynamic variable, recomputed from the simulated map at every step. `Model.save` does not write it yet.
+
 ### Fixed
 - The names of the landscape mosaic's classes 6 to 12 (`LM19_CLASSES`): they did not match the classes
   `landscape_mosaic` gives (two of them had one name). Each name lists the dominant cover first (above 60%), then

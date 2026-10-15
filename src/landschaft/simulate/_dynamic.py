@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Dynamic variables: drivers computed again from the simulated map at every step.
 
-Distances to a class, the share of a class around each cell, or any
+Distances to a class, the share of a class around each cell, the
+gravitational potential of a class, or any
 function of the map ("moving frontier" variables): a :class:`Model` given
 ``dynamic={name: piece}`` recomputes them from the map at the start of each
 step and predicts the potential again with them in place of the static
@@ -19,7 +20,7 @@ from .. import _core
 from ._change import _class_value
 from ._maps import read_map
 
-__all__ = ["distance_to", "share_of"]
+__all__ = ["distance_to", "gravity_of", "share_of"]
 
 
 def _classes_of(classes) -> list:
@@ -158,6 +159,70 @@ class share_of:
 
     def __repr__(self) -> str:
         return f"share_of({self.classes!r}, window={self.window.shape[0]})"
+
+
+class gravity_of:
+    """Gravitational interaction potential of the cells of some classes.
+
+    The sum over the cells k of the classes of m_k / d^exponent
+    (:func:`landschaft.surface.gravity`, Dinamica EGO's
+    ``CalcInteractionPotentialMap``): the pull of towns or cleared land that
+    grows as they grow.
+
+    Parameters
+    ----------
+    classes
+        A class or a list of classes.
+    exponent : float, default 2
+        The distance decay exponent.
+    mass : xarray.DataArray or array_like, optional
+        The mass of each cell (population, production...) where it holds one
+        of the classes; default 1.
+    unit : {"cells", "map"}, default "cells"
+        Distances in cells (Dinamica) or in map units.
+
+    Notes
+    -----
+    Calling it with a map gives the potential map (NaN where the map has no
+    value; the cells without a value are no source).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> land = np.array([[1, 1, 1, 3], [1, 1, 1, 1]])
+    >>> ls.simulate.gravity_of(3)(land)
+    array([[0.11111111, 0.25      , 1.        , 1.        ],
+           [0.1       , 0.2       , 0.5       , 1.        ]])
+    """
+
+    def __init__(self, classes, exponent: float = 2.0, *, mass=None, unit: str = "cells"):
+        if unit not in ("cells", "map"):
+            raise ValueError("unit must be 'cells' or 'map'")
+        self.classes = _classes_of(classes)
+        self.exponent = float(exponent)
+        if not math.isfinite(self.exponent):
+            raise ValueError("exponent must be finite")
+        self.mass = None if mass is None else read_map(mass).as_float()
+        self.unit = unit
+
+    def __call__(self, landscape, nodata=None):
+        from ..surface import gravity
+
+        land = read_map(landscape, nodata)
+        v = land.as_float()
+        m = np.where(np.isin(v, self.classes), 1.0, np.nan)
+        if self.mass is not None:
+            if self.mass.shape != v.shape:
+                raise ValueError("the masses differ in shape from the map")
+            m = m * self.mass
+        src = m if land.template is None else land.template.copy(data=m)
+        out = np.asarray(gravity(src, self.exponent, unit=self.unit), dtype=np.float64).copy()
+        out[np.isnan(v)] = np.nan
+        return _like(out, land.template, f"gravity_of_{'_'.join(f'{c:g}' for c in self.classes)}")
+
+    def __repr__(self) -> str:
+        return f"gravity_of({self.classes!r}, exponent={self.exponent:g}{', mass=...' if self.mass is not None else ''})"
 
 
 def with_dynamic(dynamic, drivers, landscape):

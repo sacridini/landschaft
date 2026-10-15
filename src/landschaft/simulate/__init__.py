@@ -39,7 +39,7 @@ from ._difference import (
     overall_difference,
     sample_to_population,
 )
-from ._dynamic import distance_to, share_of
+from ._dynamic import distance_to, gravity_of, share_of
 from ._ensemble import Ensemble, scenarios
 from ._estimator import Estimator, RasterPotential
 from ._examples import example_data
@@ -136,6 +136,7 @@ __all__ = [
     "futures_validation",
     "futures_validation_grid",
     "fuzzy_similarity",
+    "gravity_of",
     "mad",
     "memberships",
     "overall_difference",

@@ -8,6 +8,7 @@
 #include <pybind11/stl.h>
 
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <tuple>
 #include <vector>
@@ -300,6 +301,24 @@ void register_python(py::module_& m) {
           "geodiv's fitplane (spatial::surf.ls): the surface and spatial's ifail.");
     m.def("surf_best_fit_plane", &py_best_fit_plane, py::arg("z"), py::arg("extent"),
           "geodiv's bestfitplane: the surface and its order.");
+    m.def("surf_gravity", [](const Array& mass, std::optional<Array> mask, double beta, double dx, double dy,
+                             double self_distance) {
+        if (mass.ndim() != 2) throw std::invalid_argument("expected a 2-D raster");
+        const int ny = static_cast<int>(mass.shape(0)), nx = static_cast<int>(mass.shape(1));
+        if (mask && (mask->ndim() != 2 || mask->shape(0) != ny || mask->shape(1) != nx))
+            throw std::invalid_argument("the mask differs in shape from the sources");
+        std::vector<double> v;
+        {
+            py::gil_scoped_release release;
+            v = surf::gravity(mass.data(), mask ? mask->data() : nullptr, ny, nx, beta, dx, dy, self_distance);
+        }
+        return to_raster(std::move(v), ny, nx);
+    }, py::arg("mass"), py::arg("mask"), py::arg("beta"), py::arg("dx"), py::arg("dy"), py::arg("self_distance"),
+       "Gravitational interaction potential: sum of m / d^beta over the source cells.");
+    m.def("surf_gravity_weights", [](int ny, int nx, double beta, double dx, double dy, double self_distance) {
+        return to_raster(surf::gravity_weights(ny, nx, beta, dx, dy, self_distance), ny, nx);
+    }, py::arg("ny"), py::arg("nx"), py::arg("beta"), py::arg("dx"), py::arg("dy"), py::arg("self_distance"),
+       "The 1 / d^beta table by offset (|di|, |dj|).");
 }
 
 }  // namespace surf

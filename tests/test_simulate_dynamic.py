@@ -89,6 +89,37 @@ def test_share_of():
         S.share_of(2, window=np.ones((2, 3)))
 
 
+def test_gravity_of():
+    land = _land()
+    land[0, 0] = np.nan
+    g = S.gravity_of(2, 1.5)(land)
+    src = np.where(land == 2, 1.0, np.nan)
+    ref = np.asarray(ls.surface.gravity(src, 1.5))
+    ref[0, 0] = np.nan
+    np.testing.assert_array_equal(g, ref)
+    mass = np.arange(land.size, dtype=float).reshape(land.shape)
+    gm = S.gravity_of([2, 3], mass=mass)(land)
+    ref = np.asarray(ls.surface.gravity(np.where(np.isin(land, [2, 3]), mass, np.nan)))
+    ref[0, 0] = np.nan
+    np.testing.assert_array_equal(gm, ref)
+    da = simulate_cases.grid(np.nan_to_num(land, nan=1))
+    out = S.gravity_of(3, unit="map")(da)
+    assert out.name == "gravity_of_3" and out.rio.crs == da.rio.crs
+    pot = Recording([np.random.default_rng(5).random(land.shape)], ["probability_1_to_2"], dim="band")
+    alloc = S.ExpanderPatcher(steps=2, expander=(4, 2, 1.5), patcher=(4, 2, 1.5))
+    sim = S.Model(pot, {(1, 2): 0.02}, alloc, dynamic={"d2": S.gravity_of(2)}).run(np.nan_to_num(land, nan=1), seed=3)
+    for k, seen in enumerate(pot.seen):
+        np.testing.assert_array_equal(seen["d2"], S.gravity_of(2)(sim.maps.values[k]))
+    with pytest.raises(ValueError, match="unit"):
+        S.gravity_of(2, unit="km")
+    with pytest.raises(ValueError, match="shape"):
+        S.gravity_of(2, mass=np.ones((3, 3)))(land)
+    from landschaft.simulate._graph import _dynamic_nodes
+
+    with pytest.raises(TypeError, match="Terraflux"):  # no Terraflux node yet
+        _dynamic_nodes(S.Model(pot, {(1, 2): 0.02}, alloc, dynamic={"d2": S.gravity_of(2)}), "drivers", None)
+
+
 # ----------------------------------------------------------------------------- dynamic variables in the models
 
 def _check_dynamic(pot, sim):

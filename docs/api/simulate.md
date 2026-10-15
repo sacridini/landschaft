@@ -131,6 +131,8 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.share_of
 
+::: landschaft.simulate.gravity_of
+
 ::: landschaft.simulate.Regional
 
 ## Land systems (CLUMondo)
