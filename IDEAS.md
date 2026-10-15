@@ -3406,6 +3406,21 @@ abaixo são os do pedido; o lugar no `ls` é sugestão. Cada um ganha também um
    estado (mínimo e máximo por célula).
    * Lugar: uma peça de alocação do `ls.simulate` (`S.ContinuousPatcher` ou um modo do `ExpanderPatcher`),
      com demanda em unidades do estoque.
+   * Medido no Dinamica EGO 8.13 (`ml mp rq := PatcherContinuousState stock prob quota mean variance isometry
+     linhas colunas prune`; estoque por hectare, tamanhos em hectares): candidatas = estoque > 0 e P > 0; lista =
+     as melhores por P enquanto o estoque somado <= quota x prune (o log diz `stateCap`); sementes sorteadas ∝ P
+     (32 x 3 sorteios de 20 entre 100 células de P 0,01-1: média 0,653; P daria 0,657, P² 0,737; um primeiro
+     teste com execuções separadas sugeria P², mas as execuções estavam correlacionadas: a semente do Dinamica
+     depende de mais que `-predefined-seed`, duas pastas deram os mesmos bits); cada célula dá todo o estoque
+     (estoque e P vão a 0); para quando a cota é atingida (a última célula pode passar: `rq` negativo); a lista
+     não é reordenada quando acaba (sobra cota). Manchas de mais de uma célula **travam** o functor (como o
+     Patcher), então o crescimento é o do nosso Patcher.
+   * **Feita**: `ls.simulate.ContinuousPatcher` (`allocate`, `run` com cota por passo e rebrota opcional;
+     `StockAllocation`, `StockSimulation`), C++ `src/cpp/sim/continuous.cpp` (seleção parcial da lista em blocos
+     que dobram, o mesmo resultado da ordenação completa; sorteio por árvore de Fenwick, agora em
+     `sim/weighted.hpp`, comum com o Patcher). Testes contra o Dinamica: os casos que não dependem do sorteio
+     (lista toda tomada, cota exata, cota maior que o estoque, cota passada) exatos, o sorteio por estatística.
+     3000 x 3000, 50 mil células: 0,41 s contra 2,9 s do Dinamica (4 cores). Falta: o nó do Terraflux.
 
 ### Prioridade estrutural (diferencial)
 

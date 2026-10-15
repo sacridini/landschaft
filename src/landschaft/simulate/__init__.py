@@ -29,6 +29,7 @@ from ._allocation import CLUE, Ordered
 from ._calibrate import Calibration, calibrate
 from ._change import Changes, IntensityAnalysis, changes, crosstab
 from ._clumondo import CLUMondo, NeighbourhoodEffect, ServiceDemand, Supply
+from ._continuous import ContinuousPatcher, StockAllocation, StockSimulation
 from ._demand import AreaDemand
 from ._difference import (
     composite_matrix,
@@ -88,6 +89,7 @@ __all__ = [
     "Calibration",
     "Cap",
     "Changes",
+    "ContinuousPatcher",
     "DevelopmentDemand",
     "DevelopmentPotential",
     "Ensemble",
@@ -114,6 +116,8 @@ __all__ = [
     "Rules",
     "ServiceDemand",
     "Simulation",
+    "StockAllocation",
+    "StockSimulation",
     "Succession",
     "Supply",
     "ThreeMapComparison",

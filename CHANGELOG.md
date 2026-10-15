@@ -13,6 +13,12 @@ in a new major version.
   sources. Within 3e-6 of Dinamica EGO 8.13 (which sums float32 terms in float32), 3.7x faster on 4 cores.
 - `ls.simulate.gravity_of`: the potential of the cells of some classes (optionally weighted by a mass map) as a
   dynamic variable, recomputed from the simulated map at every step. `Model.save` does not write it yet.
+- `ls.simulate.ContinuousPatcher`: new patches that take a stock (biomass, carbon, timber) up to a quota (Dinamica
+  EGO's `PatcherContinuousState`, clean-room): `allocate` (stock left, depleted probabilities, stock taken, patch
+  numbers, quota left) and `run` (a quota per step, optional regrowth). Candidates, pruning (summed stock up to
+  prune factor x quota), seeds drawn in proportion to the probability and the quota rule measured in Dinamica EGO
+  8.13 (exact on the cases that do not depend on the draw, statistical on the draw); patch growth as the Patcher's
+  (C++ `sim/continuous.cpp`). 3000 x 3000 cells: 0.41 s against 2.9 s.
 
 ### Fixed
 - The names of the landscape mosaic's classes 6 to 12 (`LM19_CLASSES`): they did not match the classes

@@ -2801,3 +2801,66 @@ CASES.update({
         notes="Dinamica EGO's CalcInteractionPotentialMap (float32 output), five exponents, with and without "
               "a mask; Dinamica sums float32 terms in float32."),
 })
+
+
+GROUPS += ["continuous_patcher"]
+
+# (quota, prune factor): the ranked list kept whole or cut, met exactly, exceeded, left unmet
+_PCS_DETERMINISTIC = ((95.0, 1.0), (45.0, 1.0), (2000.0, 10.0), (880.0, 1.5))
+_PCS_DRAWS = 32
+
+
+@cache
+def pcs_world():
+    """Stock (100 per hectare on 30 m cells: 9 per cell) and probabilities for the continuous Patcher."""
+    import xarray as xr
+
+    rng = np.random.default_rng(81)
+    ny, nx = 20, 20
+    stock = np.full((ny, nx), 100.0)
+    stock[:, :15] = 0.0  # 100 cells with stock, 900 units
+    prob = rng.random((ny, nx))
+    prob[0, 19] = 0.0  # never a candidate
+    draws = np.full((30, 40), 100.0)
+    dprob = np.full(30 * 40, 0.001)  # below the 100 cells the 900 units of the pruned list hold
+    dprob[rng.choice(30 * 40, 100, replace=False)] = np.linspace(0.01, 1.0, 100)
+    dprob = dprob.reshape(30, 40)
+    small = [grid(stock), grid(prob)]
+    big = [grid(draws), grid(dprob)]
+    return {"stock": small[0], "prob": small[1], "draw_stock": big[0], "draw_prob": big[1]}
+
+
+def _pcs_job(world):
+    lines = ['  s := LoadMap "stock.tif";', '  p := LoadMap "prob.tif";', '  ds := LoadMap "draw_stock.tif";',
+             '  dp := LoadMap "draw_prob.tif";']
+    outputs, names = [], []
+    for k, (q, f) in enumerate(_PCS_DETERMINISTIC):
+        lines += [f"  m{k} mp{k} r{k} := PatcherContinuousState s p {q} 0.09 0 1.5 3 3 {f};",
+                  f'  SaveMap m{k} "det_{k}.tif";']
+        outputs.append(f"det_{k}.tif")
+        names.append(f"r{k}")
+    for k in range(_PCS_DRAWS):
+        lines += [f"  d{k} dq{k} dr{k} := PatcherContinuousState ds dp 180 0.09 0 1.5 3 3 5;",
+                  f'  SaveMap d{k} "draw_{k}.tif";']
+        outputs.append(f"draw_{k}.tif")
+    lines.append("  t := CreateTable [\n\"Key*\",\"Value\"\n" + "\n".join(f"{k + 1},0" for k in range(len(names)))
+                 + "\n];")
+    prev = "t"
+    for k, name in enumerate(names):
+        lines.append(f"  t{k} := SetTableCellValue {prev} 2 [ {k + 1} ] {name};")
+        prev = f"t{k}"
+    lines.append(f'  SaveTable {prev} "remaining.csv";')
+    rasters = {k: world[k] for k in ("stock", "prob", "draw_stock", "draw_prob")}
+    return {"rasters": rasters, "script": "Script {{\n" + "\n".join(lines) + "\n}};\n",
+            "outputs": [*outputs, "remaining.csv"]}
+
+
+INPUTS.update({"pcs_world": pcs_world})
+
+CASES.update({
+    "continuous_patcher_dinamica": Case(
+        "continuous_patcher", "dinamica", ("pcs_world",), job=lambda pcs_world: _pcs_job(pcs_world),
+        notes="Dinamica EGO's PatcherContinuousState with one-cell patches (larger ones crash it): four quotas "
+              "and prune factors whose outcome does not depend on the draw, and 32 draws of 20 cells among 100 "
+              "of probability 0.01-1 for the seed statistics."),
+})

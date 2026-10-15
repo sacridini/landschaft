@@ -260,6 +260,7 @@ add_library(simcore STATIC
     src/cpp/sim/rglm.cpp
     src/cpp/sim/clues.cpp
     src/cpp/sim/clumondo.cpp
+    src/cpp/sim/continuous.cpp
     src/cpp/sim/demand.cpp
     src/cpp/sim/futures.cpp
     src/cpp/sim/molusce.cpp

@@ -18,6 +18,7 @@
 #include "sim/change.hpp"
 #include "sim/clues.hpp"
 #include "sim/clumondo.hpp"
+#include "sim/continuous.hpp"
 #include "sim/demand.hpp"
 #include "sim/futures.hpp"
 #include "sim/molusce.hpp"
@@ -586,6 +587,32 @@ py::dict sim_patches(const IArray& landscape, const py::list& transitions, doubl
     return out;
 }
 
+py::dict sim_continuous_patches(const DArray& stock, const DArray& probability, double quota, double mean,
+                                double variance, double isometry, double prune_factor, int win_rows, int win_cols,
+                                std::uint64_t seed) {
+    if (stock.ndim() != 2) throw std::invalid_argument("the stock must be 2-D");
+    const i64 ny = stock.shape(0), nx = stock.shape(1);
+    if (probability.ndim() != 2 || probability.shape(0) != ny || probability.shape(1) != nx)
+        throw std::invalid_argument("the probability map differs in shape from the stock");
+    sim::ContinuousResult r;
+    {
+        py::gil_scoped_release release;
+        r = sim::continuous_patches(ny, nx, stock.data(), probability.data(), quota, mean, variance, isometry,
+                                    prune_factor, win_rows, win_cols, seed);
+    }
+    py::dict out;
+    py::array_t<double> taken({ny, nx});
+    std::copy(r.taken.begin(), r.taken.end(), taken.mutable_data());
+    py::array_t<std::int32_t> patch({ny, nx});
+    std::copy(r.patch.begin(), r.patch.end(), patch.mutable_data());
+    out["taken"] = taken;
+    out["patch"] = patch;
+    out["remaining"] = r.remaining;
+    out["patches"] = r.patches;
+    out["cells"] = r.cells;
+    return out;
+}
+
 py::array_t<double> sim_tmc_table(const DArray& x, const DArray& x1, const DArray& y1, const DArray& w) {
     if (x.ndim() != 2 || x1.ndim() != 2 || y1.ndim() != 2) throw std::invalid_argument("(classes, blocks) counts");
     const int n = static_cast<int>(x.shape(0));
@@ -1077,6 +1104,10 @@ void register_python(py::module_& m) {
     m.def("sim_patches", &sim_patches, py::arg("landscape"), py::arg("transitions"), py::arg("prune_factor") = 10.0,
           py::arg("win_rows") = 3, py::arg("win_cols") = 3, py::arg("seed") = 1,
           "Expander and Patcher (Soares-Filho et al. 2002): allocation of the changes of each transition.");
+    m.def("sim_continuous_patches", &sim_continuous_patches, py::arg("stock"), py::arg("probability"),
+          py::arg("quota"), py::arg("mean"), py::arg("variance"), py::arg("isometry"), py::arg("prune_factor") = 10.0,
+          py::arg("win_rows") = 3, py::arg("win_cols") = 3, py::arg("seed") = 1,
+          "The Patcher of a continuous state (Dinamica EGO's PatcherContinuousState): patches taking stock to a quota.");
     m.def("sim_cars", &sim_cars, py::arg("landscape"), py::arg("fixed"), py::arg("region"), py::arg("probability"),
           py::arg("weights"),
           py::arg("seeds"), py::arg("allowed"), py::arg("demand"), py::arg("window") = 3, py::arg("decay") = 0.9,

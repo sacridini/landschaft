@@ -157,6 +157,14 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.ExpanderPatcher
 
+## Stock taken by patches (Dinamica's continuous Patcher)
+
+::: landschaft.simulate.ContinuousPatcher
+
+::: landschaft.simulate.StockAllocation
+
+::: landschaft.simulate.StockSimulation
+
 ## Multi-type random patch seeds (PLUS)
 
 ::: landschaft.simulate.CARS

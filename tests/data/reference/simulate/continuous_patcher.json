@@ -1,0 +1,267 @@
+{
+ "arrays": {
+  "continuous_patcher_dinamica/det_0.tif": {
+   "dim": [
+    20,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/det_1.tif": {
+   "dim": [
+    20,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/det_2.tif": {
+   "dim": [
+    20,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/det_3.tif": {
+   "dim": [
+    20,
+    20
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_0.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_1.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_10.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_11.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_12.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_13.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_14.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_15.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_16.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_17.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_18.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_19.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_2.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_20.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_21.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_22.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_23.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_24.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_25.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_26.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_27.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_28.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_29.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_3.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_30.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_31.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_4.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_5.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_6.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_7.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_8.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/draw_9.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "continuous_patcher_dinamica/remaining.csv/Key*": {
+   "kind": "vector"
+  },
+  "continuous_patcher_dinamica/remaining.csv/Value": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "dinamica": {
+   "dinamica": "8130"
+  }
+ }
+}
