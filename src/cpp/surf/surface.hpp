@@ -171,4 +171,33 @@ std::vector<double> gravity_weights(int ny, int nx, double beta, double dx, doub
 std::vector<double> gravity(const double* mass, const double* mask, int ny, int nx, double beta, double dx,
                             double dy, double self_distance);
 
+// -- hilltops (APP de topo de morro, Lei 12.651/2012) --------------------------
+
+struct Hill {
+    i64 summit = -1;          // cell of the summit
+    double top = 0;           // its elevation
+    double base = 0;          // elevation of the base
+    i64 base_cell = -1;       // the saddle, plain cell or lowest cell
+    int kind = 0;             // 0 saddle (key col), 1 plain or water, 2 lowest cell of a connected area
+    double height = 0;        // top - base
+    double mean_slope = 0;    // of its region's cells above the base (degrees)
+    double line_slope = 0;    // of the line from the summit to the nearest cell at or below the base (degrees)
+    i64 cells = 0;            // cells of its region above the base
+    double threshold = 0;     // base + fraction x height, for the hills that qualify
+    bool qualifies = false;
+    bool fixed = false;
+};
+
+struct Hilltops {
+    std::vector<Hill> hills;            // one per summit, in the order of the sweep (highest first)
+    std::vector<std::int32_t> label;    // the qualifying hill whose upper part holds the cell (-1: none)
+};
+
+// z: the DEM (NaN = missing); slope: per cell (degrees, NaN where unknown); plain:
+// non-zero on plains and water bodies (optional); dx, dy: cell sizes; a hill
+// qualifies when its height >= min_height and its slope (mean, or of the line
+// with `line_slope`) > min_slope; its upper part from base + fraction x height.
+Hilltops hilltops(const double* z, const double* slope, const std::uint8_t* plain, int ny, int nx, double dx,
+                  double dy, double min_height, double min_slope, bool line_slope, double fraction);
+
 }  // namespace surf

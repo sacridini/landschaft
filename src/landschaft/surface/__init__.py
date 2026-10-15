@@ -24,6 +24,7 @@ from ._bearing import bearing_area, height_ba, sbi, sci, sdc, sk, spk, svi, svk
 from ._examples import example_data
 from ._features import find_peaks, find_valleys, s10z, sds, ssc
 from ._gravity import gravity
+from ._hilltop import Hilltop, hilltop
 from ._hybrid import flat_area, sdq, sdq6, sdr, surface_area
 from ._metrics import list_metrics, metrics
 from ._plane import best_fit_plane, fit_plane, remove_plane
@@ -32,6 +33,7 @@ from ._terrain import curvature, dissection, hli, hsp, spherical_sd, srr, terrai
 from ._window import window_metrics
 
 __all__ = [
+    "Hilltop",
     "aacf",
     "bearing_area",
     "best_fit_plane",
@@ -43,6 +45,7 @@ __all__ = [
     "fit_plane",
     "flat_area",
     "gravity",
+    "hilltop",
     "height_ba",
     "hli",
     "hsp",

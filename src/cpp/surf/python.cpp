@@ -8,6 +8,7 @@
 #include <pybind11/stl.h>
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <tuple>
@@ -315,6 +316,60 @@ void register_python(py::module_& m) {
         return to_raster(std::move(v), ny, nx);
     }, py::arg("mass"), py::arg("mask"), py::arg("beta"), py::arg("dx"), py::arg("dy"), py::arg("self_distance"),
        "Gravitational interaction potential: sum of m / d^beta over the source cells.");
+    m.def("surf_hilltops", [](const Array& z, const Array& slope,
+                              std::optional<py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>> plain,
+                              double dx, double dy, double min_height, double min_slope, bool line_slope,
+                              double fraction) {
+        if (z.ndim() != 2) throw std::invalid_argument("expected a 2-D raster");
+        const int ny = static_cast<int>(z.shape(0)), nx = static_cast<int>(z.shape(1));
+        if (slope.ndim() != 2 || slope.shape(0) != ny || slope.shape(1) != nx)
+            throw std::invalid_argument("the slope differs in shape from the DEM");
+        if (plain && (plain->ndim() != 2 || plain->shape(0) != ny || plain->shape(1) != nx))
+            throw std::invalid_argument("the plain mask differs in shape from the DEM");
+        surf::Hilltops r;
+        {
+            py::gil_scoped_release release;
+            r = surf::hilltops(z.data(), slope.data(), plain ? plain->data() : nullptr, ny, nx, dx, dy, min_height,
+                               min_slope, line_slope, fraction);
+        }
+        const std::size_t nh = r.hills.size();
+        py::array_t<std::int64_t> summit(nh), base_cell(nh), cells(nh);
+        py::array_t<double> top(nh), base(nh), height(nh), mean(nh), line(nh), thr(nh);
+        py::array_t<std::int32_t> kind(nh);
+        py::array_t<bool> ok(nh);
+        for (std::size_t h = 0; h < nh; ++h) {
+            const auto& x = r.hills[h];
+            summit.mutable_data()[h] = x.summit;
+            base_cell.mutable_data()[h] = x.base_cell;
+            cells.mutable_data()[h] = x.cells;
+            top.mutable_data()[h] = x.top;
+            base.mutable_data()[h] = x.base;
+            height.mutable_data()[h] = x.height;
+            mean.mutable_data()[h] = x.mean_slope;
+            line.mutable_data()[h] = x.line_slope;
+            thr.mutable_data()[h] = x.qualifies ? x.threshold : std::numeric_limits<double>::quiet_NaN();
+            kind.mutable_data()[h] = x.kind;
+            ok.mutable_data()[h] = x.qualifies;
+        }
+        py::array_t<std::int32_t> label({ny, nx});
+        std::copy(r.label.begin(), r.label.end(), label.mutable_data());
+        py::dict d;
+        d["summit"] = summit;
+        d["top"] = top;
+        d["base"] = base;
+        d["base_cell"] = base_cell;
+        d["kind"] = kind;
+        d["height"] = height;
+        d["mean_slope"] = mean;
+        d["line_slope"] = line;
+        d["cells"] = cells;
+        d["threshold"] = thr;
+        d["qualifies"] = ok;
+        d["label"] = label;
+        return d;
+    }, py::arg("z"), py::arg("slope"), py::arg("plain"), py::arg("dx"), py::arg("dy"), py::arg("min_height"),
+       py::arg("min_slope"), py::arg("line_slope"), py::arg("fraction"),
+       "Hilltops (APP de topo de morro): summits, bases, heights, slopes and the upper parts of the qualifying hills.");
     m.def("surf_gravity_weights", [](int ny, int nx, double beta, double dx, double dy, double self_distance) {
         return to_raster(surf::gravity_weights(ny, nx, beta, dx, dy, self_distance), ny, nx);
     }, py::arg("ny"), py::arg("nx"), py::arg("beta"), py::arg("dx"), py::arg("dy"), py::arg("self_distance"),

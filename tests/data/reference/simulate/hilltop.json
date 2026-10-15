@@ -1,0 +1,27 @@
+{
+ "arrays": {
+  "hilltop_dinamica/dip.csv/Key*": {
+   "kind": "vector"
+  },
+  "hilltop_dinamica/dip.csv/Value": {
+   "kind": "vector"
+  },
+  "hilltop_dinamica/height.csv/Key*": {
+   "kind": "vector"
+  },
+  "hilltop_dinamica/height.csv/Value": {
+   "kind": "vector"
+  },
+  "hilltop_dinamica/maxima.csv/Key*": {
+   "kind": "vector"
+  },
+  "hilltop_dinamica/maxima.csv/Value": {
+   "kind": "vector"
+  }
+ },
+ "versions": {
+  "dinamica": {
+   "dinamica": "8130"
+  }
+ }
+}

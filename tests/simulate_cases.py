@@ -2937,3 +2937,67 @@ CASES.update({
               "without merging, along the directions) and 100 CalcDestinationMap draws (2 x 2 quadrants, 3 per "
               "quadrant, 90 m apart)."),
 })
+
+
+GROUPS += ["hilltop"]
+
+# cones on a plain at 500 m: (row, column, height m, radius m); 30 m cells
+_HILL_CONES = ((30, 30, 80, 200), (30, 90, 150, 300), (90, 50, 250, 400), (90, 130, 400, 500))
+
+
+@cache
+def hilltop_world():
+    """Cones of known height and slope on a plain, the DEM cut into 10 m bands (Dinamica's input)."""
+    from scipy import ndimage
+
+    ny, nx = 120, 160
+    yy, xx = np.mgrid[0:ny, 0:nx] * 30.0
+    dem = np.full((ny, nx), 500.0)
+    for r, c, h, run in _HILL_CONES:
+        dem = np.maximum(dem, 500 + h * np.clip(1 - np.hypot(yy - r * 30.0, xx - c * 30.0) / run, 0, None))
+    band = np.floor(dem / 10.0)
+    ids = np.zeros((ny, nx))
+    nid = 0
+    for b in np.unique(band):
+        lab, k = ndimage.label(band == b, structure=np.ones((3, 3)))
+        ids[lab > 0] = lab[lab > 0] + nid
+        nid += k
+    return {"dem": grid(dem), "ids": grid(ids)}
+
+
+def _hilltop_job(world):
+    ls = _ls()
+    dem, ids = np.asarray(world["dem"]), np.asarray(world["ids"]).astype(int)
+    slope = np.asarray(ls.surface.terrain(world["dem"], "slope"))
+    rows = {"elev": [], "slope": [], "area": []}
+    for k in range(1, ids.max() + 1):
+        m = ids == k
+        s = slope[m][~np.isnan(slope[m])]
+        rows["elev"].append(f"{k},{float(dem[m].mean())!r}")
+        rows["slope"].append(f"{k},{float(s.mean() if s.size else 0.0)!r}")
+        rows["area"].append(f"{k},{float(m.sum() * 0.09)!r}")
+    files = {f"{t}.csv": '"Key*","Value"\n' + "\n".join(v) + "\n" for t, v in rows.items()}
+    # thresholds relaxed (heights from 0, any slope, no maximum, no grouping) to see every summit's height and slope
+    script = """Script {{
+  p := LoadMap "ids.tif";
+  e := LoadLookupTable "elev.csv";
+  s := LoadLookupTable "slope.csv";
+  a := LoadLookupTable "area.csv";
+  h hh hd pl mx mn := CalcHilltop p e s a 0 10000 5.7 0 10 5.7 45 0 0.67 .yes;
+  SaveLookupTable hh "height.csv";
+  SaveLookupTable hd "dip.csv";
+  SaveLookupTable mx "maxima.csv";
+}};
+"""
+    return {"rasters": {"ids": world["ids"].assign_attrs(categorical=True)}, "files": files, "script": script,
+            "outputs": ["height.csv", "dip.csv", "maxima.csv"]}
+
+
+INPUTS.update({"hilltop_world": hilltop_world})
+
+CASES.update({
+    "hilltop_dinamica": Case(
+        "hilltop", "dinamica", ("hilltop_world",), job=lambda hilltop_world: _hilltop_job(hilltop_world),
+        notes="Dinamica EGO's CalcHilltop (CONAMA 303/2002) on four cones on a plain, the DEM in 10 m bands, "
+              "thresholds relaxed: each summit's height and dip slope."),
+})

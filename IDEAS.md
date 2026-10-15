@@ -3481,6 +3481,97 @@ abaixo são os do pedido; o lugar no `ls` é sugestão. Cada um ganha também um
      anotada.
    * Saídas: o mapa da APP, os cumes com base, altura, inclinação média e o ponto de sela de cada elevação
      (tabela), e as elevações que não passam nos critérios (para conferência). Lugar: `ls.surface.hilltop`.
+   * Medido no Dinamica EGO 8.13 (`h hh hd pl mx mn := CalcHilltop fatias elevação declividade área ...9 reais
+     ... .yes`; doc na wiki, `calc_hilltop`): segue a **CONAMA 303/2002** (morro de 50 a 300 m, declividade
+     mínima 17,19° na "linha de maior declividade", base plana até 5,73°, planalto, escarpa, agrupamento por
+     distância), sobre o MDE já cortado em fatias hipsométricas com tabelas de elevação/declividade/área por
+     fatia; devolve tabelas (as fatias da APP, alturas, mergulhos, planaltos, máximos, mínimos). A altura bate (topo
+     − média da fatia da base), mas o "mergulho" mede do topo à célula mais próxima da fatia da base que **toca
+     outra feição ou a borda do mapa**, não ao pé do morro: 5,07° num cone isolado de 21,8°, e varia com a
+     posição do cone no mapa (medido com cones, bordas elevadas e uma depressão). Por isso não há paridade
+     possível nem desejável: o objetivo é a regra da lei.
+   * **Feita** (`ls.surface.hilltop`, `Hilltop`; C++ `src/cpp/surf/hilltop.cpp`): árvore de fusão das células em
+     ordem decrescente de cota (radix sort das cotas, union-find de 32 bits, bitset das células varridas,
+     floresta das ligações com a célula que fez cada ligação). Escolhas (a lei deixa margem):
+     - base = cota do ponto de sela onde a região do cume encontra terreno **mais alto** (a sela-chave da
+       proeminência topográfica): o pico mais alto de uma serra é medido da base da serra, os demais picos das
+       suas selas; base = cota da planície/espelho d'água quando a região chega a uma célula da máscara `plain`
+       antes (planícies não são inferidas da declividade: o usuário dá a máscara); o pico mais alto de uma área
+       sem planície tem como base a menor cota da área;
+     - inclinação média = média da declividade (Horn) das células da região acima da base ligadas ao cume acima
+       dela (o terreno plano na cota da base e regiões que só se tocam ali ficam fora); `slope="line"` dá o
+       ângulo do cume até o pé (a célula mais próxima com cota <= base), para a CONAMA 303;
+     - APP = a parte da região acima de base + 2/3 da altura **ligada ao cume** (um pico separado acima do
+       limiar, ligado abaixo dele, é julgado como morro próprio); rótulo = o morro de maior limiar que cobre a
+       célula.
+     Testes: cones e serras de geometria conhecida, máscara de lago, critérios da CONAMA, e uma implementação
+     ingênua por componentes conexos (bases, médias e APP iguais em MDEs aleatórios); o caso do Dinamica mostra
+     as mesmas alturas e o mergulho distorcido. 3000 x 3000: 1,7 s (4 cores). Falta: decidir com o usuário as
+     escolhas acima; o nó do Terraflux.
+
+---
+
+## Hidrologia e forma do terreno (pedido em 2026-10-16)
+
+Quatro ferramentas de terreno de alto impacto, todas sobre um condicionamento hidrológico comum, como funções
+do landschaft (C++/OpenMP, `n_threads`) e nós do Terraflux (`Model.save`; o motor por tiles do Terraflux, onde o
+algoritmo for local). Lugar sugerido: `ls.surface` (terreno), com `ls.hydro` se o conjunto crescer.
+
+### 0. Condicionamento do MDE (o "encanamento" de tudo o que usa fluxo acumulado)
+
+Nenhum MDE bruto (SRTM, ALOS, Copernicus) serve direto: depressões espúrias interrompem o fluxo.
+* **Priority-Flood** (Barnes, Lehman & Mulla 2014; Wang & Liu 2006): fila de prioridade, O(N log N), ou O(N)
+  para inteiros/com fila simples nas planícies (a variante "+ε" para dar caimento às áreas planas, e o
+  rebaixamento — *breaching* — de Lindsay 2016 como alternativa ao preenchimento).
+* Direções de fluxo D8, D-Infinity (Tarboton 1997) e MFD (Quinn et al. 1991; Freeman 1991; Holmgren 1994),
+  área de contribuição (ordem topológica, paralela por bacias) e rede de drenagem por limiar de área.
+* Referências de paridade: WhiteboxTools (MIT), RichDEM (GPL-3, do próprio Barnes), TauDEM (GPL), GRASS
+  `r.fill.dir`/`r.watershed`/`r.flow` (GPL). Bit a bit onde o algoritmo é determinístico (preenchimento, D8).
+
+### 1. HAND (Height Above Nearest Drainage)
+
+Desenvolvido no Brasil (INPE: Rennó et al. 2008; Nobre et al. 2011): a altura de cada célula acima do ponto da
+drenagem para onde ela escoa (caminho D8 descendente sobre o MDE condicionado até a rede).
+* Usos: fisionomias (terra firme, várzea, igapó na Amazônia; matas ciliares no Cerrado), profundidade do
+  lençol, mapas instantâneos de suscetibilidade a inundação por cota (o `Flooding` do FUTURES já recebe HAND
+  como entrada: aqui ele seria calculado), planícies aluviais e áreas úmidas para o Código Florestal (a máscara
+  `plain` do `hilltop`).
+* Viabilidade média: condicionamento + rede + caminhamento descendente (uma passada em ordem topológica, cada
+  célula herda a drenagem do seu receptor). Referências: `HAND` do TerraHidro/INPE, GRASS `r.stream.distance`
+  (`-n`, elevação), WhiteboxTools `ElevationAboveStream`.
+
+### 2. Geomorphons (Jasiewicz & Stepinski 2013)
+
+Formas do relevo por padrões de linha de visada nas 8 direções até uma distância de busca (com tolerância de
+planura), em vez de derivadas locais de janela 3 x 3: as 10 formas fundamentais (plano, pico, crista, esporão,
+encosta, depressão rasa..., vale, garganta, fosso) e o código ternário de cada célula.
+* Covariável mais expressiva que declividade e aspecto para LUCC, SDM (Random Forest, MaxNet) e pesos de
+  evidência: capta a morfologia do sítio.
+* Puramente focal (raios radiais): paraleliza por linhas/tiles e serve ao motor por tiles do Terraflux (borda
+  = distância de busca). Referência de paridade: GRASS `r.geomorphon` (GPL), bit a bit.
+
+### 3. TWI, SPI e STI com fluxo múltiplo
+
+TWI = ln(a / tan β) (umidade topográfica), SPI = a · tan β (poder erosivo), STI = fator LS da USLE (Moore &
+Burch 1986: (a / 22,13)^0,6 (sin β / 0,0896)^1,3), com a área específica de contribuição a de **D-Infinity ou
+MFD** (o D8 simples gera as linhas paralelas artificiais) e tratamento de β = 0.
+* TWI é um dos drivers mais usados em SDM e expansão agrícola. Referências: WhiteboxTools (`WetnessIndex`,
+  `StreamPowerIndex`, `SedimentTransportIndex`), SAGA `ta_hydrology` (GPL), TauDEM `DinfFlowDir`/`AreaDinf`.
+
+### 4. Conectividade de sedimentos (IC de Borselli / Cavalli) e retenção (estilo InVEST SDR)
+
+IC = log10(D_up / D_dn) (Borselli et al. 2008; Cavalli et al. 2013): conectividade entre encostas e drenagem ou
+reservatórios, ponderada pela cobertura (fator C, rugosidade); a razão de entrega de sedimentos (SDR) do
+InVEST (Apache-2.0, Python/Cython: referência de paridade) com a RUSLE por célula.
+* Liga ao `ls.prioritize` (otimização) e à restauração (`plangea`): onde restaurar para reter sedimentos (PSA
+  hídrico, assoreamento de hidrelétricas, captação de água das cidades), junto com carbono e biodiversidade, como
+  feição ou benefício por ação ("sedimento evitado" se a célula for restaurada).
+* Referências: SedInConnect (Crema & Cavalli 2018, GPL), InVEST SDR (`natcap.invest.sdr`).
+
+### Ordem sugerida
+
+0 (condicionamento, direções, acumulação) → 1 (HAND) e 3 (TWI/SPI/STI) → 2 (geomorphons, independente) → 4
+(IC/SDR, depende de 0 e 3 e de tabelas de C/P por uso).
 
 ---
 

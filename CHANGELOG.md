@@ -28,6 +28,14 @@ in a new major version.
   range of distances from the roads, joined to the network each step; `step`, `run`) and `RoadDistance`
   (`RoadBuilder.dynamic`: the distance to the roads as a dynamic variable that builds a step of roads each time
   the simulated map changes).
+- `ls.surface.hilltop`: hilltops as permanent protection areas (APP de topo de morro, Lei 12.651/2012 art. 4 IX):
+  every summit with its base (the saddle where it meets higher terrain, the plain or water body it reaches, or the
+  lowest elevation of its area), height, mean slope and line slope; the hills of at least 100 m and mean slope above
+  25 degrees (configurable, e.g. CONAMA 303/2002's 50 m and 30 % along the line) and their upper third. A merge tree
+  of the cells swept from the highest down in C++ (radix sort, 32-bit union-find with a forest of links); 3000 x
+  3000 cells in 1.7 s on 4 cores. An open replacement of Dinamica EGO's `CalcHilltop` (CONAMA 303 on a DEM cut into
+  elevation bands, whose dip slope reaches to the map's edge or other features: 5 degrees for an isolated cone of
+  21.8).
 
 ### Fixed (against Dinamica EGO)
 - `destinations` covers the whole map with its quadrants (Dinamica gives each `n // q` rows or columns: the last

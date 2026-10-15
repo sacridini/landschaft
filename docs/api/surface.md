@@ -133,6 +133,12 @@ terra's slope and aspect), corrected where it errs.
 
 ::: landschaft.surface.hli
 
+## Hilltops (APP de topo de morro)
+
+::: landschaft.surface.hilltop
+
+::: landschaft.surface.Hilltop
+
 ## Spatial interaction
 
 ::: landschaft.surface.gravity
