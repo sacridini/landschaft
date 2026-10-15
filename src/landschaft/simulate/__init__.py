@@ -63,6 +63,7 @@ from ._molusce import MolusceCA, MolusceWoE
 from ._patches import ExpanderPatcher
 from ._plus import CARS
 from ._regional import Regional
+from ._roads import RoadBuilder, RoadDistance, destinations, friction_cost, pathways
 from ._rules import Neighbourhood, Rules
 from ._run import Projection, agreement, run
 from ._similarity import (
@@ -112,6 +113,8 @@ __all__ = [
     "Projection",
     "RasterPotential",
     "Regional",
+    "RoadBuilder",
+    "RoadDistance",
     "Roles",
     "Rules",
     "ServiceDemand",
@@ -130,6 +133,7 @@ __all__ = [
     "compare_maps",
     "composite_matrix",
     "crosstab",
+    "destinations",
     "development_pressure",
     "difference_components",
     "difference_resolutions",
@@ -139,11 +143,13 @@ __all__ = [
     "example_data",
     "futures_validation",
     "futures_validation_grid",
+    "friction_cost",
     "fuzzy_similarity",
     "gravity_of",
     "mad",
     "memberships",
     "overall_difference",
+    "pathways",
     "patch_library",
     "presets",
     "run",

@@ -3436,6 +3436,29 @@ abaixo são os do pedido; o lugar no `ls` é sugestão. Cada um ganha também um
      dinâmicas `distance_to` das estradas passam a ver as novas (o ciclo estrada → desmatamento → estrada).
    * Paridade: estocástica (número de estradas, comprimento total, distribuição das distâncias aos destinos,
      sinuosidade) em várias sementes; o determinístico (custo acumulado, caminho sem ruído) bit a bit.
+   * Medido no Dinamica EGO 8.13 (assinaturas pelo parser: `c d := CalcCostMap fontes fricção direções? tipo nulo
+     diagonais passes relativa`; `d := CalcDestinationMap atração h v distância tentativas por_quadrante tipo nulo
+     esparso`; `p := CalcPathwayMap rede fontes custo_ou_direção é_direção loteria mesclar`; o submodelo
+     `Submodels/ClassicRoadConstructor.egoml` mostra a composição):
+     - `CalcCostMap`: um passo custa a fricção da célula de **destino** (× √2 exato na diagonal), 8 vizinhos;
+       com passes = 0 os custos são os de Dijkstra bit a bit (somas na ordem do caminho); fricção nula e células
+       inalcançáveis ficam nulas; "relativa" multiplica pela resolução. As direções são o predecessor no caminho
+       ótimo (códigos 1 NO ... 8 O); nos empates seguem a ordem das varreduras do push-broom (sem regra fixa).
+     - `CalcPathwayMap` com custos: de cada fonte desce ao vizinho de menor custo até custo <= 0; empates para o
+       primeiro na ordem das linhas da janela 3 x 3 (NO, N, NE, O, L, SO, S, SE; medido com custos montados para
+       separar das outras ordens); células novas valem 1; com direções, segue os códigos.
+     - `CalcDestinationMap`: "horizontal" divide as colunas, "vertical" as linhas, cada quadrante com n // q (o
+       resto nunca recebe destino); o sorteio é ∝ atração, mas arredonda U × soma para inteiro e anda pela soma
+       acumulada: a primeira célula tem meio peso e o sorteio além do fim pega a última célula do quadrante mesmo
+       com atração 0 (~1/(2 x soma) das vezes; medido com 300 sorteios); as tentativas só servem à distância
+       mínima (rejeita < mínimo).
+   * **Feita**: `ls.simulate.friction_cost`, `destinations` (só a forma correta: quadrantes cobrem o mapa, sorteio
+     exato ∝ atração), `pathways`, `RoadBuilder` (`step`, `run`, `dynamic` → `RoadDistance`, a distância às
+     estradas como variável dinâmica que constrói um passo a cada mapa novo), C++ `src/cpp/sim/roads.cpp`.
+     Testes contra o Dinamica: custos bit a bit (fricções reais e inteiras, com e sem diagonal, relativa, células
+     intransponíveis e inalcançáveis), direções iguais fora dos empates (nos empates, ambas predecessoras ótimas),
+     caminhos iguais (mesclados, só novos, pelas direções do Dinamica), destinos por estatística. 3000 x 3000:
+     custo em 1,2 s contra 308 s do Dinamica (passes ilimitados, 4 cores). Falta: o nó do Terraflux.
 
 ### Projeto especial (alto valor para o Brasil)
 

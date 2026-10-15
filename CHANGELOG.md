@@ -19,6 +19,21 @@ in a new major version.
   prune factor x quota), seeds drawn in proportion to the probability and the quota rule measured in Dinamica EGO
   8.13 (exact on the cases that do not depend on the draw, statistical on the draw); patch growth as the Patcher's
   (C++ `sim/continuous.cpp`). 3000 x 3000 cells: 0.41 s against 2.9 s.
+- Endogenous roads (Dinamica EGO's road constructor, clean-room): `ls.simulate.friction_cost` (`CalcCostMap`: a
+  step costs the friction of the cell entered, sqrt(2) on diagonals; Dijkstra in C++, the same bits as Dinamica's
+  push-broom run to convergence, 1.2 s against 308 s on 3000 x 3000 cells; directions to the predecessors),
+  `destinations` (`CalcDestinationMap`: draws by attraction in quadrants, a minimum distance between them),
+  `pathways` (`CalcPathwayMap`: down the costs to the network, ties to the first in row order or by lottery, or
+  along the directions; the same maps as Dinamica), `RoadBuilder` (the `ClassicRoadConstructor`: destinations at a
+  range of distances from the roads, joined to the network each step; `step`, `run`) and `RoadDistance`
+  (`RoadBuilder.dynamic`: the distance to the roads as a dynamic variable that builds a step of roads each time
+  the simulated map changes).
+
+### Fixed (against Dinamica EGO)
+- `destinations` covers the whole map with its quadrants (Dinamica gives each `n // q` rows or columns: the last
+  `n % q` never get a destination) and draws in exact proportion to the attraction (Dinamica rounds its draw to an
+  integer of the summed attraction: the first cell gets half its share and a draw past the end takes the
+  quadrant's last cell, even of no attraction).
 
 ### Fixed
 - The names of the landscape mosaic's classes 6 to 12 (`LM19_CLASSES`): they did not match the classes

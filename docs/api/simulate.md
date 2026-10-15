@@ -165,6 +165,18 @@ sim.development                                                # step in which e
 
 ::: landschaft.simulate.StockSimulation
 
+## Roads built by the model (Dinamica's road constructor)
+
+::: landschaft.simulate.RoadBuilder
+
+::: landschaft.simulate.RoadDistance
+
+::: landschaft.simulate.friction_cost
+
+::: landschaft.simulate.destinations
+
+::: landschaft.simulate.pathways
+
 ## Multi-type random patch seeds (PLUS)
 
 ::: landschaft.simulate.CARS

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <vector>
 
@@ -26,6 +27,7 @@
 #include "sim/ordered.hpp"
 #include "sim/patches.hpp"
 #include "sim/plus.hpp"
+#include "sim/roads.hpp"
 #include "sim/rglm.hpp"
 #include "sim/rules.hpp"
 #include "sim/rng.hpp"
@@ -613,6 +615,62 @@ py::dict sim_continuous_patches(const DArray& stock, const DArray& probability, 
     return out;
 }
 
+using U8Array = py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>;
+
+void same_shape(const py::array& a, i64 ny, i64 nx, const char* what) {
+    if (a.ndim() != 2 || a.shape(0) != ny || a.shape(1) != nx)
+        throw std::invalid_argument(std::string(what) + " differs in shape from the first map");
+}
+
+py::tuple sim_friction_cost(const U8Array& source, const DArray& friction, double diagonal, bool directions) {
+    if (source.ndim() != 2) throw std::invalid_argument("the sources must be 2-D");
+    const i64 ny = source.shape(0), nx = source.shape(1);
+    same_shape(friction, ny, nx, "the friction");
+    sim::FrictionCost r;
+    {
+        py::gil_scoped_release release;
+        r = sim::friction_cost(ny, nx, source.data(), friction.data(), diagonal, directions);
+    }
+    py::array_t<double> cost({ny, nx});
+    std::copy(r.cost.begin(), r.cost.end(), cost.mutable_data());
+    if (!directions) return py::make_tuple(cost, py::none());
+    py::array_t<std::uint8_t> dir({ny, nx});
+    std::copy(r.dir.begin(), r.dir.end(), dir.mutable_data());
+    return py::make_tuple(cost, dir);
+}
+
+py::array_t<std::int64_t> sim_destinations(const DArray& attraction, int horizontal, int vertical, int per_quadrant,
+                                           double min_distance, int max_attempts, double dx, double dy,
+                                           std::uint64_t seed) {
+    if (attraction.ndim() != 2) throw std::invalid_argument("the attraction must be 2-D");
+    std::vector<i64> r;
+    {
+        py::gil_scoped_release release;
+        r = sim::destinations(attraction.shape(0), attraction.shape(1), attraction.data(), horizontal, vertical,
+                              per_quadrant, min_distance, max_attempts, dx, dy, seed);
+    }
+    return to_array(r);
+}
+
+py::array_t<std::uint8_t> sim_pathways(const U8Array& network, const U8Array& sources, std::optional<DArray> cost,
+                                       std::optional<U8Array> dir, bool lottery, std::uint64_t seed) {
+    if (network.ndim() != 2) throw std::invalid_argument("the network must be 2-D");
+    const i64 ny = network.shape(0), nx = network.shape(1);
+    same_shape(sources, ny, nx, "the sources");
+    if (cost.has_value() == dir.has_value()) throw std::invalid_argument("give the costs or the directions");
+    if (cost) same_shape(*cost, ny, nx, "the cost map");
+    if (dir) same_shape(*dir, ny, nx, "the direction map");
+    std::vector<std::uint8_t> r;
+    {
+        py::gil_scoped_release release;
+        r = sim::pathways(ny, nx, network.data(), sources.data(), cost ? cost->data() : nullptr,
+                          dir ? dir->data() : nullptr, lottery, seed);
+    }
+    py::array_t<std::uint8_t> out({ny, nx});
+    std::copy(r.begin(), r.end(), out.mutable_data());
+    return out;
+}
+
 py::array_t<double> sim_tmc_table(const DArray& x, const DArray& x1, const DArray& y1, const DArray& w) {
     if (x.ndim() != 2 || x1.ndim() != 2 || y1.ndim() != 2) throw std::invalid_argument("(classes, blocks) counts");
     const int n = static_cast<int>(x.shape(0));
@@ -1108,6 +1166,16 @@ void register_python(py::module_& m) {
           py::arg("quota"), py::arg("mean"), py::arg("variance"), py::arg("isometry"), py::arg("prune_factor") = 10.0,
           py::arg("win_rows") = 3, py::arg("win_cols") = 3, py::arg("seed") = 1,
           "The Patcher of a continuous state (Dinamica EGO's PatcherContinuousState): patches taking stock to a quota.");
+    m.def("sim_friction_cost", &sim_friction_cost, py::arg("source"), py::arg("friction"), py::arg("diagonal"),
+          py::arg("directions"),
+          "Dinamica EGO's CalcCostMap: the cost from the nearest source, a step costing the friction of the cell "
+          "entered, and the directions to the predecessors.");
+    m.def("sim_destinations", &sim_destinations, py::arg("attraction"), py::arg("horizontal"), py::arg("vertical"),
+          py::arg("per_quadrant"), py::arg("min_distance"), py::arg("max_attempts"), py::arg("dx"), py::arg("dy"),
+          py::arg("seed"), "Dinamica EGO's CalcDestinationMap: destinations drawn by attraction in quadrants.");
+    m.def("sim_pathways", &sim_pathways, py::arg("network"), py::arg("sources"), py::arg("cost") = py::none(),
+          py::arg("directions") = py::none(), py::arg("lottery") = false, py::arg("seed") = 1,
+          "Dinamica EGO's CalcPathwayMap: paths from the sources down the costs (or along the directions).");
     m.def("sim_cars", &sim_cars, py::arg("landscape"), py::arg("fixed"), py::arg("region"), py::arg("probability"),
           py::arg("weights"),
           py::arg("seeds"), py::arg("allowed"), py::arg("demand"), py::arg("window") = 3, py::arg("decay") = 0.9,

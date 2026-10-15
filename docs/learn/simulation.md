@@ -130,7 +130,10 @@ Variables that the simulation itself changes, such as the distance to the
 nearest forest, the share of built land around a cell or the gravitational
 pull of the towns, should be recomputed at every step: these are the
 **dynamic variables** of `Model(dynamic={...})` (`S.distance_to`,
-`S.share_of`, `S.gravity_of`).
+`S.share_of`, `S.gravity_of`). Roads can grow with the simulation too: a
+`S.RoadBuilder` (Dinamica's road constructor) adds roads from the network
+towards attractive places at every step, and its `dynamic(network)` is the
+distance to that growing network.
 
 ## With what shape: allocation
 

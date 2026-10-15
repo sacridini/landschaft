@@ -1,0 +1,856 @@
+{
+ "arrays": {
+  "roads_dinamica/cost_int_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/cost_int_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/cost_real_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/cost_real_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/cost_relative.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_0.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_1.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_10.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_11.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_12.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_13.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_14.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_15.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_16.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_17.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_18.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_19.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_2.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_20.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_21.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_22.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_23.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_24.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_25.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_26.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_27.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_28.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_29.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_3.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_30.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_31.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_32.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_33.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_34.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_35.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_36.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_37.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_38.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_39.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_4.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_40.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_41.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_42.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_43.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_44.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_45.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_46.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_47.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_48.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_49.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_5.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_50.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_51.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_52.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_53.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_54.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_55.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_56.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_57.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_58.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_59.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_6.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_60.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_61.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_62.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_63.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_64.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_65.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_66.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_67.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_68.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_69.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_7.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_70.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_71.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_72.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_73.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_74.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_75.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_76.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_77.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_78.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_79.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_8.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_80.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_81.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_82.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_83.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_84.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_85.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_86.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_87.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_88.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_89.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_9.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_90.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_91.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_92.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_93.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_94.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_95.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_96.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_97.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_98.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dest_99.tif": {
+   "dim": [
+    30,
+    40
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dir_int_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dir_int_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dir_real_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dir_real_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dirpath_int_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dirpath_int_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dirpath_real_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/dirpath_real_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/new_int_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/new_int_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/new_real_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/new_real_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/path_int_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/path_int_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/path_real_diag.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  },
+  "roads_dinamica/path_real_flat.tif": {
+   "dim": [
+    40,
+    50
+   ],
+   "kind": "matrix"
+  }
+ },
+ "versions": {
+  "dinamica": {
+   "dinamica": "8130"
+  }
+ }
+}

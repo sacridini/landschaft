@@ -2864,3 +2864,76 @@ CASES.update({
               "and prune factors whose outcome does not depend on the draw, and 32 draws of 20 cells among 100 "
               "of probability 0.01-1 for the seed statistics."),
 })
+
+
+GROUPS += ["roads"]
+
+_DEST_DRAWS = 100
+
+
+@cache
+def roads_world():
+    """A network, frictions (real and integer, with impassable cells), path sources and attractions."""
+    rng = np.random.default_rng(91)
+    ny, nx = 40, 50
+    net = np.zeros((ny, nx))
+    net[0, :] = 1
+    net[:, 0] = 1
+    net[25, 20:30] = 2
+    fr = np.round(1 + rng.random((ny, nx)) * 9, 3)
+    fr[10:14, 30:33] = np.nan  # impassable
+    fr[30:40, 45:50] = np.nan  # a corner cut off ...
+    fr[39, 49] = 1.0           # ... with a cell no source reaches
+    fri = rng.integers(1, 4, (ny, nx)).astype(float)
+    src = np.zeros((ny, nx))
+    for i, j in ((35, 40), (20, 45), (12, 10), (5, 30), (30, 5), (38, 22), (2, 2)):
+        src[i, j] = 1
+    att = rng.integers(0, 6, (30, 40)).astype(float)
+    att[rng.random((30, 40)) < 0.3] = 0
+    att[7, 9] = 200  # a cell much more attractive
+    return {k: grid(v) for k, v in (("net", net), ("fr", fr), ("fri", fri), ("src", src), ("att", att))}
+
+
+def _roads_job(world):
+    lines = ['  n := LoadCategoricalMap "net.tif" .none .default 0;', '  f := LoadMap "fr.tif";',
+             '  fi := LoadMap "fri.tif";', '  s := LoadMap "src.tif";', '  a := LoadMap "att.tif";']
+    outputs = []
+
+    def save(var, name):
+        lines.append(f'  SaveMap {var} "{name}";')
+        outputs.append(name)
+
+    for tag, fmap in (("real", "f"), ("int", "fi")):
+        for dg in (".yes", ".no"):
+            k = f"{tag}_{'diag' if dg == '.yes' else 'flat'}"
+            lines.append(f"  c_{k} d_{k} := CalcCostMap n {fmap} .yes .float64 -1 {dg} 0 .no;")
+            save(f"c_{k}", f"cost_{k}.tif")
+            save(f"d_{k}", f"dir_{k}.tif")
+            lines.append(f"  p_{k} := CalcPathwayMap n s c_{k} .no .no .yes;")
+            save(f"p_{k}", f"path_{k}.tif")
+            lines.append(f"  q_{k} := CalcPathwayMap n s c_{k} .no .no .no;")
+            save(f"q_{k}", f"new_{k}.tif")
+            lines.append(f"  r_{k} := CalcPathwayMap n s d_{k} .yes .no .no;")
+            save(f"r_{k}", f"dirpath_{k}.tif")
+    lines.append("  cr dr := CalcCostMap n f .no .float64 -1 .yes 0 .yes;")
+    save("cr", "cost_relative.tif")
+    for k in range(_DEST_DRAWS):
+        lines.append(f"  e{k} := CalcDestinationMap a 2 2 90 15 3 .int32 -1 .no;")
+        save(f"e{k}", f"dest_{k}.tif")
+    rasters = {"net": world["net"].where(world["net"] != 0).assign_attrs(categorical=True), "fr": world["fr"],
+               "fri": world["fri"],
+               "src": world["src"].where(world["src"] != 0), "att": world["att"].assign_attrs(categorical=True)}
+    return {"rasters": rasters, "script": "Script {{\n" + "\n".join(lines) + "\n}};\n", "outputs": outputs,
+            "band_names": {}}
+
+
+INPUTS.update({"roads_world": roads_world})
+
+CASES.update({
+    "roads_dinamica": Case(
+        "roads", "dinamica", ("roads_world",), job=lambda roads_world: _roads_job(roads_world),
+        notes="Dinamica EGO's CalcCostMap (real and integer frictions, impassable and unreachable cells, "
+              "diagonals costing sqrt(2) or not, relative frictions), CalcPathwayMap (down the costs with and "
+              "without merging, along the directions) and 100 CalcDestinationMap draws (2 x 2 quadrants, 3 per "
+              "quadrant, 90 m apart)."),
+})
