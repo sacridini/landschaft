@@ -4186,7 +4186,7 @@ ou pela ET das plantas, `event` 0):
      SAVE quando `algcon >= 5000`. (Os SAVE estão em `Sim::saved`.)
 - Comportamento mantido do SWAT+: posto não encontrado (o Ames cita `ames.tem`, o `tmp.cli` lista `ames.tmp`)
   -> gerador, com o aviso do `diagnostics.out` devolvido em `SwatResult.warnings` (e `warnings.warn`).
-- **7 (da paisagem para o modelo) — Feita no ramo do fork** (2026-10-16): a mesma divisão de trabalho do QSWAT+ e
+- **7 (da paisagem para o modelo) — Feita no ramo do fork, integrada** (2026-10-16): a mesma divisão de trabalho do QSWAT+ e
   do SWAT+ Editor, cada um portado. `ls.hydro.swat.watershed` (`_qswat.py`) faz o papel do QSWAT+ 4 (fonte do
   QSWAT+3, C. George, GPL-2+): MDE preenchido, D8, rede por limiar de área (km², padrão 1 % do MDE), trechos
   (`ls.hydro.stream_links`, novo, divididos nas junções e nos exutórios, `ls.hydro.snap_outlets`, 300 m), sub-bacias
@@ -4235,6 +4235,25 @@ ou pela ET das plantas, `event` 0):
      121/90/60/30/10 m); a do QSWAT+ (`gis_subbasins.sll`) não é usada.
   7. QSWAT+: células sem uso ou solo recebem o uso/solo padrão (código 0 ou o primeiro da tabela) em vez de ficarem
      de fora (e de terem sua área redistribuída).
+- **8 (resultados) — Em andamento** (2026-10-16): `output.cpp` porta o que o SWAT+ imprime: `hru_output`,
+  `basin_output`, `aquifer_output`, `sd_channel_output` (dia, mês, ano, média anual, com as regras de soma/média de
+  cada campo), o `print.prt` inteiro (ordem fixa ou por rótulo), o intervalo de impressão diária, `basin_sw_init`,
+  `lsu_read_elements` (frações da bacia) e os zeramentos anuais do `time_control`; a aritmética dos tipos de saída
+  é gerada do Fortran (`tools/swat/ops2cpp.py` -> `out_ops.hpp`). Para conferir, a referência faz um *dump* antes de
+  cada WRITE dessas tabelas (`tools/swat/patch_output_dumps.py`, tag = a unidade Fortran 2000-2083, 2500-2523; os
+  casos ligam todas as tabelas no `print.prt`, HB com `nyskip` 1): **bit a bit** nos casos HB, HB Muskingum, Ames e
+  `landscape`, e os 4 campos antes excluídos (`sw_init`, `sno_init`, `sno_final`, `bm_max`) agora batem. API:
+  `SwatResult.tables` / `result.table(nome, passo)` (DataFrames com os nomes e unidades dos cabeçalhos do SWAT+,
+  `tools/swat/tables2py.py` -> `_tables.py`), `SwatProject.set_print`, `run(project, tables=..., nyskip=...)`;
+  `hru_map`/`channel_map`/`reach_discharge` passam a usar as tabelas (o "anual" é o `aa` do SWAT+). Fora do Windows
+  os testes aceitam 1e-4 da escala de cada coluna (`conftest.assert_swat_close`; a libm acumula em anos: pior caso
+  2,4e-5). Falta: OpenMP nos HRUs, documentação, rotações automáticas do editor (`pl_hv_summer1/winter1`).
+- **Candidatos a erro nas saídas, mantidos (decidir com o usuário)**:
+  1. `basin_output`/`basin_sw_init` usam `lsu_elem(lsu_elem(ihru)%obtypno)` (o número do elemento como índice de novo).
+  2. `aquifer_output`: a média anual de `stor`, `dep_wt`, `no3_st` divide a soma dos meses por 12 mesmo num ano
+     parcial.
+  3. `time%yrs_prt` divide os dias por `365 + num_leap / nbyr` com divisão inteira: a correção do bissexto some (2
+     anos com um bissexto: 731/365 anos).
 
 ---
 

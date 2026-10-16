@@ -28,6 +28,10 @@ in a new major version.
   `load_qswat_project`), `from_rasters` does both; `climate` and `wgn_from_series` make the weather files and the
   weather generator from daily tables; `hru_map`, `channel_map` and `reach_discharge` put HRU and channel results
   back on the map. A synthetic landscape and a real DEM simulate bit for bit as SWAT+ on the editor's files.
+- `ls.hydro.swat` results: `run` gives what SWAT+ prints (print.prt's HRU, basin, channel and aquifer tables by day,
+  month, year and average annual, with SWAT+'s sums and means) as `SwatResult.tables` / `result.table(name, step)`,
+  DataFrames with SWAT+'s column names and units, bit for bit with SWAT+'s own records; `SwatProject.set_print` and
+  `run(..., tables=, nyskip=)` choose them. `hru_map` and `channel_map` map SWAT+'s average annual values.
 - `ls.hydro.stream_links`, `ls.hydro.watersheds` and `ls.hydro.snap_outlets`: the links of a stream network (split
   at junctions and outlets, with length, drop and Strahler order), the area draining to each seed, outlets moved
   onto the streams.
