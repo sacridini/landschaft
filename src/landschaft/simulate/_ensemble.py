@@ -192,8 +192,52 @@ def _apply(model, change):
     raise TypeError("a scenario is a Model, a dict of pieces or a function of the model")
 
 
+def _saved(model, folder, name: str, start, drivers, nodata) -> list:
+    """The model written as a Terraflux graph in ``folder``: the files of the task that runs it."""
+    from pathlib import Path
+
+    from .._dist import InputFile
+
+    path = Path(folder) / f"{name}.json"
+    try:
+        model.save(path, start, drivers, seed=0, nodata=nodata)
+    except Exception as e:  # noqa: BLE001
+        raise ValueError(f"the model cannot be sent to helpers ({type(e).__name__}: {e}); run it without on=") from e
+    data = path.with_name(path.stem + "_data")
+    files = [InputFile.of(path)]
+    if data.is_dir():
+        files += [InputFile.of(p, p.relative_to(folder).as_posix()) for p in sorted(data.rglob("*")) if p.is_file()]
+    return files
+
+
+def _runs_on(on, models, names, runs, seeds, start, drivers, nodata) -> list:
+    """The runs as tasks of ``on`` (ls.helpers()): their maps and step tables, in order."""
+    import tempfile
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from .._dist import Job, Task, run_job
+
+    with tempfile.TemporaryDirectory(prefix="landschaft-scenarios-") as tmp:
+        files = {s: _saved(models[name], tmp, f"scenario_{s}", start, drivers, nodata) for s, name in enumerate(names)}
+        tasks = [Task(f"{names[s]} #{r}", "simulate.run", {"model": f"scenario_{s}.json", "seed": seeds[r]},
+                      files[s], root=Path(tmp)) for s, r in runs]
+        out = {}
+
+        def collect(task, folder, stats):
+            maps = np.load(folder / "maps.npy", allow_pickle=False)
+            out[task.name] = SimpleNamespace(maps=SimpleNamespace(values=maps, shape=maps.shape),
+                                             steps=pd.read_parquet(folder / "steps.parquet"))
+
+        report = run_job(on, Job("scenarios", tasks, collect))
+    if report.failed:
+        name, error = next(iter(report.failed.items()))
+        raise RuntimeError(f"{len(report.failed)} run(s) failed; {name}: {error}")
+    return [out[t.name] for t in tasks]
+
+
 def scenarios(model, start=None, drivers=None, *, scenarios=None, replicates: int = 10, seed=None, steps=None,
-              years=None, keep=None, n_workers=None, n_threads=None, nodata=None) -> Ensemble:
+              years=None, keep=None, n_workers=None, n_threads=None, nodata=None, on=None) -> Ensemble:
     """Run a model under several scenarios, several times each, in parallel.
 
     Parameters
@@ -224,6 +268,11 @@ def scenarios(model, start=None, drivers=None, *, scenarios=None, replicates: in
         Runs at the same time (default: as many as the threads allow).
     n_threads
         Threads in all (default: all cores but one), shared by the workers.
+    on
+        ``ls.helpers()``: run the simulations on this computer and on the helpers of
+        its group (see :mod:`landschaft.parallel`), with the same maps. Each scenario's
+        model travels as its Terraflux graph (:meth:`Model.save`), so it must be made
+        of the pieces that :meth:`Model.save` writes.
 
     Returns
     -------
@@ -282,7 +331,9 @@ def scenarios(model, start=None, drivers=None, *, scenarios=None, replicates: in
 
     with warnings.catch_warnings():
         warnings.simplefilter("default")
-        if workers == 1:
+        if on is not None:
+            results = _runs_on(on, models, names, runs, seeds, start, drivers, nodata)
+        elif workers == 1:
             results = [one(j) for j in runs]
         else:
             with ThreadPoolExecutor(max_workers=workers) as pool:

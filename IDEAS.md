@@ -3511,6 +3511,77 @@ abaixo são os do pedido; o lugar no `ls` é sugestão. Cada um ganha também um
 
 ---
 
+## Paralelismo entre máquinas (`ls.parallel`, pedido em 2026-10-16)
+
+Pedido: "funções de paralelismo como existe no zeit e/ou no terraflux que possibilitem realizar paralelismo entre
+diferentes máquinas de uma forma mais fácil. Tipo uma função para 'emprestar a máquina' pelo cli". Plano
+compartilhado com o usuário como doc ("Paralelismo entre máquinas no landschaft").
+
+### Decisões (do usuário, 2026-10-16)
+
+1. Só **operações registradas** viajam: uma tarefa = nome de uma operação do landschaft + parâmetros em JSON +
+   arquivos de entrada. Nada de pickle nem de funções do usuário (seria execução remota de código em quem empresta
+   a máquina).
+2. **Copiar e adaptar** o `zeit/_tiles` (biblioteca padrão + `cryptography`), não extrair um pacote comum.
+3. Fases A+B primeiro, depois hidrologia/InVEST; C e D depois.
+
+Não faz sentido (e por quê): distribuir algoritmos globais (Zonation, MILP, Priority-Flood, acumulação, rótulos;
+a comunicação dominaria: ficam com OpenMP), `dask.distributed` como caminho principal (pickle, arrays decodificados
+pela rede, versões), tarefas pequenas (por janela/pixel), perfis SSH/Slurm/nuvem e coordenador redundante (o
+Terraflux já tem; para Slurm basta `srun landschaft worker`).
+
+### Desenho (o que mudou em relação ao zeit)
+
+- `landschaft/_dist/`: `_group`, `_net`, `_pairing`, `_system` quase iguais aos do zeit (portas TCP 47811 e UDP
+  47810, para não colidir com o zeit; `LANDSCHAFT_CONFIG_DIR`; a impressão digital é só do código Python, a
+  mesma num checkout e numa wheel do mesmo código: com o C++ de `src/cpp` só no checkout, Windows e Linux se
+  recusavam). Novos: `_tasks` (`InputFile`, `Task`, `Job`), `_ops` (as operações registradas),
+  `_slots`/`_child` (processos filhos), `_coordinator` e `_worker` generalizados.
+- **Unidade de trabalho**: `Task(name, op, params, files, root)`; os arquivos ficam na pasta da tarefa pelos nomes
+  dados (relativos, conferidos por `check_name`), então um modelo salvo com a sua pasta `_data` viaja inteiro. No
+  computador que coordena a tarefa roda direto em `root`. `Job(label, tasks, collect, threads, results_dir)`:
+  `collect(task, pasta, stats)` recebe as saídas de cada tarefa terminada.
+- **Processos filhos** (`python -m landschaft._dist._child`, JSON por pipe; não `multiprocessing`, que no Windows
+  reexecutaria o script do usuário): o landschaft é importado uma vez por processo (~2 s), o processo segue vivo
+  entre tarefas e jobs; tarefa cancelada ou que derruba o processo leva só ele.
+- **Núcleos**: cada máquina divide os seus entre tarefas simultâneas (`Job.threads`, ou `cores // min(cores,
+  tarefas)`); o ajudante busca uma tarefa à frente e começa outra quando há núcleos livres.
+- **Arquivos**: chave = SHA-256 de todos os bytes até 256 MB (o mesmo dado salvo em pastas diferentes vai uma
+  vez só), acima disso tamanho + data + primeiro e último MiB; cache LRU no ajudante; NAS pela prova de 1 MiB;
+  saídas direto na pasta de resultados quando o ajudante a vê.
+- **Coordenador persistente**: `ls.helpers()` num `with` mantém o servidor e os ajudantes entre chamadas; fora
+  dele cada chamada liga e desliga. Sem grupo ainda, cria um grupo de um (os outros entram depois pelo convite).
+- **Estado "collecting"** entre o fim da tarefa e o fim do `collect`: sem ele o job podia terminar antes do
+  `collect` da última tarefa (achado no teste dos cenários do Dinamica).
+
+### Fases
+
+- **A (núcleo) — Feito** (sem versão ainda): `_dist`, CLI `landschaft worker|helpers invite|list|firewall|leave`
+  (`[project.scripts]` e `python -m landschaft`), `ls.parallel` (`helpers`, `Helpers`, `run_worker`,
+  `invite_helpers`, `list_helpers`, `leave_group`, `open_firewall`), `ls.load_result` (pasta do `ls.save` de volta
+  como dict). `cryptography` virou dependência.
+- **B (primeiros usos) — Feito**: `on=` em `batch`/`mspa_batch` (operações `batch` e `mspa`; ferramenta pelo nome,
+  parâmetros JSON, arquivos auxiliares do GDAL junto; o JSON de cada saída reescrito com os caminhos finais;
+  retomada como antes), `simulate.scenarios` (operação `simulate.run`: cada cenário salvo com `Model.save`, mapas
+  em `.npy` e tabela de passos em Parquet; mesmos `codes` e `steps`) e `simulate.calibrate` grid/random
+  (`simulate.losses`: início e observado como float64 com NaN, só alvos embutidos; a simulação do melhor ponto
+  roda de novo aqui). Testes (`tests/test_parallel.py`, 17): ajudante numa thread pela rede, mesmos resultados
+  que o local (batch, MSPA, cenários CARS e Dinamica, calibração), cache, falha de um raster, grupo/código
+  errados, pareamento, descoberta, nomes e tar que tentam sair da pasta, operações não registradas. Ponta a ponta
+  com um `python -m landschaft worker` de verdade noutro processo: mapas idênticos; entre sistemas, coordenador no Linux
+  (WSL) e ajudante no Windows pelo localhost: os mesmos `codes` (Dinamica, 6 réplicas) que o local do Linux e o do
+  Windows. Cuidado conhecido: onde o resultado depende da libm (o `atan` da UCRT na declividade do terreno, ver a
+  paridade do Linux) misturar sistemas pode mudar o último bit.
+- **C**: `on=` em `sdm.fit` (modelos x folds), re-solves do `ls.prioritize` (carteiras, importância por
+  substituição, calibração/trade-offs), `uncertainty.monte_carlo`, réplicas do `nlm`; `ls.parallel.map` para
+  ferramentas registradas sobre objetos em memória (com `ls.load_result` para trazer os resultados).
+- **D**: tiles com borda para ferramentas focais de rasters maiores que a memória (geomorphons, `window_metrics`,
+  carbono, qualidade de habitat).
+- Para depois: compressão das entradas sem compressão no envio (o ZSTD do zeit), `--idle` (pausar quando o dono
+  volta), mandar modelos do `ls.simulate` ao cluster do Terraflux.
+
+---
+
 ## Hidrologia e forma do terreno (pedido em 2026-10-16)
 
 Quatro ferramentas de terreno de alto impacto, todas sobre um condicionamento hidrológico comum, como funções

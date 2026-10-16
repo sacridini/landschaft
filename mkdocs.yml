@@ -176,6 +176,7 @@ nav:
       - Routes on grids: tutorials/grid-routes.md
       - Change detection: tutorials/change-detection.md
       - Large data & batch: tutorials/large-data.md
+      - Several computers: tutorials/many-computers.md
       - Neutral landscapes: tutorials/neutral-landscapes.md
       - Surface texture: tutorials/surface-texture.md
       - Biodiversity analysis: tutorials/biodiversity.md

@@ -47,6 +47,8 @@ them together.
 
 ::: landschaft.save
 
+::: landschaft.load_result
+
 Every result object (of `fos`, `restoration_status`, `zonation`...) also has
 a `save(folder)` method that calls `save`.
 

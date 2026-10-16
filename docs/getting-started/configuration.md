@@ -36,6 +36,15 @@ share the same cores (all but one).
     of each script, so that together they do not use more cores than the
     machine has.
 
+## Other computers
+
+Functions that run many independent tasks (`batch`, `mspa_batch`,
+`simulate.scenarios`, `simulate.calibrate`) take `on=ls.helpers()` and share
+the tasks with the computers of a group running `landschaft worker`, with the
+same results; see [several computers](../tutorials/many-computers.md). The
+group's secret is kept in `%APPDATA%\landschaft` (Windows) or
+`~/.config/landschaft` (`LANDSCHAFT_CONFIG_DIR` overrides it).
+
 ## Memory
 
 | Setting | Where | What it does |

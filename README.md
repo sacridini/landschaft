@@ -40,7 +40,7 @@ in the test suite, and runs from a few to several hundred times faster.
 | **Spatial prioritization** | ranking of whole landscapes for many features (CAZ and ABF rules), weights, costs, hierarchic masks, connectivity transforms, performance curves, post-processing, impact assessment; maps larger than memory | Zonation 5 |
 | **Species distributions** | cleaning and thinning occurrence records, accessible area, collinearity filters, background points, spatial cross-validation folds, evaluation (AUC, TSS, Boyce index), Maxent (MaxNet), ensembles of scikit-learn models, projection and extrapolation (MESS, MOP, ExDet) | CoordinateCleaner, spThin, usdm, dismo, blockCV, ENMeval, ecospat, predicts, maxnet, mop |
 | **Land change simulation** | change analysis (intensity, components of difference, Markov chains), transition potential (weights of evidence, logistic regression, any scikit-learn model), allocation (CLUE-S, ordered, land systems, Expander/Patcher, random patch seeds, patch growing), dynamic variables, regional demands, validation at several resolutions, fuzzy similarity, calibration, scenarios with replicates | lulcc, OpenLand, diffeR, CLUMondo, FUTURES, MOLUSCE, Dinamica EGO, PLUS |
-| **Large data** | out-of-core tiles and row blocks, parallel batches of rasters | |
+| **Large data** | out-of-core tiles and row blocks, parallel batches of rasters, tasks shared with the other computers of a lab (`landschaft worker`) | |
 
 ## Installation
 

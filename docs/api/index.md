@@ -148,6 +148,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.load_table`](data.md#landschaft.load_table) | Read a table, the format given by the file extension |
 | [`ls.write_table`](data.md#landschaft.write_table) | Write a table, the format given by the file extension |
 | [`ls.save`](data.md#landschaft.save) | Save data or a result, each part in the format that suits it |
+| [`ls.load_result`](data.md#landschaft.load_result) | Read back a result folder written by `save` (or ``result.save``) |
 | [`ls.plot`](data.md#landschaft.plot) | Plot anything: a raster, a vector layer, a table or the result of a tool, as it calls for |
 | [`ls.Plot`](data.md#landschaft.Plot) | A plot made by `plot`: interactive maps and charts (or a static figure) |
 | [`ls.example_data`](data.md#landschaft.example_data) | Path of an example data set shipped with the package |
@@ -418,6 +419,13 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.batch`](batch.md#landschaft.batch) | Parallel processing of many rasters, one thread per raster |
 | [`ls.mspa_batch`](batch.md#landschaft.mspa_batch) | Run MSPA on many rasters in parallel and write the results |
 | [`ls.BatchResult`](batch.md#landschaft.BatchResult) | Outcome of one input of `batch` / `mspa_batch` |
+| [`ls.helpers`](batch.md#landschaft.parallel.helpers) | This computer and the helpers of its group, for ``on=`` (see `Helpers`) |
+| [`ls.Helpers`](batch.md#landschaft.parallel.Helpers) | This computer and the helpers of its group, for the ``on=`` argument of landschaft's functions that run many independent tasks |
+| [`ls.run_worker`](batch.md#landschaft.parallel.run_worker) | Lend this computer to the group: wait for tasks and run them, until Ctrl+C |
+| [`ls.invite_helpers`](batch.md#landschaft.parallel.invite_helpers) | Show an invitation code and let other computers join this one's group with ``landschaft worker --join <code>``, for ``minutes`` |
+| [`ls.list_helpers`](batch.md#landschaft.parallel.list_helpers) | The helpers of this computer's group waiting for work now (busy ones are not looking): ``[{"name", "address", "cores", "version"}]`` |
+| [`ls.leave_group`](batch.md#landschaft.parallel.leave_group) | Forget this computer's group (it no longer helps nor uses helpers) |
+| [`ls.open_firewall`](batch.md#landschaft.parallel.open_firewall) | Let helpers reach this computer: the Windows firewall rules for the local network |
 | [`ls.mspa_tiled`](batch.md#landschaft.mspa_tiled) | MSPA of a large map by overlapping tiles, identical to GTB's MSPA Tiling |
 | [`ls.tile_layout`](batch.md#landschaft.tile_layout) | GTB's tiles along one axis of ``size`` pixels |
 

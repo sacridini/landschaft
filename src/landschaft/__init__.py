@@ -92,6 +92,9 @@ from .io import (
 )
 from .morphology import ParcellationResult, contortion, parcellation
 from . import nlm
+from . import parallel
+from .parallel import Helpers, helpers
+from ._save import load_result
 from . import prioritize
 from . import sdm
 from . import simulate
@@ -269,6 +272,10 @@ __all__ = [
     "rasterize",
     "reproject",
     "save",
+    "load_result",
+    "helpers",
+    "Helpers",
+    "parallel",
     "zonal_stats",
     "write_vector",
     "max_threads",

@@ -156,6 +156,8 @@ morph_stack.shape
 - Collections and `batch`: `n_workers × threads_per_worker` threads; a
   memory budget with `max_memory`.
 - Omniscape: `memory_limit=` caps the memory of its windows.
+- `batch` and `mspa_batch` also run on the computers of a lab with
+  `on=ls.helpers()`: see [several computers](many-computers.md).
 
 ## Next steps
 

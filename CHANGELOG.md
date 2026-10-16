@@ -7,6 +7,18 @@ in a new major version.
 ## [Unreleased]
 
 ### Added
+- Work shared with the other computers of a lab (`ls.parallel`, adapted from zeit's tile runner): a computer lends
+  itself with `landschaft worker` (the new `landschaft` command; the first time `--join <code>`, with the code that
+  `landschaft helpers invite` shows), and `batch`, `mspa_batch`, `simulate.scenarios` and `simulate.calibrate`
+  (grid and random searches) take `on=ls.helpers()`: their tasks run here and on the helpers, with the same
+  results as on one computer (seeds set here, outputs put together in task order, the same version and code
+  required). A task is a registered operation, its JSON parameters and its input files, never code: helpers run
+  only landschaft's own operations, in child processes, connect out over TLS and prove the group's secret (HMAC
+  bound to the certificate). Discovery by UDP broadcast (`--connect` otherwise), input files from the helper's
+  cache (by the hash of their bytes), a shared folder (NAS) or the network, outputs straight into a shared output
+  folder, retries on another computer, stragglers run twice near the end, helpers that leave give their tasks back.
+  `landschaft helpers list|firewall|leave`; tutorial "Several computers".
+- `ls.load_result`: a result folder written by `ls.save` read back as a dict of its maps, tables and numbers.
 - Documentation of the 1.46 tools: the course chapters on continuous surfaces (summits, saddles and protected
   hilltops; the gravity model, with checks by hand) and on land change (stocks and endogenous roads); the surface
   texture tutorial's hilltop protection areas; the land change tutorial's gravity pull, roads that grow with the

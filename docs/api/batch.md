@@ -23,6 +23,38 @@ as its first argument works too.
 
 `accounting`, `clustering_fac`, `conefor_inputs`, `contagion_pff`, `contortion`, `distance_to_resistance`, `euclidean_distance`, `fad`, `fad_multiscale`, `fos`, `gray_spatial_convolution`, `gtn_components`, `gtn_importance`, `influence_zones`, `landscape_mosaic`, `landscape_mosaic_heatmap`, `landscape_mosaic_stats`, `mspa`, `parcellation`, `proximity`, `reclassify`, `restoration_status`, `spa`, `spatial_entropy`, `spatial_entropy_map`, `landscape_metrics`, `window_metrics`.
 
+## Several computers
+
+`on=ls.helpers()` runs the tasks of `batch`, `mspa_batch`,
+`simulate.scenarios` and `simulate.calibrate` on this computer and on the
+computers of its group running `landschaft worker`. Tutorial:
+[several computers](../tutorials/many-computers.md).
+
+::: landschaft.parallel.helpers
+
+::: landschaft.parallel.Helpers
+
+::: landschaft.parallel.run_worker
+
+::: landschaft.parallel.invite_helpers
+
+::: landschaft.parallel.list_helpers
+
+::: landschaft.parallel.leave_group
+
+::: landschaft.parallel.open_firewall
+
+### The `landschaft` command
+
+| Command | What it does |
+|---|---|
+| `landschaft helpers invite [--minutes 10]` | show a code with which other computers join this one's group |
+| `landschaft worker --join CODE` | join a group (the first time) and lend this computer |
+| `landschaft worker [--cores N] [--connect HOST[:PORT]] [--map SRC=DST] [--cache-gb 20]` | lend this computer until Ctrl+C |
+| `landschaft helpers list` | the helpers waiting for work on the local network |
+| `landschaft helpers firewall` | Windows: let helpers reach this computer (TCP 47811, UDP 47810, local subnet) |
+| `landschaft helpers leave` | take this computer out of its group |
+
 ## Maps larger than memory
 
 ::: landschaft.mspa_tiled

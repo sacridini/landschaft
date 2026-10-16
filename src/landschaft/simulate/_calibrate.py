@@ -200,7 +200,8 @@ def _targets(targets) -> dict:
 @threaded
 def calibrate(model, start, observed, drivers=None, *, params: dict, targets: dict | None = None,
               method: str = "nelder-mead", replicates: int = 1, seed: int | None = None, max_evals: int = 50,
-              grid_points: int = 5, x0: dict | None = None, n_workers: int | None = None, nodata=None) -> Calibration:
+              grid_points: int = 5, x0: dict | None = None, n_workers: int | None = None, nodata=None,
+              on=None) -> Calibration:
     """Search the settings of a model that best reproduce an observed map.
 
     Parameters
@@ -237,6 +238,11 @@ def calibrate(model, start, observed, drivers=None, *, params: dict, targets: di
         Evaluations at most (not for ``"grid"``).
     x0
         Starting settings for Nelder-Mead (default: the middle of the ranges).
+    on
+        ``ls.helpers()``: evaluate the points of a ``"grid"`` or ``"random"`` search on
+        this computer and on the helpers of its group (see :mod:`landschaft.parallel`),
+        with the same losses. Each point's model travels as its Terraflux graph
+        (:meth:`Model.save`), and the targets must be the built-in ones.
 
     Returns
     -------
@@ -288,6 +294,10 @@ def calibrate(model, start, observed, drivers=None, *, params: dict, targets: di
     if method != "grid" and any(kinds[k] == "values" for k in names):
         raise ValueError("lists of values are searched with method='grid'")
     tg = _targets(targets)
+    if on is not None:
+        if method not in ("grid", "random"):
+            raise ValueError("on= evaluates the points of the grid and random searches")
+        sent_targets = _targets_json(targets)
     if seed is None:
         seed = int(np.random.default_rng().integers(1, 2**31 - 1))
     seeds = [int(seed) + r for r in range(int(replicates))]
@@ -337,8 +347,19 @@ def calibrate(model, start, observed, drivers=None, *, params: dict, targets: di
             rows.append(row)
         return loss
 
+    def record(values, parts_all, m, first):
+        key = tuple(values[k] for k in names)
+        parts = {k: float(np.mean([p[k] for p in parts_all])) for k in tg}
+        loss = float(sum(tg[k][1] * parts[k] for k in tg))
+        cache[key] = (loss, {**values, "loss": loss, **{f"loss_{k}": v for k, v in parts.items()}})
+        sims[key] = (m, first)
+
     def in_order(points):  # the parallel evaluations, recorded in the order of the points
-        _parallel(points, lambda p, inner: evaluate(p, inner, record=False), n_workers)
+        if on is not None:
+            _evaluate_on(on, [clean(p) for p in points], names, cache, model_for, record, seeds, sent_targets,
+                         start, observed, drivers, nodata)
+        else:
+            _parallel(points, lambda p, inner: evaluate(p, inner, record=False), n_workers)
         seen = set()
         for p in points:
             key = tuple(clean(p)[k] for k in names)
@@ -383,10 +404,63 @@ def calibrate(model, start, observed, drivers=None, *, params: dict, targets: di
     i = int(np.argmin([r["loss"] for r in rows]))  # the first of equal losses
     best = {k: rows[i][k] for k in names}
     m, sim = sims[tuple(best[k] for k in names)]
+    if sim is None:  # evaluated by a helper: its first replicate again, here
+        sim = m.run(start, drivers, seed=seeds[0], nodata=nodata)
     return Calibration(best, float(rows[i]["loss"]), history, m, sim,
                        {"method": method, "replicates": int(replicates), "seed": int(seed),
                         "targets": {k: v[1] for k, v in tg.items()}, "params": {k: str(v) for k, v in params.items()}},
                        (start, observed, nodata))
+
+
+def _targets_json(targets):
+    """The targets as JSON for the helpers: only the built-in ones travel."""
+    import json
+
+    for name, spec in (targets or {}).items():
+        if callable(spec) or (isinstance(spec, tuple) and spec and callable(spec[0])):
+            raise ValueError(f"with on=, the targets are the built-in ones ({name!r} is a function)")
+    return json.loads(json.dumps(targets or {"figure_of_merit": 1.0, "similarity": 1.0}))
+
+
+def _evaluate_on(on, points, names, cache, model_for, record, seeds, targets, start, observed, drivers, nodata):
+    """The points not evaluated yet, as tasks of ``on`` (ls.helpers())."""
+    import tempfile
+    from pathlib import Path
+
+    from .._dist import InputFile, Job, Task, run_job
+    from ._ensemble import _saved
+
+    todo = {}
+    for values in points:
+        key = tuple(values[k] for k in names)
+        if key not in cache and key not in todo:
+            todo[key] = values
+    if not todo:
+        return
+    with tempfile.TemporaryDirectory(prefix="landschaft-calibrate-") as tmp:
+        tmp = Path(tmp)
+        for name, x in (("start", start), ("observed", observed)):
+            np.save(tmp / f"{name}.npy", read_map(x, nodata).as_float(), allow_pickle=False)
+        maps = [InputFile.of(tmp / "start.npy"), InputFile.of(tmp / "observed.npy")]
+        tasks, models = [], {}
+        for k, (key, values) in enumerate(todo.items()):
+            m = model_for(values)
+            models[f"point {k}"] = (key, values, m)
+            files = _saved(m, tmp, f"point_{k}", start, drivers, nodata) + maps
+            tasks.append(Task(f"point {k}", "simulate.losses",
+                              {"model": f"point_{k}.json", "seeds": list(seeds), "targets": targets,
+                               "start": "start.npy", "observed": "observed.npy"}, files, root=tmp))
+        found = {}
+
+        def collect(task, folder, stats):
+            found[task.name] = stats["parts"]
+
+        report = run_job(on, Job("calibrate", tasks, collect))
+    if report.failed:
+        name, error = next(iter(report.failed.items()))
+        raise RuntimeError(f"{len(report.failed)} evaluation(s) failed; {name}: {error}")
+    for name, (key, values, m) in models.items():
+        record(values, found[name], m, None)
 
 
 def _simplex(x):

@@ -166,6 +166,7 @@ def mspa_batch(
     max_memory: int | str | None = None,
     overwrite: bool = False,
     raise_errors: bool = False,
+    on=None,
 ) -> list[BatchResult]:
     """Run MSPA on many rasters in parallel and write the results.
 
@@ -197,6 +198,10 @@ def mspa_batch(
         Recompute outputs that already exist.
     raise_errors
         Raise the first error instead of recording it in the results.
+    on
+        ``ls.helpers()``: process the rasters on this computer and on the helpers of
+        its group (see :mod:`landschaft.parallel`), each with ``threads_per_worker``
+        threads (``n_workers`` and ``max_memory`` do not apply).
 
     Returns
     -------
@@ -222,6 +227,20 @@ def mspa_batch(
         paths, band, size = expand_sources(inputs), None, {}
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    if on is not None:
+        def task(src: Path):
+            dst = out_dir / _output_name(src, connectivity, edge_width, transition, internal)
+            if dst.exists() and not overwrite:
+                return BatchResult(src, dst, 0.0)
+            return "mspa", {"input": src.name, "band": band, "output": dst.name, "connectivity": int(connectivity),
+                            "edge_width": int(edge_width), "transition": bool(transition), "internal": bool(internal)}
+
+        def done(src: Path, folder: Path, stats: dict) -> BatchResult:
+            dst = out_dir / _output_name(src, connectivity, edge_width, transition, internal)
+            _move(folder / dst.name, dst)
+            return BatchResult(src, dst, float(stats.get("compute_s") or 0.0))
+
+        return _run_on(on, "mspa", paths, task, done, threads_per_worker, out_dir, raise_errors)
 
     def process(src: Path) -> BatchResult:
         start = time.perf_counter()
@@ -429,6 +448,82 @@ def _write_outputs(result, base: Path, table_format: str = "csv") -> tuple[list[
     return outputs, values
 
 
+def _tool_outputs(name: str, fn: Callable, src: Path, base: Path, band, call_params: dict,
+                  table_format: str) -> tuple[list[Path], dict[str, Any]]:
+    """Run one tool on one raster and write its outputs next to ``base``."""
+    if name == "landscape_metrics" and call_params.get("block_rows") is not None:
+        data = src  # read by blocks, not into memory
+    else:
+        data = _load_map(src, band=band)
+    if name == "landscape_metrics":
+        # written metric by metric, never as one table in memory
+        return [_stream_landscape_metrics(data, call_params, base, table_format)], {}
+    return _write_outputs(fn(data, **call_params), base, table_format)
+
+
+def _write_meta(meta_path: Path, name: str, src: Path, params: dict, outputs: list, values: dict,
+                seconds: float) -> None:
+    from . import __version__
+
+    meta_path.write_text(json.dumps({
+        "tool": name, "input": str(src), "params": _json_value(params),
+        "outputs": [str(p) for p in outputs], "values": values,
+        "seconds": round(seconds, 3), "landschaft": __version__,
+    }, indent=1))
+
+
+def _move(src: Path, dst: Path) -> Path:
+    """A finished output into place (replacing an older one)."""
+    import shutil
+
+    if dst.exists():
+        dst.unlink()
+    shutil.move(str(src), str(dst))
+    return dst
+
+
+def _sidecars(src: Path) -> list[Path]:
+    """The raster and the files GDAL reads with it (``.aux.xml``, ``.ovr``, world files)."""
+    try:
+        names = os.listdir(src.parent)
+    except OSError:
+        return [src]
+    extra = [src.parent / n for n in sorted(names) if n.startswith(src.name + ".")
+             or (n.startswith(src.stem + ".") and n[len(src.stem):].lower() in (".tfw", ".tifw", ".wld", ".prj"))]
+    return [src, *[p for p in extra if p.is_file()]]
+
+
+def _run_on(on, label: str, paths: list[Path], task, done, threads: int, out_dir: Path,
+            raise_errors: bool) -> list[BatchResult]:
+    """The rasters as tasks of ``on`` (ls.helpers()): ``task(src)`` gives a result (already
+    done) or ``(op, params)``; ``done(src, folder, stats)`` takes a finished task's outputs."""
+    from ._dist import InputFile, Job, Task, run_job
+
+    results: dict[int, BatchResult] = {}
+    tasks = []
+    for i, src in enumerate(paths):
+        what = task(src)
+        if isinstance(what, BatchResult):
+            results[i] = what
+            continue
+        op, params = what
+        tasks.append(Task(f"{i}:{src.name}", op, params, [InputFile.of(p) for p in _sidecars(src)], root=src.parent))
+    index = {t.name: int(t.name.split(":", 1)[0]) for t in tasks}
+
+    def collect(t, folder: Path, stats: dict) -> None:
+        i = index[t.name]
+        results[i] = done(paths[i], folder, stats)
+
+    if tasks:
+        report = run_job(on, Job(label, tasks, collect, threads=max(1, int(threads)), results_dir=out_dir))
+        for name, error in report.failed.items():
+            i = index[name]
+            if raise_errors:
+                raise RuntimeError(f"{paths[i]}: {error}")
+            results.setdefault(i, BatchResult(paths[i], None, 0.0, error))
+    return [results[i] for i in range(len(paths))]
+
+
 def batch(
     tool,
     inputs,
@@ -440,6 +535,7 @@ def batch(
     overwrite: bool = False,
     raise_errors: bool = False,
     table_format: str = "csv",
+    on=None,
     **params,
 ) -> list[BatchResult]:
     """Run a landschaft tool on many rasters in parallel and write its outputs.
@@ -475,6 +571,11 @@ def batch(
         tool's ``n_threads``/``threads`` argument.
     table_format
         "csv" (default) or "parquet" (needs pyarrow) for the tables.
+    on
+        ``ls.helpers()``: process the rasters on this computer and on the helpers of
+        its group (see :mod:`landschaft.parallel`), with the same outputs; ``tool``
+        is then a name from :data:`BATCH_TOOLS` and ``params`` JSON values (numbers,
+        strings, lists, dicts).
     **params
         Parameters of the tool, e.g. ``variant=6`` for ``"spa"``.
 
@@ -506,7 +607,7 @@ def batch(
         raise ValueError("table_format must be 'csv' or 'parquet'")
     if name == "mspa":
         return mspa_batch(inputs, output_dir, n_workers=n_workers, threads_per_worker=threads_per_worker,
-                          max_memory=max_memory, overwrite=overwrite, raise_errors=raise_errors, **params)
+                          max_memory=max_memory, overwrite=overwrite, raise_errors=raise_errors, on=on, **params)
     if isinstance(inputs, RasterCollection):
         paths, band = inputs.paths, inputs.band
         size = {i.path: i.pixels for i in inputs}
@@ -518,7 +619,35 @@ def batch(
     call_params = dict(params)
     if thread_kw and thread_kw not in call_params:
         call_params[thread_kw] = threads_per_worker
-    from . import __version__
+
+    def done_before(src: Path, meta_path: Path) -> BatchResult:
+        files = [Path(f) for f in json.loads(meta_path.read_text()).get("outputs", [])]
+        return BatchResult(src, files[0] if files else meta_path, 0.0, outputs=files + [meta_path])
+
+    if on is not None:
+        if callable(tool):
+            raise TypeError("on= runs the tools of BATCH_TOOLS by name, not functions")
+        sent = {k: v for k, v in params.items() if k != thread_kw}
+        try:
+            sent = json.loads(json.dumps(sent))
+        except (TypeError, ValueError) as err:
+            raise TypeError(f"with on=, the parameters of the tool must be JSON values: {err}") from None
+
+        def task(src: Path):
+            meta_path = out_dir / f"{src.stem}_{name}.json"
+            if meta_path.exists() and not overwrite:
+                return done_before(src, meta_path)
+            return "batch", {"tool": name, "input": src.name, "stem": src.stem, "band": band, "params": sent,
+                             "table_format": table_format}
+
+        def done(src: Path, folder: Path, stats: dict) -> BatchResult:
+            outputs = [_move(folder / n, out_dir / n) for n in stats.get("outputs", [])]
+            seconds = float(stats.get("compute_s") or 0.0)
+            meta_path = out_dir / f"{src.stem}_{name}.json"
+            _write_meta(meta_path, name, src, params, outputs, stats.get("values", {}), seconds)
+            return BatchResult(src, outputs[0] if outputs else meta_path, seconds, outputs=outputs + [meta_path])
+
+        return _run_on(on, name, paths, task, done, threads_per_worker, out_dir, raise_errors)
 
     def process(src: Path) -> BatchResult:
         start = time.perf_counter()
@@ -526,24 +655,10 @@ def batch(
         meta_path = base.with_name(base.name + ".json")
         try:
             if meta_path.exists() and not overwrite:
-                files = [Path(f) for f in json.loads(meta_path.read_text()).get("outputs", [])]
-                return BatchResult(src, files[0] if files else meta_path, 0.0, outputs=files + [meta_path])
-            if name == "landscape_metrics" and call_params.get("block_rows") is not None:
-                data = src  # read by blocks, not into memory
-            else:
-                data = _load_map(src, band=band)
-            if name == "landscape_metrics":
-                # written metric by metric, never as one table in memory
-                outputs, values = [_stream_landscape_metrics(data, call_params, base, table_format)], {}
-            else:
-                result = fn(data, **call_params)
-                outputs, values = _write_outputs(result, base, table_format)
+                return done_before(src, meta_path)
+            outputs, values = _tool_outputs(name, fn, src, base, band, call_params, table_format)
             seconds = time.perf_counter() - start
-            meta_path.write_text(json.dumps({
-                "tool": name, "input": str(src), "params": _json_value(params),
-                "outputs": [str(p) for p in outputs], "values": values,
-                "seconds": round(seconds, 3), "landschaft": __version__,
-            }, indent=1))
+            _write_meta(meta_path, name, src, params, outputs, values, seconds)
             return BatchResult(src, outputs[0] if outputs else meta_path, seconds, outputs=outputs + [meta_path])
         except Exception as err:  # noqa: BLE001 - reported per file
             if raise_errors:

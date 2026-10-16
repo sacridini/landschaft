@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-__all__ = ["Saveable", "save"]
+__all__ = ["Saveable", "load_result", "save"]
 
 #: 2-D arrays of a result with fewer cells than this are tables (matrices), not maps.
 _MIN_MAP_CELLS = 1000
@@ -263,3 +263,63 @@ def save(obj, path, *, like=None, table_format: str = "csv", **kwargs) -> Path:
     if hasattr(obj, "_save_items") or dataclasses.is_dataclass(obj) or hasattr(obj, "__dict__"):
         return _save_folder(obj, path, like, table_format)
     raise TypeError(f"cannot save a {type(obj).__name__}")
+
+
+def load_result(path) -> dict:
+    """Read back a result folder written by :func:`save` (or ``result.save``).
+
+    Every map comes back as a DataArray (:func:`load_raster`), every table as a
+    DataFrame (:func:`load_table`), a vector layer as a GeoDataFrame, a ``.npy`` array
+    as numpy, a sub-folder (a nested result) as a ``dict`` of its own, and the numbers
+    and settings of ``summary.json`` as they were written (``"result"``: the name of the
+    result's class). The result's class itself is not rebuilt: its parts are.
+
+    Parameters
+    ----------
+    path
+        The folder.
+
+    Returns
+    -------
+    dict
+        Each part by its name (the file name without its extension).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> forest = ls.load_raster(ls.example_data("input"))
+    >>> folder = ls.fos(forest).save("fos_result")
+    >>> parts = ls.load_result(folder)
+    >>> parts["result"], type(parts["map"]).__name__, type(parts["stats"]).__name__
+    ('FOSResult', 'DataArray', 'DataFrame')
+    >>> parts["n_patches"] == ls.fos(forest).n_patches
+    True
+    """
+    from ._table import load_table
+    from ._vector import load_vector
+    from .io import load_raster
+
+    folder = Path(path)
+    if not folder.is_dir():
+        raise NotADirectoryError(f"{folder} is not a result folder (written by ls.save)")
+    out: dict[str, Any] = {}
+    summary = folder / "summary.json"
+    if summary.is_file():
+        out.update(json.loads(summary.read_text(encoding="utf-8")))
+    for p in sorted(folder.iterdir()):
+        if p == summary:
+            continue
+        suffix = p.suffix.lower()
+        if p.is_dir():
+            out[p.name] = load_result(p)
+        elif suffix in (".tif", ".tiff"):
+            out[p.stem] = load_raster(p)
+        elif suffix in (".csv", ".parquet", ".xlsx", ".feather", ".tsv", ".txt"):
+            out[p.stem] = load_table(p)
+        elif suffix in (".gpkg", ".shp", ".geojson"):
+            out[p.stem] = load_vector(p)
+        elif suffix == ".npy":
+            out[p.stem] = np.load(p, allow_pickle=False)
+        elif suffix == ".nwk":
+            out[p.stem] = p.read_text(encoding="utf-8").strip()
+    return out

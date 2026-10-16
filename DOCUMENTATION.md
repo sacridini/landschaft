@@ -575,6 +575,24 @@ results = ls.mspa_batch(
 )
 ```
 
+### Several computers
+
+Many independent tasks can be shared with the other computers of a lab. Each
+helper joins the group once (`landschaft helpers invite` on the main computer,
+`landschaft worker --join <code>` on the helper) and then lends itself with
+`landschaft worker`. Functions that run many tasks take `on=`:
+
+```python
+with ls.helpers() as pool:
+    ls.batch("fad", "tiles/", "fad_out/", on=pool)
+    ens = ls.simulate.scenarios(model, start, drivers, replicates=200, seed=1, on=pool)
+```
+
+The results are the same as on one computer. Helpers run only landschaft's own
+operations (a task is an operation's name, its JSON parameters and its input
+files, never code), connect out over TLS and prove the group's secret; input
+files come from their cache, a shared folder (NAS) or the network.
+
 ---
 
 ## 12. Accuracy & Bit-for-Bit Verification
