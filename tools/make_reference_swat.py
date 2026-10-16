@@ -102,7 +102,7 @@ def trim_climate(files: dict[str, bytes], start: int, end: int) -> None:
         files[name] = ("\n".join(head + keep) + "\n").encode()
 
 
-def hubbard_brook(start: int, end: int):
+def hubbard_brook(start: int, end: int, codes: dict | None = None):
     def make() -> dict[str, bytes]:
         files = read_inputs(DATA / "SWATPlus-datasets" / "SWAT+_model_examples" / "example1")
         # written for rev 60.5.7: the basin line of file.cio needs the carbon file of 62
@@ -111,6 +111,8 @@ def hubbard_brook(start: int, end: int):
         files["file.cio"] = "\n".join(cio).encode()
         set_period(files, start, end)
         trim_climate(files, start, end)
+        for column, value in (codes or {}).items():
+            set_code(files, column, value)
         return files
 
     return make
@@ -138,6 +140,8 @@ def ames(start: int, end: int):
 
 CASES = {
     "hubbard_brook": hubbard_brook(2000, 2002),
+    # the Muskingum routing of the channels
+    "hubbard_brook_musk": hubbard_brook(2000, 2001, {"rte_cha": "1"}),
     "ames": ames(1975, 1979),
 }
 

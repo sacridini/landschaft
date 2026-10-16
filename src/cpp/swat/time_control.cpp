@@ -3,6 +3,8 @@
 // The simulation: main.f90's sequence of reads and initialisations, and the yearly and
 // daily loops of time_control.f90.
 
+#include <algorithm>
+#include <cstring>
 #include <stdexcept>
 
 #include "swat/fmath.hpp"
@@ -51,6 +53,21 @@ void dump_init(Sim& s) {
                            pm.ab_gr(ipl).m, pm.leaf(ipl).m, pm.stem(ipl).m, pm.seed(ipl).m, pc.plm(ipl).n_fr,
                            pc.plm(ipl).p_fr, c.lai_pot});
         }
+    }
+    // delivery ratios of the routing units' elements (tag 6)
+    for (int i = s.ru_elem.lbound(); i <= s.ru_elem.ubound(); ++i)
+        if (i >= 1) s.dump_record(6, i, values(s.ru_elem(i).dr));
+}
+
+// phubase, yr_skip and a pending skip operation of a HRU at the end of its year
+void reset_year_hru(Sim& s, int j) {
+    s.phubase(j) = 0.0f;
+    s.yr_skip(j) = 0;
+    const int isched = s.hru(j).mgt_ops;
+    if (isched > 0 && s.sched(isched).num_ops > 0) {
+        hydrologic_response_unit& h = s.hru(j);
+        if (s.sched(isched).mgt_ops(h.cur_op).op == "skip") h.cur_op = h.cur_op + 1;
+        if (h.cur_op > s.sched(isched).num_ops) h.cur_op = 1;
     }
 }
 
@@ -117,10 +134,40 @@ void time_control(Sim& s) {
                     t.yrs_prt = t.yrs_prt / (365.0f + static_cast<float>(t.num_leap / t.nbyr));
                 }
             }
+            if (s.sp_ob.hru > 0) sim_initday(s);
             if (t.yrs > s.pco.nyskip) s.ndmo(t.mo) += 1;
 
             climate_control(s);
             dump_weather(s);
+            // irrigation of the day (zeroed here for water allocation) and the sediment budget
+            for (int j = s.irrig.lbound(); j <= s.irrig.ubound(); ++j) {
+                s.irrig(j).runoff = 0.0f;
+                s.irrig(j).applied = 0.0f;
+                s.irrig(j).eff = 0.0f;
+                s.irrig(j).demand = 0.0f;
+            }
+            s.bsn_sedbud = s.bsn_sedbudz;
+            for (int i = s.ch_morph.lbound(); i <= s.ch_morph.ubound(); ++i) s.ch_morph(i) = s.ch_morphz;
+            s.ch_morph_ord.fill(s.ch_morphz);
+            command(s);
+            // southern hemisphere: heat units and skipped years reset near the winter solstice
+            if (t.day == 181) {
+                for (int ihru = 1; ihru <= s.sp_ob.hru; ++ihru)
+                    if (s.ob(s.sp_ob1.hru + ihru - 1).lat < 0.0f) reset_year_hru(s, ihru);
+            }
+        }
+        // end of the year
+        for (int j = 1; j <= s.sp_ob.hru; ++j) {
+            if (s.bsn_cc.cswat == 0 && s.hru(j).hyd.biomix > 1.e-6f) mgt_newtillmix_cswat0(s, j, s.hru(j).hyd.biomix, 0);
+            plant_community& pc = s.pcom(j);
+            for (int ipl = 1; ipl <= pc.npl; ++ipl) {
+                const int idp = pc.plcur(ipl).idplt;
+                if (idp > 0 && s.pldb(idp).typ == "perennial") {
+                    pc.plcur(ipl).curyr_mat = pc.plcur(ipl).curyr_mat + 1;
+                    pc.plcur(ipl).curyr_mat = std::min(pc.plcur(ipl).curyr_mat, s.pldb(idp).mat_yrs);
+                }
+            }
+            if (s.ob(s.sp_ob1.hru + j - 1).lat >= 0.0f) reset_year_hru(s, j);
         }
         t.yrc = t.yrc + 1;
     }
@@ -133,11 +180,17 @@ void run(Sim& s, const RunOptions& opt) {
     proc_db(s);
     proc_read(s);
     hyd_connect(s);
+    // main.f90's order around the HRU set-up
+    cli_lapse(s);
+    om_water_init(s);
     proc_hru(s);
-    time_conc_init(s);  // in proc_cha
+    proc_cha(s);  // calls time_conc_init
+    proc_aqu(s);
     if (s.bsn_cc.cswat != 0) throw std::runtime_error("SWAT+ carbon models other than the static one (carbon = 0) are not supported");
     proc_cal(s);
     for (s.ihru = 1; s.ihru <= s.sp_ob.hru; ++s.ihru) soil_nutcarb_init(s);
+    dr_ru(s);
+    for (const auto& [i, v] : s.inject_dr) std::memcpy(&s.ru_elem(i).dr, v.data(), sizeof(hyd_output));
     s.time_init = s.time;
     time_control(s);
 }

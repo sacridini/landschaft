@@ -4116,6 +4116,61 @@ ou pela ET das plantas, `event` 0):
      varia no mês.
   3. `cli_tmeas` divide as médias mensais de todos os meses pela contagem do último mês lido (sem efeito: as
      médias não são usadas).
+- **2-4 (HRUs) — Feitas para o Hubbard Brook** (2026-10-16): `hru_init.cpp` (`proc_hru`: `hru_read`, `hrudb_init`,
+  uso do solo, topografia e hidrologia, solos com camadas próprias, plantas e crescimento inicial, números de curva,
+  `hydro_init`; `time_conc_init`; `soil_nutcarb_init` do carbono estático), `calibration.cpp` (as mudanças de
+  parâmetros do `calibration.cal`), `hru_daily.cpp` (`hru_control` inteiro no subconjunto: neve, interceptação,
+  temperatura do solo, ETP Priestley-Taylor/Penman-Monteith/Hargreaves, ET real, CN diário e escoamento, MUSLE,
+  percolação e fluxo lateral, decomposição de resíduos, mineralização, nitrificação/volatilização, fósforo,
+  comunidade de plantas e crescimento, nutrientes no sedimento e na água, armazenamentos de defasagem,
+  `hru_hyds`), `mgt.cpp` (`mgt_newtillmix_cswat0`: a mistura biológica de fim de ano). Simulação inteira do Hubbard
+  Brook (HRUs reais alimentando o roteamento, 3 anos, e o caso Muskingum) **bit a bit** em todos os campos dos
+  balanços diários dos HRUs (tags 10-13), hidrogramas, aquíferos e canal; fora `sw_init`, `sno_init`, `sno_final` e
+  `bm_max`, que só o `hru_output` (saídas impressas, fase 8) escreve. Recusados com erro claro: operações de manejo
+  e tabelas de decisão (próximo passo, para o Ames), entradas nos HRUs (run-on, lateral, aquífero), Green-Ampt,
+  fósforo de Vadas-White, carbono não estático. Testes `tests/test_hydro_swat_hru.py`.
+- **Candidatos a erro nos HRUs, mantidos por ora (decidir com o usuário)**:
+  1. `plant_init`: `sl_len` (de `cons_prac sl_len_mx`) calculado e não usado.
+  2. `hydro_init`: `tsoil = (tmpmx(12) + tmpmx(12)) / 2` (dezembro duas vezes; o certo seria máxima e mínima).
+  3. `soil_nutcarb_init` zera os totais do carbono estático.
+  4. `cal_parm_select`: `lab_p`, `hum_c_n`, `hum_c_p` aplicados `nly` vezes à mesma camada.
+  5. `sq_snom`: a temperatura do pacote de neve (`snotmp`) recomeça de 0 a cada dia (local sem SAVE).
+  6. `et_pot` (Penman-Monteith): a resistência do dossel usa o `gsi_adj` da última planta, não a média ponderada.
+  7. `ero_ysed`: a atenuação pela neve nunca é aplicada (aninhamento dos `if`).
+  8. `swr_latsed`: o sedimento lateral é somado duas vezes.
+  9. `pl_tstr`: `rto > 0 .or. rto < 2` é sempre verdadeiro e sobrescreve o estresse de temperatura calculado.
+  10. `pl_leaf_gro`: `sumlaiht` soma `plg(ipl)%lai` (a planta corrente) em vez de `plg(jpl)%lai`.
+  11. `nut_psed`: as frações ativa/estável do P mineral trocadas, e `man(1)%p` contado duas vezes.
+  12. `pl_seed_gro` usa `ob(j)%wst` com `j` = número do HRU (não o do objeto).
+  13. `mgt_newtillmix_cswat0`: a massa de cada camada usa a densidade da camada 1.
+- **5 e 6 (roteamento) — Feitas no ramo do fork** (2026-10-16): `command.cpp` (laço de comandos, `ru_control`,
+  `dr_ru`), `aquifer.cpp` (`proc_aqu`, `aqu_1d_control`), `channel.cpp` (`proc_cha`, curvas de descarga,
+  `sd_channel_control3`, `sd_channel_sediment3`, `ch_rtmusk`, `ch_watqual4`, `ch_temp`), `hyd_ops.hpp` (os operadores
+  dos hidrogramas). Testado com as saídas dos HRUs da referência injetadas (`swat_run(..., inject={6, 10, 40})`;
+  tag 6 nova no dump: `ru_elem%dr`): entradas e saídas de todos os objetos, aquíferos e canal do Hubbard Brook
+  **bit a bit** (3 anos com armazenamento variável; caso `hubbard_brook_musk`, 2 anos com Muskingum), inclusive a
+  temperatura da água. As somas `SUM` de séries do Fortran (flang) batem com a soma simples em `float`. Fora: sais,
+  pesticidas, patógenos, constituintes, áreas úmidas da planície, gwflow, alocação de água, `aqu_cha.lin`,
+  `chan-surf.lin`, separação de hidrogramas (`hdsep`, só saída), saídas de fim de dia.
+- **Candidatos a erro no roteamento, mantidos por ora (decidir com o usuário)**:
+  1. `command`: `hin_aqu` nunca é zerado (acumula de um dia para o outro) — afetaria HRUs que recebem água de
+     aquífero (`rls_routeaqu`).
+  2. `command`: a vazão sub-diária de entrada (`tsin`) de um HRU/unidade de roteamento "tot" soma `hd(4)+hd(5)` ao
+     `hyd_flo`, que já é `hd(1)` (= superficial + lateral + dreno): o lateral conta duas vezes na vazão de entrada
+     do canal (`ch_rtmusk` usa-a na curva de descarga; o armazenamento fica certo porque a razão é limitada a 1).
+  3. `aqu_initial`: o armazenamento inicial usa `aqu_d(iaqdb)%dep_wt` (o aquífero numerado como a entrada do banco)
+     em vez de `aqu_d(iaq)`.
+  4. `sd_channel_read` procura os nomes de `sd_dat(ichi)` em vez de `sd_dat(i)`; `ch_watqual4` e `ch_temp` indexam o
+     banco hidráulico `sd_chd` pelo número do canal.
+  5. `sd_channel_sediment3` sobrescreve todo dia `bankfull_flo`, `fp_inun_days`, `d50` e `bed_exp` por constantes
+     (os valores de entrada são ignorados); `sd_channel_control3` nunca calcula `hc_sed`, `ebtm_m`, `ebank_m`
+     (saídas zero).
+  6. `ch_temp`: o `ob%hd(1) = ht2` vem antes do `ch_temp`, então a temperatura calculada não chega ao hidrograma de
+     saída (só a `ch_stor`); usa sempre `w_temp(0)` (os padrões: o `temperature.cha` não tem efeito); testa
+     `ru_elem(ielem)` em vez de `ru_elem(ise)`.
+  7. `ch_rtmusk`: sem vazão de entrada, a curva de descarga usa o `inflo` da chamada anterior (variável SAVE); a
+     perda por transmissão é calculada com o perímetro molhado e logo trocada pela largura. `ch_watqual4`: `gra`
+     SAVE quando `algcon >= 5000`. (Os SAVE estão em `Sim::saved`.)
 - Comportamento mantido do SWAT+: posto não encontrado (o Ames cita `ames.tem`, o `tmp.cli` lista `ames.tmp`)
   -> gerador, com o aviso do `diagnostics.out` devolvido em `SwatResult.warnings` (e `warnings.warn`).
 

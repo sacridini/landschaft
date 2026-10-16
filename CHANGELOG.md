@@ -11,6 +11,13 @@ in a new major version.
   (`load_txtinout` -> `SwatProject`, `run` -> `SwatResult`), bit for bit with SWAT+ itself. So far the daily
   weather: measured series, the weather generator with its random numbers, the stations and the daily Hargreaves
   PET, checked against a dump of the reference on the Hubbard Brook and Ames examples.
+- `ls.hydro.swat` routing: the daily command loop over the spatial objects, routing units with their delivery
+  ratios, 1-D aquifers and SWAT-DEG channels (rating curves, variable storage or Muskingum routing, channel
+  sediment, in-stream water quality, water temperature), bit for bit with SWAT+ on Hubbard Brook given the
+  reference's HRU outputs.
+- `ls.hydro.swat` HRUs: the land phase of each day (snow, canopy, soil temperature, PET, ET, curve number
+  runoff, MUSLE, percolation and lateral flow, residue and nutrient cycling, plant growth, the lag storages and the
+  HRU hydrographs), so the whole Hubbard Brook simulation, HRUs feeding the routing, is bit for bit with SWAT+.
 
 ## [1.49.0] - 2026-10-16
 

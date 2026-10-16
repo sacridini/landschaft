@@ -107,10 +107,10 @@ index fc8e026..e46cc6e 100644
          
 diff --git a/src/ls_dump_module.f90 b/src/ls_dump_module.f90
 new file mode 100644
-index 0000000..7952051
+index 0000000..d3ec31b
 --- /dev/null
 +++ b/src/ls_dump_module.f90
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,104 @@
 +      module ls_dump_module
 +!!    landschaft parity harness: binary daily dump of SWAT+ states.
 +!!    Active only when the environment variable SWAT_DUMP names a file.
@@ -182,7 +182,7 @@ index 0000000..7952051
 +      subroutine ls_dump_init
 +!!      the state at the start of the daily loop: soil layers (tag 3, id = 100 hru + layer),
 +!!      hru values (tag 4) and plants (tag 5, id = 100 hru + plant)
-+        use hydrograph_module, only : sp_ob
++        use hydrograph_module, only : sp_ob, ru_elem
 +        use soil_module, only : soil
 +        use hru_module, only : hru, cn2, wfsh, cvm_com
 +        use plant_module, only : pcom
@@ -207,6 +207,11 @@ index 0000000..7952051
 +              pcom(j)%plm(ipl)%n_fr, pcom(j)%plm(ipl)%p_fr, pcom(j)%plcur(ipl)%lai_pot])
 +          end do
 +        end do
++        if (allocated(ru_elem)) then
++          do j = 1, size(ru_elem)
++            call ls_dump (6, j, transfer(ru_elem(j)%dr, [0.]))
++          end do
++        end if
 +      end subroutine ls_dump_init
 +
 +      end module ls_dump_module

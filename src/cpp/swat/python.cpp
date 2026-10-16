@@ -52,9 +52,29 @@ py::dict dumps_to_python(const std::vector<DumpRecord>& dumps) {
 void register_python(py::module_& m) {
     m.def(
         "swat_run",
-        [](const std::map<std::string, py::bytes>& files, bool dump) {
+        [](const std::map<std::string, py::bytes>& files, bool dump, py::object inject) {
             Sim s;
             for (const auto& [name, text] : files) s.files.add(name, std::string(text));
+            if (!inject.is_none()) {
+                // {tag: (keys, vals)} from the reference: 40 (hd of HRU objects), 10 (hwb_d), 6 (ru_elem dr)
+                for (auto item : py::cast<py::dict>(inject)) {
+                    const int tag = py::cast<int>(item.first);
+                    auto kv = py::cast<py::tuple>(item.second);
+                    auto keys = py::cast<py::array_t<std::int32_t, py::array::c_style | py::array::forcecast>>(kv[0]);
+                    auto vals = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(kv[1]);
+                    auto k = keys.unchecked<2>();
+                    auto v = vals.unchecked<2>();
+                    for (py::ssize_t r = 0; r < k.shape(0); ++r) {
+                        std::vector<float> row(static_cast<std::size_t>(v.shape(1)));
+                        for (py::ssize_t c = 0; c < v.shape(1); ++c) row[static_cast<std::size_t>(c)] = v(r, c);
+                        const InjectKey key{k(r, 0), k(r, 1), k(r, 2)};
+                        if (tag == 40) s.inject_hd[key] = std::move(row);
+                        else if (tag == 10) s.inject_hwb[key] = std::move(row);
+                        else if (tag == 6) s.inject_dr[k(r, 2)] = std::move(row);
+                        else throw py::value_error("inject: tags 6, 10 and 40");
+                    }
+                }
+            }
             RunOptions opt;
             opt.dump = dump;
             {
@@ -70,8 +90,9 @@ void register_python(py::module_& m) {
             out["start"] = py::make_tuple(s.time_init.yrc_start, s.time_init.day_start);
             return out;
         },
-        py::arg("files"), py::arg("dump") = true,
-        "Run a SWAT+ project given as {file name: contents}; returns the daily records.");
+        py::arg("files"), py::arg("dump") = true, py::arg("inject") = py::none(),
+        "Run a SWAT+ project given as {file name: contents}; returns the daily records. inject: reference "
+        "records replacing hru_control (tests of the routing).");
 
     m.def(
         "swat_list_read",

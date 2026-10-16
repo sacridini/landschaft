@@ -43,6 +43,24 @@ void cli_staread(Sim& s);
 void cli_precip_control(Sim& s, int istart);
 void climate_control(Sim& s);
 
+// objects, routing units, aquifers and channels (command.cpp, aquifer.cpp, channel.cpp)
+void om_water_init(Sim& s);
+void cli_lapse(Sim& s);
+void proc_cha(Sim& s);
+void proc_aqu(Sim& s);
+void dr_ru(Sim& s);
+void command(Sim& s);
+void ru_control(Sim& s);
+void aqu_1d_control(Sim& s);
+void sd_channel_control3(Sim& s);
+void rcurv_interp_dep(Sim& s, int icha, float flow_dep);
+void rcurv_interp_flo(Sim& s, int icha, float flo_rate);
+
+// HRU (hru_daily.cpp, mgt.cpp)
+void hru_control(Sim& s);
+void sim_initday(Sim& s);
+void mgt_newtillmix_cswat0(Sim& s, int jj, float bmix, int idtill);
+
 // time
 void time_control(Sim& s);
 void xmon(const Sim& s, int jd, int& mo, int& day_mo);

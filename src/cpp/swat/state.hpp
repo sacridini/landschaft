@@ -5,7 +5,9 @@
 
 #pragma once
 
+#include <map>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "swat/fio.hpp"
@@ -17,6 +19,24 @@ namespace swat {
 struct DumpRecord {
     int tag, yrc, day, id;
     std::vector<float> values;
+};
+
+// routing tests (fork phases 5-6): reference values keyed by (year, day, object)
+struct InjectKey {
+    int yrc, day, id;
+    bool operator<(const InjectKey& o) const { return std::tie(yrc, day, id) < std::tie(o.yrc, o.day, o.id); }
+};
+
+// Fortran local variables with an initialiser are SAVEd: those read before they are set
+// in a call keep their value from the last call
+struct SavedLocals {
+    float ch_rtmusk_inflo = 0.0f;
+    float ch_watqual4_gra = 0.0f;
+    float et_act_sev = 0.0f;
+    float pl_nut_demand_delg_p = 0.0f;
+    float nut_psed_fr_orgp = 0.0f;
+    float nut_psed_fr_actmin = 0.0f;
+    float nut_psed_fr_stamin = 0.0f;
 };
 
 struct Sim : input_file_module,
@@ -61,6 +81,12 @@ struct Sim : input_file_module,
              dr_module,
              recall_module {
     fio::FileSet files;
+    SavedLocals saved;
+
+    // reference outputs replacing hru_control (tests of the routing): tag 40 hd rows of
+    // HRU objects, tag 10 hwb_d rows
+    std::map<InjectKey, std::vector<float>> inject_hd, inject_hwb;
+    std::map<int, std::vector<float>> inject_dr;  // tag 6: ru_elem(i)%dr after dr_ru
 
     // what the reference writes to diagnostics.out
     std::vector<std::string> warnings;

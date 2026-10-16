@@ -1318,6 +1318,16 @@ void proc_hru(Sim& s) {
         hru_lum_init(s, iihru);
     }
     topohyd_init(s);
+    // hru_output_allo (the daily records; the monthly, yearly and average ones are not kept)
+    const int mhru = s.sp_ob.hru;
+    s.hwb_d.alloc(1, mhru, output_waterbal());
+    s.hnb_d.alloc(1, mhru, output_nutbal());
+    s.hls_d.alloc(1, mhru, output_losses());
+    s.hpw_d.alloc(1, mhru, output_plantweather());
+    s.hsc_d.alloc(1, mhru, s.hscz);
+    s.hrc_d.alloc(1, mhru, s.hrcz);
+    s.hpc_d.alloc(1, mhru, s.hpcz);
+    s.hscf_d.alloc(1, mhru, s.hscfz);
     soils_init(s);
     structure_init(s);
     plant_all_init(s);
