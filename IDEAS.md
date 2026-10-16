@@ -4154,7 +4154,7 @@ ou pela ET das plantas, `event` 0):
       de decisão (`irr_year`) vale para a simulação inteira.
   16. `hru_dtbl_actions_init` indexa o HRU pelo número do objeto (`sp_ob1%hru + i - 1`): errado quando os HRUs não
       são os primeiros objetos do `object.cnt`.
-  17. `pl_tstr` à parte, `conditions` guarda `ipl` entre chamadas (SAVE): `phu_plant` sem plantas usa o `ipl` de
+  17. `conditions` guarda `ipl` entre chamadas (SAVE): `phu_plant` sem plantas usa o `ipl` de
       uma condição anterior.
 - **5 e 6 (roteamento) — Feitas no ramo do fork** (2026-10-16): `command.cpp` (laço de comandos, `ru_control`,
   `dr_ru`), `aquifer.cpp` (`proc_aqu`, `aqu_1d_control`), `channel.cpp` (`proc_cha`, curvas de descarga,

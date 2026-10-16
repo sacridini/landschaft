@@ -7723,7 +7723,7 @@ struct hydrologic_response_unit {
     int paddy_irr = 0;
     int wallo_pod = 0;
     topography topo;
-    field field;
+    ::swat::field field;
     hydrology hyd;
     hydrology hydcal;
     landuse luse;

@@ -201,6 +201,8 @@ def parse_decl(stmt: str):
 def cpp_decl(d: Decl) -> str:
     base = d.typ if d.base == "type" else d.base
     name = cname(d.name)
+    if d.base == "type" and base == name:
+        base = "::swat::" + base  # a member named as its type: gcc rejects the unqualified form
     if d.pointer and not d.dims:
         return f"{base}* {name} = nullptr;"
     if d.dims:
