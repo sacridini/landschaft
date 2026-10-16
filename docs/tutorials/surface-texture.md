@@ -19,6 +19,7 @@ surfaces, brought to landscape ecology as *gradient surface metrics*
   direction and wavelength, fractal dimension;
 - compute terrain indices of a DEM: slope, TPI, ruggedness, curvature, heat
   load;
+- classify landforms with geomorphons;
 - delineate the hilltops protected by Brazil's Forest Code.
 
 Everything lives in `ls.surface`. The metrics follow the R packages geodiv
@@ -208,6 +209,41 @@ hli 0.771 1.072
   warmest direction (south-west in the northern hemisphere) and latitude.
 - `curvature`, `srr`, `dissection`, `spherical_sd` and `trasp` complete the
   set.
+
+## Landforms
+
+Geomorphons (Jasiewicz & Stepinski 2013) classify each cell into one of ten
+landforms by looking along eight lines of sight up to a search distance:
+whether the terrain rises, falls or stays level in each direction. Unlike
+slope or curvature from a 3 x 3 window, they capture the form of the site at
+the scale of the search, and make expressive covariates for species
+distribution and land change models. They need a projected DEM:
+
+```python
+utm = ls.reproject(ls.load_raster(ls.surface.example_data("orelevation")), "EPSG:32610", res=30)
+forms = ls.surface.geomorphons(utm, search=20)
+print(forms.share()[["name", "share"]].round(3).to_string())
+```
+
+```text
+           name  share
+form                  
+1          flat  0.000
+2          peak  0.014
+3         ridge  0.110
+4      shoulder  0.003
+5          spur  0.215
+6         slope  0.363
+7        hollow  0.182
+8     footslope  0.004
+9        valley  0.098
+10          pit  0.011
+```
+
+Slopes, spurs and hollows dominate these mountains. `forms.ternary` keeps the
+pattern of each cell (one of 498), and `measures=True` adds intensity,
+exposition, range and the shape of each geomorphon. The forms are GRASS GIS's
+`r.geomorphon` bit for bit, with its errors corrected.
 
 ## Hilltop protection areas
 

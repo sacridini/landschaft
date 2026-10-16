@@ -95,6 +95,14 @@ and follow along.
     texture images, spatial structure, terrain indices of DEMs and the
     hilltops protected by Brazil's Forest Code.
 
+
+-   :material-water-outline:{ .lg .middle } **[Terrain hydrology](terrain-hydrology.md)**
+
+    ---
+
+    Filling and breaching depressions, flow directions and accumulation,
+    streams, height above the nearest drainage and wetness.
+
 -   :material-leaf:{ .lg .middle } **[Biodiversity analysis](biodiversity.md)**
 
     ---
