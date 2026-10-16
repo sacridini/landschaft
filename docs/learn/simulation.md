@@ -158,6 +158,19 @@ whose patches are too large consolidates it. Since the next steps of most
 studies are landscape metrics or connectivity, the shape of the simulated
 change is not a detail: it decides the answer.
 
+Two kinds of change escape the class-by-class picture. Logging, fire and
+harvest take biomass, carbon or timber from the forest without turning it
+into another class: the **Patcher of a continuous state** of Dinamica EGO
+(`S.ContinuousPatcher`) opens patches that take the stock of their cells,
+drawn by probability, until a quota of stock is met. And change builds the
+infrastructure that drives more change: on Amazonian frontiers clearing
+follows the roads, and new roads follow the clearing (Soares-Filho et al.,
+2004, 2006). A **road constructor** (`S.RoadBuilder`) draws destinations
+among attractive cells at a range of distances from the roads and joins
+each to the network down the cheapest way over a friction surface, every
+step; the distance to the growing network is then a dynamic variable of
+the model.
+
 ## Validation: is the simulation any good?
 
 A simulation of the observed period, from the earlier map, can be compared
@@ -310,7 +323,9 @@ print((change > 0.5).sum(dim=change.dims[1:]).values)     # cells that change in
 - Pontius, R. G., Jr., Boersma, W., Castella, J.-C., Clarke, K., de Nijs, T., Dietzel, C., et al. (2008). Comparing the input, output, and validation maps for several models of land change. *The Annals of Regional Science*, 42(1), 11–37.
 - Pontius, R. G., Jr., & Millones, M. (2011). Death to Kappa: birth of quantity disagreement and allocation disagreement for accuracy assessment. *International Journal of Remote Sensing*, 32(15), 4407–4429.
 - Pontius, R. G., Jr., Peethambaram, S., & Castella, J.-C. (2011). Comparison of three maps at multiple resolutions: a case study of land change simulation in Cho Don District, Vietnam. *Annals of the Association of American Geographers*, 101(1), 45–62.
+- Soares-Filho, B. S., Alencar, A., Nepstad, D., Cerqueira, G. C., Diaz, M. del C. V., Rivero, S., Solórzano, L., & Voll, E. (2004). Simulating the response of land-cover changes to road paving and governance along a major Amazon highway: the Santarém–Cuiabá corridor. *Global Change Biology*, 10(5), 745–764.
 - Soares-Filho, B. S., Cerqueira, G. C., & Pennachin, C. L. (2002). DINAMICA: a stochastic cellular automata model designed to simulate the landscape dynamics in an Amazonian colonization frontier. *Ecological Modelling*, 154(3), 217–235.
+- Soares-Filho, B. S., Nepstad, D. C., Curran, L. M., Cerqueira, G. C., Garcia, R. A., Ramos, C. A., Voll, E., McDonald, A., Lefebvre, P., & Schlesinger, P. (2006). Modelling conservation in the Amazon basin. *Nature*, 440, 520–523.
 - van Asselen, S., & Verburg, P. H. (2013). Land cover change or land-use intensification: simulating land system change with a global-scale land change model. *Global Change Biology*, 19(12), 3648–3667.
 - van Vliet, J., Bregt, A. K., & Hagen-Zanker, A. (2011). Revisiting Kappa to account for change in the accuracy assessment of land-use change models. *Ecological Modelling*, 222(8), 1367–1375.
 - Verburg, P. H., Schot, P. P., Dijst, M. J., & Veldkamp, A. (2004). Land use change modelling: current practice and research priorities. *GeoJournal*, 61(4), 309–324.

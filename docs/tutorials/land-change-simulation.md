@@ -17,13 +17,15 @@ chapter [Simulating land change](../learn/simulation.md).
 - fit, check and project a model in one call;
 - validate a simulation against the observed map;
 - calibrate a setting that cannot be measured;
-- run scenarios with replicates and map the probability of change.
+- run scenarios with replicates and map the probability of change;
+- let variables, roads and stocks change with the simulation.
 
 The pieces reproduce the established land change models, value for value
 where their code is open: CLUE-S and the ordered procedure as the R package
 lulcc runs them, CLUMondo, FUTURES (GRASS's `r.futures`) and MOLUSCE; the
-weights of evidence, transition rates, Expander and Patcher and fuzzy
-similarity of Dinamica EGO, measured on the program; PLUS's random patch
+weights of evidence, transition rates, Expander and Patcher, fuzzy
+similarity, gravity potential, road constructor and continuous Patcher of
+Dinamica EGO, measured on the program; PLUS's random patch
 seeds, written from its paper. The [benchmarks page](../benchmarks.md)
 lists every comparison.
 
@@ -246,6 +248,55 @@ model = S.Model(lr2, demand, S.Ordered(order=[2, 3, 4, 5, 1]), dynamic={"dist_fo
 sim = model.run(t1, drivers_t1, seed=1)
 print(sim.steps.filter(like="cells_"))
 ```
+
+`S.gravity_of` is another: the pull of a class (here the rice fields, as a
+stand-in for villages) summed over the map with a distance decay, the
+gravity model of spatial interaction, recomputed as the class grows:
+
+```python
+pull = S.gravity_of(4, exponent=2)          # sum over rice cells of 1 / distance^2 (in cells)
+print(float(pull(t1).max()), float(pull(t1).mean()))
+```
+
+## Roads that grow with the model
+
+Roads open new land to clearing, and clearing calls for new roads. A road
+builder adds roads each step: it keeps the attraction (here, the forest)
+at 500-2000 m from the roads, draws destinations in quadrants of the map,
+and joins each to the network down the cheapest way over a friction (here
+the slope):
+
+```python
+roads = (drivers.sel(band="dist_roads") == 0).astype(float).where(~np.isnan(t1))   # the road cells of 2011
+friction = (1 + drivers.sel(band="slope")).where(~np.isnan(t1))
+rb = S.RoadBuilder(friction, lambda m: (m == 1).astype(float), quadrants=(2, 4), distance=(500, 2000),
+                   spacing=1000)
+nets = rb.run(roads.fillna(0), 3, landscape=t1, seed=1)
+print([int((nets[k] > 0).sum()) for k in range(4)])                  # road cells at each step
+```
+
+`rb.dynamic(network)` makes the distance to the growing network a dynamic
+variable of a `Model`: each step builds roads on the simulated map, and the
+potential sees them. The pieces are also functions of their own:
+`S.friction_cost`, `S.destinations` and `S.pathways`.
+
+## Taking a stock
+
+Logging and harvest take biomass from the forest without changing its
+class. `S.ContinuousPatcher` opens patches, of a lognormal size, that take
+all the stock of their cells, drawn by probability, until the quota of each
+step is met:
+
+```python
+biomass = (t1 == 1) * 150.0                                    # Mg per hectare in the forest
+near_roads = (1 / (1 + drivers.sel(band="dist_roads") / 500)).where(t1 == 1, 0)
+cp = S.ContinuousPatcher(mean=25, variance=100, isometry=1.5)  # patches of about 25 ha
+logging = cp.run(biomass.where(~np.isnan(t1)), near_roads, [20000, 20000, 20000], seed=1)
+print(logging.steps)                                           # Mg taken, the quota left, patches, cells
+```
+
+The quota left is negative when the last cell took more than was needed,
+and positive when the cells with stock and probability ran out.
 
 ## Other models
 

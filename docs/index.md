@@ -79,7 +79,8 @@ Python 3.10+ · C++17 / OpenMP core · numpy · xarray · dask · GPL-3.0-or-lat
 -   [**Surface texture**](tutorials/surface-texture.md)
 
     Roughness, height distribution and texture of continuous rasters
-    (ISO 25178) such as NDVI or elevation, and terrain indices of DEMs.
+    (ISO 25178) such as NDVI or elevation, terrain indices of DEMs and
+    protected hilltops.
 
 -   [**Neutral landscapes**](tutorials/neutral-landscapes.md)
 
@@ -104,8 +105,9 @@ Python 3.10+ · C++17 / OpenMP core · numpy · xarray · dask · GPL-3.0-or-lat
 -   [**Land change simulation**](tutorials/land-change-simulation.md)
 
     Project land use from two maps: demand, transition potential and
-    allocation, validation against the observed change, calibration and
-    scenarios with replicates.
+    allocation, validation against the observed change, calibration,
+    scenarios with replicates, and roads and stocks that change with the
+    model.
 
 -   [**Large data & batch**](tutorials/large-data.md)
 

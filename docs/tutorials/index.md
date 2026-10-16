@@ -92,7 +92,8 @@ and follow along.
     ---
 
     Continuous rasters without classes: roughness, height distribution,
-    texture images, spatial structure, and terrain indices of DEMs.
+    texture images, spatial structure, terrain indices of DEMs and the
+    hilltops protected by Brazil's Forest Code.
 
 -   :material-leaf:{ .lg .middle } **[Biodiversity analysis](biodiversity.md)**
 
@@ -137,6 +138,6 @@ and follow along.
 
     Project land use from two maps: demand, transition potential and four
     allocations, validation at several resolutions, calibration, scenarios
-    with replicates.
+    with replicates, roads and stocks that change with the model.
 
 </div>

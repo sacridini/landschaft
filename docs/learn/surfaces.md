@@ -19,6 +19,8 @@ varies rather than by the patches a threshold would cut out of it.
     - the spatial structure of a surface: autocorrelation, anisotropy,
       direction, wavelength, fractal dimension;
     - surfaces in moving windows, and terrain indices of elevation models;
+    - summits, saddles and the hilltops protected by Brazil's Forest Code;
+    - the gravity model of spatial interaction;
     - pitfalls in measuring surfaces.
 
 ## Patches or gradients?
@@ -247,6 +249,73 @@ window = dem.values[99:102, 199:202]
 print(dem.values[100, 200] - window.mean(), float(tpi.values[100, 200]))
 ```
 
+## Summits, saddles and protected hilltops
+
+A DEM is also a set of **elevations**: summits, each standing above a base.
+Where is the base of a hill? Walking down from a summit, its region grows
+until it meets the region of a higher summit at a **saddle** (a col): below
+that level the two are one landform. The height of the saddle under a summit
+that leads to higher ground is the summit's *key col*, and the summit's
+height above it its **topographic prominence**. The highest summit of an
+area has no higher neighbour: its base is the lowest ground around it, a
+plain, a river or the sea.
+
+The definition matters in law. Brazil's Forest Code (Lei 12.651/2012,
+art. 4, IX) protects the tops of hills, mountains and ranges at least 100 m
+high and with a mean slope above 25°: the area above the contour at two
+thirds of the height, measured from the base, which is the adjacent plain or
+water body or, in undulating relief, "the nearest saddle point". These
+hilltop permanent protection areas (*APP de topo de morro*) keep vegetation
+on the steep upper slopes, where clearing causes erosion and landslides.
+
+`ls.surface.hilltop` sweeps the cells from the highest down, joining each to
+its swept neighbours, and records each summit's base where its region meets
+a higher one (or the plain, given as a mask). Two cones that meet at a
+saddle show it:
+
+```python
+yy, xx = np.mgrid[0:60, 0:100] * 30.0 + 15                  # 30 m cells
+big = 500 + np.clip(400 - np.hypot(yy - 885, xx - 1065), 0, None)
+small = 500 + np.clip(250 - np.hypot(yy - 885, xx - 1545), 0, None)
+cones = np.maximum(big, small)                              # 45 degree slopes on a plain at 500 m
+h = ls.surface.hilltop(cones, extent=(0, 3000, 0, 1800))
+hills = h.hills[h.hills.height > 0]
+print(hills[["top", "base", "base_kind", "height", "mean_slope", "threshold"]].round(1))
+print(cones[29, 35:52].min())                               # the lowest point of the ridge between them
+```
+
+The big cone stands 400 m above the plain; the small one 150 m above the
+saddle at 600 m, the lowest point of the ridge that joins them, not above
+the plain. Both qualify, and each protects the area above its threshold:
+766.7 m and 700 m. With the older rule of CONAMA 303/2002, hills of 50 m
+and a slope of 30 % along the line of steepest slope also count:
+`min_height=50, min_slope=16.7, slope="line"`.
+
+## Spatial interaction: the gravity model
+
+Towns, markets and ports pull activity towards them, more the larger they
+are and the closer. The **gravity model** of spatial interaction (Haynes &
+Fotheringham, 1984) sums that pull over the sources:
+
+<div class="ls-formula" markdown>
+P<sub>i</sub> = Σ<sub>k</sub> m<sub>k</sub> / d<sub>ik</sub><sup>β</sup>
+<small>m<sub>k</sub>: the mass of source k (population, production); d<sub>ik</sub>: its distance from cell i; β: the distance decay (2: the inverse square).</small>
+</div>
+
+The potential is a common driver of land change: deforestation and
+urbanisation follow it. `ls.surface.gravity` computes it, with distances in
+cells (a source's own cell at 1, as Dinamica EGO does) or in map units, and
+`ls.simulate.gravity_of` recomputes it from the simulated map at every step
+([chapter 14](simulation.md)). By hand, for the cell of the smaller of two
+towns:
+
+```python
+towns = np.full((5, 7), np.nan)
+towns[1, 1], towns[3, 5] = 2000, 500                        # populations
+p = ls.surface.gravity(towns, 2)
+print(2000 / ((3 - 1) ** 2 + (5 - 1) ** 2) + 500 / 1, float(p[3, 5]))
+```
+
 ## Pitfalls
 
 - **Remove the trend deliberately.** Metrics of a surface with a trend
@@ -267,6 +336,11 @@ print(dem.values[100, 200] - window.mean(), float(tpi.values[100, 200]))
   handful from different families (amplitude, distribution, spatial) says
   most of what the full set says, as with patch metrics
   ([chapter 5](metrics.md#redundancy-fewer-metrics-than-you-think)).
+- **Hilltops depend on the DEM.** Bases, heights and mean slopes change
+  with the resolution and the errors of the elevation model (a coarse DEM
+  flattens slopes and can drop a hill below 25°), and on what is given as
+  plain or water. Automatic delineation is a starting point for field and
+  legal work, not its end.
 - **Edges and missing cells.** Windows that reach the edge of the map or a
   missing cell give missing values (or, for the Fourier metrics, use the
   largest square without missing cells).
@@ -281,6 +355,9 @@ print(dem.values[100, 200] - window.mean(), float(tpi.values[100, 200]))
     - Texture images map heterogeneity at a chosen scale.
     - Terrain indices (TPI, TRI, VRM, curvature, heat load) turn a DEM into
       ecologically meaningful variables.
+    - A summit's base is the saddle where it meets higher ground, or the
+      plain; the protected hilltop is the area above two thirds of its
+      height.
 
 ## Check your understanding
 
@@ -290,6 +367,10 @@ print(dem.values[100, 200] - window.mean(), float(tpi.values[100, 200]))
    much between thresholds 0.60 and 0.75?
 3. A surface has a texture aspect ratio (Str) of 0.05. What does it look
    like, and which metric tells its orientation?
+4. A peak of 1000 m stands on a range whose highest summit is 1100 m; the
+   lowest point of the ridge between them is at 960 m and the range rises
+   from a plain at 300 m. What is the peak's height for the Forest Code, and
+   is it a protected hill?
 
 ??? success "Answers"
     1. Ssk = −2: most cells are slightly above the mean, with rare, deep
@@ -303,12 +384,21 @@ print(dem.values[100, 200] - window.mean(), float(tpi.values[100, 200]))
     3. Strongly anisotropic: stretched in one direction, like ridges,
        valleys or rows. The texture direction Std gives the orientation
        (and the wavelength Srw the spacing of the ridges).
+    4. Its base is the saddle at 960 m, where it meets the higher summit:
+       40 m, below the 100 m the law asks, so it is not a hill of its own.
+       It is part of the range, whose highest summit stands 800 m above the
+       plain; if that qualifies, its protected area starts at
+       300 + 2/3 × 800 ≈ 833 m, and the peak, joined to the summit by a
+       ridge that never drops below 960 m, lies inside it.
 
 ## References
 
 <div class="ls-refs" markdown>
 
 - Clarke, K. C. (1986). Computation of the fractal dimension of topographic surfaces using the triangular prism surface area method. *Computers & Geosciences*, 12(5), 713–722.
+- Brasil (2012). Lei nº 12.651, de 25 de maio de 2012 (Código Florestal), art. 4, IX. *Diário Oficial da União*, 28 May 2012.
+- CONAMA (2002). Resolução nº 303, de 20 de março de 2002. Conselho Nacional do Meio Ambiente, Brasília.
+- Haynes, K. E., & Fotheringham, A. S. (1984). *Gravity and Spatial Interaction Models*. Sage, Beverly Hills.
 - Horn, B. K. P. (1981). Hill shading and the reflectance map. *Proceedings of the IEEE*, 69(1), 14–47.
 - ISO 25178-2 (2012). *Geometrical product specifications (GPS) — Surface texture: Areal — Part 2: Terms, definitions and surface texture parameters*. International Organization for Standardization.
 - McCune, B., & Keon, D. (2002). Equations for potential annual direct incident radiation and heat load. *Journal of Vegetation Science*, 13(4), 603–606.

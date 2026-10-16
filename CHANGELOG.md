@@ -6,6 +6,13 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- Documentation of the 1.46 tools: the course chapters on continuous surfaces (summits, saddles and protected
+  hilltops; the gravity model, with checks by hand) and on land change (stocks and endogenous roads); the surface
+  texture tutorial's hilltop protection areas; the land change tutorial's gravity pull, roads that grow with the
+  model and stocks taken by patches; their speed and accuracy against Dinamica EGO on the benchmarks page, with
+  `tools/benchmark_dinamica.py` (4 cores).
+
 ## [1.46.0] - 2026-10-16
 
 ### Added

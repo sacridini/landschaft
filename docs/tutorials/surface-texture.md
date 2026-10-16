@@ -18,7 +18,8 @@ surfaces, brought to landscape ecology as *gradient surface metrics*
 - measure the spatial structure of a surface: correlation lengths, texture
   direction and wavelength, fractal dimension;
 - compute terrain indices of a DEM: slope, TPI, ruggedness, curvature, heat
-  load.
+  load;
+- delineate the hilltops protected by Brazil's Forest Code.
 
 Everything lives in `ls.surface`. The metrics follow the R packages geodiv
 (surface metrics) and spatialEco (terrain indices), value for value where they
@@ -208,6 +209,42 @@ hli 0.771 1.072
 - `curvature`, `srr`, `dissection`, `spherical_sd` and `trasp` complete the
   set.
 
+## Hilltop protection areas
+
+Brazil's Forest Code (Lei 12.651/2012) protects the tops of hills at least
+100 m high with a mean slope above 25°: the area above two thirds of their
+height, measured from the base (the plain or water around them, or the
+saddle where they meet higher ground). `hilltop` finds every summit with its
+base and marks the protected area of those that qualify:
+
+```python
+h = ls.surface.hilltop(dem)
+hills = h.hills[h.hills.qualifies]
+print(hills[["top", "base", "base_kind", "height", "mean_slope", "threshold", "app_cells"]].round(1))
+print(len(h.hills), "summits")
+conama = ls.surface.hilltop(dem, min_height=50, min_slope=16.7, slope="line")   # CONAMA 303/2002
+print(int(conama.hills["qualifies"].sum()), "hills,", int(conama.app.sum()), "cells with the older rule")
+ls.plot([dem, h.app])
+```
+
+```text
+         top   base base_kind  height  mean_slope  threshold  app_cells
+hill
+208   1068.0  909.0    saddle   159.0        25.6     1015.0        115
+625 summits
+12 hills, 1400 cells with the older rule
+```
+
+Of 625 summits, one is a hill for the law: 159 m above the saddle that
+joins it to higher ground, with a mean slope of 25.6°. The rest are bumps on
+larger landforms or too gentle; the highest summit of the map stands 957 m
+above the lowest point but its slopes average 18°. Give the plains and water
+bodies around the hills as `plain=` (a mask) so that their bases are taken
+from them. The older rule of CONAMA 303/2002 (50 m, a slope of 30 % along
+the line from the summit to its foot) finds twelve hills here. Bases,
+heights and slopes depend on the DEM's resolution and accuracy: the result
+is a starting point for field and legal work.
+
 ## Validation
 
 Every metric is checked in the test suite against R: against geodiv and
@@ -219,4 +256,7 @@ centre of the Fourier images, the fractal dimension's prisms, the choice of
 trend surface, curvature's second derivatives, hsp's z-scores and the heat
 load's southern hemisphere; see the [benchmarks](../benchmarks.md#accuracy)
 and each function's notes. Typical gains in speed are tens to thousands of
-times over the R packages.
+times over the R packages. `hilltop` follows the law rather than a program
+(Dinamica EGO's `CalcHilltop` applies the older CONAMA rule with other
+definitions); it is checked against an independent computation of the
+landforms on random DEMs and on cones and ranges of known geometry.

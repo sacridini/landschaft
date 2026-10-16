@@ -333,6 +333,15 @@ default threads. CLUMondo and FUTURES were timed when they were written.
 | Weights of evidence and 3 simulator iterations, 180 × 240 (MOLUSCE) | 1.99 s | 53 ms | 1.15 |
 | Three-map comparison, agreement budget and figure of merit, Plum Island, 6 resolutions (lulcc) | 7.21 s | 0.17 s | 1.17 |
 | Fuzzy similarity of the differences, windows 1-11, 480 × 640 (Dinamica EGO) | 0.67 s | 49 ms | 1.18 |
+| Gravity potential, 1000 × 1000, 1000 sources (Dinamica EGO `CalcInteractionPotentialMap`) | 0.42 s | 0.13 s | 1.46 |
+| Stock taken by patches, 3000 × 3000, 50 000 cells (Dinamica EGO `PatcherContinuousState`) | 3.8 s | 0.59 s | 1.46 |
+| Cost surface to a road network, 3000 × 3000 (Dinamica EGO `CalcCostMap`, passes until exact) | 769 s | 1.4 s | 1.46 |
+
+The Dinamica EGO functors of version 1.46 were timed with
+`tools/benchmark_dinamica.py` on 4 cores on both sides (Dinamica with
+`-processors 4`), the time of the functor in Dinamica's log. Its cost surface sweeps the map in four directions until no cost
+changes (fewer passes give an approximation); Landschaft's runs Dijkstra's
+algorithm once, with the same sums.
 
 CLUE-S draws a random number per cell and class at each of its thousands of
 passes, from R's generator, one after the other: Landschaft draws the same
@@ -457,6 +466,8 @@ raster read in strips), and only that is reprojected and encoded.
 | Land change: MOLUSCE's weights of evidence, simulator, multi-criteria evaluation, kappa and error budget | MOLUSCE 5.3.0 imported without QGIS (its confidence corrected: `tools/molusce_fixed.patch`): 6 cases | identical bits, NumPy's random numbers included |
 | Land change validation: three maps at several resolutions, agreement budget, figure of merit, `r.futures.validation` | lulcc 1.0.4 (raster 3.6-31): 2 cases; GRASS's addon: 3 cases | identical bits |
 | Land change validation: fuzzy similarity and similarity of differences | Dinamica EGO 8.13 (measured): 36 maps, windows 1-11, exponential and constant decay | identical maps; means to the 15 digits it writes |
+| Land change: gravity potential (`surface.gravity`) | Dinamica EGO 8.13 `CalcInteractionPotentialMap` (measured): 10 maps, five exponents, with and without a mask | within 3e-6 (Dinamica adds float32 terms in float32; Landschaft sums in float64) |
+| Land change: roads (`friction_cost`, `pathways`) | Dinamica EGO 8.13 `CalcCostMap` and `CalcPathwayMap` (measured): real and integer frictions, with and without diagonal costs, relative frictions, impassable and unreachable cells; paths down the costs and along the directions | identical costs and paths; directions identical except between equally cheap predecessors (Dinamica's follow its sweeps) |
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an
 algebraic multigrid) is itself only about 2e-7 away from the exact solution;
@@ -476,6 +487,8 @@ its code:
 | Cost distance, least-cost path, restoration corridor, contortion, simple and morphological change, FOS change, GraySpatCon metrics other than those of FOS | unit tests on constructed cases |
 | Zonal statistics, extraction at points, clip, rasterize | cells against GDAL's rasterizer, statistics against NumPy and rasterstats |
 | Land change: Dinamica's Expander and Patcher | Dinamica EGO 8.13's functors crash for patches of more than one cell, so their seed selection was measured with one-cell patches (acceptance by neighbours, draw by probability) and the patch growth follows the publications; statistical comparison |
+| Land change: Dinamica's continuous Patcher (`ContinuousPatcher`) and road destinations (`destinations`) | Dinamica EGO 8.13's continuous Patcher crashes for patches of more than one cell, as its Patcher does: the candidates, the pruning, the quota and the draw by probability were measured with one-cell patches (exact on the cases that do not depend on the draw, statistical on 32 draws), the growth is the Patcher's; destinations compared statistically on 100 draws (Dinamica's draw errors corrected, see below) |
+| Hilltop protection areas (`surface.hilltop`) | written from the Forest Code (Lei 12.651/2012): Dinamica EGO's `CalcHilltop` follows the older CONAMA 303/2002 rule on a DEM cut into elevation bands, with its own definitions (its slope criterion measures to the map's edge or to other features: 5° on an isolated cone of 21.8°), so only the heights are compared (to 0.05 m on cones); checked against an independent computation of the landforms by connected components on random DEMs, and on cones, ranges and lakes of known geometry |
 | Land change: PLUS's CA with multi-type random patch seeds (CARS) | PLUS is distributed without source code or licence: written from its paper, checked by its properties (demand met, growth from patches and seeds, the threshold, the rules, the same maps with any number of threads) |
 | Land change: dynamic variables, regional demands, presets, projections, scenarios, calibration | unit tests: the pieces they assemble are compared above |
 
@@ -509,6 +522,13 @@ its code:
       checks use Natural Earth's `iso_a3_eh` (with `iso_a3`, France and
       Norway are "-99"), and MOP's Mahalanobis distance uses the
       reference's covariance (mop used that of the cells tested).
+    - **Dinamica EGO's destinations** (`destinations`, of its road
+      constructor): Dinamica gives each quadrant `n // q` rows or columns,
+      so the last `n % q` never get a destination, and rounds its draw to an
+      integer of the summed attraction, so the first cell of a quadrant gets
+      half its share and a draw past the end takes the quadrant's last cell,
+      even of no attraction. Landschaft's quadrants cover the map and its
+      draw follows the attraction exactly.
     - **Off Windows**, the arctangent of the slopes of `surface.terrain` is
       the C library's, as terra's is on Windows: R takes it from Windows'
       UCRT, whose code is not public, and other C libraries (glibc) differ
@@ -554,4 +574,6 @@ with lulcc, OpenLand and diffeR (`LANDSCHAFT_SIM_R_LIBS`, default
 `%LOCALAPPDATA%/R/landschaft-sim-lib`), CLUMondo (`LANDSCHAFT_CLUMONDO`,
 `LANDSCHAFT_CLUMONDO_FIXED`), GRASS 8 with the `r.futures` addons in WSL,
 Dinamica EGO's console (`LANDSCHAFT_DINAMICA`) and MOLUSCE's sources
-(`LANDSCHAFT_MOLUSCE`, `LANDSCHAFT_MOLUSCE_FIXED`).
+(`LANDSCHAFT_MOLUSCE`, `LANDSCHAFT_MOLUSCE_FIXED`);
+`tools/benchmark_dinamica.py` times the Dinamica EGO functors added in 1.46
+on 4 cores.
