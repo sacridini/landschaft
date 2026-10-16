@@ -548,6 +548,14 @@ void conditions(Sim& s, int ob_cur, int idtbl) {
             cond_real(d, ic, s.pl_mass(ob_num).ab_gr_com.m, c.lim_const);
         } else if (v == "leaf_area") {
             cond_real(d, ic, s.pcom(ob_num).lai_sum, c.lim_const);
+        } else if (v == "phu_base0" || v == "precip_cur" || v == "precip_next") {
+            // the weather of the HRU's object (iob kept from an earlier call for other objects)
+            int& iob = s.saved.conditions_iob;
+            if (c.ob == "hru") iob = s.sp_ob1.hru + ob_num - 1;
+            if (c.ob == "hlt") iob = s.sp_ob1.hru_lte + ob_num - 1;
+            const weather_daily& w = s.wst(s.ob(iob).wst).weat;
+            const float x = v == "phu_base0" ? w.phubase0 : v == "precip_cur" ? w.precip : w.precip_next;
+            cond_real(d, ic, x, c.lim_const);
         } else if (v == "soil_temp2") {
             cond_real(d, ic, s.soil(ob_num).phys(2).tmp, c.lim_const);
         } else if (v == "land_use") {
@@ -559,7 +567,25 @@ void conditions(Sim& s, int ob_cur, int idtbl) {
     }
 }
 
-// actions.f90 (irrigation from an unlimited source: the action of the port)
+// the editor's generic plant-harvest tables: the action's crop is the schedule's (the
+// table, shared by the HRUs, keeps it)
+void auto_crop_option(Sim& s, decision_table& d, int iac, int j, int idtbl) {
+    const management_schedule& sc = s.sched(s.hru(j).mgt_ops);
+    const std::string& an = sc.auto_name(idtbl);
+    if (an == "pl_hv_summer1" || an == "pl_hv_winter1") d.act(iac).option = sc.auto_crop(1);
+    if (an == "pl_hv_summer2") d.act(iac).option = sc.auto_crop(s.pcom(j).rot_yr);
+}
+
+// the counters of an action taken
+void after_action(Sim& s, int j, int idtbl, int iac) {
+    auto_operations& at = s.pcom(j).dtbl(idtbl);
+    at.num_actions(iac) = at.num_actions(iac) + 1;
+    at.days_act(iac) = 1;
+    if (iac > 1) at.days_act(iac - 1) = 0;
+}
+
+// actions.f90 (irrigation from an unlimited source, planting, harvests, kills and the
+// counter resets: the actions of the port)
 void actions(Sim& s, int ob_cur, int ob_num, int idtbl) {
     (void)ob_num;
     decision_table& d = *s.d_tbl;
@@ -591,6 +617,92 @@ void actions(Sim& s, int ob_cur, int ob_num, int idtbl) {
                 s.pcom(j).days_irr = 1;
                 if (iac > 1) at.days_act(iac - 1) = 0;
             }
+        } else if (a.typ == "plant") {
+            // not mgt_plantop: the plant only starts growing (its masses and heat units stay)
+            const int j = a.ob_num == 0 ? ob_cur : a.ob_num;
+            plant_community& pc = s.pcom(j);
+            const int icom = pc.pcomdb;
+            pc.days_plant = 1;
+            auto_crop_option(s, d, iac, j, idtbl);
+            for (s.ipl = 1; s.ipl <= pc.npl; ++s.ipl) {
+                const int ipl = s.ipl;
+                if (d.act(iac).option == s.pcomdb(icom).pl(ipl).cpnm && pc.plcur(ipl).gro == "n") {
+                    pc.plcur(ipl).gro = "y";
+                    pc.plcur(ipl).idorm = "n";
+                    if (d.act_app(iac) > 0) refuse("transplanting");
+                }
+            }
+            after_action(s, j, idtbl, iac);
+        } else if (a.typ == "harvest" || a.typ == "harvest_kill") {
+            const bool kill = a.typ == "harvest_kill";
+            const int j = a.ob_num == 0 ? ob_cur : a.ob_num;
+            plant_community& pc = s.pcom(j);
+            if (pc.dtbl(idtbl).num_actions(iac) <= static_cast<int>(a.const2)) {
+                const int iharvop = d.act_typ(iac);
+                const int icom = pc.pcomdb;
+                pc.days_harv = 1;
+                auto_crop_option(s, d, iac, j, idtbl);
+                for (s.ipl = 1; s.ipl <= pc.npl; ++s.ipl) {
+                    const int ipl = s.ipl;
+                    const float biomass = s.pl_mass(j).tot(ipl).m;
+                    if (!(d.act(iac).option == s.pcomdb(icom).pl(ipl).cpnm || d.act(iac).option == "all")) continue;
+                    if (biomass > s.harvop_db(iharvop).bm_min) {
+                        const std::string& typ = s.harvop_db(iharvop).typ;
+                        if (typ == "grain" || typ == "picker" || (kill && typ == "stripper")) {
+                            mgt_harvgrain(s, j, ipl, iharvop);
+                        } else if (typ == "residue") {
+                            mgt_harvresidue(s, j, d.act(iac).const_, iharvop);
+                        } else if (!(kill && typ == "tree")) {
+                            refuse("harvest type " + typ);
+                        }
+                    }
+                    if (s.cal_codes.plt == "y") refuse("plant calibration");
+                    if (kill) {
+                        pc.last_kill = s.pcomdb(icom).pl(ipl).cpnm;
+                        mgt_killop(s, j, ipl);
+                        sum_yield(s, j, ipl);
+                    } else {
+                        // the reference counts harv_num_yr twice (not harv_num) and adds its
+                        // local yield, never set, to the basin's yield
+                        plant_community_mass& pm = s.pl_mass(j);
+                        pm.yield_tot(ipl) = pm.yield_tot(ipl) + s.pl_yield;
+                        pm.yield_yr(ipl) = pm.yield_yr(ipl) + s.pl_yield;
+                        pc.plcur(ipl).harv_num_yr = pc.plcur(ipl).harv_num_yr + 2;
+                        const int iplt_bsn = pc.plcur(ipl).bsn_num;
+                        s.bsn_crop_yld(iplt_bsn).area_ha = s.bsn_crop_yld(iplt_bsn).area_ha + s.hru(j).area_ha;
+                    }
+                }
+                after_action(s, j, idtbl, iac);
+            }
+        } else if (a.typ == "kill") {
+            const int j = a.ob_num == 0 ? ob_cur : a.ob_num;
+            plant_community& pc = s.pcom(j);
+            if (pc.dtbl(idtbl).num_actions(iac) <= static_cast<int>(a.const2)) {
+                const int icom = pc.pcomdb;
+                pc.days_kill = 1;
+                for (s.ipl = 1; s.ipl <= pc.npl; ++s.ipl) {
+                    const int ipl = s.ipl;
+                    if (d.act(iac).option == s.pcomdb(icom).pl(ipl).cpnm || d.act(iac).option == "all") {
+                        pc.last_kill = s.pcomdb(icom).pl(ipl).cpnm;
+                        mgt_killop(s, j, ipl);
+                    }
+                    pc.plcur(ipl).phuacc = 0.0f;
+                    s.phubase(j) = 0.0f;
+                }
+                after_action(s, j, idtbl, iac);
+            }
+        } else if (a.typ == "rot_reset" || a.typ == "harv_reset" || a.typ == "kill_reset" ||
+                   a.typ == "plant_reset" || a.typ == "irr_reset") {
+            const int j = a.ob_num == 0 ? ob_cur : a.ob_num;
+            actions_var& w = d.act(iac);
+            if (w.const_ < 1.0f) w.const_ = 1.0f;
+            const int k = static_cast<int>(w.const_);
+            plant_community& pc = s.pcom(j);
+            if (a.typ == "rot_reset") pc.rot_yr = k;
+            if (a.typ == "harv_reset") pc.days_harv = k;
+            if (a.typ == "kill_reset") pc.days_kill = k;
+            if (a.typ == "plant_reset") pc.days_plant = k;
+            if (a.typ == "irr_reset") pc.days_irr = k;
         } else {
             refuse("decision table action " + a.typ);
         }

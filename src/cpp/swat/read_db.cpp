@@ -275,9 +275,20 @@ void mgt_read_mgtops(Sim& s) {
                     sc.num_db.alloc(1, m_autos, 0);
                     for (int iauto = 1; iauto <= m_autos; ++iauto) {
                         eof = f.read(chars(sc.auto_name(iauto), sc.auto_name_len));
-                        const std::string& an = sc.auto_name(iauto);
-                        if (an == "pl_hv_summer1" || an == "pl_hv_winter1" || an == "pl_hv_summer2")
-                            throw std::runtime_error("SWAT+ automatic crop schedules (" + an + ") are not supported");
+                        // the editor's generic plant-harvest tables name their crops on the line
+                        const std::string an = sc.auto_name(iauto);
+                        const int ncrop = an == "pl_hv_summer1" || an == "pl_hv_winter1" ? 1
+                                          : an == "pl_hv_summer2"                       ? 2
+                                                                                        : 0;
+                        if (ncrop > 0) {
+                            sc.auto_crop.alloc(1, ncrop, "");
+                            f.backspace();
+                            sc.auto_crop_num = 1;
+                            fio::File::Statement st = f.reader();
+                            st.item(chars(sc.auto_name(iauto), sc.auto_name_len));
+                            for (int k = 1; k <= ncrop; ++k) st.item(chars(sc.auto_crop(k), sc.auto_crop_len));
+                            eof = st.finish();
+                        }
                         if (eof < 0) break;
                     }
                 }
@@ -402,7 +413,7 @@ void proc_db(Sim& s) {
     read_db(s, s.in_parmdb.fert_frt, s.fertdb, s.db_mx.fertparm);
     read_db_names(s, "manure_om.frt", s.manure_om, s.db_mx.manure_om);
     read_db_names(s, "manure_db.frt", s.manure_db, s.db_mx.manureparm);
-    read_db_names(s, s.in_parmdb.urban_urb, s.urbdb, s.db_mx.urban, [](urban_db& x) { return chars(x.urbnm, x.urbnm_len); });
+    read_db(s, s.in_parmdb.urban_urb, s.urbdb, s.db_mx.urban);
     read_db_names(s, s.in_parmdb.pathcom_db, s.path_db, s.db_mx.path, [](pathogen_db& x) { return chars(x.pathnm, x.pathnm_len); });
     read_db_names(s, s.in_parmdb.septic_sep, s.sepdb, s.db_mx.sep, [](septic_db& x) { return chars(x.sepnm, x.sepnm_len); });
     read_db(s, s.in_ops.irr_ops, s.irrop_db, s.db_mx.irrop_db);

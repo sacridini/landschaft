@@ -1035,7 +1035,6 @@ void plant_init(Sim& s, int init, int iihru) {
             break;
         }
     }
-    if (h.luse.urb_lu > 0) throw std::runtime_error("SWAT+ urban land uses are not supported");
     for (int idb = 1; idb <= s.db_mx.ovn; ++idb) {
         if (fstrcmp(s.lum(ilum).ovn, s.overland_n(idb).name) == 0) {
             h.luse.ovn = s.overland_n(idb).ovn;

@@ -41,6 +41,7 @@ struct SavedLocals {
     int mgt_sched_icom = 0;
     int conditions_ipl = 0;
     float conditions_targ = 0.0f;
+    int conditions_iob = 0;
 };
 
 struct Sim : input_file_module,

@@ -32,6 +32,9 @@ in a new major version.
   month, year and average annual, with SWAT+'s sums and means) as `SwatResult.tables` / `result.table(name, step)`,
   DataFrames with SWAT+'s column names and units, bit for bit with SWAT+'s own records; `SwatProject.set_print` and
   `run(..., tables=, nyskip=)` choose them. `hru_map` and `channel_map` map SWAT+'s average annual values.
+- `ls.hydro.swat`: the SWAT+ Editor's automatic crop rotations (plant, harvest, kill and reset actions of the decision
+  tables) and urban land uses (impervious runoff, build-up/wash-off and USGS regression loads); `run_many` runs
+  several projects at once; `load_txtinout` reads a zip; example project `ls.example_data("swat_hubbard_brook")`.
 - `ls.hydro.stream_links`, `ls.hydro.watersheds` and `ls.hydro.snap_outlets`: the links of a stream network (split
   at junctions and outlets, with length, drop and Strahler order), the area draining to each seed, outlets moved
   onto the streams.

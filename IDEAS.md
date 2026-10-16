@@ -4247,7 +4247,16 @@ ou pela ET das plantas, `event` 0):
   `tools/swat/tables2py.py` -> `_tables.py`), `SwatProject.set_print`, `run(project, tables=..., nyskip=...)`;
   `hru_map`/`channel_map`/`reach_discharge` passam a usar as tabelas (o "anual" é o `aa` do SWAT+). Fora do Windows
   os testes aceitam 1e-4 da escala de cada coluna (`conftest.assert_swat_close`; a libm acumula em anos: pior caso
-  2,4e-5). Falta: OpenMP nos HRUs, documentação, rotações automáticas do editor (`pl_hv_summer1/winter1`).
+  2,4e-5). Rotações automáticas do editor (`pl_hv_summer1/winter1/summer2`: ações `plant`, `harvest`, `kill`,
+  `harvest_kill`, `*_reset`, condição `phu_base0`/`precip_cur/next`) e uso urbano (`sq_daycn` com a fração
+  impermeável conectada, `hru_urban` com `usgs_reg` e `buildup_washoff`) feitos: caso `landscape_crops` (milho,
+  trigo, urbano) **bit a bit**. `run_many` (simulações em threads; sem estado global no motor), `load_txtinout` lê
+  `.zip`, exemplo `ls.example_data("swat_hubbard_brook")`, página `docs/api/swat.md`. Falta: OpenMP dentro de uma
+  simulação, tutorial (depois da decisão sobre o fator C).
+- **Candidatos a erro nas ações das tabelas de decisão, mantidos**: a ação `plant` não chama `mgt_plantop` (a planta
+  volta a crescer com as massas e unidades de calor que tinha); `harvest` soma ao rendimento da bacia uma variável
+  `yield` nunca atribuída (0) e conta `harv_num_yr` duas vezes (e `harv_num` nenhuma); as ações gravam a cultura da
+  agenda no `option` da tabela, compartilhada pelos HRUs.
 - **Candidatos a erro nas saídas, mantidos (decidir com o usuário)**:
   1. `basin_output`/`basin_sw_init` usam `lsu_elem(lsu_elem(ihru)%obtypno)` (o número do elemento como índice de novo).
   2. `aquifer_output`: a média anual de `stor`, `dep_wt`, `no3_st` divide a soma dos meses por 12 mesmo num ano

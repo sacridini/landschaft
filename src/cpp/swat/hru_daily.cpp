@@ -394,14 +394,104 @@ void sq_dailycn(Sim& s) {
     s.cnday(j) = 25400.0f / (r2 + 254.0f);
 }
 
-// sq_daycn.f90 (no urban land use)
+// sq_daycn.f90 (urban HRUs: the connected impervious fraction with CN 98)
 void sq_daycn(Sim& s) {
     const int j = s.ihru;
-    const float r2 = 25400.0f / s.cnday(j) - 254.0f;
-    const float bb = 0.2f * r2;
-    const float pb = s.precip_eff - bb;
+    float r2 = 25400.0f / s.cnday(j) - 254.0f;
+    float bb = 0.2f * r2;
+    float pb = s.precip_eff - bb;
     s.surfq(j) = 0.0f;
     if (pb > 0.0f) s.surfq(j) = pb * pb / (s.precip_eff + 0.8f * r2);
+    if (s.hru(j).luse.urb_lu > 0) {
+        float surfqimp = 0.0f;
+        const float cnimp = 98.0f;
+        r2 = 25400.0f / cnimp - 254.0f;
+        bb = 0.2f * r2;
+        pb = s.precip_eff - bb;
+        if (pb > 0.0f) surfqimp = pb * pb / (s.precip_eff + 0.8f * r2);
+        const urban_db& u = s.urbdb(s.hru(j).luse.urb_lu);
+        s.surfq(j) = s.surfq(j) * (1.0f - u.fcimp) + surfqimp * u.fcimp;
+    }
+}
+
+// regres.f90: the USGS regression loads of urban runoff (kg)
+float regres(const Sim& s, int k) {
+    static const float bcod[15] = {407.0f, 0.626f, 0.710f, 0.379f, 1.518f, 151.0f, 0.823f, 0.726f,
+                                   0.564f, 1.451f, 102.0f, 0.851f, 0.601f, 0.528f, 1.978f};
+    static const float bsus[15] = {1778.0f, 0.867f, 0.728f, 0.157f, 2.367f, 812.0f, 1.236f, 0.436f,
+                                   0.202f,  1.938f, 97.7f,  1.002f, 1.009f, 0.837f, 2.818f};
+    static const float btn[15] = {20.2f, 0.825f, 1.070f, 0.479f, 1.258f, 4.04f, 0.936f, 0.937f,
+                                  0.692f, 1.373f, 1.66f,  0.703f, 0.465f, 0.521f, 1.845f};
+    static const float btp[15] = {1.725f, 0.884f, 0.826f, 0.467f, 2.130f, 0.697f, 1.008f, 0.628f,
+                                  0.469f, 1.790f, 1.618f, 0.954f, 0.789f, 0.289f, 2.247f};
+    const int j = s.ihru;
+    const int ii = s.wgn_pms(s.iwgen).ireg;
+    const float* beta = k == 1 ? bcod : k == 2 ? bsus : k == 3 ? btn : btp;
+    auto b = [&](int i) { return beta[(ii - 1) * 5 + (i - 1)]; };  // beta(i, ii), column major
+    const float fimp = s.urbdb(s.hru(j).luse.urb_lu).fimp;
+    float r = b(1) * fpow(s.w.precip / 25.4f, b(2)) * fpow(s.hru(j).km * fimp / 2.589f, b(3)) *
+              fpow(fimp * 100.0f + 1.0f, b(4)) * b(5);
+    r = r / 2.205f;
+    return r;
+}
+
+// hru_urban.f90 (daily step)
+void hru_urban(Sim& s) {
+    const int j = s.ihru;
+    const hydrologic_response_unit& h = s.hru(j);
+    const urban_db& u = s.urbdb(h.luse.urb_lu);
+    s.iwst = s.ob(h.obj_no).wst;
+    const float f = u.fimp;
+    if (h.luse.urb_ro == "usgs_reg") {
+        if (s.w.precip > 0.1f && s.surfq(j) > 0.1f) {
+            const float cod = regres(s, 1);
+            (void)cod;
+            const float sus_sol = regres(s, 2);
+            const float tn = regres(s, 3);
+            const float tp = regres(s, 4);
+            s.sedyld(j) = (0.001f * sus_sol) * f + s.sedyld(j) * (1.0f - f);
+            s.silyld(j) = (0.001f * sus_sol) * f + s.silyld(j) * (1.0f - f);
+            s.sanyld(j) = s.sanyld(j) * (1.0f - f);
+            s.clayld(j) = s.clayld(j) * (1.0f - f);
+            s.sagyld(j) = s.sagyld(j) * (1.0f - f);
+            s.lagyld(j) = s.lagyld(j) * (1.0f - f);
+            s.sedorgn(j) = (0.7f * tn / (h.km * 100.0f)) * f + s.sedorgn(j) * (1.0f - f);
+            s.surqno3(j) = (0.3f * tn / (h.km * 100.0f)) * f + s.surqno3(j) * (1.0f - f);
+            s.sedorgp(j) = (0.75f * tp / (h.km * 100.0f)) * f + s.sedorgp(j) * (1.0f - f);
+            s.surqsolp(j) = 0.25f * tp / (h.km * 100.0f) * f + s.surqsolp(j) * (1.0f - f);
+        }
+    } else if (h.luse.urb_ro == "buildup_washoff") {
+        if (s.surfq(j) > 0.1f) {
+            float dirt = u.dirtmx * s.twash(j) / (u.thalf + s.twash(j));
+            const float dirto = dirt;
+            const float urbk = u.urbcoef * (s.qp_cms * 3.6f / h.km);
+            const float rp1 = -2.0f * std::log(1.0f - s.wst(s.iwst).weat.precip_half_hr);
+            const float durf = 4.605f / rp1;
+            float turo = durf + s.tconc(j);
+            if (turo > 24.0f) turo = 24.0f;
+            float xx = urbk * turo;
+            if (xx > 24.0f) xx = 24.0f;
+            dirt = dirt * std::exp(-xx);
+            if (dirt < 1.e-6f) dirt = 0.0f;
+            s.twash(j) = u.thalf * dirt / (u.dirtmx - dirt);
+            const float sus_sol = fmax2(0.0f, (dirto - dirt) * u.curbden);
+            const float tn = u.tnconc * sus_sol / 1.e6f;
+            const float tp = u.tpconc * sus_sol / 1.e6f;
+            const float tno3 = u.tno3conc * sus_sol / 1.e6f;
+            s.sedyld(j) = (0.001f * sus_sol) * f + s.sedyld(j) * (1.0f - f);
+            s.silyld(j) = (0.001f * sus_sol * h.area_ha) * f + s.silyld(j) * (1.0f - f);
+            s.sanyld(j) = s.sanyld(j) * (1.0f - f);
+            s.clayld(j) = s.clayld(j) * (1.0f - f);
+            s.sagyld(j) = s.sagyld(j) * (1.0f - f);
+            s.lagyld(j) = s.lagyld(j) * (1.0f - f);
+            s.surqno3(j) = tno3 * f + s.surqno3(j) * (1.0f - f);
+            s.sedorgn(j) = (tn - tno3) * f + s.sedorgn(j) * (1.0f - f);
+            s.sedorgp(j) = 0.75f * tp * f + s.sedorgp(j) * (1.0f - f);
+            s.surqsolp(j) = 0.25f * tp * f + s.surqsolp(j) * (1.0f - f);
+        } else {
+            s.twash(j) = s.twash(j) + 1.0f;
+        }
+    }
 }
 
 // ero_pkq.f90
@@ -1954,6 +2044,7 @@ void hru_control(Sim& s) {
     // nut_nrain: atmospheric deposition is refused at set-up
     nut_nlch(s);
     nut_solp(s);
+    if (h.luse.urb_lu > 0) hru_urban(s);
     swr_latsed(s);
     stor_surfstor(s);
     swr_substor(s);
