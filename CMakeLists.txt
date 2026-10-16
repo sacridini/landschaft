@@ -167,6 +167,7 @@ set_target_properties(surfcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(hydrocore STATIC
     src/cpp/hydro/breach.cpp
     src/cpp/hydro/hydro.cpp
+    src/cpp/hydro/mfd.cpp
 )
 target_include_directories(hydrocore PUBLIC src/cpp)
 set_target_properties(hydrocore PROPERTIES POSITION_INDEPENDENT_CODE ON)

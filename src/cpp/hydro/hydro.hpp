@@ -70,6 +70,18 @@ std::vector<double> dinf_accumulation(const double* angle, const double* weight,
 std::vector<double> mfd_accumulation(const Grid& g, double exponent, bool quinn, const std::int8_t* flats,
                                      const double* weight);
 
+// pygeoprocessing's multiple flow directions (the InVEST models' routing): each cell's
+// flow split among its lower neighbours in proportion to the drop (over sqrt 2 on the
+// diagonals; the cell size plays no part), plateaus draining to their nearest outlets,
+// packed as eight 4-bit weights (0 E, 1 NE, 2 N, ... 7 SE; 0: no flow). block: the
+// block size pygeoprocessing iterates the DEM by (the order plateaus are searched in).
+std::vector<std::int32_t> mfd_directions(const Grid& g, int block);
+std::vector<double> mfd_packed_accumulation(const std::int32_t* dir, const double* weight, int ny, int nx);
+// The mean distance (in cells, or the sum of the weights of the cells passed) along the
+// flow to a channel cell; NaN where no flow reaches one.
+std::vector<double> mfd_distance_to_channel(const std::int32_t* dir, const std::uint8_t* channel,
+                                            const double* weight, int ny, int nx);
+
 // The height of each cell above the stream cell it drains to along `dir` (Rennó et
 // al. 2008): 0 on the streams, NaN where the cell reaches no stream.
 std::vector<double> hand(const Grid& g, const std::int8_t* dir, const std::uint8_t* streams);

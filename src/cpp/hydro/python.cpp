@@ -150,6 +150,42 @@ void register_python(py::module_& m) {
     }, py::arg("z"), py::arg("dx"), py::arg("dy"), py::arg("exponent"), py::arg("quinn"), py::arg("flats"),
        py::arg("weight"), "Multiple flow direction accumulation (FD8 / Quinn).");
 
+    using Packed = py::array_t<std::int32_t, py::array::c_style | py::array::forcecast>;
+    m.def("hydro_mfd_directions", [](const Array& z, int block) {
+        const Grid g = grid_of(z, 1.0, 1.0);
+        std::vector<std::int32_t> out;
+        {
+            py::gil_scoped_release release;
+            out = mfd_directions(g, block);
+        }
+        return to_raster(std::move(out), g.ny, g.nx);
+    }, py::arg("z"), py::arg("block"), "pygeoprocessing's multiple flow directions (packed 4-bit weights).");
+
+    m.def("hydro_mfd_packed_accumulation", [](const Packed& dir, std::optional<Array> weight) {
+        check2d(dir, "directions");
+        if (weight) same_shape(dir, *weight, "weights");
+        const int ny = static_cast<int>(dir.shape(0)), nx = static_cast<int>(dir.shape(1));
+        std::vector<double> out;
+        {
+            py::gil_scoped_release release;
+            out = mfd_packed_accumulation(dir.data(), weight ? weight->data() : nullptr, ny, nx);
+        }
+        return to_raster(std::move(out), ny, nx);
+    }, py::arg("dir"), py::arg("weight"), "pygeoprocessing's multiple flow accumulation.");
+
+    m.def("hydro_mfd_distance_to_channel", [](const Packed& dir, const Mask& channel, std::optional<Array> weight) {
+        check2d(dir, "directions");
+        same_shape(dir, channel, "channels");
+        if (weight) same_shape(dir, *weight, "weights");
+        const int ny = static_cast<int>(dir.shape(0)), nx = static_cast<int>(dir.shape(1));
+        std::vector<double> out;
+        {
+            py::gil_scoped_release release;
+            out = mfd_distance_to_channel(dir.data(), channel.data(), weight ? weight->data() : nullptr, ny, nx);
+        }
+        return to_raster(std::move(out), ny, nx);
+    }, py::arg("dir"), py::arg("channel"), py::arg("weight"), "pygeoprocessing's distance to channel (MFD).");
+
     m.def("hydro_hand", [](const Array& z, const Dirs& dir, const Mask& streams) {
         const Grid g = grid_of(z, 1.0, 1.0);
         same_shape(z, dir, "directions");

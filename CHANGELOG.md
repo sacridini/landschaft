@@ -13,7 +13,10 @@ in a new major version.
   `flow_direction` (D8 as ESRI codes, D-infinity azimuths), `flow_accumulation` (D8, D-infinity, FD8 of Freeman,
   Quinn's multiple flow with contour lengths; cells, area or specific contributing area; weights), `streams`, `hand`
   (height above the nearest drainage) and the indices `twi`, `spi`, `sti`; flat areas drain by Barnes, Lehman &
-  Mulla (2014). C++ (`src/cpp/hydro`); the directions, accumulations, HAND and indices identical to WhiteboxTools
+  Mulla (2014). `method="mfd"` and `distance_to_channel`: the multiple flow routing of pygeoprocessing 2.4 (the
+  InVEST models'), its 4-bit packed directions, accumulation and mean distance to a channel, identical bit for bit
+  (`tools/make_reference_pygeoprocessing.py`; its `fill_pits` gives the same DEM as `fill`). C++ (`src/cpp/hydro`);
+  the directions, accumulations, HAND and indices identical to WhiteboxTools
   2.4 on four DEMs (`tools/make_reference_hydro.py`), 1.2 to 3.1 times faster on 4 cores (`tools/benchmark_hydro.py`).
 
 ### Fixed (against WhiteboxTools)

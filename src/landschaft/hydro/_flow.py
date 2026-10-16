@@ -20,12 +20,14 @@ from .._threads import current, threaded
 from ..cost._transition import _crs_lonlat
 from ..surface._grid import Surface, read_surface
 
-__all__ = ["D8_CODES", "breach", "fill", "flow_accumulation", "flow_direction", "hand", "streams"]
+__all__ = ["D8_CODES", "breach", "distance_to_channel", "fill", "flow_accumulation", "flow_direction", "hand", "streams"]
 
 #: D8 codes of :func:`flow_direction` (ESRI's): the neighbour each cell drains to.
 D8_CODES = {1: "E", 2: "SE", 4: "S", 8: "SW", 16: "W", 32: "NW", 64: "N", 128: "NE"}
 _ESRI = np.array([128, 1, 2, 4, 8, 16, 32, 64], dtype=np.int16)   # by neighbour index 0 NE ... 7 N
-_METHODS = ("d8", "dinf", "fd8", "quinn")
+_METHODS = ("d8", "dinf", "fd8", "quinn", "mfd")
+#: Neighbours of the packed "mfd" directions (pygeoprocessing's): 0 E, 1 NE, 2 N, 3 NW, 4 W, 5 SW, 6 S, 7 SE.
+MFD_BLOCK = 256
 
 
 def _cells(s: Surface) -> tuple[float, float]:
@@ -173,13 +175,18 @@ def flow_direction(dem, *, method: str = "d8", flats: bool = True, extent=None, 
     ----------
     dem
         The elevations, best with its depressions filled (:func:`fill`).
-    method : {"d8", "dinf"}
+    method : {"d8", "dinf", "mfd"}
         ``"d8"`` (O'Callaghan & Mark 1984): the neighbour of steepest descent
         (drop over distance; of equal slopes the first from north-east clockwise),
         as an ESRI code (:data:`D8_CODES`: 1 east, 2 south-east, 4 south ... 128
         north-east), 0 where no neighbour is lower. ``"dinf"`` (Tarboton 1997):
         the azimuth of steepest descent over the eight triangular facets around
         the cell, in degrees clockwise from north, -1 where nothing is lower.
+        ``"mfd"``: the multiple flow directions of pygeoprocessing (the routing of
+        the InVEST models), each lower neighbour's share in proportion to the drop
+        (over sqrt 2 on diagonals), plateaus draining to their nearest outlets,
+        packed as eight 4-bit weights (``(code >> 4 * k) & 15`` for neighbour ``k``:
+        0 east, 1 north-east, 2 north ... 7 south-east), 0 where nothing flows.
     flats
         Drain the flat areas towards lower terrain and away from higher terrain
         (Barnes, Lehman & Mulla 2014), so that every cell of a filled DEM has a
@@ -210,7 +217,10 @@ def flow_direction(dem, *, method: str = "d8", flats: bool = True, extent=None, 
         dx, dy = _cells(s)
         return s.raster(_core.hydro_dinf(s.values, dx, dy, _flat_dirs(s) if flats else None, current()), "dinf",
                         {"units": "degrees clockwise from north; -1 no flow"})
-    raise ValueError("method must be 'd8' or 'dinf'")
+    if method == "mfd":
+        packed = _core.hydro_mfd_directions(s.values, MFD_BLOCK)
+        return s.raster(packed, "mfd", {"codes": "eight 4-bit weights: 0 E, 1 NE, 2 N, 3 NW, 4 W, 5 SW, 6 S, 7 SE"})
+    raise ValueError("method must be 'd8', 'dinf' or 'mfd'")
 
 
 @threaded
@@ -222,14 +232,16 @@ def flow_accumulation(dem, *, method: str = "d8", units: str = "cells", weights=
     ----------
     dem
         The elevations, best with its depressions filled (:func:`fill`).
-    method : {"d8", "dinf", "fd8", "quinn"}
+    method : {"d8", "dinf", "fd8", "quinn", "mfd"}
         How a cell passes its flow on: all to its steepest neighbour (``"d8"``),
         split between the two cells of the D-infinity azimuth (``"dinf"``,
         Tarboton 1997), or among all lower neighbours in proportion to
         slope^exponent (``"fd8"``, Freeman 1991, exponent 1.1) or to slope times
         the contour length (0.5 cardinal, 0.354 diagonal; ``"quinn"``, Quinn et
-        al. 1991, exponent 1). The multiple-flow methods avoid the parallel lines
-        of D8 on hillslopes.
+        al. 1991, exponent 1), or pygeoprocessing's multiple flow directions
+        (``"mfd"``: the routing of the InVEST models, see :func:`flow_direction`;
+        ``flats`` and ``exponent`` do not apply). The multiple-flow methods avoid
+        the parallel lines of D8 on hillslopes.
     units : {"cells", "area", "sca"}
         Number of cells, area (cells times the cell area, in map units squared;
         square metres for longitude / latitude), or specific contributing area
@@ -275,6 +287,9 @@ def flow_accumulation(dem, *, method: str = "d8", units: str = "cells", weights=
     dx, dy = _cells(s)
     if method == "d8":
         acc = _core.hydro_d8_accumulation(_d8(s, flats), w)
+    elif method == "mfd":
+        acc = _core.hydro_mfd_packed_accumulation(_core.hydro_mfd_directions(s.values, MFD_BLOCK), w)
+        acc[np.isnan(s.values)] = np.nan
     elif method == "dinf":
         angle = _core.hydro_dinf(s.values, dx, dy, _flat_dirs(s) if flats else None, current())
         acc = _core.hydro_dinf_accumulation(angle, w)
@@ -287,6 +302,58 @@ def flow_accumulation(dem, *, method: str = "d8", units: str = "cells", weights=
         if units == "sca":
             acc = acc / ((dx + dy) / 2.0)
     return s.raster(acc, "accumulation", {"method": method, "units": units})
+
+
+@threaded
+def distance_to_channel(dem, streams, *, weights=None, extent=None, crs=None, band=None,
+                        nodata=None) -> xr.DataArray:
+    """The mean distance water travels from each cell to a stream, along
+    pygeoprocessing's multiple flow directions (as InVEST's sediment delivery model
+    measures its downslope component).
+
+    Each cell's distance is the mean over the neighbours its flow reaches (weighted
+    by its shares) of their distance plus the step to them; only the flow that
+    reaches a stream counts.
+
+    Parameters
+    ----------
+    dem
+        The elevations, with depressions filled (:func:`fill`).
+    streams
+        A raster, 1 on the stream cells.
+    weights
+        The length of each step as a raster (the value of the cell stepped onto),
+        instead of 1 (sides) and sqrt 2 (diagonals) cell lengths.
+    extent, crs, band, nodata
+        For arrays without georeferencing, or to pick a band and a missing value.
+
+    Returns
+    -------
+    xarray.DataArray
+        In cell lengths (or in the units of the weights); 0 on the streams, NaN where
+        no flow reaches a stream.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> dem = np.add.outer(np.arange(4.0, 0, -1), np.zeros(3))      # falling to the south
+    >>> rivers = np.zeros((4, 3)); rivers[3] = 1
+    >>> ls.hydro.distance_to_channel(dem, rivers).values[:, 1].round(3)   # part flows diagonally
+    array([3.628, 2.433, 1.237, 0.   ])
+    """
+    s = _read(dem, extent, crs, band, nodata)
+    st = read_surface(streams).values
+    if st.shape != s.shape:
+        raise ValueError("the streams differ in shape from the DEM")
+    w = None
+    if weights is not None:
+        w = read_surface(weights).values
+        if w.shape != s.shape:
+            raise ValueError("the weights differ in shape from the DEM")
+    packed = _core.hydro_mfd_directions(s.values, MFD_BLOCK)
+    channel = (np.nan_to_num(st) == 1).astype(np.uint8)
+    return s.raster(_core.hydro_mfd_distance_to_channel(packed, channel, w), "distance_to_channel")
 
 
 def streams(accumulation, threshold: float) -> xr.DataArray:

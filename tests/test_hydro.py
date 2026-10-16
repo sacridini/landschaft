@@ -249,3 +249,32 @@ def test_breach_fills_what_it_cannot_cut(ref):
     np.testing.assert_array_equal(done, H.fill(left, **kw).values)
     plain = H.flow_direction(done, flats=True, **kw).values
     assert (plain[1:-1, 1:-1] == 0).sum() == 0
+
+
+PGP = Path(__file__).parent / "data" / "reference" / "hydro" / "pygeoprocessing.npz"
+
+
+@pytest.mark.parametrize("name", CASES)
+def test_mfd_routing_is_pygeoprocessing(ref, name):
+    pgp = np.load(PGP)
+    kw = _kw(ref, name)
+    dem = ref[f"{name}/dem"]
+    filled = H.fill(dem, **kw).values
+    np.testing.assert_array_equal(filled, pgp[f"{name}/filled"])                 # fill_pits
+    packed = H.flow_direction(filled, method="mfd", **kw).values
+    np.testing.assert_array_equal(packed, pgp[f"{name}/dir"])                    # flow_dir_mfd
+    np.testing.assert_array_equal(H.flow_accumulation(filled, method="mfd", **kw).values, pgp[f"{name}/acc"])
+    w = pgp[f"{name}/weights"]
+    np.testing.assert_array_equal(H.flow_accumulation(filled, method="mfd", weights=w, **kw).values,
+                                  pgp[f"{name}/accw"])
+    channel = pgp[f"{name}/channel"].astype(float)
+    np.testing.assert_array_equal(H.distance_to_channel(filled, channel, **kw).values, pgp[f"{name}/dist"])
+    np.testing.assert_array_equal(H.distance_to_channel(filled, channel, weights=w, **kw).values,
+                                  pgp[f"{name}/distw"])
+
+
+def test_mfd_shares_sum_to_about_fifteen(ref):
+    packed = H.flow_direction(ref["oregon/dem"], method="mfd", **_kw(ref, "oregon")).values
+    shares = np.stack([(packed >> (4 * k)) & 15 for k in range(8)])
+    total = shares.sum(axis=0)[packed > 0]                  # (0: a pit of the unfilled DEM)
+    assert total.min() >= 13 and total.max() <= 19          # each share rounded on its own

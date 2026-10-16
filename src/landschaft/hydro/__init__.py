@@ -14,7 +14,9 @@ Typical use::
     wetness = ls.hydro.twi(filled)
 """
 
-from ._flow import D8_CODES, breach, fill, flow_accumulation, flow_direction, hand, streams
+from ._flow import (D8_CODES, breach, distance_to_channel, fill, flow_accumulation, flow_direction, hand,
+                    streams)
 from ._indices import spi, sti, twi
 
-__all__ = ["D8_CODES", "breach", "fill", "flow_accumulation", "flow_direction", "hand", "spi", "sti", "streams", "twi"]
+__all__ = ["D8_CODES", "breach", "distance_to_channel", "fill", "flow_accumulation", "flow_direction", "hand", "spi",
+           "sti", "streams", "twi"]

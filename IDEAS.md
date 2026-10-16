@@ -3672,7 +3672,15 @@ InVEST (Apache-2.0, Python/Cython: referência de paridade) com a RUSLE por cél
   várias ele toma as poças de mesma elevação na ordem em que as threads entregam as linhas: não determinístico).
   Erro dele corrigido: o canal que chega à borda não era cavado (o recuo começava na célula além da borda, sem
   `backlink`); referência corrigida pela mesma moldura baixa. As poças que sobram são preenchidas pelo nosso `fill`.
-  Falta: MFD do pygeoprocessing para o SDR (fase 3 do InVEST); nós do Terraflux.
+- **Roteamento do pygeoprocessing — Feito** (`mfd.cpp`, para a fase 3 do InVEST): `flow_direction(method="mfd")`
+  (as direções em 8 pesos de 4 bits, `int(0.5 + w/soma*15)` cada; queda sobre sqrt 2 nas diagonais, sem o tamanho
+  da célula; planícies pela distância à saída mais próxima, com as raízes das planícies na ordem dos blocos de 256
+  do `iterblocks`, para as somas de distância saírem na mesma ordem), `flow_accumulation(method="mfd")` (puxada de
+  montante, `/<float>soma`), `distance_to_channel` (média ponderada pelos pesos de 4 bits; com pesos, o peso da
+  célula de destino no lugar de 1 / sqrt 2). Bit a bit com o pygeoprocessing 2.4.11 nos 4 MDEs
+  (`tools/make_reference_pygeoprocessing.py`, rodado no Python da env `invest-ref`); o `fill_pits` dele dá o mesmo
+  MDE que o nosso `fill` (borda e células sem valor como saídas), o que confirma a correção feita no WhiteboxTools.
+  Falta: o D8 do pygeoprocessing (opção do SDR); nós do Terraflux.
 
 ---
 

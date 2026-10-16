@@ -1,0 +1,9 @@
+{
+ "pygeoprocessing": "2.4.11",
+ "cases": [
+  "holes",
+  "oregon",
+  "terraces",
+  "walk"
+ ]
+}

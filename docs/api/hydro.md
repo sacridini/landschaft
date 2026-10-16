@@ -12,7 +12,11 @@ The directions and accumulations are those of WhiteboxTools 2.4 cell for cell
 `FillDepressions` with water let out at the map's edge and at missing cells,
 which WhiteboxTools does not do, and the breaching its
 `BreachDepressionsLeastCost` with the channels that reach the edge cut. Flat
-areas drain by the method of Barnes, Lehman & Mulla (2014).
+areas drain by the method of Barnes, Lehman & Mulla (2014). The `"mfd"`
+method and `distance_to_channel` are the routing of the InVEST models
+(pygeoprocessing 2.4's `flow_dir_mfd`, `flow_accumulation_mfd`,
+`distance_to_channel_mfd`), cell for cell; its `fill_pits` gives the same DEM
+as `fill`.
 
 <!-- no-run -->
 ```python
@@ -39,6 +43,8 @@ wetness = ls.hydro.twi(filled)                           # FD8 contributing area
 ::: landschaft.hydro.flow_accumulation
 
 ::: landschaft.hydro.streams
+
+::: landschaft.hydro.distance_to_channel
 
 `ls.hydro.D8_CODES` maps the D8 codes to their directions: 1 east, 2
 south-east, 4 south, 8 south-west, 16 west, 32 north-west, 64 north, 128
