@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.48.0] - 2026-10-16
+
 ### Added
 - `ls.services.sdr` (InVEST's sediment delivery ratio): RUSLE soil loss with the LS factor of Desmet & Govers from
   the flow accumulation, the index of connectivity of Borselli / Cavalli (D_up from the accumulated C factor and
