@@ -7,6 +7,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "swat/farray.hpp"
 #include "swat/fio.hpp"
@@ -1161,6 +1162,9 @@ inline fio::ItemList items(basin_sediment_budget& x) {
     return l;
 }
 inline int read_items(fio::File& f, basin_sediment_budget& x) { return f.read(items(x)); }
+inline std::vector<float> values(const basin_sediment_budget& x) {
+    return {x.upland_t, x.ebank_t, x.ebtm_t, x.fp_t, x.res_dep_t, x.wet_dep_t};
+}
 
 struct mgt_header {
     std::string hru = "        hru";
@@ -2061,6 +2065,9 @@ inline fio::ItemList items(hyd_output& x) {
     return l;
 }
 inline int read_items(fio::File& f, hyd_output& x) { return f.read(items(x)); }
+inline std::vector<float> values(const hyd_output& x) {
+    return {x.flo, x.sed, x.orgn, x.sedp, x.no3, x.solp, x.chla, x.nh3, x.no2, x.cbod, x.dox, x.san, x.sil, x.cla, x.sag, x.lag, x.grv, x.temp};
+}
 
 struct hyd_sep {
     float flo_surq = 0.0f;
@@ -2083,6 +2090,9 @@ inline fio::ItemList items(hyd_sep& x) {
     return l;
 }
 inline int read_items(fio::File& f, hyd_sep& x) { return f.read(items(x)); }
+inline std::vector<float> values(const hyd_sep& x) {
+    return {x.flo_surq, x.flo_latq, x.flo_gwsw, x.flo_swgw, x.flo_satex, x.flo_satexsw, x.flo_tile};
+}
 
 struct irrigation_water_transfer {
     float demand = 0.0f;
@@ -2196,6 +2206,9 @@ inline fio::ItemList items(channel_floodplain_water_balance& x) {
     return l;
 }
 inline int read_items(fio::File& f, channel_floodplain_water_balance& x) { return f.read(items(x)); }
+inline std::vector<float> values(const channel_floodplain_water_balance& x) {
+    return {x.inflo, x.outflo, x.tl, x.ev, x.ch_stor_init, x.ch_stor, x.fp_stor_init, x.fp_stor, x.tot_stor_init, x.tot_stor, x.wet_stor_init, x.wet_stor};
+}
 
 struct timestep {
     Vec<hyd_output> hh;
@@ -2256,6 +2269,9 @@ inline fio::ItemList items(flashiness_index& x) {
     return l;
 }
 inline int read_items(fio::File& f, flashiness_index& x) { return f.read(items(x)); }
+inline std::vector<float> values(const flashiness_index& x) {
+    return {x.sum_q_q1, x.sum_q, x.q_prev, x.index};
+}
 
 struct object_connectivity {
     std::string name = "default";
@@ -2530,6 +2546,9 @@ inline fio::ItemList items(geomorphic_baseflow_channel_data& x) {
     return l;
 }
 inline int read_items(fio::File& f, geomorphic_baseflow_channel_data& x) { return f.read(items(x)); }
+inline std::vector<float> values(const geomorphic_baseflow_channel_data& x) {
+    return {x.area, x.len, x.len_left, x.flo_fr};
+}
 
 struct channel_aquifer_elements {
     std::string name = "";
@@ -4589,6 +4608,9 @@ inline fio::ItemList items(residue_partition_fracs& x) {
     return l;
 }
 inline int read_items(fio::File& f, residue_partition_fracs& x) { return f.read(items(x)); }
+inline std::vector<float> values(const residue_partition_fracs& x) {
+    return {x.meta_frac, x.str_frac, x.lig_frac};
+}
 
 struct lignin_derived_partition_fracs {
     float meta_frac_abg = 0.85f;
@@ -4609,6 +4631,9 @@ inline fio::ItemList items(lignin_derived_partition_fracs& x) {
     return l;
 }
 inline int read_items(fio::File& f, lignin_derived_partition_fracs& x) { return f.read(items(x)); }
+inline std::vector<float> values(const lignin_derived_partition_fracs& x) {
+    return {x.meta_frac_abg, x.str_frac_abg, x.lig_frac_abg, x.meta_frac_blg, x.str_frac_blg, x.lig_frac_blg};
+}
 
 struct plant_db {
     std::string plantnm = "";
@@ -4766,6 +4791,9 @@ inline fio::ItemList items(plant_cp& x) {
     return l;
 }
 inline int read_items(fio::File& f, plant_cp& x) { return f.read(items(x)); }
+inline std::vector<float> values(const plant_cp& x) {
+    return {x.popsc1, x.popsc2, x.leaf1, x.leaf2, x.ruc1, x.ruc2, x.nup1, x.nup2, x.pup1, x.pup2, x.gmaxfr, x.vpdfr, x.cvm, x.vpd2};
+}
 
 struct plant_init_db {
     std::string cpnm = "frsd";
@@ -5859,6 +5887,9 @@ inline fio::ItemList items(soilayer_db& x) {
     return l;
 }
 inline int read_items(fio::File& f, soilayer_db& x) { return f.read(items(x)); }
+inline std::vector<float> values(const soilayer_db& x) {
+    return {x.z, x.bd, x.awc, x.k, x.cbn, x.clay, x.silt, x.sand, x.rock, x.alb, x.usle_k, x.ec, x.cal, x.ph};
+}
 
 struct soil_profile_db {
     std::string snam = "";
@@ -6000,6 +6031,9 @@ inline fio::ItemList items(soil_physical_properties& x) {
     return l;
 }
 inline int read_items(fio::File& f, soil_physical_properties& x) { return f.read(items(x)); }
+inline std::vector<float> values(const soil_physical_properties& x) {
+    return {x.d, x.thick, x.bd, x.k, x.cbn, x.clay, x.silt, x.sand, x.rock, x.conv_wt, x.crdep, x.awc, x.fc, x.hk, x.por, x.st, x.tmp, x.ul, x.up, x.wp, x.wpmm, x.tot_sw};
+}
 
 struct soil_test {
     std::string snam = "";
@@ -6112,6 +6146,9 @@ inline fio::ItemList items(plant_mass& x) {
     return l;
 }
 inline int read_items(fio::File& f, plant_mass& x) { return f.read(items(x)); }
+inline std::vector<float> values(const plant_mass& x) {
+    return {x.c_fr, x.n_fr, x.p_fr};
+}
 
 struct plant_status {
     int idplt = 0;
@@ -6170,6 +6207,9 @@ inline fio::ItemList items(plant_stress& x) {
     return l;
 }
 inline int read_items(fio::File& f, plant_stress& x) { return f.read(items(x)); }
+inline std::vector<float> values(const plant_stress& x) {
+    return {x.reg, x.strsw, x.strsa, x.strsn, x.strsp, x.strst, x.strss, x.sum_w, x.sum_tmp, x.sum_n, x.sum_p, x.sum_a};
+}
 
 struct auto_operations {
     int apply_day = 0;
@@ -6242,6 +6282,9 @@ inline fio::ItemList items(basin_crop_yields& x) {
     return l;
 }
 inline int read_items(fio::File& f, basin_crop_yields& x) { return f.read(items(x)); }
+inline std::vector<float> values(const basin_crop_yields& x) {
+    return {x.area_ha, x.yield};
+}
 
 struct plant_carbon {
     float leaf = 0.41f;
@@ -6258,6 +6301,9 @@ inline fio::ItemList items(plant_carbon& x) {
     return l;
 }
 inline int read_items(fio::File& f, plant_carbon& x) { return f.read(items(x)); }
+inline std::vector<float> values(const plant_carbon& x) {
+    return {x.leaf, x.stem, x.seed, x.root};
+}
 
 struct plant_module {
     int basin_plants = 0;
@@ -6306,6 +6352,9 @@ inline fio::ItemList items(carbon_inputs& x) {
     return l;
 }
 inline int read_items(fio::File& f, carbon_inputs& x) { return f.read(items(x)); }
+inline std::vector<float> values(const carbon_inputs& x) {
+    return {x.hp_rate, x.hs_rate, x.microb_rate, x.meta_rate, x.str_rate, x.microb_top_rate, x.hs_hp, x.microb_koc, x.min_n_frac, x.c_org_frac};
+}
 
 struct manure_coef {
     float rtof = 0.5f;
@@ -6318,6 +6367,9 @@ inline fio::ItemList items(manure_coef& x) {
     return l;
 }
 inline int read_items(fio::File& f, manure_coef& x) { return f.read(items(x)); }
+inline std::vector<float> values(const manure_coef& x) {
+    return {x.rtof, x.man_to_c};
+}
 
 struct organic_allocations {
     float abp = 0.0f;
@@ -6338,6 +6390,9 @@ inline fio::ItemList items(organic_allocations& x) {
     return l;
 }
 inline int read_items(fio::File& f, organic_allocations& x) { return f.read(items(x)); }
+inline std::vector<float> values(const organic_allocations& x) {
+    return {x.abp, x.asp, x.a1co2, x.asco2, x.apco2, x.abco2};
+}
 
 struct organic_controls {
     float sut = 0.0f;
@@ -6418,6 +6473,9 @@ inline fio::ItemList items(organic_ratio& x) {
     return l;
 }
 inline int read_items(fio::File& f, organic_ratio& x) { return f.read(items(x)); }
+inline std::vector<float> values(const organic_ratio& x) {
+    return {x.ncbm, x.nchp, x.nchs};
+}
 
 struct carbon_water_coef {
     float prmt_21 = 1000.0f;
@@ -6430,6 +6488,9 @@ inline fio::ItemList items(carbon_water_coef& x) {
     return l;
 }
 inline int read_items(fio::File& f, carbon_water_coef& x) { return f.read(items(x)); }
+inline std::vector<float> values(const carbon_water_coef& x) {
+    return {x.prmt_21, x.prmt_44};
+}
 
 struct organic_transformations {
     float bmctp = 0.0f;
@@ -6462,6 +6523,9 @@ inline fio::ItemList items(organic_transformations& x) {
     return l;
 }
 inline int read_items(fio::File& f, organic_transformations& x) { return f.read(items(x)); }
+inline std::vector<float> values(const organic_transformations& x) {
+    return {x.bmctp, x.bmntp, x.hsctp, x.hsntp, x.hpctp, x.hpntp, x.lmctp, x.lmntp, x.lsctp, x.lslctp, x.lslnctp, x.lsntp};
+}
 
 struct organic_flux {
     float cfmets1 = 0.0f;
@@ -6544,6 +6608,9 @@ inline fio::ItemList items(organic_flux& x) {
     return l;
 }
 inline int read_items(fio::File& f, organic_flux& x) { return f.read(items(x)); }
+inline std::vector<float> values(const organic_flux& x) {
+    return {x.cfmets1, x.cfstrs1, x.cfstrs2, x.efmets1, x.efstrs1, x.efstrs2, x.immmets1, x.immstrs1, x.immstrs2, x.mnrmets1, x.mnrstrs1, x.mnrstrs2, x.co2fmet, x.co2fstr, x.cfs1s2, x.cfs1s3, x.cfs2s1, x.cfs2s3, x.cfs3s1, x.efs1s2, x.efs1s3, x.efs2s1, x.efs2s3, x.efs3s1, x.imms1s2, x.imms1s3, x.imms2s1, x.imms2s3, x.imms3s1, x.mnrs1s2, x.mnrs1s3, x.mnrs2s1, x.mnrs2s3, x.mnrs3s1, x.co2fs1, x.co2fs2, x.co2fs3};
+}
 
 struct carbon_soil_transformations {
     float meta_micr = 0.0f;
@@ -6578,6 +6645,9 @@ inline fio::ItemList items(carbon_soil_transformations& x) {
     return l;
 }
 inline int read_items(fio::File& f, carbon_soil_transformations& x) { return f.read(items(x)); }
+inline std::vector<float> values(const carbon_soil_transformations& x) {
+    return {x.meta_micr, x.str_micr, x.str_hs, x.co2_meta, x.co2_str, x.micr_hs, x.micr_hp, x.hs_micr, x.hs_hp, x.hp_micr, x.co2_micr, x.co2_hs, x.co2_hp};
+}
 
 struct carbon_soil_gain_losses {
     float sed_c = 0.0f;
@@ -6604,6 +6674,9 @@ inline fio::ItemList items(carbon_soil_gain_losses& x) {
     return l;
 }
 inline int read_items(fio::File& f, carbon_soil_gain_losses& x) { return f.read(items(x)); }
+inline std::vector<float> values(const carbon_soil_gain_losses& x) {
+    return {x.sed_c, x.surq_c, x.latq_c, x.perc_c, x.rsd_decay_c, x.man_app_c, x.man_graz_c, x.rsp_c, x.emit_c};
+}
 
 struct carbon_residue_gain_losses {
     float plant_surf_c = 0.0f;
@@ -6624,6 +6697,9 @@ inline fio::ItemList items(carbon_residue_gain_losses& x) {
     return l;
 }
 inline int read_items(fio::File& f, carbon_residue_gain_losses& x) { return f.read(items(x)); }
+inline std::vector<float> values(const carbon_residue_gain_losses& x) {
+    return {x.plant_surf_c, x.plant_root_c, x.rsd_surfdecay_c, x.rsd_rootdecay_c, x.harv_stov_c, x.emit_c};
+}
 
 struct carbon_plant_gain_losses {
     float npp_c = 0.0f;
@@ -6644,6 +6720,9 @@ inline fio::ItemList items(carbon_plant_gain_losses& x) {
     return l;
 }
 inline int read_items(fio::File& f, carbon_plant_gain_losses& x) { return f.read(items(x)); }
+inline std::vector<float> values(const carbon_plant_gain_losses& x) {
+    return {x.npp_c, x.harv_abgr_c, x.harv_root_c, x.drop_c, x.grazeat_c, x.emit_c};
+}
 
 inline constexpr float cb_lyr_missing = -99.0f;
 struct carbon_module {
@@ -6740,6 +6819,9 @@ inline fio::ItemList items(organic_mass& x) {
     return l;
 }
 inline int read_items(fio::File& f, organic_mass& x) { return f.read(items(x)); }
+inline std::vector<float> values(const organic_mass& x) {
+    return {x.m, x.c, x.n, x.p};
+}
 
 struct organic_mixing_mass {
     organic_mass tot;
@@ -6769,6 +6851,9 @@ inline fio::ItemList items(clay_mass& x) {
     return l;
 }
 inline int read_items(fio::File& f, clay_mass& x) { return f.read(items(x)); }
+inline std::vector<float> values(const clay_mass& x) {
+    return {x.m, x.nh4};
+}
 
 struct sediment {
     float m = 0.0f;
@@ -6800,6 +6885,9 @@ inline fio::ItemList items(mineral_nitrogen& x) {
     return l;
 }
 inline int read_items(fio::File& f, mineral_nitrogen& x) { return f.read(items(x)); }
+inline std::vector<float> values(const mineral_nitrogen& x) {
+    return {x.no3, x.nh4};
+}
 
 struct mineral_phosphorus {
     float wsol = 0.0f;
@@ -6816,6 +6904,9 @@ inline fio::ItemList items(mineral_phosphorus& x) {
     return l;
 }
 inline int read_items(fio::File& f, mineral_phosphorus& x) { return f.read(items(x)); }
+inline std::vector<float> values(const mineral_phosphorus& x) {
+    return {x.wsol, x.lab, x.act, x.sta};
+}
 
 struct plant_residue {
     Vec<organic_mass> rsd;
@@ -6901,6 +6992,9 @@ inline fio::ItemList items(mineral_mass& x) {
     return l;
 }
 inline int read_items(fio::File& f, mineral_mass& x) { return f.read(items(x)); }
+inline std::vector<float> values(const mineral_mass& x) {
+    return {x.m, x.no3, x.no2, x.nh4, x.po4};
+}
 
 struct organic_mineral_mass {
     float vol = 0.0f;
@@ -7163,6 +7257,9 @@ inline fio::ItemList items(uptake_parameters& x) {
     return l;
 }
 inline int read_items(fio::File& f, uptake_parameters& x) { return f.read(items(x)); }
+inline std::vector<float> values(const uptake_parameters& x) {
+    return {x.water_dis, x.water_norm, x.n_norm, x.p_norm};
+}
 
 struct irrigation_sources {
     int flag = 0;
@@ -7594,6 +7691,9 @@ inline fio::ItemList items(nutrient_parameters& x) {
     return l;
 }
 inline int read_items(fio::File& f, nutrient_parameters& x) { return f.read(items(x)); }
+inline std::vector<float> values(const nutrient_parameters& x) {
+    return {x.phoskd, x.pperco, x.psp, x.nperco, x.cmn, x.nperco_lchtile};
+}
 
 struct hydrologic_response_unit {
     std::string name = "";
@@ -8234,6 +8334,9 @@ inline fio::ItemList items(output_waterbal& x) {
     return l;
 }
 inline int read_items(fio::File& f, output_waterbal& x) { return f.read(items(x)); }
+inline std::vector<float> values(const output_waterbal& x) {
+    return {x.precip, x.snofall, x.snomlt, x.surq_gen, x.latq, x.wateryld, x.perc, x.et, x.ecanopy, x.eplant, x.esoil, x.surq_cont, x.cn, x.sw_init, x.sw_final, x.sw, x.sw_300, x.sno_init, x.sno_final, x.snopack, x.pet, x.qtile, x.irr, x.surq_runon, x.latq_runon, x.overbank, x.surq_cha, x.surq_res, x.surq_ls, x.latq_cha, x.latq_res, x.latq_ls, x.gwsoil, x.satex, x.satex_chan, x.delsw, x.lagsurf, x.laglatq, x.lagsatex, x.wet_evap, x.wet_out, x.wet_stor};
+}
 
 struct regional_output_waterbal {
     Vec<output_waterbal> lum;
@@ -8284,6 +8387,9 @@ inline fio::ItemList items(output_nutbal& x) {
     return l;
 }
 inline int read_items(fio::File& f, output_nutbal& x) { return f.read(items(x)); }
+inline std::vector<float> values(const output_nutbal& x) {
+    return {x.grazn, x.grazp, x.lab_min_p, x.act_sta_p, x.fertn, x.fertp, x.fixn, x.denit, x.act_nit_n, x.act_sta_n, x.org_lab_p, x.rsd_nitorg_n, x.rsd_laborg_p, x.no3atmo, x.nh4atmo, x.nuptake, x.puptake, x.gwsoiln, x.gwsoilp};
+}
 
 struct regional_output_nutbal {
     Vec<output_nutbal> lum;
@@ -8312,6 +8418,9 @@ inline fio::ItemList items(output_nutcarb_cycling& x) {
     return l;
 }
 inline int read_items(fio::File& f, output_nutcarb_cycling& x) { return f.read(items(x)); }
+inline std::vector<float> values(const output_nutcarb_cycling& x) {
+    return {x.lab_min_p, x.act_sta_p, x.act_nit_n, x.act_sta_n, x.org_lab_p, x.rsd_hs_c, x.rsd_nitorg_n, x.rsd_laborg_p};
+}
 
 struct output_losses {
     float sedyld = 0.0f;
@@ -8344,6 +8453,9 @@ inline fio::ItemList items(output_losses& x) {
     return l;
 }
 inline int read_items(fio::File& f, output_losses& x) { return f.read(items(x)); }
+inline std::vector<float> values(const output_losses& x) {
+    return {x.sedyld, x.sedorgn, x.sedorgp, x.surqno3, x.latno3, x.surqsolp, x.usle, x.sedminp, x.tileno3, x.lchlabp, x.tilelabp, x.satexn};
+}
 
 struct regional_output_losses {
     Vec<output_losses> lum;
@@ -8406,6 +8518,9 @@ inline fio::ItemList items(output_plantweather& x) {
     return l;
 }
 inline int read_items(fio::File& f, output_plantweather& x) { return f.read(items(x)); }
+inline std::vector<float> values(const output_plantweather& x) {
+    return {x.lai, x.bioms, x.yield, x.residue, x.sol_tmp, x.strsw, x.strsa, x.strstmp, x.strsn, x.strsp, x.strss, x.nplnt, x.percn, x.pplnt, x.tmx, x.tmn, x.tmpav, x.solrad, x.wndspd, x.rhum, x.phubase0, x.lai_max, x.bm_max, x.bm_grow, x.c_gro};
+}
 
 struct regional_output_plantweather {
     Vec<output_plantweather> lum;
@@ -10296,6 +10411,9 @@ inline fio::ItemList items(aquifer_dynamic& x) {
     return l;
 }
 inline int read_items(fio::File& f, aquifer_dynamic& x) { return f.read(items(x)); }
+inline std::vector<float> values(const aquifer_dynamic& x) {
+    return {x.flo, x.dep_wt, x.stor, x.rchrg, x.seep, x.revap, x.no3_st, x.minp, x.cbn, x.orgn, x.no3_rchg, x.no3_loss, x.no3_lat, x.no3_seep, x.flo_cha, x.flo_res, x.flo_ls};
+}
 
 struct aquifer_init_data_char {
     std::string name = "";
@@ -10713,6 +10831,9 @@ inline fio::ItemList items(channel_sediment_budget_output& x) {
     return l;
 }
 inline int read_items(fio::File& f, channel_sediment_budget_output& x) { return f.read(items(x)); }
+inline std::vector<float> values(const channel_sediment_budget_output& x) {
+    return {x.in_sed, x.out_sed, x.fp_dep, x.ch_dep, x.bank_ero, x.bed_ero, x.in_no3, x.in_orgn, x.out_no3, x.out_orgn, x.fp_no3, x.bank_no3, x.bed_no3, x.fp_orgn, x.ch_orgn, x.bank_orgn, x.bed_orgn, x.in_solp, x.in_orgp, x.out_solp, x.out_orgp, x.fp_solp, x.bank_solp, x.bed_solp, x.fp_orgp, x.ch_orgp, x.bank_orgp, x.bed_orgp, x.no3_orgn, x.solp_orgp};
+}
 
 struct channel_morphology_output {
     int num = 0;
@@ -10937,6 +11058,9 @@ inline fio::ItemList items(channel_rating_curve_parameters& x) {
     return l;
 }
 inline int read_items(fio::File& f, channel_rating_curve_parameters& x) { return f.read(items(x)); }
+inline std::vector<float> values(const channel_rating_curve_parameters& x) {
+    return {x.flo_rate, x.xsec_area, x.surf_area, x.dep, x.top_wid, x.vol, x.vol_fp, x.vol_ch, x.wet_perim, x.vel, x.ttime};
+}
 
 struct channel_rating_curve {
     int npts = 4;
@@ -11007,6 +11131,9 @@ inline fio::ItemList items(sd_ch_output& x) {
     return l;
 }
 inline int read_items(fio::File& f, sd_ch_output& x) { return f.read(items(x)); }
+inline std::vector<float> values(const sd_ch_output& x) {
+    return {x.flo_in, x.aqu_in, x.flo, x.peakr, x.sed_in, x.sed_out, x.washld, x.bedld, x.dep, x.deg_btm, x.deg_bank, x.hc_sed, x.width, x.depth, x.slope, x.deg_btm_m, x.deg_bank_m, x.hc_m, x.flo_in_mm, x.aqu_in_mm, x.flo_mm, x.sed_stor, x.n_tot, x.p_tot, x.dep_bf, x.velav_bf};
+}
 
 struct sdch_header {
     std::string day = "  jday";
@@ -12122,6 +12249,9 @@ inline fio::ItemList items(channel_velocity_parameters& x) {
     return l;
 }
 inline int read_items(fio::File& f, channel_velocity_parameters& x) { return f.read(items(x)); }
+inline std::vector<float> values(const channel_velocity_parameters& x) {
+    return {x.area, x.vel_bf, x.vel, x.rttime, x.wid_btm, x.dep_bf, x.velav_bf, x.celerity_bf, x.st_dis, x.vel_1bf, x.celerity_1bf, x.stor_dis_1bf};
+}
 
 struct channel_velocity_module {
     Vec<channel_velocity_parameters> ch_vel;
@@ -12620,6 +12750,9 @@ inline fio::ItemList items(channel& x) {
     return l;
 }
 inline int read_items(fio::File& f, channel& x) { return f.read(items(x)); }
+inline std::vector<float> values(const channel& x) {
+    return {x.algae, x.ammonian, x.bankst, x.li, x.orgn, x.orgp, x.si, x.wi, x.di, x.chlora, x.pst_conc, x.dep_chan, x.disolvp, x.drift, x.flwin, x.flwout, x.nitraten, x.nitriten, x.organicn, x.organicp, x.rch_bactlp, x.rch_bactp, x.rch_cbod, x.rch_dox, x.rchstor, x.sedst, x.vel_chan, x.bed_san, x.bed_sil, x.bed_cla, x.bed_gra, x.bnk_san, x.bnk_sil, x.bnk_cla, x.bnk_gra, x.depfp, x.depprfp, x.depsilfp, x.depclafp, x.depch, x.depprch, x.depsanch, x.depsilch, x.depclach, x.depsagch, x.deplagch, x.depgrach, x.sanst, x.silst, x.clast, x.sagst, x.lagst, x.grast, x.wattemp, x.bactp, x.chfloodvol, x.bactlp};
+}
 
 struct ch_output {
     float flo_in = 0.0f;
@@ -12746,6 +12879,9 @@ inline fio::ItemList items(ch_output& x) {
     return l;
 }
 inline int read_items(fio::File& f, ch_output& x) { return f.read(items(x)); }
+inline std::vector<float> values(const ch_output& x) {
+    return {x.flo_in, x.flo_out, x.evap, x.tloss, x.sed_in, x.sed_out, x.sed_conc, x.orgn_in, x.orgn_out, x.orgp_in, x.orgp_out, x.no3_in, x.no3_out, x.nh4_in, x.nh4_out, x.no2_in, x.no2_out, x.solp_in, x.solp_out, x.chla_in, x.chla_out, x.cbod_in, x.cbod_out, x.dis_in, x.dis_out, x.solpst_in, x.solpst_out, x.sorbpst_in, x.sorbpst_out, x.react, x.volat, x.setlpst, x.resuspst, x.difus, x.reactb, x.bury, x.sedpest, x.bacp, x.baclp, x.met1, x.met2, x.met3, x.sand_in, x.sand_out, x.silt_in, x.silt_out, x.clay_in, x.clay_out, x.smag_in, x.smag_out, x.lag_in, x.lag_out, x.grvl_in, x.grvl_out, x.bnk_ero, x.ch_deg, x.ch_dep, x.fp_dep, x.tot_ssed};
+}
 
 struct regional_output_channel {
     Vec<ch_output> ord;
@@ -13493,6 +13629,9 @@ inline fio::ItemList items(soft_calib_ls_adjust& x) {
     return l;
 }
 inline int read_items(fio::File& f, soft_calib_ls_adjust& x) { return f.read(items(x)); }
+inline std::vector<float> values(const soft_calib_ls_adjust& x) {
+    return {x.cn, x.esco, x.lat_len, x.petco, x.slope, x.tconc, x.etco, x.perco, x.revapc, x.cn3_swf};
+}
 
 struct soft_calib_ls_processes {
     std::string name = "default";
@@ -13837,6 +13976,9 @@ inline fio::ItemList items(soft_calib_pl_adjust& x) {
     return l;
 }
 inline int read_items(fio::File& f, soft_calib_pl_adjust& x) { return f.read(items(x)); }
+inline std::vector<float> values(const soft_calib_pl_adjust& x) {
+    return {x.epco, x.pest_stress, x.harv_idx, x.lai_pot};
+}
 
 struct soft_calib_pl_processes {
     std::string name = "default";
@@ -13965,6 +14107,9 @@ inline fio::ItemList items(soft_calib_chan_adjust& x) {
     return l;
 }
 inline int read_items(fio::File& f, soft_calib_chan_adjust& x) { return f.read(items(x)); }
+inline std::vector<float> values(const soft_calib_chan_adjust& x) {
+    return {x.cov, x.erod, x.shear_bnk, x.hc_erod};
+}
 
 struct soft_calib_chan_processes {
     std::string name = "";
@@ -14198,6 +14343,9 @@ inline fio::ItemList items(water_body& x) {
     return l;
 }
 inline int read_items(fio::File& f, water_body& x) { return f.read(items(x)); }
+inline std::vector<float> values(const water_body& x) {
+    return {x.area_ha, x.precip, x.evap, x.seep};
+}
 
 struct water_body_module {
     water_body wbodz;
@@ -14260,6 +14408,9 @@ inline fio::ItemList items(erosion_output_variables& x) {
     return l;
 }
 inline int read_items(fio::File& f, erosion_output_variables& x) { return f.read(items(x)); }
+inline std::vector<float> values(const erosion_output_variables& x) {
+    return {x.sedyld, x.precip, x.surfq, x.peak, x.k, x.s, x.l, x.ls, x.p, x.c, x.rsd_m, x.grcov_frac, x.rsd_covfact, x.bio_covfact};
+}
 
 struct erosion_output {
     int n_events = 0;
@@ -15831,6 +15982,9 @@ inline fio::ItemList items(reservoir_pest_processes& x) {
     return l;
 }
 inline int read_items(fio::File& f, reservoir_pest_processes& x) { return f.read(items(x)); }
+inline std::vector<float> values(const reservoir_pest_processes& x) {
+    return {x.react, x.volat, x.settle, x.resus, x.difus, x.react_ben, x.bury};
+}
 
 struct res_header {
     std::string day = " jday";

@@ -283,6 +283,7 @@ def main(src: str) -> None:
            "#pragma once",
            "",
            "#include <string>",
+           "#include <vector>",
            "",
            "#include \"swat/farray.hpp\"",
            "#include \"swat/fio.hpp\"",
@@ -343,6 +344,11 @@ def main(src: str) -> None:
                     out.append("    return l;")
                     out.append("}")
                     out.append(f"inline int read_items(fio::File& f, {tname}& x) {{ return f.read(items(x)); }}")
+            # every component a scalar REAL: the values in order (the reference's transfer(x, [0.]))
+            if comps and all(c.base == "float" and not c.dims and not c.alloc and not c.pointer for c in comps):
+                out.append(f"inline std::vector<float> values(const {tname}& x) {{")
+                out.append("    return {" + ", ".join(f"x.{cname(c.name)}" for c in comps) + "};")
+                out.append("}")
             out.append("")
         vars_ = [v for v in variables if not getattr(v, "param", False)]
         params = [v for v in variables if getattr(v, "param", False)]
