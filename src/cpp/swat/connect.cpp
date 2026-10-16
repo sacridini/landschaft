@@ -96,6 +96,8 @@ void hyd_read_connect(Sim& s, const std::string& con_file, const std::string& ob
     for (int i = ob1; i <= ob2; ++i) search(s.wst_n, s.db_mx.wst, s.ob(i).wst_c, s.ob(i).wst);
 }
 
+}  // namespace
+
 // define_unit_elements.f90: element lists such as "1 -5 8" (1 to 5, then 8)
 void define_unit_elements(Sim& s, int num_elem, int& ielem) {
     const Vec<int>& ec = s.elem_cnt;
@@ -142,6 +144,8 @@ void define_unit_elements(Sim& s, int num_elem, int& ielem) {
         }
     }
 }
+
+namespace {
 
 // ru_read.f90
 void ru_read(Sim& s) {

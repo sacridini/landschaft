@@ -174,9 +174,11 @@ target_include_directories(hydrocore PUBLIC src/cpp)
 set_target_properties(hydrocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # SWAT+ 62.0.1 (the ls.hydro.swat subset): float arithmetic as the Fortran reference.
 add_library(swatcore STATIC
+    src/cpp/swat/calibration.cpp
     src/cpp/swat/climate.cpp
     src/cpp/swat/connect.cpp
     src/cpp/swat/fio.cpp
+    src/cpp/swat/hru_init.cpp
     src/cpp/swat/read_basin.cpp
     src/cpp/swat/read_db.cpp
     src/cpp/swat/time_control.cpp

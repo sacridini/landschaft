@@ -110,6 +110,8 @@ void plant_parm_read(Sim& s) {
     s.pl_class.alloc(0, s.db_mx.plantparm, "");
 }
 
+}  // namespace
+
 // ascrv.f90: the shape coefficients of an S curve through (x1, y1) and (x2, y2)
 void ascrv(float x1, float x2, float x3, float x4, float& x5, float& x6) {
     float xx = 0.0f;
@@ -117,6 +119,8 @@ void ascrv(float x1, float x2, float x3, float x4, float& x5, float& x6) {
     x6 = (xx - std::log(x4 / x2 - x4)) / (x4 - x3);
     x5 = xx + (x3 * x6);
 }
+
+namespace {
 
 // plantparm_init.f90
 void plantparm_init(Sim& s) {
