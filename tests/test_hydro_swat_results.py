@@ -89,3 +89,25 @@ def test_results_save(tmp_path, hb):
     folder = result.save(tmp_path / "swat")
     names = {p.name for p in folder.rglob("*.csv")}
     assert any("hru_wb" in n for n in names)
+
+
+def test_run_many_equals_one_by_one():
+    base = ls.hydro.swat.load_txtinout(ls.example_data("swat_hubbard_brook"))
+    other = base.copy()
+    other.set_text("time.sim", base.text("time.sim").replace("2002", "2001"))
+    tables = {"hru_wb": "year", "channel_sd": "day"}
+    many = S.run_many([base, other, base], tables=tables, n_threads=3)
+    for project, res in zip([base, other, base], many):
+        one = S.run(project, tables=tables)
+        for name in tables:
+            for step, df in one.tables[name].items():
+                pd.testing.assert_frame_equal(res.tables[name][step], df)
+    assert len(many[1].table("hru_wb", "year")) < len(many[0].table("hru_wb", "year"))
+
+
+def test_load_txtinout_reads_folders_and_zips(tmp_path):
+    zipped = S.load_txtinout(ls.example_data("swat_hubbard_brook"))
+    folder = S.load_txtinout(zipped.write(tmp_path / "TxtInOut"))
+    assert folder.files == zipped.files
+    with pytest.raises(FileNotFoundError):
+        S.load_txtinout(tmp_path / "nothing")

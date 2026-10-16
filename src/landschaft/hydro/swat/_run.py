@@ -14,7 +14,7 @@ from ..._save import Saveable
 from ._project import SwatProject
 from ._tables import TABLES
 
-__all__ = ["SwatResult", "run", "WEATHER_COLUMNS", "TABLES", "STEPS"]
+__all__ = ["SwatResult", "run", "run_many", "WEATHER_COLUMNS", "TABLES", "STEPS"]
 
 # climate_module weather_daily, in the order the port (and the reference's dump) keeps them
 WEATHER_COLUMNS = ("precip", "precip_next", "tmax", "tmin", "tave", "solrad", "solradmx", "rhum", "dewpt", "windsp",
@@ -119,16 +119,84 @@ def run(project: SwatProject, *, tables=None, nyskip: int | None = None) -> Swat
     Examples
     --------
     >>> import landschaft as ls
-    >>> project = ls.hydro.swat.load_txtinout("TxtInOut")  # doctest: +SKIP
-    >>> result = ls.hydro.swat.run(project, tables={"hru_ls": "year", "channel_sd": "day"})  # doctest: +SKIP
-    >>> result.table("hru_ls", "year")["sedyld"]  # doctest: +SKIP
+    >>> project = ls.hydro.swat.load_txtinout(ls.example_data("swat_hubbard_brook"))
+    >>> result = ls.hydro.swat.run(project, tables={"hru_wb": "aa", "channel_sd": ["day", "aa"]}, nyskip=0)
+    >>> wb = result.table("hru_wb", "aa")              # average annual water balance of each HRU
+    >>> wb[["precip", "et", "surq_gen", "latq", "perc"]].astype(float).round(1).head(3)  # mm per year
+                    precip     et  surq_gen  latq   perc
+    date       hru
+    2002-12-31 1    1243.8  314.2     444.1   1.3  448.8
+               2    1243.8  314.2     440.0  10.9  443.4
+               3    1243.8  314.2     436.9  18.0  439.5
+    >>> q = result.table("channel_sd", "day")["flo_out"]  # m3/s leaving the channel
+    >>> round(float(q.mean()), 3), result.units["channel_sd"]["flo_out"]
+    (0.005, 'm^3/s')
     """
+    return _result(_raw_with(project, tables, nyskip), stacklevel=3)
+
+
+def run_many(projects, *, tables=None, nyskip: int | None = None, n_threads: int | None = None) -> list:
+    """Simulate several SWAT+ projects at once (scenarios, parameter sets), one per thread.
+
+    Each simulation is :func:`run`'s, independent of the others: the same results as
+    one by one, whatever the thread count.
+
+    Parameters
+    ----------
+    projects : iterable of SwatProject
+    tables, nyskip
+        As :func:`run`, for every project.
+    n_threads : int, optional
+        Simulations running together; default all cores but one.
+
+    Returns
+    -------
+    list of SwatResult
+        In the order of ``projects``.
+
+    Examples
+    --------
+    Three rainfall scenarios of the Hubbard Brook example:
+
+    >>> import landschaft as ls
+    >>> base = ls.hydro.swat.load_txtinout(ls.example_data("swat_hubbard_brook"))
+    >>> def scaled(project, factor):  # the measured rain of every gage times factor
+    ...     p = project.copy()
+    ...     for name in [n for n in p.files if n.endswith(".pcp")]:
+    ...         lines = p.text(name).splitlines()
+    ...         rows = [r.split() for r in lines[3:]]
+    ...         p.set_text(name, "\\n".join(lines[:3] + [f"{r[0]} {r[1]} {float(r[2]) * factor:.3f}" for r in rows]))
+    ...     return p
+    >>> results = ls.hydro.swat.run_many([scaled(base, f) for f in (0.8, 1.0, 1.2)], tables={"hru_wb": "aa"})
+    >>> [round(float(r.table("hru_wb", "aa")["wateryld"].mean())) for r in results]
+    [324, 436, 564]
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ..._threads import limit, resolve
+
+    projects = list(projects)
+    n = min(resolve(n_threads), max(1, len(projects)))
+
+    def one(project):
+        with limit(1):
+            return _raw_with(project, tables, nyskip)
+
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        raws = list(pool.map(one, projects))
+    return [_result(raw, stacklevel=3) for raw in raws]
+
+
+def _raw_with(project: SwatProject, tables, nyskip) -> dict:
     if tables is not None or nyskip is not None:
         project = project.copy()
         project.set_print(tables, nyskip=nyskip)
-    raw = _run_raw(project, dump=[1])
+    return _run_raw(project, dump=[1])
+
+
+def _result(raw: dict, stacklevel: int = 2) -> SwatResult:
     for w in raw["warnings"]:
-        warnings.warn(f"SWAT+: {w}", stacklevel=2)
+        warnings.warn(f"SWAT+: {w}", stacklevel=stacklevel)
     keys, vals = raw["dump"].get(1, (np.zeros((0, 3), np.int32), np.zeros((0, len(WEATHER_COLUMNS)), np.float32)))
     stations = np.asarray(raw["stations"], dtype=object)
     index = pd.MultiIndex.from_arrays([_dates(keys), stations[keys[:, 2] - 1] if len(keys) else []],

@@ -41,6 +41,7 @@ _MODULE_DATA: dict[str, tuple[str, str]] = {
     "acaule": ("landschaft.sdm", "acaule.csv"),
     "bioclim": ("landschaft.sdm", "bioclim.tif"),
     "biome": ("landschaft.sdm", "biome.tif"),
+    "swat_hubbard_brook": ("landschaft.hydro.swat", "hubbard_brook.zip"),
 }
 
 
@@ -76,6 +77,10 @@ def example_data(name: str = "input") -> Path:
         ``"bradypus"`` and ``"acaule"`` (occurrence records, CSV),
         ``"bioclim"`` (nine bioclimatic variables) and ``"biome"`` (biomes),
         0.5 degree over Central and South America.
+
+        Watershed model (see :func:`landschaft.hydro.swat.load_txtinout`):
+        ``"swat_hubbard_brook"`` (the SWAT+ project of Hubbard Brook W2, a zip of
+        its TxtInOut files, 2000-2002).
 
     Returns
     -------

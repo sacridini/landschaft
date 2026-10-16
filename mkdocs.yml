@@ -196,6 +196,7 @@ nav:
       - Circuit connectivity: api/circuits.md
       - Surface metrics: api/surface.md
       - Terrain hydrology: api/hydro.md
+      - Watershed model (SWAT+): api/swat.md
       - Grid distances: api/cost.md
       - Distance & restoration: api/distance.md
       - Change detection: api/change.md

@@ -35,9 +35,10 @@ from ._landscape import (CHANNEL_COLUMNS, HRU_COLUMNS, channel_map, from_rasters
                          reach_discharge)
 from ._project import SwatProject, load_txtinout
 from ._qswat import SwatWatershed, watershed
-from ._run import STEPS, TABLES, WEATHER_COLUMNS, SwatResult, run
+from ._run import STEPS, TABLES, WEATHER_COLUMNS, SwatResult, run, run_many
 from ._weather import WGN_COLUMNS, SwatClimate, climate, wgn_from_series
 
 __all__ = ["CHANNEL_COLUMNS", "HRU_COLUMNS", "STEPS", "SwatClimate", "SwatProject", "SwatResult", "SwatWatershed",
            "TABLES", "WEATHER_COLUMNS", "WGN_COLUMNS", "channel_map", "climate", "from_rasters", "from_tables",
-           "hru_map", "load_qswat_project", "load_txtinout", "reach_discharge", "run", "watershed", "wgn_from_series"]
+           "hru_map", "load_qswat_project", "load_txtinout", "reach_discharge", "run", "run_many", "watershed",
+           "wgn_from_series"]

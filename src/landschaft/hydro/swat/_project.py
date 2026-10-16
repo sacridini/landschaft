@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import re
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -94,6 +95,14 @@ class SwatProject:
             ``aquifer`` (and the other rows of print.prt by their SWAT+ names).
         nyskip : int, optional
             Years simulated before printing (spin-up).
+
+        Examples
+        --------
+        >>> import landschaft as ls
+        >>> project = ls.hydro.swat.load_txtinout(ls.example_data("swat_hubbard_brook"))
+        >>> project.set_print({"hru_ls": ["year", "aa"], "hru_nb": []}, nyskip=1)
+        >>> [ln.split() for ln in project.text("print.prt").splitlines() if ln.startswith(("hru_ls", "hru_nb"))]
+        [['hru_nb', 'n', 'n', 'n', 'n'], ['hru_ls', 'n', 'n', 'y', 'y']]
         """
         name = self.print_file()
         lines = self.text(name).split("\n")
@@ -129,17 +138,38 @@ class SwatProject:
 
 
 def load_txtinout(path) -> SwatProject:
-    """Read a SWAT+ TxtInOut folder (the outputs of earlier runs in it are left out).
+    """Read a SWAT+ TxtInOut folder, or a zip file of one (the outputs of earlier runs
+    in it are left out).
+
+    Parameters
+    ----------
+    path : str or path
+        The folder (with ``file.cio``) or a ``.zip`` of its files.
+
+    Returns
+    -------
+    SwatProject
 
     Examples
     --------
+    The Hubbard Brook W2 example of SWAT+ (SWATPlus-datasets, LGPL-2.1): 10 HRUs, a
+    routing unit, 2 aquifers and a channel, 2000-2002:
+
     >>> import landschaft as ls
-    >>> project = ls.hydro.swat.load_txtinout(ls.example_data("swat_hubbard_brook"))  # doctest: +SKIP
+    >>> project = ls.hydro.swat.load_txtinout(ls.example_data("swat_hubbard_brook"))
+    >>> project
+    SwatProject(79 files)
+    >>> project.text("time.sim").splitlines()[2].split()
+    ['0', '2000', '0', '2002', '0']
     """
-    folder = Path(path)
-    if not folder.is_dir():
-        raise FileNotFoundError(f"not a folder: {os.fspath(path)}")
-    files = {p.name: p.read_bytes() for p in sorted(folder.iterdir()) if p.is_file() and not _OUTPUT.search(p.name)}
+    p = Path(path)
+    if p.is_file() and p.suffix.lower() == ".zip":
+        with zipfile.ZipFile(p) as z:
+            files = {Path(n).name: z.read(n) for n in z.namelist() if not n.endswith("/") and not _OUTPUT.search(n)}
+    elif p.is_dir():
+        files = {f.name: f.read_bytes() for f in sorted(p.iterdir()) if f.is_file() and not _OUTPUT.search(f.name)}
+    else:
+        raise FileNotFoundError(f"not a folder or a zip file: {os.fspath(path)}")
     if "file.cio" not in {k.lower() for k in files}:
         raise ValueError(f"no file.cio in {os.fspath(path)}: not a SWAT+ TxtInOut folder")
     return SwatProject(files)

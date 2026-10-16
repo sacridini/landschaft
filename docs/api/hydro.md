@@ -50,6 +50,19 @@ wetness = ls.hydro.twi(filled)                           # FD8 contributing area
 south-east, 4 south, 8 south-west, 16 west, 32 north-west, 64 north, 128
 north-east (0: no lower neighbour).
 
+## Stream links and watersheds
+
+The division of a stream network into links (between junctions and outlets),
+the area that drains to each seed and outlets moved onto the streams: the
+delineation steps of the watershed model (see
+[`ls.hydro.swat.watershed`](swat.md#from-the-landscape)).
+
+::: landschaft.hydro.stream_links
+
+::: landschaft.hydro.watersheds
+
+::: landschaft.hydro.snap_outlets
+
 ## Height above the nearest drainage
 
 ::: landschaft.hydro.hand

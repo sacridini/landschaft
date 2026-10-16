@@ -4254,6 +4254,20 @@ ou pela ET das plantas, `event` 0):
      parcial.
   3. `time%yrs_prt` divide os dias por `365 + num_leap / nbyr` com divisão inteira: a correção do bissexto some (2
      anos com um bissexto: 731/365 anos).
+- **Investigação da erosão alta (2026-10-16)**, projeto feito com `from_rasters` sobre o MDE `orelevation` (Oregon,
+  33 sub-bacias, 51 HRUs, floresta e pasto, os solos sintéticos dos testes): 400 t/ha/ano em média, floresta > pasto.
+  1. O porte é **idêntico ao SWAT+ de referência** nesse projeto (todos os tags, bit a bit): não é erro do porte.
+  2. Causa principal: o SWAT+ 62 força `bsn_cc%cfac = 1` em `ero_cfactor` (o `c_fact` do `codes.bsn` é "not used"
+     no modelo e no editor): o fator C é sempre o do APEX, cobertura do resíduo x cobertura da biomassa, em que um dossel
+     alto quase não protege (`1 - cov * exp(-0.328 cht)`); a floresta só se protege pela serapilheira, que decai a
+     0,6-1,2 t/ha -> C = 0,66 (o `usle_c` mínimo da floresta é 0,001). Na referência com o método antigo (C mínimo da
+     planta): floresta em argila 868 -> 1,2 t/ha/ano, pasto em argila 318 -> 11,5. Decisão a tomar com o usuário.
+  3. Contribui: o solo sintético `CLAY1` (grupo D, 0,8-1,5 mm/h) satura (650 mm/ano de escoamento, 57 % da chuva),
+     agravado pelo erro do editor na regra de `perco/cn3_swf/latq_co` (declividade em fração numa tabela em %:
+     `latq_co` 0,01 em vez de 0,9 a 32 %); corrigida a regra, a erosão não cai (o `cn3_swf` 0 aumenta o CN).
+  4. O exemplo oficial do Hubbard Brook parecia plausível (0-6 t/ha/ano) só porque o seu `parameters.bsn` (editor
+     2.3.3, rev. 60.5.7) tem `adj_pkrt_sed = 1` na posição que o SWAT+ 62 lê como `prf` (484 no editor 4.0.2): vazões
+     de pico 484 vezes menores. A erosão do exemplo no SWAT+ 62 está subestimada (~32x).
 
 ---
 
