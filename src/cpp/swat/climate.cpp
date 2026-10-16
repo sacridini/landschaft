@@ -42,9 +42,9 @@ int count_records(fio::File& f) {
 
 // cli_pmeas.f90
 void cli_pmeas(Sim& s) {
-    const std::string& cli = s.in.pcp_cli;
+    const std::string& cli = s.in_cli.pcp_cli;
     if (!s.files.exists(cli) || cli == "null") {
-        s.pcp.alloc(0, 0, ClimateMeasured());
+        s.pcp.alloc(0, 0, climate_measured_data());
         s.pcp_n.alloc(1, 0, "");
         s.db_mx.pcpfiles = 0;
         return;
@@ -56,7 +56,7 @@ void cli_pmeas(Sim& s) {
         if (f.read(chars(titldum, 80)) < 0) break;
         if (f.read(chars(header, 80)) < 0) break;
         imax = count_records(f);
-        s.pcp.alloc(0, imax, ClimateMeasured());
+        s.pcp.alloc(0, imax, climate_measured_data());
         s.pcp_n.alloc(1, imax, "");
         f.rewind();
         if (f.read(chars(titldum, 80)) < 0) break;
@@ -67,9 +67,9 @@ void cli_pmeas(Sim& s) {
         if (f.read(chars(titldum, 80)) < 0) break;
         if (f.read(chars(header, 80)) < 0) break;
         for (int i = 1; i <= imax; ++i) {
-            ClimateMeasured& m = s.pcp(i);
+            climate_measured_data& m = s.pcp(i);
             if (f.read(chars(m.filename, 50)) < 0) break;
-            fio::File g = s.files.open(climate_path(s.in.path_pcp, m.filename));
+            fio::File g = s.files.open(climate_path(s.in_path_pcp.pcp, m.filename));
             if (!g.open()) throw std::runtime_error("cannot open precipitation file " + m.filename);
             if (g.read(chars(titldum, 80)) < 0) break;
             if (g.read(chars(header, 80)) < 0) break;
@@ -113,9 +113,9 @@ void cli_pmeas(Sim& s) {
 
 // cli_tmeas.f90: maximum and minimum temperatures, with the monthly means
 void cli_tmeas(Sim& s) {
-    const std::string& cli = s.in.tmp_cli;
+    const std::string& cli = s.in_cli.tmp_cli;
     if (!s.files.exists(cli) || cli == "null") {
-        s.tmp.alloc(0, 0, ClimateMeasured());
+        s.tmp.alloc(0, 0, climate_measured_data());
         s.tmp_n.alloc(1, 0, "");
         s.db_mx.tmpfiles = 0;
         return;
@@ -127,7 +127,7 @@ void cli_tmeas(Sim& s) {
         if (f.read(chars(titldum, 80)) < 0) break;
         if (f.read(chars(header, 80)) < 0) break;
         imax = count_records(f);
-        s.tmp.alloc(0, imax, ClimateMeasured());
+        s.tmp.alloc(0, imax, climate_measured_data());
         s.tmp_n.alloc(1, imax, "");
         f.rewind();
         if (f.read(chars(titldum, 80)) < 0) break;
@@ -138,10 +138,10 @@ void cli_tmeas(Sim& s) {
         if (f.read(chars(titldum, 80)) < 0) break;
         if (f.read(chars(header, 80)) < 0) break;
         for (int i = 1; i <= imax; ++i) {
-            ClimateMeasured& m = s.tmp(i);
+            climate_measured_data& m = s.tmp(i);
             if (f.read(chars(m.filename, 50)) < 0) break;
-            std::array<int, 13> num_tot{};
-            fio::File g = s.files.open(climate_path(s.in.path_tmp, m.filename));
+            Fix<int, 1, 12> num_tot;
+            fio::File g = s.files.open(climate_path(s.in_path_tmp.tmp, m.filename));
             if (!g.open()) throw std::runtime_error("cannot open temperature file " + m.filename);
             if (g.read(chars(titldum, 80)) < 0) break;
             if (g.read(chars(header, 80)) < 0) break;
@@ -164,7 +164,7 @@ void cli_tmeas(Sim& s) {
             int iyrs = 1;
             // the reference sets the module's month table to this year's (xmon below and
             // cli_initwgn's month lengths then follow the last year read)
-            s.ndays = (iyr % 4 == 0) ? ndays_leap : ndays_noleap;
+            s.ndays = (iyr % 4 == 0) ? s.ndays_leap : s.ndays_noleap;
             int mo = 0, day_mo = 0;
             for (;;) {
                 float vx = 0.0f, vn = 0.0f;
@@ -173,16 +173,16 @@ void cli_tmeas(Sim& s) {
                 m.ts(istep, iyrs) = vx;
                 m.ts2(istep, iyrs) = vn;
                 xmon(s, istep, mo, day_mo);
-                num_tot[static_cast<std::size_t>(mo)] += 1;
-                m.max_mon[static_cast<std::size_t>(mo)] = m.max_mon[static_cast<std::size_t>(mo)] + m.ts(istep, iyrs);
-                m.min_mon[static_cast<std::size_t>(mo)] = m.min_mon[static_cast<std::size_t>(mo)] + m.ts2(istep, iyrs);
+                num_tot(mo) += 1;
+                m.max_mon(mo) = m.max_mon(mo) + m.ts(istep, iyrs);
+                m.min_mon(mo) = m.min_mon(mo) + m.ts2(istep, iyrs);
                 if (istep == 365 || istep == 366) {
                     if (g.read(iyr, istep) < 0) break;
                     g.backspace();
                     if (iyr != iyr_prev) {
                         iyr_prev = iyr;
                         ++iyrs;
-                        s.ndays = (iyr % 4 == 0) ? ndays_leap : ndays_noleap;
+                        s.ndays = (iyr % 4 == 0) ? s.ndays_leap : s.ndays_noleap;
                     }
                 }
             }
@@ -190,10 +190,10 @@ void cli_tmeas(Sim& s) {
             m.end_yr = iyr;
             // the reference divides every month by the count of the last one read
             for (int k = 1; k <= 12; ++k) {
-                m.max_mon[static_cast<std::size_t>(k)] =
-                    m.max_mon[static_cast<std::size_t>(k)] / static_cast<float>(num_tot[static_cast<std::size_t>(mo)]);
-                m.min_mon[static_cast<std::size_t>(k)] =
-                    m.min_mon[static_cast<std::size_t>(k)] / static_cast<float>(num_tot[static_cast<std::size_t>(mo)]);
+                m.max_mon(k) =
+                    m.max_mon(k) / static_cast<float>(num_tot(mo));
+                m.min_mon(k) =
+                    m.min_mon(k) / static_cast<float>(num_tot(mo));
             }
         }
         break;
@@ -202,10 +202,10 @@ void cli_tmeas(Sim& s) {
 }
 
 // cli_smeas.f90, cli_hmeas.f90, cli_wmeas.f90, cli_petmeas.f90: one value a day
-void cli_one_meas(Sim& s, const std::string& cli, const std::string& path, Vec<ClimateMeasured>& arr,
+void cli_one_meas(Sim& s, const std::string& cli, const std::string& path, Vec<climate_measured_data>& arr,
                   Vec<std::string>& names, int& nfiles) {
     if (!s.files.exists(cli) || cli == "null") {
-        arr.alloc(0, 0, ClimateMeasured());
+        arr.alloc(0, 0, climate_measured_data());
         names.alloc(1, 0, "");
         nfiles = 0;
         return;
@@ -217,7 +217,7 @@ void cli_one_meas(Sim& s, const std::string& cli, const std::string& path, Vec<C
         if (f.read(chars(titldum, 80)) < 0) break;
         if (f.read(chars(header, 80)) < 0) break;
         imax = count_records(f);
-        arr.alloc(0, imax, ClimateMeasured());
+        arr.alloc(0, imax, climate_measured_data());
         names.alloc(1, imax, "");
         f.rewind();
         if (f.read(chars(titldum, 80)) < 0) break;
@@ -228,7 +228,7 @@ void cli_one_meas(Sim& s, const std::string& cli, const std::string& path, Vec<C
         if (f.read(chars(titldum, 80)) < 0) break;
         if (f.read(chars(header, 80)) < 0) break;
         for (int i = 1; i <= imax; ++i) {
-            ClimateMeasured& m = arr(i);
+            climate_measured_data& m = arr(i);
             if (f.read(chars(m.filename, 50)) < 0) break;
             fio::File g = s.files.open(climate_path(path, m.filename));
             if (!g.open()) throw std::runtime_error("cannot open climate file " + m.filename);
@@ -347,9 +347,9 @@ void gcycl(Sim& s) {
 
 // cli_initwgn.f90
 void cli_initwgn(Sim& s, int iwgn) {
-    WeatherGeneratorDb& g = s.wgn(iwgn);
-    WgnParms& p = s.wgn_pms(iwgn);
-    auto nd = [&](int k) { return s.ndays[static_cast<std::size_t>(k - 1)]; };
+    weather_generator_db& g = s.wgn(iwgn);
+    wgn_parms& p = s.wgn_pms(iwgn);
+    auto nd = [&](int k) { return s.ndays(k); };
     float x1 = 0.0f, x2 = 0.0f;
     const float xx = g.lat / 57.296f;
     p.latsin = std::sin(xx);
@@ -372,47 +372,47 @@ void cli_initwgn(Sim& s, int iwgn) {
         dl = s.bsn_prm.dorm_hr;
     }
     p.daylth = dl;
-    std::array<float, 13> rain_hhsm{};
-    rain_hhsm[1] = (g.rainhmx[12] + g.rainhmx[1] + g.rainhmx[2]) / 3.0f;
+    Fix<float, 1, 12> rain_hhsm;
+    rain_hhsm(1) = (g.rainhmx(12) + g.rainhmx(1) + g.rainhmx(2)) / 3.0f;
     for (int mon = 2; mon <= 11; ++mon)
-        rain_hhsm[mon] = (g.rainhmx[mon - 1] + g.rainhmx[mon] + g.rainhmx[mon + 1]) / 3.0f;
-    rain_hhsm[12] = (g.rainhmx[11] + g.rainhmx[12] + g.rainhmx[1]) / 3.0f;
+        rain_hhsm(mon) = (g.rainhmx(mon - 1) + g.rainhmx(mon) + g.rainhmx(mon + 1)) / 3.0f;
+    rain_hhsm(12) = (g.rainhmx(11) + g.rainhmx(12) + g.rainhmx(1)) / 3.0f;
     float summx_t = 0.0f, summn_t = 0.0f, summm_p = 0.0f, summm_pet = 0.0f;
     float tmin = 100.0f, tmax = 0.0f;
     for (int mon = 1; mon <= 12; ++mon) {
         const int mdays = nd(mon + 1) - nd(mon);
-        float tav = (g.tmpmx[mon] + g.tmpmn[mon]) / 2.0f;
+        float tav = (g.tmpmx(mon) + g.tmpmn(mon)) / 2.0f;
         if (tav > tmax) tmax = tav;
         if (tav < tmin) tmin = tav;
-        summx_t = summx_t + g.tmpmx[mon];
-        summn_t = summn_t + g.tmpmn[mon];
+        summx_t = summx_t + g.tmpmx(mon);
+        summn_t = summn_t + g.tmpmn(mon);
         if (tav > 0.0f) p.phutot = p.phutot + tav * static_cast<float>(mdays);
-        if (g.pr_ww[mon] <= g.pr_wd[mon] || g.pr_wd[mon] <= 0.0f) {
-            if (g.pcpd[mon] < 0.1f) g.pcpd[mon] = 0.1f;
-            g.pr_wd[mon] = 0.75f * g.pcpd[mon] / static_cast<float>(mdays);
-            g.pr_ww[mon] = 0.25f + g.pr_wd[mon];
+        if (g.pr_ww(mon) <= g.pr_wd(mon) || g.pr_wd(mon) <= 0.0f) {
+            if (g.pcpd(mon) < 0.1f) g.pcpd(mon) = 0.1f;
+            g.pr_wd(mon) = 0.75f * g.pcpd(mon) / static_cast<float>(mdays);
+            g.pr_ww(mon) = 0.25f + g.pr_wd(mon);
         } else {
-            g.pcpd[mon] = static_cast<float>(mdays) * g.pr_wd[mon] / (1.0f - g.pr_ww[mon] + g.pr_wd[mon]);
+            g.pcpd(mon) = static_cast<float>(mdays) * g.pr_wd(mon) / (1.0f - g.pr_ww(mon) + g.pr_wd(mon));
         }
-        if (g.pcpd[mon] <= 0.0f) g.pcpd[mon] = 0.001f;
-        p.pr_wdays[mon] = g.pcpd[mon] / static_cast<float>(mdays);
-        p.pcpmean[mon] = g.pcpmm[mon] / g.pcpd[mon];
-        if (g.pcpskw[mon] < 0.2f) g.pcpskw[mon] = 0.2f;
-        summm_p = summm_p + g.pcpmm[mon];
-        p.pcpdays = p.pcpdays + g.pcpd[mon];
-        tav = (g.tmpmx[mon] + g.tmpmn[mon]) / 2.0f;
+        if (g.pcpd(mon) <= 0.0f) g.pcpd(mon) = 0.001f;
+        p.pr_wdays(mon) = g.pcpd(mon) / static_cast<float>(mdays);
+        p.pcpmean(mon) = g.pcpmm(mon) / g.pcpd(mon);
+        if (g.pcpskw(mon) < 0.2f) g.pcpskw(mon) = 0.2f;
+        summm_p = summm_p + g.pcpmm(mon);
+        p.pcpdays = p.pcpdays + g.pcpd(mon);
+        tav = (g.tmpmx(mon) + g.tmpmn(mon)) / 2.0f;
         const float tk = tav + 273.0f;
         const float alb = 0.15f;
         const float d = std::exp(21.255f - 5304.0f / tk) * 5304.0f / fpowi(tk, 2);
         const float gma = d / (d + 0.68f);
-        const float ho = 23.9f * g.solarav[mon] * (1.0f - alb) / 58.3f;
+        const float ho = 23.9f * g.solarav(mon) * (1.0f - alb) / 58.3f;
         const float aph = 1.28f;
-        p.pet[mon] = aph * ho * gma * static_cast<float>(nd(mon + 1) - nd(mon));
-        summm_pet = summm_pet + p.pet[mon];
+        p.pet(mon) = aph * ho * gma * static_cast<float>(nd(mon + 1) - nd(mon));
+        summm_pet = summm_pet + p.pet(mon);
     }
     p.idewpt = 1;
     for (int mon = 1; mon <= 12; ++mon) {
-        if (g.dewpt[mon] > 1.0f || g.dewpt[mon] < 0.0f) {
+        if (g.dewpt(mon) > 1.0f || g.dewpt(mon) < 0.0f) {
             p.idewpt = 0;
             break;
         }
@@ -426,8 +426,8 @@ void cli_initwgn(Sim& s, int iwgn) {
     p.precip_sum = 0.0f;
     p.pet_sum = 0.0f;
     for (int inext = 1; inext <= s.ppet_ndays; ++inext) {
-        p.precip_mce(inext) = g.pcpmm[mo_ppet] / static_cast<float>(nd(mo_ppet + 1) - nd(mo_ppet));
-        p.pet_mce(inext) = p.pet[mo_ppet] / static_cast<float>(nd(mo_ppet + 1) - nd(mo_ppet));
+        p.precip_mce(inext) = g.pcpmm(mo_ppet) / static_cast<float>(nd(mo_ppet + 1) - nd(mo_ppet));
+        p.pet_mce(inext) = p.pet(mo_ppet) / static_cast<float>(nd(mo_ppet + 1) - nd(mo_ppet));
         p.precip_sum = p.precip_sum + p.precip_mce(inext);
         p.pet_sum = p.pet_sum + p.pet_mce(inext);
     }
@@ -437,29 +437,29 @@ void cli_initwgn(Sim& s, int iwgn) {
     int xrnd = s.rndseed(s.idg(3), iwgn);
     float rndm1 = aunif(xrnd);
     for (int mon = 1; mon <= 12; ++mon) {
-        const float r6 = g.pcpskw[mon] / 6.0f;
+        const float r6 = g.pcpskw(mon) / 6.0f;
         float sum = 0.0f;
         for (int j = 1; j <= 1000; ++j) {
             const float rnm2 = aunif(xrnd);
             float xlv = (cli_dstn1(rndm1, rnm2) - r6) * r6 + 1.0f;
             rndm1 = rnm2;
-            xlv = (fpowi(xlv, 3) - 1.0f) * 2.0f / g.pcpskw[mon];
-            float pcp_gen = xlv * g.pcpstd[mon] + p.pcpmean[mon];
+            xlv = (fpowi(xlv, 3) - 1.0f) * 2.0f / g.pcpskw(mon);
+            float pcp_gen = xlv * g.pcpstd(mon) + p.pcpmean(mon);
             if (pcp_gen < 0.01f) pcp_gen = 0.01f;
             sum = sum + pcp_gen;
         }
-        p.pcf[mon] = sum > 0.0f ? 1000.0f * p.pcpmean[mon] / sum : 1.0f;
+        p.pcf(mon) = sum > 0.0f ? 1000.0f * p.pcpmean(mon) / sum : 1.0f;
         if (g.rain_yrs < 1.0f) g.rain_yrs = 10.0f;
         x1 = 0.5f / g.rain_yrs;
-        x2 = x1 / g.pcpd[mon];
-        const float x3 = rain_hhsm[mon] / std::log(x2);
-        if (p.pcpmean[mon] > 1.e-4f) {
-            p.amp_r[mon] = s.bsn_prm.adj_pkr * (1.0f - std::exp(x3 / p.pcpmean[mon]));
+        x2 = x1 / g.pcpd(mon);
+        const float x3 = rain_hhsm(mon) / std::log(x2);
+        if (p.pcpmean(mon) > 1.e-4f) {
+            p.amp_r(mon) = s.bsn_prm.adj_pkr * (1.0f - std::exp(x3 / p.pcpmean(mon)));
         } else {
-            p.amp_r[mon] = 0.95f;
+            p.amp_r(mon) = 0.95f;
         }
-        if (p.amp_r[mon] < 0.1f) p.amp_r[mon] = 0.1f;
-        if (p.amp_r[mon] > 0.95f) p.amp_r[mon] = 0.95f;
+        if (p.amp_r(mon) < 0.1f) p.amp_r(mon) = 0.1f;
+        if (p.amp_r(mon) > 0.95f) p.amp_r(mon) = 0.95f;
     }
     if (summm_p < 508.0f) {
         p.ireg = 1;
@@ -472,7 +472,7 @@ void cli_initwgn(Sim& s, int iwgn) {
 
 // cli_wgnread.f90
 void cli_wgnread(Sim& s) {
-    const std::string& name = s.in.weat_wgn;
+    const std::string& name = s.in_cli.weat_wgn;
     auto alloc_rng = [&](int lo, int n) {
         s.wgncur.alloc(1, 3, lo, n, 0.0f);
         s.wgnold.alloc(1, 3, lo, n, 0.0f);
@@ -484,9 +484,9 @@ void cli_wgnread(Sim& s) {
         s.idg.alloc(1, 9, 0);
     };
     if (!s.files.exists(name) || name == "null") {
-        s.wgn.alloc(0, 1, WeatherGeneratorDb());
+        s.wgn.alloc(0, 1, weather_generator_db());
         s.wgn_n.alloc(1, 1, "");
-        s.wgn_pms.alloc(0, 1, WgnParms());
+        s.wgn_pms.alloc(0, 1, wgn_parms());
         alloc_rng(0, 1);
         s.frad.alloc(0, 1, 1, 1, 0.0f);
         gcycl(s);
@@ -510,25 +510,25 @@ void cli_wgnread(Sim& s) {
             ++imax;
         }
         s.db_mx.wgnsta = imax;
-        s.wgn.alloc(1, imax, WeatherGeneratorDb());
+        s.wgn.alloc(1, imax, weather_generator_db());
         s.wgn_n.alloc(1, imax, "");
-        s.wgn_pms.alloc(1, imax, WgnParms());
+        s.wgn_pms.alloc(1, imax, wgn_parms());
         alloc_rng(1, imax);
         s.frad.alloc(1, imax, 1, s.time.step, 0.0f);
         f.rewind();
         if (f.read(chars(titldum, 80)) < 0) break;
         gcycl(s);
         for (int iwgn = 1; iwgn <= s.db_mx.wgnsta; ++iwgn) {
-            WeatherGeneratorDb& g = s.wgn(iwgn);
+            weather_generator_db& g = s.wgn(iwgn);
             eof = f.read(chars(s.wgn_n(iwgn), 50), g.lat, g.long_, g.elev, g.rain_yrs);
             if (eof < 0) break;
             eof = f.read(chars(header, 80));
             if (eof < 0) break;
             for (int mo = 1; mo <= 12; ++mo) {
-                const auto m = static_cast<std::size_t>(mo);
-                eof = f.read(g.tmpmx[m], g.tmpmn[m], g.tmpstdmx[m], g.tmpstdmn[m], g.pcpmm[m], g.pcpstd[m],
-                             g.pcpskw[m], g.pr_wd[m], g.pr_ww[m], g.pcpd[m], g.rainhmx[m], g.solarav[m], g.dewpt[m],
-                             g.windav[m]);
+                const int m = mo;
+                eof = f.read(g.tmpmx(m), g.tmpmn(m), g.tmpstdmx(m), g.tmpstdmn(m), g.pcpmm(m), g.pcpstd(m),
+                             g.pcpskw(m), g.pr_wd(m), g.pr_ww(m), g.pcpd(m), g.rainhmx(m), g.solarav(m), g.dewpt(m),
+                             g.windav(m));
             }
             cli_initwgn(s, iwgn);
             if (eof < 0) break;
@@ -565,20 +565,20 @@ void search(const Vec<std::string>& sch, int max, const std::string& cfind, int&
 }
 
 void proc_date_time(Sim& s) {
-    cli_one_meas(s, s.in.pet_cli, s.in.path_pet, s.petm, s.petm_n, s.db_mx.petfiles);
+    cli_one_meas(s, s.in_cli.pet_cli, s.in_path_pet.peti, s.petm, s.petm_n, s.db_mx.petfiles);
     cli_pmeas(s);
     cli_tmeas(s);
-    cli_one_meas(s, s.in.slr_cli, s.in.path_slr, s.slr, s.slr_n, s.db_mx.slrfiles);
-    cli_one_meas(s, s.in.hmd_cli, s.in.path_hmd, s.hmd, s.hmd_n, s.db_mx.rhfiles);
-    cli_one_meas(s, s.in.wnd_cli, s.in.path_wnd, s.wnd, s.wnd_n, s.db_mx.wndfiles);
+    cli_one_meas(s, s.in_cli.slr_cli, s.in_path_slr.slr, s.slr, s.slr_n, s.db_mx.slrfiles);
+    cli_one_meas(s, s.in_cli.hmd_cli, s.in_path_hmd.hmd, s.hmd, s.hmd_n, s.db_mx.rhfiles);
+    cli_one_meas(s, s.in_cli.wnd_cli, s.in_path_wnd.wnd, s.wnd, s.wnd_n, s.db_mx.wndfiles);
     cli_wgnread(s);
 }
 
 // cli_staread.f90
 void cli_staread(Sim& s) {
-    const std::string& name = s.in.weat_sta;
+    const std::string& name = s.in_cli.weat_sta;
     if (!s.files.exists(name) || name == "null") {
-        s.wst.alloc(0, 1, WeatherStation());
+        s.wst.alloc(0, 1, weather_station());
         s.wst_n.alloc(0, 0, "");
         return;
     }
@@ -589,48 +589,48 @@ void cli_staread(Sim& s) {
         if (f.read(chars(header, 80)) < 0) break;
         const int imax = count_records(f);
         s.db_mx.wst = imax;
-        s.wst.alloc(1, imax, WeatherStation());
+        s.wst.alloc(1, imax, weather_station());
         s.wst_n.alloc(1, imax, "");
         for (int iwst = 1; iwst <= s.db_mx.wst; ++iwst) {
-            WeatherStation& w = s.wst(iwst);
+            weather_station& w = s.wst(iwst);
             w.weat.ts.alloc(1, s.time.step, 0.0f);
             w.weat.ts_next.alloc(1, s.time.step, 0.0f);
             w.weat.precip_prior_day = "dry";
             w.tlag.alloc(1, 6, 0.0f);
-            const int iwgn = w.wgn;  // still the default (1): the station's generator is read below
-            w.tlag.fill((s.wgn(iwgn).tmpmn[1] + s.wgn(iwgn).tmpstdmx[1]) / 2.0f);
+            const int iwgn = w.wco.wgn;  // still the default (1): the station's generator is read below
+            w.tlag.fill((s.wgn(iwgn).tmpmn(1) + s.wgn(iwgn).tmpstdmx(1)) / 2.0f);
         }
         f.rewind();
         if (f.read(chars(titldum, 80)) < 0) break;
         if (f.read(chars(header, 80)) < 0) break;
         for (int i = 1; i <= s.db_mx.wst; ++i) {
-            WeatherStation& w = s.wst(i);
+            weather_station& w = s.wst(i);
             int eof = f.read(chars(titldum, 80));
             if (eof < 0) break;
             f.backspace();
-            eof = f.read(chars(w.name, 50), chars(w.c_wgn, 50), chars(w.c_pgage, 50), chars(w.c_tgage, 50),
-                         chars(w.c_sgage, 50), chars(w.c_hgage, 50), chars(w.c_wgage, 50), chars(w.c_petgage, 50),
-                         chars(w.c_atmodep, 50));
+            eof = f.read(chars(w.name, 50), chars(w.wco_c.wgn, 50), chars(w.wco_c.pgage, 50), chars(w.wco_c.tgage, 50),
+                         chars(w.wco_c.sgage, 50), chars(w.wco_c.hgage, 50), chars(w.wco_c.wgage, 50), chars(w.wco_c.petgage, 50),
+                         chars(w.wco_c.atmodep, 50));
             if (eof < 0) break;
             s.wst_n(i) = w.name;
-            if (s.db_mx.wgnsta > 0) search(s.wgn_n, s.db_mx.wgnsta, w.c_wgn, w.wgn);
-            if (s.db_mx.pcpfiles > 0) search(s.pcp_n, s.db_mx.pcpfiles, w.c_pgage, w.pgage);
-            w.pcp_ts = s.pcp(w.pgage).tstep;
-            if (s.db_mx.tmpfiles > 0) search(s.tmp_n, s.db_mx.tmpfiles, w.c_tgage, w.tgage);
-            if (s.db_mx.slrfiles > 0) search(s.slr_n, s.db_mx.slrfiles, w.c_sgage, w.sgage);
-            if (s.db_mx.rhfiles > 0) search(s.hmd_n, s.db_mx.rhfiles, w.c_hgage, w.hgage);
-            if (s.db_mx.wndfiles > 0) search(s.wnd_n, s.db_mx.wndfiles, w.c_wgage, w.wgage);
-            if (s.db_mx.petfiles > 0) search(s.petm_n, s.db_mx.petfiles, w.c_petgage, w.petgage);
-            if (w.c_atmodep != "null" && !w.c_atmodep.empty())
+            if (s.db_mx.wgnsta > 0) search(s.wgn_n, s.db_mx.wgnsta, w.wco_c.wgn, w.wco.wgn);
+            if (s.db_mx.pcpfiles > 0) search(s.pcp_n, s.db_mx.pcpfiles, w.wco_c.pgage, w.wco.pgage);
+            w.pcp_ts = s.pcp(w.wco.pgage).tstep;
+            if (s.db_mx.tmpfiles > 0) search(s.tmp_n, s.db_mx.tmpfiles, w.wco_c.tgage, w.wco.tgage);
+            if (s.db_mx.slrfiles > 0) search(s.slr_n, s.db_mx.slrfiles, w.wco_c.sgage, w.wco.sgage);
+            if (s.db_mx.rhfiles > 0) search(s.hmd_n, s.db_mx.rhfiles, w.wco_c.hgage, w.wco.hgage);
+            if (s.db_mx.wndfiles > 0) search(s.wnd_n, s.db_mx.wndfiles, w.wco_c.wgage, w.wco.wgage);
+            if (s.db_mx.petfiles > 0) search(s.petm_n, s.db_mx.petfiles, w.wco_c.petgage, w.wco.petgage);
+            if (w.wco_c.atmodep != "null" && !w.wco_c.atmodep.empty())
                 throw std::runtime_error("SWAT+ atmospheric deposition is not supported");
             // as the reference (diagnostics.out): a gage not found falls back to the generator
-            if (w.wgn == 0 && w.c_wgn != "sim") s.warn(w.c_wgn + " file not found (wgn)");
-            if (w.pgage == 0 && w.c_pgage != "sim") s.warn(w.c_pgage + " file not found (pgage)");
-            if (w.tgage == 0 && w.c_tgage != "sim") s.warn(w.c_tgage + " file not found (tgage)");
-            if (w.sgage == 0 && w.c_sgage != "sim") s.warn(w.c_sgage + " file not found (sgage)");
-            if (w.hgage == 0 && w.c_hgage != "sim") s.warn(w.c_hgage + " file not found (hgage)");
-            if (w.wgage == 0 && w.c_wgage != "sim") s.warn(w.c_wgage + " file not found (wgage)");
-            if (w.petgage == 0 && w.c_petgage != "null") s.warn(w.c_petgage + " file not found (petgage)");
+            if (w.wco.wgn == 0 && w.wco_c.wgn != "sim") s.warn(w.wco_c.wgn + " file not found (wgn)");
+            if (w.wco.pgage == 0 && w.wco_c.pgage != "sim") s.warn(w.wco_c.pgage + " file not found (pgage)");
+            if (w.wco.tgage == 0 && w.wco_c.tgage != "sim") s.warn(w.wco_c.tgage + " file not found (tgage)");
+            if (w.wco.sgage == 0 && w.wco_c.sgage != "sim") s.warn(w.wco_c.sgage + " file not found (sgage)");
+            if (w.wco.hgage == 0 && w.wco_c.hgage != "sim") s.warn(w.wco_c.hgage + " file not found (hgage)");
+            if (w.wco.wgage == 0 && w.wco_c.wgage != "sim") s.warn(w.wco_c.wgage + " file not found (wgage)");
+            if (w.wco.petgage == 0 && w.wco_c.petgage != "null") s.warn(w.wco_c.petgage + " file not found (petgage)");
         }
         break;
     }
@@ -654,22 +654,22 @@ void cli_bounds_check(const Sim& s, int st_day, int st_yr, int end_day, int end_
 }
 
 void cli_pgen(Sim& s, int iwgn) {
-    WeatherStation& w = s.wst(s.iwst);
-    const WeatherGeneratorDb& g = s.wgn(iwgn);
+    weather_station& w = s.wst(s.iwst);
+    const weather_generator_db& g = s.wgn(iwgn);
     const int mo = s.time.mo;
     float pcpgen = 0.0f;
     const float vv = aunif(s.rndseed(s.idg(1), iwgn));
-    const float xx = w.weat.precip_prior_day == "dry" ? g.pr_wd[mo] : g.pr_ww[mo];
+    const float xx = w.weat.precip_prior_day == "dry" ? g.pr_wd(mo) : g.pr_ww(mo);
     if (vv > xx) {
         pcpgen = 0.0f;
     } else {
         const float v8 = aunif(s.rndseed(s.idg(3), iwgn));
-        const float r6 = g.pcpskw[mo] / 6.0f;
+        const float r6 = g.pcpskw(mo) / 6.0f;
         float xlv = (cli_dstn1(s.rnd3(iwgn), v8) - r6) * r6 + 1.0f;
-        xlv = (fpowi(xlv, 3) - 1.0f) * 2.0f / g.pcpskw[mo];
+        xlv = (fpowi(xlv, 3) - 1.0f) * 2.0f / g.pcpskw(mo);
         s.rnd3(iwgn) = v8;
-        pcpgen = xlv * g.pcpstd[mo] + s.wgn_pms(iwgn).pcpmean[mo];
-        pcpgen = pcpgen * s.wgn_pms(iwgn).pcf[mo];
+        pcpgen = xlv * g.pcpstd(mo) + s.wgn_pms(iwgn).pcpmean(mo);
+        pcpgen = pcpgen * s.wgn_pms(iwgn).pcf(mo);
         if (pcpgen < 0.1f) pcpgen = 0.1f;
     }
     w.weat.precip_next = pcpgen;
@@ -706,22 +706,22 @@ void cli_weatgn(Sim& s, int iwgn) {
 }
 
 void cli_tgen(Sim& s, int iwgn) {
-    WeatherStation& w = s.wst(s.iwst);
-    const WeatherGeneratorDb& g = s.wgn(iwgn);
+    weather_station& w = s.wst(s.iwst);
+    const weather_generator_db& g = s.wgn(iwgn);
     const int mo = s.time.mo;
-    const float tamp = 0.5f * (g.tmpmx[mo] - g.tmpmn[mo]);
-    float txxm = g.tmpmx[mo] + tamp * s.wgn_pms(iwgn).pr_wdays[mo];
+    const float tamp = 0.5f * (g.tmpmx(mo) - g.tmpmn(mo));
+    float txxm = g.tmpmx(mo) + tamp * s.wgn_pms(iwgn).pr_wdays(mo);
     if (w.weat.precip > 0.0f) txxm = txxm - tamp;
-    const float tmxg = txxm + g.tmpstdmx[mo] * s.wgncur(1, iwgn);
-    float tmng = g.tmpmn[mo] + g.tmpstdmn[mo] * s.wgncur(2, iwgn);
+    const float tmxg = txxm + g.tmpstdmx(mo) * s.wgncur(1, iwgn);
+    float tmng = g.tmpmn(mo) + g.tmpstdmn(mo) * s.wgncur(2, iwgn);
     if (tmng > tmxg) tmng = tmxg - 0.2f * std::abs(tmxg);
     w.weat.tmax = tmxg;
     w.weat.tmin = tmng;
 }
 
 void cli_clgen(Sim& s, int iwgn) {
-    WeatherStation& w = s.wst(s.iwst);
-    const WgnParms& p = s.wgn_pms(iwgn);
+    weather_station& w = s.wst(s.iwst);
+    const wgn_parms& p = s.wgn_pms(iwgn);
     w.weat.precip_prior_day = w.weat.precip >= 0.1f ? "wet" : "dry";
     const float day = static_cast<float>(s.time.day);
     const float sd = std::asin(0.4f * std::sin((day - 82.0f) / 58.09f));
@@ -753,31 +753,31 @@ void cli_clgen(Sim& s, int iwgn) {
 }
 
 void cli_slrgen(Sim& s, int iwgn) {
-    WeatherStation& w = s.wst(s.iwst);
-    const WeatherGeneratorDb& g = s.wgn(iwgn);
+    weather_station& w = s.wst(s.iwst);
+    const weather_generator_db& g = s.wgn(iwgn);
     const int mo = s.time.mo;
-    float rav = g.solarav[mo] / (1.0f - 0.5f * s.wgn_pms(iwgn).pr_wdays[mo]);
+    float rav = g.solarav(mo) / (1.0f - 0.5f * s.wgn_pms(iwgn).pr_wdays(mo));
     if (w.weat.precip > 0.0f) rav = 0.5f * rav;
     const float rx = w.weat.solradmx - rav;
     w.weat.solrad = rav + s.wgncur(3, iwgn) * rx / 4.0f;
     if (w.weat.solrad <= 0.0f) w.weat.solrad = 0.05f * w.weat.solradmx;
     // the reference then replaces the generated value by the monthly mean
-    w.weat.solrad = g.solarav[mo];
+    w.weat.solrad = g.solarav(mo);
 }
 
 void cli_rhgen(Sim& s, int iwgn) {
-    WeatherStation& w = s.wst(s.iwst);
-    const WeatherGeneratorDb& g = s.wgn(iwgn);
-    const WgnParms& p = s.wgn_pms(iwgn);
+    weather_station& w = s.wst(s.iwst);
+    const weather_generator_db& g = s.wgn(iwgn);
+    const wgn_parms& p = s.wgn_pms(iwgn);
     const int mo = s.time.mo;
     float rhmo = 0.0f;
     if (p.idewpt == 0) {
-        const float tmpmean = (g.tmpmx[mo] + g.tmpmn[mo]) / 2.0f;
-        rhmo = ee(g.dewpt[mo]) / ee(tmpmean);
+        const float tmpmean = (g.tmpmx(mo) + g.tmpmn(mo)) / 2.0f;
+        rhmo = ee(g.dewpt(mo)) / ee(tmpmean);
     } else {
-        rhmo = g.dewpt[mo];
+        rhmo = g.dewpt(mo);
     }
-    const float yy = 0.9f * p.pr_wdays[mo];
+    const float yy = 0.9f * p.pr_wdays(mo);
     float rhm = (rhmo - yy) / (1.0f - yy);
     if (rhm < 0.05f) rhm = 0.5f * rhmo;
     if (w.weat.precip > 0.0f) rhm = rhm * 0.1f + 0.9f;
@@ -788,9 +788,9 @@ void cli_rhgen(Sim& s, int iwgn) {
 }
 
 void cli_wndgen(Sim& s, int iwgn) {
-    WeatherStation& w = s.wst(s.iwst);
+    weather_station& w = s.wst(s.iwst);
     const float v6 = aunif(s.rndseed(s.idg(5), iwgn));
-    w.weat.windsp = s.wgn(iwgn).windav[s.time.mo] * fpow(-std::log(v6), 0.3f);
+    w.weat.windsp = s.wgn(iwgn).windav(s.time.mo) * fpow(-std::log(v6), 0.3f);
 }
 
 }  // namespace
@@ -798,17 +798,17 @@ void cli_wndgen(Sim& s, int iwgn) {
 // cli_precip_control.f90 (daily step: no sub-daily precipitation)
 void cli_precip_control(Sim& s, int istart) {
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
+        weather_station& w = s.wst(s.iwst);
         w.weat.precip = w.weat.precip_next;
         w.weat.precip_next = 0.0f;
         w.weat.ts = w.weat.ts_next;
-        const int iwgn = w.wgn;
-        const int ipg = w.pgage;
-        if (w.c_pgage == "sim") {
+        const int iwgn = w.wco.wgn;
+        const int ipg = w.wco.pgage;
+        if (w.wco_c.pgage == "sim") {
             cli_pgen(s, iwgn);
         } else {
             bool out_bounds = false;
-            ClimateMeasured& m = s.pcp(ipg);
+            climate_measured_data& m = s.pcp(ipg);
             int cur_day = s.time.day + istart;
             int yrs_to_start = s.time.yrs - m.yrs_start;
             if (cur_day > s.time.day_end_yr) {
@@ -840,13 +840,13 @@ void climate_control(Sim& s) {
     const int mo = s.time.mo;
 
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
-        const int iwgn = w.wgn;
+        weather_station& w = s.wst(s.iwst);
+        const int iwgn = w.wco.wgn;
         cli_weatgn(s, iwgn);
-        if (w.c_tgage == "sim") {
+        if (w.wco_c.tgage == "sim") {
             cli_tgen(s, iwgn);
         } else {
-            ClimateMeasured& m = s.tmp(w.tgage);
+            climate_measured_data& m = s.tmp(w.wco.tgage);
             bool out_bounds = false;
             cli_bounds_check(s, m.start_day, m.start_yr, m.end_day, m.end_yr, out_bounds);
             if (out_bounds) {
@@ -866,8 +866,8 @@ void climate_control(Sim& s) {
         w.weat.tave = (w.weat.tmax + w.weat.tmin) / 2.0f;
     }
 
-    auto measured = [&](Vec<ClimateMeasured>& arr, int ig, float& value, auto&& generate) {
-        ClimateMeasured& m = arr(ig);
+    auto measured = [&](Vec<climate_measured_data>& arr, int ig, float& value, auto&& generate) {
+        climate_measured_data& m = arr(ig);
         bool out_bounds = false;
         cli_bounds_check(s, m.start_day, m.start_yr, m.end_day, m.end_yr, out_bounds);
         if (out_bounds) {
@@ -883,40 +883,40 @@ void climate_control(Sim& s) {
     };
 
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
-        const int iwgn = w.wgn;
+        weather_station& w = s.wst(s.iwst);
+        const int iwgn = w.wco.wgn;
         cli_clgen(s, iwgn);
-        if (w.c_sgage == "sim") {
+        if (w.wco_c.sgage == "sim") {
             cli_slrgen(s, iwgn);
         } else {
-            measured(s.slr, w.sgage, w.weat.solrad, [&] { cli_slrgen(s, iwgn); });
+            measured(s.slr, w.wco.sgage, w.weat.solrad, [&] { cli_slrgen(s, iwgn); });
         }
     }
 
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
-        const int iwgn = w.wgn;
-        if (w.c_hgage == "sim") {
+        weather_station& w = s.wst(s.iwst);
+        const int iwgn = w.wco.wgn;
+        if (w.wco_c.hgage == "sim") {
             cli_rhgen(s, iwgn);
         } else {
-            measured(s.hmd, w.hgage, w.weat.rhum, [&] { cli_rhgen(s, iwgn); });
+            measured(s.hmd, w.wco.hgage, w.weat.rhum, [&] { cli_rhgen(s, iwgn); });
         }
         w.weat.dewpt = w.weat.tave - (1.0f - w.weat.rhum) / 5.0f;
     }
 
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
-        const int iwgn = w.wgn;
-        if (w.c_wgage == "sim") {
+        weather_station& w = s.wst(s.iwst);
+        const int iwgn = w.wco.wgn;
+        if (w.wco_c.wgage == "sim") {
             cli_wndgen(s, iwgn);
         } else {
-            measured(s.wnd, w.wgage, w.weat.windsp, [&] { cli_wndgen(s, iwgn); });
+            measured(s.wnd, w.wco.wgage, w.weat.windsp, [&] { cli_wndgen(s, iwgn); });
         }
     }
 
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
-        const int ig = w.petgage;
+        weather_station& w = s.wst(s.iwst);
+        const int ig = w.wco.petgage;
         if (ig > 0) {
             measured(s.petm, ig, w.weat.pet, [&] {
                 const float ramm = w.weat.solradmx * 37.59f / 30.0f;
@@ -934,7 +934,7 @@ void climate_control(Sim& s) {
     s.ppet_mce = s.ppet_mce + 1;
     if (s.ppet_mce > s.ppet_ndays) s.ppet_mce = 1;
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
+        weather_station& w = s.wst(s.iwst);
         const float ramm = w.weat.solradmx * 37.59f / 30.0f;
         if (w.weat.tmax > w.weat.tmin) {
             const float xl = 2.501f - 2.361e-3f * w.weat.tave;
@@ -944,7 +944,7 @@ void climate_control(Sim& s) {
             w.weat.pet = 0.01f;
         }
         if (w.weat.pet > 0.1f) w.weat.ppet = w.weat.ppet + w.weat.precip / w.weat.pet;
-        WgnParms& p = s.wgn_pms(w.wgn);
+        wgn_parms& p = s.wgn_pms(w.wco.wgn);
         p.precip_sum = p.precip_sum + w.weat.precip - p.precip_mce(s.ppet_mce);
         p.pet_sum = p.pet_sum + w.weat.pet - p.pet_mce(s.ppet_mce);
         if (p.pet_sum > 1.e-6f) {
@@ -961,17 +961,17 @@ void climate_control(Sim& s) {
     }
 
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
-        const int iwgn = w.wgn;
+        weather_station& w = s.wst(s.iwst);
+        const int iwgn = w.wco.wgn;
         const float half_hr_mn = 0.02083f;
         const float xx = -125.0f / (w.weat.precip + 5.0f);
         const float half_hr_mx = 1.0f - std::exp(xx);
-        w.weat.precip_half_hr = atri(half_hr_mn, s.wgn_pms(iwgn).amp_r[mo], half_hr_mx, s.rndseed(10, iwgn));
+        w.weat.precip_half_hr = atri(half_hr_mn, s.wgn_pms(iwgn).amp_r(mo), half_hr_mx, s.rndseed(10, iwgn));
     }
 
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
-        const WgnParms& p = s.wgn_pms(w.wgn);
+        weather_station& w = s.wst(s.iwst);
+        const wgn_parms& p = s.wgn_pms(w.wco.wgn);
         if (p.phutot > 0.0f) {
             if (w.weat.tave > 0.0f) w.weat.phubase0 = w.weat.phubase0 + w.weat.tave / p.phutot;
         } else {
@@ -981,14 +981,14 @@ void climate_control(Sim& s) {
     }
 
     for (s.iwst = 1; s.iwst <= s.db_mx.wst; ++s.iwst) {
-        WeatherStation& w = s.wst(s.iwst);
-        w.weat.precip = w.weat.precip * (1.0f + w.rfinc[mo] / 100.0f);
+        weather_station& w = s.wst(s.iwst);
+        w.weat.precip = w.weat.precip * (1.0f + w.rfinc(mo) / 100.0f);
         if (w.weat.precip < 0.0f) w.weat.precip = 0.0f;
-        w.weat.tmax = w.weat.tmax + w.tmpinc[mo];
-        w.weat.tmin = w.weat.tmin + w.tmpinc[mo];
-        w.weat.solrad = w.weat.solrad + w.radinc[mo];
+        w.weat.tmax = w.weat.tmax + w.tmpinc(mo);
+        w.weat.tmin = w.weat.tmin + w.tmpinc(mo);
+        w.weat.solrad = w.weat.solrad + w.radinc(mo);
         w.weat.solrad = fmax2(0.0f, w.weat.solrad);
-        w.weat.rhum = w.weat.rhum + w.huminc[mo];
+        w.weat.rhum = w.weat.rhum + w.huminc(mo);
         w.weat.rhum = fmax2(0.01f, w.weat.rhum);
         w.weat.rhum = fmin2(0.99f, w.weat.rhum);
     }

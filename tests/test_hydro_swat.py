@@ -73,11 +73,18 @@ class _nowarn:
         self._w.__exit__(*a)
 
 
-def test_ames_gage_not_found_falls_back_to_the_generator():
+def test_ames_warnings_are_the_diagnostics_of_swatplus():
     # Ames's weather-sta.cli names "ames.tem", its tmp.cli lists "ames.tmp": SWAT+ warns in
-    # diagnostics.out and generates the temperatures
+    # diagnostics.out and generates the temperatures; four land uses name schedules the
+    # management.sch does not have
     raw = S._run._run_raw(_project("ames"))
-    assert raw["warnings"] == ["ames.tem file not found (tgage)"]
+    assert raw["warnings"] == [
+        "agrr_lum AGRR_rot not found in management.sch",
+        "soyb_lum SOYB_rot not found in management.sch",
+        "oats_lum OATS_rot not found in management.sch",
+        "wwht_lum WWHT_rot not found in management.sch",
+        "ames.tem file not found (tgage)",
+    ]
 
 
 def test_project_round_trip(tmp_path):

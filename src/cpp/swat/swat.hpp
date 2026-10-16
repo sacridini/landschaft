@@ -30,6 +30,11 @@ void basin_prm_default(Sim& s);
 void basin_print_codes_read(Sim& s);
 void co2_read(Sim& s);
 
+// databases, files and connections
+void proc_db(Sim& s);
+void proc_read(Sim& s);
+void hyd_connect(Sim& s);
+
 // climate
 void proc_date_time(Sim& s);
 void cli_staread(Sim& s);

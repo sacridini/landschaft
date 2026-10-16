@@ -55,7 +55,7 @@ index 1863f88..93d4f5f 100644
        real :: rttime
        real :: vc
 diff --git a/src/command.f90 b/src/command.f90
-index fc8e026..334f7f2 100644
+index fc8e026..e46cc6e 100644
 --- a/src/command.f90
 +++ b/src/command.f90
 @@ -27,6 +27,7 @@
@@ -66,7 +66,14 @@ index fc8e026..334f7f2 100644
        implicit none
        
        external :: aqu_1d_control, aqu_cs_output, aqu_pesticide_output, aqu_salt_output, aquifer_output, &
-@@ -278,6 +279,7 @@
+@@ -272,12 +273,14 @@
+           end if
+         end if
+ 
++        call ls_dump_hin (icmd)
+         ! select the next command type
+         select case (ob(icmd)%typ)
+             
            case ("hru")   ! hru
              ihru = ob(icmd)%num
              call hru_control
@@ -74,7 +81,7 @@ index fc8e026..334f7f2 100644
              if (ob(icmd)%rcv_tot > 0) call hyddep_output
                        
            case ("hru_lte")   ! hru_lte
-@@ -300,6 +302,7 @@
+@@ -300,6 +303,7 @@
            case ("aqu")   ! aquifer
              if (ob(icmd)%dfn_tot == 0) then   !1-D use old bf recession
                call aqu_1d_control
@@ -82,7 +89,7 @@ index fc8e026..334f7f2 100644
              end if
            
            !case ("chan")   ! channel
-@@ -376,6 +379,7 @@
+@@ -376,6 +380,7 @@
              isd_chsur = ob(icmd)%props2
              if (sd_ch(isdch)%chl > 1.e-3) then
                call sd_channel_control3
@@ -90,7 +97,7 @@ index fc8e026..334f7f2 100644
              else
                  !! artificial channel - length=0 - no transformations
                  ob(icmd)%hd(1) = ob(icmd)%hin
-@@ -429,6 +433,7 @@
+@@ -429,6 +434,7 @@
            end if
          end if
          
@@ -100,10 +107,10 @@ index fc8e026..334f7f2 100644
          
 diff --git a/src/ls_dump_module.f90 b/src/ls_dump_module.f90
 new file mode 100644
-index 0000000..abd1440
+index 0000000..7952051
 --- /dev/null
 +++ b/src/ls_dump_module.f90
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,99 @@
 +      module ls_dump_module
 +!!    landschaft parity harness: binary daily dump of SWAT+ states.
 +!!    Active only when the environment variable SWAT_DUMP names a file.
@@ -163,6 +170,44 @@ index 0000000..abd1440
 +        if (.not. ls_dump_on) return
 +        call ls_dump (40, i, transfer(ob(i)%hd, [0.]))
 +      end subroutine ls_dump_obj
++
++      subroutine ls_dump_hin (i)
++        use hydrograph_module, only : ob
++        integer, intent(in) :: i
++        if (.not. ls_dump_on) return
++        call ls_dump (41, i, [transfer(ob(i)%hin, [0.]), transfer(ob(i)%hin_sur, [0.]),        &
++          transfer(ob(i)%hin_lat, [0.]), transfer(ob(i)%hin_til, [0.]), transfer(ob(i)%hin_aqu, [0.])])
++      end subroutine ls_dump_hin
++
++      subroutine ls_dump_init
++!!      the state at the start of the daily loop: soil layers (tag 3, id = 100 hru + layer),
++!!      hru values (tag 4) and plants (tag 5, id = 100 hru + plant)
++        use hydrograph_module, only : sp_ob
++        use soil_module, only : soil
++        use hru_module, only : hru, cn2, wfsh, cvm_com
++        use plant_module, only : pcom
++        use organic_mineral_mass_module, only : pl_mass
++        integer :: j, ly, ipl
++        if (.not. ls_dump_on) return
++        do j = 1, sp_ob%hru
++          do ly = 1, soil(j)%nly
++            call ls_dump (3, 100 * j + ly, transfer(soil(j)%phys(ly), [0.]))
++          end do
++          call ls_dump (4, j, [soil(j)%sw, soil(j)%sumfc, soil(j)%sumul, soil(j)%avpor, soil(j)%avbd,          &
++            soil(j)%sumwp, cn2(j), hru(j)%lumv%usle_ls, hru(j)%lumv%usle_p, wfsh(j), hru(j)%topo%slope,         &
++            hru(j)%hyd%perco_lim, cvm_com(j), pcom(j)%rsd_covfac, real(soil(j)%nly), real(pcom(j)%npl),       &
++            hru(j)%sno_mm, hru(j)%snocov1, hru(j)%snocov2, hru(j)%hyd%pet_co, hru(j)%topo%lat_len,             &
++            pl_mass(j)%rsd_tot%m, pl_mass(j)%rsd_tot%n, pcom(j)%laimx_sum])
++          do ipl = 1, pcom(j)%npl
++            call ls_dump (5, 100 * j + ipl, [pcom(j)%plcur(ipl)%phumat, pcom(j)%plcur(ipl)%phuacc,             &
++              real(pcom(j)%plcur(ipl)%curyr_mat), pcom(j)%plcur(ipl)%phumat_p, pcom(j)%plcur(ipl)%phuacc_p,    &
++              pcom(j)%plg(ipl)%lai, pcom(j)%plg(ipl)%cht, pcom(j)%plg(ipl)%laimxfr, pcom(j)%plg(ipl)%root_dep, &
++              pl_mass(j)%tot(ipl)%m, pl_mass(j)%tot(ipl)%n, pl_mass(j)%tot(ipl)%p, pl_mass(j)%root(ipl)%m,     &
++              pl_mass(j)%ab_gr(ipl)%m, pl_mass(j)%leaf(ipl)%m, pl_mass(j)%stem(ipl)%m, pl_mass(j)%seed(ipl)%m,  &
++              pcom(j)%plm(ipl)%n_fr, pcom(j)%plm(ipl)%p_fr, pcom(j)%plcur(ipl)%lai_pot])
++          end do
++        end do
++      end subroutine ls_dump_init
 +
 +      end module ls_dump_module
 diff --git a/src/main.f90.in b/src/main.f90.in
@@ -236,7 +281,7 @@ index 3e181d6..86f4f0d 100644
      
      return
 diff --git a/src/time_control.f90 b/src/time_control.f90
-index d357b05..ce444a6 100644
+index d357b05..58087a8 100644
 --- a/src/time_control.f90
 +++ b/src/time_control.f90
 @@ -53,6 +53,7 @@
@@ -247,7 +292,15 @@ index d357b05..ce444a6 100644
        
        implicit none
        
-@@ -221,6 +222,15 @@
+@@ -86,6 +87,7 @@
+       real :: rnum = 0.              !none          |channel count per stream order (>= 1 to avoid 0/0)
+ 
+       time%yrc = time%yrc_start
++      call ls_dump_init
+       
+       !! generate precip for the first day - %precip_next
+       if (Mod(time%yrc,4) == 0) then 
+@@ -221,6 +223,15 @@
            if (time%yrs > pco%nyskip) ndmo(time%mo) = ndmo(time%mo) + 1
  
            call climate_control      !! read in/generate weather

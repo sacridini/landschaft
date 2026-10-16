@@ -38,6 +38,25 @@ Items<T> items(T* p, int n) {
     return {p, n};
 }
 
+// Type-erased items: the components of a derived type, listed for one READ.
+struct Item {
+    enum Kind { I32, I64, F32, F64, BOOL, CHARS } kind;
+    void* p;
+    std::size_t len;
+};
+using ItemList = std::vector<Item>;
+inline void add(ItemList& l, int& v) { l.push_back({Item::I32, &v, 0}); }
+inline void add(ItemList& l, long long& v) { l.push_back({Item::I64, &v, 0}); }
+inline void add(ItemList& l, float& v) { l.push_back({Item::F32, &v, 0}); }
+inline void add(ItemList& l, double& v) { l.push_back({Item::F64, &v, 0}); }
+inline void add(ItemList& l, bool& v) { l.push_back({Item::BOOL, &v, 0}); }
+inline void add(ItemList& l, Chars c) { l.push_back({Item::CHARS, &c.s, c.len}); }
+inline void add(ItemList& l, const ItemList& m) { l.insert(l.end(), m.begin(), m.end()); }
+template <class T>
+void add(ItemList& l, Items<T> v) {
+    for (int i = 0; i < v.n; ++i) add(l, v.p[i]);
+}
+
 class File {
 public:
     File() = default;
@@ -78,6 +97,18 @@ public:
         template <class T>
         void item(Items<T> v) {
             for (int i = 0; i < v.n; ++i) item(v.p[i]);
+        }
+        void item(const ItemList& l) {
+            for (const Item& it : l) {
+                switch (it.kind) {
+                    case Item::I32: item(*static_cast<int*>(it.p)); break;
+                    case Item::I64: item(*static_cast<long long*>(it.p)); break;
+                    case Item::F32: item(*static_cast<float*>(it.p)); break;
+                    case Item::F64: item(*static_cast<double*>(it.p)); break;
+                    case Item::BOOL: item(*static_cast<bool*>(it.p)); break;
+                    case Item::CHARS: item(Chars{*static_cast<std::string*>(it.p), it.len}); break;
+                }
+            }
         }
         int finish();
 
