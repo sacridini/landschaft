@@ -34,9 +34,15 @@ def run(op: str, params: dict, inputs: Path, out: Path, threads: int) -> dict:
         raise ValueError(f"unknown operation {op!r}")
     if not isinstance(params, dict):
         raise TypeError("the parameters of an operation are a JSON object")
+    # the task's threads are the process default while it runs (its own threads too), and
+    # the previous default comes back after it (a task can run in the caller's process)
+    previous = _threads._default
     _threads.set_default_threads(max(1, int(threads)))
-    with _threads.limit(threads):
-        return fn(params, Path(inputs), Path(out), int(threads)) or {}
+    try:
+        with _threads.limit(threads):
+            return fn(params, Path(inputs), Path(out), int(threads)) or {}
+    finally:
+        _threads.set_default_threads(previous)
 
 
 def input_file(inputs: Path, name) -> Path:
