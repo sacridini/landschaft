@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <string>
 #include <vector>
@@ -50,9 +51,39 @@ struct SolveOptions {
     double objective_target = -kInf;     // MIP: stop at a solution better than it (HiGHS's objective_target)
 };
 
+// What the solves of a thread are told to say how they go: the best solution's objective, the bound, the gap
+// (NaN when not known) and the seconds; false when they are to stop.
+using Watch = std::function<bool(double best, double bound, double gap, double seconds)>;
+
+// While a WatchScope lives, the solves on its thread (HiGHS's, and the loops of the covering, wide and zones
+// engines around theirs) ask its watch a few times a second how to go on; once it says no, they stop as at a
+// deadline: their status is "time_limit", and `stopped()` says why.
+class WatchScope {
+  public:
+    struct State;  // the watch and how it went (milp.cpp)
+    explicit WatchScope(Watch watch);
+    ~WatchScope();
+    WatchScope(const WatchScope&) = delete;
+    WatchScope& operator=(const WatchScope&) = delete;
+    bool stopped() const;
+
+  private:
+    State* state_;
+    State* previous_;
+};
+
+// Whether the solves of this thread were told to stop: asks the watch of the scope, if any, at most five times a
+// second (told what is known of the solve: NaN when nothing).
+bool stop_asked(double best = std::numeric_limits<double>::quiet_NaN(),
+                double bound = std::numeric_limits<double>::quiet_NaN(),
+                double gap = std::numeric_limits<double>::quiet_NaN());
+
+// Whether a watch is asked on this thread.
+bool watched();
+
 struct SolveResult {
-    // "optimal" (within the gap), "time_limit", "target" (objective_target reached), "infeasible", "unbounded",
-    // "infeasible_or_unbounded" or "error: <HiGHS's status>"
+    // "optimal" (within the gap), "time_limit" (also when stopped by a WatchScope's watch), "target"
+    // (objective_target reached), "infeasible", "unbounded", "infeasible_or_unbounded" or "error: <HiGHS's status>"
     std::string status;
     bool has_solution = false;
     std::vector<double> x;  // ncol, when has_solution

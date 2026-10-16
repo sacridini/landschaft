@@ -746,7 +746,7 @@ SolveResult solve_zone_covering(const Model& model, i64 n_units, const SolveOpti
     } else if (!any_integer) {
         mip_optimal = true;
         bound = e.lp_objective;
-    } else if (relative_gap(best_obj + p.offset, bound + p.offset) > options.gap && !(timed && Clock::now() >= deadline)) {
+    } else if (relative_gap(best_obj + p.offset, bound + p.offset) > options.gap && !(timed && Clock::now() >= deadline) && !stop_asked()) {
         // Lagrangian fixing: forcing unit-zone column j to the other value raises L(y) by at least the change of
         // its unit's best shares; when that exceeds best - L, j keeps its value (exact)
         const i64 n = p.n, nz = p.nz;

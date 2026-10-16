@@ -92,6 +92,43 @@ void set(Highs& h, const std::string& name, const T& value) {
 
 void use_highs_threads(int threads) { use_threads(threads); }
 
+struct WatchScope::State {
+    Watch watch;
+    Clock::time_point t0;
+    Clock::time_point told;
+    bool stopped = false;
+};
+
+namespace {
+thread_local WatchScope::State* watching = nullptr;
+}
+
+WatchScope::WatchScope(Watch watch)
+    : state_(new State{std::move(watch), Clock::now(), Clock::now() - std::chrono::milliseconds(200)}),
+      previous_(watching) {
+    watching = state_;
+}
+
+WatchScope::~WatchScope() {
+    watching = previous_;
+    delete state_;
+}
+
+bool WatchScope::stopped() const { return state_->stopped; }
+
+bool watched() { return watching != nullptr && watching->watch; }
+
+bool stop_asked(double best, double bound, double gap) {
+    WatchScope::State* s = watching;
+    if (s == nullptr || !s->watch) return false;
+    if (s->stopped) return true;
+    const auto now = Clock::now();
+    if (now - s->told < std::chrono::milliseconds(200)) return false;
+    s->told = now;
+    if (!s->watch(best, bound, gap, std::chrono::duration<double>(now - s->t0).count())) s->stopped = true;
+    return s->stopped;
+}
+
 SolveResult solve_highs(const Model& model, const SolveOptions& options) {
     model.check();
     if (options.threads < 1) throw std::invalid_argument("threads must be at least 1");
@@ -140,14 +177,20 @@ SolveResult solve_highs(const Model& model, const SolveOptions& options) {
         h.setSolution(s);
     }
 
-    // our clock: interrupt the simplex, the interior point method and the MIP at the deadline
+    // our clock: interrupt the simplex, the interior point method and the MIP at the deadline; the watch told how
+    // the solve goes a few times a second, and asked whether to go on
     const bool timed = std::isfinite(options.time_limit);
     const auto deadline = t0 + std::chrono::duration_cast<Clock::duration>(
                                    std::chrono::duration<double>(timed ? options.time_limit : 0.0));
     bool timed_out = false;
-    if (timed) {
-        h.setCallback([&](int, const std::string&, const HighsCallbackOutput*, HighsCallbackInput* in, void*) {
-            if (Clock::now() >= deadline) {
+    if (timed || watched()) {
+        h.setCallback([&](int type, const std::string&, const HighsCallbackOutput* out, HighsCallbackInput* in, void*) {
+            const double nan = std::numeric_limits<double>::quiet_NaN();
+            const bool mip = type == kCallbackMipInterrupt && out != nullptr;
+            const double best = mip && std::isfinite(out->mip_primal_bound) ? out->mip_primal_bound : nan;
+            const double bound = mip ? out->mip_dual_bound : nan;
+            const double gap = mip && std::isfinite(best) ? out->mip_gap : nan;
+            if ((timed && Clock::now() >= deadline) || stop_asked(best, bound, gap)) {
                 timed_out = true;
                 in->user_interrupt = true;
             }
