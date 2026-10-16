@@ -6,6 +6,12 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.hydro.swat` (in progress): SWAT+ 62.0.1 ported to C++, read from its own TxtInOut files
+  (`load_txtinout` -> `SwatProject`, `run` -> `SwatResult`), bit for bit with SWAT+ itself. So far the daily
+  weather: measured series, the weather generator with its random numbers, the stations and the daily Hargreaves
+  PET, checked against a dump of the reference on the Hubbard Brook and Ames examples.
+
 ## [1.49.0] - 2026-10-16
 
 ### Added

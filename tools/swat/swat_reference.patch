@@ -1,0 +1,265 @@
+diff --git a/src/cbn_rsd_decomp.f90 b/src/cbn_rsd_decomp.f90
+index d5eb7d1..3fc0de4 100644
+--- a/src/cbn_rsd_decomp.f90
++++ b/src/cbn_rsd_decomp.f90
+@@ -55,8 +55,8 @@
+       real :: cprf = 0.     !              |carbon phosphorus ratio factor
+       real :: ca = 0.       !              |
+       real :: decr = 0.     !              |
+-      real :: ipl = 0.      !              |plant number in plant community
+-      real :: idp = 0.      !              |plant number in plant data module
++      integer :: ipl = 0      !              |plant number in plant community
++      integer :: idp = 0      !              |plant number in plant data module
+       real :: cdg = 0.      !none          |soil temperature factor
+       real :: sut = 0.      !none          |soil water factor
+       j = ihru
+diff --git a/src/cbn_rsd_transfer.f90 b/src/cbn_rsd_transfer.f90
+index 1107fa5..c4ff471 100644
+--- a/src/cbn_rsd_transfer.f90
++++ b/src/cbn_rsd_transfer.f90
+@@ -44,7 +44,7 @@
+       integer :: k = 0      !none          |counter (soil layer)
+       real :: decr = 0.     !              |
+       integer :: ipl = 0      !              |plant number in plant community
+-      real :: idp = 0.      !              |plant number in plant data module
++      integer :: idp = 0      !              |plant number in plant data module
+       j = ihru
+       !zero transformations for summing layers
+       hnb_d(j)%act_nit_n = 0.
+diff --git a/src/ch_temp.f90 b/src/ch_temp.f90
+index 1863f88..93d4f5f 100644
+--- a/src/ch_temp.f90
++++ b/src/ch_temp.f90
+@@ -45,10 +45,10 @@
+       real :: t_air
+       real :: t_air_min_av
+       real :: t_air_max_av
+-      real :: surf_lag
+-      real :: lat_lag
+-      real :: sno_lag
+-      real :: gw_lag
++      integer :: surf_lag
++      integer :: lat_lag
++      integer :: sno_lag
++      integer :: gw_lag
+       real :: surf_contr
+       real :: lat_contr
+       real :: gw_contr
+@@ -83,7 +83,7 @@
+       integer :: ru_count
+       integer :: ise             !none       |routing unit element number
+       real :: const  
+-      real :: jday
++      integer :: jday
+       integer :: i
+       real :: rttime
+       real :: vc
+diff --git a/src/command.f90 b/src/command.f90
+index fc8e026..334f7f2 100644
+--- a/src/command.f90
++++ b/src/command.f90
+@@ -27,6 +27,7 @@
+       use soil_module
+       use recall_module
+       use water_allocation_module
++      use ls_dump_module
+       implicit none
+       
+       external :: aqu_1d_control, aqu_cs_output, aqu_pesticide_output, aqu_salt_output, aquifer_output, &
+@@ -278,6 +279,7 @@
+           case ("hru")   ! hru
+             ihru = ob(icmd)%num
+             call hru_control
++            call ls_dump_hru (ihru)
+             if (ob(icmd)%rcv_tot > 0) call hyddep_output
+                       
+           case ("hru_lte")   ! hru_lte
+@@ -300,6 +302,7 @@
+           case ("aqu")   ! aquifer
+             if (ob(icmd)%dfn_tot == 0) then   !1-D use old bf recession
+               call aqu_1d_control
++              call ls_dump_aqu (ob(icmd)%num)
+             end if
+           
+           !case ("chan")   ! channel
+@@ -376,6 +379,7 @@
+             isd_chsur = ob(icmd)%props2
+             if (sd_ch(isdch)%chl > 1.e-3) then
+               call sd_channel_control3
++              call ls_dump_cha (isdch)
+             else
+                 !! artificial channel - length=0 - no transformations
+                 ob(icmd)%hd(1) = ob(icmd)%hin
+@@ -429,6 +433,7 @@
+           end if
+         end if
+         
++        call ls_dump_obj (icmd)
+         !set the next command
+         icmd = ob(icmd)%cmd_next
+         
+diff --git a/src/ls_dump_module.f90 b/src/ls_dump_module.f90
+new file mode 100644
+index 0000000..abd1440
+--- /dev/null
++++ b/src/ls_dump_module.f90
+@@ -0,0 +1,61 @@
++      module ls_dump_module
++!!    landschaft parity harness: binary daily dump of SWAT+ states.
++!!    Active only when the environment variable SWAT_DUMP names a file.
++!!    Record: int32 tag, yrc, day, id, n; then n real32 values.
++      use iso_fortran_env, only : int32
++      implicit none
++      integer :: ls_dump_unit = -1
++      logical :: ls_dump_on = .false.
++      contains
++
++      subroutine ls_dump_open
++        character(len=1024) :: path
++        integer :: n, st
++        call get_environment_variable ("SWAT_DUMP", path, n, st)
++        if (st == 0 .and. n > 0) then
++          open (newunit=ls_dump_unit, file=path(1:n), access="stream", form="unformatted", status="replace")
++          ls_dump_on = .true.
++        end if
++      end subroutine ls_dump_open
++
++      subroutine ls_dump (tag, id, vals)
++        use time_module
++        integer, intent(in) :: tag, id
++        real, dimension(:), intent(in) :: vals
++        if (.not. ls_dump_on) return
++        write (ls_dump_unit) int(tag,int32), int(time%yrc,int32), int(time%day,int32), int(id,int32), &
++                             int(size(vals),int32), vals
++      end subroutine ls_dump
++
++      subroutine ls_dump_hru (j)
++        use output_landscape_module, only : hwb_d, hnb_d, hls_d, hpw_d
++        integer, intent(in) :: j
++        if (.not. ls_dump_on) return
++        call ls_dump (10, j, transfer(hwb_d(j), [0.]))
++        call ls_dump (11, j, transfer(hnb_d(j), [0.]))
++        call ls_dump (12, j, transfer(hls_d(j), [0.]))
++        call ls_dump (13, j, transfer(hpw_d(j), [0.]))
++      end subroutine ls_dump_hru
++
++      subroutine ls_dump_aqu (i)
++        use aquifer_module, only : aqu_d
++        integer, intent(in) :: i
++        if (.not. ls_dump_on) return
++        call ls_dump (20, i, transfer(aqu_d(i), [0.]))
++      end subroutine ls_dump_aqu
++
++      subroutine ls_dump_cha (i)
++        use sd_channel_module, only : chsd_d
++        integer, intent(in) :: i
++        if (.not. ls_dump_on) return
++        call ls_dump (30, i, transfer(chsd_d(i), [0.]))
++      end subroutine ls_dump_cha
++
++      subroutine ls_dump_obj (i)
++        use hydrograph_module, only : ob
++        integer, intent(in) :: i
++        if (.not. ls_dump_on) return
++        call ls_dump (40, i, transfer(ob(i)%hd, [0.]))
++      end subroutine ls_dump_obj
++
++      end module ls_dump_module
+diff --git a/src/main.f90.in b/src/main.f90.in
+index 8fe25aa..887a67f 100644
+--- a/src/main.f90.in
++++ b/src/main.f90.in
+@@ -5,6 +5,7 @@
+       use maximum_data_module
+       use calibration_data_module
+       use hru_module
++      use ls_dump_module
+ 
+       implicit none
+       
+@@ -37,6 +38,7 @@
+       
+       open (888,file="erosion.txt",recl = 1500)
+       
++      call ls_dump_open
+       call proc_bsn   
+       call proc_date_time
+       call proc_db
+diff --git a/src/search.f90 b/src/search.f90
+index 3e181d6..86f4f0d 100644
+--- a/src/search.f90
++++ b/src/search.f90
+@@ -12,37 +12,17 @@
+                                                  !             |routing in the muskingum routing method
+     integer :: nl = 0                            !none         |number of layers being mixed
+     
+-    nf = 1
+-    nl = max
+-    
+-    do int = 1, 25  !max for 100,000,000
+-      nn = (nl - nf) / 2 + nf
+-      
+-      if (nl - nf == 1) then
+-        if (sch(nl) == cfind) then
+-          iseq = nl
+-          return
+-        end if
+-        if (sch(nf) == cfind) then
+-          iseq = nf
+-          return
+-        end if
+-      end if
+-        
+-      if (sch(nn) == cfind) then
+-        iseq = nn
++    !! landschaft: the names need not be sorted (the binary search missed names of
++    !! unsorted lists, e.g. tmp.cli, and the gage fell back to the generator)
++    do int = 1, max
++      if (sch(int) == cfind) then
++        iseq = int
+         return
+       end if
+-      
+-      if (sch(nn) > cfind) then
+-        nl = nn
+-      end if
+-      
+-      if (sch(nn) < cfind) then 
+-        nf = nn
+-      end if
+     end do
+-
++    nf = 0
++    nl = 0
++    nn = 0
+ 100  format (1x,2a) 
+     
+     return
+diff --git a/src/time_control.f90 b/src/time_control.f90
+index d357b05..ce444a6 100644
+--- a/src/time_control.f90
++++ b/src/time_control.f90
+@@ -53,6 +53,7 @@
+       use output_ls_pesticide_module
+       use water_body_module
+       use water_allocation_module
++      use ls_dump_module
+       
+       implicit none
+       
+@@ -221,6 +222,15 @@
+           if (time%yrs > pco%nyskip) ndmo(time%mo) = ndmo(time%mo) + 1
+ 
+           call climate_control      !! read in/generate weather
++          if (ls_dump_on) then
++            do j = 1, db_mx%wst
++              call ls_dump (1, j, [wst(j)%weat%precip, wst(j)%weat%precip_next, wst(j)%weat%tmax,      &
++                wst(j)%weat%tmin, wst(j)%weat%tave, wst(j)%weat%solrad, wst(j)%weat%solradmx,           &
++                wst(j)%weat%rhum, wst(j)%weat%dewpt, wst(j)%weat%windsp, wst(j)%weat%pet,              &
++                wst(j)%weat%wndir, wst(j)%weat%phubase0, wst(j)%weat%ppet, wst(j)%weat%daylength,      &
++                wst(j)%weat%precip_half_hr])
++            end do
++          end if
+           
+           call cli_atmodep_time_control     !! set array counter for atmospheric deposition
+ 

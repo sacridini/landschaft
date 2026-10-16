@@ -4030,6 +4030,97 @@ forma fechada + Fenwick: 1 milhão de células e 30 mil sorteios em 0,24 s contr
 
 ---
 
+## SWAT+ (`ls.hydro.swat`, pedido em 2026-10-16)
+
+Plano do usuário: `plano_integracao_swat_landschaft_terraflux.md` ("SWAT-Landscape": balanço hídrico diário, MUSLE,
+roteamento na rede, tudo a partir de rasters, depois nós do Terraflux; não clonar as 150 mil linhas do SWAT+, só a
+física central). Decisão de implementação, pela regra de paridade do landschaft: em vez de reescrever as equações
+"no espírito" do SWAT, **portar fielmente o subconjunto do SWAT+ que essa física usa** (C++/OpenMP, `float` como o
+`real` do Fortran) e conferir **bit a bit** contra o próprio SWAT+ rodando os mesmos dados. Assim "os mesmos resultados
+do SWAT+" é verificável, e não uma convergência aproximada. Fica de fora o que o plano chama de burocracia agronômica
+(pesticidas, patógenos, sais, constituintes, sépticos, urbano, áreas úmidas/arrozais, alocação de água, esterco,
+gwflow, SWAT-C/CENTURY, rachaduras, Green-Ampt, drenos, decisões condicionais além de agendas simples, calibração).
+
+**Referência**: SWAT+ 62.0.1 (tag do `swat-model/swatplus`, LGPL-2.1: portável para a GPL-3), fonte em
+`dev/swat_sources/swatplus`. Compilado por nós com o **flang 22** do conda-forge (env `swat-ref22`) e o linker do MSVC,
+contra a UCRT, sem otimização: a mesma libm do nosso build MSVC, o que torna o bit a bit possível no Windows (no
+Linux, tolerância, como `assert_ucrt_close`). Três declarações corrigidas para o flang (índices `real` em
+`cbn_rsd_decomp`, `cbn_rsd_transfer`, `ch_temp`, fora do subconjunto). Validado: no caso `Ames_sub1` (12 HRUs,
+1975-2020) o nosso executável dá as mesmas saídas, em todos os dígitos impressos, que o binário oficial gnu-win
+62.0.1; o gnu-lin difere em 3 valores na 7ª casa. Para a paridade, o executável de referência ganha um *dump*
+binário diário (balanços de água, sedimento, nutrientes e plantas por HRU; aquíferos; canais) em vez das saídas de
+texto com 3 casas.
+
+**Subconjunto** (`codes.bsn`: `pet` 0/1/2, `rte_cha` 0/1, `nostress` 0/1/2, `carbon` 0, `cn` pela umidade do solo
+ou pela ET das plantas, `event` 0):
+* Clima: séries medidas (pcp, tmp, slr, hmd, wnd) e o gerador WGN do SWAT para as faltas (com o RNG dele),
+  correção por altitude, ETP de Priestley-Taylor, Penman-Monteith ou Hargreaves.
+* HRU: inicialização dos solos (camadas, CC/PMP, Ksat, `soil_phys_init`), temperatura do solo, interceptação,
+  neve, CN diário, escoamento superficial e o atraso (`surlag`), ET real (solo/plantas), percolação em camadas
+  (*tipping bucket*), escoamento lateral, recarga ao aquífero; plantas (EPIC: unidades de calor, IAF, biomassa,
+  raízes, dormência, estresses, comunidades) e operações agendadas (plantio, colheita, morte, preparo, adubação,
+  `skip`); ciclo de N e P do carbono estático (mineralização, nitrificação/volatilização, lixiviação, perdas com
+  sedimento), que alimenta o estresse das plantas.
+* Erosão: MUSLE (vazão de pico, fator C dinâmico, LS, CFRG), USLE de saída, sedimento no escoamento lateral.
+* Aquífero 1-D (`aqu_1d_control`: fluxo de base com `alpha`, revap, percolação profunda).
+* Rede: o laço de comandos (objetos HRU, unidades de roteamento, aquíferos, canais SWAT-DEG, exutórios; frações de
+  conexão; hidrogramas que passam para o dia seguinte) e os canais `sd_channel_control3` (curvas de descarga,
+  armazenamento variável ou Muskingum, sedimento do canal `sd_channel_sediment3`, nutrientes só transportados).
+
+### Fases (cada uma: versão, commit; push quando pedido)
+
+0. **Harness de referência**: patch do *dump* binário, `tools/make_reference_swat.py` (escreve o TxtInOut de cada
+   caso, roda o SWAT+ do flang, guarda os dumps em `tests/data/reference/swat`), leitor/escritor de TxtInOut em
+   Python (`ls.hydro.swat.load_txtinout` -> `SwatProject`, `SwatProject.write`), conversão exata de texto para
+   `float` (a do Fortran: correta, sem passar por `double`).
+1. **Clima e ETP**: estações, séries, WGN, ETP; dump do `w` diário por estação.
+2. **HRU sem plantas e com plantas**: solos, água, neve, CN, ET, percolação, lateral, plantas, operações.
+3. **Nutrientes** (carbono estático).
+4. **Erosão**.
+5. **Aquífero e roteamento** (laço de comandos, `.con`, unidades de roteamento).
+6. **Canais** (água e sedimento).
+7. **Da paisagem para o modelo** (o diferencial do plano): delineamento com o `ls.hydro` (fill/breach, D8, rede por
+   limiar, sub-bacias, exutórios), HRUs por uso x solo x classe de declividade (limiares como no QSWAT+), parâmetros
+   por tabelas (plantas e CN por uso, solos por tabela ou SoilGrids), clima de tabelas/Zarr, LS do MDE; escreve o
+   TxtInOut (para rodar no SWAT+ oficial também) e mapeia os resultados de volta para rasters (perda de solo t/ha/ano
+   por célula da HRU, vazão por trecho).
+8. **API, resultados e desempenho**: `ls.hydro.swat.run(project)` -> `SwatResult` (séries diárias/mensais/anuais por
+   HRU, aquífero, canal e bacia, `Saveable`), HRUs sem afluência em paralelo (OpenMP, mesmas somas em ordem fixa:
+   bits independentes do número de threads), documentação.
+9. **Terraflux**: `crates/ls-sys` e nós `hydrology.swat_basin`, `hydrology.musle_erosion`,
+   `hydrology.stream_discharge`; modelos do Builder (cenários de uso -> assoreamento; PSA hídrico com o
+   `ls.prioritize`).
+
+### Andamento
+
+- **0 e 1 — Feitas** (2026-10-16): `src/cpp/swat` (`swatcore`): `fio` = leitura *list-directed* do Fortran sobre
+  arquivos em memória (registros, `backspace`/`rewind`, brancos/tabs/vírgulas, `/`, nulos, `r*c`, aspas, iostat;
+  texto -> `float` correto, sem passar por `double`; nomes de arquivo sem distinção de caixa, como no Windows),
+  `farray` (vetores com os limites do Fortran, índice fora dos limites = exceção), `fmath` (`x**n` = FPowI do
+  flang-rt, MAX/MIN como o flang, `aunif`), leitores do `proc_bsn` e todo o clima (séries medidas, WGN com o RNG
+  dele, estações, `climate_control`). A entrada é o próprio TxtInOut (o mesmo caminho de leitura do SWAT+):
+  `ls.hydro.swat.load_txtinout` -> `SwatProject` (arquivos em memória, `write`), `run` -> `SwatResult.weather`.
+  **Bit a bit** com a referência: Hubbard Brook (19 estações, 2000-2020: 145.749 registros estação-dia, os 16
+  campos) e Ames. Harness `tools/make_reference_swat.py` (casos guardados em `tests/data/reference/swat`, séries
+  climáticas recortadas aos anos simulados), patch `tools/swat/swat_reference.patch`, testes
+  `tests/test_hydro_swat.py`.
+- **Erros da referência** (só a forma correta, com a referência corrigida):
+  1. `search.f90` é busca binária: nomes de listas fora de ordem (o `tmp.cli` do Hubbard Brook: `STA1, STA6,
+     STA14...`) não são achados, e o posto passa em silêncio ao gerador (só um aviso no `diagnostics.out`).
+     Corrigido para busca exata (também na referência).
+- **Candidatos a erro, mantidos por ora (decidir com o usuário)**:
+  1. `cli_tmeas` muda a tabela global de meses (`ndays`, bissexto ou não) conforme o último ano lido do arquivo
+     de temperatura, e o `cli_initwgn` (depois) usa essa tabela para os dias de cada mês: as estatísticas do
+     gerador para fevereiro dependem de o arquivo terminar num ano bissexto.
+  2. `cli_slrgen` gera a radiação e depois a substitui pela média mensal (`solarav`): a radiação gerada nunca
+     varia no mês.
+  3. `cli_tmeas` divide as médias mensais de todos os meses pela contagem do último mês lido (sem efeito: as
+     médias não são usadas).
+- Comportamento mantido do SWAT+: posto não encontrado (o Ames cita `ames.tem`, o `tmp.cli` lista `ames.tmp`)
+  -> gerador, com o aviso do `diagnostics.out` devolvido em `SwatResult.warnings` (e `warnings.warn`).
+
+---
+
 ## Roteiro integrado dos novos módulos
 
 A integração entre os módulos do landschaft consolida um ecossistema completo para ecologia espacial e planejamento

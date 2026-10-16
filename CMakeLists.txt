@@ -172,6 +172,15 @@ add_library(hydrocore STATIC
 )
 target_include_directories(hydrocore PUBLIC src/cpp)
 set_target_properties(hydrocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# SWAT+ 62.0.1 (the ls.hydro.swat subset): float arithmetic as the Fortran reference.
+add_library(swatcore STATIC
+    src/cpp/swat/climate.cpp
+    src/cpp/swat/fio.cpp
+    src/cpp/swat/read_basin.cpp
+    src/cpp/swat/time_control.cpp
+)
+target_include_directories(swatcore PUBLIC src/cpp)
+set_target_properties(swatcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Spatial prioritization (Zonation 5): quantized feature data and the iterative ranking.
 add_library(priocore STATIC
     src/cpp/prio/buffer.cpp
@@ -378,6 +387,7 @@ if(LANDSCHAFT_OPENMP)
         endif()
         target_link_libraries(restcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(servcore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(swatcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
         if(APPLE)
@@ -408,6 +418,7 @@ if(MSVC)
     endif()
     target_compile_options(restcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(servcore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(swatcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -426,6 +437,8 @@ else()
     endif()
     target_compile_options(restcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(servcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    # a double literal or promotion in the float code would change its bits
+    target_compile_options(swatcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra -Wdouble-promotion)
 endif()
 
 if(LANDSCHAFT_PYTHON)
@@ -433,10 +446,10 @@ if(LANDSCHAFT_PYTHON)
                         src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
                         src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
                         src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp src/cpp/hydro/python.cpp
-                        src/cpp/serv/python.cpp)
+                        src/cpp/serv/python.cpp src/cpp/swat/python.cpp)
     target_link_libraries(_core PRIVATE eigen_headers)
     target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
-                          iocore sdmcore simcore optcore restcore hydrocore servcore)
+                          iocore sdmcore simcore optcore restcore hydrocore servcore swatcore)
     if(MSVC)
         target_compile_options(_core PRIVATE /fp:precise)
     else()
@@ -470,7 +483,7 @@ if(LANDSCHAFT_PYTHON)
 else()
     # The static libraries and their headers, for native programs (Terraflux links simcore and what it needs).
     install(TARGETS gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore iocore sdmcore
-                    simcore restcore hydrocore servcore
+                    simcore restcore hydrocore servcore swatcore
             ARCHIVE DESTINATION lib)
     # with HiGHS's library, which its own rules install
     if(LANDSCHAFT_MILP)
