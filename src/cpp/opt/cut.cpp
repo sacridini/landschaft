@@ -195,7 +195,7 @@ Result solve(const marxan::Data& d, const Options& o, const std::vector<int>& in
     const double bound_value = bound;
     std::vector<double> best_y = br.centre;
     for (const double theta : {1.02, 1.05, 1.1, 1.15, 1.2, 1.3, 1.4, 1.5, 1.75, 2.0, 2.5, 3.0}) {
-        if (relative_gap(best, bound) <= o.gap || Clock::now() >= deadline) break;
+        if (relative_gap(best, bound) <= o.gap || Clock::now() >= deadline || stop_asked(best, bound)) break;
         std::vector<double> yt(best_y);
         for (double& v : yt) v *= theta;
         lagrangian(yt, g);

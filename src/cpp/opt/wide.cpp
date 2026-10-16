@@ -151,7 +151,7 @@ struct WarmLP {
         for (i64 j = w.n; j < w.ncol; ++j) others.push_back(j);
         add(others);
         h.setCallback([this](int, const std::string&, const HighsCallbackOutput*, HighsCallbackInput* in, void*) {
-            if (Clock::now() >= deadline) {
+            if (Clock::now() >= deadline || stop_asked()) {
                 interrupted = true;
                 in->user_interrupt = true;
             }
@@ -324,7 +324,7 @@ struct Sifting {
         std::string why = "box or iterations";
         std::vector<double> history;  // the best value after each iteration
         for (; it < 1000 && box > box_min; ++it) {
-            if (Clock::now() >= deadline) {
+            if (Clock::now() >= deadline || stop_asked()) {
                 why = "time";
                 break;
             }
@@ -961,7 +961,7 @@ SolveResult solve_wide(const Model& model, i64 n_units, const SolveOptions& opti
         for (i64 i = 0; i < w.n; ++i) best_unit_obj += w.c[i] * best[i];
         int tries = 0, stale = 0;
         for (const auto& [dj, j] : cand) {
-            if (tries >= kGreedyTries || stale >= kGreedyStale || (timed && Clock::now() >= deadline)) break;
+            if (tries >= kGreedyTries || stale >= kGreedyStale || (timed && Clock::now() >= deadline) || stop_asked()) break;
             std::vector<double> act(best_act);
             bool fits = true;
             for (i64 k = w.col_start[j]; k < w.col_start[j + 1]; ++k) {

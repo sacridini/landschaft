@@ -251,7 +251,7 @@ void expansions(const Search& s, const std::vector<double>& y, std::vector<int>&
         // wide move often overshoots and the narrow ones find what it misses
         for (int mode = 0; mode < 3; ++mode)
         for (int z = in.mandatory ? 0 : -1; z < nz; ++z) {
-            if (Clock::now() >= deadline) return;
+            if (Clock::now() >= deadline || stop_asked()) return;
             if (mode == 2 && z >= 0) near_zone(z, near);
             std::vector<std::uint8_t> movable(static_cast<std::size_t>(n), 0);
             bool any = false;
@@ -526,7 +526,7 @@ Result solve(const Input& in, const Options& o, const std::vector<double>& start
     // primal search: the cuts of the best multipliers scaled up (more units in, less to repair)
     std::vector<double> g;
     for (const double theta : {1.02, 1.05, 1.1, 1.2, 1.35, 1.5, 2.0, 3.0}) {
-        if (relative_gap(best, bound) <= o.gap || Clock::now() >= deadline) break;
+        if (relative_gap(best, bound) <= o.gap || Clock::now() >= deadline || stop_asked(best, bound)) break;
         std::vector<double> yt(br.centre);
         for (double& v : yt) v *= theta;
         force = true;  // a solution from every one of these cuts
@@ -535,7 +535,7 @@ Result solve(const Input& in, const Options& o, const std::vector<double>& start
     }
     if (!best_zone.empty() && relative_gap(best, bound) > o.gap && Clock::now() < deadline)
         for (const double theta : {1.0, 1.25, 1.5, 2.0, 3.0}) {  // the targets' penalty scaled up in turn
-            if (relative_gap(best, bound) <= o.gap || Clock::now() >= deadline) break;
+            if (relative_gap(best, bound) <= o.gap || Clock::now() >= deadline || stop_asked(best, bound)) break;
             std::vector<double> yt(br.centre);
             for (double& v : yt) v *= theta;
             expansions(search, yt, best_zone, best, deadline, o.verbose);

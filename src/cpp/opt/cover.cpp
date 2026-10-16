@@ -296,7 +296,7 @@ struct Sifting {
         const double box_min = 1e-12 * std::max(1.0, scale);
         int it = 0;
         for (; it < 1000 && box > box_min; ++it) {
-            if (Clock::now() >= deadline) break;
+            if (Clock::now() >= deadline || stop_asked()) break;
             // master LP: max t  s.t.  t - g_k'y <= L_k - g_k'y_k,  best - box <= y <= best + box,  y >= 0
             Model master;
             master.ncol = m + 1;

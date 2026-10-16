@@ -708,7 +708,7 @@ Result solve(const Problem& p, const Options& o, const std::vector<std::uint8_t>
     const double bound = rounded(br.bound);
     // primal search: the multipliers scaled (more covered, less spent: less to repair)
     for (const double theta : {1.02, 1.05, 1.1, 1.2, 1.35, 1.5, 2.0, 0.98, 0.95, 0.9}) {
-        if (relative_gap(best, bound) <= o.gap || Clock::now() >= deadline) break;
+        if (relative_gap(best, bound) <= o.gap || Clock::now() >= deadline || stop_asked(best, bound)) break;
         std::vector<double> yt(br.centre);
         for (double& v : yt) v *= theta;
         lagrangian(yt, g);
