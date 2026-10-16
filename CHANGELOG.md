@@ -6,6 +6,19 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.hydro`, terrain hydrology: `fill` (Priority-Flood; `drain_flats=True` for Priority-Flood+epsilon),
+  `flow_direction` (D8 as ESRI codes, D-infinity azimuths), `flow_accumulation` (D8, D-infinity, FD8 of Freeman,
+  Quinn's multiple flow with contour lengths; cells, area or specific contributing area; weights), `streams`, `hand`
+  (height above the nearest drainage) and the indices `twi`, `spi`, `sti`; flat areas drain by Barnes, Lehman &
+  Mulla (2014). C++ (`src/cpp/hydro`); the directions, accumulations, HAND and indices identical to WhiteboxTools
+  2.4 on four DEMs (`tools/make_reference_hydro.py`), 1.2 to 3.1 times faster on 4 cores (`tools/benchmark_hydro.py`).
+
+### Fixed (against WhiteboxTools)
+- `fill` lets water out at the map's edge and at missing cells: WhiteboxTools' `FillDepressions` raises a
+  depression that touches the edge (or a missing cell) together with the edge cells in it, when the depression grows
+  from an interior pit.
+
 ## [1.47.0] - 2026-10-16
 
 ### Added

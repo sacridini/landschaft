@@ -44,6 +44,7 @@
 #include "cost/python.hpp"
 #include "bio/python.hpp"
 #include "surf/python.hpp"
+#include "hydro/python.hpp"
 #include "io/python.hpp"
 #include "prio/python.hpp"
 #include "sdm/python.hpp"
@@ -1446,6 +1447,7 @@ PYBIND11_MODULE(_core, m) {
     cost::register_python(m);
     bio::register_python(m);
     surf::register_python(m);
+    hydro::register_python(m);
     prio::register_python(m);
     lsio::register_python(m);
     sdm::register_python(m);

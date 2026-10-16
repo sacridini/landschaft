@@ -163,6 +163,12 @@ target_include_directories(surfcore PUBLIC src/cpp)
 # R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp), R's fft (nlm/rfft.hpp), geodesics (cost/geodesic.hpp).
 target_link_libraries(surfcore PUBLIC lsmcore nlmcore costcore)
 set_target_properties(surfcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Terrain hydrology: depression filling, flow directions and accumulation, HAND.
+add_library(hydrocore STATIC
+    src/cpp/hydro/hydro.cpp
+)
+target_include_directories(hydrocore PUBLIC src/cpp)
+set_target_properties(hydrocore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Spatial prioritization (Zonation 5): quantized feature data and the iterative ranking.
 add_library(priocore STATIC
     src/cpp/prio/buffer.cpp
@@ -351,6 +357,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(costcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(circuitcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(surfcore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(hydrocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(priocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(iocore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(sdmcore PUBLIC OpenMP::OpenMP_CXX)
@@ -380,6 +387,7 @@ if(MSVC)
     target_compile_options(costcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(circuitcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(surfcore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(hydrocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(priocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(iocore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(sdmcore PRIVATE /fp:precise /W4 /permissive-)
@@ -396,6 +404,7 @@ else()
     target_compile_options(costcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(circuitcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(surfcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(hydrocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(priocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(iocore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(sdmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -409,10 +418,10 @@ if(LANDSCHAFT_PYTHON)
     pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
                         src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
                         src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
-                        src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp)
+                        src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp src/cpp/hydro/python.cpp)
     target_link_libraries(_core PRIVATE eigen_headers)
     target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
-                          iocore sdmcore simcore optcore restcore)
+                          iocore sdmcore simcore optcore restcore hydrocore)
     if(MSVC)
         target_compile_options(_core PRIVATE /fp:precise)
     else()
@@ -446,7 +455,7 @@ if(LANDSCHAFT_PYTHON)
 else()
     # The static libraries and their headers, for native programs (Terraflux links simcore and what it needs).
     install(TARGETS gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore iocore sdmcore
-                    simcore restcore
+                    simcore restcore hydrocore
             ARCHIVE DESTINATION lib)
     # with HiGHS's library, which its own rules install
     if(LANDSCHAFT_MILP)

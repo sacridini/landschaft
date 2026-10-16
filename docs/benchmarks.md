@@ -211,6 +211,19 @@ sums and standard deviations use compensated prefix sums along the rows
 (within about 1e-13 of summing each window), so a window costs one step per
 row whatever its size.
 
+### Terrain hydrology
+
+Against WhiteboxTools 2.4 on a rough terrain of 3000 × 3000 cells, both on 4
+cores (`tools/benchmark_hydro.py`, best of 3); WhiteboxTools' times include
+reading and writing its GeoTIFFs, so Landschaft's include writing its result.
+
+| Task | WhiteboxTools | Landschaft | Since |
+|---|---|---|---|
+| Filling depressions | 3.16 s | 2.07 s | 1.48 |
+| D8 flow accumulation | 1.95 s | 0.62 s | 1.48 |
+| D-infinity flow accumulation | 1.84 s | 1.22 s | 1.48 |
+| FD8 flow accumulation | 2.00 s | 1.65 s | 1.48 |
+
 ### Spatial prioritization
 
 Against Zonation 5 v2.4 (`z5.exe`, and `z5_16bit.exe` for 16 bits) on
@@ -446,6 +459,7 @@ raster read in strips), and only that is reprojected and encoded.
 | Grid distances: commute distances, random-walk and randomised-shortest-path passages and distances, route overlap, barrier and area transitions | the same gdistance: 15 reference cases | 1e-14 typical, 1e-10 worst (different sparse factorisations than R's Matrix package); barrier and area transitions identical |
 | Surface metrics: amplitude parameters (`sa`, `sq`, `ssk`, `sku`, `sv`, `sph`, `smean`), trend surfaces of order 0-3 and the choice of the best one, slopes and developed area (`sdq`, `sdq6`, `sdr`), peaks, valleys, `sds`, `ssc`, `s10z`, the bearing area curve and its parameters (`sdc`, `sbi`, `svi`, `sci`, `sk`, `spk`, `svk`), autocorrelation, correlation lengths, texture direction and wavelength, fractal dimension, texture images | geodiv 1.1.1 (R 4.4.2, terra 1.9.50, spatial 7.3-17), and where geodiv errs geodiv with its errors corrected (`tools/surface_fixed.R`): 70 reference cases, projected and longitude/latitude, among them geodiv's example rasters, NA cells, non-square cells and ties | identical bits |
 | Terrain indices: slope, aspect, tpi, tri, vrm, srr, dissection, curvature, spherical standard deviation, hsp, trasp, hli | spatialEco 2.0-5 and terra 1.9-50 (R 4.4.2), and where spatialEco errs spatialEco with its errors corrected (`tools/surface_fixed.R`): 3 DEMs (square and rectangular cells, missing cells, longitude/latitude) | identical bits; focal means (tpi, hsp, srr, vrm, spherical standard deviation, Bolstad's curvature) within 1e-12 of summing each window (compensated prefix sums), 1e-11 of terra's running sums; on longitude/latitude slope and aspect within 1e-12 |
+| Terrain hydrology: D8 and D-infinity directions, D8, D-infinity and FD8 accumulations (cells, specific contributing area), HAND, wetness, stream power and sediment transport indices | WhiteboxTools 2.4: 4 DEMs (SRTM, missing cells, rectangular cells, terraced elevations with many flats and ties) | identical bits (the accumulations and indices to the float32 WhiteboxTools writes); filling identical to `FillDepressions` run with the map's edge as an outlet (WhiteboxTools raises depressions that touch the edge or missing cells) |
 | Spatial prioritization: the ranking (8 rules, weights and weight groups, output groups, thresholds, zero modes, value extraction, costs, hierarchic masks, analysis areas, smoothing, 8 and 16 bits), condition, retention, pre-processing maps, transformed layers, connectivity transforms, post-processing, impact assessment | Zonation 5 v2.4 (`z5.exe`, `z5_16bit.exe`, on one thread): 64 reference projects, and the timing cases below | identical rank maps and iterations; curve, statistics, post-processing and impact files digit for digit |
 | Optimized prioritization: every objective, target, penalty, constraint, decision and portfolio of prioritizr; raster, table and polygon planning units | prioritizr 8.0.6 (R 4.4.2; its errors corrected: phylogenetic tip order, portfolio cuts): `compile()` of 55 reference problems; the optimum with Gurobi | identical models, row by row and bit for bit; the same optima |
 | Evaluation: summaries, representation, target coverage, Ferrier, rarity-weighted richness, replacement and rank importance; calibration | prioritizr 8.0.6 and its calibration vignette | identical bits (R's `pnorm` ported) |

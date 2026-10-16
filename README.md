@@ -35,6 +35,7 @@ in the test suite, and runs from a few to several hundred times faster.
 | **Change detection** | simple and morphological change, fragmentation transitions | GuidosToolbox |
 | **Routes on grids** | transitions from any rule, travel-time surfaces, least-cost distances and paths, random walks, randomised shortest paths, route overlap | gdistance |
 | **Surface metrics** | texture of continuous rasters (ISO 25178): roughness, height distribution, bearing area curve, slopes, peaks and valleys, autocorrelation, orientation, fractal dimension, trend surfaces, texture images; terrain indices (TPI, TRI, VRM, curvature, HLI...) | geodiv, spatialEco |
+| **Terrain hydrology** | depression filling, D8, D-infinity and multiple flow directions, flow accumulation, streams, height above the nearest drainage (HAND), wetness, stream power and sediment transport indices | WhiteboxTools |
 | **Neutral landscape models** | simulated landscapes as null models: random, percolation, gradients, fractal surfaces, Gaussian fields, mosaics, clusters, classification | NLMR |
 | **Biodiversity analysis** | species records in grid cells: richness, endemism, phylogenetic diversity and endemism, randomisations, CANAPE, clustering | Biodiverse |
 | **Spatial prioritization** | ranking of whole landscapes for many features (CAZ and ABF rules), weights, costs, hierarchic masks, connectivity transforms, performance curves, post-processing, impact assessment; maps larger than memory | Zonation 5 |

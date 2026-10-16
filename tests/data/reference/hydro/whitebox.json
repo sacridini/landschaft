@@ -1,0 +1,9 @@
+{
+ "whitebox": "WhiteboxTools v2.4.0 (c) Dr. John Lindsay 2017-2023",
+ "cases": [
+  "holes",
+  "oregon",
+  "terraces",
+  "walk"
+ ]
+}

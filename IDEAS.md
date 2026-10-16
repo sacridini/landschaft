@@ -3644,6 +3644,30 @@ InVEST (Apache-2.0, Python/Cython: referência de paridade) com a RUSLE por cél
 0 (condicionamento, direções, acumulação) → 1 (HAND) e 3 (TWI/SPI/STI) → 2 (geomorphons, independente) → 4
 (IC/SDR, depende de 0 e 3 e de tabelas de C/P por uso; o SDR completo é a fase 3 da seção do InVEST abaixo).
 
+### Andamento (2026-10-16)
+
+- **0, 1 e 3 — Feitos** (`ls.hydro`, C++ `src/cpp/hydro/hydro.cpp`): `fill` (Priority-Flood com fila de poças;
+  `drain_flats=True` = Priority-Flood+ε com `nextafter`), `flow_direction` (D8 em códigos ESRI, D-infinito em graus
+  a partir do norte), `flow_accumulation` (D8, D-inf, FD8 de Freeman com expoente 1,1, Quinn com comprimentos de
+  contorno 0,5/0,354; células, área ou SCA = área / lado médio, como o WhiteboxTools; pesos), `streams`, `hand`,
+  `twi`/`spi`/`sti` (declividade de Horn como tangente, sem trigonometria, ou um raster de declividade em graus;
+  seno = t / sqrt(1 + t²)). Planícies pelo método de Barnes, Lehman & Mulla (2014) (rótulos a partir das bordas
+  baixas, passos a partir das bordas altas e baixas, máscara 2·baixo + (altura − alto)); as acumulações MFD e D-inf
+  passam o fluxo das células planas pela direção D8 resolvida.
+- **Paridade** com o WhiteboxTools 2.4 (fonte MIT em `dev/hydro_sources/wbt`, binário do pacote `whitebox`;
+  `tools/make_reference_hydro.py`, 4 MDEs guardados: SRTM 180 x 220, com buracos, rugoso com células retangulares,
+  em degraus com muitas planícies): D8 (ordem NE, E, SE, ... N; o primeiro de declives iguais), D-inf, acumulações,
+  SCA, HAND e índices bit a bit (os que ele grava em float32, iguais em float32: ele soma na ordem em que as threads
+  entregam as linhas, então nem ele é determinístico no último bit de float64). O D-inf portado com as escolhas do
+  WhiteboxTools (facetas com só um vizinho mais baixo, `>=` nos empates).
+- **Erro do WhiteboxTools corrigido**: o `FillDepressions` não deixa a água sair pela borda nem pelas células sem
+  valor quando a depressão cresce a partir de uma poça interior (só reconhece saída numa célula com vizinho mais
+  baixo dentro do mapa), e sobe as células da borda junto. Referência corrigida: o mesmo `FillDepressions` com o MDE
+  numa moldura de células a −1e9, recortado. Também: ele marca as células sem valor do D-inf como −1.
+- 3000 x 3000, 4 cores: fill 2,1 s contra 3,2 s; acumulação D8 0,62 contra 1,95; D-inf 1,2 contra 1,8; FD8 1,7
+  contra 2,0 (com a gravação do resultado). Falta: rebaixamento (*breaching*, Lindsay 2016) como alternativa ao
+  preenchimento; MFD do pygeoprocessing para o SDR (fase 3 do InVEST); nós do Terraflux.
+
 ---
 
 ## Serviços ecossistêmicos do InVEST (pedido em 2026-10-16)

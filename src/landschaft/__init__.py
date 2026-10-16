@@ -99,6 +99,7 @@ from . import prioritize
 from . import sdm
 from . import simulate
 from . import surface
+from . import hydro
 from . import uncertainty
 from .lsm import (
     Landscape,
@@ -215,6 +216,7 @@ __all__ = [
     "sdm",
     "simulate",
     "surface",
+    "hydro",
     "uncertainty",
     "batch",
     "clustering_fac",
