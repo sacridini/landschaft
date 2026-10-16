@@ -159,7 +159,39 @@ def ames(start: int, end: int):
     return make
 
 
+def landscape(landuse: dict | None = None, period: tuple | None = None):
+    """ls.hydro.swat.from_rasters' case (tests/swat_landscape.py): our delineation and HRUs
+    (QSWAT+'s tables), the project written by the SWAT+ Editor 4.0.2 itself
+    (tools/swat/editor_txtinout.py, LANDSCHAFT_SWAT_EDITOR), then the reference run.
+    ``landuse``: another land use lookup; ``period``: (start, end) instead of the
+    weather's."""
+
+    def make() -> dict[str, bytes]:
+        sys.path.insert(0, str(ROOT / "tests"))
+        sys.path.insert(0, str(ROOT / "tools" / "swat"))
+        import swat_landscape as case
+        from editor_txtinout import run_editor
+
+        import landschaft as ls
+        from landschaft.hydro.swat._weather import _time_sim, wgn_records
+
+        dem, lu, so = case.rasters()
+        w = ls.hydro.swat.watershed(dem, lu, so, landuse_lookup=landuse or case.LANDUSE, soil_lookup=case.SOILS,
+                                    soil_table=case.soil_table(), **case.OPTIONS)
+        stations, pcp, tmax, tmin, monthly = case.weather()
+        c = ls.hydro.swat.climate(stations, pcp=pcp, tmax=tmax, tmin=tmin, monthly=monthly)
+        weather, _ = c.files()
+        files = run_editor(w.tables, {k: v.encode() for k, v in weather.items()}, wgn_records(c),
+                           _time_sim(*(period or c.period())))
+        return {k: v.replace(b"\r\n", b"\n") for k, v in files.items()}
+
+    return make
+
+
 CASES = {
+    "landscape": landscape(),
+    # annual crops (the editor's pl_hv_summer1 / pl_hv_winter1 rotations) and an urban land use
+    "landscape_crops": landscape({1: "CORN", 2: "WWHT", 3: "URMD"}, ("2000-01-01", "2000-12-31")),
     "hubbard_brook": hubbard_brook(2000, 2002, nyskip=1),
     # the Muskingum routing of the channels
     "hubbard_brook_musk": hubbard_brook(2000, 2001, {"rte_cha": "1"}),
@@ -202,6 +234,8 @@ def main(names: list[str]) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     meta_path = OUT / "swat.json"
     meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+    # tags as numbers again, so that the cases keep their numeric order
+    meta["cases"] = {c: {int(t): s for t, s in v.items()} for c, v in meta.get("cases", {}).items()}
     patch = (ROOT / "tools" / "swat" / "swat_reference.patch").read_bytes()
     meta["reference"] = {
         "swatplus": "62.0.1",

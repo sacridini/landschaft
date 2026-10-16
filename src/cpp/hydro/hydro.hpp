@@ -99,4 +99,25 @@ std::vector<double> pgp_d8_distance_to_channel(const std::uint8_t* dir, const st
 // al. 2008): 0 on the streams, NaN where the cell reaches no stream.
 std::vector<double> hand(const Grid& g, const std::int8_t* dir, const std::uint8_t* streams);
 
+// The links of a stream network along D8 directions: the stretches between a source, a
+// junction or a break cell (an outlet the link must end at) and the next. link: the link
+// of each cell (1..n, 0 off the streams); start/end: its first and last cell (raster
+// order of the starts); down: the link the last cell drains into (0: none).
+struct StreamLinks {
+    std::vector<std::int32_t> link;
+    std::vector<i64> start, end;
+    std::vector<std::int32_t> down;
+};
+StreamLinks stream_links(const std::int8_t* dir, const std::uint8_t* stream, const std::uint8_t* breaks, int ny,
+                         int nx);
+
+// Each cell labelled with the first non-zero seed found along its D8 path (seed cells
+// keep their own), 0 where the path meets none.
+std::vector<std::int32_t> watersheds(const std::int8_t* dir, const std::int32_t* seeds, int ny, int nx);
+
+// The length of the D8 path from each cell to the first target cell (0 on targets, NaN
+// where the path meets none).
+std::vector<double> flow_distance(const std::int8_t* dir, const std::uint8_t* targets, int ny, int nx, double dx,
+                                  double dy);
+
 }  // namespace hydro

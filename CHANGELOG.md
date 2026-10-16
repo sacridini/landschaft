@@ -21,6 +21,16 @@ in a new major version.
 - `ls.hydro.swat` management: scheduled operations (plant, grain and residue harvest, kill, harvest and kill,
   tillage, irrigation, mineral fertilizer, skip) and land use decision tables with HRU conditions and irrigation
   actions, bit for bit with SWAT+ on the Ames example (scheduled corn and automatic irrigation).
+- `ls.hydro.swat` from the landscape: `watershed` divides a DEM with land use and soil maps as QSWAT+ does
+  (subbasins and channels from stream links split at the outlets, HRUs by land use, soil and slope band with QSWAT+'s
+  dominant / filter / area selection, aquifers, routing; QSWAT+'s tables), `from_tables` writes the SWAT+ project as
+  the SWAT+ Editor 4.0.2 does (the same files, token for token, also from a QSWAT+ project database with
+  `load_qswat_project`), `from_rasters` does both; `climate` and `wgn_from_series` make the weather files and the
+  weather generator from daily tables; `hru_map`, `channel_map` and `reach_discharge` put HRU and channel results
+  back on the map. A synthetic landscape and a real DEM simulate bit for bit as SWAT+ on the editor's files.
+- `ls.hydro.stream_links`, `ls.hydro.watersheds` and `ls.hydro.snap_outlets`: the links of a stream network (split
+  at junctions and outlets, with length, drop and Strahler order), the area draining to each seed, outlets moved
+  onto the streams.
 
 ## [1.49.0] - 2026-10-16
 

@@ -246,6 +246,49 @@ void register_python(py::module_& m) {
         }
         return to_raster(std::move(out), g.ny, g.nx);
     }, py::arg("z"), py::arg("dir"), py::arg("streams"), "Height above the nearest drainage along the D8 directions.");
+
+    m.def("hydro_stream_links", [](const Dirs& dir, const Mask& stream, std::optional<Mask> breaks) {
+        check2d(dir, "directions");
+        same_shape(dir, stream, "streams");
+        if (breaks) same_shape(dir, *breaks, "breaks");
+        const int ny = static_cast<int>(dir.shape(0)), nx = static_cast<int>(dir.shape(1));
+        StreamLinks out;
+        {
+            py::gil_scoped_release release;
+            out = stream_links(dir.data(), stream.data(), breaks ? breaks->data() : nullptr, ny, nx);
+        }
+        py::array_t<std::int64_t> start(static_cast<py::ssize_t>(out.start.size()), out.start.data());
+        py::array_t<std::int64_t> end(static_cast<py::ssize_t>(out.end.size()), out.end.data());
+        py::array_t<std::int32_t> down(static_cast<py::ssize_t>(out.down.size()), out.down.data());
+        return py::make_tuple(to_raster(std::move(out.link), ny, nx), start, end, down);
+    }, py::arg("dir"), py::arg("stream"), py::arg("breaks"),
+       "Stream links: (link raster, first cell, last cell, downstream link) of each link.");
+
+    using Labels = py::array_t<std::int32_t, py::array::c_style | py::array::forcecast>;
+    m.def("hydro_watersheds", [](const Dirs& dir, const Labels& seeds) {
+        check2d(dir, "directions");
+        same_shape(dir, seeds, "seeds");
+        const int ny = static_cast<int>(dir.shape(0)), nx = static_cast<int>(dir.shape(1));
+        std::vector<std::int32_t> out;
+        {
+            py::gil_scoped_release release;
+            out = watersheds(dir.data(), seeds.data(), ny, nx);
+        }
+        return to_raster(std::move(out), ny, nx);
+    }, py::arg("dir"), py::arg("seeds"), "The seed each cell drains to along the D8 directions.");
+
+    m.def("hydro_flow_distance", [](const Dirs& dir, const Mask& targets, double dx, double dy) {
+        check2d(dir, "directions");
+        same_shape(dir, targets, "targets");
+        const int ny = static_cast<int>(dir.shape(0)), nx = static_cast<int>(dir.shape(1));
+        std::vector<double> out;
+        {
+            py::gil_scoped_release release;
+            out = flow_distance(dir.data(), targets.data(), ny, nx, dx, dy);
+        }
+        return to_raster(std::move(out), ny, nx);
+    }, py::arg("dir"), py::arg("targets"), py::arg("dx"), py::arg("dy"),
+       "Length of the D8 path from each cell to the first target cell.");
 }
 
 }  // namespace hydro

@@ -4186,6 +4186,55 @@ ou pela ET das plantas, `event` 0):
      SAVE quando `algcon >= 5000`. (Os SAVE estão em `Sim::saved`.)
 - Comportamento mantido do SWAT+: posto não encontrado (o Ames cita `ames.tem`, o `tmp.cli` lista `ames.tmp`)
   -> gerador, com o aviso do `diagnostics.out` devolvido em `SwatResult.warnings` (e `warnings.warn`).
+- **7 (da paisagem para o modelo) — Feita no ramo do fork** (2026-10-16): a mesma divisão de trabalho do QSWAT+ e
+  do SWAT+ Editor, cada um portado. `ls.hydro.swat.watershed` (`_qswat.py`) faz o papel do QSWAT+ 4 (fonte do
+  QSWAT+3, C. George, GPL-2+): MDE preenchido, D8, rede por limiar de área (km², padrão 1 % do MDE), trechos
+  (`ls.hydro.stream_links`, novo, divididos nas junções e nos exutórios, `ls.hydro.snap_outlets`, 300 m), sub-bacias
+  (`ls.hydro.watersheds`, novo), um canal e uma LSU por sub-bacia (sem *landscapes*), HRUs uso x solo x classe de
+  declividade com a seleção do QSWAT+ (`dominant_hru`, o padrão dele; `dominant`; `filter` por % de uso/solo/
+  declividade; `area`; redistribuição das áreas removidas como ele faz), largura/profundidade 1,29 A^0,6 e 0,13 A^0,4,
+  aquífero raso por sub-bacia e profundo por exutório, `gis_routing` como o `routeChannelsOutletsAndBasins`; as
+  tabelas `gis_*`, `soils_sol`, `soils_sol_layer` do banco do QSWAT+ (solos de uma tabela *usersoil* ou no formato
+  do SWAT+). `from_tables` (`_editor.py`) porta o *import* GIS do Editor 4.0.2 (domínio público), a importação de
+  clima observado (postos nas coordenadas dos arquivos, objeto -> posto mais próximo, posto -> WGN mais próximo,
+  período = interseção dos arquivos) e os escritores de arquivos; os arquivos iguais para todo projeto (bancos de
+  plantas, adubos, preparo, `lum.dtl`, `codes.bsn`, `parameters.bsn`, `print.prt`, ...) e as tabelas do banco de
+  dados do editor (comunidades de plantas, usos padrão) vêm do próprio editor (`data/swatplus_editor.zip`, 45 kB,
+  `tools/swat/make_editor_data.py`). `load_qswat_project` lê um banco `.sqlite` do QSWAT+; `climate` e
+  `wgn_from_series` (estatísticas WXGEN dos dados diários; `pcp_hhr` dado: não se tira de dados diários) fazem os
+  arquivos de clima; `hru_map`, `channel_map`, `reach_discharge` devolvem resultados ao mapa (por ora sobre o *dump*,
+  `_landscape._daily`, para a fase 8 trocar pelo `SwatResult`).
+  **Validação**: `tools/swat/editor_txtinout.py` roda o próprio SWAT+ Editor 4.0.2 sem interface (fonte em
+  `dev/swat_sources/swatplus-editor`, commit d8551ab; precisa de `peewee`) sobre as tabelas do `watershed`; os nossos
+  arquivos são **iguais aos do editor token a token** (64 arquivos; também com rotações de culturas anuais —
+  `management.sch` com `pl_hv_summer1`/`pl_hv_winter1` — e uso urbano), e a simulação do porte sobre eles é **bit a
+  bit** com o SWAT+ 62.0.1 de referência (casos `landscape`, sintético 2000-2001, 4 sub-bacias, 15 HRUs; todos os
+  tags dos HRUs, aquíferos, canais e hidrogramas, fora os 4 campos só do `hru_output`). Conferido também num MDE real
+  (dados de teste `duff` do QSWAT+, 282 km², exutório de shapefile, uso e solo em outras resoluções: 33 sub-bacias,
+  100 HRUs): arquivos iguais aos do editor e simulação bit a bit. Caso `landscape_crops` guardado para quando o porte
+  simular as rotações automáticas e o uso urbano (o teste pula com o erro claro de hoje). 3,6 M células -> 382
+  sub-bacias e 1542 HRUs em 3,7 s. Testes `tests/test_hydro_swat_landscape.py`.
+  Diferenças do QSWAT+ (documentadas): análise de terreno do `ls.hydro` em vez do TauDEM (preenchimento, D8 com as
+  planícies de Barnes, declividade D8 do MDE preenchido como o `sd8`); um canal por sub-bacia (limiar de canal =
+  limiar de rede); sem *landscapes*, lagos, reservatórios, fontes pontuais; o comprimento de um trecho conta o passo
+  da última célula (uma célula de largura se ela não drena para nada, para que nenhum canal tenha comprimento zero); o
+  ponto médio do canal é o meio entre o centro da primeira célula e o da célula abaixo da última. Áreas úmidas
+  (`WATR`, `WETL`, ...) são recusadas pelo `from_tables` (o editor faria `wetland.wet`, que o porte não simula).
+- **Candidatos a erro no QSWAT+ / SWAT+ Editor, mantidos (decidir com o usuário)**:
+  1. Editor `insert_routing_units`: o comprimento de rampa da unidade de roteamento usa `get_slope_len(slope / 100)`
+     (fração numa tabela em %): sempre 121 m para declividades abaixo de 100 %.
+  2. Editor `insert_hrus`: `perco`, `cn3_swf`, `latq_co` de `get_perco_cn3_swf_latq_co(hyd_grp, slope / 100)`, de
+     novo fração numa tabela em %: todo HRU cai na classe de declividade baixa.
+  3. Editor `Parameters_bsn.write`: `lin_sed` e `exp_sed` sempre escritos 0.0 (`value_overrides`), seja qual for o
+     banco (o banco diz `exp_sed = 1`).
+  4. Editor `insert_landuse`: os itens de uma comunidade do banco recebem todos a planta do uso (`plnt_name = p_id`):
+     uma comunidade de várias plantas vira a mesma planta repetida.
+  5. Editor `update_closest_lat_lon`: o posto mais próximo em graus planos, sem o fator cos(lat) que o
+     `closest_lat_lon` dele usa.
+  6. QSWAT+ e Editor têm duas regras de comprimento de rampa (`getSlsubbsn`: 120/100/90/60/30 m; `get_slope_len`:
+     121/90/60/30/10 m); a do QSWAT+ (`gis_subbasins.sll`) não é usada.
+  7. QSWAT+: células sem uso ou solo recebem o uso/solo padrão (código 0 ou o primeiro da tabela) em vez de ficarem
+     de fora (e de terem sua área redistribuída).
 
 ---
 

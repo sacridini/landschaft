@@ -26,7 +26,7 @@ def _normalize(b: bytes) -> bytes:
 class SwatProject:
     """The input files of a SWAT+ model (the TxtInOut folder), by name.
 
-    Made by :func:`load_txtinout` (or, later, from rasters); :func:`run` simulates
+    Made by :func:`load_txtinout`, :func:`from_tables` or :func:`from_rasters`; :func:`run` simulates
     it and :meth:`write` writes the folder for SWAT+ itself. The files are SWAT+
     62.0.1's formats; names are matched without regard to case, as on Windows.
 
@@ -37,6 +37,8 @@ class SwatProject:
     """
 
     files: dict = field(default_factory=dict)
+    #: the division of the landscape the project came from (from_rasters), for the maps
+    watershed: object = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         self.files = {str(k): _normalize(v if isinstance(v, bytes) else str(v).encode()) for k, v in self.files.items()}
@@ -67,7 +69,7 @@ class SwatProject:
         self.files[k] = _normalize(text.encode())
 
     def copy(self) -> SwatProject:
-        return SwatProject(dict(self.files))
+        return SwatProject(dict(self.files), watershed=self.watershed)
 
     def print_file(self) -> str:
         """The name of the print settings file (file.cio's simulation line, else print.prt)."""
