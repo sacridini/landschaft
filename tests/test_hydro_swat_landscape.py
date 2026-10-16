@@ -17,12 +17,12 @@ import pytest
 
 import landschaft as ls
 from landschaft import _core
-from conftest import assert_ucrt_close
+from conftest import assert_swat_close
 import swat_landscape as case
 
 REF = Path(__file__).parent / "data" / "reference" / "swat"
-# written only by the reference's hru_output: hwb_d sw_init, sno_init, sno_final; hpw_d bm_max
-OUTPUT_ONLY = {10: [13, 17, 18], 13: [22]}
+# what SWAT+ prints with the editor's print.prt (yearly and average annual tables)
+PRINTS = [u + k for u in (2000, 2020, 2030, 2040, 2050, 2060, 2070, 2080, 2500, 2520) for k in range(4)]
 
 
 # ------------------------------------------------------------------ ls.hydro
@@ -190,11 +190,8 @@ def test_crop_rotations_simulate_as_swatplus(crops):
     for tag in (10, 11, 12, 13, 30, 40):
         keys, vals = ours["dump"][tag]
         np.testing.assert_array_equal(keys, ref[f"t{tag}_keys"])
-        rvals = ref[f"t{tag}_vals"].copy()
-        vals = vals[:, : rvals.shape[1]].copy()
-        for c in OUTPUT_ONLY.get(tag, []):
-            vals[:, c] = rvals[:, c] = 0.0
-        assert_ucrt_close(vals, rvals, err_msg=f"tag {tag}")
+        rvals = ref[f"t{tag}_vals"]
+        assert_swat_close(vals[:, : rvals.shape[1]], rvals, err_msg=f"tag {tag}")
 
 
 def test_qswat_project_database_round_trip(built, tmp_path):
@@ -222,32 +219,43 @@ def test_simulation_matches_swatplus(simulated, tag):
     keys, vals = ours["dump"][tag]
     rkeys, rvals = ref[f"t{tag}_keys"], ref[f"t{tag}_vals"]
     np.testing.assert_array_equal(keys, rkeys, err_msg=f"tag {tag}: (year, day, object)")
-    vals = vals[:, : rvals.shape[1]].copy()
-    rvals = rvals.copy()
-    for c in OUTPUT_ONLY.get(tag, []):
-        vals[:, c] = rvals[:, c] = 0.0
-    assert_ucrt_close(vals, rvals, err_msg=f"tag {tag}")
+    assert_swat_close(vals[:, : rvals.shape[1]], rvals, err_msg=f"tag {tag}")
+
+
+@pytest.mark.parametrize("tag", PRINTS)
+def test_printed_tables_match_swatplus(simulated, tag):
+    ours, ref = simulated
+    if f"t{tag}_keys" not in ref.files:
+        pytest.skip(f"the editor's print.prt does not print table {tag}")
+    keys, vals = ours["prints"][tag]
+    np.testing.assert_array_equal(keys, ref[f"t{tag}_keys"], err_msg=f"print {tag}")
+    assert_swat_close(vals, ref[f"t{tag}_vals"], err_msg=f"print {tag}")
 
 
 # ------------------------------------------------------------------ the map
 def test_results_on_the_map(built):
     project, _ = built
-    from landschaft.hydro.swat._landscape import _daily
-
-    out = _daily(project)
+    res = ls.hydro.swat.run(project, tables={"hru_ls": ["day", "aa"], "channel_sd": ["day", "aa"]}, nyskip=0)
     w = project.watershed
-    loss = ls.hydro.swat.hru_map(project, "sedyld", outputs=out)
+    loss = ls.hydro.swat.hru_map(project, "sedyld", result=res)
     assert loss.shape == w.hrus.shape
     assert np.nanmax(loss.values) > 0
     assert np.isnan(loss.values[np.isnan(w.hrus.values)]).all()
-    # a cell's value is its HRU's yearly total
-    ls_ = out["ls"]["sedyld"].groupby(level="hru").sum() / (len(out["ls"].index.get_level_values("date").unique())
-                                                            / 365.25)
+    # a cell's value is its HRU's average annual soil loss, as SWAT+ prints it
+    aa = res.table("hru_ls", "aa")["sedyld"].droplevel("date")
     r, c = np.argwhere(np.isfinite(w.hrus.values))[0]
-    assert loss.values[r, c] == pytest.approx(ls_.loc[int(w.hrus.values[r, c])])
-    q = ls.hydro.swat.reach_discharge(project, outputs=out)
+    assert loss.values[r, c] == aa.loc[int(w.hrus.values[r, c])]
+    # ... the daily soil loss summed over the run, divided by SWAT+'s years (731 days
+    # / 365: its leap-day correction divides integers)
+    daily = res.table("hru_ls", "day")["sedyld"]
+    assert np.allclose(aa, daily.groupby(level="hru").sum() / (731 / 365), rtol=1e-5)
+    # the default runs the project as its print.prt says (the editor skips a year)
+    own = ls.hydro.swat.run(project, tables={"hru_ls": "aa"})
+    assert np.array_equal(ls.hydro.swat.hru_map(project, "sedyld").values,
+                          ls.hydro.swat.hru_map(project, "sedyld", result=own).values, equal_nan=True)
+    q = ls.hydro.swat.reach_discharge(project, result=res)
     assert q.shape[1] == len(w.tables["gis_channels"])
-    flow = ls.hydro.swat.channel_map(project, outputs=out)
+    flow = ls.hydro.swat.channel_map(project, result=res)
     outlet = int(w.tables["gis_channels"]["areac"].idxmax()) + 1
     assert np.nanmax(flow.values) == pytest.approx(q[outlet].mean())
     assert np.isnan(flow.values[np.nan_to_num(w.channels.values) == 0]).all()

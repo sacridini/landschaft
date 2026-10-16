@@ -11,36 +11,19 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from ... import _core
 from ._editor import from_tables
 from ._project import SwatProject
 from ._qswat import SwatWatershed, watershed
+from ._run import TABLES, run
 from ._weather import SwatClimate
 
 __all__ = ["HRU_COLUMNS", "CHANNEL_COLUMNS", "from_rasters", "hru_map", "channel_map", "load_qswat_project",
            "reach_discharge"]
 
-#: The daily HRU outputs (the port's hwb_d, hnb_d, hls_d and hpw_d records, in order).
-HRU_COLUMNS = {
-    "wb": ("precip", "snofall", "snomlt", "surq_gen", "latq", "wateryld", "perc", "et", "ecanopy", "eplant", "esoil",
-           "surq_cont", "cn", "sw_init", "sw_final", "sw", "sw_300", "sno_init", "sno_final", "snopack", "pet",
-           "qtile", "irr", "surq_runon", "latq_runon", "overbank", "surq_cha", "surq_res", "surq_ls", "latq_cha",
-           "latq_res", "latq_ls", "gwsoil", "satex", "satex_chan", "delsw", "lagsurf", "laglatq", "lagsatex",
-           "wet_evap", "wet_out", "wet_stor"),
-    "nb": ("grazn", "grazp", "lab_min_p", "act_sta_p", "fertn", "fertp", "fixn", "denit", "act_nit_n", "act_sta_n",
-           "org_lab_p", "rsd_nitorg_n", "rsd_laborg_p", "no3atmo", "nh4atmo", "nuptake", "puptake", "gwsoiln",
-           "gwsoilp"),
-    "ls": ("sedyld", "sedorgn", "sedorgp", "surqno3", "latno3", "surqsolp", "usle", "sedminp", "tileno3", "lchlabp",
-           "tilelabp", "satexn"),
-    "pw": ("lai", "bioms", "yield", "residue", "sol_tmp", "strsw", "strsa", "strstmp", "strsn", "strsp", "strss",
-           "nplnt", "percn", "pplnt", "tmx", "tmn", "tmpav", "solrad", "wndspd", "rhum", "phubase0", "lai_max",
-           "bm_max", "bm_grow", "c_gro"),
-}
-#: The daily channel outputs (chsd_d of the SWAT-DEG channels).
-CHANNEL_COLUMNS = ("flo_in", "aqu_in", "flo", "peakr", "sed_in", "sed_out", "washld", "bedld", "dep", "deg_btm",
-                   "deg_bank", "hc_sed", "width", "depth", "slope", "deg_btm_m", "deg_bank_m", "hc_m", "flo_in_mm",
-                   "aqu_in_mm", "flo_mm", "sed_stor", "n_tot", "p_tot", "dep_bf", "velav_bf")
-_TAGS = {"wb": 10, "nb": 11, "ls": 12, "pw": 13}
+#: The columns of the HRU tables a map can show (SWAT+'s names, see :data:`TABLES`).
+HRU_COLUMNS = {name: TABLES[name][2] for name in ("hru_wb", "hru_nb", "hru_ls", "hru_pw")}
+#: The columns of the SWAT-DEG channel table (``channel_sd``).
+CHANNEL_COLUMNS = TABLES["channel_sd"][2]
 
 
 def from_rasters(dem, landuse, soils, *, landuse_lookup, soil_lookup, soil_table, climate: SwatClimate, start=None,
@@ -110,35 +93,19 @@ def load_qswat_project(path) -> dict:
     return out
 
 
-def _daily(project: SwatProject, raw: dict | None = None) -> dict:
-    """The port's daily records as DataFrames (internal: phase 8 replaces it by SwatResult)."""
-    if raw is None:
-        raw = _core.swat_run(project.files, True)
-    dump = raw["dump"]
-
-    def frame(tag, cols, level):
-        keys, vals = dump.get(tag, (np.zeros((0, 3), np.int32), np.zeros((0, len(cols)), np.float32)))
-        dates = pd.to_datetime(keys[:, 0].astype(str), format="%Y") + pd.to_timedelta(keys[:, 1] - 1, unit="D")
-        idx = pd.MultiIndex.from_arrays([dates, keys[:, 2]], names=["date", level])
-        return pd.DataFrame(vals[:, : len(cols)].astype(np.float64), index=idx, columns=list(cols))
-
-    out = {k: frame(t, HRU_COLUMNS[k], "hru") for k, t in _TAGS.items()}
-    out["channel"] = frame(30, CHANNEL_COLUMNS, "channel")
-    return out
+def _table(project, result, table: str, step: str) -> pd.DataFrame:
+    """A printed table of ``result``, or of a run of ``project`` printing it."""
+    if result is None:
+        result = run(project, tables={table: ["day", "aa"]})
+    return result.table(table, step)
 
 
-def _per_year(df: pd.DataFrame, level: str, how: str) -> pd.DataFrame:
-    dates = df.index.get_level_values("date")
-    g = df.groupby(level=level)
+def _by_object(project, result, table: str, variable: str, level: str, how: str) -> pd.Series:
     if how == "annual":
-        years = (dates.max() - dates.min()).days / 365.25 + 1 / 365.25
-        return g.sum() / years
-    if how == "mean":
-        return g.mean()
-    if how == "max":
-        return g.max()
-    if how == "sum":
-        return g.sum()
+        return _table(project, result, table, "aa")[variable].droplevel("date")
+    daily = _table(project, result, table, "day")[variable].groupby(level=level)
+    if how in ("mean", "max", "sum"):
+        return getattr(daily, how)()
     raise ValueError("how must be 'annual', 'mean', 'max' or 'sum'")
 
 
@@ -149,7 +116,7 @@ def _watershed_of(project) -> SwatWatershed:
     return w
 
 
-def hru_map(project, variable, *, how: str = "annual", outputs: dict | None = None) -> xr.DataArray:
+def hru_map(project, variable, *, how: str = "annual", result=None) -> xr.DataArray:
     """An HRU result on the map: each cell takes the value of its HRU.
 
     Parameters
@@ -157,15 +124,16 @@ def hru_map(project, variable, *, how: str = "annual", outputs: dict | None = No
     project : SwatProject
         A project of :func:`from_rasters`.
     variable : str or pandas.Series
-        A daily HRU output (:data:`HRU_COLUMNS`: e.g. ``"sedyld"``, the soil loss in
-        t/ha; ``"wateryld"``, ``"surq_gen"``, ``"et"`` in mm; ``"bioms"`` in kg/ha), or
-        values by HRU number (1..n).
+        A column of an HRU table (:data:`HRU_COLUMNS`: e.g. ``"sedyld"``, the soil loss
+        in t/ha; ``"wateryld"``, ``"surq_gen"``, ``"et"`` in mm; ``"bioms"`` in kg/ha),
+        or values by HRU number (1..n).
     how : {"annual", "mean", "max", "sum"}
-        Of the daily values: the yearly total (the sum over the simulation divided by
-        its length in years), the daily mean, the largest, the sum.
-    outputs
-        The daily outputs of an earlier run (internal; to map several variables of one
-        run).
+        ``"annual"``: SWAT+'s average annual value (the yearly total of a flux, the
+        mean of a state, after the years print.prt skips); or of the daily values: the
+        mean, the largest, the sum.
+    result : SwatResult, optional
+        A run of the project that printed the HRU table (``aa`` for ``"annual"``, ``day``
+        otherwise), to map several variables of one run; by default the project runs.
 
     Returns
     -------
@@ -175,11 +143,10 @@ def hru_map(project, variable, *, how: str = "annual", outputs: dict | None = No
     """
     w = _watershed_of(project)
     if isinstance(variable, str):
-        group = next((k for k, cols in HRU_COLUMNS.items() if variable in cols), None)
-        if group is None:
+        table = next((k for k, cols in HRU_COLUMNS.items() if variable in cols), None)
+        if table is None:
             raise ValueError(f"unknown HRU output {variable!r}")
-        outputs = outputs or _daily(project)
-        values = _per_year(outputs[group][[variable]], "hru", how)[variable]
+        values = _by_object(project, result, table, variable, "hru", how)
         name = variable
     else:
         values, name = pd.Series(variable), getattr(variable, "name", None) or "value"
@@ -197,25 +164,25 @@ def hru_map(project, variable, *, how: str = "annual", outputs: dict | None = No
     return da
 
 
-def reach_discharge(project, *, outputs: dict | None = None) -> pd.DataFrame:
-    """The daily discharge of each channel (m3/s): dates x channel number."""
-    outputs = outputs or _daily(project)
-    return outputs["channel"]["flo"].unstack("channel")
+def reach_discharge(project, *, result=None) -> pd.DataFrame:
+    """The daily discharge leaving each channel (m3/s, ``channel_sd``'s ``flo_out``):
+    dates x channel number. ``result``: a run that printed ``channel_sd`` by day."""
+    return _table(project, result, "channel_sd", "day")["flo_out"].unstack("channel")
 
 
-def channel_map(project, values=None, *, how: str = "mean", outputs: dict | None = None) -> xr.DataArray:
+def channel_map(project, values=None, *, how: str = "mean", result=None) -> xr.DataArray:
     """A channel result on the stream cells (by default the mean discharge, m3/s).
 
-    ``values``: a daily channel output (:data:`CHANNEL_COLUMNS`) or values by channel
-    number; ``how`` as :func:`hru_map`. NaN off the streams.
+    ``values``: a column of the channel table (:data:`CHANNEL_COLUMNS`, default
+    ``"flo_out"``) or values by channel number; ``how`` and ``result`` as
+    :func:`hru_map`. NaN off the streams.
     """
     w = _watershed_of(project)
     if values is None or isinstance(values, str):
-        col = values or "flo"
+        col = values or "flo_out"
         if col not in CHANNEL_COLUMNS:
             raise ValueError(f"unknown channel output {col!r}")
-        outputs = outputs or _daily(project)
-        values = _per_year(outputs["channel"][[col]], "channel", how)[col]
+        values = _by_object(project, result, "channel_sd", col, "channel", how).rename(col)
     values = pd.Series(values)
     ch = w.channels.values
     lut = np.full(int(np.nanmax(ch)) + 1, np.nan)
