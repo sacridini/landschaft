@@ -5,7 +5,11 @@
 // basin_read_prm.f90, basin_prm_default.f90, basin_print_codes_read.f90, co2_read.f90).
 
 #include <cmath>
+#include <set>
 #include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "swat/fmath.hpp"
 #include "swat/swat.hpp"
@@ -172,15 +176,101 @@ void basin_prm_default(Sim& s) {
 }
 
 void basin_print_codes_read(Sim& s) {
-    // only the first line changes the simulation (the years skipped); the rest selects outputs
-    std::string titldum, header;
+    std::string titldum, header, name;
+    basin_print_codes& p = s.pco;
+    // the print.prt objects in the order of a file without labels (use_obj_labels = n)
+    const std::vector<print_interval*> fixed = {
+        &p.wb_bsn, &p.nb_bsn, &p.ls_bsn, &p.pw_bsn, &p.aqu_bsn, &p.res_bsn, &p.chan_bsn, &p.sd_chan_bsn,
+        &p.recall_bsn, &p.wb_reg, &p.nb_reg, &p.ls_reg, &p.pw_reg, &p.aqu_reg, &p.res_reg, &p.sd_chan_reg,
+        &p.recall_reg, &p.water_allo, &p.wb_lsu, &p.nb_lsu, &p.ls_lsu, &p.pw_lsu, &p.wb_hru, &p.nb_hru,
+        &p.ls_hru, &p.pw_hru, &p.wb_sd, &p.nb_sd, &p.ls_sd, &p.pw_sd, &p.chan, &p.sd_chan,
+        &p.aqu, &p.res, &p.recall, &p.hyd, &p.ru, &p.pest, &p.salt_basin, &p.salt_hru,
+        &p.salt_ru, &p.salt_aqu, &p.salt_chn, &p.salt_res, &p.salt_wet, &p.cs_basin, &p.cs_hru, &p.cs_ru,
+        &p.cs_aqu, &p.cs_chn, &p.cs_res, &p.cs_wet};
+    // the labels of a file read by label
+    const std::vector<std::pair<const char*, print_interval*>> labels = {
+        {"basin_wb", &p.wb_bsn}, {"basin_nb", &p.nb_bsn}, {"basin_ls", &p.ls_bsn}, {"basin_pw", &p.pw_bsn},
+        {"basin_aqu", &p.aqu_bsn}, {"basin_res", &p.res_bsn}, {"basin_cha", &p.chan_bsn}, {"basin_sd_cha", &p.sd_chan_bsn},
+        {"basin_psc", &p.recall_bsn}, {"region_wb", &p.wb_reg}, {"region_nb", &p.nb_reg}, {"region_ls", &p.ls_reg},
+        {"region_pw", &p.pw_reg}, {"region_aqu", &p.aqu_reg}, {"region_res", &p.res_reg}, {"region_sd_cha", &p.sd_chan_reg},
+        {"region_psc", &p.recall_reg}, {"water_allo", &p.water_allo}, {"lsunit_wb", &p.wb_lsu}, {"lsunit_nb", &p.nb_lsu},
+        {"lsunit_ls", &p.ls_lsu}, {"lsunit_pw", &p.pw_lsu}, {"lsu_cb_gl", &p.cb_gl_lsu}, {"lsu_cb_trf", &p.cb_trf_lsu},
+        {"lsu_cb_plt", &p.cb_plt_lsu}, {"hru_wb", &p.wb_hru}, {"hru_nb", &p.nb_hru}, {"hru_ls", &p.ls_hru},
+        {"hru_pw", &p.pw_hru}, {"hru_cb", &p.cb_hru}, {"hru_cb_vars", &p.cb_vars_hru}, {"hru_cb_gl", &p.cb_gl_hru},
+        {"hru_cb_trf", &p.cb_trf_hru}, {"hru_cb_lyr", &p.cb_lyr_hru}, {"hru_cb_cpool", &p.cb_cpool_hru}, {"hru_cb_npool", &p.cb_npool_hru},
+        {"hru_cb_plt", &p.cb_plt_hru}, {"hru_cb_flux", &p.cb_flux_hru}, {"hru_cb_drv", &p.cb_drv_hru}, {"hru_cb_dyn", &p.cb_dyn_hru},
+        {"hru_cb_snap", &p.cb_snap_hru}, {"hru-lte_wb", &p.wb_sd}, {"hru-lte_nb", &p.nb_sd}, {"hru-lte_ls", &p.ls_sd},
+        {"hru-lte_pw", &p.pw_sd}, {"channel", &p.chan}, {"channel_sd", &p.sd_chan}, {"aquifer", &p.aqu},
+        {"reservoir", &p.res}, {"recall", &p.recall}, {"hyd", &p.hyd}, {"ru", &p.ru},
+        {"pest", &p.pest}, {"basin_salt", &p.salt_basin}, {"hru_salt", &p.salt_hru}, {"ru_salt", &p.salt_ru},
+        {"aqu_salt", &p.salt_aqu}, {"channel_salt", &p.salt_chn}, {"res_salt", &p.salt_res}, {"wetland_salt", &p.salt_wet},
+        {"basin_cs", &p.cs_basin}, {"hru_cs", &p.cs_hru}, {"ru_cs", &p.cs_ru}, {"aqu_cs", &p.cs_aqu},
+        {"channel_cs", &p.cs_chn}, {"res_cs", &p.cs_res}, {"wetland_cs", &p.cs_wet}, {"gwflow_wb", &p.gwflow_wb},
+        {"gwflow_flux", &p.gwflow_flux}, {"gwflow_heat", &p.gwflow_heat}, {"gwflow_solute", &p.gwflow_solute}, {"gwflow_obs", &p.gwflow_obs},
+        {"gwflow_pump", &p.gwflow_pump}};
     if (s.files.exists(s.in_sim.prt) || s.in_sim.prt != "null") {
         fio::File f = s.files.open(s.in_sim.prt);
-        if (f.read(chars(titldum, 80)) < 0) return;
-        if (f.read(chars(header, 500)) < 0) return;
-        basin_print_codes& p = s.pco;
-        f.read(p.nyskip, p.day_start, p.yrc_start, p.day_end, p.yrc_end, p.int_day);
+        for (;;) {
+            if (f.read(chars(titldum, 80)) < 0) break;
+            if (f.read(chars(header, 500)) < 0) break;
+            if (f.read(p.nyskip, p.day_start, p.yrc_start, p.day_end, p.yrc_end, p.int_day) < 0) break;
+            if (f.read(chars(header, 500)) < 0) break;
+            f.read(p.aa_numint);
+            if (p.aa_numint > 0) {
+                p.aa_yrs.alloc(1, p.aa_numint, 0);
+                f.backspace();
+                fio::File::Statement st = f.reader();
+                st.item(p.aa_numint);
+                for (int ii = 1; ii <= p.aa_numint; ++ii) st.item(p.aa_yrs(ii));
+                if (st.finish() < 0) break;
+            } else {
+                p.aa_yrs.alloc(1, 1, 0);
+            }
+            if (f.read(chars(header, 500)) < 0) break;
+            if (f.read(chars(p.csvout, p.csvout_len), chars(p.use_obj_labels, p.use_obj_labels_len),
+                       chars(p.cdfout, p.cdfout_len)) < 0)
+                break;
+            if (f.read(chars(header, 500)) < 0) break;
+            if (f.read(chars(p.crop_yld, p.crop_yld_len), chars(p.mgtout, p.mgtout_len), chars(p.hydcon, p.hydcon_len),
+                       chars(p.fdcout, p.fdcout_len)) < 0)
+                break;
+            if (f.read(chars(header, 500)) < 0) break;
+            auto read_interval = [&](print_interval& pi) {
+                return f.read(chars(name, 16), chars(pi.d, 1), chars(pi.m, 1), chars(pi.y, 1), chars(pi.a, 1));
+            };
+            if (p.use_obj_labels == "n") {
+                for (print_interval* pi : fixed)
+                    if (read_interval(*pi) < 0) break;
+            } else {
+                std::set<print_interval*> already_read_in;
+                int eof = 0;
+                while (eof >= 0) {
+                    name.clear();
+                    eof = f.read(chars(name, 16));
+                    if (name.empty()) continue;
+                    for (const auto& [label, pi] : labels) {
+                        if (name == label) {
+                            if (already_read_in.count(pi)) {
+                                s.warn("print.prt: " + name + " given more than once");
+                            } else {
+                                f.backspace();
+                                eof = read_interval(*pi);
+                                already_read_in.insert(pi);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            break;
+        }
     }
+    if (p.day_start == 0) p.day_start = 1;
+    if (p.day_end == 0) p.day_end = 366;
+    if (p.yrc_start == 0) p.yrc_start = s.time.yrc;
+    if (p.yrc_end == 0) p.yrc_end = s.time.yrc + s.time.nbyr;
+    if (p.int_day <= 0) p.int_day = 1;
+    p.int_day_cur = p.int_day;
 }
 
 void co2_read(Sim& s) {

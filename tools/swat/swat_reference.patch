@@ -1,3 +1,199 @@
+diff --git a/src/aquifer_output.f90 b/src/aquifer_output.f90
+index df21e25..9450a33 100644
+--- a/src/aquifer_output.f90
++++ b/src/aquifer_output.f90
+@@ -1,4 +1,5 @@
+       subroutine aquifer_output(iaq)
++      use ls_dump_module, only : ls_push, ls_flush
+       
+       use time_module
+       use basin_module
+@@ -19,6 +20,8 @@
+         !! daily print - AQUIFER
+          if (pco%day_print == "y" .and. pco%int_day_cur == pco%int_day) then
+           if (pco%aqu%d == "y") then
++            call ls_push (aqu_d(iaq))  !ls_dump_output
++            call ls_flush (2520, iaq)  !ls_dump_output
+             write (2520,100) time%day, time%mo, time%day_mo, time%yrc, iaq, ob(iob)%gis_id, ob(iob)%name, aqu_d(iaq)
+             if (pco%csvout == "y") then
+               write (2524,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, iaq, ob(iob)%gis_id, ob(iob)%name, aqu_d(iaq)
+@@ -34,6 +37,8 @@
+           aqu_m(iaq)%no3_st = aqu_m(iaq)%no3_st / const
+           aqu_y(iaq) = aqu_y(iaq) + aqu_m(iaq)
+           if (pco%aqu%m == "y") then
++            call ls_push (aqu_m(iaq))  !ls_dump_output
++            call ls_flush (2521, iaq)  !ls_dump_output
+             write (2521,100)  time%day, time%mo, time%day_mo, time%yrc, iaq, ob(iob)%gis_id, ob(iob)%name, aqu_m(iaq)
+             if (pco%csvout == "y") then
+               write (2525,'(*(G0.6,:","))')  time%day, time%mo, time%day_mo, time%yrc, iaq, ob(iob)%gis_id, ob(iob)%name, aqu_m(iaq)
+@@ -49,6 +54,8 @@
+           aqu_y(iaq)%no3_st = aqu_y(iaq)%no3_st / 12.
+           aqu_a(iaq) = aqu_a(iaq) + aqu_y(iaq)
+           if (pco%aqu%y == "y") then
++            call ls_push (aqu_y(iaq))  !ls_dump_output
++            call ls_flush (2522, iaq)  !ls_dump_output
+             write (2522,102) time%day, time%mo, time%day_mo, time%yrc, iaq, ob(iob)%gis_id, ob(iob)%name, aqu_y(iaq)
+             if (pco%csvout == "y") then
+               write (2526,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, iaq, ob(iob)%gis_id, ob(iob)%name, aqu_y(iaq) 
+@@ -61,6 +68,8 @@
+       !! average annual print - AQUIFER
+       if (time%end_sim == 1 .and. pco%aqu%a == "y") then
+         aqu_a(iaq) = aqu_a(iaq) / time%yrs_prt
++        call ls_push (aqu_a(iaq))  !ls_dump_output
++        call ls_flush (2523, iaq)  !ls_dump_output
+         write (2523,102) time%day, time%mo, time%day_mo, time%yrc, iaq, ob(iob)%gis_id, ob(iob)%name, aqu_a(iaq)
+         if (pco%csvout == "y") then 
+           write (2527,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, iaq, ob(iob)%gis_id, ob(iob)%name, aqu_a(iaq)  
+diff --git a/src/basin_output.f90 b/src/basin_output.f90
+index 9882289..09a4640 100644
+--- a/src/basin_output.f90
++++ b/src/basin_output.f90
+@@ -1,4 +1,5 @@
+       subroutine basin_output
++      use ls_dump_module, only : ls_push, ls_flush
+       
+       use time_module
+       use hydrograph_module
+@@ -69,6 +70,8 @@
+           if (pco%wb_bsn%d == "y") then
+             bwb_d%sw = (bwb_d%sw_init + bwb_d%sw_final) / 2.
+             bwb_d%snopack = (bwb_d%sno_init + bwb_d%sno_final) / 2.
++            call ls_push (bwb_d)  !ls_dump_output
++            call ls_flush (2050, 1)  !ls_dump_output
+             write (2050,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bwb_d  !! waterbal
+             if (pco%csvout == "y") then 
+               write (2054,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bwb_d  !! waterbal
+@@ -77,18 +80,24 @@
+             bwb_d%sno_init = bwb_d%sno_final
+           end if 
+           if (pco%nb_bsn%d == "y") then 
++            call ls_push (bnb_d)  !ls_dump_output
++            call ls_flush (2060, 1)  !ls_dump_output
+             write (2060,104) time%day, time%mo, time%day_mo, time%yrc, "        1", "       1", bsn%name, bnb_d  !! nutrient bal
+             if (pco%csvout == "y") then 
+               write (2064,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bnb_d  !! nutrient bal
+               end if
+           end if
+           if (pco%ls_bsn%d == "y") then
++            call ls_push (bls_d)  !ls_dump_output
++            call ls_flush (2070, 1)  !ls_dump_output
+             write (2070,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bls_d  !! losses
+             if (pco%csvout == "y") then 
+               write (2074,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bls_d  !! losses
+             end if 
+           end if
+           if (pco%pw_bsn%d == "y") then
++            call ls_push (bpw_d)  !ls_dump_output
++            call ls_flush (2080, 1)  !ls_dump_output
+             write (2080,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bpw_d  !! plant weather
+             if (pco%csvout == "y") then 
+               write (2084,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bpw_d  !! plant weather
+@@ -109,6 +118,8 @@
+           if (pco%wb_bsn%m == "y") then
+             bwb_m%sw_final = bwb_d%sw_final
+             bwb_m%sno_final = bwb_d%sno_final
++            call ls_push (bwb_m)  !ls_dump_output
++            call ls_flush (2051, 1)  !ls_dump_output
+             write (2051,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bwb_m
+             if (pco%csvout == "y") then 
+               write (2055,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bwb_m
+@@ -117,12 +128,16 @@
+             bwb_m%sno_init = bwb_m%sno_final
+           end if
+           if (pco%nb_bsn%m == "y") then 
++            call ls_push (bnb_m)  !ls_dump_output
++            call ls_flush (2061, 1)  !ls_dump_output
+             write (2061,104) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bnb_m 
+             if (pco%csvout == "y") then 
+               write (2065,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bnb_m
+               end if 
+           end if
+           if (pco%ls_bsn%m == "y") then  
++            call ls_push (bls_m)  !ls_dump_output
++            call ls_flush (2071, 1)  !ls_dump_output
+             write (2071,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bls_m
+             if (pco%csvout == "y") then 
+               write (2075,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bls_m
+@@ -131,6 +146,8 @@
+           if (pco%pw_bsn%m == "y") then
+             !bpw_m%nplnt = bpw_d%nplnt
+             !bpw_m%nplnt = bpw_d%pplnt
++            call ls_push (bpw_m)  !ls_dump_output
++            call ls_flush (2081, 1)  !ls_dump_output
+             write (2081,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bpw_m
+             if (pco%csvout == "y") then 
+               write (2085,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bpw_m
+@@ -161,6 +178,8 @@
+            if (pco%wb_bsn%y == "y") then
+              bwb_y%sw_final = bwb_d%sw_final
+              bwb_y%sno_final = bwb_d%sno_final
++             call ls_push (bwb_y)  !ls_dump_output
++             call ls_flush (2052, 1)  !ls_dump_output
+              write (2052,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bwb_y
+              if (pco%csvout == "y") then 
+                 write (2056,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bwb_y
+@@ -169,12 +188,16 @@
+              bwb_y%sno_init = bwb_y%sno_final
+            end if
+            if (pco%nb_bsn%y == "y") then
++             call ls_push (bnb_y)  !ls_dump_output
++             call ls_flush (2062, 1)  !ls_dump_output
+              write (2062,104) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bnb_y
+              if (pco%csvout == "y") then 
+                write (2066,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bnb_y
+              end if
+            end if
+            if (pco%ls_bsn%y == "y") then
++             call ls_push (bls_y)  !ls_dump_output
++             call ls_flush (2072, 1)  !ls_dump_output
+              write (2072,100)time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bls_y
+              if (pco%csvout == "y") then 
+                 write (2076,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bls_y
+@@ -183,6 +206,8 @@
+            if (pco%pw_bsn%y == "y") then
+              !bpw_y%nplnt = bpw_d%nplnt
+              !bpw_y%nplnt = bpw_d%pplnt
++             call ls_push (bpw_y)  !ls_dump_output
++             call ls_flush (2082, 1)  !ls_dump_output
+              write (2082,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bpw_y
+              if (pco%csvout == "y") then 
+                write (2086,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bpw_y
+@@ -212,6 +237,8 @@
+         bwb_a%sno_final = bwb_d%sno_final
+ 
+         if (pco%wb_bsn%a == "y") then
++        call ls_push (bwb_a)  !ls_dump_output
++        call ls_flush (2053, 1)  !ls_dump_output
+         write (2053,103) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bwb_a, cal_sim, cal_adj
+         if (pco%csvout == "y") then 
+           write (2057,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bwb_a,    &
+@@ -224,6 +251,8 @@
+       if (time%end_sim == 1) then
+         bnb_a = bnb_a / time%yrs_prt
+         if (pco%nb_bsn%a == "y") then
++        call ls_push (bnb_a)  !ls_dump_output
++        call ls_flush (2063, 1)  !ls_dump_output
+         write (2063,104) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bnb_a
+         if (pco%csvout == "y") then 
+           write (2067,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bnb_a
+@@ -233,6 +262,8 @@
+       if (time%end_sim == 1) then
+         bls_a = bls_a / time%yrs_prt
+         if (pco%ls_bsn%a == "y") then
++        call ls_push (bls_a)  !ls_dump_output
++        call ls_flush (2073, 1)  !ls_dump_output
+         write (2073,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bls_a
+         if (pco%csvout == "y") then 
+           write (2077,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bls_a
+@@ -243,6 +274,8 @@
+         bpw_a = bpw_a / time%yrs_prt
+         bpw_a = bpw_a // time%days_prt
+         if (pco%pw_bsn%a == "y") then
++        call ls_push (bpw_a)  !ls_dump_output
++        call ls_flush (2083, 1)  !ls_dump_output
+         write (2083,100) time%day, time%mo, time%day_mo, time%yrc, "       1", "       1", bsn%name, bpw_a
+         if (pco%csvout == "y") then 
+           write (2087,'(*(G0.6,:","))') time%day, time%mo, time%day_mo, time%yrc, "       1", "        1", bsn%name, bpw_a
 diff --git a/src/cbn_rsd_decomp.f90 b/src/cbn_rsd_decomp.f90
 index d5eb7d1..3fc0de4 100644
 --- a/src/cbn_rsd_decomp.f90
@@ -105,12 +301,170 @@ index fc8e026..e46cc6e 100644
          !set the next command
          icmd = ob(icmd)%cmd_next
          
+diff --git a/src/hru_output.f90 b/src/hru_output.f90
+index 8356e69..92c214b 100644
+--- a/src/hru_output.f90
++++ b/src/hru_output.f90
+@@ -1,4 +1,5 @@
+       subroutine hru_output (ihru)
++      use ls_dump_module, only : ls_push, ls_flush
+ 
+       use plant_module
+       use plant_data_module
+@@ -60,6 +61,8 @@
+       !! daily print
+          if (pco%day_print == "y" .and. pco%int_day_cur == pco%int_day) then
+           if (pco%wb_hru%d == "y") then
++             call ls_push (hwb_d(j))  !ls_dump_output
++             call ls_flush (2000, j)  !ls_dump_output
+              write (2000,100) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hwb_d(j),      &
+                                                                            lum(ilu)%plant_cov, lum(ilu)%mgt_ops     !! water bal day
+              if (pco%csvout == "y") then
+@@ -72,6 +75,8 @@
+           hwb_d(j)%sno_init = hwb_d(j)%sno_final
+           
+           if (pco%nb_hru%d == "y") then
++            call ls_push (hnb_d(j))  !ls_dump_output
++            call ls_flush (2020, j)  !ls_dump_output
+             write (2020,104) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hnb_d(j),         &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops      !! nutrient bal day
+             if (pco%csvout == "y") then
+@@ -80,6 +85,9 @@
+                 end if
+           end if
+           if (pco%ls_hru%d == "y") then
++            call ls_push (hls_d(j))  !ls_dump_output
++            call ls_push (hpw_d(j)%percn)  !ls_dump_output
++            call ls_flush (2030, j)  !ls_dump_output
+             write (2030,108) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hls_d(j),         &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops, hpw_d(j)%percn       !! losses day
+             if (pco%csvout == "y") then
+@@ -89,6 +97,8 @@
+           end if
+           if (pco%pw_hru%d == "y") then
+             hpw_d(j)%bm_max = hpw_d(j)%bioms
++            call ls_push (hpw_d(j))  !ls_dump_output
++            call ls_flush (2040, j)  !ls_dump_output
+             write (2040,101) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hpw_d(j),                  & 
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops  !! plant weather day 
+               if (pco%csvout == "y") then 
+@@ -119,6 +129,8 @@
+            hwb_m(j)%sno_final = hwb_d(j)%sno_final
+            
+            if (pco%wb_hru%m == "y") then
++             call ls_push (hwb_m(j))  !ls_dump_output
++             call ls_flush (2001, j)  !ls_dump_output
+              write (2001,100) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hwb_m(j),        &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops           !! water bal mon
+                if (pco%csvout == "y") then
+@@ -128,6 +140,8 @@
+            end if
+            
+            if (pco%nb_hru%m == "y") then
++             call ls_push (hnb_m(j))  !ls_dump_output
++             call ls_flush (2021, j)  !ls_dump_output
+              write (2021,104) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hnb_m(j),        &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops           !! nutrient bal mon
+              if (pco%csvout == "y") then
+@@ -137,6 +151,9 @@
+            end if
+            
+            if (pco%ls_hru%m == "y") then
++             call ls_push (hls_m(j))  !ls_dump_output
++             call ls_push (hpw_m(j)%percn)  !ls_dump_output
++             call ls_flush (2031, j)  !ls_dump_output
+              write (2031,108) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hls_m(j),        &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops, hpw_m(j)%percn            !! losses mon
+              if (pco%csvout == "y") then 
+@@ -148,6 +165,8 @@
+            if (pco%pw_hru%m == "y") then
+              hpw_m(j)%nplnt = pl_mass(j)%tot_com%n
+              hpw_m(j)%pplnt = pl_mass(j)%tot_com%p
++             call ls_push (hpw_m(j))  !ls_dump_output
++             call ls_flush (2041, j)  !ls_dump_output
+              write (2041,101) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hpw_m(j),         &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops  !! plant weather mon
+                if (pco%csvout == "y") then 
+@@ -190,6 +209,8 @@
+              hru(j)%irr = 1
+            end if
+           if (pco%wb_hru%y == "y") then
++             call ls_push (hwb_y(j))  !ls_dump_output
++             call ls_flush (2002, j)  !ls_dump_output
+              write (2002,100) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hwb_y(j),          &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops           !! water balance yr
+                if (pco%csvout == "y") then
+@@ -199,6 +220,8 @@
+           end if
+           
+            if (pco%nb_hru%y == "y") then
++             call ls_push (hnb_y(j))  !ls_dump_output
++             call ls_flush (2022, j)  !ls_dump_output
+              write (2022,104) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hnb_y(j),          &
+                                                                                 lum(ilu)%plant_cov, lum(ilu)%mgt_ops     !! nutrient balance yr
+              if (pco%csvout == "y") then
+@@ -208,6 +231,9 @@
+            end if
+            
+            if (pco%ls_hru%y == "y") then
++             call ls_push (hls_y(j))  !ls_dump_output
++             call ls_push (hpw_y(j)%percn)  !ls_dump_output
++             call ls_flush (2032, j)  !ls_dump_output
+              write (2032,108) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hls_y(j),          &
+                                                                            lum(ilu)%plant_cov, lum(ilu)%mgt_ops, hpw_y(j)%percn            !! losses yr
+              if (pco%csvout == "y") then
+@@ -219,6 +245,8 @@
+            if (pco%pw_hru%y == "y") then
+              hpw_y(j)%nplnt = pl_mass(j)%tot_com%n
+              hpw_y(j)%pplnt = pl_mass(j)%tot_com%p
++             call ls_push (hpw_y(j))  !ls_dump_output
++             call ls_flush (2042, j)  !ls_dump_output
+              write (2042,101) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hpw_y(j),        &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops  !! plant weather yr             
+                if (pco%csvout == "y") then 
+@@ -242,6 +270,8 @@
+            hwb_a(j)%sno_init = sno_init
+            hwb_a(j)%sno_final = hwb_d(j)%sno_final
+            if (pco%wb_hru%a == "y") then
++             call ls_push (hwb_a(j))  !ls_dump_output
++             call ls_flush (2003, j)  !ls_dump_output
+              write (2003,100) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hwb_a(j),       &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops       !! water balance ann
+              if (pco%csvout == "y") then
+@@ -264,6 +294,8 @@
+         
+          if (time%end_sim == 1 .and. pco%nb_hru%a == "y") then 
+            hnb_a(j) = hnb_a(j) / time%yrs_prt
++           call ls_push (hnb_a(j))  !ls_dump_output
++           call ls_flush (2023, j)  !ls_dump_output
+            write (2023,104) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hnb_a(j),        &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops      !! nutrient bal ann
+            if (pco%csvout == "y") then 
+@@ -276,6 +308,9 @@
+          if (time%end_sim == 1 .and. pco%ls_hru%a == "y") then
+            hls_a(j) = hls_a(j) / time%yrs_prt 
+            percn_aa = hpw_a(j)%percn / time%yrs_prt
++           call ls_push (hls_a(j))  !ls_dump_output
++           call ls_push (percn_aa)  !ls_dump_output
++           call ls_flush (2033, j)  !ls_dump_output
+            write (2033,107) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hls_a(j),        &
+                                                                           lum(ilu)%plant_cov, lum(ilu)%mgt_ops, percn_aa       !! losses ann
+              if (pco%csvout == "y") then 
+@@ -291,6 +326,8 @@
+            hpw_a(j)%nplnt = pl_mass(j)%tot_com%n
+            hpw_a(j)%pplnt = pl_mass(j)%tot_com%p
+            hpw_a(j)%bm_max = bm_max_a   ! Restore bm_max_a
++           call ls_push (hpw_a(j))  !ls_dump_output
++           call ls_flush (2043, j)  !ls_dump_output
+            write (2043,102) time%day, time%mo, time%day_mo, time%yrc, j, ob(iob)%gis_id, ob(iob)%name, hpw_a(j),           &
+                                                                         lum(ilu)%plant_cov, lum(ilu)%mgt_ops  !! plant weather ann
+              if (pco%csvout == "y") then 
 diff --git a/src/ls_dump_module.f90 b/src/ls_dump_module.f90
 new file mode 100644
-index 0000000..d3ec31b
+index 0000000..400fe14
 --- /dev/null
 +++ b/src/ls_dump_module.f90
-@@ -0,0 +1,104 @@
+@@ -0,0 +1,157 @@
 +      module ls_dump_module
 +!!    landschaft parity harness: binary daily dump of SWAT+ states.
 +!!    Active only when the environment variable SWAT_DUMP names a file.
@@ -119,7 +473,60 @@ index 0000000..d3ec31b
 +      implicit none
 +      integer :: ls_dump_unit = -1
 +      logical :: ls_dump_on = .false.
++      real, dimension(:), allocatable :: ls_buf
++      interface ls_push
++        module procedure ls_push_r, ls_push_wb, ls_push_nb, ls_push_ls, ls_push_pw, ls_push_aq, ls_push_hyd
++      end interface
 +      contains
++
++!!    printed outputs: push the values of a WRITE, then flush them as one record
++      subroutine ls_push_r (x)
++        real, intent(in) :: x
++        if (.not. allocated(ls_buf)) allocate (ls_buf(0))
++        ls_buf = [ls_buf, x]
++      end subroutine ls_push_r
++      subroutine ls_push_wb (x)
++        use output_landscape_module, only : output_waterbal
++        type (output_waterbal), intent(in) :: x
++        if (.not. allocated(ls_buf)) allocate (ls_buf(0))
++        ls_buf = [ls_buf, transfer(x, [0.])]
++      end subroutine ls_push_wb
++      subroutine ls_push_nb (x)
++        use output_landscape_module, only : output_nutbal
++        type (output_nutbal), intent(in) :: x
++        if (.not. allocated(ls_buf)) allocate (ls_buf(0))
++        ls_buf = [ls_buf, transfer(x, [0.])]
++      end subroutine ls_push_nb
++      subroutine ls_push_ls (x)
++        use output_landscape_module, only : output_losses
++        type (output_losses), intent(in) :: x
++        if (.not. allocated(ls_buf)) allocate (ls_buf(0))
++        ls_buf = [ls_buf, transfer(x, [0.])]
++      end subroutine ls_push_ls
++      subroutine ls_push_pw (x)
++        use output_landscape_module, only : output_plantweather
++        type (output_plantweather), intent(in) :: x
++        if (.not. allocated(ls_buf)) allocate (ls_buf(0))
++        ls_buf = [ls_buf, transfer(x, [0.])]
++      end subroutine ls_push_pw
++      subroutine ls_push_aq (x)
++        use aquifer_module, only : aquifer_dynamic
++        type (aquifer_dynamic), intent(in) :: x
++        if (.not. allocated(ls_buf)) allocate (ls_buf(0))
++        ls_buf = [ls_buf, transfer(x, [0.])]
++      end subroutine ls_push_aq
++      subroutine ls_push_hyd (x)
++        use hydrograph_module, only : hyd_output
++        type (hyd_output), intent(in) :: x
++        if (.not. allocated(ls_buf)) allocate (ls_buf(0))
++        ls_buf = [ls_buf, transfer(x, [0.])]
++      end subroutine ls_push_hyd
++      subroutine ls_flush (tag, id)
++        integer, intent(in) :: tag, id
++        if (.not. allocated(ls_buf)) allocate (ls_buf(0))
++        call ls_dump (tag, id, ls_buf)
++        deallocate (ls_buf)
++      end subroutine ls_flush
 +
 +      subroutine ls_dump_open
 +        character(len=1024) :: path
@@ -235,6 +642,80 @@ index 8fe25aa..887a67f 100644
        call proc_bsn   
        call proc_date_time
        call proc_db
+diff --git a/src/sd_channel_output.f90 b/src/sd_channel_output.f90
+index a010506..0b247df 100644
+--- a/src/sd_channel_output.f90
++++ b/src/sd_channel_output.f90
+@@ -1,4 +1,5 @@
+       subroutine sd_channel_output (ichan)
++      use ls_dump_module, only : ls_push, ls_flush
+     
+       use sd_channel_module
+       use basin_module
+@@ -30,6 +31,15 @@
+ !!!!! daily print
+        if (pco%day_print == "y" .and. pco%int_day_cur == pco%int_day) then
+         if (pco%sd_chan%d == "y") then
++          call ls_push (ch_wat_d(ichan)%area_ha)  !ls_dump_output
++          call ls_push (ch_wat_d(ichan)%precip)  !ls_dump_output
++          call ls_push (ch_wat_d(ichan)%evap)  !ls_dump_output
++          call ls_push (ch_wat_d(ichan)%seep)  !ls_dump_output
++          call ls_push (ch_stor(ichan))  !ls_dump_output
++          call ls_push (ch_in_d(ichan))  !ls_dump_output
++          call ls_push (ch_out_d(ichan))  !ls_dump_output
++          call ls_push (wtemp)  !ls_dump_output
++          call ls_flush (2500, ichan)  !ls_dump_output
+           write (2500,100) time%day, time%mo, time%day_mo, time%yrc, ichan, ob(iob)%gis_id, ob(iob)%name,       &
+             ch_wat_d(ichan)%area_ha, ch_wat_d(ichan)%precip, ch_wat_d(ichan)%evap, ch_wat_d(ichan)%seep,        &                
+             ch_stor(ichan), ch_in_d(ichan), ch_out_d(ichan), wtemp
+@@ -55,6 +65,15 @@
+           ch_wat_m(ichan) = ch_wat_m(ichan) // const            !! // only divides area (daily average values)
+           
+           if (pco%sd_chan%m == "y") then
++          call ls_push (ch_wat_m(ichan)%area_ha)  !ls_dump_output
++          call ls_push (ch_wat_m(ichan)%precip)  !ls_dump_output
++          call ls_push (ch_wat_m(ichan)%evap)  !ls_dump_output
++          call ls_push (ch_wat_m(ichan)%seep)  !ls_dump_output
++          call ls_push (ch_stor(ichan))  !ls_dump_output
++          call ls_push (ch_in_m(ichan))  !ls_dump_output
++          call ls_push (ch_out_m(ichan))  !ls_dump_output
++          call ls_push (wtemp)  !ls_dump_output
++          call ls_flush (2501, ichan)  !ls_dump_output
+           write (2501,100) time%day, time%mo, time%day_mo, time%yrc, ichan, ob(iob)%gis_id, ob(iob)%name,  &
+             ch_wat_m(ichan)%area_ha, ch_wat_m(ichan)%precip, ch_wat_m(ichan)%evap, ch_wat_m(ichan)%seep,   &
+             ch_stor(ichan), ch_in_m(ichan), ch_out_m(ichan), wtemp
+@@ -85,6 +104,15 @@
+         ch_wat_y(ichan) = ch_wat_y(ichan) // const      !! // only divides area (daily average values)
+           
+         if (pco%sd_chan%y == "y") then 
++          call ls_push (ch_wat_y(ichan)%area_ha)  !ls_dump_output
++          call ls_push (ch_wat_y(ichan)%precip)  !ls_dump_output
++          call ls_push (ch_wat_y(ichan)%evap)  !ls_dump_output
++          call ls_push (ch_wat_y(ichan)%seep)  !ls_dump_output
++          call ls_push (ch_stor(ichan))  !ls_dump_output
++          call ls_push (ch_in_y(ichan))  !ls_dump_output
++          call ls_push (ch_out_y(ichan))  !ls_dump_output
++          call ls_push (wtemp)  !ls_dump_output
++          call ls_flush (2502, ichan)  !ls_dump_output
+           write (2502,100) time%day, time%mo, time%day_mo, time%yrc, ichan, ob(iob)%gis_id, ob(iob)%name,   &
+             ch_wat_y(ichan)%area_ha, ch_wat_y(ichan)%precip, ch_wat_y(ichan)%evap, ch_wat_y(ichan)%seep,    &
+             ch_stor(ichan), ch_in_y(ichan), ch_out_y(ichan), wtemp
+@@ -105,6 +133,15 @@
+         ch_wat_a(ichan) = ch_wat_a(ichan) // time%yrs_prt       !! all averaged variables divided by years
+         
+         if (pco%sd_chan%a == "y") then
++        call ls_push (ch_wat_a(ichan)%area_ha)  !ls_dump_output
++        call ls_push (ch_wat_a(ichan)%precip)  !ls_dump_output
++        call ls_push (ch_wat_a(ichan)%evap)  !ls_dump_output
++        call ls_push (ch_wat_a(ichan)%seep)  !ls_dump_output
++        call ls_push (ch_stor(ichan))  !ls_dump_output
++        call ls_push (ch_in_a(ichan))  !ls_dump_output
++        call ls_push (ch_out_a(ichan))  !ls_dump_output
++        call ls_push (wtemp)  !ls_dump_output
++        call ls_flush (2503, ichan)  !ls_dump_output
+         write (2503,100) time%day, time%mo, time%day_mo, time%yrc, ichan, ob(iob)%gis_id, ob(iob)%name,  &
+           ch_wat_a(ichan)%area_ha, ch_wat_a(ichan)%precip, ch_wat_a(ichan)%evap, ch_wat_a(ichan)%seep,   &
+           ch_stor(ichan), ch_in_a(ichan), ch_out_a(ichan), wtemp
 diff --git a/src/search.f90 b/src/search.f90
 index 3e181d6..86f4f0d 100644
 --- a/src/search.f90

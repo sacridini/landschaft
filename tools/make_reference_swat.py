@@ -102,7 +102,7 @@ def trim_climate(files: dict[str, bytes], start: int, end: int) -> None:
         files[name] = ("\n".join(head + keep) + "\n").encode()
 
 
-def hubbard_brook(start: int, end: int, codes: dict | None = None):
+def hubbard_brook(start: int, end: int, codes: dict | None = None, nyskip: int = 0):
     def make() -> dict[str, bytes]:
         files = read_inputs(DATA / "SWATPlus-datasets" / "SWAT+_model_examples" / "example1")
         # written for rev 60.5.7: the basin line of file.cio needs the carbon file of 62
@@ -113,6 +113,7 @@ def hubbard_brook(start: int, end: int, codes: dict | None = None):
         trim_climate(files, start, end)
         for column, value in (codes or {}).items():
             set_code(files, column, value)
+        set_print(files, nyskip)
         return files
 
     return make
@@ -127,19 +128,39 @@ def set_code(files: dict[str, bytes], column: str, value: str) -> None:
     files["codes.bsn"] = "\n".join(lines).encode()
 
 
+# printed outputs compared with the port: daily, monthly, yearly and average annual
+PRINTS = {name: "y y y y" for name in ("basin_wb", "basin_nb", "basin_ls", "basin_pw", "hru_wb", "hru_nb", "hru_ls",
+                                        "hru_pw", "channel_sd", "aquifer")}
+
+
+def set_print(files: dict[str, bytes], nyskip: int, prints: dict[str, str] = PRINTS) -> None:
+    """Years skipped before printing (print.prt nyskip) and the printed tables (the
+    daily, monthly, yearly and average annual flags of print.prt's objects)."""
+    lines = files["print.prt"].decode().split("\n")
+    vals = lines[2].split()
+    vals[0] = str(nyskip)
+    lines[2] = " ".join(f"{v:<10}" for v in vals)
+    for k, ln in enumerate(lines):
+        p = ln.split()
+        if len(p) == 5 and p[0] in prints:
+            lines[k] = f"{p[0]:<24}" + "".join(f"{f:>14}" for f in prints[p[0]].split())
+    files["print.prt"] = "\n".join(lines).encode()
+
+
 def ames(start: int, end: int):
     def make() -> dict[str, bytes]:
         files = read_inputs(DATA / "swatplus" / "refdata" / "Ames_sub1")
         set_code(files, "carbon", "0")  # the static carbon of the port, not CENTURY
         set_period(files, start, end)
         trim_climate(files, start, end)
+        set_print(files, 0)
         return files
 
     return make
 
 
 CASES = {
-    "hubbard_brook": hubbard_brook(2000, 2002),
+    "hubbard_brook": hubbard_brook(2000, 2002, nyskip=1),
     # the Muskingum routing of the channels
     "hubbard_brook_musk": hubbard_brook(2000, 2001, {"rte_cha": "1"}),
     "ames": ames(1975, 1979),

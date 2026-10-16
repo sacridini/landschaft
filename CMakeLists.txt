@@ -184,6 +184,7 @@ add_library(swatcore STATIC
     src/cpp/swat/hru_daily.cpp
     src/cpp/swat/hru_init.cpp
     src/cpp/swat/mgt.cpp
+    src/cpp/swat/output.cpp
     src/cpp/swat/read_basin.cpp
     src/cpp/swat/read_db.cpp
     src/cpp/swat/time_control.cpp

@@ -20,9 +20,6 @@ REF = Path(__file__).parent / "data" / "reference" / "swat"
 # irrigation) and a decision table for automatic irrigation; no routing objects
 CASES = ["hubbard_brook", "hubbard_brook_musk", "ames"]
 
-# Fields written only by the reference's hru_output (the printed outputs, not ported
-# yet): hwb_d sw_init, sno_init and sno_final; hpw_d bm_max.
-OUTPUT_ONLY = {10: [13, 17, 18], 13: [22]}
 
 
 def _files(case: str) -> dict:
@@ -47,11 +44,24 @@ def test_simulation_matches_swatplus(simulated, tag):
     keys, vals = ours["dump"][tag]
     rkeys, rvals = ref[f"t{tag}_keys"], ref[f"t{tag}_vals"]
     np.testing.assert_array_equal(keys, rkeys, err_msg=f"tag {tag}: (year, day, object)")
-    vals = vals[:, : rvals.shape[1]].copy()
-    rvals = rvals.copy()
-    for c in OUTPUT_ONLY.get(tag, []):
-        vals[:, c] = rvals[:, c] = 0.0
+    vals = vals[:, : rvals.shape[1]]
     assert_swat_close(vals, rvals, err_msg=f"tag {tag}")
+
+
+# what SWAT+ prints (print.prt), tag = its Fortran unit: HRU water, nutrient, losses and
+# plant tables (2000-2043), the basin's (2050-2083), SWAT-DEG channels (2500-2503) and
+# aquifers (2520-2523); the last digit is the step (day, month, year, average annual)
+PRINTS = [u + k for u in (2000, 2020, 2030, 2040, 2050, 2060, 2070, 2080, 2500, 2520) for k in range(4)]
+
+
+@pytest.mark.parametrize("tag", PRINTS)
+def test_printed_outputs_match_swatplus(simulated, tag):
+    case, ours, ref = simulated
+    if f"t{tag}_keys" not in ref.files:
+        pytest.skip(f"{case} does not print table {tag}")
+    keys, vals = ours["prints"][tag]
+    np.testing.assert_array_equal(keys, ref[f"t{tag}_keys"], err_msg=f"print {tag}: (year, day, object)")
+    assert_swat_close(vals, ref[f"t{tag}_vals"], err_msg=f"print {tag}")
 
 
 def test_hrus_make_runoff_and_grow(simulated):

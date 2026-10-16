@@ -83,6 +83,7 @@ void register_python(py::module_& m) {
             }
             py::dict out;
             out["dump"] = dumps_to_python(s.dumps);
+            out["prints"] = dumps_to_python(s.prints);
             out["warnings"] = s.warnings;
             std::vector<std::string> stations;
             for (int i = 1; i <= s.db_mx.wst; ++i) stations.push_back(s.wst(i).name);

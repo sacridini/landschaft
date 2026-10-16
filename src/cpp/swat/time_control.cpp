@@ -117,6 +117,12 @@ void time_control(Sim& s) {
             t.yrs_prt = static_cast<float>(t.nbyr);
         }
 
+        // initial soil water and snow of the printed balances
+        if (s.pco.sw_init == "n" && t.yrs > s.pco.nyskip) {
+            basin_sw_init(s);
+            s.pco.sw_init = "y";
+        }
+
         for (int julian_day = t.day_start; julian_day <= t.day_end_yr; ++julian_day) {
             t.day = julian_day;
             xmon(s, t.day, mo, day_mo);
@@ -132,6 +138,19 @@ void time_control(Sim& s) {
                 if (t.yrs == t.nbyr) {
                     t.end_sim = 1;
                     t.yrs_prt = t.yrs_prt / (365.0f + static_cast<float>(t.num_leap / t.nbyr));
+                }
+            }
+            // the interval of daily printing
+            basin_print_codes& pco = s.pco;
+            if (pco.day_print_over == "n") {
+                if (pco.day_print == "n") {
+                    if (t.day >= pco.day_start && t.yrc >= pco.yrc_start) pco.day_print = "y";
+                } else if (t.day > pco.day_end && t.yrc == pco.yrc_end) {
+                    pco.day_print = "n";
+                    pco.day_print_over = "y";
+                } else {
+                    pco.int_day_cur = pco.int_day_cur + 1;
+                    if (pco.int_day_cur > pco.int_day) pco.int_day_cur = 1;
                 }
             }
             if (s.sp_ob.hru > 0) sim_initday(s);
@@ -156,8 +175,23 @@ void time_control(Sim& s) {
                     if (s.ob(s.sp_ob1.hru + ihru - 1).lat < 0.0f) reset_year_hru(s, ihru);
             }
         }
-        // end of the year
+        // end of the year: the yearly balances zeroed after use, then the HRUs
+        for (int ich = 1; ich <= s.sp_ob.chandeg; ++ich) {
+            s.chsd_y(ich) = s.chsdz;
+            s.ch_stor_y(ich) = s.chaz;
+            s.ch_in_y(ich) = s.chaz;
+            s.ch_out_y(ich) = s.chaz;
+            s.ch_wat_y(ich) = s.wbodz;
+        }
         for (int j = 1; j <= s.sp_ob.hru; ++j) {
+            const float sw_init = s.hwb_y(j).sw_final;
+            const float sno_init = s.hwb_y(j).sno_final;
+            s.hwb_y(j) = s.hwbz;
+            s.hwb_y(j).sw_init = sw_init;
+            s.hwb_y(j).sno_init = sno_init;
+            s.hnb_y(j) = s.hnbz;
+            s.hpw_y(j) = s.hpwz;
+            s.hls_y(j) = s.hlsz;
             if (s.bsn_cc.cswat == 0 && s.hru(j).hyd.biomix > 1.e-6f) mgt_newtillmix_cswat0(s, j, s.hru(j).hyd.biomix, 0);
             plant_community& pc = s.pcom(j);
             for (int ipl = 1; ipl <= pc.npl; ++ipl) {
@@ -183,12 +217,14 @@ void run(Sim& s, const RunOptions& opt) {
     // main.f90's order around the HRU set-up
     cli_lapse(s);
     om_water_init(s);
+    lsu_read_elements(s);
     proc_hru(s);
     proc_cha(s);  // calls time_conc_init
     proc_aqu(s);
     dtbl_lum_read(s);
     proc_cond(s);
     hru_dtbl_actions_init(s);
+    output_allo(s);
     if (s.bsn_cc.cswat != 0) throw std::runtime_error("SWAT+ carbon models other than the static one (carbon = 0) are not supported");
     proc_cal(s);
     for (s.ihru = 1; s.ihru <= s.sp_ob.hru; ++s.ihru) soil_nutcarb_init(s);

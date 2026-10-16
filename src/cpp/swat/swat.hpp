@@ -66,6 +66,12 @@ void hru_dtbl_actions_init(Sim& s);
 void mgt_operatn(Sim& s);
 void hru_dtbl_control(Sim& s);
 
+// outputs (output.cpp)
+void lsu_read_elements(Sim& s);
+void output_allo(Sim& s);
+void basin_sw_init(Sim& s);
+void output_control(Sim& s);
+
 // time
 void time_control(Sim& s);
 void xmon(const Sim& s, int jd, int& mo, int& day_mo);

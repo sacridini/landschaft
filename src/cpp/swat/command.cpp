@@ -295,6 +295,7 @@ void command(Sim& s) {
         if (s.dump) s.dump_record(40, s.icmd, to_floats(o.hd.data(), o.hd.size()));
         s.icmd = o.cmd_next;
     }
+    output_control(s);
 }
 
 }  // namespace swat

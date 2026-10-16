@@ -98,6 +98,11 @@ struct Sim : input_file_module,
     // daily dump
     bool dump = false;
     std::vector<DumpRecord> dumps;
+    // what SWAT+ prints (print.prt), always kept: tag = the reference's Fortran unit
+    std::vector<DumpRecord> prints;
+    void print_record(int tag, int id, std::vector<float> v) {
+        prints.push_back({tag, time.yrc, time.day, id, std::move(v)});
+    }
     void dump_record(int tag, int id, std::vector<float> v) {
         if (dump) dumps.push_back({tag, time.yrc, time.day, id, std::move(v)});
     }

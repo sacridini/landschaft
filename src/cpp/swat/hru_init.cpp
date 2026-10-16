@@ -1318,12 +1318,12 @@ void proc_hru(Sim& s) {
         hru_lum_init(s, iihru);
     }
     topohyd_init(s);
-    // hru_output_allo (the daily records; the monthly, yearly and average ones are not kept)
+    // hru_output_allo
     const int mhru = s.sp_ob.hru;
-    s.hwb_d.alloc(1, mhru, output_waterbal());
-    s.hnb_d.alloc(1, mhru, output_nutbal());
-    s.hls_d.alloc(1, mhru, output_losses());
-    s.hpw_d.alloc(1, mhru, output_plantweather());
+    for (Vec<output_waterbal>* v : {&s.hwb_d, &s.hwb_m, &s.hwb_y, &s.hwb_a}) v->alloc(1, mhru, output_waterbal());
+    for (Vec<output_nutbal>* v : {&s.hnb_d, &s.hnb_m, &s.hnb_y, &s.hnb_a}) v->alloc(1, mhru, output_nutbal());
+    for (Vec<output_losses>* v : {&s.hls_d, &s.hls_m, &s.hls_y, &s.hls_a}) v->alloc(1, mhru, output_losses());
+    for (Vec<output_plantweather>* v : {&s.hpw_d, &s.hpw_m, &s.hpw_y, &s.hpw_a}) v->alloc(1, mhru, output_plantweather());
     s.hsc_d.alloc(1, mhru, s.hscz);
     s.hrc_d.alloc(1, mhru, s.hrcz);
     s.hpc_d.alloc(1, mhru, s.hpcz);
