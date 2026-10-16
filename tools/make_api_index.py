@@ -29,6 +29,10 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
           "Omniscape and Circuitscape: current, resistance distance, networks."),
          ("surface.md", "Surface metrics", ":material-terrain:",
           "Texture of continuous rasters (ISO 25178): roughness, shape, trend surfaces."),
+         ("hydro.md", "Terrain hydrology", ":material-waves:",
+          "Filling, flow directions and accumulation, streams, watersheds, HAND, wetness indices."),
+         ("swat.md", "Watershed model (SWAT+)", ":material-water-outline:",
+          "SWAT+ projects from TxtInOut folders or rasters, daily water, sediment and nutrients, results on maps."),
          ("cost.md", "Grid distances", ":material-routes:",
           "Transitions, cost surfaces, least-cost and random-walk distances and paths."),
          ("distance.md", "Distance & restoration", ":material-map-marker-distance:",
@@ -118,6 +122,10 @@ def prefix(ident: str) -> str:
         return "ls.surface."
     if ".uncertainty." in ident:
         return "ls.uncertainty."
+    if ".hydro.swat." in ident:
+        return "ls.hydro.swat."
+    if ".hydro." in ident:
+        return "ls.hydro."
     if ".circuit." in ident and name != "omniscape":
         return "circuit."
     return "ls."

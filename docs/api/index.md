@@ -66,6 +66,18 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Texture of continuous rasters (ISO 25178): roughness, shape, trend surfaces.
 
+-   :material-waves:{ .lg .middle } **[Terrain hydrology](hydro.md)**
+
+    ---
+
+    Filling, flow directions and accumulation, streams, watersheds, HAND, wetness indices.
+
+-   :material-water-outline:{ .lg .middle } **[Watershed model (SWAT+)](swat.md)**
+
+    ---
+
+    SWAT+ projects from TxtInOut folders or rasters, daily water, sediment and nutrients, results on maps.
+
 -   :material-routes:{ .lg .middle } **[Grid distances](cost.md)**
 
     ---
@@ -355,6 +367,45 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.surface.best_fit_plane`](surface.md#landschaft.surface.best_fit_plane) | The polynomial surface of order 0 to 3 that fits a surface best |
 | [`ls.surface.remove_plane`](surface.md#landschaft.surface.remove_plane) | A surface minus its best-fitting polynomial surface (geodiv's ``remove_plane``) |
 | [`ls.surface.example_data`](surface.md#landschaft.surface.example_data) | Path of an example surface |
+
+### Terrain hydrology
+
+| Name | Summary |
+|---|---|
+| [`ls.hydro.fill`](hydro.md#landschaft.hydro.fill) | Fill the depressions of a DEM, so that water can flow from every cell to the edge |
+| [`ls.hydro.breach`](hydro.md#landschaft.hydro.breach) | Remove the depressions of a DEM by cutting channels through their rims |
+| [`ls.hydro.flow_direction`](hydro.md#landschaft.hydro.flow_direction) | The direction each cell drains to |
+| [`ls.hydro.flow_accumulation`](hydro.md#landschaft.hydro.flow_accumulation) | The area that drains through each cell (the cell itself included) |
+| [`ls.hydro.streams`](hydro.md#landschaft.hydro.streams) | The stream cells: those whose flow accumulation is at least ``threshold`` |
+| [`ls.hydro.distance_to_channel`](hydro.md#landschaft.hydro.distance_to_channel) | The mean distance water travels from each cell to a stream, along pygeoprocessing's multiple flow directions (as InVEST's sediment delivery model measures its downslope component) |
+| [`ls.hydro.stream_links`](hydro.md#landschaft.hydro.stream_links) | The links of a stream network: the stretches between sources, junctions and outlets |
+| [`ls.hydro.watersheds`](hydro.md#landschaft.hydro.watersheds) | The area draining to each seed: every cell labelled with the first seed below it |
+| [`ls.hydro.snap_outlets`](hydro.md#landschaft.hydro.snap_outlets) | The stream cell each outlet point stands for |
+| [`ls.hydro.hand`](hydro.md#landschaft.hydro.hand) | Height Above the Nearest Drainage (HAND; Rennó et al. 2008, Nobre et al. 2011) |
+| [`ls.hydro.twi`](hydro.md#landschaft.hydro.twi) | Topographic wetness index: ln(a / tan(slope)) (Beven & Kirkby 1979) |
+| [`ls.hydro.spi`](hydro.md#landschaft.hydro.spi) | Stream power index: a · tan(slope) (Moore, Grayson & Ladson 1991), the erosive power of overland flow |
+| [`ls.hydro.sti`](hydro.md#landschaft.hydro.sti) | Sediment transport index, the LS factor of the USLE from the contributing area (Moore & Burch 1986): (m + 1) (a / 22.13)^m (sin(slope) / 0.0896)^n |
+| [`ls.hydro.connectivity_index`](hydro.md#landschaft.hydro.connectivity_index) | The index of connectivity of Borselli et al. (2008), as InVEST's SDR model computes it |
+
+### Watershed model (SWAT+)
+
+| Name | Summary |
+|---|---|
+| [`ls.hydro.swat.load_txtinout`](swat.md#landschaft.hydro.swat.load_txtinout) | Read a SWAT+ TxtInOut folder, or a zip file of one (the outputs of earlier runs in it are left out) |
+| [`ls.hydro.swat.SwatProject`](swat.md#landschaft.hydro.swat.SwatProject) | The input files of a SWAT+ model (the TxtInOut folder), by name |
+| [`ls.hydro.swat.run`](swat.md#landschaft.hydro.swat.run) | Simulate a SWAT+ project, as SWAT+ 62.0.1 does |
+| [`ls.hydro.swat.SwatResult`](swat.md#landschaft.hydro.swat.SwatResult) | What `run` simulated |
+| [`ls.hydro.swat.watershed`](swat.md#landschaft.hydro.swat.watershed) | Divide a watershed into subbasins, channels and HRUs, as QSWAT+ does |
+| [`ls.hydro.swat.SwatWatershed`](swat.md#landschaft.hydro.swat.SwatWatershed) | A watershed divided as QSWAT+ divides it, ready for the SWAT+ Editor's import |
+| [`ls.hydro.swat.from_tables`](swat.md#landschaft.hydro.swat.from_tables) | A SWAT+ project from QSWAT+'s tables and the weather, as the SWAT+ Editor makes it |
+| [`ls.hydro.swat.from_rasters`](swat.md#landschaft.hydro.swat.from_rasters) | A SWAT+ project from a DEM, land use and soil maps, tables and the weather |
+| [`ls.hydro.swat.load_qswat_project`](swat.md#landschaft.hydro.swat.load_qswat_project) | The tables of a QSWAT+ project database, for `from_tables` |
+| [`ls.hydro.swat.climate`](swat.md#landschaft.hydro.swat.climate) | The weather of a SWAT+ project from tables |
+| [`ls.hydro.swat.SwatClimate`](swat.md#landschaft.hydro.swat.SwatClimate) | The weather of a SWAT+ project (made by `climate`) |
+| [`ls.hydro.swat.wgn_from_series`](swat.md#landschaft.hydro.swat.wgn_from_series) | SWAT's weather generator statistics (WXGEN) of each station, from daily series |
+| [`ls.hydro.swat.hru_map`](swat.md#landschaft.hydro.swat.hru_map) | An HRU result on the map: each cell takes the value of its HRU |
+| [`ls.hydro.swat.channel_map`](swat.md#landschaft.hydro.swat.channel_map) | A channel result on the stream cells (by default the mean discharge, m3/s) |
+| [`ls.hydro.swat.reach_discharge`](swat.md#landschaft.hydro.swat.reach_discharge) | The daily discharge leaving each channel (m3/s, ``channel_sd``'s ``flo_out``): dates x channel number. ``result``: a run that printed ``channel_sd`` by day |
 
 ### Grid distances
 
