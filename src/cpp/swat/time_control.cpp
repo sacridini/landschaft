@@ -186,6 +186,9 @@ void run(Sim& s, const RunOptions& opt) {
     proc_hru(s);
     proc_cha(s);  // calls time_conc_init
     proc_aqu(s);
+    dtbl_lum_read(s);
+    proc_cond(s);
+    hru_dtbl_actions_init(s);
     if (s.bsn_cc.cswat != 0) throw std::runtime_error("SWAT+ carbon models other than the static one (carbon = 0) are not supported");
     proc_cal(s);
     for (s.ihru = 1; s.ihru <= s.sp_ob.hru; ++s.ihru) soil_nutcarb_init(s);

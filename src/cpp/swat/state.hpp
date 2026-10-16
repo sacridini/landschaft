@@ -37,6 +37,9 @@ struct SavedLocals {
     float nut_psed_fr_orgp = 0.0f;
     float nut_psed_fr_actmin = 0.0f;
     float nut_psed_fr_stamin = 0.0f;
+    int mgt_sched_icom = 0;
+    int conditions_ipl = 0;
+    float conditions_targ = 0.0f;
 };
 
 struct Sim : input_file_module,

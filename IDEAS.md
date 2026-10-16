@@ -4126,9 +4126,14 @@ ou pela ET das plantas, `event` 0):
   `hru_hyds`), `mgt.cpp` (`mgt_newtillmix_cswat0`: a mistura biológica de fim de ano). Simulação inteira do Hubbard
   Brook (HRUs reais alimentando o roteamento, 3 anos, e o caso Muskingum) **bit a bit** em todos os campos dos
   balanços diários dos HRUs (tags 10-13), hidrogramas, aquíferos e canal; fora `sw_init`, `sno_init`, `sno_final` e
-  `bm_max`, que só o `hru_output` (saídas impressas, fase 8) escreve. Recusados com erro claro: operações de manejo
-  e tabelas de decisão (próximo passo, para o Ames), entradas nos HRUs (run-on, lateral, aquífero), Green-Ampt,
-  fósforo de Vadas-White, carbono não estático. Testes `tests/test_hydro_swat_hru.py`.
+  `bm_max`, que só o `hru_output` (saídas impressas, fase 8) escreve. Manejo (`mgt.cpp`): `mgt_operatn`/`mgt_sched`
+  com plantio, colheita de grão e de resíduo, morte, colheita+morte, preparo, irrigação manual, adubação mineral e
+  `skip`; tabelas de decisão do uso do solo (`dtbl_lum_read`, `proc_cond`, `hru_dtbl_actions_init`, `conditions`
+  com as condições de HRU, `actions` com a irrigação de fonte ilimitada). Ames (12 HRUs, 1975-1979, manejo agendado
+  e irrigação automática por tabela de decisão: 264 dias irrigados) **bit a bit** nos mesmos campos. Recusados com
+  erro claro: colheita de biomassa/tubérculo, transplante, esterco, pesticidas, pastejo, queima, outras ações e
+  condições das tabelas, entradas nos HRUs (run-on, lateral, aquífero), Green-Ampt, fósforo de Vadas-White, carbono
+  não estático. Testes `tests/test_hydro_swat_hru.py`.
 - **Candidatos a erro nos HRUs, mantidos por ora (decidir com o usuário)**:
   1. `plant_init`: `sl_len` (de `cons_prac sl_len_mx`) calculado e não usado.
   2. `hydro_init`: `tsoil = (tmpmx(12) + tmpmx(12)) / 2` (dezembro duas vezes; o certo seria máxima e mínima).
@@ -4143,6 +4148,14 @@ ou pela ET das plantas, `event` 0):
   11. `nut_psed`: as frações ativa/estável do P mineral trocadas, e `man(1)%p` contado duas vezes.
   12. `pl_seed_gro` usa `ob(j)%wst` com `j` = número do HRU (não o do objeto).
   13. `mgt_newtillmix_cswat0`: a massa de cada camada usa a densidade da camada 1.
+  14. `pl_fert`: o P orgânico ativo recebe `hsta(l)%p + ...` (o estável) em vez de `hact(l)%p + ...`; o N e o P
+      orgânicos do adubo entram também em `tot(l)` e no resíduo da planta 1.
+  15. `hru%irr_yr` nunca é zerado (a linha do fim de ano está comentada): o limite "anual" de irrigação das tabelas
+      de decisão (`irr_year`) vale para a simulação inteira.
+  16. `hru_dtbl_actions_init` indexa o HRU pelo número do objeto (`sp_ob1%hru + i - 1`): errado quando os HRUs não
+      são os primeiros objetos do `object.cnt`.
+  17. `pl_tstr` à parte, `conditions` guarda `ipl` entre chamadas (SAVE): `phu_plant` sem plantas usa o `ipl` de
+      uma condição anterior.
 - **5 e 6 (roteamento) — Feitas no ramo do fork** (2026-10-16): `command.cpp` (laço de comandos, `ru_control`,
   `dr_ru`), `aquifer.cpp` (`proc_aqu`, `aqu_1d_control`), `channel.cpp` (`proc_cha`, curvas de descarga,
   `sd_channel_control3`, `sd_channel_sediment3`, `ch_rtmusk`, `ch_watqual4`, `ch_temp`), `hyd_ops.hpp` (os operadores

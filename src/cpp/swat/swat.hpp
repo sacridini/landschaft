@@ -60,6 +60,11 @@ void rcurv_interp_flo(Sim& s, int icha, float flo_rate);
 void hru_control(Sim& s);
 void sim_initday(Sim& s);
 void mgt_newtillmix_cswat0(Sim& s, int jj, float bmix, int idtill);
+void dtbl_lum_read(Sim& s);
+void proc_cond(Sim& s);
+void hru_dtbl_actions_init(Sim& s);
+void mgt_operatn(Sim& s);
+void hru_dtbl_control(Sim& s);
 
 // time
 void time_control(Sim& s);

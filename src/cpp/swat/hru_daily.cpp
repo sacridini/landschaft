@@ -1847,8 +1847,7 @@ void hru_control(Sim& s) {
     if (s.nd_30 > 30) s.nd_30 = 1;
     s.ht1 = s.hz;
     s.ht2 = s.hz;
-    if (s.sched(isched).num_autos > 0)
-        throw std::runtime_error("SWAT+ decision tables of management schedules are not supported yet");
+    hru_dtbl_control(s);
     pc.days_plant = pc.days_plant + 1;
     pc.days_harv = pc.days_harv + 1;
     pc.days_kill = pc.days_kill + 1;
@@ -1873,8 +1872,7 @@ void hru_control(Sim& s) {
         throw std::runtime_error("SWAT+ inflows to HRUs (run-on, lateral or aquifer) are not supported yet");
     et_pot(s);
     et_act(s);
-    if (s.yr_skip(j) == 0 && s.sched(isched).num_ops > 0)
-        throw std::runtime_error("SWAT+ management operations are not supported yet");
+    if (s.yr_skip(j) == 0) mgt_operatn(s);
     surface(s);
     s.sedyld(j) = s.sedyld(j) + s.ht2.sed;
     s.ht2 = s.hz;

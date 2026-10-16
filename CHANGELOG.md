@@ -18,6 +18,9 @@ in a new major version.
 - `ls.hydro.swat` HRUs: the land phase of each day (snow, canopy, soil temperature, PET, ET, curve number
   runoff, MUSLE, percolation and lateral flow, residue and nutrient cycling, plant growth, the lag storages and the
   HRU hydrographs), so the whole Hubbard Brook simulation, HRUs feeding the routing, is bit for bit with SWAT+.
+- `ls.hydro.swat` management: scheduled operations (plant, grain and residue harvest, kill, harvest and kill,
+  tillage, irrigation, mineral fertilizer, skip) and land use decision tables with HRU conditions and irrigation
+  actions, bit for bit with SWAT+ on the Ames example (scheduled corn and automatic irrigation).
 
 ## [1.49.0] - 2026-10-16
 
