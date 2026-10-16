@@ -229,4 +229,75 @@ void quality(const float* total, const std::int32_t* cls, const float* habitat, 
     }
 }
 
+template <typename T>
+void water_fraction(const std::int32_t* cls, const float* kc, const float* root, const float* veg, const T* eto,
+                    const T* precip, const T* soil, const T* pawc, double z, i64 n, float* fractp, int threads) {
+    const T zt = static_cast<T>(z), one = T(1), w0 = static_cast<T>(1.25), cap = T(5);
+#pragma omp parallel for num_threads(threads) schedule(static)
+    for (i64 i = 0; i < n; ++i) {
+        const std::int32_t c = cls[i];
+        const T p = precip[i], e = eto[i], s = soil[i], w = pawc[i];
+        // numpy.isclose(precip, 0): |precip| <= 1e-8
+        if (c < 0 || std::isnan(p) || std::isnan(e) || std::isnan(s) || std::isnan(w) ||
+            std::abs(static_cast<double>(p)) <= 1e-8) {
+            fractp[i] = kNaN;
+            continue;
+        }
+        const T k = static_cast<T>(kc[c]), r = static_cast<T>(root[c]);
+        const T pet = k * e;
+        const T phi = pet / p;
+        const T awc = (r < s ? r : s) * w;
+        T cw = ((awc / p) * zt) + w0;
+        if (cw > cap) cw = cap;
+        const T x = pet / p;
+        const T aet_p = (one + x) - std::pow(one + std::pow(x, cw), one / cw);
+        T result;
+        if (static_cast<T>(veg[c]) == one) {
+            result = phi < aet_p ? phi : aet_p;
+        } else {
+            T nonveg = pet;
+            if (p < pet) nonveg = p;
+            result = nonveg / p;
+        }
+        fractp[i] = static_cast<float>(result);
+    }
+}
+
+template <typename U>
+void water_yield(const float* fractp, const U* precip, i64 n, U* wyield, U* aet, int threads) {
+    const U nan = std::numeric_limits<U>::quiet_NaN();
+#pragma omp parallel for num_threads(threads) schedule(static)
+    for (i64 i = 0; i < n; ++i) {
+        const float f = fractp[i];
+        const U p = precip[i];
+        if (std::isnan(f) || std::isnan(p)) {
+            wyield[i] = nan;
+            aet[i] = nan;
+            continue;
+        }
+        wyield[i] = static_cast<U>(1.0f - f) * p;  // (1 - fractp) in float32, then times precip
+        aet[i] = static_cast<U>(f) * p;
+    }
+}
+
+template <typename V>
+void potential_et(const std::int32_t* cls, const float* kc, const V* eto, i64 n, V* pet, int threads) {
+    const V nan = std::numeric_limits<V>::quiet_NaN();
+#pragma omp parallel for num_threads(threads) schedule(static)
+    for (i64 i = 0; i < n; ++i) {
+        const std::int32_t c = cls[i];
+        const V e = eto[i];
+        pet[i] = (c < 0 || std::isnan(e)) ? nan : e * static_cast<V>(kc[c]);
+    }
+}
+
+template void water_fraction<float>(const std::int32_t*, const float*, const float*, const float*, const float*,
+                                    const float*, const float*, const float*, double, i64, float*, int);
+template void water_fraction<double>(const std::int32_t*, const float*, const float*, const float*, const double*,
+                                     const double*, const double*, const double*, double, i64, float*, int);
+template void water_yield<float>(const float*, const float*, i64, float*, float*, int);
+template void water_yield<double>(const float*, const double*, i64, double*, double*, int);
+template void potential_et<float>(const std::int32_t*, const float*, const float*, i64, float*, int);
+template void potential_et<double>(const std::int32_t*, const float*, const double*, i64, double*, int);
+
 }  // namespace serv

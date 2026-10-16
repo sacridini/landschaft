@@ -3778,6 +3778,30 @@ invest-ref`: o python da env chamado direto não acha as DLLs, "DLL load failed 
   do InVEST (volumes, médias por área); consumo por uso (demanda), escassez e a valoração hidrelétrica opcional
   (fração de calibração, eficiência, altura da queda, preço, anos de vida, taxa de desconto).
 
+**Fase 2 feita** (2026-10-16, mesmo ramo do worktree, sem versão; `ls.services.water_yield`, C++ em
+`src/cpp/serv/services.cpp`):
+* O `fractp_op` do InVEST célula a célula (Fu/Zhang, w limitado a 5, classes não vegetadas com min(Kc ET0, P),
+  células sem chuva fora do balanço como no InVEST: o `array_equals_nodata(precip, 0)` deles), com o tipo do
+  numpy: tudo em float32 se as entradas cabem em float32 (float32, int16...), em float64 se alguma é float64 ou
+  int32 (`pow`/`powf` da UCRT, os do numpy); fractp gravado em float32, rendimento `(1 - fractp)` em float32 vezes
+  P no tipo de P, AET e PET no tipo de P e de ET0 (`numpy.result_type`). **Bit a bit** nos quatro casos
+  (float32, int16, float64, com demanda, sub-bacias e valoração). Mistura de classes de tipo (só P em float64,
+  por exemplo) segue um tipo só: aí pode haver diferença no último bit de float32 (não testado).
+* Somas por bacia e sub-bacia pelo `ls.zonal_stats` (o rasterizador do GDAL, centros das células, como o
+  `gdal.Rasterize(allTouched=False)` do `pygeoprocessing.zonal_statistics`), em float64: o InVEST soma em float32
+  (o `feature_data.sum()` de um bloco float32 acumula num escalar float32) e grava 11 casas decimais, então as
+  médias, volumes e consumo concordam a 1,2e-7 (relativo). O volume é média x área do polígono / 1000, como lá.
+  Fica de fora o caso dos polígonos que não cobrem o centro de nenhuma célula (o InVEST usa então a caixa do
+  polígono).
+* Erros do InVEST (só a forma correta, testada contra os próprios campos do InVEST): (1) com taxa de desconto 0
+  o VPL hidrelétrico sai 0 (o `dsum` fica 0 quando a razão é 1): aqui `time_span` x valor anual; (2) `rsupply_mn`
+  subtrai o consumo em m3 por célula do rendimento em mm: aqui m3 por célula (rendimento em mm x área da célula
+  / 1000 menos o consumo médio). Também: o "Model Spec" diz `consum_mn` em m3/ha, mas o valor é por célula (o
+  landschaft documenta "por célula").
+* Desempenho (3000 x 3000, 4 bacias, demanda, 3 núcleos): 0,8 s contra 11,0 s do InVEST.
+* Fica para depois: o recorte dos mapas à caixa das bacias (o InVEST alinha as entradas à interseção com a caixa
+  do vetor; aqui os mapas cobrem a grade toda), entradas em grades diferentes (aqui na mesma grade).
+
 ### Fase 3 (conectividade sedimentar): `sdr`
 
 Acoplada ao condicionamento do MDE da seção "Hidrologia e forma do terreno" (Priority-Flood, fluxo múltiplo).

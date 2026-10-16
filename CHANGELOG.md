@@ -35,6 +35,12 @@ in a new major version.
   access from a raster or polygons, total degradation, quality h (1 - D^2.5 / (D^2.5 + k^2.5)), rarity against a
   base map). The maps are InVEST's float32 maps bit for bit (the exponential decay to 1 unit in the last place:
   numpy's float32 `exp`), checked against stored outputs of natcap.invest (`tools/make_reference_invest.py`).
+- `ls.services.water_yield` (InVEST's annual water yield): the Budyko curve in Fu and Zhang's form by cell (PET =
+  Kc ET0, w = Z AWC / P + 1.25 capped at 5, non-vegetated classes at min(Kc ET0, P)), water yield, actual and
+  potential evapotranspiration, demand, and per watershed and sub-watershed (`ls.zonal_stats`) the means, the yield
+  volume, consumption, realized supply and the hydropower energy and net present value. The maps are InVEST's bit
+  for bit in its float32 or float64 arithmetic (float32, int16 and float64 inputs checked); the watershed tables
+  agree to 1.2e-7 (InVEST adds the cells in float32). 3000 x 3000 cells: 0.8 s against 11 s.
 
 ### Fixed (against WhiteboxTools)
 - `fill` lets water out at the map's edge and at missing cells: WhiteboxTools' `FillDepressions` raises a
@@ -57,6 +63,10 @@ in a new major version.
   half the raster's perimeter from it, which a long enough maximum distance turns into degradation everywhere).
 - Habitat quality: a base map with threat maps gets its degradation and quality (InVEST 3.20.2 stops with
   `KeyError: 'deg_sum_b'`, an output it never registers).
+- Water yield: the hydropower value with a discount rate of 0 is the time span times the annual value (InVEST
+  gives 0: its geometric sum is left at 0 when the ratio is 1).
+- Water yield: `rsupply_mn`, the realized supply per cell, is in m3 per cell, the yield of a cell (mm over its
+  area) minus its demand (InVEST subtracts the demand in m3 per cell from the yield in mm).
 
 ## [1.47.0] - 2026-10-16
 

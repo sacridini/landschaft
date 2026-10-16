@@ -16,9 +16,15 @@ Typical use::
 
     hq = ls.services.habitat_quality(lulc, threats, sensitivity, threat_maps, half_saturation=0.05)
     hq.quality["current"]
+
+    wy = ls.services.water_yield(lulc, biophysical, rain, et0, soil_depth, pawc, seasonality=5,
+                                 watersheds=ls.load_vector("watersheds.gpkg"))
+    wy.watersheds                              # mean yield and volume per watershed
 """
 
 from ._carbon import Carbon, carbon, valuation_constant
 from ._habitat import HabitatQuality, habitat_quality
+from ._water import WaterYield, water_yield
 
-__all__ = ["Carbon", "HabitatQuality", "carbon", "habitat_quality", "valuation_constant"]
+__all__ = ["Carbon", "HabitatQuality", "WaterYield", "carbon", "habitat_quality", "valuation_constant",
+           "water_yield"]

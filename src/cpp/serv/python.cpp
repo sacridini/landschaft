@@ -30,7 +30,10 @@ void same_size(const py::array& a, const py::array& b, const char* what) {
 
 namespace serv {
 
+void register_water(py::module_& m);
+
 void register_python(py::module_& m) {
+    register_water(m);
     m.def("serv_classify", [](const I64& lulc, const U8& valid, const I64& codes, int threads) {
         same_size(lulc, valid, "the mask differs in size from the map");
         I32 out(lulc.request().shape);
@@ -107,6 +110,76 @@ void register_python(py::module_& m) {
         return out;
     }, py::arg("total"), py::arg("cls"), py::arg("habitat"), py::arg("ksq"), py::arg("threads"),
        "Habitat quality h (1 - d^2.5 / (d^2.5 + k^2.5)) by cell.");
+}
+
+namespace {
+
+template <typename T>
+using Arr = py::array_t<T, py::array::c_style | py::array::forcecast>;
+
+template <typename T>
+py::array water_fraction_t(const I32& cls, const F32& kc, const F32& root, const F32& veg, const py::array& eto_,
+                           const py::array& precip_, const py::array& soil_, const py::array& pawc_, double z,
+                           int threads) {
+    const auto eto = Arr<T>::ensure(eto_), precip = Arr<T>::ensure(precip_), soil = Arr<T>::ensure(soil_),
+               pawc = Arr<T>::ensure(pawc_);
+    for (const py::array* a : {static_cast<const py::array*>(&eto), static_cast<const py::array*>(&precip),
+                               static_cast<const py::array*>(&soil), static_cast<const py::array*>(&pawc)})
+        same_size(cls, *a, "the rasters differ in size from the land use map");
+    F32 out(cls.request().shape);
+    {
+        py::gil_scoped_release release;
+        water_fraction<T>(cls.data(), kc.data(), root.data(), veg.data(), eto.data(), precip.data(), soil.data(),
+                          pawc.data(), z, static_cast<i64>(cls.size()), out.mutable_data(), threads);
+    }
+    return out;
+}
+
+template <typename U>
+py::tuple water_yield_t(const F32& fractp, const py::array& precip_, int threads) {
+    const auto precip = Arr<U>::ensure(precip_);
+    same_size(fractp, precip, "the precipitation differs in size from the map");
+    Arr<U> wy(fractp.request().shape), aet(fractp.request().shape);
+    {
+        py::gil_scoped_release release;
+        water_yield<U>(fractp.data(), precip.data(), static_cast<i64>(fractp.size()), wy.mutable_data(),
+                       aet.mutable_data(), threads);
+    }
+    return py::make_tuple(wy, aet);
+}
+
+template <typename V>
+py::array potential_et_t(const I32& cls, const F32& kc, const py::array& eto_, int threads) {
+    const auto eto = Arr<V>::ensure(eto_);
+    same_size(cls, eto, "the reference evapotranspiration differs in size from the map");
+    Arr<V> out(cls.request().shape);
+    {
+        py::gil_scoped_release release;
+        potential_et<V>(cls.data(), kc.data(), eto.data(), static_cast<i64>(cls.size()), out.mutable_data(), threads);
+    }
+    return out;
+}
+
+}  // namespace
+
+void register_water(py::module_& m) {
+    m.def("serv_water_fraction", [](const I32& cls, const F32& kc, const F32& root, const F32& veg,
+                                    const py::array& eto, const py::array& precip, const py::array& soil,
+                                    const py::array& pawc, double z, bool wide, int threads) {
+        if (wide)
+            return water_fraction_t<double>(cls, kc, root, veg, eto, precip, soil, pawc, z, threads);
+        return water_fraction_t<float>(cls, kc, root, veg, eto, precip, soil, pawc, z, threads);
+    }, py::arg("cls"), py::arg("kc"), py::arg("root"), py::arg("veg"), py::arg("eto"), py::arg("precip"),
+       py::arg("soil"), py::arg("pawc"), py::arg("z"), py::arg("wide"), py::arg("threads"),
+       "AET / P by cell (InVEST's fractp, float32), computed in float64 if wide else float32.");
+    m.def("serv_water_yield", [](const F32& fractp, const py::array& precip, bool wide, int threads) {
+        return wide ? water_yield_t<double>(fractp, precip, threads) : water_yield_t<float>(fractp, precip, threads);
+    }, py::arg("fractp"), py::arg("precip"), py::arg("wide"), py::arg("threads"),
+       "Water yield and actual evapotranspiration by cell.");
+    m.def("serv_potential_et", [](const I32& cls, const F32& kc, const py::array& eto, bool wide, int threads) {
+        return wide ? potential_et_t<double>(cls, kc, eto, threads) : potential_et_t<float>(cls, kc, eto, threads);
+    }, py::arg("cls"), py::arg("kc"), py::arg("eto"), py::arg("wide"), py::arg("threads"),
+       "Potential evapotranspiration eto * kc by cell.");
 }
 
 }  // namespace serv

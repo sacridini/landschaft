@@ -14,6 +14,12 @@ scenarios goes straight in.
 
 ::: landschaft.services.valuation_constant
 
+## Annual water yield and hydropower
+
+::: landschaft.services.water_yield
+
+::: landschaft.services.WaterYield
+
 ## Habitat quality and rarity
 
 ::: landschaft.services.habitat_quality

@@ -307,19 +307,161 @@ def _patch_distance_transform():
     hq.pygeoprocessing.distance_transform_edt = fixed
 
 
+# --------------------------------------------------------------------------- annual water yield
+
+WY_CASES = {
+    "wy_basic": dict(seed=21, dtype="float32", demand=False, sub=False, valuation=False),
+    "wy_full": dict(seed=22, dtype="float32", demand=True, sub=True, valuation=True),
+    "wy_int_inputs": dict(seed=23, dtype="int16", demand=True, sub=False, valuation=False),
+    "wy_float64": dict(seed=24, dtype="float64", demand=True, sub=True, valuation=True),
+}
+
+
+def _boxes(ny, nx, parts, pad):
+    """Polygons covering the raster (and ``pad`` metres beyond), cut in ``parts`` columns,
+    with a slanted edge so that cells are split by the boundaries."""
+    x0, y0 = ORIGIN
+    x1, y1 = x0 + nx * PIXEL, y0 - ny * PIXEL
+    xs = np.linspace(x0 - pad, x1 + pad, parts + 1)
+    out = []
+    for k in range(parts):
+        xa, xb = xs[k], xs[k + 1]
+        tilt = 37.0 if k else 0.0
+        tilt_b = 37.0 if k < parts - 1 else 0.0
+        out.append([(xa - tilt, y0 + pad), (xb - tilt_b, y0 + pad), (xb + tilt_b, y1 - pad), (xa + tilt, y1 - pad),
+                    (xa - tilt, y0 + pad)])
+    return out
+
+
+def _write_polygons(path, rings, field, ids):
+    from osgeo import ogr, osr
+
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(EPSG)
+    ds = ogr.GetDriverByName("ESRI Shapefile").CreateDataSource(str(path))
+    layer = ds.CreateLayer(Path(path).stem, srs, ogr.wkbPolygon)
+    layer.CreateField(ogr.FieldDefn(field, ogr.OFTInteger))
+    for ring, i in zip(rings, ids):
+        g = ogr.Geometry(ogr.wkbLinearRing)
+        for x, y in ring:
+            g.AddPoint_2D(x, y)
+        poly = ogr.Geometry(ogr.wkbPolygon)
+        poly.AddGeometry(g)
+        feat = ogr.Feature(layer.GetLayerDefn())
+        feat.SetField(field, int(i))
+        feat.SetGeometry(poly)
+        layer.CreateFeature(feat)
+    ds = None
+
+
+def _read_polygons(path):
+    from osgeo import ogr
+
+    ds = ogr.Open(str(path))
+    layer = ds.GetLayer()
+    defn = layer.GetLayerDefn()
+    names = [defn.GetFieldDefn(i).GetName() for i in range(defn.GetFieldCount())]
+    rows = []
+    for feat in layer:
+        rows.append({n: feat.GetField(n) for n in names})
+    return rows
+
+
+def run_wy(name, spec, tmp):
+    from osgeo import gdal
+
+    from natcap.invest.annual_water_yield import annual_water_yield as awy
+
+    rng = np.random.default_rng(spec["seed"])
+    codes = [1, 2, 3, 5, 6, 8]
+    ny, nx = 53, 71
+    nodata = 0
+    lulc = _lulc(rng, ny, nx, codes, nodata).astype(np.int16)
+    dtype = np.dtype(spec["dtype"])
+    gtype = {"float32": gdal.GDT_Float32, "float64": gdal.GDT_Float64, "int16": gdal.GDT_Int16}[dtype.name]
+    nd = -9999
+
+    def field(lo, hi, decimals, holes=0.01):
+        a = rng.uniform(lo, hi, size=(ny, nx))
+        a = np.round(a, decimals if dtype.kind == "f" else 0).astype(dtype)
+        a[rng.random((ny, nx)) < holes] = nd
+        return a
+
+    precip = field(300, 2500, 2)
+    precip[rng.random((ny, nx)) < 0.01] = 0  # InVEST leaves cells without rain out of the balance
+    eto = field(600, 1800, 2)
+    depth = field(200, 3000, 1)
+    pawc = np.round(rng.uniform(0.05, 0.4, size=(ny, nx)), 3).astype(np.float32 if dtype.name != "float64"
+                                                                     else np.float64)
+    pawc[rng.random((ny, nx)) < 0.01] = nd
+    _write_raster(tmp / "lulc.tif", lulc, nodata, gdal.GDT_Int16)
+    for k, a in (("precip", precip), ("eto", eto), ("depth", depth)):
+        _write_raster(tmp / f"{k}.tif", a, nd, gtype)
+    _write_raster(tmp / "pawc.tif", pawc, nd, gdal.GDT_Float64 if pawc.dtype == np.float64 else gdal.GDT_Float32)
+    veg = np.array([1, 1, 0, 1, 0, 1])
+    root = np.round(rng.uniform(300, 7000, size=len(codes)), 1)
+    kc = np.round(rng.uniform(0.2, 1.2, size=len(codes)), 3)
+    kc[2] = 1.05  # open water
+    _csv(tmp / "bio.csv", ["lucode", "lulc_veg", "root_depth", "kc"], [[c, v, r, k] for c, v, r, k in
+                                                                       zip(codes, veg, root, kc)])
+    ws_rings = _boxes(ny, nx, 2, 45.0)
+    _write_polygons(tmp / "ws.shp", ws_rings, "ws_id", [1, 2])
+    args = {"workspace_dir": str(tmp / "ws_out"), "results_suffix": "", "lulc_path": str(tmp / "lulc.tif"),
+            "depth_to_root_rest_layer_path": str(tmp / "depth.tif"), "precipitation_path": str(tmp / "precip.tif"),
+            "pawc_path": str(tmp / "pawc.tif"), "eto_path": str(tmp / "eto.tif"), "watersheds_path": str(tmp / "ws.shp"),
+            "biophysical_table_path": str(tmp / "bio.csv"), "seasonality_constant": 7.5, "sub_watersheds_path": "",
+            "demand_table_path": "", "valuation_table_path": "", "n_workers": -1}
+    inputs = {"lulc": lulc, "precip": precip, "eto": eto, "depth": depth, "pawc": pawc, "codes": np.asarray(codes),
+              "veg": veg, "root": root, "kc": kc}
+    meta = {"model": "annual_water_yield", "nodata": nodata, "input_nodata": nd, "pixel": PIXEL, "z": 7.5,
+            "watersheds": ws_rings}
+    sub_rings = None
+    if spec["sub"]:
+        sub_rings = _boxes(ny, nx, 4, 45.0)
+        _write_polygons(tmp / "sub.shp", sub_rings, "subws_id", [10, 11, 12, 13])
+        args["sub_watersheds_path"] = str(tmp / "sub.shp")
+        meta["subwatersheds"] = sub_rings
+    if spec["demand"]:
+        demand = np.round(rng.uniform(0, 3, size=len(codes)), 2)
+        demand[0] = 0.0
+        _csv(tmp / "demand.csv", ["lucode", "demand"], [[c, d] for c, d in zip(codes, demand)])
+        args["demand_table_path"] = str(tmp / "demand.csv")
+        inputs["demand"] = demand
+    if spec["valuation"]:
+        val = [[1, 0.8, 0.6, 200.0, 0.07, 1000.0, 100, 5.0],
+               [2, 0.85, 0.7, 150.0, 0.05, 2000.0, 30, 0.0]]  # a discount rate of 0
+        _csv(tmp / "val.csv", ["ws_id", "efficiency", "fraction", "height", "kw_price", "cost", "time_span",
+                               "discount"], val)
+        args["valuation_table_path"] = str(tmp / "val.csv")
+        meta["valuation"] = val
+    registry = awy.execute(args)
+    outputs = {}
+    for key in ("fractp", "aet", "wyield", "pet", "demand"):
+        path = registry.get(key)
+        if isinstance(path, str) and Path(path).is_file():
+            a, ndv = _read(path)
+            outputs[key] = np.where(a == ndv, np.nan, a) if ndv is not None else a
+    meta["watershed_results"] = _read_polygons(registry["watershed_results_wyield"])
+    if spec["sub"]:
+        meta["subwatershed_results"] = _read_polygons(registry["subwatershed_results_wyield"])
+    return inputs, outputs, meta
+
+
 def main(argv):
     import natcap.invest
     import numpy
     import pygeoprocessing
 
     OUT.mkdir(parents=True, exist_ok=True)
-    cases = {**{k: ("carbon", v) for k, v in CARBON_CASES.items()}, **{k: ("hq", v) for k, v in HQ_CASES.items()}}
+    cases = {**{k: ("carbon", v) for k, v in CARBON_CASES.items()}, **{k: ("hq", v) for k, v in HQ_CASES.items()},
+             **{k: ("wy", v) for k, v in WY_CASES.items()}}
+    runners = {"carbon": run_carbon, "hq": run_hq, "wy": run_wy}
     names = argv or list(cases)
     for name in names:
         kind, spec = cases[name]
-        with tempfile.TemporaryDirectory(prefix=f"invest-{name}-") as tmp:
+        with tempfile.TemporaryDirectory(prefix=f"invest-{name}-", ignore_cleanup_errors=True) as tmp:
             tmp = Path(tmp)
-            inputs, outputs, meta = (run_carbon if kind == "carbon" else run_hq)(name, spec, tmp)
+            inputs, outputs, meta = runners[kind](name, spec, tmp)
         meta["versions"] = {"natcap.invest": natcap.invest.__version__, "pygeoprocessing": pygeoprocessing.__version__,
                             "numpy": numpy.__version__}
         arrays = {f"in/{k}": v for k, v in inputs.items()}
