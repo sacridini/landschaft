@@ -14,7 +14,7 @@ import pytest
 
 import landschaft as ls
 from landschaft import _core
-from conftest import assert_ucrt_close
+from conftest import assert_swat_close
 
 S = ls.hydro.swat
 REF = Path(__file__).parent / "data" / "reference" / "swat"
@@ -40,7 +40,7 @@ def _compare(ours, ref, tag: int, width: int | None = None) -> None:
     rkeys, rvals = ref[f"t{tag}_keys"], ref[f"t{tag}_vals"]
     np.testing.assert_array_equal(keys, rkeys, err_msg=f"tag {tag}: (year, day, object)")
     w = width or rvals.shape[1]
-    assert_ucrt_close(vals[:, :w], rvals[:, :w], err_msg=f"tag {tag}")
+    assert_swat_close(vals[:, :w], rvals[:, :w], err_msg=f"tag {tag}")
 
 
 def test_weather_matches_swatplus(case):
@@ -58,7 +58,7 @@ def test_run_gives_weather_by_station(case):
     assert len(w) == len(rkeys)
     first = w.index[0][0]
     assert (first.year, first.dayofyear) == tuple(rkeys[0, :2])
-    assert_ucrt_close(w["precip"].to_numpy(), ref["t1_vals"][:, 0])
+    assert_swat_close(w["precip"].to_numpy(), ref["t1_vals"][:, 0])
 
 
 class _nowarn:

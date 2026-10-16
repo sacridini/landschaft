@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from landschaft import _core
-from conftest import assert_ucrt_close
+from conftest import assert_swat_close
 
 REF = Path(__file__).parent / "data" / "reference" / "swat"
 # Ames: 12 HRUs with scheduled operations (plant, harvest and kill, tillage, fertilizer,
@@ -51,7 +51,7 @@ def test_simulation_matches_swatplus(simulated, tag):
     rvals = rvals.copy()
     for c in OUTPUT_ONLY.get(tag, []):
         vals[:, c] = rvals[:, c] = 0.0
-    assert_ucrt_close(vals, rvals, err_msg=f"tag {tag}")
+    assert_swat_close(vals, rvals, err_msg=f"tag {tag}")
 
 
 def test_hrus_make_runoff_and_grow(simulated):

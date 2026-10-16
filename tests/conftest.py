@@ -57,6 +57,28 @@ def assert_ucrt_close(a, b, err_msg: str = "") -> None:
         np.testing.assert_allclose(a, b, rtol=UCRT_RTOL, atol=0, equal_nan=True, err_msg=err_msg)
 
 
+# SWAT+ simulations carry the last bits of exp, log, pow... through years of daily
+# state (soil water, plants, storages): off Windows the libm's other last bits move a
+# value by up to ~1e-5 of its column's scale (a daily series of one quantity).
+SWAT_TOL = 1e-4
+
+
+def assert_swat_close(a, b, err_msg: str = "") -> None:
+    """SWAT+ dump records ``a`` (rows = days and objects, columns = fields) equal ``b``
+    on Windows; elsewhere ``|a - b| <= SWAT_TOL * (|b| + max |b| of the column)``."""
+    a = np.asarray(a)
+    b = np.asarray(b)
+    if UCRT_LIBM:
+        assert_ucrt_close(a, b, err_msg=err_msg)
+        return
+    np.testing.assert_array_equal(np.isnan(a), np.isnan(b), err_msg=err_msg)
+    a64 = np.nan_to_num(a.astype(np.float64))
+    b64 = np.nan_to_num(b.astype(np.float64))
+    scale = np.abs(b64).max(axis=0) if b64.ndim == 2 and len(b64) else np.abs(b64).max(initial=0.0)
+    bad = np.abs(a64 - b64) > SWAT_TOL * (np.abs(b64) + scale)
+    assert not bad.any(), f"{err_msg}: {int(bad.sum())} values beyond SWAT_TOL, first at {np.argwhere(bad)[0]}"
+
+
 def same_bits(a, b, *, scale=None, ulps: float = 4) -> np.ndarray:
     """Element by element: ``a`` has the bits of ``b`` (NaN matching NaN).
 

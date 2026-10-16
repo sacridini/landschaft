@@ -14,7 +14,7 @@ import pytest
 
 import landschaft as ls
 from landschaft import _core
-from conftest import assert_ucrt_close
+from conftest import assert_swat_close
 
 REF = Path(__file__).parent / "data" / "reference" / "swat"
 CASES = ["hubbard_brook", "hubbard_brook_musk"]
@@ -39,7 +39,7 @@ def _compare(ours, ref, tag: int) -> None:
     rkeys, rvals = ref[f"t{tag}_keys"], ref[f"t{tag}_vals"]
     np.testing.assert_array_equal(keys, rkeys, err_msg=f"tag {tag}: (year, day, object)")
     w = rvals.shape[1]
-    assert_ucrt_close(vals[:, :w], rvals[:, :w], err_msg=f"tag {tag}")
+    assert_swat_close(vals[:, :w], rvals[:, :w], err_msg=f"tag {tag}")
 
 
 @pytest.mark.parametrize("tag", [41, 40, 20, 30])
