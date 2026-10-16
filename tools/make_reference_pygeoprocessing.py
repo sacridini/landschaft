@@ -7,8 +7,9 @@ Usage (with a Python that has natcap.invest / pygeoprocessing, not landschaft)::
 
 Reads the DEMs stored by ``tools/make_reference_hydro.py``
 (``tests/data/reference/hydro/whitebox.npz``), runs ``fill_pits``, ``flow_dir_mfd``,
-``flow_accumulation_mfd`` (plain and weighted) and ``distance_to_channel_mfd`` (plain
-and weighted) and stores the outputs in ``tests/data/reference/hydro/pygeoprocessing.npz``
+``flow_accumulation_mfd`` (plain and weighted), ``distance_to_channel_mfd`` (plain
+and weighted), ``extract_streams_mfd`` (trace 0.7, as InVEST's SDR), and the D8 routing
+(``flow_dir_d8``, ``flow_accumulation_d8``, ``distance_to_channel_d8``) and stores the outputs in ``tests/data/reference/hydro/pygeoprocessing.npz``
 with the version in ``pygeoprocessing.json``.
 """
 
@@ -79,6 +80,22 @@ def main() -> None:
                                             str(wd / "dist.tif"))
             routing.distance_to_channel_mfd((str(wd / "dir.tif"), 1), (str(wd / "channel.tif"), 1),
                                             str(wd / "distw.tif"), weight_raster_path_band=(str(wd / "w.tif"), 1))
+            routing.extract_streams_mfd((str(wd / "acc.tif"), 1), (str(wd / "dir.tif"), 1), 100.0,
+                                        str(wd / "streams.tif"), trace_threshold_proportion=0.7)
+            routing.flow_dir_d8((str(wd / "filled.tif"), 1), str(wd / "d8.tif"), working_dir=str(wd))
+            routing.flow_accumulation_d8((str(wd / "d8.tif"), 1), str(wd / "d8acc.tif"))
+            routing.flow_accumulation_d8((str(wd / "d8.tif"), 1), str(wd / "d8accw.tif"),
+                                         weight_raster_path_band=(str(wd / "w.tif"), 1))
+            routing.distance_to_channel_d8((str(wd / "d8.tif"), 1), (str(wd / "channel.tif"), 1),
+                                           str(wd / "d8dist.tif"))
+            routing.distance_to_channel_d8((str(wd / "d8.tif"), 1), (str(wd / "channel.tif"), 1),
+                                           str(wd / "d8distw.tif"), weight_raster_path_band=(str(wd / "w.tif"), 1))
+            out[f"{name}/streams"] = read(wd / "streams.tif").astype(np.uint8)
+            out[f"{name}/d8"] = read(wd / "d8.tif").astype(np.uint8)
+            out[f"{name}/d8acc"] = read(wd / "d8acc.tif")
+            out[f"{name}/d8accw"] = read(wd / "d8accw.tif")
+            out[f"{name}/d8dist"] = read(wd / "d8dist.tif", nodata=-1)
+            out[f"{name}/d8distw"] = read(wd / "d8distw.tif", nodata=-1)
             out[f"{name}/filled"] = read(wd / "filled.tif")
             out[f"{name}/dir"] = read(wd / "dir.tif").astype(np.int32)
             out[f"{name}/acc"] = acc

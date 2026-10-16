@@ -3697,7 +3697,10 @@ InVEST (Apache-2.0, Python/Cython: referência de paridade) com a RUSLE por cél
   célula de destino no lugar de 1 / sqrt 2). Bit a bit com o pygeoprocessing 2.4.11 nos 4 MDEs
   (`tools/make_reference_pygeoprocessing.py`, rodado no Python da env `invest-ref`); o `fill_pits` dele dá o mesmo
   MDE que o nosso `fill` (borda e células sem valor como saídas), o que confirma a correção feita no WhiteboxTools.
-  Falta: o D8 do pygeoprocessing (opção do SDR); nós do Terraflux.
+  Também o `extract_streams_mfd` (`streams(trace=0.7, dem=...)`, rastreio com as células "tentativas" 2
+  confirmadas para jusante) e o D8 do pygeoprocessing (`_core.hydro_pgp_d8*`: códigos 0 L ... 7 SE, 128 sem
+  valor; distância com o peso da célula de montante, diferente do MFD, que usa o da de jusante), bit a bit.
+  Falta: nós do Terraflux.
 
 ---
 

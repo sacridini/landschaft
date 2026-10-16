@@ -356,7 +356,7 @@ def distance_to_channel(dem, streams, *, weights=None, extent=None, crs=None, ba
     return s.raster(_core.hydro_mfd_distance_to_channel(packed, channel, w), "distance_to_channel")
 
 
-def streams(accumulation, threshold: float) -> xr.DataArray:
+def streams(accumulation, threshold: float, *, trace: float | None = None, dem=None) -> xr.DataArray:
     """The stream cells: those whose flow accumulation is at least ``threshold``.
 
     Parameters
@@ -365,6 +365,14 @@ def streams(accumulation, threshold: float) -> xr.DataArray:
         A flow accumulation (:func:`flow_accumulation`).
     threshold
         The smallest accumulation of a stream, in its units.
+    trace
+        With ``dem``: pygeoprocessing's stream extraction from the ``"mfd"``
+        accumulation, as InVEST's sediment model runs it (``trace=0.7``): the cells of
+        at least ``threshold`` traced up from the outlets, and tributaries down to
+        ``trace`` x ``threshold`` kept where they lead to such a stream (with
+        divergent multiple flow, the cells above the threshold do not always join).
+    dem
+        The (filled) DEM whose ``"mfd"`` directions are traced.
 
     Returns
     -------
@@ -383,8 +391,20 @@ def streams(accumulation, threshold: float) -> xr.DataArray:
     """
     s = read_surface(accumulation)
     a = s.values
-    out = np.where(np.isnan(a), np.nan, (a >= threshold).astype(np.float64))
-    return s.raster(out, "streams", {"threshold": float(threshold)})
+    if trace is None:
+        out = np.where(np.isnan(a), np.nan, (a >= threshold).astype(np.float64))
+        return s.raster(out, "streams", {"threshold": float(threshold)})
+    if dem is None:
+        raise ValueError("tracing streams needs the DEM (dem=)")
+    if not 0.0 <= trace <= 1.0:
+        raise ValueError("trace must be between 0 and 1")
+    z = read_surface(dem).values
+    if z.shape != a.shape:
+        raise ValueError("the DEM differs in shape from the accumulation")
+    packed = _core.hydro_mfd_directions(z, MFD_BLOCK)
+    codes = _core.hydro_mfd_streams(a, packed, float(threshold), float(trace), MFD_BLOCK)
+    out = np.where(codes == 255, np.nan, codes.astype(np.float64))
+    return s.raster(out, "streams", {"threshold": float(threshold), "trace": float(trace)})
 
 
 @threaded

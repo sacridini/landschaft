@@ -278,3 +278,21 @@ def test_mfd_shares_sum_to_about_fifteen(ref):
     shares = np.stack([(packed >> (4 * k)) & 15 for k in range(8)])
     total = shares.sum(axis=0)[packed > 0]                  # (0: a pit of the unfilled DEM)
     assert total.min() >= 13 and total.max() <= 19          # each share rounded on its own
+
+
+@pytest.mark.parametrize("name", CASES)
+def test_pygeoprocessing_streams_and_d8(ref, name):
+    from landschaft import _core
+
+    pgp = np.load(PGP)
+    filled = pgp[f"{name}/filled"]
+    acc = pgp[f"{name}/acc"]
+    rivers = H.streams(acc, 100, trace=0.7, dem=filled).values                  # extract_streams_mfd
+    np.testing.assert_array_equal(np.where(np.isnan(rivers), 255, rivers).astype(np.uint8), pgp[f"{name}/streams"])
+    d8 = _core.hydro_pgp_d8(filled, 256)                                         # flow_dir_d8
+    np.testing.assert_array_equal(d8, pgp[f"{name}/d8"])
+    w, channel = pgp[f"{name}/weights"], pgp[f"{name}/channel"]
+    np.testing.assert_array_equal(_core.hydro_pgp_d8_accumulation(d8, None), pgp[f"{name}/d8acc"])
+    np.testing.assert_array_equal(_core.hydro_pgp_d8_accumulation(d8, w), pgp[f"{name}/d8accw"])
+    np.testing.assert_array_equal(_core.hydro_pgp_d8_distance_to_channel(d8, channel, None), pgp[f"{name}/d8dist"])
+    np.testing.assert_array_equal(_core.hydro_pgp_d8_distance_to_channel(d8, channel, w), pgp[f"{name}/d8distw"])

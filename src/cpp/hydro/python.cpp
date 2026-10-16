@@ -186,6 +186,55 @@ void register_python(py::module_& m) {
         return to_raster(std::move(out), ny, nx);
     }, py::arg("dir"), py::arg("channel"), py::arg("weight"), "pygeoprocessing's distance to channel (MFD).");
 
+    m.def("hydro_mfd_streams", [](const Array& acc, const Packed& dir, double threshold, double trace, int block) {
+        check2d(acc, "accumulation");
+        same_shape(acc, dir, "directions");
+        const int ny = static_cast<int>(acc.shape(0)), nx = static_cast<int>(acc.shape(1));
+        std::vector<std::uint8_t> out;
+        {
+            py::gil_scoped_release release;
+            out = mfd_streams(acc.data(), dir.data(), ny, nx, threshold, trace, block);
+        }
+        return to_raster(std::move(out), ny, nx);
+    }, py::arg("acc"), py::arg("dir"), py::arg("threshold"), py::arg("trace"), py::arg("block"),
+       "pygeoprocessing's MFD stream extraction (1 stream, 0 not, 255 missing).");
+
+    using Codes = py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>;
+    m.def("hydro_pgp_d8", [](const Array& z, int block) {
+        const Grid g = grid_of(z, 1.0, 1.0);
+        std::vector<std::uint8_t> out;
+        {
+            py::gil_scoped_release release;
+            out = pgp_d8_directions(g, block);
+        }
+        return to_raster(std::move(out), g.ny, g.nx);
+    }, py::arg("z"), py::arg("block"), "pygeoprocessing's D8 (0 E ... 7 SE, 128 missing).");
+
+    m.def("hydro_pgp_d8_accumulation", [](const Codes& dir, std::optional<Array> weight) {
+        check2d(dir, "directions");
+        if (weight) same_shape(dir, *weight, "weights");
+        const int ny = static_cast<int>(dir.shape(0)), nx = static_cast<int>(dir.shape(1));
+        std::vector<double> out;
+        {
+            py::gil_scoped_release release;
+            out = pgp_d8_accumulation(dir.data(), weight ? weight->data() : nullptr, ny, nx);
+        }
+        return to_raster(std::move(out), ny, nx);
+    }, py::arg("dir"), py::arg("weight"), "pygeoprocessing's D8 accumulation.");
+
+    m.def("hydro_pgp_d8_distance_to_channel", [](const Codes& dir, const Mask& channel, std::optional<Array> weight) {
+        check2d(dir, "directions");
+        same_shape(dir, channel, "channels");
+        if (weight) same_shape(dir, *weight, "weights");
+        const int ny = static_cast<int>(dir.shape(0)), nx = static_cast<int>(dir.shape(1));
+        std::vector<double> out;
+        {
+            py::gil_scoped_release release;
+            out = pgp_d8_distance_to_channel(dir.data(), channel.data(), weight ? weight->data() : nullptr, ny, nx);
+        }
+        return to_raster(std::move(out), ny, nx);
+    }, py::arg("dir"), py::arg("channel"), py::arg("weight"), "pygeoprocessing's D8 distance to channel.");
+
     m.def("hydro_hand", [](const Array& z, const Dirs& dir, const Mask& streams) {
         const Grid g = grid_of(z, 1.0, 1.0);
         same_shape(z, dir, "directions");

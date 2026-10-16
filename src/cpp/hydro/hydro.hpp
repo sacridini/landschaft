@@ -82,6 +82,19 @@ std::vector<double> mfd_packed_accumulation(const std::int32_t* dir, const doubl
 std::vector<double> mfd_distance_to_channel(const std::int32_t* dir, const std::uint8_t* channel,
                                             const double* weight, int ny, int nx);
 
+// pygeoprocessing's stream extraction from the MFD accumulation: the cells of at least
+// threshold traced up from the outlets, with tributaries of trace_proportion x threshold
+// kept where they join a stream downstream. 1 stream, 0 not, 255 missing.
+std::vector<std::uint8_t> mfd_streams(const double* acc, const std::int32_t* dir, int ny, int nx, double threshold,
+                                      double trace_proportion, int block);
+// pygeoprocessing's D8: 0 E, 1 NE, ... 7 SE, 128 missing; plateaus drain to their
+// nearest outlets. Its accumulation (pulled from upstream) and distance to channel
+// (the weight of the cell entered upstream, or 1 / sqrt 2).
+std::vector<std::uint8_t> pgp_d8_directions(const Grid& g, int block);
+std::vector<double> pgp_d8_accumulation(const std::uint8_t* dir, const double* weight, int ny, int nx);
+std::vector<double> pgp_d8_distance_to_channel(const std::uint8_t* dir, const std::uint8_t* channel,
+                                               const double* weight, int ny, int nx);
+
 // The height of each cell above the stream cell it drains to along `dir` (Rennó et
 // al. 2008): 0 on the streams, NaN where the cell reaches no stream.
 std::vector<double> hand(const Grid& g, const std::int8_t* dir, const std::uint8_t* streams);
