@@ -27,6 +27,13 @@ in a new major version.
   float32 DEM, coordinates as `Rast_row_to_northing`); `GEOMORPHON_FORMS`, `Geomorphons.share()`. 2000 x 2000
   cells, search 10: 2.5 s on 3 threads (6.1x GRASS, single-threaded; 2.5x on one thread), the zenith and nadir
   kept by their height / distance ratio and atan2 computed only at the end or at near ties.
+- `ls.services`, InVEST's ecosystem service models reimplemented (natcap.invest 3.20, Apache-2.0), C++ with
+  OpenMP: `carbon` (the four pools by class, storage of a baseline and a future map, sequestration, its net present
+  value with InVEST's valuation constant, `valuation_constant`; landscape totals in tons) and `habitat_quality`
+  (threats decaying linearly or exponentially with the distance to their nearest cell, weights, sensitivities,
+  access from a raster or polygons, total degradation, quality h (1 - D^2.5 / (D^2.5 + k^2.5)), rarity against a
+  base map). The maps are InVEST's float32 maps bit for bit (the exponential decay to 1 unit in the last place:
+  numpy's float32 `exp`), checked against stored outputs of natcap.invest (`tools/make_reference_invest.py`).
 
 ### Fixed (against WhiteboxTools)
 - `fill` lets water out at the map's edge and at missing cells: WhiteboxTools' `FillDepressions` raises a
@@ -41,6 +48,14 @@ in a new major version.
   direction numbers); the extended correction's second, shorter search starts next to the cell (`r.geomorphon`
   keeps the inner radius, though it sets it to 0); a geomorphon whose first direction has no point keeps the shape
   of its other points (`r.geomorphon` gives none).
+
+### Fixed (against InVEST)
+- Carbon: a change of exactly -1 t/ha is a change, not a missing cell (InVEST writes the change map with -1 as its
+  nodata, so those cells drop out of the change total and get no net present value).
+- Habitat quality: a threat without any cell degrades nothing (InVEST's distance transform puts every cell at about
+  half the raster's perimeter from it, which a long enough maximum distance turns into degradation everywhere).
+- Habitat quality: a base map with threat maps gets its degradation and quality (InVEST 3.20.2 stops with
+  `KeyError: 'deg_sum_b'`, an output it never registers).
 
 ## [1.47.0] - 2026-10-16
 

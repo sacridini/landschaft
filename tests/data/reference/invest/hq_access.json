@@ -1,0 +1,138 @@
+{
+ "model": "habitat_quality",
+ "nodata": 255,
+ "pixel": 30.0,
+ "k": 0.1,
+ "threats": [
+  {
+   "threat": "crops",
+   "max_dist": 600.0,
+   "weight": 0.7,
+   "decay": "linear"
+  },
+  {
+   "threat": "roads",
+   "max_dist": 1000.0,
+   "weight": 1.0,
+   "decay": "exponential"
+  },
+  {
+   "threat": "urban",
+   "max_dist": 270.0,
+   "weight": 0.35,
+   "decay": "linear"
+  }
+ ],
+ "threat_nodata": {
+  "roads": -9.0
+ },
+ "scenarios": [
+  "cur"
+ ],
+ "polygons": [
+  {
+   "ring": [
+    [
+     500307.0,
+     7999755.0
+    ],
+    [
+     501046.0,
+     7999768.0
+    ],
+    [
+     501046.0,
+     7999169.0
+    ],
+    [
+     500327.0,
+     7999169.0
+    ],
+    [
+     500307.0,
+     7999755.0
+    ]
+   ],
+   "access": 0.0
+  },
+  {
+   "ring": [
+    [
+     501207.0,
+     7999095.0
+    ],
+    [
+     502096.0,
+     7999108.0
+    ],
+    [
+     502096.0,
+     7998359.0
+    ],
+    [
+     501227.0,
+     7998359.0
+    ],
+    [
+     501207.0,
+     7999095.0
+    ]
+   ],
+   "access": 0.4
+  },
+  {
+   "ring": [
+    [
+     500157.0,
+     7998795.0
+    ],
+    [
+     500686.0,
+     7998808.0
+    ],
+    [
+     500686.0,
+     7998359.0
+    ],
+    [
+     500177.0,
+     7998359.0
+    ],
+    [
+     500157.0,
+     7998795.0
+    ]
+   ],
+   "access": 0.75
+  }
+ ],
+ "rarity": {},
+ "patched": false,
+ "outputs": [
+  "access_layer",
+  "deg_sum_c",
+  "degradation_[THREAT]_cur/crops",
+  "degradation_[THREAT]_cur/roads",
+  "degradation_[THREAT]_cur/urban",
+  "quality_c"
+ ],
+ "registry": [
+  "[THREAT]_aligned/*",
+  "[THREAT]_distance_transform_cur/*",
+  "access_layer",
+  "deg_sum_c",
+  "degradation_[THREAT]_cur/*",
+  "filtered_[DECAY]_[THREAT]_cur/*",
+  "habitat_cur",
+  "lulc_cur_aligned",
+  "quality_c",
+  "reprojected_access_vector",
+  "sens_[THREAT]_cur/*",
+  "taskgraph_cache"
+ ],
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

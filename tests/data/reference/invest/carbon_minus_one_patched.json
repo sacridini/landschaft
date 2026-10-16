@@ -1,0 +1,60 @@
+{
+ "model": "carbon",
+ "nodata": -1,
+ "pixel": 30.0,
+ "valuation": {
+  "price": 20.0,
+  "discount": 3.0,
+  "change": 1.0,
+  "years": [
+   2000,
+   2010
+  ]
+ },
+ "summary": [
+  {
+   "label": "Baseline Carbon Storage",
+   "total": 217404.36,
+   "units": "metric_ton",
+   "filename": "c_storage_bas.tif"
+  },
+  {
+   "label": "Alternate Carbon Storage",
+   "total": 216785.16,
+   "units": "metric_ton",
+   "filename": "c_storage_alt.tif"
+  },
+  {
+   "label": "Change in Carbon Storage",
+   "total": 1579.77,
+   "units": "metric_ton",
+   "filename": "c_change_bas_alt.tif"
+  },
+  {
+   "label": "Net Present Value of Carbon Change",
+   "total": 26619.686995296477,
+   "units": "currency",
+   "filename": "npv_alt.tif"
+  }
+ ],
+ "outputs": [
+  "c_above_alt",
+  "c_above_bas",
+  "c_below_alt",
+  "c_below_bas",
+  "c_change_bas_alt",
+  "c_dead_alt",
+  "c_dead_bas",
+  "c_soil_alt",
+  "c_soil_bas",
+  "c_storage_alt",
+  "c_storage_bas",
+  "npv_alt"
+ ],
+ "patched": true,
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

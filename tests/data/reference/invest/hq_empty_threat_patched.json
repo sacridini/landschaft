@@ -1,0 +1,61 @@
+{
+ "model": "habitat_quality",
+ "nodata": 255,
+ "pixel": 30.0,
+ "k": 0.05,
+ "threats": [
+  {
+   "threat": "crops",
+   "max_dist": 600.0,
+   "weight": 0.7,
+   "decay": "linear"
+  },
+  {
+   "threat": "roads",
+   "max_dist": 1000.0,
+   "weight": 1.0,
+   "decay": "exponential"
+  },
+  {
+   "threat": "urban",
+   "max_dist": 6000.0,
+   "weight": 0.35,
+   "decay": "linear"
+  }
+ ],
+ "threat_nodata": {
+  "roads": -9.0
+ },
+ "scenarios": [
+  "cur"
+ ],
+ "polygons": [],
+ "rarity": {},
+ "patched": true,
+ "outputs": [
+  "access_layer",
+  "deg_sum_c",
+  "degradation_[THREAT]_cur/crops",
+  "degradation_[THREAT]_cur/roads",
+  "degradation_[THREAT]_cur/urban",
+  "quality_c"
+ ],
+ "registry": [
+  "[THREAT]_aligned/*",
+  "[THREAT]_distance_transform_cur/*",
+  "access_layer",
+  "deg_sum_c",
+  "degradation_[THREAT]_cur/*",
+  "filtered_[DECAY]_[THREAT]_cur/*",
+  "habitat_cur",
+  "lulc_cur_aligned",
+  "quality_c",
+  "sens_[THREAT]_cur/*",
+  "taskgraph_cache"
+ ],
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

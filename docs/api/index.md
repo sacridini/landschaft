@@ -120,6 +120,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation.
 
+-   :material-leaf-circle-outline:{ .lg .middle } **[Ecosystem services](services.md)**
+
+    ---
+
+    InVEST's models: carbon storage and sequestration, habitat quality and rarity.
+
 -   :material-plus-minus-variant:{ .lg .middle } **[Uncertainty](uncertainty.md)**
 
     ---
@@ -700,6 +706,16 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.scenarios`](simulate.md#landschaft.simulate.scenarios) | Run a model under several scenarios, several times each, in parallel |
 | [`ls.Ensemble`](simulate.md#landschaft.simulate.Ensemble) | The simulations of `scenarios`: every scenario, replicate and year |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |
+
+### Ecosystem services
+
+| Name | Summary |
+|---|---|
+| [`ls.carbon`](services.md#landschaft.services.carbon) | Carbon storage of a landscape and its change between two maps (InVEST's carbon model) |
+| [`ls.Carbon`](services.md#landschaft.services.Carbon) | Carbon stored in a landscape, and its change (`carbon`) |
+| [`ls.valuation_constant`](services.md#landschaft.services.valuation_constant) | The factor turning a change in carbon into its net present value (InVEST's) |
+| [`ls.habitat_quality`](services.md#landschaft.services.habitat_quality) | Habitat degradation, quality and rarity (InVEST's habitat quality model) |
+| [`ls.HabitatQuality`](services.md#landschaft.services.HabitatQuality) | Habitat degradation, quality and rarity (`habitat_quality`) |
 
 ### Uncertainty
 

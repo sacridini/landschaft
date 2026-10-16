@@ -263,6 +263,13 @@ target_include_directories(restcore PUBLIC src/cpp)
 # R's x87 maths and 80-bit sums (lsm/rmath.hpp, lsm/extended.hpp).
 target_link_libraries(restcore PUBLIC lsmcore)
 set_target_properties(restcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Ecosystem services (InVEST): carbon storage, habitat quality.
+add_library(servcore STATIC
+    src/cpp/serv/services.cpp
+)
+target_include_directories(servcore PUBLIC src/cpp)
+set_target_properties(servcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Land use change (ls.simulate): cross-tabulation and change counts.
 add_library(simcore STATIC
     src/cpp/sim/change.cpp
@@ -369,6 +376,7 @@ if(LANDSCHAFT_OPENMP)
             target_link_libraries(optcore PUBLIC OpenMP::OpenMP_CXX)
         endif()
         target_link_libraries(restcore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(servcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
         if(APPLE)
@@ -398,6 +406,7 @@ if(MSVC)
         target_compile_options(optcore PRIVATE /fp:precise /W4 /permissive-)
     endif()
     target_compile_options(restcore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(servcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(lsmcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -415,16 +424,18 @@ else()
         target_compile_options(optcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     endif()
     target_compile_options(restcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(servcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
 endif()
 
 if(LANDSCHAFT_PYTHON)
     pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
                         src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
                         src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
-                        src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp src/cpp/hydro/python.cpp)
+                        src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp src/cpp/hydro/python.cpp
+                        src/cpp/serv/python.cpp)
     target_link_libraries(_core PRIVATE eigen_headers)
     target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
-                          iocore sdmcore simcore optcore restcore hydrocore)
+                          iocore sdmcore simcore optcore restcore hydrocore servcore)
     if(MSVC)
         target_compile_options(_core PRIVATE /fp:precise)
     else()
@@ -458,7 +469,7 @@ if(LANDSCHAFT_PYTHON)
 else()
     # The static libraries and their headers, for native programs (Terraflux links simcore and what it needs).
     install(TARGETS gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore iocore sdmcore
-                    simcore restcore hydrocore
+                    simcore restcore hydrocore servcore
             ARCHIVE DESTINATION lib)
     # with HiGHS's library, which its own rules install
     if(LANDSCHAFT_MILP)

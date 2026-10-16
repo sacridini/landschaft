@@ -1,0 +1,143 @@
+{
+ "model": "habitat_quality",
+ "nodata": 255,
+ "pixel": 30.0,
+ "k": 0.3,
+ "threats": [
+  {
+   "threat": "crops",
+   "max_dist": 600.0,
+   "weight": 0.7,
+   "decay": "linear"
+  },
+  {
+   "threat": "roads",
+   "max_dist": 1000.0,
+   "weight": 1.0,
+   "decay": "exponential"
+  },
+  {
+   "threat": "urban",
+   "max_dist": 270.0,
+   "weight": 0.35,
+   "decay": "linear"
+  }
+ ],
+ "threat_nodata": {
+  "roads": -9.0
+ },
+ "scenarios": [
+  "cur",
+  "fut",
+  "bas"
+ ],
+ "polygons": [],
+ "rarity": {
+  "rarity_c_csv": [
+   [
+    1.0,
+    0.49850000000000005
+   ],
+   [
+    2.0,
+    0.49603174603174605
+   ],
+   [
+    4.0,
+    0.5020107238605898
+   ],
+   [
+    7.0,
+    0.5037137069547604
+   ],
+   [
+    9.0,
+    0.49758745476477684
+   ],
+   [
+    12.0,
+    0.5031937544357701
+   ]
+  ],
+  "rarity_f_csv": [
+   [
+    1.0,
+    0.5222629649030905
+   ],
+   [
+    2.0,
+    0.49309664694280075
+   ],
+   [
+    3.0,
+    0.0
+   ],
+   [
+    4.0,
+    0.5020107238605898
+   ],
+   [
+    7.0,
+    0.5030343897505057
+   ],
+   [
+    9.0,
+    0.49879081015719473
+   ],
+   [
+    12.0,
+    0.5057061340941512
+   ]
+  ]
+ },
+ "patched": false,
+ "outputs": [
+  "access_layer",
+  "deg_sum_c",
+  "deg_sum_f",
+  "degradation_[THREAT]_cur/crops",
+  "degradation_[THREAT]_cur/roads",
+  "degradation_[THREAT]_cur/urban",
+  "degradation_[THREAT]_fut/crops",
+  "degradation_[THREAT]_fut/roads",
+  "degradation_[THREAT]_fut/urban",
+  "quality_c",
+  "quality_f",
+  "rarity_c",
+  "rarity_f"
+ ],
+ "registry": [
+  "[THREAT]_aligned/*",
+  "[THREAT]_distance_transform_cur/*",
+  "[THREAT]_distance_transform_fut/*",
+  "access_layer",
+  "deg_sum_c",
+  "deg_sum_f",
+  "degradation_[THREAT]_cur/*",
+  "degradation_[THREAT]_fut/*",
+  "filtered_[DECAY]_[THREAT]_cur/*",
+  "filtered_[DECAY]_[THREAT]_fut/*",
+  "habitat_bas",
+  "habitat_cur",
+  "habitat_fut",
+  "lulc_bas_aligned",
+  "lulc_cur_aligned",
+  "lulc_fut_aligned",
+  "new_cover_c",
+  "new_cover_f",
+  "quality_c",
+  "quality_f",
+  "rarity_c",
+  "rarity_c_csv",
+  "rarity_f",
+  "rarity_f_csv",
+  "sens_[THREAT]_cur/*",
+  "sens_[THREAT]_fut/*",
+  "taskgraph_cache"
+ ],
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

@@ -98,6 +98,7 @@ from ._save import load_result
 from . import prioritize
 from . import sdm
 from . import simulate
+from . import services
 from . import surface
 from . import hydro
 from . import uncertainty
@@ -215,6 +216,7 @@ __all__ = [
     "prioritize",
     "sdm",
     "simulate",
+    "services",
     "surface",
     "hydro",
     "uncertainty",

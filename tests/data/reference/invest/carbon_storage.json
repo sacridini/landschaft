@@ -1,0 +1,27 @@
+{
+ "model": "carbon",
+ "nodata": -1,
+ "pixel": 30.0,
+ "valuation": null,
+ "summary": [
+  {
+   "label": "Baseline Carbon Storage",
+   "total": 208456.67781738282,
+   "units": "metric_ton",
+   "filename": "c_storage_bas.tif"
+  }
+ ],
+ "outputs": [
+  "c_above_bas",
+  "c_below_bas",
+  "c_dead_bas",
+  "c_soil_bas",
+  "c_storage_bas"
+ ],
+ "patched": false,
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

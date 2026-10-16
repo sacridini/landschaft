@@ -3732,6 +3732,39 @@ Dependem só do mapa de uso, de tabelas de parâmetros e de álgebra de mapas, t
   núcleo normalizado): a mesma convolução, em C++ ou com o `scipy.fft` com `workers`, um mapa por ameaça em
   paralelo.
 
+**Fase 1 feita** (2026-10-16, ramo do worktree, sem versão; `ls.services`, C++ `src/cpp/serv/`): referência
+natcap.invest 3.20.2 (pygeoprocessing 2.4.11, numpy 2.5.4) numa conda env `invest-ref` (rodar com `conda run -n
+invest-ref`: o python da env chamado direto não acha as DLLs, "DLL load failed while importing pyexpat");
+`tools/make_reference_invest.py` (9 casos sintéticos, entradas e saídas guardadas em `tests/data/reference/invest/`).
+* `carbon`: os quatro reservatórios por classe em float32, total ((acima + abaixo) + solo) + morto em float32 (o
+  `numpy.sum(axis=0)` do InVEST soma um após o outro), mudança e VPL em float32 (o mapa float32 vezes o float do
+  Python: a constante vira float32 antes, regra NEP 50), constante de valoração com as contas do InVEST passo a
+  passo: **bit a bit** em todos os mapas; totais da paisagem (float64, ordem fixa) com rtol 1e-12 (o InVEST soma
+  com a soma par a par do numpy por bloco). Na versão atual os mapas são densidades (t/ha) e os totais em t
+  (x área da célula / 10000).
+* `habitat_quality`: **o IDEAS dizia convolução, mas o InVEST mudou** (3.12, "HISTORY.rst": a convolução desde a
+  3.3.0 nunca foi documentada nem é a do artigo): o decaimento é da **distância euclidiana à célula de ameaça
+  mais próxima** (`pygeoprocessing.distance_transform_edt`, Meijster em float32; células de ameaça = valor != 0 e
+  != nodata, a intensidade 0-1 só é conferida), linear `(m - d) / m` ou exponencial `exp(-2,99 d / m)`, zero
+  além de m (em pixels). Portado o transform deles em float32 (mesmos bits; acima de ~4096 px os quadrados em
+  float32 podem arredondar diferente do `pow` do Cython: não testado), a degradação `f32(f64(f32(decay x sens)) x
+  peso x acesso)` (o peso é um float64 do numpy, forte na NEP 50), a soma em float32 na ordem das ameaças, a
+  qualidade com `powf` (o `np.power` float32 do numpy é o `powf` da UCRT) e o exponencial pela mesma expressão
+  numpy do InVEST (o `exp` float32 do numpy é SIMD, sem igual em C: com `exp` em double arredondado davam 2 ulps):
+  **bit a bit** em degradações, soma, qualidade e raridade (raster e tabela), com acesso por polígonos
+  (`rasterize` do landschaft = o do GDAL).
+* Erros do InVEST (só a forma correta, testada contra referência corrigida): (1) carbono: o mapa de mudança tem
+  nodata -1, então mudanças de exatamente -1 t/ha somem do total e do VPL (caso `carbon_minus_one_patched`, com o
+  nodata trocado por NaN); (2) habitat: uma ameaça sem nenhuma célula tem distância ~ meio perímetro do raster (o
+  "infinito numérico" do transform) e, com `max_dist` maior que isso, degrada tudo (casos `hq_empty_threat`, que
+  mostra o erro, e `..._patched`); (3) o InVEST 3.20.2 para com `KeyError: 'deg_sum_b'` quando o mapa base tem
+  ameaças (a saída nunca registrada): aqui a base com ameaças dá degradação e qualidade (teste: igual ao modelo
+  rodado com o mapa base como atual); as referências usam a base só para a raridade.
+* Desempenho (3000 x 3000, 3 núcleos, sem E/S): carbono 0,15 s contra 2,4 s do InVEST; qualidade de habitat
+  (3 ameaças) 0,82 s contra 12,2 s (o InVEST inclui gravar os GeoTIFFs).
+* Fica para depois: a forma "convolução" antiga como opção (densidade de ameaças), entradas em lon/lat (o InVEST
+  exige projetado; aqui também), o nó do Terraflux.
+
 ### Fase 2 (acoplamento hidrológico): `water_yield`
 
 Álgebra de mapas com clima e somas por microbacia.
