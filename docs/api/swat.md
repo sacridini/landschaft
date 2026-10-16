@@ -71,6 +71,8 @@ erosion = ls.hydro.swat.hru_map(project, "sedyld")    # t/ha per year, on the DE
 
 ::: landschaft.hydro.swat.load_qswat_project
 
+::: landschaft.hydro.swat.example_landscape
+
 ## Weather
 
 ::: landschaft.hydro.swat.climate

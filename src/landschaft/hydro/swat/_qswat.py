@@ -59,6 +59,17 @@ class SwatWatershed:
         the HRU selection (their area went to the HRUs kept) and outside.
     channels : xarray.DataArray
         The channel of each stream cell, 0 elsewhere.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> w = ls.hydro.swat.watershed(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+    ...                             soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], stream_threshold=1.0)
+    >>> w.subbasins.shape, int(w.subbasins.max())
+    ((371, 273), 33)
+    >>> sorted(w.tables)[:4]
+    ['gis_aquifers', 'gis_channels', 'gis_deep_aquifers', 'gis_hrus']
     """
 
     tables: dict
@@ -419,6 +430,31 @@ def watershed(dem, landuse, soils, *, landuse_lookup, soil_lookup, soil_table, s
     Returns
     -------
     SwatWatershed
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+
+    A 1 km2 stream threshold, one HRU per subbasin (QSWAT+'s default):
+
+    >>> w = ls.hydro.swat.watershed(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+    ...                             soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], stream_threshold=1.0)
+    >>> w
+    SwatWatershed(33 subbasins, 33 HRUs, 8075.9 ha)
+    >>> w.tables["gis_hrus"][["lsu", "landuse", "soil", "slope", "arsub"]].round(1).head(3)
+       lsu landuse         soil  slope  arsub
+    0   10    FRSD  UPLAND_LOAM   31.9  228.5
+    1   20    FRSD  UPLAND_LOAM   47.9   38.4
+    2   30    FRSD  UPLAND_LOAM   23.0  116.9
+
+    Every combination above 10 % of land use, soil and slope (bands 0-15-35-9999 %):
+
+    >>> many = ls.hydro.swat.watershed(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+    ...                                soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], stream_threshold=1.0,
+    ...                                hru_method="filter", thresholds=(10, 10, 10), slope_bands=(15, 35))
+    >>> len(many.tables["gis_hrus"])
+    128
     """
     if hru_method not in _METHODS:
         raise ValueError(f"hru_method must be one of {_METHODS}")

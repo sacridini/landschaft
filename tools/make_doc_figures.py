@@ -1458,6 +1458,67 @@ def sdm_future():
     save(fig, "sdm_future")
 
 
+_SWAT = {}
+
+
+def swat_run():
+    """The watershed model of the Watershed simulation tutorial (cached)."""
+    if not _SWAT:
+        ex = ls.hydro.swat.example_landscape()
+        w = ls.hydro.swat.watershed(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+                                    soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], stream_threshold=1.0,
+                                    slope_bands=(15, 35), hru_method="filter", thresholds=(10, 10, 10))
+        wx = ls.hydro.swat.climate(ex["stations"], pcp=ex["pcp"], tmax=ex["tmax"], tmin=ex["tmin"],
+                                   monthly=ex["monthly"])
+        project = ls.hydro.swat.from_tables(w, wx)
+        project.watershed = w
+        tables = {"hru_ls": "aa", "channel_sd": "day"}
+        _SWAT.update(ex=ex, w=w, project=project, swatplus=ls.hydro.swat.run(project, tables=tables),
+                     plant=ls.hydro.swat.run(project, tables=tables, c_factor="plant"))
+    return _SWAT
+
+
+@figure
+def swat_erosion():
+    run = swat_run()
+    project, ex = run["project"], run["ex"]
+    maps = [(ls.hydro.swat.hru_map(project, "sedyld", result=run["swatplus"]), "C of SWAT+ 62 (default)"),
+            (ls.hydro.swat.hru_map(project, "sedyld", result=run["plant"]), 'c_factor="plant"')]
+    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.6))
+    palette_map(axes[0], np.nan_to_num(ex["landuse"].values), {0: (255, 255, 255, 255), 1: (34, 120, 60, 255),
+                2: (230, 200, 90, 255)}, None, "land use and channels")
+    axes[0].legend(handles=[Patch(color=(34 / 255, 120 / 255, 60 / 255), label="forest (FRSD)"),
+                            Patch(color=(230 / 255, 200 / 255, 90 / 255), label="pasture (PAST)")],
+                   loc="upper center", bbox_to_anchor=(0.5, -0.01), ncol=2, frameon=False, fontsize=8)
+    axes[0].contour(run["w"].channels.values > 0, levels=[0.5], colors="#1d4ed8", linewidths=0.8)
+    from matplotlib.colors import LogNorm
+    for ax, (m, title) in zip(axes[1:], maps):
+        im = ax.imshow(np.clip(m.values, 0.01, None), cmap="YlOrBr", norm=LogNorm(0.01, 1000), interpolation="nearest")
+        ax.set_title(f"soil loss, {title}")
+        ax.set_axis_off()
+    fig.colorbar(im, ax=axes[1:], shrink=0.75, label="t/ha per year (average annual)")
+    save(fig, "swat_erosion")
+
+
+@figure
+def swat_discharge():
+    run = swat_run()
+    q = ls.hydro.swat.reach_discharge(run["project"], result=run["swatplus"])
+    outlet = int(q.mean().idxmax())
+    pcp = run["ex"]["pcp"]["valley"]
+    fig, ax = plt.subplots(figsize=(10, 3.4))
+    ax.plot(q.index, q[outlet].astype(float), color="#1d4ed8", lw=0.9)
+    ax.set_ylabel("discharge at the outlet (m3/s)")
+    ax.set_xlim(q.index[0], q.index[-1])
+    rain = ax.twinx()
+    rain.bar(pcp.index, pcp.values, color="#64748b", width=1.0)
+    rain.set_ylim(pcp.max() * 4, 0)
+    rain.set_ylabel("rain (mm/day)")
+    ax.set_title("daily discharge leaving the watershed")
+    fig.tight_layout()
+    save(fig, "swat_discharge")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:

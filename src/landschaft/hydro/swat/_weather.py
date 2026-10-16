@@ -53,6 +53,17 @@ class SwatClimate:
     wgn : pandas.DataFrame
         The weather generator: index (station, month 1-12), the :data:`WGN_COLUMNS`,
         plus ``rain_yrs`` (years of rain record).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> wx = ls.hydro.swat.climate(ex["stations"], pcp=ex["pcp"], tmax=ex["tmax"], tmin=ex["tmin"], monthly=ex["monthly"])
+    >>> sorted(wx.series)
+    ['pcp', 'tmax', 'tmin']
+    >>> wx.stations
+                  lat         lon      elev
+    valley  43.050142 -122.950156  899.0123
     """
 
     stations: pd.DataFrame
@@ -144,6 +155,20 @@ def wgn_from_series(pcp: pd.DataFrame, tmax: pd.DataFrame, tmin: pd.DataFrame, *
     -------
     pandas.DataFrame
         Index (station, month); the :data:`WGN_COLUMNS` and ``rain_yrs``.
+
+
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> wgn = ls.hydro.swat.wgn_from_series(ex["pcp"], ex["tmax"], ex["tmin"], monthly=ex["monthly"])
+    >>> wgn.loc["valley", ["pcp_ave", "pcp_sd", "wet_dry", "wet_wet"]].round(3).head(3)
+           pcp_ave  pcp_sd  wet_dry  wet_wet
+    month                                   
+    1      151.675   7.289    0.784    0.663
+    2      172.350   9.764    0.522    0.612
+    3      106.600   6.234    0.391    0.600
     """
     monthly = dict(monthly or {})
     pcp, tmax, tmin = (pd.DataFrame(x).astype(float) for x in (pcp, tmax, tmin))
@@ -232,6 +257,24 @@ def climate(stations, *, pcp, tmax, tmin, slr=None, hmd=None, wnd=None, wgn=None
     Returns
     -------
     SwatClimate
+
+
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> wx = ls.hydro.swat.climate(ex["stations"], pcp=ex["pcp"], tmax=ex["tmax"], tmin=ex["tmin"], monthly=ex["monthly"])
+    >>> wx
+    SwatClimate(1 stations, pcp, tmax, tmin)
+    >>> wx.period()
+    (Timestamp('2001-01-01 00:00:00'), Timestamp('2004-12-31 00:00:00'))
+    >>> wx.wgn.loc["valley", ["tmp_max_ave", "tmp_min_ave", "pcp_ave", "wet_dry", "pcp_days"]].round(2).head(3)
+           tmp_max_ave  tmp_min_ave  pcp_ave  wet_dry  pcp_days
+    month                                                      
+    1             5.59        -4.83   151.68     0.78     21.75
+    2             7.40        -3.06   172.35     0.52     16.25
+    3            10.59        -0.04   106.60     0.39     15.25
     """
     st = pd.DataFrame(stations).copy()
     for c in ("lat", "lon", "elev"):

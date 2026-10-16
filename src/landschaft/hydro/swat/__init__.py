@@ -31,6 +31,7 @@ Typical use::
 """
 
 from ._editor import from_tables
+from ._example import example_landscape
 from ._landscape import (CHANNEL_COLUMNS, HRU_COLUMNS, channel_map, from_rasters, hru_map, load_qswat_project,
                          reach_discharge)
 from ._project import SwatProject, load_txtinout
@@ -39,6 +40,6 @@ from ._run import C_FACTORS, STEPS, TABLES, WEATHER_COLUMNS, SwatProjectWarning,
 from ._weather import WGN_COLUMNS, SwatClimate, climate, wgn_from_series
 
 __all__ = ["C_FACTORS", "CHANNEL_COLUMNS", "HRU_COLUMNS", "STEPS", "SwatClimate", "SwatProject", "SwatProjectWarning",
-           "SwatResult", "SwatWatershed", "TABLES", "WEATHER_COLUMNS", "WGN_COLUMNS", "channel_map", "climate",
+           "SwatResult", "SwatWatershed", "TABLES", "WEATHER_COLUMNS", "WGN_COLUMNS", "channel_map", "climate", "example_landscape",
            "from_rasters", "from_tables", "hru_map", "load_qswat_project", "load_txtinout", "reach_discharge", "run",
            "run_many", "watershed", "wgn_from_series"]

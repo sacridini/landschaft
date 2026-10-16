@@ -200,6 +200,23 @@ def from_tables(watershed, climate: SwatClimate, *, start=None, end=None, codes:
     Returns
     -------
     SwatProject
+
+
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> w = ls.hydro.swat.watershed(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+    ...                             soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], stream_threshold=1.0)
+    >>> wx = ls.hydro.swat.climate(ex["stations"], pcp=ex["pcp"], tmax=ex["tmax"], tmin=ex["tmin"], monthly=ex["monthly"])
+    >>> project = ls.hydro.swat.from_tables(w, wx)
+    >>> project
+    SwatProject(62 files)
+    >>> project.text("time.sim").splitlines()[2].split()
+    ['0', '2001', '0', '2004', '0']
+    >>> print(project.text("hru-data.hru").splitlines()[2])
+           1  hru01                    topohru01             hyd01       UPLAND_LOAM          frsd_lum        soilplant1              null           snow001              null  
     """
     tables = getattr(watershed, "tables", watershed)
     static, data = _editor_data()

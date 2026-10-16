@@ -103,6 +103,13 @@ and follow along.
     Filling and breaching depressions, flow directions and accumulation,
     streams, height above the nearest drainage and wetness.
 
+-   :material-waves:{ .lg .middle } **[Watershed simulation](watershed-model.md)**
+
+    ---
+
+    The SWAT+ model from a DEM, land use and soils: daily water balance,
+    streamflow, soil loss on the map and a land use scenario.
+
 -   :material-leaf:{ .lg .middle } **[Biodiversity analysis](biodiversity.md)**
 
     ---

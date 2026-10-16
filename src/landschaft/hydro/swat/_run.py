@@ -67,6 +67,21 @@ class SwatResult(Saveable):
         ``{table: {column: unit}}``.
     warnings : list
         What SWAT+ would write to ``diagnostics.out`` (gages not found, ...).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> project = ls.hydro.swat.load_txtinout(ls.example_data("swat_hubbard_brook"))
+    >>> result = ls.hydro.swat.run(project, tables={"basin_wb": ["month", "year"]}, nyskip=1)
+    >>> result
+    SwatResult(1096 days, tables: hru_wb[day/month/year/aa], hru_nb[day/month/year/aa], hru_ls[day/month/year/aa], hru_pw[day/month/year/aa], basin_wb[month/year], basin_nb[day/month/year/aa], basin_ls[day/month/year/aa], basin_pw[day/month/year/aa], channel_sd[day/month/year/aa], aquifer[day/month/year/aa])
+    >>> result.table("basin_wb", "year")[["precip", "et", "surq_gen", "perc"]].astype(float).round(1)
+                precip     et  surq_gen   perc
+    date                                      
+    2001-12-31  1004.1  128.3     356.0  536.7
+    2002-12-31  1319.2  126.5     532.1  594.6
+    >>> result.units["basin_wb"]["et"]
+    'mm'
     """
 
     weather: pd.DataFrame

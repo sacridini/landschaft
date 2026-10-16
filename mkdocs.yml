@@ -180,6 +180,7 @@ nav:
       - Neutral landscapes: tutorials/neutral-landscapes.md
       - Surface texture: tutorials/surface-texture.md
       - Terrain hydrology: tutorials/terrain-hydrology.md
+      - Watershed simulation: tutorials/watershed-model.md
       - Biodiversity analysis: tutorials/biodiversity.md
       - Conservation priorities: tutorials/prioritization.md
       - Optimized conservation plans: tutorials/conservation-plans.md

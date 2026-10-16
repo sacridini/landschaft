@@ -484,6 +484,8 @@ raster read in strips), and only that is reprojected and encoded.
 | Land change validation: fuzzy similarity and similarity of differences | Dinamica EGO 8.13 (measured): 36 maps, windows 1-11, exponential and constant decay | identical maps; means to the 15 digits it writes |
 | Land change: gravity potential (`surface.gravity`) | Dinamica EGO 8.13 `CalcInteractionPotentialMap` (measured): 10 maps, five exponents, with and without a mask | within 3e-6 (Dinamica adds float32 terms in float32; Landschaft sums in float64) |
 | Land change: roads (`friction_cost`, `pathways`) | Dinamica EGO 8.13 `CalcCostMap` and `CalcPathwayMap` (measured): real and integer frictions, with and without diagonal costs, relative frictions, impassable and unreachable cells; paths down the costs and along the directions | identical costs and paths; directions identical except between equally cheap predecessors (Dinamica's follow its sweeps) |
+| Watershed model (`hydro.swat.run`): weather and generator, HRUs (snow, ET, curve number runoff, MUSLE, percolation, lateral flow, nutrients, plant growth, scheduled management, decision tables, crop rotations, urban land), routing units, aquifers, SWAT-DEG channels, every printed table | SWAT+ 62.0.1 built with flang 22 against the UCRT (equal to the official Windows executable in every printed digit), dumping its state each day and its printed records: the official Hubbard Brook and Ames examples, Muskingum routing, two projects made by `from_rasters` (one with crop rotations and urban land) and the plants' minimum C (`c_factor="plant"`) | identical bits (every field of every day) |
+| Watershed division and project files (`hydro.swat.watershed`, `from_tables`) | QSWAT+ 3 (its sources) and the SWAT+ Editor 4.0.2 run on the same tables: a synthetic watershed and a 282 km² DEM (QSWAT+'s test data) | the Editor's 64 files, token for token |
 
 The default solver of Omniscape and Circuitscape (conjugate gradients with an
 algebraic multigrid) is itself only about 2e-7 away from the exact solution;
@@ -549,8 +551,11 @@ its code:
       the C library's, as terra's is on Windows: R takes it from Windows'
       UCRT, whose code is not public, and other C libraries (glibc) differ
       from it in the last bit. The slopes then differ from R's by one unit in
-      the last place (two in degrees). Everything else gives the same bits
-      on Windows and Linux: Landschaft carries its own versions of the
+      the last place (two in degrees). The SWAT+ port calls the C library's
+      exp, log and powers as SWAT+ does, and carries their last bits through
+      years of daily state: off Windows its results are within 1e-4 of each
+      quantity's scale of SWAT+'s on Windows (2.4e-5 at most in the test
+      cases). Everything else gives the same bits on Windows and Linux: Landschaft carries its own versions of the
       functions whose bits matter (log, sqrt, sin, cos, atan2, exp and powers
       as mingw-w64 computes them on the x87 unit, and the UCRT's hypot).
 

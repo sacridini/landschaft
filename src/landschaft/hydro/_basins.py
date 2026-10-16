@@ -78,6 +78,20 @@ def snap_outlets(points, streams, *, distance: float | None = None, accumulation
     -------
     numpy.ndarray
         (n, 2) row and column of the cell of each point.
+
+
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> dem = np.array([[5, 4, 5], [5, 3, 5], [5, 2, 5], [5, 1, 5]], float)
+    >>> st = ls.hydro.streams(ls.hydro.flow_accumulation(dem), 2)
+
+    a point half a cell west of the stream, in the raster's x, y (cell centres 0.5, 1.5...):
+
+    >>> ls.hydro.snap_outlets([(0.9, 1.5)], st, distance=1.0)
+    array([[2, 1]])
     """
     s = read_surface(streams)
     pts = _points(points, s)

@@ -109,6 +109,11 @@ Python 3.10+ · C++17 / OpenMP core · numpy · xarray · dask · GPL-3.0-or-lat
     scenarios with replicates, and roads and stocks that change with the
     model.
 
+-   [**Watershed simulation**](tutorials/watershed-model.md)
+
+    The SWAT+ model from a DEM, land use and soils: daily water balance,
+    streamflow, soil loss on the map and land use scenarios.
+
 -   [**Large data & batch**](tutorials/large-data.md)
 
     Folders of rasters in parallel, tiles for maps larger than memory,
@@ -219,7 +224,8 @@ networks), Circuitscape and Omniscape (circuit connectivity), gdistance (routes 
 grids), geodiv and spatialEco (surface metrics), NLMR (neutral landscape models),
 Zonation 5 (spatial prioritization), the R packages for species distributions
 (CoordinateCleaner, usdm, dismo, blockCV, ENMeval, predicts, ecospat, maxnet) and
-the land change models (lulcc, CLUMondo, FUTURES, MOLUSCE, Dinamica EGO), and is
+the land change models (lulcc, CLUMondo, FUTURES, MOLUSCE, Dinamica EGO) and SWAT+
+(watershed simulation), and is
 [tested against their outputs](benchmarks.md#accuracy).
 
 You do not need to know any of them to use it: the [tutorials](tutorials/index.md)

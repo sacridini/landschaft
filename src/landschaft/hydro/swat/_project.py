@@ -35,6 +35,19 @@ class SwatProject:
     ----------
     files : dict
         ``{file name: contents}`` (bytes, LF line ends).
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> project = ls.hydro.swat.load_txtinout(ls.example_data("swat_hubbard_brook"))
+    >>> "plants.plt" in project, project.text("time.sim").splitlines()[1].split()
+    (True, ['day_start', 'yrc_start', 'day_end', 'yrc_end', 'step'])
+    >>> copy = project.copy()
+    >>> copy.set_text("time.sim", project.text("time.sim").replace("2002", "2001"))
+    >>> import tempfile
+    >>> folder = copy.write(tempfile.mkdtemp())   # a TxtInOut folder SWAT+ itself can run
+    >>> sorted(p.name for p in folder.iterdir())[:4]
+    ['HQ.tmp', 'STA1.tmp', 'STA14.tmp', 'STA17.tmp']
     """
 
     files: dict = field(default_factory=dict)

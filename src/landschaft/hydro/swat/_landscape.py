@@ -52,15 +52,25 @@ def from_rasters(dem, landuse, soils, *, landuse_lookup, soil_lookup, soil_table
     -------
     SwatProject
 
+
+
     Examples
     --------
     >>> import landschaft as ls
-    >>> wx = ls.hydro.swat.climate(stations, pcp=pcp, tmax=tmax, tmin=tmin,  # doctest: +SKIP
-    ...                            monthly={"pcp_hhr": 15.0, "slr_ave": 14.0, "dew_ave": 5.0, "wnd_ave": 3.0})
-    >>> project = ls.hydro.swat.from_rasters(  # doctest: +SKIP
-    ...     dem, landuse, soils, landuse_lookup={1: "FRSD", 2: "PAST"}, soil_lookup={1: "TX047"},
-    ...     soil_table=usersoil, climate=wx, stream_threshold=2.0, hru_method="filter", thresholds=(10, 10, 10))
-    >>> erosion = ls.hydro.swat.hru_map(project, "sedyld")  # t/ha per year  # doctest: +SKIP
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> wx = ls.hydro.swat.climate(ex["stations"], pcp=ex["pcp"], tmax=ex["tmax"], tmin=ex["tmin"], monthly=ex["monthly"])
+    >>> project = ls.hydro.swat.from_rasters(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+    ...                                      soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], climate=wx,
+    ...                                      stream_threshold=1.0)
+    >>> project
+    SwatProject(62 files)
+    >>> project.watershed
+    SwatWatershed(33 subbasins, 33 HRUs, 8075.9 ha)
+    >>> result = ls.hydro.swat.run(project, tables={"basin_wb": "aa"})
+    >>> result.table("basin_wb", "aa")[["precip", "et", "surq_gen", "latq", "perc"]].astype(float).round(1)
+                precip     et  surq_gen  latq   perc
+    date                                            
+    2004-12-31  1108.2  507.9     258.7  21.1  294.5
     """
     w = watershed(dem, landuse, soils, landuse_lookup=landuse_lookup, soil_lookup=soil_lookup, soil_table=soil_table,
                   **options)
@@ -76,6 +86,24 @@ def load_qswat_project(path) -> dict:
     ``gis_aquifers``, ``gis_deep_aquifers``, ``gis_points``, ``gis_routing``,
     ``soils_sol`` and ``soils_sol_layer`` from the ``.sqlite`` QSWAT+ writes (the
     projects without landscapes, lakes, reservoirs or point sources).
+
+
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> w = ls.hydro.swat.watershed(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+    ...                             soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], stream_threshold=1.0)
+    >>> import sqlite3, tempfile, pathlib
+    >>> db = pathlib.Path(tempfile.mkdtemp()) / "project.sqlite"
+    >>> with sqlite3.connect(db) as conn:
+    ...     for name, table in w.tables.items():
+    ...         _ = table.to_sql(name, conn, index=False)
+    ... 
+    >>> tables = ls.hydro.swat.load_qswat_project(db)
+    >>> len(tables["gis_hrus"]), sorted(tables)[:3]
+    (33, ['gis_aquifers', 'gis_channels', 'gis_deep_aquifers'])
     """
     p = Path(path)
     if not p.is_file():
@@ -143,6 +171,24 @@ def hru_map(project, variable, *, how: str = "annual", result=None, c_factor: st
     xarray.DataArray
         On the DEM's grid; NaN outside the watershed and on cells whose land use, soil
         and slope combination was folded into other HRUs.
+
+
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> wx = ls.hydro.swat.climate(ex["stations"], pcp=ex["pcp"], tmax=ex["tmax"], tmin=ex["tmin"], monthly=ex["monthly"])
+    >>> project = ls.hydro.swat.from_rasters(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+    ...                                      soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], climate=wx,
+    ...                                      stream_threshold=1.0)
+    >>> result = ls.hydro.swat.run(project, tables={"hru_ls": "aa", "hru_wb": "aa"}, c_factor="plant")
+    >>> loss = ls.hydro.swat.hru_map(project, "sedyld", result=result)   # t/ha per year, plants' minimum C
+    >>> loss.shape == ex["dem"].shape, round(float(loss.mean()), 3)
+    (True, 0.379)
+    >>> runoff = ls.hydro.swat.hru_map(project, "surq_gen", result=result)   # mm per year
+    >>> round(float(runoff.min()), 1), round(float(runoff.max()), 1)
+    (1.9, 445.5)
     """
     w = _watershed_of(project)
     if isinstance(variable, str):
@@ -169,7 +215,22 @@ def hru_map(project, variable, *, how: str = "annual", result=None, c_factor: st
 
 def reach_discharge(project, *, result=None) -> pd.DataFrame:
     """The daily discharge leaving each channel (m3/s, ``channel_sd``'s ``flo_out``):
-    dates x channel number. ``result``: a run that printed ``channel_sd`` by day."""
+    dates x channel number. ``result``: a run that printed ``channel_sd`` by day.
+
+
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> wx = ls.hydro.swat.climate(ex["stations"], pcp=ex["pcp"], tmax=ex["tmax"], tmin=ex["tmin"], monthly=ex["monthly"])
+    >>> project = ls.hydro.swat.from_rasters(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+    ...                                      soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], climate=wx,
+    ...                                      stream_threshold=1.0)
+    >>> q = ls.hydro.swat.reach_discharge(project)   # days x channels, m3/s
+    >>> q.shape, round(float(q.max().max()), 2)
+    ((1096, 33), 11.1)
+    """
     return _table(project, result, "channel_sd", "day")["flo_out"].unstack("channel")
 
 
@@ -179,6 +240,20 @@ def channel_map(project, values=None, *, how: str = "mean", result=None) -> xr.D
     ``values``: a column of the channel table (:data:`CHANNEL_COLUMNS`, default
     ``"flo_out"``) or values by channel number; ``how`` and ``result`` as
     :func:`hru_map`. NaN off the streams.
+
+
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> ex = ls.hydro.swat.example_landscape()
+    >>> wx = ls.hydro.swat.climate(ex["stations"], pcp=ex["pcp"], tmax=ex["tmax"], tmin=ex["tmin"], monthly=ex["monthly"])
+    >>> project = ls.hydro.swat.from_rasters(ex["dem"], ex["landuse"], ex["soils"], landuse_lookup=ex["landuse_lookup"],
+    ...                                      soil_lookup=ex["soil_lookup"], soil_table=ex["soil_table"], climate=wx,
+    ...                                      stream_threshold=1.0)
+    >>> flow = ls.hydro.swat.channel_map(project)   # mean m3/s leaving each channel, on the stream cells
+    >>> round(float(flow.max()), 3)
+    0.609
     """
     w = _watershed_of(project)
     if values is None or isinstance(values, str):
