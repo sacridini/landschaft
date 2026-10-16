@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.49.0] - 2026-10-16
+
 ### Added
 - `ls.parallel.map`: any tool of `ls.parallel.TOOLS` (the analyses of `ls`, `ls.surface`, `ls.hydro`,
   `ls.services`, `ls.nlm`, `ls.circuit`) on many inputs, here or on helpers; arguments and results travel as data
