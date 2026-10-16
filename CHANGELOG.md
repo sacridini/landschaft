@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.47.0] - 2026-10-16
+
 ### Added
 - Work shared with the other computers of a lab (`ls.parallel`, adapted from zeit's tile runner): a computer lends
   itself with `landschaft worker` (the new `landschaft` command; the first time `--join <code>`, with the code that
