@@ -6,45 +6,45 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.50.0] - 2026-10-16
+
 ### Added
-- `ls.hydro.swat` (in progress): SWAT+ 62.0.1 ported to C++, read from its own TxtInOut files
-  (`load_txtinout` -> `SwatProject`, `run` -> `SwatResult`), bit for bit with SWAT+ itself. So far the daily
-  weather: measured series, the weather generator with its random numbers, the stations and the daily Hargreaves
-  PET, checked against a dump of the reference on the Hubbard Brook and Ames examples.
-- `ls.hydro.swat` routing: the daily command loop over the spatial objects, routing units with their delivery
-  ratios, 1-D aquifers and SWAT-DEG channels (rating curves, variable storage or Muskingum routing, channel
-  sediment, in-stream water quality, water temperature), bit for bit with SWAT+ on Hubbard Brook given the
-  reference's HRU outputs.
-- `ls.hydro.swat` HRUs: the land phase of each day (snow, canopy, soil temperature, PET, ET, curve number
-  runoff, MUSLE, percolation and lateral flow, residue and nutrient cycling, plant growth, the lag storages and the
-  HRU hydrographs), so the whole Hubbard Brook simulation, HRUs feeding the routing, is bit for bit with SWAT+.
-- `ls.hydro.swat` management: scheduled operations (plant, grain and residue harvest, kill, harvest and kill,
-  tillage, irrigation, mineral fertilizer, skip) and land use decision tables with HRU conditions and irrigation
-  actions, bit for bit with SWAT+ on the Ames example (scheduled corn and automatic irrigation).
+- `ls.hydro.swat`: the watershed model SWAT+ 62.0.1 (USDA-ARS and Texas A&M AgriLife) ported to C++, giving
+  SWAT+'s own results, bit for bit on Windows, for the part of the model it covers. Daily weather (measured series
+  and the weather generator with SWAT+'s random numbers), HRUs (snow, canopy, soil temperature, PET, ET, curve number
+  runoff, MUSLE erosion, percolation, lateral flow, residue and nutrient cycling with the static carbon model, plant
+  growth, scheduled operations, land use decision tables, the SWAT+ Editor's automatic crop rotations, urban land),
+  routing units, 1-D aquifers and SWAT-DEG channels (variable storage or Muskingum routing, channel sediment, water
+  quality and temperature). Checked against SWAT+ itself, built with flang against the UCRT and dumping its state
+  every day: the official Hubbard Brook and Ames examples and projects made by `from_rasters`. What it does not
+  simulate (reservoirs, wetlands, pesticides, salts, CENTURY carbon, Green-Ampt...) is refused with a clear error.
+- `ls.hydro.swat.load_txtinout` (a TxtInOut folder or a zip of one) -> `SwatProject`; `run` / `run_many` ->
+  `SwatResult`: what SWAT+ prints (print.prt's HRU, basin, channel and aquifer tables by day, month, year and average
+  annual, with SWAT+'s sums and means) as DataFrames with SWAT+'s column names and units
+  (`result.table(name, step)`, `result.units`); `SwatProject.set_print` and `run(..., tables=, nyskip=)` choose them;
+  `run_many` runs several projects at once, one per thread.
 - `ls.hydro.swat` from the landscape: `watershed` divides a DEM with land use and soil maps as QSWAT+ does
   (subbasins and channels from stream links split at the outlets, HRUs by land use, soil and slope band with QSWAT+'s
   dominant / filter / area selection, aquifers, routing; QSWAT+'s tables), `from_tables` writes the SWAT+ project as
   the SWAT+ Editor 4.0.2 does (the same files, token for token, also from a QSWAT+ project database with
   `load_qswat_project`), `from_rasters` does both; `climate` and `wgn_from_series` make the weather files and the
-  weather generator from daily tables; `hru_map`, `channel_map` and `reach_discharge` put HRU and channel results
-  back on the map. A synthetic landscape and a real DEM simulate bit for bit as SWAT+ on the editor's files.
-- `ls.hydro.swat` results: `run` gives what SWAT+ prints (print.prt's HRU, basin, channel and aquifer tables by day,
-  month, year and average annual, with SWAT+'s sums and means) as `SwatResult.tables` / `result.table(name, step)`,
-  DataFrames with SWAT+'s column names and units, bit for bit with SWAT+'s own records; `SwatProject.set_print` and
-  `run(..., tables=, nyskip=)` choose them. `hru_map` and `channel_map` map SWAT+'s average annual values.
-- `ls.hydro.swat`: the SWAT+ Editor's automatic crop rotations (plant, harvest, kill and reset actions of the decision
-  tables) and urban land uses (impervious runoff, build-up/wash-off and USGS regression loads); `run_many` runs
-  several projects at once; `load_txtinout` reads a zip; example project `ls.example_data("swat_hubbard_brook")`.
-- `ls.hydro.swat.run(..., c_factor="plant")`: MUSLE's C from the plants' minimum USLE C (SWAT+'s earlier method,
-  kept in its code but unused in 62, whose residue and canopy cover gives forests a C of 0.5-0.9); the default stays
+  weather generator from daily tables; `hru_map`, `channel_map` and `reach_discharge` put results back on the map.
+- `ls.hydro.swat.run(..., c_factor="plant")`: MUSLE's C from the plants' minimum USLE C, SWAT+'s earlier method,
+  kept in its code but unused in 62, whose residue and canopy cover gives forests a C of 0.5-0.9; the default stays
   SWAT+ 62's.
 - `ls.hydro.swat.run` warns (`SwatProjectWarning`) when parameters.bsn's peak rate factor is far below the 484 of
   SWAT+ 62: files written for an earlier SWAT+ (the official Hubbard Brook and Ames examples) put 1 there, and SWAT+
-  62 then computes peak rates, and erosion, hundreds of times too low without a word. The packaged Hubbard Brook
-  example has 484.
+  62 then computes peak rates, and erosion, hundreds of times too low without a word.
+- Examples: `ls.example_data("swat_hubbard_brook")` (the official Hubbard Brook project, with the peak rate factor
+  of SWAT+ 62) and `ls.hydro.swat.example_landscape()` (DEM, land use, soils and weather for a small model); the
+  tutorial *Watershed simulation* and the API page *Watershed model (SWAT+)*.
 - `ls.hydro.stream_links`, `ls.hydro.watersheds` and `ls.hydro.snap_outlets`: the links of a stream network (split
   at junctions and outlets, with length, drop and Strahler order), the area draining to each seed, outlets moved
   onto the streams.
+
+### Fixed
+- `ls.parallel`: a task run in the caller's process gave the process its own thread count as the default for
+  everything after it.
 
 ## [1.49.0] - 2026-10-16
 
