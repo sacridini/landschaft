@@ -379,6 +379,7 @@ def test_monte_carlo_on_a_helper(group, tmp_path):
 
 
 def test_sdm_folds_on_a_helper(group, tmp_path):
+    pytest.importorskip("sklearn")
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
