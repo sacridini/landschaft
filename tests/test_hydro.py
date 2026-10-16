@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 import landschaft as ls
+from conftest import assert_ucrt_close
 
 H = ls.hydro
 REF = Path(__file__).parent / "data" / "reference" / "hydro" / "whitebox.npz"
@@ -42,7 +43,7 @@ def test_directions_and_accumulations_match_whitebox(ref, name):
         ours = H.flow_accumulation(filled, flats=False, units=units, **kw).values
         np.testing.assert_array_equal(ours.astype(np.float32), ref[f"{name}/{key}"].astype(np.float32))
     dinf = H.flow_direction(filled, method="dinf", flats=False, **kw).values
-    np.testing.assert_array_equal(dinf[valid], ref[f"{name}/dinf"][valid])   # (WhiteboxTools: -1 where missing)
+    assert_ucrt_close(dinf[valid], ref[f"{name}/dinf"][valid])   # (WhiteboxTools: -1 where missing; atan)
     # stored as float32 (WhiteboxTools sums in the order its threads hand over the rows: the
     # same float32 values, the last float64 bits may differ)
     for method, key in (("dinf", "dinfacc"), ("fd8", "fd8acc")):

@@ -37,10 +37,10 @@ def _raster(a, nodata=None):
 
 
 def _same(ours, ref):
-    """The same float32 bits (NaN where InVEST has nodata)."""
-    a = np.asarray(ours, dtype=np.float32)
-    np.testing.assert_array_equal(np.isnan(a), np.isnan(ref))
-    np.testing.assert_array_equal(a, ref.astype(np.float32))
+    """The same float32 bits (NaN where InVEST has nodata); off Windows within UCRT_RTOL."""
+    from conftest import assert_ucrt_close
+
+    assert_ucrt_close(np.asarray(ours, dtype=np.float32), ref.astype(np.float32))
 
 
 def _ulps(ours, ref):

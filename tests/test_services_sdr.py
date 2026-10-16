@@ -39,11 +39,11 @@ def _run(name, **kw):
 
 
 def _same(ours, ref, name):
+    from conftest import assert_ucrt_close
+
     a = np.asarray(ours)
     assert a.dtype == ref.dtype, (name, a.dtype, ref.dtype)
-    if a.dtype.kind == "f":
-        np.testing.assert_array_equal(np.isnan(a), np.isnan(ref), err_msg=name)
-    np.testing.assert_array_equal(a, ref, err_msg=name)
+    assert_ucrt_close(a, ref, err_msg=name)
 
 
 @pytest.mark.parametrize("name", CASES)

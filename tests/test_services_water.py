@@ -46,10 +46,11 @@ def _run_wy(name):
 
 
 def _bits(ours, ref):
+    from conftest import assert_ucrt_close
+
     a = np.asarray(ours)
     assert a.dtype == ref.dtype, (a.dtype, ref.dtype)
-    np.testing.assert_array_equal(np.isnan(a), np.isnan(ref))
-    np.testing.assert_array_equal(a, ref)
+    assert_ucrt_close(a, ref)
 
 
 @pytest.mark.parametrize("name", ["wy_basic", "wy_full", "wy_int_inputs", "wy_float64"])

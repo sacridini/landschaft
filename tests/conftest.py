@@ -39,6 +39,23 @@ UCRT_LIBM = sys.platform == "win32"
 # values allow a few units in the last place.
 WINDOWS_BLAS = sys.platform == "win32"
 
+# Off Windows, results that go through the C library's exp, pow, log10 or atan in a
+# chain of float32 rasters (the InVEST models, D-infinity) can differ from references
+# made on Windows by a unit in the last place of one term, which the chain carries on.
+UCRT_RTOL = 0.0 if UCRT_LIBM else 1e-5
+
+
+def assert_ucrt_close(a, b, err_msg: str = "") -> None:
+    """``a`` equals ``b`` (NaN matching NaN) on Windows, within ``UCRT_RTOL`` elsewhere."""
+    a = np.asarray(a)
+    b = np.asarray(b)
+    if a.dtype.kind == "f":
+        np.testing.assert_array_equal(np.isnan(a), np.isnan(b), err_msg=err_msg)
+    if UCRT_LIBM:
+        np.testing.assert_array_equal(a, b, err_msg=err_msg)
+    else:
+        np.testing.assert_allclose(a, b, rtol=UCRT_RTOL, atol=0, equal_nan=True, err_msg=err_msg)
+
 
 def same_bits(a, b, *, scale=None, ulps: float = 4) -> np.ndarray:
     """Element by element: ``a`` has the bits of ``b`` (NaN matching NaN).
