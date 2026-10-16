@@ -35,6 +35,9 @@ in a new major version.
 - `ls.hydro.swat`: the SWAT+ Editor's automatic crop rotations (plant, harvest, kill and reset actions of the decision
   tables) and urban land uses (impervious runoff, build-up/wash-off and USGS regression loads); `run_many` runs
   several projects at once; `load_txtinout` reads a zip; example project `ls.example_data("swat_hubbard_brook")`.
+- `ls.hydro.swat.run(..., c_factor="plant")`: MUSLE's C from the plants' minimum USLE C (SWAT+'s earlier method,
+  kept in its code but unused in 62, whose residue and canopy cover gives forests a C of 0.5-0.9); the default stays
+  SWAT+ 62's.
 - `ls.hydro.stream_links`, `ls.hydro.watersheds` and `ls.hydro.snap_outlets`: the links of a stream network (split
   at junctions and outlets, with length, drop and Strahler order), the area draining to each seed, outlets moved
   onto the streams.

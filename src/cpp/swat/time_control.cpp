@@ -209,6 +209,7 @@ void time_control(Sim& s) {
 
 void run(Sim& s, const RunOptions& opt) {
     s.dump = opt.dump;
+    s.c_factor_plant = opt.c_factor_plant;
     proc_bsn(s);
     proc_date_time(s);
     proc_db(s);

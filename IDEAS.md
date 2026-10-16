@@ -4270,7 +4270,9 @@ ou pela ET das plantas, `event` 0):
      no modelo e no editor): o fator C é sempre o do APEX, cobertura do resíduo x cobertura da biomassa, em que um dossel
      alto quase não protege (`1 - cov * exp(-0.328 cht)`); a floresta só se protege pela serapilheira, que decai a
      0,6-1,2 t/ha -> C = 0,66 (o `usle_c` mínimo da floresta é 0,001). Na referência com o método antigo (C mínimo da
-     planta): floresta em argila 868 -> 1,2 t/ha/ano, pasto em argila 318 -> 11,5. Decisão a tomar com o usuário.
+     planta): floresta em argila 868 -> 1,2 t/ha/ano, pasto em argila 318 -> 11,5. **Decisão do usuário (2026-10-16)**:
+     padrão = SWAT+ 62; o C clássico como opção explícita `run(..., c_factor="plant")` (também `run_many`,
+     `hru_map`), conferida bit a bit contra a referência com `SWAT_CFAC_PLANT=1` (caso `landscape_cplant`).
   3. Contribui: o solo sintético `CLAY1` (grupo D, 0,8-1,5 mm/h) satura (650 mm/ano de escoamento, 57 % da chuva),
      agravado pelo erro do editor na regra de `perco/cn3_swf/latq_co` (declividade em fração numa tabela em %:
      `latq_co` 0,01 em vez de 0,9 a 32 %); corrigida a regra, a erosão não cai (o `cn3_swf` 0 aumenta o CN).

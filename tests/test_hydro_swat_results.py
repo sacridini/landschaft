@@ -111,3 +111,31 @@ def test_load_txtinout_reads_folders_and_zips(tmp_path):
     assert folder.files == zipped.files
     with pytest.raises(FileNotFoundError):
         S.load_txtinout(tmp_path / "nothing")
+
+
+@pytest.fixture(scope="module")
+def cplant():
+    project = _project("landscape_cplant")
+    raw = S._run._run_raw(project, dump=True, c_factor="plant")
+    return project, raw, np.load(REF / "landscape_cplant.npz")
+
+
+@pytest.mark.parametrize("tag", [10, 11, 12, 13, 30, 40, 2033, 2503])
+def test_plant_c_factor_matches_swatplus_run_so(cplant, tag):
+    # the reference run with SWAT_CFAC_PLANT=1: ero_cfactor's old method
+    _, raw, ref = cplant
+    keys, vals = (raw["prints"] if tag >= 2000 else raw["dump"])[tag]
+    np.testing.assert_array_equal(keys, ref[f"t{tag}_keys"])
+    assert_swat_close(vals[:, : ref[f"t{tag}_vals"].shape[1]], ref[f"t{tag}_vals"], err_msg=f"tag {tag}")
+
+
+def test_plant_c_factor_changes_only_sediment(cplant):
+    project, _, _ = cplant
+    tables = {"hru_wb": "aa", "hru_ls": "aa"}
+    apex = S.run(project, tables=tables)
+    plant = S.run(project, tables=tables, c_factor="plant")
+    pd.testing.assert_frame_equal(apex.table("hru_wb", "aa"), plant.table("hru_wb", "aa"))
+    a, p = apex.table("hru_ls", "aa")["sedyld"], plant.table("hru_ls", "aa")["sedyld"]
+    assert (p <= a + 1e-9).all() and p.sum() < 0.1 * a.sum()
+    with pytest.raises(ValueError, match="c_factor"):
+        S.run(project, c_factor="apex")

@@ -301,6 +301,26 @@ index fc8e026..e46cc6e 100644
          !set the next command
          icmd = ob(icmd)%cmd_next
          
+diff --git a/src/ero_cfactor.f90 b/src/ero_cfactor.f90
+index a564a80..0c828c7 100644
+--- a/src/ero_cfactor.f90
++++ b/src/ero_cfactor.f90
+@@ -32,6 +32,7 @@
+       use time_module
+       use erosion_module
+       use utils
++      use ls_dump_module, only : ls_cfac_plant
+       
+       implicit none
+ 
+@@ -49,6 +50,7 @@
+       j = ihru
+ 
+       bsn_cc%cfac = 1
++      if (ls_cfac_plant) bsn_cc%cfac = 0
+       !! HRU sediment calculations
+       if (bsn_cc%cfac == 0) then
+         !! old method using minimum c factor (average of each plant in community)
 diff --git a/src/hru_output.f90 b/src/hru_output.f90
 index 8356e69..92c214b 100644
 --- a/src/hru_output.f90
@@ -461,10 +481,10 @@ index 8356e69..92c214b 100644
               if (pco%csvout == "y") then 
 diff --git a/src/ls_dump_module.f90 b/src/ls_dump_module.f90
 new file mode 100644
-index 0000000..400fe14
+index 0000000..599cf9f
 --- /dev/null
 +++ b/src/ls_dump_module.f90
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,161 @@
 +      module ls_dump_module
 +!!    landschaft parity harness: binary daily dump of SWAT+ states.
 +!!    Active only when the environment variable SWAT_DUMP names a file.
@@ -473,6 +493,7 @@ index 0000000..400fe14
 +      implicit none
 +      integer :: ls_dump_unit = -1
 +      logical :: ls_dump_on = .false.
++      logical :: ls_cfac_plant = .false.  !! env SWAT_CFAC_PLANT=1: ero_cfactor's old method (plant minimum C)
 +      real, dimension(:), allocatable :: ls_buf
 +      interface ls_push
 +        module procedure ls_push_r, ls_push_wb, ls_push_nb, ls_push_ls, ls_push_pw, ls_push_aq, ls_push_hyd
@@ -531,6 +552,9 @@ index 0000000..400fe14
 +      subroutine ls_dump_open
 +        character(len=1024) :: path
 +        integer :: n, st
++        call get_environment_variable ("SWAT_CFAC_PLANT", path, n, st)
++        ls_cfac_plant = (st == 0 .and. n > 0)
++        if (ls_cfac_plant) ls_cfac_plant = (path(1:1) == "1")
 +        call get_environment_variable ("SWAT_DUMP", path, n, st)
 +        if (st == 0 .and. n > 0) then
 +          open (newunit=ls_dump_unit, file=path(1:n), access="stream", form="unformatted", status="replace")

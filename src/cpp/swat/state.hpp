@@ -99,6 +99,7 @@ struct Sim : input_file_module,
 
     // daily dump
     bool dump = false;
+    bool c_factor_plant = false;  // RunOptions::c_factor_plant
     std::vector<DumpRecord> dumps;
     // what SWAT+ prints (print.prt), always kept: tag = the reference's Fortran unit
     std::vector<DumpRecord> prints;

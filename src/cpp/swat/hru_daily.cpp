@@ -529,8 +529,23 @@ void ero_eiusle(Sim& s) {
 // ero_cfactor.f90 (the reference always uses the residue and cover method)
 void ero_cfactor(Sim& s) {
     const int j = s.ihru;
-    s.bsn_cc.cfac = 1;
+    // SWAT+ 62 always takes the residue and biomass cover of APEX (codes.bsn c_fact is not
+    // used); RunOptions::c_factor_plant gives its old method, the plant's minimum C
+    s.bsn_cc.cfac = s.c_factor_plant ? 0 : 1;
     const plant_community_mass& pm = s.pl_mass(j);
+    if (s.bsn_cc.cfac == 0) {
+        const float cover = pm.ab_gr_com.m + pm.rsd_tot.m;
+        float c = 0.0f;
+        if (s.pcom(j).npl > 0) {
+            c = exp_w((-0.2231f - s.cvm_com(j)) * std::exp(-0.00115f * cover) + s.cvm_com(j));
+        } else if (cover > 1.e-4f) {
+            c = exp_w(-0.2231f * exp_w(-0.00115f * cover));
+        } else {
+            c = 0.8f;
+        }
+        s.usle_cfac(s.ihru) = c;
+        return;
+    }
     const float rsd_sumfac = (pm.rsd_tot.m + 1.0f) / 1000.0f;
     const float rsd_covfact = exp_w(-s.bsn_prm.rsd_covco * rsd_sumfac);
     const float ab_gr_t = pm.ab_gr_com.m / 1000.0f;

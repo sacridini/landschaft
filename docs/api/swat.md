@@ -20,6 +20,13 @@ files), `from_rasters` does both. `run` simulates the project; `hru_map` and
 `channel_map` put the results back on the map. A project made here also runs
 in SWAT+ itself (`SwatProject.write`).
 
+The erosion of MUSLE uses SWAT+ 62's cover factor C by default: the cover of
+the residue times the cover of the growing biomass, in which a tall canopy
+hardly protects the soil, so a forest's C (0.5-0.9 under little litter) can
+exceed a pasture's. `run(..., c_factor="plant")` takes the earlier SWAT+
+method instead, the plants' minimum C (forest 0.001); only sediment and what
+travels with it change.
+
 What the port does not simulate is refused with a clear error when a project
 uses it (reservoirs, wetlands, pesticides, salts, constituents, Green-Ampt
 infiltration, the CENTURY carbon model, water allocation...).

@@ -188,6 +188,16 @@ def landscape(landuse: dict | None = None, period: tuple | None = None):
     return make
 
 
+def stored(case: str):
+    """The input files of a stored case (tests/data/reference/swat/<case>.zip)."""
+
+    def make() -> dict[str, bytes]:
+        with zipfile.ZipFile(OUT / f"{case}.zip") as z:
+            return {n: z.read(n) for n in z.namelist()}
+
+    return make
+
+
 CASES = {
     "landscape": landscape(),
     # annual crops (the editor's pl_hv_summer1 / pl_hv_winter1 rotations) and an urban land use
@@ -196,15 +206,20 @@ CASES = {
     # the Muskingum routing of the channels
     "hubbard_brook_musk": hubbard_brook(2000, 2001, {"rte_cha": "1"}),
     "ames": ames(1975, 1979),
+    # the landscape case with ero_cfactor's old method (the plants' minimum C; env SWAT_CFAC_PLANT
+    # of the reference, c_factor="plant" of ls.hydro.swat.run)
+    "landscape_cplant": stored("landscape"),
 }
+# environment of the reference run of a case
+CASE_ENV = {"landscape_cplant": {"SWAT_CFAC_PLANT": "1"}}
 
 
-def run_reference(files: dict[str, bytes]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
+def run_reference(files: dict[str, bytes], env: dict | None = None) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     with tempfile.TemporaryDirectory() as tmp:
         wd = Path(tmp)
         for name, b in files.items():
             (wd / name).write_bytes(b)
-        env = dict(os.environ, SWAT_DUMP=str(wd / "dump.bin"))
+        env = dict(os.environ, **(env or {}), SWAT_DUMP=str(wd / "dump.bin"))
         res = subprocess.run([str(EXE)], cwd=wd, env=env, capture_output=True, text=True)
         if res.returncode != 0 or not (wd / "dump.bin").exists():
             raise RuntimeError(f"SWAT+ failed ({res.returncode}): {res.stdout[-2000:]}{res.stderr[-2000:]}")
@@ -244,7 +259,7 @@ def main(names: list[str]) -> None:
     }
     for name in names or list(CASES):
         files = CASES[name]()
-        dump = run_reference(files)
+        dump = run_reference(files, CASE_ENV.get(name))
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
             for fname, b in sorted(files.items()):

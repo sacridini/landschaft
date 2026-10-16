@@ -14,7 +14,7 @@ from ..._save import Saveable
 from ._project import SwatProject
 from ._tables import TABLES
 
-__all__ = ["SwatResult", "run", "run_many", "WEATHER_COLUMNS", "TABLES", "STEPS"]
+__all__ = ["SwatResult", "run", "run_many", "WEATHER_COLUMNS", "TABLES", "STEPS", "C_FACTORS"]
 
 # climate_module weather_daily, in the order the port (and the reference's dump) keeps them
 WEATHER_COLUMNS = ("precip", "precip_next", "tmax", "tmin", "tave", "solrad", "solradmx", "rhum", "dewpt", "windsp",
@@ -92,13 +92,19 @@ class SwatResult(Saveable):
         return f"SwatResult({len(days)} days, tables: {printed or 'none'})"
 
 
-def _run_raw(project: SwatProject, dump=True) -> dict:
+#: The USLE C factors :func:`run` offers (``c_factor``).
+C_FACTORS = ("swatplus", "plant")
+
+
+def _run_raw(project: SwatProject, dump=True, c_factor: str = "swatplus") -> dict:
     if not isinstance(project, SwatProject):
         raise TypeError(f"expected a SwatProject (ls.hydro.swat.load_txtinout), got {type(project).__name__}")
-    return _core.swat_run(project.files, dump)
+    if c_factor not in C_FACTORS:
+        raise ValueError(f"c_factor must be one of {', '.join(map(repr, C_FACTORS))}, got {c_factor!r}")
+    return _core.swat_run(project.files, dump, c_factor_plant=c_factor == "plant")
 
 
-def run(project: SwatProject, *, tables=None, nyskip: int | None = None) -> SwatResult:
+def run(project: SwatProject, *, tables=None, nyskip: int | None = None, c_factor: str = "swatplus") -> SwatResult:
     """Simulate a SWAT+ project, as SWAT+ 62.0.1 does.
 
     Parameters
@@ -111,6 +117,16 @@ def run(project: SwatProject, *, tables=None, nyskip: int | None = None) -> Swat
         "channel_sd": "day"}``.
     nyskip : int, optional
         Years simulated before printing, overriding print.prt.
+    c_factor : {"swatplus", "plant"}
+        The cover and management factor C of MUSLE. ``"swatplus"`` (default), SWAT+
+        62's: the cover of the residue times the cover of the growing biomass (from
+        APEX), in which a tall canopy hardly protects the soil, so that a forest's C
+        depends on its litter (0.5-0.9 under 1 t/ha of residue). ``"plant"``: SWAT+'s
+        earlier method, which 62 keeps in its code but never uses (``codes.bsn``
+        ``c_fact`` is ignored): C from the plants' minimum ``usle_c`` (plants.plt), raised
+        towards 0.8 as cover falls (forest 0.001). Only sediment and what travels with it
+        change; with ``"plant"`` the results are SWAT+'s with that method (checked
+        against SWAT+ run so).
 
     Returns
     -------
@@ -132,10 +148,11 @@ def run(project: SwatProject, *, tables=None, nyskip: int | None = None) -> Swat
     >>> round(float(q.mean()), 3), result.units["channel_sd"]["flo_out"]
     (0.005, 'm^3/s')
     """
-    return _result(_raw_with(project, tables, nyskip), stacklevel=3)
+    return _result(_raw_with(project, tables, nyskip, c_factor), stacklevel=3)
 
 
-def run_many(projects, *, tables=None, nyskip: int | None = None, n_threads: int | None = None) -> list:
+def run_many(projects, *, tables=None, nyskip: int | None = None, c_factor: str = "swatplus",
+             n_threads: int | None = None) -> list:
     """Simulate several SWAT+ projects at once (scenarios, parameter sets), one per thread.
 
     Each simulation is :func:`run`'s, independent of the others: the same results as
@@ -144,7 +161,7 @@ def run_many(projects, *, tables=None, nyskip: int | None = None, n_threads: int
     Parameters
     ----------
     projects : iterable of SwatProject
-    tables, nyskip
+    tables, nyskip, c_factor
         As :func:`run`, for every project.
     n_threads : int, optional
         Simulations running together; default all cores but one.
@@ -180,18 +197,18 @@ def run_many(projects, *, tables=None, nyskip: int | None = None, n_threads: int
 
     def one(project):
         with limit(1):
-            return _raw_with(project, tables, nyskip)
+            return _raw_with(project, tables, nyskip, c_factor)
 
     with ThreadPoolExecutor(max_workers=n) as pool:
         raws = list(pool.map(one, projects))
     return [_result(raw, stacklevel=3) for raw in raws]
 
 
-def _raw_with(project: SwatProject, tables, nyskip) -> dict:
+def _raw_with(project: SwatProject, tables, nyskip, c_factor: str = "swatplus") -> dict:
     if tables is not None or nyskip is not None:
         project = project.copy()
         project.set_print(tables, nyskip=nyskip)
-    return _run_raw(project, dump=[1])
+    return _run_raw(project, dump=[1], c_factor=c_factor)
 
 
 def _result(raw: dict, stacklevel: int = 2) -> SwatResult:

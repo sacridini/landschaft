@@ -14,6 +14,7 @@ namespace swat {
 // What run() does besides simulating.
 struct RunOptions {
     bool dump = true;  // keep the daily records of the reference's ls_dump_module
+    bool c_factor_plant = false;  // the USLE C of the plants' minimum (SWAT+'s old method), not APEX's cover
 };
 
 // Run the project in s.files (a TxtInOut directory read into memory).

@@ -93,17 +93,18 @@ def load_qswat_project(path) -> dict:
     return out
 
 
-def _table(project, result, table: str, step: str) -> pd.DataFrame:
+def _table(project, result, table: str, step: str, c_factor: str = "swatplus") -> pd.DataFrame:
     """A printed table of ``result``, or of a run of ``project`` printing it."""
     if result is None:
-        result = run(project, tables={table: ["day", "aa"]})
+        result = run(project, tables={table: ["day", "aa"]}, c_factor=c_factor)
     return result.table(table, step)
 
 
-def _by_object(project, result, table: str, variable: str, level: str, how: str) -> pd.Series:
+def _by_object(project, result, table: str, variable: str, level: str, how: str,
+               c_factor: str = "swatplus") -> pd.Series:
     if how == "annual":
-        return _table(project, result, table, "aa")[variable].droplevel("date")
-    daily = _table(project, result, table, "day")[variable].groupby(level=level)
+        return _table(project, result, table, "aa", c_factor)[variable].droplevel("date")
+    daily = _table(project, result, table, "day", c_factor)[variable].groupby(level=level)
     if how in ("mean", "max", "sum"):
         return getattr(daily, how)()
     raise ValueError("how must be 'annual', 'mean', 'max' or 'sum'")
@@ -116,7 +117,7 @@ def _watershed_of(project) -> SwatWatershed:
     return w
 
 
-def hru_map(project, variable, *, how: str = "annual", result=None) -> xr.DataArray:
+def hru_map(project, variable, *, how: str = "annual", result=None, c_factor: str = "swatplus") -> xr.DataArray:
     """An HRU result on the map: each cell takes the value of its HRU.
 
     Parameters
@@ -134,6 +135,8 @@ def hru_map(project, variable, *, how: str = "annual", result=None) -> xr.DataAr
     result : SwatResult, optional
         A run of the project that printed the HRU table (``aa`` for ``"annual"``, ``day``
         otherwise), to map several variables of one run; by default the project runs.
+    c_factor : {"swatplus", "plant"}
+        The USLE C factor of that run (see :func:`run`); ignored with ``result``.
 
     Returns
     -------
@@ -146,7 +149,7 @@ def hru_map(project, variable, *, how: str = "annual", result=None) -> xr.DataAr
         table = next((k for k, cols in HRU_COLUMNS.items() if variable in cols), None)
         if table is None:
             raise ValueError(f"unknown HRU output {variable!r}")
-        values = _by_object(project, result, table, variable, "hru", how)
+        values = _by_object(project, result, table, variable, "hru", how, c_factor)
         name = variable
     else:
         values, name = pd.Series(variable), getattr(variable, "name", None) or "value"

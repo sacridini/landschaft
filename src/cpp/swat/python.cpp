@@ -52,7 +52,7 @@ py::dict dumps_to_python(const std::vector<DumpRecord>& dumps) {
 void register_python(py::module_& m) {
     m.def(
         "swat_run",
-        [](const std::map<std::string, py::bytes>& files, py::object dump, py::object inject) {
+        [](const std::map<std::string, py::bytes>& files, py::object dump, py::object inject, bool c_factor_plant) {
             Sim s;
             for (const auto& [name, text] : files) s.files.add(name, std::string(text));
             if (!inject.is_none()) {
@@ -76,6 +76,7 @@ void register_python(py::module_& m) {
                 }
             }
             RunOptions opt;
+            opt.c_factor_plant = c_factor_plant;
             if (py::isinstance<py::bool_>(dump)) {
                 opt.dump = py::cast<bool>(dump);
             } else {
@@ -96,7 +97,7 @@ void register_python(py::module_& m) {
             out["start"] = py::make_tuple(s.time_init.yrc_start, s.time_init.day_start);
             return out;
         },
-        py::arg("files"), py::arg("dump") = true, py::arg("inject") = py::none(),
+        py::arg("files"), py::arg("dump") = true, py::arg("inject") = py::none(), py::arg("c_factor_plant") = false,
         "Run a SWAT+ project given as {file name: contents}; returns the daily records (dump: True, False or the "
         "tags to keep) and the printed ones. inject: reference "
         "records replacing hru_control (tests of the routing).");
