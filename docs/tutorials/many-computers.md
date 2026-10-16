@@ -95,6 +95,48 @@ scenarios: 200 task(s) in 3 min 02 s
 | `ls.mspa_batch` | MSPA of one raster | |
 | `ls.simulate.scenarios` | one run of one scenario | each scenario's model travels as its graph (`Model.save`) |
 | `ls.simulate.calibrate` | one point of a `"grid"` or `"random"` search, with its replicates | built-in targets; the best point's simulation is run again here |
+| `ls.sdm.fit` | one model on one cross-validation fold | scikit-learn or `ls.sdm` estimators with plain parameters; the same scikit-learn on every computer; the final fits run here |
+| `ls.uncertainty.monte_carlo` | a chunk of draws | `f` is `ls.parallel.call(tool, ..., param(0))` |
+| `ls.prioritize.calibrate`, `calibrate_penalty`, `calibrate_budget`, `pareto_front` | one problem | its compiled model travels, the solution is made here |
+| `ls.prioritize.eval_replacement_importance` | a chunk of selected units | without zones |
+| `ls.parallel.map` | one call of a tool | any tool of `ls.parallel.TOOLS` |
+| `ls.parallel.tiled` | one tile with its margin | neighbourhood tools on large rasters |
+
+## Any tool, by name
+
+`ls.parallel.map` runs a tool on many inputs (rasters, or dicts of arguments); the
+arguments and the results travel as data:
+
+<!-- no-run -->
+```python
+with ls.helpers() as pool:
+    fads = ls.parallel.map("fad", rasters, window_size=27, on=pool)
+    landscapes = ls.parallel.map("nlm.fbm", [dict(nrow=500, ncol=500, fract_dim=1.5, seed=s)
+                                             for s in range(100)], on=pool)
+```
+
+Monte Carlo draws of a tool's parameters work the same way, with the drawn
+arguments marked:
+
+<!-- no-run -->
+```python
+f = ls.parallel.call("surface.gravity", sources, exponent=ls.parallel.param(0))
+mc = ls.uncertainty.monte_carlo(f, [2.0], [0.2], n=1000, seed=1, on=pool)
+```
+
+## Large rasters in tiles
+
+`ls.parallel.tiled` cuts a raster into tiles with the margin a neighbourhood tool
+needs (the lines of sight of geomorphons, a moving window), runs the tiles here or
+on the helpers and puts the results together: the same values as on the whole
+raster. A raster read lazily (`ls.load_raster(path, chunks=...)`) is read tile by
+tile.
+
+<!-- no-run -->
+```python
+dem = ls.load_raster("srtm_brazil.tif", chunks=2048)
+forms = ls.parallel.tiled("surface.geomorphons", dem, search=20, tile=2048, on=pool)
+```
 
 ## The same results
 

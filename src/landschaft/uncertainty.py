@@ -287,6 +287,44 @@ def delta_method(
     return DeltaResult(value=value, sd=_shape_like(value, out), jacobian=jac)
 
 
+def _draws_on(on, f, draws: np.ndarray, chunk: int | None) -> np.ndarray:
+    """The values of ``f`` (a ls.parallel.call) for every draw, as tasks of ``on``."""
+    import math
+    import tempfile
+    from pathlib import Path
+
+    from ._dist import InputFile, Job, Task, _pack, _registry, run_job
+    from .parallel import Call
+
+    if not isinstance(f, Call):
+        raise TypeError("with on=, f is a tool of landschaft with its arguments: ls.parallel.call(...)")
+    if len(draws) == 0:
+        return np.empty((0, 0))
+    _registry.check_strings(list(f.args), "args")
+    _registry.check_strings(f.kwargs, "kwargs")
+    if chunk is None:
+        chunk = max(1, math.ceil(len(draws) / 100))
+    with tempfile.TemporaryDirectory(prefix="landschaft-mc-") as tmp:
+        tmp = Path(tmp)
+        stored = _pack.write((list(f.args), f.kwargs), tmp / "args")
+        shared = [InputFile.of(p, f"args/{p.name}") for p in _pack.files(stored)]
+        tasks = []
+        for k, start in enumerate(range(0, len(draws), chunk)):
+            np.save(tmp / f"d{k}.npy", np.ascontiguousarray(draws[start:start + chunk]), allow_pickle=False)
+            tasks.append(Task(f"{k}", "call.draws", {"tool": f.tool, "args": "args", "draws": f"d{k}.npy"},
+                              shared + [InputFile.of(tmp / f"d{k}.npy")], root=tmp))
+        found = {}
+
+        def collect(task, folder, stats):
+            found[task.name] = np.load(Path(folder) / "values.npy", allow_pickle=False)
+
+        report = run_job(on, Job(f"monte carlo {f.tool}", tasks, collect))
+    if report.failed:
+        name, error = next(iter(report.failed.items()))
+        raise RuntimeError(f"{len(report.failed)} chunk(s) of draws failed; chunk {name}: {error}")
+    return np.concatenate([found[t.name] for t in tasks])
+
+
 def monte_carlo(
     f: Callable,
     params,
@@ -297,6 +335,8 @@ def monte_carlo(
     seed: int = 0,
     quantiles=(0.025, 0.975),
     keep: bool = False,
+    on=None,
+    chunk: int | None = None,
 ) -> MonteCarloResult:
     """Uncertainty of a result by drawing its parameters (Monte Carlo).
 
@@ -321,6 +361,13 @@ def monte_carlo(
         The quantiles to report.
     keep
         Keep every draw's outputs in ``samples``.
+    on
+        ``ls.helpers()``: compute the draws here and on the helpers of this computer's
+        group (:mod:`landschaft.parallel`), with the same results; ``f`` is then a tool
+        of landschaft with its arguments, :func:`landschaft.parallel.call`, the drawn
+        parameters marked by :func:`landschaft.parallel.param`.
+    chunk
+        Draws per task with ``on`` (default: about a hundredth of them).
 
     Returns
     -------
@@ -344,8 +391,11 @@ def monte_carlo(
     first = f(draws[0].copy())
     out = np.empty((n, _values(first).size))
     out[0] = _values(first).reshape(-1)
-    for i in range(1, n):
-        out[i] = _values(f(draws[i].copy())).reshape(-1)
+    if on is not None:
+        out[1:] = _draws_on(on, f, draws[1:], chunk)
+    else:
+        for i in range(1, n):
+            out[i] = _values(f(draws[i].copy())).reshape(-1)
     q = np.quantile(out, np.asarray(quantiles, dtype=np.float64), axis=0)
     return MonteCarloResult(mean=_shape_like(first, out.mean(axis=0)), sd=_shape_like(first, out.std(axis=0, ddof=1)),
                             quantiles=q, samples=out if keep else None)

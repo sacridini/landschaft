@@ -26,13 +26,27 @@ as its first argument works too.
 ## Several computers
 
 `on=ls.helpers()` runs the tasks of `batch`, `mspa_batch`,
-`simulate.scenarios` and `simulate.calibrate` on this computer and on the
-computers of its group running `landschaft worker`. Tutorial:
+`simulate.scenarios`, `simulate.calibrate`, `sdm.fit` (its cross-validation),
+`uncertainty.monte_carlo`, the trade-off calibrations and replacement importance
+of `ls.prioritize`, `parallel.map` and `parallel.tiled` on this computer and on
+the computers of its group running `landschaft worker`. Tutorial:
 [several computers](../tutorials/many-computers.md).
 
 ::: landschaft.parallel.helpers
 
 ::: landschaft.parallel.Helpers
+
+::: landschaft.parallel.map
+
+::: landschaft.parallel.tiled
+
+::: landschaft.parallel.call
+
+::: landschaft.parallel.param
+
+`ls.parallel.TOOLS` lists the tools `map`, `tiled` and `monte_carlo` can run by name:
+the analyses of `ls` (`"fad"`, `"mspa"`, ...), `ls.surface` (`"surface.geomorphons"`),
+`ls.hydro`, `ls.services`, `ls.nlm` and `ls.circuit`.
 
 ::: landschaft.parallel.run_worker
 

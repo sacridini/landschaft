@@ -6,6 +6,20 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.parallel.map`: any tool of `ls.parallel.TOOLS` (the analyses of `ls`, `ls.surface`, `ls.hydro`,
+  `ls.services`, `ls.nlm`, `ls.circuit`) on many inputs, here or on helpers; arguments and results travel as data
+  (rasters with their georeferencing, tables, GeoDataFrames, arrays, landschaft's result classes), never pickled.
+- `ls.parallel.tiled`: a neighbourhood tool on a large (or lazily read) raster tile by tile, each tile with the margin
+  the tool needs, here or on helpers: the same bits as on the whole raster for geomorphons, FAD, window metrics, TRI,
+  slope, curvature, dissection, TRASP and carbon (the running-sum window means of TPI, VRM, SRR, HSP and the spherical
+  standard deviation to about 1e-12, with an explicit halo).
+- `on=ls.helpers()` in `sdm.fit` (each model on each cross-validation fold; the estimator travels as its scikit-learn
+  or `ls.sdm` class and parameters, the scores come back, the same scikit-learn required), `uncertainty.monte_carlo`
+  (chunks of draws of `ls.parallel.call(tool, ..., param(i))`), the `ls.prioritize` calibrations (`calibrate`,
+  `calibrate_penalty`, `calibrate_budget`, `pareto_front`: the compiled model travels, the solution is made here) and
+  `eval_replacement_importance` (without zones). The same results as on one computer.
+
 ## [1.48.0] - 2026-10-16
 
 ### Added

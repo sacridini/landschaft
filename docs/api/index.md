@@ -429,6 +429,10 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.BatchResult`](batch.md#landschaft.BatchResult) | Outcome of one input of `batch` / `mspa_batch` |
 | [`ls.helpers`](batch.md#landschaft.parallel.helpers) | This computer and the helpers of its group, for ``on=`` (see `Helpers`) |
 | [`ls.Helpers`](batch.md#landschaft.parallel.Helpers) | This computer and the helpers of its group, for the ``on=`` argument of landschaft's functions that run many independent tasks |
+| [`ls.map`](batch.md#landschaft.parallel.map) | Run a tool on many inputs, on this computer or on helpers, in parallel |
+| [`ls.tiled`](batch.md#landschaft.parallel.tiled) | Run a neighbourhood tool on a large raster tile by tile, on this computer or on helpers |
+| [`ls.call`](batch.md#landschaft.parallel.call) | A registered tool with its arguments, the drawn ones marked by `param` |
+| [`ls.param`](batch.md#landschaft.parallel.param) | The ``index``-th drawn parameter, in the arguments of a `call` |
 | [`ls.run_worker`](batch.md#landschaft.parallel.run_worker) | Lend this computer to the group: wait for tasks and run them, until Ctrl+C |
 | [`ls.invite_helpers`](batch.md#landschaft.parallel.invite_helpers) | Show an invitation code and let other computers join this one's group with ``landschaft worker --join <code>``, for ``minutes`` |
 | [`ls.list_helpers`](batch.md#landschaft.parallel.list_helpers) | The helpers of this computer's group waiting for work now (busy ones are not looking): ``[{"name", "address", "cores", "version"}]`` |

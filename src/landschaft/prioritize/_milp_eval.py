@@ -562,11 +562,12 @@ def _solve_values(m, solver: str, opts: dict, n: int, start=None) -> dict:
     return solve_model(m, solver, opts, start, n_units=n)
 
 
-def eval_replacement_importance(p, solution, rescale: bool = True, n_threads: int | None = None):
+def eval_replacement_importance(p, solution, rescale: bool = True, n_threads: int | None = None, on=None):
     """The replacement cost of every selected unit (Cabeza & Moilanen 2006): how much the objective
     worsens when the unit is left out and the problem solved again with the other selected units kept
     (infinite when nothing can replace it), rescaled to 0.01-1. One solve per selected unit, in parallel
     (``n_threads``, default all cores but one).
+    ``on=ls.helpers()`` solves them on the helpers of this computer's group too (:mod:`landschaft.parallel`).
 
     Examples
     --------
@@ -581,6 +582,8 @@ def eval_replacement_importance(p, solution, rescale: bool = True, n_threads: in
     1.0
     """
     if p.units.zoned:  # every selected unit-zone column in turn; a layer per zone
+        if on is not None:
+            raise ValueError("on= is not available with zones yet")
         from ._zones_eval import replacement_importance
 
         return replacement_importance(p, solution, rescale, n_threads)
@@ -630,8 +633,15 @@ def eval_replacement_importance(p, solution, rescale: bool = True, n_threads: in
             r = prep.solve(lo, hi, one)
             return float(r["objective"]) if r["has_solution"] else math.inf
 
-    with ThreadPoolExecutor(max_workers=threads) as ex:
-        objs = np.array(list(ex.map(alt, sel)))
+    if on is not None:
+        from ._milp_remote import replacement_objectives
+
+        prepared = solver == "highs" and not any(
+            sp_[0] == "penalty" and sp_[1] in ("boundary", "connectivity", "asym_connectivity") for sp_ in p.spatial)
+        objs = replacement_objectives(m, lb, ub, sel, solver, opts, u.n, prepared, on)
+    else:
+        with ThreadPoolExecutor(max_workers=threads) as ex:
+            objs = np.array(list(ex.map(alt, sel)))
     out = objs - float(base["objective"])
     if m.modelsense == "max":
         out = out * -1

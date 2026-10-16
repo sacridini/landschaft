@@ -284,3 +284,183 @@ def test_discovery_answers_only_its_group(group):
                          targets=["127.0.0.1"]) is None
     finally:
         responder.close()
+
+
+# --------------------------------------------------------------------------- phase C: tools by name
+
+def _equal(a, b):
+    import dataclasses
+
+    import xarray as xr
+
+    if isinstance(a, xr.DataArray):
+        np.testing.assert_array_equal(a.values, b.values)
+        assert a.dims == b.dims
+    elif isinstance(a, pd.DataFrame):
+        pd.testing.assert_frame_equal(a, b)
+    elif dataclasses.is_dataclass(a):
+        assert type(a) is type(b)
+        for f in dataclasses.fields(a):
+            _equal(getattr(a, f.name), getattr(b, f.name))
+    elif isinstance(a, np.ndarray):
+        np.testing.assert_array_equal(a, b)
+    elif isinstance(a, dict):
+        assert a.keys() == b.keys()
+        for k in a:
+            _equal(a[k], b[k])
+    else:
+        assert a == b or (a != a and b != b)
+
+
+def test_values_travel_without_pickle(tmp_path):
+    import geopandas as gpd
+    import xarray as xr
+    from shapely.geometry import Point
+
+    from landschaft._dist import _pack
+
+    forest = ls.load_raster(ls.example_data("input"))[:60, :80]
+    frame = pd.DataFrame({1: [1.5, np.nan], 2: [3, 4]}, index=pd.Index(["a", "b"], name="k"))
+    multi = pd.DataFrame([[1.0, 2.0]], columns=pd.MultiIndex.from_tuples([("auc", "mean"), ("auc", "std")]))
+    geo = gpd.GeoDataFrame({"v": [1, 2]}, geometry=[Point(0, 0), Point(1, 1)], crs="EPSG:4326")
+    value = {"map": forest, "frame": frame, "multi": multi, "geo": geo, "series": frame[1],
+             "fad": ls.fad(forest, 7), (1, 2): [np.float32(2.5), float("inf"), None, ("t", 3)],
+             "ds": xr.Dataset({"a": forest.astype(float)})}
+    back = _pack.read(_pack.write(value, tmp_path / "v"))
+    _equal(back["map"], value["map"])
+    assert back["map"].rio.crs == forest.rio.crs and back["map"].rio.transform() == forest.rio.transform()
+    pd.testing.assert_frame_equal(back["frame"], frame)
+    pd.testing.assert_frame_equal(back["multi"], multi)
+    assert back["geo"].equals(geo)
+    pd.testing.assert_series_equal(back["series"], frame[1])
+    _equal(back["fad"], value["fad"])
+    assert back[(1, 2)][1] == float("inf") and back[(1, 2)][3] == ("t", 3)
+    np.testing.assert_array_equal(back["ds"]["a"].values, value["ds"]["a"].values)
+    with pytest.raises(_pack.Unpackable):
+        _pack.write(lambda x: x, tmp_path / "f")
+
+
+def test_map_on_a_helper_gives_the_local_results(group, tmp_path):
+    forest = ls.load_raster(ls.example_data("input"))
+    rasters = [forest[k * 150:k * 150 + 200, :250] for k in range(3)]
+    here = ls.parallel.map("fad", rasters, window_size=13)
+    seeds = [dict(nrow=40, ncol=40, seed=s) for s in range(3)]
+    with _pool(local=False) as pool, _Helper(pool, tmp_path / "cache"):
+        there = ls.parallel.map(ls.fad, rasters, window_size=13, on=pool)
+        nlm_there = ls.parallel.map("nlm.random", seeds, on=pool)
+    for a, b in zip(here, there):
+        _equal(a, b)
+    for a, b in zip(ls.parallel.map("nlm.random", seeds), nlm_there):
+        _equal(a, b)
+    saved = ls.parallel.map("nlm.random", seeds, output_dir=tmp_path / "out")
+    assert [p.name for p in saved] == ["0.tif", "1.tif", "2.tif"]
+
+
+def test_map_takes_registered_tools_and_data_only(group):
+    with _pool(local=True) as pool:
+        with pytest.raises(ValueError, match="not a tool"):
+            ls.parallel.map(ls.write_raster, [1], on=pool)
+        with pytest.raises(ValueError, match="file path"):
+            ls.parallel.map("fad", ["C:/data/forest.tif"], on=pool)
+
+
+def test_monte_carlo_on_a_helper(group, tmp_path):
+    src = np.zeros((25, 25))
+    src[5, 7] = 1
+    src[18, 12] = 2
+    f = ls.parallel.call("surface.gravity", src, exponent=ls.parallel.param(0))
+    here = ls.uncertainty.monte_carlo(f, [2.0], [0.2], n=40, seed=3, keep=True)
+    with _pool(local=False) as pool, _Helper(pool, tmp_path / "cache"):
+        there = ls.uncertainty.monte_carlo(f, [2.0], [0.2], n=40, seed=3, keep=True, on=pool, chunk=7)
+    np.testing.assert_array_equal(np.asarray(here.mean), np.asarray(there.mean))
+    np.testing.assert_array_equal(np.asarray(here.sd), np.asarray(there.sd))
+    with _pool(local=True) as pool, pytest.raises(TypeError, match="parallel.call"):
+        ls.uncertainty.monte_carlo(lambda p: p[0], [1.0], [0.1], n=5, on=pool)
+
+
+def test_sdm_folds_on_a_helper(group, tmp_path):
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    occ = ls.load_table(ls.sdm.example_data("bradypus"))
+    env = ls.load_raster(ls.sdm.example_data("bioclim"))
+    data = ls.sdm.prepare(occ, env, clean=False, background=600)
+    models = {"glm": make_pipeline(StandardScaler(), LogisticRegression(max_iter=500)),
+              "glm_c": LogisticRegression(C=0.5, max_iter=500)}
+    here = ls.sdm.fit(data, models)
+    with _pool(local=True) as pool, _Helper(pool, tmp_path / "cache"):
+        there = ls.sdm.fit(data, models, on=pool)
+    pd.testing.assert_frame_equal(here.metrics, there.metrics)
+    pd.testing.assert_frame_equal(here.summary, there.summary)
+    with _pool(local=True) as pool, pytest.raises(TypeError, match="scikit-learn"):
+        ls.sdm.fit(data, {"x": object()}, on=pool)
+
+
+def _problem():
+    P = ls.prioritize
+    cost = ls.load_raster(P.example_data("cost"))
+    features = ls.load_raster(P.example_data("features"))
+    return P.problem(cost, features).add_min_set_objective().add_relative_targets(0.2).add_binary_decisions()
+
+
+def test_prioritize_resolves_on_a_helper(group, tmp_path):
+    P = ls.prioritize
+    p = _problem()
+    sol = p.solve()
+
+    def make(t):
+        return p.add_relative_targets(t)
+
+    def criterion(q, s):
+        return float(s.objective)
+
+    here = P.eval_replacement_importance(p, sol)
+    cal_here = P.calibrate(make, [0.1, 0.2, 0.3], criterion)
+    with _pool(local=False) as pool, _Helper(pool, tmp_path / "cache"):
+        there = P.eval_replacement_importance(p, sol, on=pool)
+        cal_there = P.calibrate(make, [0.1, 0.2, 0.3], criterion, on=pool)
+    np.testing.assert_array_equal(np.asarray(here), np.asarray(there))
+    pd.testing.assert_frame_equal(cal_here.table, cal_there.table)
+    for a, b in zip(cal_here.solutions, cal_there.solutions):
+        np.testing.assert_array_equal(np.asarray(a.selection), np.asarray(b.selection))
+
+
+# --------------------------------------------------------------------------- phase D: tiles
+
+def _dem():
+    return ls.nlm.fbm(130, 170, fract_dim=1.4, seed=11) * 300.0
+
+
+def test_tiles_give_the_whole_map():
+    dem = _dem()
+    for tool, kw in (("surface.tri", {}), ("surface.terrain", dict(v="slope")), ("surface.curvature", {}),
+                     ("surface.dissection", {})):
+        whole = ls.parallel._registry.resolve(tool)(dem, **kw)
+        tiles = ls.parallel.tiled(tool, dem, tile=45, **kw)
+        np.testing.assert_array_equal(tiles.values, whole.values)
+    # running sums along the rows start elsewhere in a tile: to about 1e-12
+    tpi = ls.parallel.tiled("surface.tpi", dem, scale=7, halo=4, tile=45)
+    np.testing.assert_allclose(tpi.values, ls.surface.tpi(dem, scale=7).values, rtol=1e-11, atol=1e-11)
+    forest = ls.load_raster(ls.example_data("input"))[:300, :340]
+    fad = ls.parallel.tiled("fad", forest, window_size=13, tile=90)            # a dict of its maps (not stats)
+    whole = ls.fad(forest, 13)
+    for k, v in fad.items():
+        np.testing.assert_array_equal(v.values, getattr(whole, k).values)
+    wm = ls.parallel.tiled("window_metrics", forest, 7, metric=["np"], level="landscape", tile=100)
+    np.testing.assert_array_equal(wm["np"].values, ls.window_metrics(forest, 7, metric=["np"])["np"].values)
+    g = ls.surface.geomorphons(dem, search=8)
+    gt = ls.parallel.tiled("surface.geomorphons", dem, search=8, tile=40, n_workers=2)
+    assert type(gt) is type(g)
+    np.testing.assert_array_equal(gt.forms.values, g.forms.values)
+    np.testing.assert_array_equal(gt.ternary.values, g.ternary.values)
+    with pytest.raises(ValueError, match="halo"):
+        ls.parallel.tiled("hydro.fill", dem)
+
+
+def test_tiles_on_a_helper(group, tmp_path):
+    dem = _dem()
+    whole = ls.surface.geomorphons(dem, search=6)
+    with _pool(local=True) as pool, _Helper(pool, tmp_path / "cache"):
+        there = ls.parallel.tiled("surface.geomorphons", dem, search=6, tile=64, on=pool)
+    np.testing.assert_array_equal(there.forms.values, whole.forms.values)

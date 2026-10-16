@@ -141,7 +141,93 @@ def _fold_metrics(pred: np.ndarray, data: SDMData, train: np.ndarray, test: np.n
     return out
 
 
-def fit(data: SDMData, models=None, *, cv: bool = True) -> SDMResult:
+def estimator_spec(est):
+    """An estimator as its class and parameters, to rebuild it on a helper (only plain values)."""
+    import numbers
+
+    def enc(v):
+        if hasattr(v, "get_params") and isinstance(v, object) and not isinstance(v, type):
+            cls = type(v)
+            if not (cls.__module__.startswith("sklearn.") or cls.__module__.startswith("landschaft.sdm")):
+                raise TypeError(f"with on=, the models are scikit-learn's or ls.sdm's ({cls.__name__} is not)")
+            return {"$estimator": f"{cls.__module__}:{cls.__qualname__}",
+                    "params": {k: enc(x) for k, x in v.get_params(deep=False).items()}}
+        if v is None or isinstance(v, (bool, str)):
+            return v
+        if isinstance(v, numbers.Integral):
+            return int(v)
+        if isinstance(v, numbers.Real):
+            v = float(v)
+            return v if np.isfinite(v) else {"$float": repr(v)}
+        if isinstance(v, tuple):
+            return {"$tuple": [enc(x) for x in v]}
+        if isinstance(v, list):
+            return [enc(x) for x in v]
+        if isinstance(v, dict) and all(isinstance(k, str) for k in v):
+            return {"$dict": {k: enc(x) for k, x in v.items()}}
+        if isinstance(v, np.ndarray) and v.dtype.kind in "biuf":
+            return [enc(x) for x in v.tolist()]
+        raise TypeError(f"with on=, a model parameter cannot be a {type(v).__name__}")
+
+    if not hasattr(est, "get_params"):
+        raise TypeError(f"with on=, the models are scikit-learn's or ls.sdm's ({type(est).__name__} is not)")
+    return enc(est)
+
+
+def _folds_on(on, models: dict, data) -> list:
+    """The cross-validation scores of every model on every fold, as tasks of ``on``."""
+    import tempfile
+    from pathlib import Path
+
+    from .._dist import InputFile, Job, Task, run_job
+    from .._dist._ops import versions
+
+    specs = {name: estimator_spec(m) for name, m in models.items()}
+    here = versions()
+    with tempfile.TemporaryDirectory(prefix="landschaft-sdm-") as tmp:
+        tmp = Path(tmp)
+        X = data.X.copy()
+        X.columns = [str(c) for c in X.columns]
+        X.to_parquet(tmp / "X.parquet")
+        np.save(tmp / "y.npy", np.asarray(data.y), allow_pickle=False)
+        shared = [InputFile.of(tmp / "X.parquet"), InputFile.of(tmp / "y.npy")]
+        if data.sample_weight is not None:
+            np.save(tmp / "w.npy", np.asarray(data.sample_weight, dtype=np.float64), allow_pickle=False)
+            shared.append(InputFile.of(tmp / "w.npy"))
+        folds = []
+        for k, (train, test) in enumerate(data.cv, start=1):
+            np.save(tmp / f"train_{k}.npy", np.asarray(train), allow_pickle=False)
+            np.save(tmp / f"test_{k}.npy", np.asarray(test), allow_pickle=False)
+            folds.append((k, [InputFile.of(tmp / f"train_{k}.npy"), InputFile.of(tmp / f"test_{k}.npy")]))
+        tasks = []
+        for name in models:
+            for k, ff in folds:
+                tasks.append(Task(f"{name} fold {k}", "sdm.fold", {
+                    "model": specs[name], "X": "X.parquet", "y": "y.npy",
+                    "w": "w.npy" if data.sample_weight is not None else None,
+                    "train": f"train_{k}.npy", "test": f"test_{k}.npy"}, shared + ff, root=tmp))
+        found = {}
+
+        def collect(task, folder, stats):
+            there = stats.get("versions", {})
+            if there.get("sklearn") != here.get("sklearn"):
+                raise RuntimeError(f"{stats.get('machine')} has scikit-learn {there.get('sklearn')}, this computer "
+                                   f"{here.get('sklearn')}: the scores could differ")
+            found[task.name] = {k: float(v) for k, v in stats["scores"].items()}
+
+        report = run_job(on, Job("sdm folds", tasks, collect, threads=1))
+    if report.failed:
+        name, error = next(iter(report.failed.items()))
+        raise RuntimeError(f"{len(report.failed)} fold fit(s) failed; {name}: {error}")
+    rows = []
+    for name in models:
+        for k, _ in folds:
+            s = found[f"{name} fold {k}"]
+            rows.append({"model": name, "fold": k, **{c: (int(v) if c == "n_test" else v) for c, v in s.items()}})
+    return rows
+
+
+def fit(data: SDMData, models=None, *, cv: bool = True, on=None) -> SDMResult:
     """Fit models to SDMData, cross-validate them on its folds, and fit them to all the data.
 
     Parameters
@@ -157,6 +243,12 @@ def fit(data: SDMData, models=None, *, cv: bool = True) -> SDMResult:
         scikit-learn Pipeline, its last step does).
     cv
         Cross-validate on ``data.folds`` (when there are folds).
+    on
+        ``ls.helpers()``: fit the models on the folds here and on the helpers of this
+        computer's group (:mod:`landschaft.parallel`), with the same scores; the models
+        travel as their scikit-learn (or ``ls.sdm``) class and parameters, which must be
+        plain values (numbers, strings, lists, other estimators), and the helpers must
+        have the same scikit-learn. The final fits on all the data run here.
 
     Returns
     -------
@@ -186,7 +278,9 @@ def fit(data: SDMData, models=None, *, cv: bool = True) -> SDMResult:
         models = {type(models).__name__: models}
     X, y, w = data.X, data.y, data.sample_weight
     rows = []
-    if cv and data.folds is not None:
+    if cv and data.folds is not None and on is not None:
+        rows = _folds_on(on, models, data)
+    elif cv and data.folds is not None:
         for name, model in models.items():
             for k, (train, test) in enumerate(data.cv, start=1):
                 m = _fit_one(model, X.iloc[train], y[train], None if w is None else w[train])

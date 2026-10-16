@@ -3572,11 +3572,24 @@ Terraflux já tem; para Slurm basta `srun landschaft worker`).
   (WSL) e ajudante no Windows pelo localhost: os mesmos `codes` (Dinamica, 6 réplicas) que o local do Linux e o do
   Windows. Cuidado conhecido: onde o resultado depende da libm (o `atan` da UCRT na declividade do terreno, ver a
   paridade do Linux) misturar sistemas pode mudar o último bit.
-- **C**: `on=` em `sdm.fit` (modelos x folds), re-solves do `ls.prioritize` (carteiras, importância por
-  substituição, calibração/trade-offs), `uncertainty.monte_carlo`, réplicas do `nlm`; `ls.parallel.map` para
-  ferramentas registradas sobre objetos em memória (com `ls.load_result` para trazer os resultados).
-- **D**: tiles com borda para ferramentas focais de rasters maiores que a memória (geomorphons, `window_metrics`,
-  carbono, qualidade de habitat).
+- **C — Feito** (1.49.0): `ls.parallel.map` (operação `call`; `_dist/_registry.py` = a lista das ferramentas,
+  só análises de objetos, nunca leitura/escrita/download; strings com `/`, `\`, `:` recusadas: as ferramentas no
+  ajudante recebem dados, não caminhos), `_dist/_pack.py` (valores sem pickle: DataArray com coordenadas e atributos
+  = georreferência, Dataset, DataFrame/Series em Parquet com colunas não-texto e MultiIndex remapeadas, GeoDataFrame
+  em GeoParquet, arrays, dataclasses do landschaft reconstruídas só se a classe for do landschaft);
+  `monte_carlo(on=, chunk=)` com `ls.parallel.call(tool, ..., param(i))` (operação `call.draws`; o primeiro sorteio
+  aqui, o resto em pedaços); `sdm.fit(on=)` (operação `sdm.fold`: o estimador como classe + `get_params` só de
+  scikit-learn/`ls.sdm`, valores simples; voltam as métricas; versão do scikit-learn conferida); `ls.prioritize`
+  `calibrate*`/`pareto_front` (operação `prioritize.solve`: o modelo compilado em arrays, `make_solution` aqui) e
+  `eval_replacement_importance` sem zonas (operação `prioritize.replacement`, pedaços de unidades, o mesmo caminho
+  `Prepared` quando o local o usa). Réplicas do `nlm` = `map("nlm.<gerador>", [dict(seed=s)...])`; carteiras e
+  importância por substituição com zonas ficam de fora.
+- **D — Feito** (1.49.0): `ls.parallel.tiled(tool, raster, halo=, tile=)` (operação `tile`): bit a bit com o mapa
+  inteiro para geomorphons, FAD (os mapas; as estatísticas do mapa inteiro não), `window_metrics`, TRI, `terrain`,
+  curvatura, dissecação, TRASP e carbono; as médias de janela por somas corridas ao longo das linhas (TPI, VRM, SRR,
+  HSP, desvio esférico) mudam o ponto de partida no tile e ficam a ~1e-12, então não têm halo padrão. Raster lido
+  preguiçosamente (`load_raster(chunks=)`) é lido por tile; o resultado é montado em memória (escrita por tile
+  fica para depois).
 - Para depois: compressão das entradas sem compressão no envio (o ZSTD do zeit), `--idle` (pausar quando o dono
   volta), mandar modelos do `ls.simulate` ao cluster do Terraflux.
 

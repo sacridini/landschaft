@@ -195,9 +195,15 @@ def _linear_values(p, data) -> np.ndarray:
     return np.nan_to_num(np.asarray(arr, dtype=np.float64))
 
 
-def _solve_all(problems: list, n_threads: int | None):
-    """Solve the problems, several at once (one solver thread each); a failure raises."""
+def _solve_all(problems: list, n_threads: int | None, on=None):
+    """Solve the problems, several at once (one solver thread each); a failure raises. ``on``:
+    ls.helpers(), the problems solved on its computers."""
     from concurrent.futures import ThreadPoolExecutor
+
+    if on is not None:
+        from ._milp_remote import solve_all
+
+        return solve_all(problems, on)
 
     from .. import _threads
 
@@ -274,11 +280,11 @@ def cohon_penalty(p, penalty: str = "boundary", data=None, edge_factor: float = 
 
 
 def calibrate_penalty(p, penalty: str = "boundary", values=None, n: int = 9, data=None, edge_factor: float = 0.5,
-                      n_threads: int | None = None) -> TradeOffs:
+                      n_threads: int | None = None, on=None) -> TradeOffs:
     """The blended approach: the problem solved with a range of penalty weights (``values``; default
     ``n`` values evenly spaced in log scale over 1/100 to 100 times the Cohon et al. penalty), every
     candidate's cost and criterion (boundary length, connectivity, ...), and the candidates TOPSIS and the
-    knee of the curve choose. ``p``: the problem without the penalty. Solves in parallel.
+    knee of the curve choose. ``p``: the problem without the penalty. Solves in parallel. ``on=ls.helpers()`` solves them on the helpers of this computer's group too (:mod:`landschaft.parallel`).
 
     Examples
     --------
@@ -306,13 +312,13 @@ def calibrate_penalty(p, penalty: str = "boundary", values=None, n: int = 9, dat
     if values.size < 1 or (values < 0).any() or not np.isfinite(values).all():
         raise ValueError("values must be finite penalties >= 0")
     problems = [_with_penalty(p, penalty, float(v), data, edge_factor) for v in values]
-    sols = _solve_all(problems, n_threads)
+    sols = _solve_all(problems, n_threads, on)
     crit = [_criterion(p, s, penalty, data, edge_factor) for s in sols]
     return TradeOffs(_table(values, sols, penalty, crit), sols, penalty)
 
 
 def calibrate_budget(p, penalty: str = "boundary", thresholds=None, inflation=None, data=None,
-                     edge_factor: float = 0.5, n_threads: int | None = None) -> TradeOffs:
+                     edge_factor: float = 0.5, n_threads: int | None = None, on=None) -> TradeOffs:
     """The hierarchical approach: the least cost solution first (``p``, a min set problem without the
     penalty, solved to optimality), then the least penalty within cost thresholds above its cost
     (``thresholds``, or the cost x (1 + ``inflation``); default inflation 1e-5 to 4 in 9 steps, the
@@ -345,12 +351,12 @@ def calibrate_budget(p, penalty: str = "boundary", thresholds=None, inflation=No
         raise ValueError("thresholds must be finite and > 0")
     pen = _with_penalty(p, penalty, 1.0, data, edge_factor)
     problems = [pen.add_min_penalties_objective(float(t)) for t in thresholds]
-    sols = _solve_all(problems, n_threads)
+    sols = _solve_all(problems, n_threads, on)
     crit = [_criterion(p, s, penalty, data, edge_factor) for s in sols]
     return TradeOffs(_table(thresholds, sols, penalty, crit), sols, penalty)
 
 
-def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> TradeOffs:
+def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None, on=None) -> TradeOffs:
     """The trade-off between cost and representation: the least total shortfall of the targets (min
     shortfall objective: the sum of the shortfalls as shares of their targets) within ``n`` budgets evenly
     spaced up to the least-cost solution's cost (above the cost of the locked-in units, which every budget
@@ -384,7 +390,7 @@ def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> 
         budgets = np.linspace(fixed + (top - fixed) / n, top, int(n))  # the locked-in units' cost is spent anyway
     budgets = np.asarray(budgets, dtype=np.float64).ravel()
     problems = [p.add_min_shortfall_objective(float(b)) for b in budgets]
-    sols = _solve_all(problems, n_threads)
+    sols = _solve_all(problems, n_threads, on)
     short, met = [], []
     for q, s in zip(problems, sols):
         cov = eval_target_coverage_summary(q, s)
@@ -400,11 +406,12 @@ def pareto_front(p, budgets=None, n: int = 10, n_threads: int | None = None) -> 
     return TradeOffs(t, sols, "shortfall")
 
 
-def calibrate(make, values, criterion, name: str = "criterion", n_threads: int | None = None) -> TradeOffs:
+def calibrate(make, values, criterion, name: str = "criterion", n_threads: int | None = None,
+              on=None) -> TradeOffs:
     """Any trade-off parameter: ``make(value)`` gives the problem for every value (a feature's weight,
     a target, a penalty of any kind...), ``criterion(problem, solution)`` the quantity traded off
     against the cost (smaller is better). The candidates' table as :func:`calibrate_penalty`'s (TOPSIS,
-    knee), solved in parallel.
+    knee), solved in parallel. ``on=ls.helpers()`` solves them on the helpers of this computer's group too (:mod:`landschaft.parallel`).
 
     Examples
     --------
@@ -425,7 +432,7 @@ def calibrate(make, values, criterion, name: str = "criterion", n_threads: int |
     if not values:
         raise ValueError("no values")
     problems = [make(v) for v in values]
-    sols = _solve_all(problems, n_threads)
+    sols = _solve_all(problems, n_threads, on)
     crit = [float(criterion(q, s)) for q, s in zip(problems, sols)]
     vals = np.asarray(values, dtype=np.float64) if all(np.isscalar(v) for v in values) else np.arange(len(values))
     return TradeOffs(_table(vals, sols, name, crit), sols, name)

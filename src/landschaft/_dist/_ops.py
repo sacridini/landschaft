@@ -131,3 +131,211 @@ def _simulate_losses(params: dict, inputs: Path, out: Path, threads: int) -> dic
         sim = model.run(ins["start"], ins.get("drivers"), seed=int(seed), n_threads=threads)
         parts.append(_losses(targets, start, observed, sim.maps.isel(step=-1), nodata))
     return {"parts": parts}
+
+
+# ----------------------------------------------------------------------------- registered tools
+
+def _call(tool: str, args, kwargs: dict, threads: int):
+    import inspect
+
+    from ._registry import check_strings, resolve
+
+    fn = resolve(tool)
+    check_strings(list(args), "args")
+    check_strings(kwargs, "kwargs")
+    try:
+        if "n_threads" in inspect.signature(fn).parameters and "n_threads" not in kwargs:
+            kwargs = {**kwargs, "n_threads": threads}
+    except (TypeError, ValueError):
+        pass
+    return fn(*args, **kwargs)
+
+
+def _spec(inputs: Path, name):
+    import json
+
+    folder = Path(inputs) / _output_name(name)
+    return json.loads((folder / "value.json").read_text()), folder
+
+
+def _arguments(spec, folder, params=None):
+    from . import _pack
+
+    value = _pack.decode(spec, folder, params)
+    if not (isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], (list, tuple))
+            and isinstance(value[1], dict)):
+        raise ValueError("bad arguments")
+    return list(value[0]), dict(value[1])
+
+
+@register("call")
+def _call_op(params: dict, inputs: Path, out: Path, threads: int) -> dict:
+    """A registered tool on its arguments (``ls.parallel.map``): the result, stored."""
+    from . import _pack
+
+    args, kwargs = _arguments(*_spec(inputs, params["args"]))
+    _pack.write(_call(str(params["tool"]), args, kwargs, threads), out / "result")
+    return {}
+
+
+@register("call.draws")
+def _draws_op(params: dict, inputs: Path, out: Path, threads: int) -> dict:
+    """A registered tool on a chunk of Monte Carlo draws: each draw's values, a row each."""
+    import numpy as np
+
+    from ..uncertainty import _values
+
+    draws = np.load(input_file(inputs, params["draws"]), allow_pickle=False)
+    spec, folder = _spec(inputs, params["args"])
+    rows = []
+    for d in draws:
+        args, kwargs = _arguments(spec, folder, params=d)
+        rows.append(np.asarray(_values(_call(str(params["tool"]), args, kwargs, threads)), dtype=np.float64).ravel())
+    np.save(out / "values.npy", np.stack(rows), allow_pickle=False)
+    return {}
+
+
+@register("tile")
+def _tile_op(params: dict, inputs: Path, out: Path, threads: int) -> dict:
+    """A registered tool on one tile with its halo: the result cut to the tile's core."""
+    from . import _pack
+    from ..parallel import _crop
+
+    tile = _pack.read(Path(inputs) / _output_name(params["tile"]))
+    args, kwargs = _arguments(*_spec(inputs, params["args"]))
+    r0, r1, c0, c1 = (int(v) for v in params["core"])
+    result = _call(str(params["tool"]), [tile, *args], kwargs, threads)
+    _pack.write(_crop(result, slice(r0, r1), slice(c0, c1), tuple(tile.shape[-2:])), out / "result")
+    return {}
+
+
+# ----------------------------------------------------------------------------- ls.sdm
+
+def build_estimator(spec):
+    """A scikit-learn estimator (or one of ls.sdm) from its class and parameters."""
+    import importlib
+
+    if isinstance(spec, list):
+        return [build_estimator(x) for x in spec]
+    if isinstance(spec, dict) and "$tuple" in spec:
+        return tuple(build_estimator(x) for x in spec["$tuple"])
+    if isinstance(spec, dict) and "$estimator" in spec:
+        module, _, qualname = str(spec["$estimator"]).partition(":")
+        if not (module.startswith("sklearn.") or module.startswith("landschaft.sdm")):
+            raise ValueError(f"refusing to build {spec['$estimator']}: only scikit-learn and ls.sdm estimators travel")
+        cls = importlib.import_module(module)
+        for part in qualname.split("."):
+            cls = getattr(cls, part)
+        if not isinstance(cls, type) or not hasattr(cls, "get_params"):
+            raise ValueError(f"{spec['$estimator']} is not an estimator")
+        return cls(**{k: build_estimator(v) for k, v in spec["params"].items()})
+    if isinstance(spec, dict) and "$dict" in spec:
+        return {k: build_estimator(v) for k, v in spec["$dict"].items()}
+    if isinstance(spec, dict) and "$float" in spec:
+        return float(spec["$float"])
+    return spec
+
+
+@register("sdm.fold")
+def _sdm_fold(params: dict, inputs: Path, out: Path, threads: int) -> dict:
+    """One model on one cross-validation fold (``ls.sdm.fit``): the fold's scores."""
+    from types import SimpleNamespace
+
+    import numpy as np
+    import pandas as pd
+
+    from ..sdm._models import _fit_one, _fold_metrics, _suitability
+
+    X = pd.read_parquet(input_file(inputs, params["X"]))
+    y = np.load(input_file(inputs, params["y"]), allow_pickle=False)
+    w = np.load(input_file(inputs, params["w"]), allow_pickle=False) if params.get("w") else None
+    train = np.load(input_file(inputs, params["train"]), allow_pickle=False)
+    test = np.load(input_file(inputs, params["test"]), allow_pickle=False)
+    model = build_estimator(params["model"])
+    m = _fit_one(model, X.iloc[train], y[train], None if w is None else w[train])
+    pred = np.full(len(y), np.nan)
+    pred[train] = _suitability(m, X.iloc[train])
+    pred[test] = _suitability(m, X.iloc[test])
+    scores = {}
+    for k, v in _fold_metrics(pred, SimpleNamespace(y=y), train, test).items():
+        v = float(v)
+        scores[k] = repr(v) if not np.isfinite(v) else v
+    return {"scores": scores, "versions": versions()}
+
+
+def versions() -> dict:
+    """The versions of the libraries an estimator's results depend on."""
+    out = {}
+    try:
+        import sklearn
+
+        out["sklearn"] = sklearn.__version__
+    except ImportError:
+        pass
+    import numpy
+
+    out["numpy"] = numpy.__version__
+    return out
+
+
+# ----------------------------------------------------------------------------- ls.prioritize
+
+def _prio_model(inputs: Path, name):
+    from . import _pack
+    from ..prioritize._milp_remote import model_from
+
+    return model_from(_pack.read(Path(inputs) / _output_name(name)))
+
+
+@register("prioritize.solve")
+def _prioritize_solve(params: dict, inputs: Path, out: Path, threads: int) -> dict:
+    """A compiled prioritization model on a solver: its result (solution, objective, status)."""
+    from . import _pack
+    from ..prioritize._milp_solve import solve_model
+
+    solver = str(params["solver"])
+    if solver not in ("highs", "gurobi", "anneal"):
+        raise ValueError(f"unknown solver {solver!r}")
+    from ..prioritize._milp_remote import options_from
+
+    options = options_from(params.get("options"))
+    options["n_threads"] = threads
+    r = solve_model(_prio_model(inputs, params["model"]), solver, options, None, n_units=params.get("n_units"),
+                    engines=bool(params.get("engines", True)), zone_units=params.get("zone_units"))
+    _pack.write(r, out / "result")
+    return {}
+
+
+@register("prioritize.replacement")
+def _prioritize_replacement(params: dict, inputs: Path, out: Path, threads: int) -> dict:
+    """The objectives of a model solved without each of some selected units (replacement importance)."""
+    import math
+
+    import numpy as np
+
+    from ..prioritize._milp import OptimizationProblem
+    from ..prioritize._milp_remote import options_from
+    from ..prioritize._milp_solve import Prepared, solve_model
+
+    m = _prio_model(inputs, params["model"])
+    lb = np.load(input_file(inputs, params["lb"]), allow_pickle=False)
+    ub = np.load(input_file(inputs, params["ub"]), allow_pickle=False)
+    solver = str(params["solver"])
+    if solver not in ("highs", "gurobi"):
+        raise ValueError(f"unknown solver {solver!r}")
+    one = {**options_from(params.get("options")), "n_threads": 1}
+    n = int(params["n_units"])
+    prep = Prepared(m, n) if params.get("prepared") else None
+    objs = []
+    for i in params["units"]:
+        lo, hi = lb.copy(), ub.copy()
+        lo[int(i)] = hi[int(i)] = 0.0
+        if prep is not None:
+            r = prep.solve(lo, hi, one)
+        else:
+            mm = OptimizationProblem(A=m.A, obj=m.obj, lb=lo, ub=hi, rhs=m.rhs, sense=m.sense, vtype=m.vtype,
+                                     modelsense=m.modelsense, row_ids=m.row_ids, col_ids=m.col_ids)
+            r = solve_model(mm, solver, one, None, n_units=n)
+        objs.append(float(r["objective"]) if r["has_solution"] else math.inf)
+    np.save(out / "objectives.npy", np.asarray(objs, dtype=np.float64), allow_pickle=False)
+    return {}
