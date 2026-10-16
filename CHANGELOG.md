@@ -7,7 +7,9 @@ in a new major version.
 ## [Unreleased]
 
 ### Added
-- `ls.hydro`, terrain hydrology: `fill` (Priority-Flood; `drain_flats=True` for Priority-Flood+epsilon),
+- `ls.hydro`, terrain hydrology: `fill` (Priority-Flood; `drain_flats=True` for Priority-Flood+epsilon), `breach`
+  (least-cost channels through the rims of depressions, as WhiteboxTools' `BreachDepressionsLeastCost`, its
+  min-heap reproduced so equal costs resolve alike),
   `flow_direction` (D8 as ESRI codes, D-infinity azimuths), `flow_accumulation` (D8, D-infinity, FD8 of Freeman,
   Quinn's multiple flow with contour lengths; cells, area or specific contributing area; weights), `streams`, `hand`
   (height above the nearest drainage) and the indices `twi`, `spi`, `sti`; flat areas drain by Barnes, Lehman &
@@ -18,6 +20,8 @@ in a new major version.
 - `fill` lets water out at the map's edge and at missing cells: WhiteboxTools' `FillDepressions` raises a
   depression that touches the edge (or a missing cell) together with the edge cells in it, when the depression grows
   from an interior pit.
+- `breach` cuts a channel that reaches the map's edge: WhiteboxTools' `BreachDepressionsLeastCost` walks back from
+  the cell beyond the edge, which has no way back, and leaves the channel uncut.
 
 ## [1.47.0] - 2026-10-16
 

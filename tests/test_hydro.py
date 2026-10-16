@@ -219,3 +219,33 @@ def test_wetness_on_flats_and_the_slope_floor():
     assert np.isnan(w[3, 2])                                     # flat: tan(slope) = 0
     w = H.twi(dem, min_slope=0.001).values
     assert np.isfinite(w[3, 2])
+
+
+@pytest.mark.parametrize("name", ["oregon", "walk", "terraces"])
+@pytest.mark.parametrize("min_dist", [True, False])
+def test_breach_is_whitebox_least_cost(ref, name, min_dist):
+    # WhiteboxTools on one thread (on several it takes equal pits in the order its threads finish),
+    # on the DEM in a frame of low cells: channels that reach the edge are cut
+    kw = _kw(ref, name)
+    out = H.breach(ref[f"{name}/dem"], max_length=20, min_dist=min_dist, fill_rest=False, **kw).values
+    np.testing.assert_array_equal(out, ref[f"{name}/{'breach_dist' if min_dist else 'breach_cost'}"])
+
+
+def test_breach_cuts_a_channel_to_the_edge():
+    dem = np.full((5, 6), 9.0)
+    dem[2, 1:5] = [5.0, 1.0, 6.0, 6.0]
+    dem[2, 5] = 7.0                                   # the edge cell is higher than the pit
+    out = H.breach(dem, flat_increment=0.01, fill_rest=False).values
+    walk = H.flow_direction(out, flats=False).values
+    ends = list(_path_ends(walk, np.ones(dem.shape, bool)))
+    assert all(r in (0, 4) or c in (0, 5) for r, c in ends)   # every cell drains off the map
+
+
+def test_breach_fills_what_it_cannot_cut(ref):
+    kw = _kw(ref, "walk")
+    dem = ref["walk/dem"]
+    left = H.breach(dem, max_length=2, max_cost=0.5, fill_rest=False, **kw).values
+    done = H.breach(dem, max_length=2, max_cost=0.5, **kw).values
+    np.testing.assert_array_equal(done, H.fill(left, **kw).values)
+    plain = H.flow_direction(done, flats=True, **kw).values
+    assert (plain[1:-1, 1:-1] == 0).sum() == 0

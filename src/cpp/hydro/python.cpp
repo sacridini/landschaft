@@ -64,6 +64,18 @@ void register_python(py::module_& m) {
         return to_raster(std::move(out), g.ny, g.nx);
     }, py::arg("z"), py::arg("epsilon"), "Priority-Flood depression filling (NaN = missing).");
 
+    m.def("hydro_breach", [](const Array& z, double dx, double dy, int max_length, double max_cost, bool min_dist,
+                             double small_num, bool fill_rest) {
+        const Grid g = grid_of(z, dx, dy);
+        std::vector<double> out;
+        {
+            py::gil_scoped_release release;
+            out = breach(g, max_length, max_cost, min_dist, small_num, fill_rest);
+        }
+        return to_raster(std::move(out), g.ny, g.nx);
+    }, py::arg("z"), py::arg("dx"), py::arg("dy"), py::arg("max_length"), py::arg("max_cost"), py::arg("min_dist"),
+       py::arg("small_num"), py::arg("fill_rest"), "Least-cost depression breaching.");
+
     m.def("hydro_d8", [](const Array& z, double dx, double dy, bool resolve_flats, int n_threads) {
         const Grid g = grid_of(z, dx, dy);
         std::vector<std::int8_t> out;

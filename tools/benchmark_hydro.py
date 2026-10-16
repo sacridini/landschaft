@@ -68,6 +68,8 @@ def main() -> None:
         rows = [
             ("fill", lambda: ls.write_raster(ls.hydro.fill(da), wd / "o.tif"),
              wbt("FillDepressions", "--dem=dem.tif", "-o=w.tif")),
+            ("breach", lambda: ls.write_raster(ls.hydro.breach(da, max_length=20, fill_rest=False), wd / "o.tif"),
+             wbt("BreachDepressionsLeastCost", "--dem=dem.tif", "-o=w.tif", "--dist=20", "--min_dist")),
             ("D8 accumulation", lambda: ls.write_raster(ls.hydro.flow_accumulation(filled, flats=False), wd / "o.tif"),
              wbt("D8FlowAccumulation", "--input=filled.tif", "-o=w.tif", "--out_type=cells")),
             ("D-inf accumulation",

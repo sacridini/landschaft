@@ -47,7 +47,7 @@ def wbt_exe() -> Path:
 
 
 def run(exe: Path, wd: Path, tool: str, *args: str) -> None:
-    cmd = [str(exe), f"-r={tool}", f"--wd={wd}", "--max_procs=4", *args]
+    cmd = [str(exe), f"-r={tool}", f"--wd={wd}", "--max_procs=1", *args]
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0 or "Error" in res.stdout:
         raise RuntimeError(f"{tool}: {res.stdout[-2000:]}{res.stderr[-2000:]}")
@@ -103,6 +103,11 @@ def main() -> None:
                 write(wd / "framed.tif", framed, dx, dy)
                 run(exe, wd, "FillDepressions", "--dem=framed.tif", "-o=framed_filled.tif")
                 out[f"{name}/filled_edge"] = read(wd / "framed_filled.tif")[1:-1, 1:-1]
+                # breaching, the same way: channels that reach the edge are cut in the framed DEM
+                for tag, extra in (("breach_dist", ["--min_dist"]), ("breach_cost", [])):
+                    run(exe, wd, "BreachDepressionsLeastCost", "--dem=framed.tif", "-o=framed_breached.tif",
+                        "--dist=20", *extra)
+                    out[f"{name}/{tag}"] = read(wd / "framed_breached.tif")[1:-1, 1:-1]
             run(exe, wd, "D8Pointer", "--dem=dem.tif", "-o=d8_raw.tif", "--esri_pntr")
             run(exe, wd, "D8Pointer", "--dem=filled.tif", "-o=d8.tif", "--esri_pntr")
             run(exe, wd, "D8FlowAccumulation", "--input=filled.tif", "-o=d8acc.tif", "--out_type=cells")

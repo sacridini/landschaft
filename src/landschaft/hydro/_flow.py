@@ -20,7 +20,7 @@ from .._threads import current, threaded
 from ..cost._transition import _crs_lonlat
 from ..surface._grid import Surface, read_surface
 
-__all__ = ["D8_CODES", "fill", "flow_accumulation", "flow_direction", "hand", "streams"]
+__all__ = ["D8_CODES", "breach", "fill", "flow_accumulation", "flow_direction", "hand", "streams"]
 
 #: D8 codes of :func:`flow_direction` (ESRI's): the neighbour each cell drains to.
 D8_CODES = {1: "E", 2: "SE", 4: "S", 8: "SW", 16: "W", 32: "NW", 64: "N", 128: "NE"}
@@ -96,6 +96,72 @@ def fill(dem, *, drain_flats: bool = False, extent=None, crs=None, band=None, no
     """
     s = _read(dem, extent, crs, band, nodata)
     return s.raster(_core.hydro_fill(s.values, bool(drain_flats)), "filled")
+
+
+@threaded
+def breach(dem, *, max_length: int = 100, max_cost: float | None = None, min_dist: bool = True,
+           flat_increment: float | None = None, fill_rest: bool = True, extent=None, crs=None, band=None,
+           nodata=None) -> xr.DataArray:
+    """Remove the depressions of a DEM by cutting channels through their rims.
+
+    Breaching often changes the terrain less than filling (:func:`fill`): a road
+    embankment across a valley or a false rim of a few cells is cut, not the whole
+    valley flooded behind it (Lindsay 2016). Each pit (a cell with no lower
+    neighbour), from the lowest, is first raised to just below its lowest
+    neighbour, then joined to the nearest cell it can drain to (lower than the
+    channel, missing, or the map's edge) by the channel of least cost, cut to
+    descend by ``flat_increment`` per cell. WhiteboxTools'
+    ``BreachDepressionsLeastCost`` (after Lindsay & Dhun 2015), cell for cell,
+    except that a channel that reaches the map's edge is cut (WhiteboxTools leaves
+    it uncut).
+
+    Parameters
+    ----------
+    dem
+        The elevations; NaN or ``nodata`` mark missing cells.
+    max_length
+        The longest channel, in cells.
+    max_cost
+        The costliest channel to cut (``None``: any); pits that would need more are
+        left (and filled with ``fill_rest``).
+    min_dist
+        Count the channel's length in its cost (the lowering times the distance),
+        so shorter channels are preferred; otherwise only the lowering counts.
+    flat_increment
+        The drop per cell along a channel (default: from the elevations and the cell
+        size, as WhiteboxTools chooses it). The steps are small: keep the result in
+        float64.
+    fill_rest
+        Fill the depressions that no channel could solve (:func:`fill`).
+    extent, crs, band, nodata
+        For arrays without georeferencing, or to pick a band and a missing value.
+
+    Returns
+    -------
+    xarray.DataArray
+        The breached DEM, float64.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> dem = np.array([[9, 9, 9, 9, 9], [9, 5, 5, 5, 9], [9, 5, 1, 6, 4], [9, 5, 5, 5, 9], [9, 9, 9, 9, 9]], float)
+    >>> b = ls.hydro.breach(dem, flat_increment=0.01)
+    >>> float(b.values[2, 2])                       # the pit, raised below its lowest neighbour
+    4.99
+    >>> int((b.values != dem).sum())                # and one rim cell cut on the way to the 4 (east)
+    2
+    >>> bool(ls.hydro.flow_direction(b, flats=False).values[2, 2] > 0)
+    True
+    """
+    s = _read(dem, extent, crs, band, nodata)
+    dx, dy = _cells(s)
+    cost = math.inf if max_cost is None else float(max_cost)
+    inc = 0.0 if flat_increment is None else float(flat_increment)
+    if flat_increment is not None and inc <= 0:
+        raise ValueError("flat_increment must be positive")
+    out = _core.hydro_breach(s.values, dx, dy, int(max_length), cost, bool(min_dist), inc, bool(fill_rest))
+    return s.raster(out, "breached")
 
 
 @threaded

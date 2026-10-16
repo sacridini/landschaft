@@ -3665,8 +3665,14 @@ InVEST (Apache-2.0, Python/Cython: referência de paridade) com a RUSLE por cél
   baixo dentro do mapa), e sobe as células da borda junto. Referência corrigida: o mesmo `FillDepressions` com o MDE
   numa moldura de células a −1e9, recortado. Também: ele marca as células sem valor do D-inf como −1.
 - 3000 x 3000, 4 cores: fill 2,1 s contra 3,2 s; acumulação D8 0,62 contra 1,95; D-inf 1,2 contra 1,8; FD8 1,7
-  contra 2,0 (com a gravação do resultado). Falta: rebaixamento (*breaching*, Lindsay 2016) como alternativa ao
-  preenchimento; MFD do pygeoprocessing para o SDR (fase 3 do InVEST); nós do Terraflux.
+  contra 2,0 (com a gravação do resultado).
+- **Rebaixamento — Feito**: `ls.hydro.breach` = `BreachDepressionsLeastCost` do WhiteboxTools portado (`breach.cpp`),
+  com o `BinaryHeap` do Rust reproduzido (sift_up / sift_down_to_bottom) para os empates de custo saírem na mesma
+  ordem: bit a bit nos três MDEs sem buracos, com e sem `min_dist`, contra o WhiteboxTools **numa thread** (com
+  várias ele toma as poças de mesma elevação na ordem em que as threads entregam as linhas: não determinístico).
+  Erro dele corrigido: o canal que chega à borda não era cavado (o recuo começava na célula além da borda, sem
+  `backlink`); referência corrigida pela mesma moldura baixa. As poças que sobram são preenchidas pelo nosso `fill`.
+  Falta: MFD do pygeoprocessing para o SDR (fase 3 do InVEST); nós do Terraflux.
 
 ---
 

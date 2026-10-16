@@ -10,8 +10,9 @@ The directions and accumulations are those of WhiteboxTools 2.4 cell for cell
 (`D8Pointer`, `DInfPointer`, `D8FlowAccumulation`, `DInfFlowAccumulation`,
 `FD8FlowAccumulation`, `ElevationAboveStream`); the filling is its
 `FillDepressions` with water let out at the map's edge and at missing cells,
-which WhiteboxTools does not do. Flat areas drain by the method of Barnes,
-Lehman & Mulla (2014).
+which WhiteboxTools does not do, and the breaching its
+`BreachDepressionsLeastCost` with the channels that reach the edge cut. Flat
+areas drain by the method of Barnes, Lehman & Mulla (2014).
 
 <!-- no-run -->
 ```python
@@ -28,6 +29,8 @@ wetness = ls.hydro.twi(filled)                           # FD8 contributing area
 ## Conditioning
 
 ::: landschaft.hydro.fill
+
+::: landschaft.hydro.breach
 
 ## Flow
 

@@ -34,6 +34,17 @@ struct Grid {
 // value above the cell it was reached from, so that filled areas drain.
 std::vector<double> fill(const Grid& g, bool epsilon);
 
+// Least-cost depression breaching (WhiteboxTools' BreachDepressionsLeastCost, after
+// Lindsay & Dhun 2015): each pit, from the lowest, raised to just below its lowest
+// neighbour, then joined to the nearest cell it can drain to (lower than the pit along
+// the channel, missing, or off the map) by the channel of least cost within max_length
+// cells, lowered to descend by small_num per cell. min_dist: the cost counts the
+// channel's length (cost-distance), otherwise only the lowering. Pits left unsolved
+// are filled when fill is set. small_num <= 0: chosen from the elevations as
+// WhiteboxTools does.
+std::vector<double> breach(const Grid& g, int max_length, double max_cost, bool min_dist, double small_num,
+                           bool fill_rest);
+
 // D8 (O'Callaghan & Mark 1984): the neighbour of steepest descent (drop / distance),
 // NO_FLOW where none is lower. resolve_flats: flat areas drain by Barnes, Lehman &
 // Mulla (2014), towards lower terrain and away from higher terrain.
