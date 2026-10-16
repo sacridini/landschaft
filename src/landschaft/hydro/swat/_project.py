@@ -69,6 +69,54 @@ class SwatProject:
     def copy(self) -> SwatProject:
         return SwatProject(dict(self.files))
 
+    def print_file(self) -> str:
+        """The name of the print settings file (file.cio's simulation line, else print.prt)."""
+        if "file.cio" in self:
+            for line in self.text("file.cio").split("\n"):
+                p = line.split()
+                if len(p) >= 3 and p[0] == "simulation":
+                    return p[2]
+        return "print.prt"
+
+    def set_print(self, tables=None, *, nyskip: int | None = None) -> None:
+        """Choose what SWAT+ prints (its print.prt): the years it skips before printing
+        and, for each table, the steps printed.
+
+        Parameters
+        ----------
+        tables : dict or list, optional
+            ``{table: steps}``, with steps from ``"day"``, ``"month"``, ``"year"``,
+            ``"aa"`` (average annual), ``"all"`` or ``[]`` (none); a list of tables
+            means all steps. Tables: ``hru_wb``, ``hru_nb``, ``hru_ls``, ``hru_pw``,
+            ``basin_wb``, ``basin_nb``, ``basin_ls``, ``basin_pw``, ``channel_sd``,
+            ``aquifer`` (and the other rows of print.prt by their SWAT+ names).
+        nyskip : int, optional
+            Years simulated before printing (spin-up).
+        """
+        name = self.print_file()
+        lines = self.text(name).split("\n")
+        if nyskip is not None:
+            vals = lines[2].split()
+            vals[0] = str(int(nyskip))
+            lines[2] = " ".join(f"{v:<10}" for v in vals)
+        if isinstance(tables, (list, tuple, set)):
+            tables = {t: "all" for t in tables}
+        for table, steps in (tables or {}).items():
+            if isinstance(steps, str):
+                steps = ["day", "month", "year", "aa"] if steps == "all" else [steps]
+            bad = set(steps) - {"day", "month", "year", "aa"}
+            if bad:
+                raise ValueError(f"unknown print steps {sorted(bad)} (day, month, year, aa)")
+            row = f"{table:<24}" + "".join(f"{'y' if s in steps else 'n':>14}" for s in ("day", "month", "year", "aa"))
+            for k, line in enumerate(lines):
+                p = line.split()
+                if len(p) == 5 and p[0] == table:
+                    lines[k] = row
+                    break
+            else:
+                raise ValueError(f"{name} has no row {table!r}")
+        self.set_text(name, "\n".join(lines))
+
     def write(self, path) -> Path:
         """Write the files into a folder (made if needed), for SWAT+ to run."""
         out = Path(path)

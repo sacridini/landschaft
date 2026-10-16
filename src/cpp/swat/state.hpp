@@ -6,6 +6,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -103,8 +104,10 @@ struct Sim : input_file_module,
     void print_record(int tag, int id, std::vector<float> v) {
         prints.push_back({tag, time.yrc, time.day, id, std::move(v)});
     }
+    std::set<int> dump_tags;  // the tags kept (empty: all)
     void dump_record(int tag, int id, std::vector<float> v) {
-        if (dump) dumps.push_back({tag, time.yrc, time.day, id, std::move(v)});
+        if (dump && (dump_tags.empty() || dump_tags.count(tag)))
+            dumps.push_back({tag, time.yrc, time.day, id, std::move(v)});
     }
 };
 

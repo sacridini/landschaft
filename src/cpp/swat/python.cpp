@@ -52,7 +52,7 @@ py::dict dumps_to_python(const std::vector<DumpRecord>& dumps) {
 void register_python(py::module_& m) {
     m.def(
         "swat_run",
-        [](const std::map<std::string, py::bytes>& files, bool dump, py::object inject) {
+        [](const std::map<std::string, py::bytes>& files, py::object dump, py::object inject) {
             Sim s;
             for (const auto& [name, text] : files) s.files.add(name, std::string(text));
             if (!inject.is_none()) {
@@ -76,7 +76,12 @@ void register_python(py::module_& m) {
                 }
             }
             RunOptions opt;
-            opt.dump = dump;
+            if (py::isinstance<py::bool_>(dump)) {
+                opt.dump = py::cast<bool>(dump);
+            } else {
+                opt.dump = true;
+                for (auto t : dump) s.dump_tags.insert(py::cast<int>(t));
+            }
             {
                 py::gil_scoped_release release;
                 run(s, opt);
@@ -92,7 +97,8 @@ void register_python(py::module_& m) {
             return out;
         },
         py::arg("files"), py::arg("dump") = true, py::arg("inject") = py::none(),
-        "Run a SWAT+ project given as {file name: contents}; returns the daily records. inject: reference "
+        "Run a SWAT+ project given as {file name: contents}; returns the daily records (dump: True, False or the "
+        "tags to keep) and the printed ones. inject: reference "
         "records replacing hru_control (tests of the routing).");
 
     m.def(
