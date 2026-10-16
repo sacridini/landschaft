@@ -266,6 +266,7 @@ set_target_properties(restcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Ecosystem services (InVEST): carbon storage, habitat quality.
 add_library(servcore STATIC
+    src/cpp/serv/sdr.cpp
     src/cpp/serv/services.cpp
 )
 target_include_directories(servcore PUBLIC src/cpp)

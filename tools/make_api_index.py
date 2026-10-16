@@ -48,7 +48,7 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("simulate.md", "Land change simulation", ":material-timeline-clock-outline:",
           "Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation."),
          ("services.md", "Ecosystem services", ":material-leaf-circle-outline:",
-          "InVEST's models: carbon, habitat quality and rarity, annual water yield and hydropower."),
+          "InVEST's models: carbon, habitat quality, water yield and hydropower, sediment delivery."),
          ("uncertainty.md", "Uncertainty", ":material-plus-minus-variant:",
           "Totals, products, the delta method, Monte Carlo and confidence intervals.")]
 

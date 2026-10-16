@@ -3655,6 +3655,9 @@ InVEST (Apache-2.0, Python/Cython: referência de paridade) com a RUSLE por cél
   hídrico, assoreamento de hidrelétricas, captação de água das cidades), junto com carbono e biodiversidade, como
   feição ou benefício por ação ("sedimento evitado" se a célula for restaurada).
 * Referências: SedInConnect (Crema & Cavalli 2018, GPL), InVEST SDR (`natcap.invest.sdr`).
+* **Feito** (2026-10-16) com a fase 3 do InVEST: `ls.hydro.connectivity_index` (o IC do SDR do InVEST para
+  qualquer peso W, com os canais dados ou traçados por limiar) e `ls.services.sdr`; o SedInConnect (D-Infinity,
+  rugosidade como peso) não foi comparado.
 
 ### Ordem sugerida
 
@@ -3812,6 +3815,30 @@ Acoplada ao condicionamento do MDE da seção "Hidrologia e forma do terreno" (P
   de drenagem opcional; somas por bacia.
 * Liga ao `ls.prioritize` e à restauração: a retenção de sedimentos (ou a exportação evitada se a célula for
   restaurada) como feição ou benefício por ação, junto de carbono e biodiversidade.
+
+**Fase 3 feita** (2026-10-16, ramo do worktree, sem versão; `ls.services.sdr`, `ls.hydro.connectivity_index`; C++
+em `src/cpp/serv/sdr.cpp`):
+* Sobre o roteamento do pygeoprocessing portado em `ls.hydro` (`fill` = `fill_pits`, MFD empacotado, D8,
+  acumulação, distância ao canal, `extract_streams_mfd` com traço 0,7; o D8 é `acc > limiar`), portados aqui: o
+  `calculate_slope` do pygeoprocessing (janela 3 x 3 com as diagonais e as substituições dos vizinhos ausentes, em
+  float64, gravado em float32) e o `sediment_deposition.h` do InVEST (MFD e D8: semente nos pontos altos bloco a
+  bloco de 256, pilha, proporções em float32 como o `NeighborTuple`, `is_close` deles, `sdr_j == 0` vira 1).
+* Cada raster da cadeia no tipo em que o InVEST o grava (os mascarados no tipo de todas as entradas juntas, o
+  `result_type` do `raster_map`; LS, barras, D_up e D_dn em float64; o resto float32) e com a mesma expressão
+  numpy, aplicada só às células válidas como o `raster_map`: o fator LS, o limiar de declividade, W, CP, RKLS
+  (fora dos canais), USLE, W̄ e S̄, 1 / (W S), IC (`log10`), SDR (o `exp` float32 do numpy), E', exportação,
+  erosão evitada, retenção total, o que drena para o canal e as somas por bacia (`ls.zonal_stats`). A máscara das
+  bacias (centros das células, o `vector_mask_options` do alinhamento) e as células sem valor em qualquer
+  entrada ficam fora, como lá.
+* **Bit a bit** contra o natcap.invest 3.20.2 em todos os rasters (33 intermediários e saídas) nos casos MFD, D8 e
+  com drenagem; totais por bacia a 3e-6 (o InVEST soma em float32). Num raster de 3000 x 3000 também tudo bit a
+  bit, exceto deposição, fluxo e retenção total: 1 ulp de float32 em 0,4 % das células, porque o `ManagedRaster`
+  do InVEST guarda os valores em double num cache LRU de blocos e os relê do arquivo float32 quando um bloco sai
+  do cache (o resultado depende do tamanho do raster); aqui o fluxo fica em double até o fim (a forma estável).
+  `connectivity_index` com o mesmo W e o MDE mascarado dá o IC do SDR bit a bit.
+* Desempenho (3000 x 3000, MFD, 5 núcleos): 9,8 s contra 114 s do InVEST.
+* Fica para depois: entradas em grades diferentes (o InVEST alinha e reamostra; aqui na mesma grade), o recorte à
+  caixa das bacias, o D-Infinity como opção, os benefícios por ação no `ls.prioritize`, o nó do Terraflux.
 
 ### Depois
 

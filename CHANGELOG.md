@@ -7,6 +7,16 @@ in a new major version.
 ## [Unreleased]
 
 ### Added
+- `ls.services.sdr` (InVEST's sediment delivery ratio): RUSLE soil loss with the LS factor of Desmet & Govers from
+  the flow accumulation, the index of connectivity of Borselli / Cavalli (D_up from the accumulated C factor and
+  slope, D_dn down the flow weighted by 1 / (W S)), the SDR, sediment export, the deposition and flux of the sediment
+  that does not reach a stream (InVEST's sediment_deposition, MFD and D8), avoided erosion and total retention,
+  drainage given by the user, what drains to a stream, and the totals per watershed. Every raster of InVEST's chain
+  in its float32 / float64 type, on pygeoprocessing's routing (`ls.hydro`) and its percent slope (ported in C++):
+  InVEST 3.20.2's rasters bit for bit (MFD, D8, with drainage), the watershed totals to 3e-6 (InVEST adds the cells
+  in float32). 3000 x 3000 cells: 9.8 s against 114 s.
+- `ls.hydro.connectivity_index`: that index of connectivity for any weight (the C factor, or any impedance from
+  0.001 to 1), with the streams given or traced from a threshold.
 - `ls.hydro`, terrain hydrology: `fill` (Priority-Flood; `drain_flats=True` for Priority-Flood+epsilon), `breach`
   (least-cost channels through the rims of depressions, as WhiteboxTools' `BreachDepressionsLeastCost`, its
   min-heap reproduced so equal costs resolve alike),

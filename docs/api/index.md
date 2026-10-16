@@ -124,7 +124,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     ---
 
-    InVEST's models: carbon, habitat quality and rarity, annual water yield and hydropower.
+    InVEST's models: carbon, habitat quality, water yield and hydropower, sediment delivery.
 
 -   :material-plus-minus-variant:{ .lg .middle } **[Uncertainty](uncertainty.md)**
 
@@ -716,6 +716,8 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.valuation_constant`](services.md#landschaft.services.valuation_constant) | The factor turning a change in carbon into its net present value (InVEST's) |
 | [`ls.water_yield`](services.md#landschaft.services.water_yield) | Annual water yield, consumption and hydropower value (InVEST's annual water yield model) |
 | [`ls.WaterYield`](services.md#landschaft.services.WaterYield) | Annual water yield of a landscape (`water_yield`) |
+| [`ls.sdr`](services.md#landschaft.services.sdr) | Sediment export, deposition and retention (InVEST's sediment delivery ratio model) |
+| [`ls.SDR`](services.md#landschaft.services.SDR) | Sediment export and retention of a landscape (`sdr`) |
 | [`ls.habitat_quality`](services.md#landschaft.services.habitat_quality) | Habitat degradation, quality and rarity (InVEST's habitat quality model) |
 | [`ls.HabitatQuality`](services.md#landschaft.services.HabitatQuality) | Habitat degradation, quality and rarity (`habitat_quality`) |
 

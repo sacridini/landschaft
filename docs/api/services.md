@@ -20,6 +20,12 @@ scenarios goes straight in.
 
 ::: landschaft.services.WaterYield
 
+## Sediment delivery ratio
+
+::: landschaft.services.sdr
+
+::: landschaft.services.SDR
+
 ## Habitat quality and rarity
 
 ::: landschaft.services.habitat_quality

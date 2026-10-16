@@ -24,7 +24,8 @@ Typical use::
 
 from ._carbon import Carbon, carbon, valuation_constant
 from ._habitat import HabitatQuality, habitat_quality
+from ._sdr import SDR, sdr
 from ._water import WaterYield, water_yield
 
-__all__ = ["Carbon", "HabitatQuality", "WaterYield", "carbon", "habitat_quality", "valuation_constant",
+__all__ = ["Carbon", "HabitatQuality", "SDR", "WaterYield", "carbon", "habitat_quality", "sdr", "valuation_constant",
            "water_yield"]

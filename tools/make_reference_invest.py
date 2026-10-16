@@ -447,6 +447,91 @@ def run_wy(name, spec, tmp):
     return inputs, outputs, meta
 
 
+# --------------------------------------------------------------------------- sediment delivery ratio
+
+SDR_CASES = {
+    "sdr_mfd": dict(seed=31, flow="mfd", drainage=False, threshold=60),
+    "sdr_d8": dict(seed=32, flow="d8", drainage=False, threshold=40),
+    "sdr_drainage": dict(seed=33, flow="mfd", drainage=True, threshold=80),
+}
+
+
+def _dem(rng, ny, nx):
+    """Hills and valleys with some noise, a few pits and flats (float32, metres)."""
+    y, x = np.mgrid[:ny, :nx].astype(np.float64)
+    z = (300 + 40 * np.sin(x / 9.0) * np.cos(y / 11.0) + 0.9 * x + 0.5 * y
+         + 15 * np.exp(-((x - nx * 0.6) ** 2 + (y - ny * 0.4) ** 2) / 60.0))
+    z += rng.normal(0, 0.8, size=(ny, nx))
+    z[20:24, 30:35] = z[20:24, 30:35].min() - 2.0          # a pit
+    z[40:44, 10:16] = np.round(z[40:44, 10:16].mean(), 1)   # a flat
+    return np.round(z, 2).astype(np.float32)
+
+
+def run_sdr(name, spec, tmp):
+    from osgeo import gdal
+
+    from natcap.invest.sdr import sdr
+
+    rng = np.random.default_rng(spec["seed"])
+    ny, nx = 61, 79
+    codes = [1, 2, 3, 4, 7]
+    dem = _dem(rng, ny, nx)
+    nd = -9999.0
+    dem[rng.random((ny, nx)) < 0.004] = nd
+    lulc = _lulc(rng, ny, nx, codes, 0, holes=0.002).astype(np.int16)
+    erosivity = np.round(rng.uniform(2000, 6000, size=(ny, nx)), 1).astype(np.float32)
+    erodibility = np.round(rng.uniform(0.01, 0.05, size=(ny, nx)), 4).astype(np.float32)
+    erosivity[rng.random((ny, nx)) < 0.003] = nd
+    _write_raster(tmp / "dem.tif", dem, nd, gdal.GDT_Float32)
+    _write_raster(tmp / "lulc.tif", lulc, 0, gdal.GDT_Int16)
+    _write_raster(tmp / "erosivity.tif", erosivity, nd, gdal.GDT_Float32)
+    _write_raster(tmp / "erodibility.tif", erodibility, nd, gdal.GDT_Float32)
+    usle_c = np.round(rng.uniform(0.001, 0.4, size=len(codes)), 4)
+    usle_c[0] = 0.0005  # below W's floor of 0.001
+    usle_p = np.round(rng.uniform(0.3, 1.0, size=len(codes)), 3)
+    _csv(tmp / "bio.csv", ["lucode", "usle_c", "usle_p"], [[c, a, b] for c, a, b in zip(codes, usle_c, usle_p)])
+    # two watersheds covering the raster (and beyond), the first with a notch cut out: cells outside are masked
+    x0, y0 = ORIGIN
+    x1, y1 = x0 + nx * PIXEL, y0 - ny * PIXEL
+    xm = x0 + 37 * PIXEL + 11.0
+    ws_rings = [[(x0 - 40, y0 + 40), (xm, y0 + 40), (xm + 60, y1 - 40), (x0 - 40, y1 - 40),
+                 (x0 - 40, y0 - 20 * PIXEL), (x0 + 9 * PIXEL, y0 - 15 * PIXEL), (x0 - 40, y0 - 10 * PIXEL),
+                 (x0 - 40, y0 + 40)],
+                [(xm, y0 + 40), (x1 + 40, y0 + 40), (x1 + 40, y1 - 40), (xm + 60, y1 - 40), (xm, y0 + 40)]]
+    _write_polygons(tmp / "ws.shp", ws_rings, "ws_id", [1, 2])
+    args = {"workspace_dir": str(tmp / "out"), "results_suffix": "", "dem_path": str(tmp / "dem.tif"),
+            "erosivity_path": str(tmp / "erosivity.tif"), "erodibility_path": str(tmp / "erodibility.tif"),
+            "lulc_path": str(tmp / "lulc.tif"), "watersheds_path": str(tmp / "ws.shp"),
+            "biophysical_table_path": str(tmp / "bio.csv"), "threshold_flow_accumulation": spec["threshold"],
+            "k_param": 2.0, "sdr_max": 0.8, "ic_0_param": 0.5, "l_max": 122, "drainage_path": "",
+            "flow_dir_algorithm": spec["flow"], "n_workers": -1}
+    inputs = {"dem": dem, "lulc": lulc, "erosivity": erosivity, "erodibility": erodibility,
+              "codes": np.asarray(codes), "usle_c": usle_c, "usle_p": usle_p}
+    if spec["drainage"]:
+        drainage = np.zeros((ny, nx), np.uint8)
+        drainage[:, 60:62] = 1
+        drainage[50:52, :] = 1
+        _write_raster(tmp / "drainage.tif", drainage, 255, gdal.GDT_Byte)
+        args["drainage_path"] = str(tmp / "drainage.tif")
+        inputs["drainage"] = drainage
+    registry = sdr.execute(args)
+    outputs = {}
+    for key, path in registry.items():
+        if isinstance(path, str) and path.endswith(".tif") and Path(path).is_file():
+            a, ndv = _read(path)
+            if a.dtype.kind == "f":
+                outputs[key] = np.where(a == ndv, np.nan, a) if ndv is not None else a
+            else:
+                outputs[key] = a
+    meta = {"model": "sdr", "nodata": 0, "input_nodata": nd, "pixel": PIXEL, "watersheds": ws_rings,
+            "params": {k: args[k] for k in ("threshold_flow_accumulation", "k_param", "sdr_max", "ic_0_param",
+                                            "l_max", "flow_dir_algorithm")},
+            "watershed_results": _read_polygons(registry["watershed_results_sdr"]),
+            "nodata_values": {key: _read(path)[1] for key, path in registry.items()
+                              if isinstance(path, str) and path.endswith(".tif") and Path(path).is_file()}}
+    return inputs, outputs, meta
+
+
 def main(argv):
     import natcap.invest
     import numpy
@@ -454,8 +539,8 @@ def main(argv):
 
     OUT.mkdir(parents=True, exist_ok=True)
     cases = {**{k: ("carbon", v) for k, v in CARBON_CASES.items()}, **{k: ("hq", v) for k, v in HQ_CASES.items()},
-             **{k: ("wy", v) for k, v in WY_CASES.items()}}
-    runners = {"carbon": run_carbon, "hq": run_hq, "wy": run_wy}
+             **{k: ("wy", v) for k, v in WY_CASES.items()}, **{k: ("sdr", v) for k, v in SDR_CASES.items()}}
+    runners = {"carbon": run_carbon, "hq": run_hq, "wy": run_wy, "sdr": run_sdr}
     names = argv or list(cases)
     for name in names:
         kind, spec = cases[name]

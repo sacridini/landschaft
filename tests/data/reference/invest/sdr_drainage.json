@@ -1,0 +1,137 @@
+{
+ "model": "sdr",
+ "nodata": 0,
+ "input_nodata": -9999.0,
+ "pixel": 30.0,
+ "watersheds": [
+  [
+   [
+    499960.0,
+    8000040.0
+   ],
+   [
+    501121.0,
+    8000040.0
+   ],
+   [
+    501181.0,
+    7998130.0
+   ],
+   [
+    499960.0,
+    7998130.0
+   ],
+   [
+    499960.0,
+    7999400.0
+   ],
+   [
+    500270.0,
+    7999550.0
+   ],
+   [
+    499960.0,
+    7999700.0
+   ],
+   [
+    499960.0,
+    8000040.0
+   ]
+  ],
+  [
+   [
+    501121.0,
+    8000040.0
+   ],
+   [
+    502410.0,
+    8000040.0
+   ],
+   [
+    502410.0,
+    7998130.0
+   ],
+   [
+    501181.0,
+    7998130.0
+   ],
+   [
+    501121.0,
+    8000040.0
+   ]
+  ]
+ ],
+ "params": {
+  "threshold_flow_accumulation": 80,
+  "k_param": 2.0,
+  "sdr_max": 0.8,
+  "ic_0_param": 0.5,
+  "l_max": 122,
+  "flow_dir_algorithm": "mfd"
+ },
+ "watershed_results": [
+  {
+   "ws_id": 1,
+   "usle_tot": 6004.11234375,
+   "sed_export": 624.89931152344,
+   "sed_dep": 4987.5075,
+   "avoid_exp": 6885.78328125,
+   "avoid_eros": 29482.75125
+  },
+  {
+   "ws_id": 2,
+   "usle_tot": 5797.65796875,
+   "sed_export": 537.97473632813,
+   "sed_dep": 5304.8816015625,
+   "avoid_exp": 6714.93234375,
+   "avoid_eros": 28078.9846875
+  }
+ ],
+ "nodata_values": {
+  "aligned_dem": -9999.0,
+  "masked_dem": 3.4028234663852886e+38,
+  "aligned_lulc": 0.0,
+  "masked_lulc": 3.4028234663852886e+38,
+  "aligned_erosivity": -9999.0,
+  "masked_erosivity": 3.4028234663852886e+38,
+  "aligned_erodibility": -9999.0,
+  "masked_erodibility": 3.4028234663852886e+38,
+  "aligned_drainage": 255.0,
+  "masked_drainage": 3.4028234663852886e+38,
+  "mask": 0.0,
+  "pit_filled_dem": 3.4028234663852886e+38,
+  "slope": -3.4028234663852886e+38,
+  "slope_threshold": 3.4028234663852886e+38,
+  "flow_direction": 0.0,
+  "flow_accumulation": -1.23789789e+29,
+  "stream": 255.0,
+  "ls": 1.7976931348623157e+308,
+  "stream_and_drainage": 255.0,
+  "w": -1.0,
+  "w_threshold": 3.4028234663852886e+38,
+  "cp": -1.0,
+  "rkls": -1.0,
+  "usle": 3.4028234663852886e+38,
+  "w_accumulation": -1.23789789e+29,
+  "w_bar": 1.7976931348623157e+308,
+  "s_accumulation": -1.23789789e+29,
+  "s_bar": 1.7976931348623157e+308,
+  "d_up": 1.7976931348623157e+308,
+  "ws_inverse": 3.4028234663852886e+38,
+  "d_dn": -1.0,
+  "ic": -3.4028234663852886e+38,
+  "sdr_factor": -1.0,
+  "sed_export": 3.4028234663852886e+38,
+  "e_prime": -1.0,
+  "flux": -1.0,
+  "sed_deposition": -1.0,
+  "avoided_erosion": 3.4028234663852886e+38,
+  "avoided_export": 3.4028234663852886e+38,
+  "what_drains_to_stream": 255.0
+ },
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

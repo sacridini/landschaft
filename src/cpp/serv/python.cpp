@@ -11,6 +11,7 @@
 #include <optional>
 #include <stdexcept>
 
+#include "serv/sdr.hpp"
 #include "serv/services.hpp"
 
 namespace py = pybind11;
@@ -31,9 +32,11 @@ void same_size(const py::array& a, const py::array& b, const char* what) {
 namespace serv {
 
 void register_water(py::module_& m);
+void register_sdr(py::module_& m);
 
 void register_python(py::module_& m) {
     register_water(m);
+    register_sdr(m);
     m.def("serv_classify", [](const I64& lulc, const U8& valid, const I64& codes, int threads) {
         same_size(lulc, valid, "the mask differs in size from the map");
         I32 out(lulc.request().shape);
@@ -161,6 +164,42 @@ py::array potential_et_t(const I32& cls, const F32& kc, const py::array& eto_, i
 }
 
 }  // namespace
+
+void register_sdr(py::module_& m) {
+    using F64 = py::array_t<double, py::array::c_style | py::array::forcecast>;
+    using U8 = py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>;
+    m.def("serv_pgp_slope", [](const F64& z, double xcell, double ycell, int threads) {
+        if (z.ndim() != 2) throw std::invalid_argument("expected a 2-D raster");
+        const int ny = static_cast<int>(z.shape(0)), nx = static_cast<int>(z.shape(1));
+        F32 out({ny, nx});
+        {
+            py::gil_scoped_release release;
+            pgp_slope(z.data(), ny, nx, xcell, ycell, out.mutable_data(), threads);
+        }
+        return out;
+    }, py::arg("z"), py::arg("xcell"), py::arg("ycell"), py::arg("threads"),
+       "pygeoprocessing's percent slope (float32, NaN missing).");
+    m.def("serv_sediment_deposition", [](const py::array& dir, const F32& e_prime, const F32& sdr, int block) {
+        if (dir.ndim() != 2) throw std::invalid_argument("expected 2-D flow directions");
+        const int ny = static_cast<int>(dir.shape(0)), nx = static_cast<int>(dir.shape(1));
+        same_size(dir, e_prime, "E' differs in size from the directions");
+        same_size(dir, sdr, "the SDR differs in size from the directions");
+        F32 dep({ny, nx}), flux({ny, nx});
+        if (dir.dtype().is(py::dtype::of<std::uint8_t>())) {
+            const auto d = U8::ensure(dir);
+            py::gil_scoped_release release;
+            sediment_deposition_d8(d.data(), e_prime.data(), sdr.data(), ny, nx, block, dep.mutable_data(),
+                                   flux.mutable_data());
+        } else {
+            const auto d = I32::ensure(dir);
+            py::gil_scoped_release release;
+            sediment_deposition_mfd(d.data(), e_prime.data(), sdr.data(), ny, nx, block, dep.mutable_data(),
+                                    flux.mutable_data());
+        }
+        return py::make_tuple(dep, flux);
+    }, py::arg("dir"), py::arg("e_prime"), py::arg("sdr"), py::arg("block"),
+       "InVEST's sediment deposition and flux (D8 for uint8 directions, else packed MFD).");
+}
 
 void register_water(py::module_& m) {
     m.def("serv_water_fraction", [](const I32& cls, const F32& kc, const F32& root, const F32& veg,

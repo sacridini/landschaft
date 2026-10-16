@@ -17,6 +17,7 @@ Typical use::
 from ._flow import (D8_CODES, breach, distance_to_channel, fill, flow_accumulation, flow_direction, hand,
                     streams)
 from ._indices import spi, sti, twi
+from ..services._sdr import connectivity_index
 
-__all__ = ["D8_CODES", "breach", "distance_to_channel", "fill", "flow_accumulation", "flow_direction", "hand", "spi",
-           "sti", "streams", "twi"]
+__all__ = ["D8_CODES", "breach", "connectivity_index", "distance_to_channel", "fill", "flow_accumulation",
+           "flow_direction", "hand", "spi", "sti", "streams", "twi"]

@@ -61,3 +61,11 @@ north-east (0: no lower neighbour).
 ::: landschaft.hydro.spi
 
 ::: landschaft.hydro.sti
+
+## Sediment connectivity
+
+The index of connectivity of Borselli et al. (2008) and Cavalli et al. (2013), as
+InVEST's sediment delivery ratio model computes it
+([`ls.services.sdr`](services.md#sediment-delivery-ratio)).
+
+::: landschaft.hydro.connectivity_index
