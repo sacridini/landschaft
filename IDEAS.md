@@ -3361,7 +3361,7 @@ sim.supply; sim.shortfall; sim.trajectory()
 
 ---
 
-## Mais functores do Dinamica EGO (pedido em 2026-10-15)
+## Mais functores do Dinamica EGO (pedido em 2026-10-15; os quatro feitos em 1.46.0)
 
 Quatro functores do Dinamica EGO que ainda não têm equivalente no landschaft. Mesma regra do `ls.simulate`:
 clean-room pelos artigos, pela documentação pública e (no `CalcHilltop`) pelo texto da lei; o Dinamica EGO 8
@@ -3571,7 +3571,66 @@ InVEST (Apache-2.0, Python/Cython: referência de paridade) com a RUSLE por cél
 ### Ordem sugerida
 
 0 (condicionamento, direções, acumulação) → 1 (HAND) e 3 (TWI/SPI/STI) → 2 (geomorphons, independente) → 4
-(IC/SDR, depende de 0 e 3 e de tabelas de C/P por uso).
+(IC/SDR, depende de 0 e 3 e de tabelas de C/P por uso; o SDR completo é a fase 3 da seção do InVEST abaixo).
+
+---
+
+## Serviços ecossistêmicos do InVEST (pedido em 2026-10-16)
+
+Modelos do InVEST (Natural Capital Project, `natcap.invest`, Apache-2.0: o código pode ser lido e portado, com
+a atribuição) reimplementados de forma otimizada: C++/OpenMP com `n_threads`, os mesmos resultados do InVEST
+(bit a bit onde a aritmética permitir; ele grava float32 e usa o `pygeoprocessing`), entradas e saídas pelos
+objetos e pelo `ls.load_*`/`ls.write_*` do landschaft (tabelas de parâmetros como DataFrame), resultados
+`Saveable`. Por enquanto só no landschaft; depois cada modelo vira nós do Terraflux (`Model.save` e o motor por
+tiles onde o algoritmo for local). Lugar sugerido: `ls.services` (ou `ls.invest`).
+
+**Referência e paridade**: `natcap.invest` (última versão estável) numa conda env própria (pip, com GDAL do
+conda-forge), rodado pelos `datastack`/`execute(args)` de cada modelo sobre os dados de exemplo do InVEST
+(`InVEST sample data`) e sobre casos sintéticos; um harness `tools/make_reference_invest.py` como os outros. Ler
+o código de cada modelo antes (a documentação do "User's Guide" e o código às vezes divergem: vale o código,
+corrigido onde estiver errado, pela regra de implementar só a forma correta). Os modelos aceitam uma série de
+mapas (cenários, anos) e um `Model` do `ls.simulate` alimenta-os diretamente (serviços dos mapas simulados).
+
+### Fase 1 (imediata): `carbon` e `habitat_quality`
+
+Dependem só do mapa de uso, de tabelas de parâmetros e de álgebra de mapas, tabelas de consulta e convoluções.
+* **Carbono** (`invest.carbon`): estoques dos quatro reservatórios (acima e abaixo do solo, solo, matéria morta)
+  por classe, totais por célula e na paisagem, cenário atual e futuro, sequestro líquido (futuro − atual) e a
+  valoração opcional (preço do carbono, taxa de desconto, mudança anual de preço, anos entre os cenários). Uma
+  passada em C++ (tabela por classe → quatro somas por célula, somas da paisagem em ordem fixa).
+* **Qualidade de habitat** (`invest.habitat_quality`): cada ameaça com peso, distância máxima e decaimento linear
+  ou exponencial, mapas de ameaça (atual, futuro, base), sensibilidade de cada habitat a cada ameaça, raster de
+  acessibilidade (proteção legal), meia-saturação k e z = 2,5: degradação D = Σ_r Σ_y (w_r / Σw) r_y i_rxy β_x
+  S_jr, qualidade Q = H (1 − D^z / (D^z + k^z)), raridade (futuro e base versus atual). As convoluções de cada
+  ameaça pelo núcleo de decaimento por FFT (o InVEST usa a convolução em blocos do `pygeoprocessing`, com o
+  núcleo normalizado): a mesma convolução, em C++ ou com o `scipy.fft` com `workers`, um mapa por ameaça em
+  paralelo.
+
+### Fase 2 (acoplamento hidrológico): `water_yield`
+
+Álgebra de mapas com clima e somas por microbacia.
+* Budyko na forma de Fu/Zhang: AET/P = 1 + PET/P − [1 + (PET/P)^ω]^(1/ω), PET = Kc x ET0, ω = Z x AWC / P + 1,25
+  (limitado a 5 como no InVEST), AWC = profundidade de restrição x PAWC; usos de evapotranspiração "real" (água,
+  área urbana: AET = min(Kc ET0, P)); rendimento Y = (1 − AET/P) x P por célula.
+* Somas e médias por bacia e sub-bacia (polígonos): o `zonal_stats` do landschaft (C++, `ls.io`), com as tabelas
+  do InVEST (volumes, médias por área); consumo por uso (demanda), escassez e a valoração hidrelétrica opcional
+  (fração de calibração, eficiência, altura da queda, preço, anos de vida, taxa de desconto).
+
+### Fase 3 (conectividade sedimentar): `sdr`
+
+Acoplada ao condicionamento do MDE da seção "Hidrologia e forma do terreno" (Priority-Flood, fluxo múltiplo).
+* RUSLE por célula (R x K x LS x C x P), LS de Desmet & Govers (1996) com a área de contribuição por fluxo múltiplo
+  (o MFD do InVEST desde a 3.9; D-Infinity como opção), IC de Borselli (D_up / D_dn com o fator C e a
+  declividade), SDR = SDR_max / (1 + exp((IC_0 − IC) / k_b)), exportação, erosão e exportação evitadas (a
+  retenção de cada célula, com e sem vegetação), deposição, rede de drenagem por limiar de acumulação e o raster
+  de drenagem opcional; somas por bacia.
+* Liga ao `ls.prioritize` e à restauração: a retenção de sedimentos (ou a exportação evitada se a célula for
+  restaurada) como feição ou benefício por ação, junto de carbono e biodiversidade.
+
+### Depois
+
+Outros modelos que usam as mesmas peças (polinização, retenção de nutrientes NDR, armazenamento sazonal de água,
+risco costeiro) ficam para avaliar quando estas fases estiverem prontas.
 
 ---
 

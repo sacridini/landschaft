@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.46.0] - 2026-10-16
+
 ### Added
 - `ls.surface.gravity`: the gravitational interaction potential of source cells, sum of m / d^beta (Dinamica EGO's
   `CalcInteractionPotentialMap`, clean-room): distances in cells (a source's own cell at 1) or map units, a mask,

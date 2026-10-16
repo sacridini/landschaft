@@ -339,6 +339,9 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.surface.hsp`](surface.md#landschaft.surface.hsp) | Hierarchical slope position (Murphy et al. 2010) |
 | [`ls.surface.trasp`](surface.md#landschaft.surface.trasp) | Transformed aspect (Roberts & Cooper 1989): (1 - cos(aspect - 30 deg)) / 2 |
 | [`ls.surface.hli`](surface.md#landschaft.surface.hli) | Heat load index (McCune & Keon 2002) |
+| [`ls.surface.hilltop`](surface.md#landschaft.surface.hilltop) | Hilltops as permanent protection areas (APP de topo de morro) |
+| [`ls.surface.Hilltop`](surface.md#landschaft.surface.Hilltop) | The hilltops of a DEM (`hilltop`) |
+| [`ls.surface.gravity`](surface.md#landschaft.surface.gravity) | Gravitational interaction potential of source cells |
 | [`ls.surface.fit_plane`](surface.md#landschaft.surface.fit_plane) | The least-squares polynomial surface of a given order |
 | [`ls.surface.best_fit_plane`](surface.md#landschaft.surface.best_fit_plane) | The polynomial surface of order 0 to 3 that fits a surface best |
 | [`ls.surface.remove_plane`](surface.md#landschaft.surface.remove_plane) | A surface minus its best-fitting polynomial surface (geodiv's ``remove_plane``) |
@@ -636,6 +639,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.Ordered`](simulate.md#landschaft.simulate.Ordered) | The ordered allocation of Fuchs et al. (2013) with stochastic choice, as lulcc's ``OrderedModel`` |
 | [`ls.distance_to`](simulate.md#landschaft.simulate.distance_to) | Distance from each cell to the nearest cell of some classes |
 | [`ls.share_of`](simulate.md#landschaft.simulate.share_of) | Share of the cells around each cell that hold some classes |
+| [`ls.gravity_of`](simulate.md#landschaft.simulate.gravity_of) | Gravitational interaction potential of the cells of some classes |
 | [`ls.Regional`](simulate.md#landschaft.simulate.Regional) | A demand per region (municipalities, biomes, basins...) |
 | [`ls.CLUMondo`](simulate.md#landschaft.simulate.CLUMondo) | CLUMondo's demand-driven allocation of land systems |
 | [`ls.ServiceDemand`](simulate.md#landschaft.simulate.ServiceDemand) | The demand for goods and services at each time step (CLUMondo's ``demand.in``) |
@@ -646,6 +650,14 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.Cap`](simulate.md#landschaft.simulate.Cap) | At most so many cells (or so much area) a year may make a role's transitions (or given pairs) |
 | [`ls.Succession`](simulate.md#landschaft.simulate.Succession) | Autonomous change after some years, whatever the demand (CLUMondo's code 1000 + years) |
 | [`ls.ExpanderPatcher`](simulate.md#landschaft.simulate.ExpanderPatcher) | Dinamica's Expander and Patcher allocation of transitions (``AllocateTransitions``) |
+| [`ls.ContinuousPatcher`](simulate.md#landschaft.simulate.ContinuousPatcher) | New patches that take a stock (biomass, carbon, timber) up to a quota |
+| [`ls.StockAllocation`](simulate.md#landschaft.simulate.StockAllocation) | What `allocate` took |
+| [`ls.StockSimulation`](simulate.md#landschaft.simulate.StockSimulation) | What `run` did, step by step |
+| [`ls.RoadBuilder`](simulate.md#landschaft.simulate.RoadBuilder) | New roads each step, from the network towards attractive places |
+| [`ls.RoadDistance`](simulate.md#landschaft.simulate.RoadDistance) | Distance to a growing road network: a dynamic variable (see `dynamic`) |
+| [`ls.friction_cost`](simulate.md#landschaft.simulate.friction_cost) | Cost of reaching every cell from the nearest source over a friction surface |
+| [`ls.destinations`](simulate.md#landschaft.simulate.destinations) | Cells drawn by attraction in quadrants of a map |
+| [`ls.pathways`](simulate.md#landschaft.simulate.pathways) | Paths from source cells to a network down a cost surface |
 | [`ls.CARS`](simulate.md#landschaft.simulate.CARS) | PLUS's CA based on multi-type random patch seeds (Liang et al. 2021) |
 | [`ls.MolusceWoE`](simulate.md#landschaft.simulate.MolusceWoE) | MOLUSCE's weights of evidence (``WoeManager``): one model per transition, persistence included |
 | [`ls.MolusceCA`](simulate.md#landschaft.simulate.MolusceCA) | MOLUSCE's simulator: each iteration makes the observed transitions where the model is most confident |
@@ -674,6 +686,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.Projection`](simulate.md#landschaft.simulate.Projection) | The result of `run` |
 | [`ls.agreement`](simulate.md#landschaft.simulate.agreement) | How a simulated map matches the observed one, cell by cell and in quantity |
 | [`ls.presets`](simulate.md#landschaft.simulate.presets) | The classic land change models, assembled from ls.simulate's pieces |
+| [`ls.terraflux`](simulate.md#landschaft.simulate.terraflux) | Run a Terraflux model with the ``terraflux`` command; the simulated maps ``(step, y, x)`` |
 | [`ls.scenarios`](simulate.md#landschaft.simulate.scenarios) | Run a model under several scenarios, several times each, in parallel |
 | [`ls.Ensemble`](simulate.md#landschaft.simulate.Ensemble) | The simulations of `scenarios`: every scenario, replicate and year |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |
