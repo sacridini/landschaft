@@ -200,4 +200,39 @@ struct Hilltops {
 Hilltops hilltops(const double* z, const double* slope, const std::uint8_t* plain, int ny, int nx, double dx,
                   double dy, double min_height, double min_slope, bool line_slope, double fraction);
 
+// -- geomorphons (GRASS's r.geomorphon) -----------------------------------------
+
+enum GeomorphonOutputs : unsigned {
+    kGmForms = 1u, kGmTernary = 2u, kGmPositive = 4u, kGmNegative = 8u, kGmIntensity = 16u, kGmExposition = 32u,
+    kGmRange = 64u, kGmVariance = 128u, kGmElongation = 256u, kGmAzimuth = 512u, kGmExtend = 1024u,
+    kGmWidth = 2048u,
+    // tests only: r.geomorphon's errors (summed direction numbers as binary patterns; no
+    // shape when the first direction has no point; the skip kept in the extended
+    // correction's second search)
+    kGmGrassErrors = 4096u
+};
+
+struct GeomorphonParams {
+    double north, west, ns_res, ew_res;  // the grid, as a GRASS window
+    int search_cells, skip_cells;
+    double search_distance;              // map units
+    double flat_threshold;               // radians
+    double flat_distance, flat_height;   // map units (0: none); tan(flat_threshold) x flat distance
+    double max_resolution;
+    bool extended;                       // the extended form correction
+    int comparison;                      // 0 anglev1, 1 anglev2, 2 anglev2_distance
+    unsigned outputs;                    // GeomorphonOutputs
+};
+
+// The outputs asked for (the others empty); forms 0 and the codes -1 where none
+// (the DEM's NaN and its outer skip + 1 cells), the measures NaN.
+struct Geomorphons {
+    std::vector<std::int8_t> forms;
+    std::vector<std::int32_t> ternary;
+    std::vector<std::int16_t> positive, negative;
+    std::vector<float> intensity, exposition, range, variance, elongation, azimuth, extend, width;
+};
+
+Geomorphons geomorphons(const float* z, int ny, int nx, const GeomorphonParams& p);
+
 }  // namespace surf

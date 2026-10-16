@@ -151,6 +151,7 @@ add_library(surfcore STATIC
     src/cpp/surf/amplitude.cpp
     src/cpp/surf/bearing.cpp
     src/cpp/surf/features.cpp
+    src/cpp/surf/geomorphons.cpp
     src/cpp/surf/gravity.cpp
     src/cpp/surf/hilltop.cpp
     src/cpp/surf/hybrid.cpp

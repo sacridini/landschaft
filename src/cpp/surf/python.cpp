@@ -12,6 +12,7 @@
 #include <optional>
 #include <stdexcept>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 #include "surf/surface.hpp"
@@ -370,6 +371,47 @@ void register_python(py::module_& m) {
     }, py::arg("z"), py::arg("slope"), py::arg("plain"), py::arg("dx"), py::arg("dy"), py::arg("min_height"),
        py::arg("min_slope"), py::arg("line_slope"), py::arg("fraction"),
        "Hilltops (APP de topo de morro): summits, bases, heights, slopes and the upper parts of the qualifying hills.");
+
+    m.def("surf_geomorphons", [](const py::array_t<float, py::array::c_style | py::array::forcecast>& z, double north,
+                                 double west, double ns_res, double ew_res, int search_cells, int skip_cells,
+                                 double search_distance, double flat_threshold, double flat_distance,
+                                 double flat_height, double max_resolution, bool extended, int comparison,
+                                 unsigned outputs) {
+        if (z.ndim() != 2) throw std::invalid_argument("expected a 2-D raster");
+        const int ny = static_cast<int>(z.shape(0)), nx = static_cast<int>(z.shape(1));
+        surf::GeomorphonParams p{north, west, ns_res, ew_res, search_cells, skip_cells, search_distance,
+                                 flat_threshold, flat_distance, flat_height, max_resolution, extended, comparison,
+                                 outputs};
+        surf::Geomorphons g;
+        {
+            py::gil_scoped_release release;
+            g = surf::geomorphons(z.data(), ny, nx, p);
+        }
+        py::dict d;
+        auto put = [&](const char* name, auto& v) {
+            using T = typename std::decay_t<decltype(v)>::value_type;
+            if (v.empty()) return;
+            py::array_t<T> a({ny, nx});
+            std::copy(v.begin(), v.end(), a.mutable_data());
+            d[name] = a;
+        };
+        put("forms", g.forms);
+        put("ternary", g.ternary);
+        put("positive", g.positive);
+        put("negative", g.negative);
+        put("intensity", g.intensity);
+        put("exposition", g.exposition);
+        put("range", g.range);
+        put("variance", g.variance);
+        put("elongation", g.elongation);
+        put("azimuth", g.azimuth);
+        put("extend", g.extend);
+        put("width", g.width);
+        return d;
+    }, py::arg("z"), py::arg("north"), py::arg("west"), py::arg("ns_res"), py::arg("ew_res"), py::arg("search_cells"),
+       py::arg("skip_cells"), py::arg("search_distance"), py::arg("flat_threshold"), py::arg("flat_distance"),
+       py::arg("flat_height"), py::arg("max_resolution"), py::arg("extended"), py::arg("comparison"),
+       py::arg("outputs"), "Geomorphons (GRASS's r.geomorphon): landforms, ternary patterns and their measures.");
     m.def("surf_gravity_weights", [](int ny, int nx, double beta, double dx, double dy, double self_distance) {
         return to_raster(surf::gravity_weights(ny, nx, beta, dx, dy, self_distance), ny, nx);
     }, py::arg("ny"), py::arg("nx"), py::arg("beta"), py::arg("dx"), py::arg("dy"), py::arg("self_distance"),

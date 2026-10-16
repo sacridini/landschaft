@@ -1,0 +1,153 @@
+{
+ "grass": "GRASS GIS 8.4.0",
+ "cases": {
+  "default": {
+   "dem": "srtm",
+   "cell": [
+    30.0,
+    30.0
+   ],
+   "origin": [
+    300000.0,
+    7400000.0
+   ],
+   "search": 3,
+   "skip": 0,
+   "flat": 1.0,
+   "dist": 0.0,
+   "comparison": "anglev1"
+  },
+  "search10_skip2_dist": {
+   "dem": "srtm",
+   "cell": [
+    30.0,
+    30.0
+   ],
+   "origin": [
+    300000.0,
+    7400000.0
+   ],
+   "search": 10,
+   "skip": 2,
+   "flat": 1.5,
+   "dist": 5.0,
+   "comparison": "anglev1"
+  },
+  "extended_anglev2": {
+   "dem": "srtm",
+   "cell": [
+    30.0,
+    30.0
+   ],
+   "origin": [
+    300000.0,
+    7400000.0
+   ],
+   "search": 16,
+   "skip": 0,
+   "flat": 1.0,
+   "dist": 0.0,
+   "comparison": "anglev2",
+   "extended": true
+  },
+  "extended_skip": {
+   "dem": "srtm",
+   "cell": [
+    30.0,
+    30.0
+   ],
+   "origin": [
+    300000.0,
+    7400000.0
+   ],
+   "search": 16,
+   "skip": 3,
+   "flat": 1.0,
+   "dist": 0.0,
+   "comparison": "anglev1",
+   "extended": true
+  },
+  "ties_anglev2_distance": {
+   "dem": "srtm_int",
+   "cell": [
+    30.0,
+    30.0
+   ],
+   "origin": [
+    300000.0,
+    7400000.0
+   ],
+   "search": 8,
+   "skip": 1,
+   "flat": 0.8,
+   "dist": 0.0,
+   "comparison": "anglev2_distance"
+  },
+  "ties_anglev1": {
+   "dem": "srtm_int",
+   "cell": [
+    30.0,
+    30.0
+   ],
+   "origin": [
+    300000.0,
+    7400000.0
+   ],
+   "search": 8,
+   "skip": 0,
+   "flat": 0.8,
+   "dist": 3.0,
+   "comparison": "anglev1"
+  },
+  "holes": {
+   "dem": "holes",
+   "cell": [
+    25.0,
+    25.0
+   ],
+   "origin": [
+    300000.0,
+    7400000.0
+   ],
+   "search": 6,
+   "skip": 1,
+   "flat": 1.0,
+   "dist": 0.0,
+   "comparison": "anglev1"
+  },
+  "map_units": {
+   "dem": "hills",
+   "cell": [
+    20.0,
+    30.0
+   ],
+   "origin": [
+    300000.0,
+    7400000.0
+   ],
+   "search": 250,
+   "skip": 40,
+   "flat": 2.0,
+   "dist": 150.0,
+   "comparison": "anglev2",
+   "meters": true
+  },
+  "terraces_extended": {
+   "dem": "terraces",
+   "cell": [
+    10.0,
+    10.0
+   ],
+   "origin": [
+    300000.0,
+    7400000.0
+   ],
+   "search": 12,
+   "skip": 0,
+   "flat": 1.0,
+   "dist": 0.0,
+   "comparison": "anglev1",
+   "extended": true
+  }
+ }
+}

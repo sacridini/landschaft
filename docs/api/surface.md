@@ -133,6 +133,19 @@ terra's slope and aspect), corrected where it errs.
 
 ::: landschaft.surface.hli
 
+## Landforms (geomorphons)
+
+The 10 landforms and 498 ternary patterns of Jasiewicz & Stepinski (2013),
+from the lines of sight of every cell: GRASS GIS's `r.geomorphon`, bit for bit
+(four of its errors corrected).
+
+::: landschaft.surface.geomorphons
+
+::: landschaft.surface.Geomorphons
+
+`ls.surface.GEOMORPHON_FORMS` maps the codes to the names: 1 flat, 2 peak,
+3 ridge, 4 shoulder, 5 spur, 6 slope, 7 hollow, 8 footslope, 9 valley, 10 pit.
+
 ## Hilltops (APP de topo de morro)
 
 ::: landschaft.surface.hilltop

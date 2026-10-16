@@ -18,6 +18,15 @@ in a new major version.
   (`tools/make_reference_pygeoprocessing.py`; its `fill_pits` gives the same DEM as `fill`). C++ (`src/cpp/hydro`);
   the directions, accumulations, HAND and indices identical to WhiteboxTools
   2.4 on four DEMs (`tools/make_reference_hydro.py`), 1.2 to 3.1 times faster on 4 cores (`tools/benchmark_hydro.py`).
+- `ls.surface.geomorphons`: landforms by geomorphons (Jasiewicz & Stepinski 2013), a C++ port of GRASS GIS's
+  `r.geomorphon` 8.4: from the zenith and nadir angles of the lines of sight in 8 directions, the 10 forms (flat,
+  peak, ridge, shoulder, spur, slope, hollow, footslope, valley, pit), the 498 ternary patterns, the binary
+  positive and negative patterns and, with `measures=True`, intensity, exposition, range, variance, elongation,
+  azimuth, extend and width; search, skip, flatness threshold and distance in cells or map units, the three
+  comparison modes and the extended correction. Bit for bit with GRASS on 9 stored cases (its mingw-w64 atan2,
+  float32 DEM, coordinates as `Rast_row_to_northing`); `GEOMORPHON_FORMS`, `Geomorphons.share()`. 2000 x 2000
+  cells, search 10: 2.5 s on 3 threads (6.1x GRASS, single-threaded; 2.5x on one thread), the zenith and nadir
+  kept by their height / distance ratio and atan2 computed only at the end or at near ties.
 
 ### Fixed (against WhiteboxTools)
 - `fill` lets water out at the map's edge and at missing cells: WhiteboxTools' `FillDepressions` raises a
@@ -25,6 +34,13 @@ in a new major version.
   from an interior pit.
 - `breach` cuts a channel that reaches the map's edge: WhiteboxTools' `BreachDepressionsLeastCost` walks back from
   the cell beyond the edge, which has no way back, and leaves the channel uncut.
+
+### Fixed (against GRASS GIS's r.geomorphon)
+- Lines of sight reach the DEM's last row (`r.geomorphon`'s row buffer leaves it out for the cells of its bottom
+  `search` rows); the binary positive and negative patterns set a bit per direction (`r.geomorphon` adds the
+  direction numbers); the extended correction's second, shorter search starts next to the cell (`r.geomorphon`
+  keeps the inner radius, though it sets it to 0); a geomorphon whose first direction has no point keeps the shape
+  of its other points (`r.geomorphon` gives none).
 
 ## [1.47.0] - 2026-10-16
 

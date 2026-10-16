@@ -340,6 +340,8 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.surface.hsp`](surface.md#landschaft.surface.hsp) | Hierarchical slope position (Murphy et al. 2010) |
 | [`ls.surface.trasp`](surface.md#landschaft.surface.trasp) | Transformed aspect (Roberts & Cooper 1989): (1 - cos(aspect - 30 deg)) / 2 |
 | [`ls.surface.hli`](surface.md#landschaft.surface.hli) | Heat load index (McCune & Keon 2002) |
+| [`ls.surface.geomorphons`](surface.md#landschaft.surface.geomorphons) | Landforms of a DEM by geomorphons (Jasiewicz & Stepinski 2013) |
+| [`ls.surface.Geomorphons`](surface.md#landschaft.surface.Geomorphons) | The geomorphons of a DEM (`geomorphons`) |
 | [`ls.surface.hilltop`](surface.md#landschaft.surface.hilltop) | Hilltops as permanent protection areas (APP de topo de morro) |
 | [`ls.surface.Hilltop`](surface.md#landschaft.surface.Hilltop) | The hilltops of a DEM (`hilltop`) |
 | [`ls.surface.gravity`](surface.md#landschaft.surface.gravity) | Gravitational interaction potential of source cells |

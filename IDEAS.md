@@ -3620,6 +3620,23 @@ encosta, depressão rasa..., vale, garganta, fosso) e o código ternário de cad
   evidência: capta a morfologia do sítio.
 * Puramente focal (raios radiais): paraleliza por linhas/tiles e serve ao motor por tiles do Terraflux (borda
   = distância de busca). Referência de paridade: GRASS `r.geomorphon` (GPL), bit a bit.
+* **Feito** (`ls.surface.geomorphons`, `Geomorphons`, `GEOMORPHON_FORMS`; C++ `src/cpp/surf/geomorphons.cpp`, porte
+  do `r.geomorphon` 8.4 — o binário do QGIS 3.34 é do MinGW contra o msvcrt: atan2 x87 de mingw-w64 (`lsm::r_atan2`),
+  atan/tan do msvcrt, DEM lido em float32, coordenadas como `Rast_row_to_northing`). As 12 saídas (formas, ternário,
+  positivo/negativo, intensidade, exposição, amplitude, variância, alongamento, azimute, extensão, largura), os três
+  modos de comparação, unidades em células ou do mapa, a correção estendida. **Bit a bit** com o GRASS em 9 casos
+  guardados (`tools/make_reference_geomorphons.py`, GRASS headless por `grass84.bat --tmp-project --exec`;
+  `tests/test_surface_geomorphons.py`, 23 testes); o WhiteboxTools 2.4 (`Geomorphons`, outra implementação) concorda
+  em 86-98 % das formas. Erros do `r.geomorphon` corrigidos (o teste emula-os com a opção privada `_grass_errors`
+  e confere o GRASS bit a bit, e mostra que a forma correta só muda o corrigido): (1) o buffer de linhas nunca
+  mostra a última linha do mapa às células das últimas `search` linhas (as referências levam uma linha nula a
+  mais embaixo, que é a escondida); (2) os padrões binários somam o número das direções (`positives += i`) em vez
+  de marcar o bit; (3) a segunda busca da correção estendida mantém o `skip` (zera `skip_distance`, que não é
+  usado); (4) a forma (alongamento etc.) é toda zero/NaN quando a primeira direção não tem ponto
+  (`distance[0]` testado para todas). Desempenho: o zênite e o nadir guardados pela razão altura/distância e o
+  atan2 só no fim ou em quase-empates (margem 1e-9: os mesmos bits); 2000 x 2000, busca 10: 2,5 s em 3 threads
+  (6,1x o GRASS, que é de uma thread; 2,5x numa thread). DEMs em longitude/latitude recusados (o GRASS mede
+  no elipsoide): falta, se pedido. Falta: o nó do Terraflux.
 
 ### 3. TWI, SPI e STI com fluxo múltiplo
 
