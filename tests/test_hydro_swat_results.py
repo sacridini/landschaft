@@ -139,3 +139,15 @@ def test_plant_c_factor_changes_only_sediment(cplant):
     assert (p <= a + 1e-9).all() and p.sum() < 0.1 * a.sum()
     with pytest.raises(ValueError, match="c_factor"):
         S.run(project, c_factor="apex")
+
+
+def test_old_peak_rate_factor_warns():
+    # the stored Hubbard Brook case keeps the original parameters.bsn (prf = 1); the
+    # packaged example has the 484 of SWAT+ 62
+    with pytest.warns(S.SwatProjectWarning, match="peak rate factor prf is 1"):
+        S.run(_project("hubbard_brook"), tables={"hru_ls": "aa"})
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", S.SwatProjectWarning)
+        S.run(S.load_txtinout(ls.example_data("swat_hubbard_brook")), tables={"hru_ls": "aa"})

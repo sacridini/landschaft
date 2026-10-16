@@ -153,7 +153,8 @@ def load_txtinout(path) -> SwatProject:
     Examples
     --------
     The Hubbard Brook W2 example of SWAT+ (SWATPlus-datasets, LGPL-2.1): 10 HRUs, a
-    routing unit, 2 aquifers and a channel, 2000-2002:
+    routing unit, 2 aquifers and a channel, 2000-2002 (its parameters.bsn was written
+    for an earlier SWAT+: the peak rate factor is set to the 484 of SWAT+ 62):
 
     >>> import landschaft as ls
     >>> project = ls.hydro.swat.load_txtinout(ls.example_data("swat_hubbard_brook"))

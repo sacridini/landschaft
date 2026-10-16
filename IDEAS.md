@@ -4278,7 +4278,11 @@ ou pela ET das plantas, `event` 0):
      `latq_co` 0,01 em vez de 0,9 a 32 %); corrigida a regra, a erosão não cai (o `cn3_swf` 0 aumenta o CN).
   4. O exemplo oficial do Hubbard Brook parecia plausível (0-6 t/ha/ano) só porque o seu `parameters.bsn` (editor
      2.3.3, rev. 60.5.7) tem `adj_pkrt_sed = 1` na posição que o SWAT+ 62 lê como `prf` (484 no editor 4.0.2): vazões
-     de pico 484 vezes menores. A erosão do exemplo no SWAT+ 62 está subestimada (~32x).
+     de pico 484 vezes menores. A erosão do exemplo no SWAT+ 62 está subestimada (~32x). O Ames do repositório
+     oficial também tem 1. **Feito (pedido do usuário)**: o exemplo empacotado (`ls.example_data("swat_hubbard_brook")`)
+     tem `prf` 484 (os casos de teste guardam o arquivo original); `run`/`run_many` avisam (`SwatProjectWarning`)
+     quando `prf < 10`. Com `prf` 484 o exemplo do HB dá 12-196 t/ha/ano nos HRUs de floresta com o C do SWAT+ 62 e
+     0,01-0,3 com `c_factor="plant"`.
 
 ---
 

@@ -80,7 +80,8 @@ def example_data(name: str = "input") -> Path:
 
         Watershed model (see :func:`landschaft.hydro.swat.load_txtinout`):
         ``"swat_hubbard_brook"`` (the SWAT+ project of Hubbard Brook W2, a zip of
-        its TxtInOut files, 2000-2002).
+        its TxtInOut files, 2000-2002; its parameters.bsn, written for an earlier
+        SWAT+, has the peak rate factor SWAT+ 62 expects, 484).
 
     Returns
     -------

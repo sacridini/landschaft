@@ -50,7 +50,8 @@ def test_weather_matches_swatplus(case):
 
 def test_run_gives_weather_by_station(case):
     name, project, _, ref = case
-    with pytest.warns() if name == "ames" else _nowarn():
+    # Ames: the gage SWAT+ does not find; Hubbard Brook: its old parameters.bsn (prf = 1)
+    with pytest.warns(UserWarning, match="SWAT\\+: " if name == "ames" else "peak rate factor"):
         res = S.run(project)
     w = res.weather
     assert list(w.columns) == list(S.WEATHER_COLUMNS)
@@ -60,17 +61,6 @@ def test_run_gives_weather_by_station(case):
     assert (first.year, first.dayofyear) == tuple(rkeys[0, :2])
     assert_swat_close(w["precip"].to_numpy(), ref["t1_vals"][:, 0])
 
-
-class _nowarn:
-    def __enter__(self):
-        import warnings
-
-        self._w = warnings.catch_warnings()
-        self._w.__enter__()
-        warnings.simplefilter("error")
-
-    def __exit__(self, *a):
-        self._w.__exit__(*a)
 
 
 def test_ames_warnings_are_the_diagnostics_of_swatplus():

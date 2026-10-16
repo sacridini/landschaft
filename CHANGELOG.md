@@ -38,6 +38,10 @@ in a new major version.
 - `ls.hydro.swat.run(..., c_factor="plant")`: MUSLE's C from the plants' minimum USLE C (SWAT+'s earlier method,
   kept in its code but unused in 62, whose residue and canopy cover gives forests a C of 0.5-0.9); the default stays
   SWAT+ 62's.
+- `ls.hydro.swat.run` warns (`SwatProjectWarning`) when parameters.bsn's peak rate factor is far below the 484 of
+  SWAT+ 62: files written for an earlier SWAT+ (the official Hubbard Brook and Ames examples) put 1 there, and SWAT+
+  62 then computes peak rates, and erosion, hundreds of times too low without a word. The packaged Hubbard Brook
+  example has 484.
 - `ls.hydro.stream_links`, `ls.hydro.watersheds` and `ls.hydro.snap_outlets`: the links of a stream network (split
   at junctions and outlets, with length, drop and Strahler order), the area draining to each seed, outlets moved
   onto the streams.

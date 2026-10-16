@@ -14,7 +14,7 @@ from ..._save import Saveable
 from ._project import SwatProject
 from ._tables import TABLES
 
-__all__ = ["SwatResult", "run", "run_many", "WEATHER_COLUMNS", "TABLES", "STEPS", "C_FACTORS"]
+__all__ = ["SwatProjectWarning", "SwatResult", "run", "run_many", "WEATHER_COLUMNS", "TABLES", "STEPS", "C_FACTORS"]
 
 # climate_module weather_daily, in the order the port (and the reference's dump) keeps them
 WEATHER_COLUMNS = ("precip", "precip_next", "tmax", "tmin", "tave", "solrad", "solradmx", "rhum", "dewpt", "windsp",
@@ -92,6 +92,37 @@ class SwatResult(Saveable):
         return f"SwatResult({len(days)} days, tables: {printed or 'none'})"
 
 
+class SwatProjectWarning(UserWarning):
+    """A project that SWAT+ runs without a word but whose input looks wrong (landschaft's
+    own checks, not SWAT+'s diagnostics)."""
+
+
+def _parameters_bsn(project: SwatProject) -> str:
+    """The name of the basin parameters file (file.cio's basin line)."""
+    if "file.cio" in project:
+        for line in project.text("file.cio").splitlines():
+            p = line.split()
+            if len(p) >= 3 and p[0] == "basin":
+                return p[2]
+    return "parameters.bsn"
+
+
+def _check(project: SwatProject, stacklevel: int) -> None:
+    name = _parameters_bsn(project)
+    if name not in project:
+        return
+    rows = [ln.split() for ln in project.text(name).splitlines()[2:3]]
+    try:
+        prf = float(rows[0][4])
+    except (IndexError, ValueError):
+        return
+    if prf < 10:
+        warnings.warn(f"the peak rate factor prf is {prf:g} (5th value of {name}); SWAT+ 62 takes 484 (the SWAT+ "
+                      f"Editor 4 writes it): the file seems written for an earlier SWAT+, whose 5th value meant "
+                      f"something else, and peak rates (hence erosion) come out about {484 / max(prf, 1e-6):.0f} "
+                      f"times too low", SwatProjectWarning, stacklevel=stacklevel + 1)
+
+
 #: The USLE C factors :func:`run` offers (``c_factor``).
 C_FACTORS = ("swatplus", "plant")
 
@@ -148,6 +179,7 @@ def run(project: SwatProject, *, tables=None, nyskip: int | None = None, c_facto
     >>> round(float(q.mean()), 3), result.units["channel_sd"]["flo_out"]
     (0.005, 'm^3/s')
     """
+    _check(project, stacklevel=2)
     return _result(_raw_with(project, tables, nyskip, c_factor), stacklevel=3)
 
 
@@ -193,6 +225,8 @@ def run_many(projects, *, tables=None, nyskip: int | None = None, c_factor: str 
     from ..._threads import limit, resolve
 
     projects = list(projects)
+    for project in projects:
+        _check(project, stacklevel=2)
     n = min(resolve(n_threads), max(1, len(projects)))
 
     def one(project):
