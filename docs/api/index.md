@@ -400,6 +400,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.hydro.swat.from_tables`](swat.md#landschaft.hydro.swat.from_tables) | A SWAT+ project from QSWAT+'s tables and the weather, as the SWAT+ Editor makes it |
 | [`ls.hydro.swat.from_rasters`](swat.md#landschaft.hydro.swat.from_rasters) | A SWAT+ project from a DEM, land use and soil maps, tables and the weather |
 | [`ls.hydro.swat.load_qswat_project`](swat.md#landschaft.hydro.swat.load_qswat_project) | The tables of a QSWAT+ project database, for `from_tables` |
+| [`ls.hydro.swat.example_landscape`](swat.md#landschaft.hydro.swat.example_landscape) | The inputs of a small watershed model, from the package's example rasters |
 | [`ls.hydro.swat.climate`](swat.md#landschaft.hydro.swat.climate) | The weather of a SWAT+ project from tables |
 | [`ls.hydro.swat.SwatClimate`](swat.md#landschaft.hydro.swat.SwatClimate) | The weather of a SWAT+ project (made by `climate`) |
 | [`ls.hydro.swat.wgn_from_series`](swat.md#landschaft.hydro.swat.wgn_from_series) | SWAT's weather generator statistics (WXGEN) of each station, from daily series |

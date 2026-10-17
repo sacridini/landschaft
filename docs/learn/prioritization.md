@@ -237,7 +237,7 @@ Spatial prioritization is used by governments, NGOs, companies and researchers w
 - **land-use planning**: balancing agriculture, water and biodiversity in watersheds and municipalities;
 - **threat management**: which threats to fight, where, to protect the most species (Cattarino et al. 2015).
 
-[Chapter 12.10](prioritization/process.md#use-cases) shows how each of these is written with `ls.prioritize`.
+[Chapter 12.10](prioritization/process.md#recipes) shows how each of these is written with `ls.prioritize`.
 
 ## The chapters of this part
 

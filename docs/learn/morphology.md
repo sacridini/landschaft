@@ -132,7 +132,7 @@ ls.mspa_stats(morph)[["pixels", "pct_foreground"]].head(7)
 About 60% of this forest is core. Bridges, loops and branches hold about
 16% of it, yet they are the structural links of the forest: a
 network of cores joined by bridges is a *structural* ecological network,
-from which the connectivity tools of [chapter 7](networks.md#networks-from-habitat-patterns)
+from which the connectivity tools of [chapter 7](networks.md#structural-networks-from-mspa)
 start. MSPA has been used to map green infrastructure at national scale
 (Wickham et al., 2010) and, combined with network analysis, to identify the
 forest connectors most important for connectivity (Saura et al., 2011).
