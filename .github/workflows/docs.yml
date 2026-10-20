@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# The website (MkDocs, see mkdocs.yml) on GitHub Pages: published by release.yml
+# with each release, so that it documents the version on PyPI. Actions > Docs >
+# Run workflow publishes it again from main (e.g. after a fix to the docs).
+name: Docs
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # the API pages are read from the sources (mkdocstrings), the package is not built
+      - run: pip install "mkdocs>=1.6,<2" "mkdocs-material>=9.5,<10" "mkdocstrings[python]>=0.26,<2" ruff
+      - run: mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

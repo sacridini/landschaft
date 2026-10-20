@@ -6,6 +6,24 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- On PyPI: `pip install landschaft` installs binary wheels (CPython 3.10-3.14; Windows x86-64, macOS arm64 and
+  x86-64, Linux x86-64 and aarch64, OpenMP included) with everything every tool uses. Releases are automatic:
+  pushing to main a version of `pyproject.toml` that has no tag yet builds and tests every wheel
+  (`.github/workflows/release.yml`), publishes them and the sdist to PyPI, tags the version, makes the GitHub
+  release from this changelog and publishes the website.
+- The website on GitHub Pages, <https://sacridini.github.io/landschaft/>, published with each release
+  (`.github/workflows/docs.yml`); project URLs, keywords and classifiers in the package metadata.
+
+### Fixed
+- `simcore` (land change simulation) is compiled with the same IEEE flags as the other modules
+  (`-ffp-contract=off -fno-fast-math` with GCC and Clang): Clang's default contraction into FMA could change its
+  last bits on ARM64.
+
+### Changed
+- README and installation guide: `pip install landschaft` first; building from source is for other platforms and
+  development.
+
 ## [1.50.0] - 2026-10-16
 
 ### Added

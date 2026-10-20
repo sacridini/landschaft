@@ -1,53 +1,112 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Wheels (built and tested by cibuildwheel, see [tool.cibuildwheel] in pyproject.toml)
-# and the sdist; published to PyPI when a GitHub release is published.
+# Releases. Pushing to main a pyproject.toml whose version has no tag yet (vX.Y.Z)
+# releases that version: the wheels are built and tested (cibuildwheel, see
+# [tool.cibuildwheel] in pyproject.toml), the wheels and the sdist go to PyPI,
+# the tag and the GitHub release are made (notes from CHANGELOG.md's section of
+# the version) and the website is published (docs.yml). Nothing is published
+# when any wheel fails its tests.
 #
-# Runs only by hand (Actions > Wheels > Run workflow) or on a published release,
-# never on push. Publishing uses PyPI's trusted publishing: add this repository,
-# this workflow (wheels.yml) and the environment "pypi" as a trusted publisher of
-# the project on pypi.org first; no token is stored.
-name: Wheels
+# Actions > Release > Run workflow builds and tests every wheel without publishing
+# (or releases, with "publish", a version that has no tag yet).
+#
+# PyPI takes the files by trusted publishing, no token is stored: pypi.org has this
+# repository, this workflow (release.yml) and the environment "pypi" as a trusted
+# publisher of the project.
+name: Release
 
 on:
+  push:
+    branches: [main]
+    paths: [pyproject.toml]
   workflow_dispatch:
-  release:
-    types: [published]
+    inputs:
+      publish:
+        description: "Release the version of pyproject.toml if it has no tag yet"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "v$version is released already"
+            release=false
+          elif [ "$EVENT" = push ] || [ "$PUBLISH" = true ]; then
+            release=true
+          else
+            release=false
+          fi
+          if [ "$release" = true ] && ! grep -q "^## \[$version\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section ## [$version]"
+            exit 1
+          fi
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "version $version, release: $release"
+
   wheels:
-    name: Wheels on ${{ matrix.os }}
+    name: Wheel cp${{ matrix.python }} on ${{ matrix.os }}
+    needs: version
+    if: needs.version.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         # Linux x86_64 and aarch64, Windows x86_64, macOS arm64 and x86_64 (Intel)
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest, macos-15-intel]
+        python: ["310", "311", "312", "313", "314"]
     steps:
       - uses: actions/checkout@v7
-      - uses: pypa/cibuildwheel@v4.2.1
+      - uses: pypa/cibuildwheel@v4.3.1
+        env:
+          CIBW_BUILD: cp${{ matrix.python }}-*
       - uses: actions/upload-artifact@v7
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheel-${{ matrix.os }}-cp${{ matrix.python }}
           path: wheelhouse/*.whl
 
   sdist:
     name: Source distribution
+    needs: version
+    if: needs.version.outputs.release == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - run: pipx run build --sdist
+      - run: pipx run twine check --strict dist/*
       - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: dist/*.tar.gz
 
-  publish:
+  pypi:
     name: Publish to PyPI
-    if: github.event_name == 'release'
-    needs: [wheels, sdist]
+    needs: [version, wheels, sdist]
+    if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
-    environment: pypi
+    environment:
+      name: pypi
+      url: https://pypi.org/project/landschaft/${{ needs.version.outputs.version }}/
     permissions:
       id-token: write
     steps:
@@ -55,4 +114,35 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@v1.14.2
+
+  github-release:
+    name: GitHub release
+    needs: [version, pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v head="## [$VERSION]" 'index($0, head) == 1 { on = 1; next } on && /^## \[/ { exit } on' \
+            CHANGELOG.md > notes.md
+          printf '\nInstall: `pip install landschaft==%s`\n' "$VERSION" >> notes.md
+      - run: gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "Landschaft $VERSION" --notes-file notes.md
+
+  docs:
+    name: Website
+    needs: [version, pypi]
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/docs.yml

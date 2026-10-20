@@ -4,12 +4,13 @@ site_description: >-
   analysis for Python.
 site_author: Eduardo Lacerda
 copyright: Copyright &copy; 2026 Eduardo Lacerda &middot; GPL-3.0-or-later
+site_url: https://sacridini.github.io/landschaft/
 repo_url: https://github.com/sacridini/landschaft
 repo_name: sacridini/landschaft
 edit_uri: ""
 
 # Plain .html links: the built site opens straight from disk (file://) as well
-# as from a web server (GitHub Pages later).
+# as from GitHub Pages (.github/workflows/docs.yml publishes it with each release).
 use_directory_urls: false
 
 theme:

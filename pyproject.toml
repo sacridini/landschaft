@@ -10,6 +10,26 @@ readme = "README.md"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.10"
 authors = [{ name = "Eduardo Lacerda" }]
+keywords = ["landscape ecology", "landscape metrics", "fragmentation", "connectivity", "MSPA", "circuit theory",
+            "conservation planning", "species distribution", "land use change", "raster", "GIS"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Hydrology",
+]
 # Everything every tool uses is installed with the package: no optional features.
 dependencies = [
     "numpy>=1.24",
@@ -34,6 +54,13 @@ dependencies = [
     "dendropy>=4",
     "cryptography>=3.4",
 ]
+
+[project.urls]
+Homepage = "https://sacridini.github.io/landschaft/"
+Documentation = "https://sacridini.github.io/landschaft/"
+Source = "https://github.com/sacridini/landschaft"
+Changelog = "https://github.com/sacridini/landschaft/blob/main/CHANGELOG.md"
+Issues = "https://github.com/sacridini/landschaft/issues"
 
 # `landschaft worker` lends this computer to a group of helpers (ls.parallel)
 [project.scripts]
@@ -69,7 +96,8 @@ markers = [
     "live_reference: run the original GTB code now (needs LANDSCHAFT_MSPA_EXE or GDL)",
 ]
 
-# Wheels (cibuildwheel; .github/workflows/wheels.yml, tools/build_macos_wheels.sh):
+# Wheels (cibuildwheel; .github/workflows/release.yml, one job per platform and Python;
+# tools/build_macos_wheels.sh):
 # CPython 3.10-3.14 on the 64-bit platforms rasterio publishes wheels for.
 [tool.cibuildwheel]
 build = "cp310-* cp311-* cp312-* cp313-* cp314-*"

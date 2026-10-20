@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logos/landschaft_ridge_stacked_dark.svg">
-    <img alt="Landschaft" src="assets/logos/landschaft_ridge_stacked_light.svg" width="320">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/sacridini/landschaft/main/assets/logos/landschaft_ridge_stacked_dark.svg">
+    <img alt="Landschaft" src="https://raw.githubusercontent.com/sacridini/landschaft/main/assets/logos/landschaft_ridge_stacked_light.svg" width="320">
   </picture>
 </p>
 
@@ -12,6 +12,7 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/landschaft/"><img alt="PyPI" src="https://img.shields.io/pypi/v/landschaft"></a>
   <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776ab">
   <img alt="C++17 / OpenMP" src="https://img.shields.io/badge/core-C%2B%2B17%20%C2%B7%20OpenMP-00599c">
   <img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-2e7d32">
@@ -46,23 +47,24 @@ in the test suite, and runs from a few to several hundred times faster.
 
 ## Installation
 
-Landschaft is built from source and needs a C++17 compiler (MSVC 2019+, GCC 9+ or
-Clang 10+). The simplest route is a [conda](https://conda-forge.org/download/)
-environment:
-
 ```bash
-conda create -n landschaft -c conda-forge python=3.12 numpy pandas scipy rasterio rioxarray xarray \
-      dask geopandas pyarrow openpyxl matplotlib folium plotly xyzservices pillow contextily pywebview h3-py dendropy \
-      scikit-build-core pybind11 cmake ninja
-conda activate landschaft
-git clone https://github.com/sacridini/landschaft.git
-cd landschaft
-pip install --no-build-isolation -e .
+pip install landschaft
 ```
 
-Or with pip only: `pip install "landschaft @ git+https://github.com/sacridini/landschaft.git"`.
-Platform notes (Windows Build Tools, OpenMP on macOS) and troubleshooting are in the
-[installation guide](docs/getting-started/installation.md).
+Binary wheels are published for CPython 3.10 to 3.14 on Windows (x86-64), macOS (Apple
+silicon and Intel, 11+) and Linux (x86-64, ARM64), with the OpenMP runtime included:
+no compiler is needed, and everything every tool uses is installed with the package.
+In a conda environment, install the geospatial libraries from conda-forge first and
+Landschaft with pip:
+
+```bash
+conda create -n landschaft -c conda-forge python=3.12 rasterio rioxarray geopandas
+conda activate landschaft
+pip install landschaft
+```
+
+Building from source (other platforms, development) needs a C++17 compiler; see the
+[installation guide](https://sacridini.github.io/landschaft/getting-started/installation.html).
 
 ### Docker
 
@@ -99,9 +101,10 @@ and returns the same type; parallel functions use all cores but one unless given
 
 ## Documentation
 
-The documentation website has a getting-started guide, tutorials by topic, the full
-API reference with runnable examples, and the benchmarks and accuracy report. It is
-built from [`docs/`](docs/index.md) with MkDocs:
+The documentation website, **<https://sacridini.github.io/landschaft/>**, has a
+getting-started guide, tutorials by topic, the full API reference with runnable
+examples, and the benchmarks and accuracy report. It is built from `docs/` with
+MkDocs and published with each release; to build it locally:
 
 ```bash
 pip install -e ".[docs]"
@@ -128,7 +131,7 @@ floating-point solvers. Typical speed-ups on the benchmark cases:
 | Land change simulation | lulcc, OpenLand, diffeR, CLUMondo, r.futures, MOLUSCE; Dinamica EGO (measured) | identical bits (R's and NumPy's random numbers included); Dinamica to its 15 digits | 7–43× |
 
 Methods, machines, full tables and the known differences are on the
-[benchmarks and accuracy page](docs/benchmarks.md). To run the tests:
+[benchmarks and accuracy page](https://sacridini.github.io/landschaft/benchmarks.html). To run the tests:
 
 ```bash
 pip install -e ".[test]"
@@ -139,7 +142,7 @@ pytest
 
 Landschaft follows [Semantic Versioning](https://semver.org/): from 1.0 on, the public API
 changes incompatibly only in a new major version. Changes are listed in the
-[changelog](CHANGELOG.md).
+[changelog](https://github.com/sacridini/landschaft/blob/main/CHANGELOG.md).
 
 ## License and credits
 

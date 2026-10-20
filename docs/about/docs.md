@@ -9,14 +9,16 @@ reference is read from the docstrings of the package by
 ## Build and browse
 
 ```bash
-pip install -e ".[docs,plot]"
+pip install -e ".[docs]"
 mkdocs serve          # live preview at http://127.0.0.1:8000, rebuilt on every save
 mkdocs build          # static site in site/
 ```
 
 The built site works without a web server: open `site/index.html` in a
-browser (search included). The same folder can be published as is, e.g. on
-GitHub Pages.
+browser (search included). The published site at
+<https://sacridini.github.io/landschaft/> is built the same way by GitHub
+Actions (`.github/workflows/docs.yml`) with each release; *Actions > Docs >
+Run workflow* publishes it again from `main` between releases.
 
 ## Figures and examples
 

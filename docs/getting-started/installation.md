@@ -1,10 +1,47 @@
 # Installation
 
-Landschaft is a Python package with a compiled C++ core. Until binary wheels
-are published it is built from source, which takes two to five minutes the
-first time.
+Landschaft is a Python package with a compiled C++ core, published on
+[PyPI](https://pypi.org/project/landschaft/) as binary wheels:
 
-## Requirements
+```bash
+pip install landschaft
+```
+
+Wheels exist for CPython 3.10 to 3.14 on Windows (x86-64), macOS 11+ (Apple
+silicon and Intel) and Linux (x86-64 and ARM64, glibc 2.28+); they include the
+OpenMP runtime, so every tool runs in parallel and no compiler is needed. The
+same command installs everything every tool uses (see
+[What is installed](#what-is-installed)); `pip install -U landschaft` updates it.
+
+## Install with pip
+
+A virtual environment keeps Landschaft and its dependencies apart from other
+projects (rasterio then comes as a binary wheel that bundles GDAL):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install landschaft
+```
+
+## Install in a conda environment
+
+[conda](https://docs.conda.io) (or mamba) provides Python and the geospatial
+libraries as tested binaries on every platform. Install those from conda-forge
+first, then Landschaft with pip, so that pip does not replace them:
+
+```bash
+conda create -n landschaft -c conda-forge python=3.12 rasterio rioxarray geopandas
+conda activate landschaft
+pip install landschaft
+```
+
+## Build from source
+
+On other platforms, or to work on Landschaft itself, it is built from source,
+which takes two to five minutes the first time.
+
+### Requirements
 
 | | Minimum | Notes |
 |---|---|---|
@@ -17,11 +54,10 @@ first time.
 The Python dependencies (numpy, pandas, scipy, xarray, rasterio, rioxarray,
 pybind11, scikit-build-core) are installed by the build.
 
-## Install with conda (recommended)
+### With conda (recommended)
 
-[conda](https://docs.conda.io) (or its faster drop-in, mamba) provides Python
-and the geospatial libraries (GDAL behind rasterio) as tested binaries on every
-platform, which avoids most installation problems.
+A conda environment with the dependencies and the build tools avoids most
+problems:
 
 === "Windows"
 
@@ -88,15 +124,14 @@ platform, which avoids most installation problems.
 The `-e` (editable) flag makes `git pull` followed by the same `pip install`
 line enough to update; the C++ core is rebuilt only where it changed.
 
-## Install with pip only
+### With pip only
 
-With a system Python and a compiler already installed, a virtual environment
-is enough (rasterio then comes as a binary wheel that bundles GDAL):
+With a system Python and a compiler already installed, pip builds the latest
+code of the repository, or the source distribution of a release:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install "landschaft @ git+https://github.com/sacridini/landschaft.git"
+pip install --no-binary landschaft landschaft
 ```
 
 ## Run with Docker
@@ -178,14 +213,16 @@ cmake --build build/native --config Release --target install --parallel
 ## Troubleshooting
 
 ??? question "`pip install` fails with *no C++ compiler found* / *CMAKE_CXX_COMPILER not set*"
-    The build needs a C++17 compiler: the *Desktop development with C++*
-    workload of the Visual Studio Build Tools on Windows, `xcode-select
-    --install` on macOS, `build-essential` or `gcc-c++` on Linux.
+    pip found no wheel for this platform or Python version and builds from
+    source (check that the Python is 64-bit and 3.10 to 3.14). The build
+    needs a C++17 compiler: the *Desktop development with C++* workload of the
+    Visual Studio Build Tools on Windows, `xcode-select --install` on macOS,
+    `build-essential` or `gcc-c++` on Linux.
 
 ??? question "`ls.max_threads()` returns 1"
-    The core was built without OpenMP. On macOS install `llvm-openmp` (conda)
-    or `libomp` (Homebrew) and reinstall; with GCC and MSVC OpenMP is always
-    available. For a runtime elsewhere, point the build at it:
+    The wheels always have OpenMP; a core built from source may not. On
+    macOS install `llvm-openmp` (conda) or `libomp` (Homebrew) and reinstall;
+    with GCC and MSVC OpenMP is always available. For a runtime elsewhere, point the build at it:
     `pip install -Ccmake.define.OpenMP_ROOT=/path/to/libomp --no-build-isolation -e .`
     (the folder with `include/omp.h` and `lib/libomp.dylib`).
 
