@@ -200,7 +200,7 @@ paridade) e o MILP. Cada fase termina com release, commit e push.
     - Sai o C++ do landschaft, o CMake (exceto o que o `highs-sys` usa), o pybind11 e o Eigen; o backend do wheel
       passa a ser o `maturin`.
     - No Terraflux saem o `terraflux-ls-sys` e o `cxx`.
-    - O Terraflux compila para `wasm32-unknown-unknown`: o motor sem o `opt`, ou com o HiGHS para WASM (ver
+    - O Terraflux compila para `wasm32-unknown-unknown`, com o HiGHS num módulo WASM à parte (ver "Decisões" e
       "Contras").
 
 As fases 1 a 6 podem trocar de ordem se o Terraflux precisar de um módulo antes no WASM. As fases 0 e 8 não
@@ -235,7 +235,7 @@ mudam de lugar.
 - O Eigen soma em blocos que dependem do tamanho do pacote SIMD e do bloqueio do GEMM. Bater com ele exige
   portar a mesma ordem de operações (Cholesky multifrontal, `SparseLU`, `EigenSolver`), e não dá para usar o
   `faer` ou o `nalgebra` nesses kernels. Se o port exato for caro demais em `circuit`, `cost` ou `sim`, a
-  alternativa é aceitar poucas ULPs ali (decisão em aberto).
+  alternativa, já aceita, é ficar a poucas ULPs ali (ver "Decisões").
 - `std::sort`, `nth_element` e `priority_queue` resolvem empates de um jeito que depende da STL. O
   `sort_unstable` e o `BinaryHeap` do Rust resolvem de outro. Onde isso muda o resultado, é preciso portar o
   algoritmo da STL.
@@ -285,14 +285,24 @@ mudam de lugar.
 - O tamanho do binário pode mudar (monomorfização dos genéricos do Rust), assim como o tempo de importação do
   módulo.
 
-## Decisões em aberto
+## Decisões
 
-- **Tolerância na álgebra linear.** Se o port exato do Eigen ficar caro demais (fase 8), aceitar poucas ULPs em
-  `circuit`, `cost` e `sim`, ou insistir no bit a bit?
-- **O C++ como referência depois de apagado.** Guardar uma tag (por exemplo `cpp-final`) e um job de CI que
-  compare o Rust com ela de tempos em tempos, ou confiar só nas referências originais?
-- **O MILP no navegador:** `highs-js` num worker, HiGHS pelo Emscripten, ou a priorização ficar fora do
-  Terraflux web.
+Tomadas em 2026-10-20.
+
+- **Tolerância na álgebra linear: aceita.** Se o port exato dos kernels do Eigen ficar caro demais na fase 8,
+  `circuit`, `cost` e `sim` podem ficar a poucas ULPs do C++. Mesmo assim, primeiro se tenta o bit a bit. Cada
+  kernel que ficar com tolerância entra em "Diferenças aceitas", com o tamanho medido e o teste que a limita, e
+  continua dentro das tolerâncias dos testes contra as referências originais (Circuitscape, gdistance).
+- **O C++ fica numa tag de referência.** Antes de apagar o C++ de cada módulo, a tag `cpp-<módulo>` marca o
+  último commit em que ele existe, e no encerramento (fase 11) a tag `cpp-final` marca o último commit com C++.
+  Um job de CI manual (`workflow_dispatch`) compila o `_core` dessa tag e roda os testes diferenciais contra o
+  Rust, para conferir regressões depois que o C++ sumir da árvore.
+- **O MILP no navegador: `highs-js` ou HiGHS pelo Emscripten, o que funcionar e for mais rápido.** Os dois são
+  o mesmo HiGHS compilado pelo Emscripten. Nenhum dos dois liga num `.wasm` do alvo `wasm32-unknown-unknown`
+  (outra ABI e outra libc), então em ambos o HiGHS roda num módulo à parte (num web worker), chamado pelo
+  JavaScript. A diferença é que o `highs-js` já vem pronto mas recebe o modelo em texto (formato LP), enquanto
+  um build próprio aplica o `highs_patch.cmake` e recebe as matrizes em binário, sem passar por texto. A escolha
+  sai de um protótipo dos dois na fase 9, medido nos problemas do `tools/benchmark_prioritize.py`.
 
 ## Progresso
 
