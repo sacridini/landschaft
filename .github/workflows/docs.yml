@@ -21,8 +21,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      # the API pages are read from the sources (mkdocstrings), the package is not built
-      - run: pip install "mkdocs>=1.6,<2" "mkdocs-material>=9.5,<10" "mkdocstrings[python]>=0.26,<2" ruff
+      # the API pages are read from the sources (mkdocstrings); docs/griffe_roles.py imports
+      # the package to resolve the cross-references, so it is built too
+      - run: pip install . "mkdocs>=1.6,<2" "mkdocs-material>=9.5,<10" "mkdocstrings[python]>=0.26,<2" ruff
       - run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v5
         with:
