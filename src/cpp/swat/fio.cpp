@@ -4,15 +4,48 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <limits>
+#include <type_traits>
 
 namespace swat::fio {
 
 namespace {
 
 bool is_blank(char c) { return c == ' ' || c == '\t' || c == '\r'; }
+
+#if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+#define SWAT_FIO_FROM_CHARS 1
+#endif
+
+// A real of the whole of `t` (normalize_real's form), as std::from_chars reads it. Apple's libc++ has no
+// from_chars of reals: strtof/strtod there (the "C" locale), as correctly rounded.
+template <class T>
+std::errc parse_real(const std::string& t, T& v) {
+#if defined(SWAT_FIO_FROM_CHARS)
+    const auto r = std::from_chars(t.data(), t.data() + t.size(), v, std::chars_format::general);
+    if (r.ec != std::errc()) return r.ec;
+    return r.ptr == t.data() + t.size() ? std::errc() : std::errc::invalid_argument;
+#else
+    if (t.empty() || std::isspace(static_cast<unsigned char>(t[0]))) return std::errc::invalid_argument;
+    char* end = nullptr;
+    errno = 0;
+    T x;
+    if constexpr (std::is_same_v<T, float>) {
+        x = std::strtof(t.c_str(), &end);
+    } else {
+        x = std::strtod(t.c_str(), &end);
+    }
+    if (end != t.c_str() + t.size()) return std::errc::invalid_argument;
+    // ERANGE of a subnormal too, which from_chars reads
+    if (errno == ERANGE && (x == 0 || std::isinf(x))) return std::errc::result_out_of_range;
+    v = x;
+    return std::errc();
+#endif
+}
 
 // Fortran real text in the form std::from_chars reads: no '+', 'd'/'q' exponents as
 // 'e', an exponent sign without a letter ("1.5+3") given its 'e'.
@@ -76,13 +109,13 @@ bool to_float(std::string_view s, float& out) {
         return true;
     }
     float v = 0.0f;
-    const auto r = std::from_chars(t.data(), t.data() + t.size(), v, std::chars_format::general);
-    if (r.ec == std::errc::result_out_of_range) {
+    const auto ec = parse_real(t, v);
+    if (ec == std::errc::result_out_of_range) {
         // overflow to infinity, underflow to zero, as the runtime rounds
         double d = 0.0;
-        std::from_chars(t.data(), t.data() + t.size(), d, std::chars_format::general);
+        parse_real(t, d);
         v = static_cast<float>(d);
-    } else if (r.ec != std::errc() || r.ptr != t.data() + t.size()) {
+    } else if (ec != std::errc()) {
         return false;
     }
     out = v;
@@ -101,8 +134,7 @@ bool to_double(std::string_view s, double& out) {
         return true;
     }
     double v = 0.0;
-    const auto r = std::from_chars(t.data(), t.data() + t.size(), v, std::chars_format::general);
-    if (r.ec != std::errc() || r.ptr != t.data() + t.size()) return false;
+    if (parse_real(t, v) != std::errc()) return false;
     out = v;
     return true;
 }
