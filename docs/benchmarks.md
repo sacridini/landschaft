@@ -277,15 +277,26 @@ find hard on their own.
 Contiguity constraints are the exception. prioritizr's contiguity model is a
 restriction (it misses some patches, see the
 [migration guide](api/prioritization-migration.md#what-to-expect-when-you-compare-the-results));
-Landschaft solves the exact model, starting from a patch of the restricted one
-and with directed cuts added before the branch and bound. On prioritizr's
-contiguity test problems (166 units, a raster and a table) it proves a gap of
-5 % in 1 to 1.5 s and finds patches as cheap as or cheaper than prioritizr's
-optimum. On larger
-problems the bound stays weak without cuts inside the branch and bound: on
-Serra Verde at 3 km (543 units, 8 features) Landschaft's network after 120 s is
-4.6 % above the best Gurobi finds in 600 s, with a proven gap of 17 % (Gurobi's,
-3.8 %).
+Landschaft solves the exact model: a patch heuristic, a first patch of the
+restricted model, directed cuts at the root, then HiGHS's branch and bound with
+the same cuts separated at its nodes (HiGHS is patched for it). Measured with
+`tools/benchmark_connect.py` (version 1.51; 120 s, gap 1 %, 4 threads, on a
+Ryzen 7 7730U laptop), against Gurobi 13 on the same exact model, alone and
+with Landschaft's cuts added at its nodes by a callback (best patch / proven
+gap):
+
+| Problem | Landschaft | Gurobi | Gurobi + the same cuts |
+|---|---|---|---|
+| prioritizr's contiguity test, raster (166 units) | 1642.83 / 2.4 % | 1646.49 / 2.1 % | 1643.33 / 0.9 % in 15 s |
+| prioritizr's contiguity test, table (166 units) | 1496.98 / 1.7 % | 1496.98 / 1.5 % | 1499.86 / 0.9 % in 10 s |
+| feature contiguity, raster (166 units) | 509.27 / 18.8 % | 509.27, optimal in 76 s | optimal in 62 s |
+| 13 × 13 grid, 10 features | 111.30 / 8.7 % | 111.30 / 8.5 % | 111.30 / 5.0 % |
+| Serra Verde at 3 km (543 units, 8 features) | 30 141 / 13.0 % | 30 679 / 13.1 % | 30 706 / 12.4 % |
+
+Landschaft's patches are as cheap as or cheaper than Gurobi's, and its proven
+gaps match Gurobi's own except with feature contiguity; Gurobi's branch and
+bound does more with the same cuts. Before version 1.51, the same runs gave
+Serra Verde a network of 33 981 with a gap of 24 % (in 60 s).
 
 ### Species distributions
 

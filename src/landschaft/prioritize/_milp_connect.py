@@ -38,7 +38,8 @@ __all__ = ["solve_connected"]
 MAX_CANDIDATES = 200  # nodes tried per structure and separation call
 FIRST_PATCH_SHARE = 0.2  # the restriction's share of the time limit
 HEURISTIC_SHARE = 0.1  # the heuristic's share of the time limit (minimum sets with contiguity)
-HEURISTIC_SECONDS = 10.0  # ... and its time without a time limit
+HEURISTIC_SECONDS = 10.0  # ... and its time at most without a time limit
+STALL_ROUNDS = 50  # without a time limit, its perturbations stop after this many rounds without a cheaper patch
 ROOT_SHARE = 0.4  # the root cuts' share of the time left
 TREE_CUTS = True  # the cuts separated at the nodes too, with one patch or corridors (presolve off)
 FIRST_PATCH_SECONDS = 120.0  # the first patch's time without a time limit (the exact MIP goes on)
@@ -150,14 +151,16 @@ def patch_columns(m: OptimizationProblem, selection: np.ndarray) -> np.ndarray:
 
 
 def _first_patch(m: OptimizationProblem, pp: dict, n_units: int, seconds: float, threads: int,
-                 start: np.ndarray | None) -> np.ndarray | None:
+                 start: np.ndarray | None, timed: bool = True) -> np.ndarray | None:
     """A patch by the heuristic (:func:`landschaft._core.opt_improve_patch`: grown from every unit, and from
-    ``start``): the whole model's solution, or None."""
+    ``start``): the whole model's solution, or None. ``timed``: the perturbations go on for all ``seconds``
+    (with a time limit); otherwise they stop after rounds that find nothing cheaper."""
     from .. import _core
 
     s0 = np.zeros(0, dtype=np.uint8) if start is None else (np.asarray(start)[:n_units] > 0.5).astype(np.uint8)
     kw = {k: v for k, v in pp.items() if k != "rows"}
-    h = _core.opt_improve_patch(**kw, initial=s0, time_limit=max(seconds, 1.0e-3), threads=threads)
+    h = _core.opt_improve_patch(**kw, initial=s0, time_limit=max(seconds, 1.0e-3), threads=threads,
+                                stall_rounds=2**31 - 1 if timed else STALL_ROUNDS)
     if not h["has_solution"]:
         return None
     return patch_columns(m, h["selection"])
@@ -218,7 +221,7 @@ def solve_connected(m: OptimizationProblem, gap: float, time_limit: float, threa
     pp = _patch_problem(m, n_units)
     if pp is not None:
         keep(_first_patch(m, pp, n_units, left() * HEURISTIC_SHARE if timed else HEURISTIC_SECONDS, threads,
-                          best_x))
+                          best_x, timed))
     if m.connected:
         share = left() * FIRST_PATCH_SHARE if timed else FIRST_PATCH_SECONDS
         restricted = OptimizationProblem(A=m.A, obj=m.obj, lb=m.lb, ub=_restricted_bounds(m), rhs=m.rhs,
@@ -229,7 +232,7 @@ def solve_connected(m: OptimizationProblem, gap: float, time_limit: float, threa
             x0 = np.asarray(r0["x"], dtype=np.float64)
             if pp is not None and (best_x is None or _better(float(m.obj @ x0), best, sense)):
                 keep(_first_patch(m, pp, n_units, left() * HEURISTIC_SHARE / 2 if timed else HEURISTIC_SECONDS / 2,
-                                  threads, x0))
+                                  threads, x0, timed))
             keep(x0)
 
     # 2. the root's cuts, as rows of the model

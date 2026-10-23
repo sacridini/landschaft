@@ -2380,6 +2380,42 @@ Pedido: "limites fortes nos objetivos de metas, contiguidade, multi-action com f
 * **E. Limites dos objetivos de metas** (max_features, phylo_div, phylo_end): cortes no espaço das metas
   (subconjuntos de metas que não cabem juntos no orçamento: Σ_S y_f <= k(S), separados pelo motor de cobertura)
   pelo separador da B; medir nas instâncias da fase 9.
+* **B feita** (2026-10-23): `highs_patch.cmake` ganhou o separador do usuário (`HighsCallback::user_separator`,
+  `Highs::setUserSeparator`, a classe `HighsUserSeparator` na lista do `HighsSeparation`: raiz e nós; só sem
+  reduções de presolve e fora dos sub-MIPs, onde as colunas não são as do usuário); o hash do script entra no
+  `PATCH_COMMAND` (um script novo reaplica o patch numa cópia já baixada). `SolveOptions::separator` (presolve
+  desligado), `opt::separate_root` (rodadas de cortes num LP só, reotimizado a quente pela base: 121 rodadas em
+  11 s no 13 x 13, contra 41 s das rodadas em Python com um LP do zero cada), `opt/connect.cpp` (cortes dirigidos
+  pelo Boykov-Kolmogorov, W = a árvore do sorvedouro, o menor lado do corte mínimo: cortes esparsos; com o maior
+  lado os LPs ficavam lentos e só 20 nós em 30 s; cortes de nós dos corredores). `opt_separate_connected` e
+  `opt_root_cuts` no Python. HiGHS 1.15 tem busca paralela na árvore só com `parallel="on"` (nunca usado).
+* **C feita** (2026-10-23): heurística de manchas em C++ (`opt/patch.cpp`, só no mínimo conjunto com
+  contiguidade): crescimento a partir de cada unidade (a unidade de maior ganho por custo do caminho mais barato,
+  Dijkstra nos nós), poda (as mais caras primeiro, sem vértices de corte), busca local (entra um vizinho e poda;
+  sai uma unidade, reparo, religação e poda) e perturbações em rodadas de 16 (o mesmo com qualquer número de
+  threads): um pedaço de 10-30 % retirado e a mancha regenerada com ruído nas pontuações e nos pesos das
+  feições, ou uma mancha nova de uma unidade sorteada. O `solve_connected` agora: heurística (10 % do tempo) ->
+  restrição do prioritizr a partir dela (20 %) -> heurística de novo da solução da restrição -> cortes da raiz
+  (40 % do que sobra) como linhas -> o MIP exato.
+  Sem limite de tempo a heurística para após 50 rodadas sem melhora (com limite, usa a sua parte toda: parar
+  cedo piorava o `contiguity_raster` de 1642,83 para 1646,49). Os cortes nos nós ficam para uma mancha só ou
+  corredores; com uma mancha por feição o presolve do HiGHS rende mais (120 s: 421 contra 401 de limite).
+  **Medidas** (`tools/benchmark_connect.py`, 120 s, gap 1 %, 4 threads, Ryzen 7 7730U; Gurobi 13.0.3 no mesmo
+  modelo exato, e com os nossos cortes nos nós por callback):
+
+  | instância | antes (60 s) | landschaft | Gurobi | Gurobi + nossos cortes |
+  |---|---|---|---|---|
+  | `contiguity_raster` (166) | 1652,72 / 3,38 % | 1642,83 / 2,36 % | 1646,49 / 2,05 % | 1643,33 / 0,93 % (15 s) |
+  | `contiguity_matrix` (166) | 1506,52 / 2,71 % | 1496,98 / 1,66 % | 1496,98 / 1,52 % | 1499,86 / 0,93 % (10 s) |
+  | `feature_contiguity_raster` | 509,27 / 26,0 % | 509,27 / 18,8 % | 509,27 ótimo em 76 s | ótimo em 62 s |
+  | sintético 13 x 13 | 119,90 / 21,8 % | 111,30 / 8,66 % | 111,30 / 8,54 % | 111,30 / 4,98 % |
+  | Serra Verde 3 km (543) | 33.981 / 24,0 % | 30.141 / 13,0 % | 30.679 / 13,1 % | 30.706 / 12,4 % |
+
+  (objetivo / gap provado.) As manchas agora são as melhores ou empatam em todas; os limites empatam com o
+  Gurobi puro, menos na contiguidade por feição. O que falta é o branch-and-bound do HiGHS: com os mesmos cortes
+  o Gurobi fecha o dobro (a vazão de nós do HiGHS é ~10x menor nestes modelos: ramificação forte e sub-MIPs na
+  raiz). Tentado: `presolve` desligado sem cortes (pior), 20 candidatos por chamada (pior), as rodadas da raiz
+  pelo `HighsSeparation` do próprio HiGHS (para cedo: 95,5 contra 101,6 das nossas rodadas no 13 x 13).
 
 ### Próximos passos (retomar daqui)
 1. Fase 11: feita até onde dava sem cortes no B&B (1.30.0); o que ficou aberto está na lista acima.
