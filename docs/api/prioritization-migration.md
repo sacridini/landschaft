@@ -148,6 +148,7 @@ ls.plot(ranks)
 | `add_boundary_penalties(penalty, edge_factor, data)` | `.add_boundary_penalties(penalty, edge_factor, data=None)` |
 | `add_connectivity_penalties(penalty, data = m)` | `.add_connectivity_penalties(penalty, m)` |
 | `add_asym_connectivity_penalties(penalty, data = m)` | `.add_asym_connectivity_penalties(penalty, m)` |
+| `add_neighbor_penalties(penalty, zones, data)` (9) | `.add_neighbor_penalties(penalty, data=None, zones=None)` |
 | `add_linear_penalties(penalty, data)` | `.add_linear_penalties(penalty, data)` |
 | `add_cost_penalties()` (9) | `.add_linear_penalties(penalty, cost)` |
 
@@ -231,7 +232,7 @@ corridors (an extension of Landschaft), Ferrier and rarity-weighted importance (
 
 ### Not available
 
-Neighbour penalties (`add_neighbor_penalties()`), the
+The
 weighted-sum and reference-point approaches of `multi_problem()` (9), `presolve_check()` and the target
 methods of 8.1 (`spec_*_targets()`). Open an issue if you need one of them.
 
@@ -359,7 +360,7 @@ prioritizr's models exactly, so some results change (see the next section).
 | `add_neighbor_constraints(k)` | `.add_neighbor_constraints(k)` |
 | `add_corridors(terminals, resistance)` | `.add_corridor_constraints(terminals, resistance, penalty)` |
 | `add_boundary_penalties`, `add_connectivity_penalties`, `add_linear_penalties` | the same (the connectivity penalties now work in every objective) |
-| `add_neighbor_penalties(penalty, data)` | not available |
+| `add_neighbor_penalties(penalty, data)` | `.add_neighbor_penalties(penalty, data)` (data optional: the units' adjacency by default) |
 | `add_continuous_bounds(upper, lower)` | `.add_proportion_decisions().add_manual_bounded_constraints(lower=lower, upper=upper)` |
 | `add_solver("auto")`, `add_highs_solver(gap, time_limit)`, `add_gurobi_solver(...)` | `.add_highs_solver(gap, time_limit)`, `.add_gurobi_solver(...)` |
 | `add_single_portfolio`, `add_top_portfolio`, `add_cuts_portfolio`, `add_gap_portfolio`, `add_shuffle_portfolio`, `add_extra_portfolio` | the same (`add_extra_portfolio` → `add_gap_portfolio`), all on HiGHS as well |

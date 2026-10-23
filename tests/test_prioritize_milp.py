@@ -650,6 +650,52 @@ def test_penalties_follow_the_order_added():
     assert "b" not in z.col_ids
 
 
+def test_neighbor_penalties_are_connectivity_penalties_of_the_adjacency():
+    """prioritizr 9's add_neighbor_penalties: the connectivity penalties of a binary symmetric adjacency matrix
+    (the units' own by default), in every objective; on a minimum set the cut engine reaches HiGHS's optimum,
+    with fewer patches than without them."""
+    import scipy.sparse as sp
+    from scipy.sparse.csgraph import connected_components
+
+    from landschaft.prioritize._milp_solve import _highs
+
+    cost, feats = optimize_cases.pu_cost(), optimize_cases.features()
+    base = ls.prioritize.problem(cost, feats).add_relative_targets(0.3).add_binary_decisions()
+    adj = ls.prioritize.adjacency_matrix(cost)
+    for p in (base.add_min_set_objective(), base.add_max_utility_objective(3000.0)):
+        a = p.add_neighbor_penalties(2.0).compile()
+        b = p.add_connectivity_penalties(2.0, adj).compile()
+        assert a.col_ids == b.col_ids and a.row_ids == b.row_ids and a.sense == b.sense
+        np.testing.assert_array_equal(a.obj, b.obj)
+        np.testing.assert_array_equal(a.rhs, b.rhs)
+        assert (a.A != b.A).nnz == 0
+    given = base.add_min_set_objective().add_neighbor_penalties(2.0, adj).compile()
+    np.testing.assert_array_equal(given.obj, base.add_min_set_objective().add_neighbor_penalties(2.0).compile().obj)
+    with pytest.raises(ValueError, match="binary"):
+        base.add_min_set_objective().add_neighbor_penalties(1.0, adj * 2.0).compile()
+    with pytest.raises(ValueError, match="symmetric"):
+        base.add_min_set_objective().add_neighbor_penalties(1.0, sp.triu(adj).tocsc()).compile()
+
+    p = base.add_min_set_objective()
+    q = p.add_neighbor_penalties(5.0)
+    sol = q.add_highs_solver(gap=0.0).solve()
+    alone = _highs(q.compile(), 0.0, math.inf, 1, "choose", False, None)
+    assert sol.status == "optimal" and sol.objective == pytest.approx(alone["objective"], rel=1e-9)
+    from landschaft.prioritize._milp_spatial import adjacency_matrix
+
+    cut = adjacency_matrix(p.units)
+
+    def patches(s):
+        sel = np.flatnonzero(s.values > 0.5)
+        return connected_components(cut[sel][:, sel], directed=False)[0]
+
+    assert patches(sol) < patches(p.add_highs_solver(gap=0.0).solve())
+    # calibration: the pairs of selected neighbours grow with the penalty
+    cal = ls.prioritize.calibrate_penalty(p.add_highs_solver(gap=0.0), "neighbor", values=[0.1, 10.0])
+    crit = cal.table["neighbor"].to_numpy()
+    assert (cal.table["status"] == "optimal").all() and crit[1] > crit[0]
+
+
 @pytest.mark.parametrize(("group", "name"), CONTIGUITY, ids=[c for _, c in CONTIGUITY])
 def test_contiguity_restriction_is_prioritizr(group, name):
     """Our exact model with the arcs from a lower unit to a higher one fixed at 0 is prioritizr's

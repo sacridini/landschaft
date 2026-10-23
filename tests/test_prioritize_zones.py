@@ -337,6 +337,25 @@ def test_zones_engine_on_a_wide_problem_keeps_the_time_limit():
     assert sol.coverage["met"].all() and sol.gap < 0.05
 
 
+def test_neighbor_penalties_with_zones_are_connectivity_penalties():
+    """add_neighbor_penalties with zones: the zoned connectivity penalties of the units' adjacency (the cells
+    with a cost in any zone), with the zones matrix given or the identity."""
+    from landschaft.prioritize import _milp_matrices as mx
+    from landschaft.prioritize._zones_spatial import _footprint
+
+    p = _random_zone_problem(6, 2)
+    adj = mx.adjacency_matrix(_footprint(p.units))
+    zm = np.array([[1.0, 0.5, 0.0], [0.5, 1.0, 0.2], [0.0, 0.2, 1.0]])
+    for zones in (None, zm):
+        a = p.add_neighbor_penalties(3.0, zones=zones).compile()
+        b = p.add_connectivity_penalties(3.0, adj, zones=zones).compile()
+        assert a.col_ids == b.col_ids and a.row_ids == b.row_ids
+        np.testing.assert_array_equal(a.obj, b.obj)
+        assert (a.A != b.A).nnz == 0
+    sol = p.add_neighbor_penalties(3.0).add_highs_solver(gap=0.0).solve()
+    assert sol.status == "optimal" and sol.coverage["met"].all()
+
+
 def _random_budget_problem(n_side: int, seed: int, objective: str, per_zone: bool, decisions: str = "binary"):
     rng = np.random.default_rng(seed)
     shape = (n_side, n_side)

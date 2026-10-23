@@ -19,7 +19,7 @@ from ._zones import one_zone
 __all__ = ["TradeOffs", "calibrate", "calibrate_budget", "calibrate_penalty", "cohon_penalty", "iterative_solve",
            "knee_point", "mean_sd", "pareto_front", "protected_cells", "topsis"]
 
-PENALTIES = ("boundary", "connectivity", "asym_connectivity", "linear")
+PENALTIES = ("boundary", "connectivity", "asym_connectivity", "neighbor", "linear")
 
 
 @dataclass
@@ -163,6 +163,8 @@ def _with_penalty(p, penalty: str, value: float, data=None, edge_factor: float =
         raise ValueError(f"penalty must be one of {PENALTIES}")
     if penalty == "boundary":
         return p.add_boundary_penalties(value, edge_factor=edge_factor, data=data)
+    if penalty == "neighbor":
+        return p.add_neighbor_penalties(value, data)
     if data is None:
         raise ValueError(f"{penalty} penalties need data")
     return getattr(p, f"add_{penalty}_penalties")(value, data)
@@ -182,6 +184,12 @@ def _criterion(p, sol, penalty: str, data=None, edge_factor: float = 0.5) -> flo
         return float(eval_connectivity_summary(p, sol, data)["connectivity"].iloc[0])
     if penalty == "asym_connectivity":
         return float(eval_asym_connectivity_summary(p, sol, data)["asym_connectivity"].iloc[0])
+    if penalty == "neighbor":  # the pairs of selected neighbours (twice each: the matrix is symmetric)
+        if data is None:
+            from ._milp_matrices import adjacency_matrix
+
+            data = adjacency_matrix(p.units.template)
+        return float(eval_connectivity_summary(p, sol, data)["connectivity"].iloc[0])
     s = _values(p, sol)
     v = _linear_values(p, data)
     return float(np.dot(v, s))

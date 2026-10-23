@@ -71,6 +71,10 @@ in a new major version.
   release from this changelog and publishes the website.
 - The website on GitHub Pages, <https://sacridini.github.io/landschaft/>, published with each release
   (`.github/workflows/docs.yml`); project URLs, keywords and classifiers in the package metadata.
+- `ls.prioritize`: `Problem.add_neighbor_penalties(penalty, data=None, zones=None)`, prioritizr 9's neighbour
+  penalties against fragmentation: the connectivity penalties of a binary symmetric adjacency matrix (the units'
+  own by default: raster cells sharing an edge, polygons that touch), with zones as well. On minimum sets they
+  take the cut engine like the boundary penalties; `calibrate_penalty(p, "neighbor")` calibrates them.
 
 ### Fixed
 - `simcore` (land change simulation) is compiled with the same IEEE flags as the other modules

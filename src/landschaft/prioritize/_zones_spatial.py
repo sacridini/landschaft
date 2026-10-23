@@ -201,6 +201,17 @@ def _connectivity(b: Builder, u, penalty: float, data, zones) -> None:
     m = unit_matrix(u, data, "connectivity data")
     if m.nnz and abs(m - m.T).max() > 0:
         raise ValueError("the connectivity data must be symmetric (use add_asym_connectivity_penalties)")
+    _connectivity_terms(b, u, m, penalty, zones)
+
+
+def _neighbor(b: Builder, u, penalty: float, data, zones) -> None:
+    """prioritizr's add_neighbor_penalties with zones: the connectivity penalties of the adjacency matrix."""
+    from ._milp_spatial import neighbor_matrix
+
+    _connectivity_terms(b, u, neighbor_matrix(_adjacency(u, data)), penalty, zones)
+
+
+def _connectivity_terms(b: Builder, u, m, penalty: float, zones) -> None:
     zm = zone_matrix(u, zones, "connectivity penalties", symmetric=False)
     mult = -1.0 if b.modelsense == "min" else 1.0
     n = u.n
@@ -336,6 +347,8 @@ def apply_zone_penalty(b: Builder, u, spec) -> None:
         _boundary(b, u, *spec[1:])
     elif kind == "connectivity":
         _connectivity(b, u, *spec[1:])
+    elif kind == "neighbor":
+        _neighbor(b, u, *spec[1:])
     elif kind == "asym_connectivity":
         _asym_connectivity(b, u, *spec[1:])
     elif kind == "linear":

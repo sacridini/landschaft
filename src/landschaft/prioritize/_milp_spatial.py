@@ -239,6 +239,26 @@ def _apply_connectivity(b: Builder, u, penalty: float, data) -> None:
     m = unit_matrix(u, data, "connectivity data")
     if m.nnz and abs(m - m.T).max() > 0:
         raise ValueError("the connectivity data must be symmetric (use add_asym_connectivity_penalties)")
+    _connectivity_terms(b, m, penalty)
+
+
+def neighbor_matrix(m: sp.csc_matrix) -> sp.csc_matrix:
+    """The adjacency matrix of :meth:`~landschaft.prioritize.Problem.add_neighbor_penalties` (cut to the
+    planning units), checked as prioritizr checks it: binary and symmetric."""
+    if m.nnz and not np.isin(m.data, (0.0, 1.0)).all():
+        raise ValueError("the neighbour data must be binary (0 or 1)")
+    if m.nnz and abs(m - m.T).max() > 0:
+        raise ValueError("the neighbour data must be symmetric")
+    return m
+
+
+def _apply_neighbor(b: Builder, u, penalty: float, data) -> None:
+    """prioritizr's add_neighbor_penalties: the connectivity penalties of the adjacency matrix."""
+    _connectivity_terms(b, neighbor_matrix(_adjacency(u, data)), penalty)
+
+
+def _connectivity_terms(b: Builder, m: sp.csc_matrix, penalty: float) -> None:
+    """rcpp_apply_connectivity_penalties on a symmetric matrix of the planning units."""
     mult = -1.0 if b.modelsense == "min" else 1.0
     low = sp.tril(m).tocsc()
     low.sort_indices()
@@ -519,6 +539,8 @@ def apply_penalty(b: Builder, u, spec) -> None:
         _apply_boundary(b, u, *spec[1:])
     elif kind == "connectivity":
         _apply_connectivity(b, u, *spec[1:])
+    elif kind == "neighbor":
+        _apply_neighbor(b, u, *spec[1:])
     elif kind == "asym_connectivity":
         _apply_asym_connectivity(b, u, *spec[1:])
     elif kind == "linear":

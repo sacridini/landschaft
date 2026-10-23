@@ -748,6 +748,18 @@ class Problem:
         zones, ``zones`` as in :meth:`add_boundary_penalties` (it need not be symmetric)."""
         return self._add("penalty", "asym_connectivity", float(penalty), data, *self._zones_arg(zones))
 
+    def add_neighbor_penalties(self, penalty: float, data=None, zones=None) -> Problem:
+        """Reward selecting neighbouring units together, against fragmentation (prioritizr 9's
+        ``add_neighbor_penalties``, after Önal and Briers 2002): ``penalty`` for every pair of selected
+        neighbours. These are the connectivity penalties (:meth:`add_connectivity_penalties`) of a binary
+        symmetric adjacency matrix: ``data``, a matrix of every unit, by default units that share an
+        edge (raster cells, 4 directions) or that touch (polygons). With zones, ``zones`` as in
+        :meth:`add_boundary_penalties` (how much neighbours in two zones count; default ``"same"``).
+
+        On minimum sets they keep the cut engine's form (pair rewards), like the boundary penalties,
+        and lighter models than contiguity constraints: a way to cluster large problems."""
+        return self._add("penalty", "neighbor", float(penalty), data, *self._zones_arg(zones))
+
     def add_linear_penalties(self, penalty: float, data) -> Problem:
         """Penalise selecting units by a value of each (``penalty`` x value): a raster on the units'
         grid, a column name, or one value per unit. With zones, ``penalty`` one or one per zone (a list

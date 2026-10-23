@@ -2353,6 +2353,34 @@ recusando zonas.
 
 `add_neighbor_penalties` (do prioritizr 9) continua um item à parte, sob pedido.
 
+### Pendências de pesquisa da otimização (fase 12, iniciada em 2026-10-23)
+Pedido: "limites fortes nos objetivos de metas, contiguidade, multi-action com fronteira chegando a gap 0,
+`add_neighbor_penalties`". Fases, nesta ordem (ao fim de cada uma: versão, commit, push, próxima):
+* **A. `add_neighbor_penalties`** (prioritizr 9): as penalidades de conectividade da matriz de adjacência
+  binária e simétrica (`rcpp_apply_connectivity_penalties` com -p no mínimo), com zonas; entra no motor de cortes
+  como as recompensas de conectividade; calibração (`calibrate_penalty(..., "neighbor")`) e avaliações.
+  **Feita** (2026-10-23): o modelo é o de `add_connectivity_penalties` com a adjacência (testado igual, nos
+  objetivos de mínimo e de máximo, com e sem zonas; com zonas a adjacência das células com custo em alguma zona);
+  no mínimo conjunto o motor de cortes chega ao ótimo do HiGHS e a solução tem menos manchas. Sem referência do R
+  nesta máquina (o prioritizr 9 não está instalado): o 9.0 monta exatamente a mesma conectividade
+  (`rcpp_apply_connectivity_penalties` do 9.0.0.1 lido, igual ao do 8.0.6).
+* **B. Cortes dentro do branch-and-bound do HiGHS** (a lacuna de "lazy/user cuts" da fase 9): patch no HiGHS
+  1.15.1 (`highs_patch.cmake`), um separador do usuário na lista de separadores do HiGHS (raiz e nós,
+  `mip_allow_cut_separation_at_nodes`), só com o modelo sem presolve (as colunas do usuário) e fora dos sub-MIPs;
+  `SolveOptions::separator` em `milp.hpp`. Separadores em C++ (`opt/connect.cpp`): cortes dirigidos das manchas
+  (fluxo máximo do Boykov-Kolmogorov do motor de cortes) e cortes de nós dos corredores, no lugar das rodadas em
+  Python com o `maximum_flow` do scipy.
+* **C. Contiguidade**: branch-and-cut com os cortes da B; heurística primal de manchas em C++ (conjunto mínimo,
+  ligação dos componentes por caminhos de menor custo nos nós, poda que mantém a mancha e as metas, trocas);
+  medir contra o Gurobi (cortes lazy) em `contiguity_raster`, `contiguity_matrix`, `feature_contiguity_raster`,
+  sintético 13 x 13 e Serra Verde em blocos de 3 km.
+* **D. Multi-action com fronteira em gap 0** (10³: o limite do HiGHS para em 1152,8, o ótimo do Gurobi é 1156 em
+  10 s): ver no log do Gurobi o que fecha (cortes, ramificação) e escolher entre cortes pelo separador da B e um
+  branch-and-bound próprio sobre o motor de fecho (limite lagrangiano por corte mínimo em cada nó).
+* **E. Limites dos objetivos de metas** (max_features, phylo_div, phylo_end): cortes no espaço das metas
+  (subconjuntos de metas que não cabem juntos no orçamento: Σ_S y_f <= k(S), separados pelo motor de cobertura)
+  pelo separador da B; medir nas instâncias da fase 9.
+
 ### Próximos passos (retomar daqui)
 1. Fase 11: feita até onde dava sem cortes no B&B (1.30.0); o que ficou aberto está na lista acima.
 2. Desempenho das métricas de paisagem e da reprojeção (ordem pedida pelo usuário): **feito em 2026-10-09**
@@ -2364,7 +2392,7 @@ recusando zonas.
    (`C`/`D`, alvos por região, curva de trade-off, intactness exata, custo mínimo por interpolação, escala
    global) feitos na 1.37.0 (ver "Itens abertos da restauração").
 5. **Zonas do prioritizr**: feitas (fases 0 a 5, 1.38.0 a 1.42.0); ver "Zonas de manejo do prioritizr".
-6. Sob pedido: `add_neighbor_penalties`.
+6. Fase 12 (pendências de pesquisa da otimização, acima).
 
 ### Decisões
 * Tomadas em 2026-10-03: o repositório do prioripy fica como está, sem mudanças; a base e a referência são o
