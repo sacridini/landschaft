@@ -47,6 +47,7 @@ def _same(ours, ref, name):
 
 
 @pytest.mark.parametrize("name", CASES)
+@pytest.mark.external_reference
 def test_sdr_matches_invest(name):
     s, ref, meta = _run(name)
     inter = s.intermediate

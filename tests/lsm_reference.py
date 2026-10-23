@@ -42,6 +42,17 @@ def find_rscript() -> Path | None:
     return Path(candidates[-1]) if candidates else None
 
 
+def find_lsm_rscript() -> Path | None:
+    """find_rscript, when its R has the packages the scripts load (terra, landscapemetrics)."""
+    exe = find_rscript()
+    if exe is None:
+        return None
+    check = ('lib <- Sys.getenv("LANDSCHAFT_R_LIBS"); if (nzchar(lib)) .libPaths(c(lib, .libPaths())); '
+             'quit(status = !all(sapply(c("terra", "landscapemetrics"), requireNamespace, quietly = TRUE)))')
+    proc = subprocess.run([str(exe), "-e", check], capture_output=True, env=r_environment(), timeout=600)
+    return exe if proc.returncode == 0 else None
+
+
 def r_environment() -> dict[str, str]:
     env = dict(os.environ)
     if "LANDSCHAFT_R_LIBS" not in env and DEFAULT_R_LIBS.is_dir():

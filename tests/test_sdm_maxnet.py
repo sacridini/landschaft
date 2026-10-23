@@ -123,6 +123,7 @@ def tolerant(case: str) -> None:
 
 
 @pytest.mark.parametrize("case", CASES)
+@pytest.mark.external_reference
 def test_model_matches_r(case):
     tolerant(case)
     m = fitted(case)
@@ -154,6 +155,7 @@ def test_model_matches_r(case):
 
 
 @pytest.mark.parametrize("case", CASES)
+@pytest.mark.external_reference
 def test_predictions_match_r(case):
     tolerant(case)
     m = fitted(case)

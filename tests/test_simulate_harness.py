@@ -42,6 +42,7 @@ def test_crt_rand_known_values():
 
 
 @pytest.mark.parametrize("case", ["smoke_r_crosstab", "smoke_molusce_woe"])
+@pytest.mark.external_reference
 def test_inputs_reach_the_reference_unchanged(case):
     ref = simulate_reference.result("smoke", case)
     ours = simulate_cases.run_python(case)

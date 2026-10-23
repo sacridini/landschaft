@@ -27,6 +27,7 @@ def _check(group, case, rtol=0.0):
 
 
 @pytest.mark.parametrize(("group", "case"), _cases(BITWISE))
+@pytest.mark.external_reference
 def test_same_as_r(group, case):
     _check(group, case)
 

@@ -94,6 +94,8 @@ testpaths = ["tests"]
 markers = [
     "reference: compare against stored outputs of the original GTB code",
     "live_reference: run the original GTB code now (needs LANDSCHAFT_MSPA_EXE or GDL)",
+    "external_reference: bit for bit (or to a few ulps) against another program's results (GDAL, R, Gurobi, InVEST, MOLUSCE, plangea, numpy), which hold with the versions and the platform the references were made with; the wheels' tests leave them out",
+    "timing: checks the wall-clock time; the wheels' tests (shared CI machines) leave it out",
 ]
 
 # Wheels (cibuildwheel; .github/workflows/release.yml, one job per platform and Python;
@@ -106,7 +108,7 @@ test-extras = ["test"]
 test-requires = ["threadpoolctl"]
 test-command = [
     "python -c \"import landschaft._core as c; assert c.openmp, 'built without OpenMP'\"",
-    "pytest {project}/tests -q -p no:cacheprovider",
+    "pytest {project}/tests -q -p no:cacheprovider -m \"not external_reference and not timing\"",
 ]
 
 [tool.cibuildwheel.macos]

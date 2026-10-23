@@ -470,6 +470,7 @@ def test_reclassify_lazy_and_habitat_mode(classes):
         ls.reclassify(classes)
 
 
+@pytest.mark.external_reference
 def test_rasterize_matches_gdal_on_edges_through_cell_centres():
     # polygons with vertices on cell centres and edges, in both orientations, with holes: GDAL's
     # rasterizer takes every ring clockwise, which decides the cells of horizontal edges on centres
@@ -497,6 +498,7 @@ def test_rasterize_matches_gdal_on_edges_through_cell_centres():
             np.testing.assert_array_equal(ours, ref, err_msg=f"{g.wkt} all_touched={touched}")
 
 
+@pytest.mark.external_reference
 def test_rasterize_points_lines_and_order_match_gdal():
     from shapely.geometry import LineString
 

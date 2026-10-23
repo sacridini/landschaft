@@ -400,6 +400,7 @@ def test_observed_patches(seed):
         assert _core.sim_observed_patches(a, b, f, t) == ref_observed_patches(a, b, f, t)
 
 
+@pytest.mark.external_reference
 def test_observed_patches_many():
     # thousands of patches: numpy's pairwise sums in blocks
     rng = np.random.default_rng(11)

@@ -157,6 +157,7 @@ def _run_hq(name, **extra):
 
 
 @pytest.mark.parametrize("name", ["hq_current", "hq_scenarios", "hq_access", "hq_empty_threat_patched"])
+@pytest.mark.external_reference
 def test_habitat_quality_matches_invest(name):
     hq, ref, meta = _run_hq(name)
     for sc, s in (("current", "cur"), ("future", "fut")):

@@ -49,6 +49,7 @@ def test_units_and_bounds_are_plangea(ref, case):
     np.testing.assert_array_equal(p.upper, arrays["scen_1/ub"])
 
 
+@pytest.mark.external_reference
 def test_biodiversity_layer_is_plangea(ref, case):
     """plangea's bd: the finite-difference slopes of the species' risk times the habitat share a unit of
     a cell restored gives; to the last bits but one (the gain is stored per km² and divided back)."""

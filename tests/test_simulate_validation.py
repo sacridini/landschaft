@@ -15,6 +15,7 @@ S = ls.simulate
 
 
 @pytest.mark.parametrize("case", simulate_reference.case_ids("validation"))
+@pytest.mark.external_reference
 def test_same_as_reference(case):
     ref = simulate_reference.result("validation", case)
     ours = simulate_cases.run_python(case)

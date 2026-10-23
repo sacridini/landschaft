@@ -96,6 +96,7 @@ def rmath():
 
 
 @pytest.mark.parametrize("key", sorted(nlm_cases.rmath_cases()))
+@pytest.mark.external_reference
 def test_r_arithmetic_matches_r(rmath, key):
     # exp() and x^y (powl) of mingw-w64 and R's vector sqrt(), as on R for Windows
     fn, x, y = nlm_cases.rmath_cases()[key]

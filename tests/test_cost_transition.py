@@ -15,6 +15,7 @@ pytestmark = pytest.mark.filterwarnings("ignore:transition function gives negati
 
 
 @pytest.mark.parametrize("case", cost_reference.case_ids("transition"))
+@pytest.mark.external_reference
 def test_matches_gdistance(case):
     c = cost_cases.CASES[case]
     result = c.py(cost_cases.RASTERS)

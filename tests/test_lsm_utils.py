@@ -204,9 +204,9 @@ def test_correlation(case, method):
 def rscript():
     import lsm_reference
 
-    exe = lsm_reference.find_rscript()
+    exe = lsm_reference.find_lsm_rscript()
     if exe is None:
-        pytest.skip("Rscript not found (set LANDSCHAFT_RSCRIPT)")
+        pytest.skip("Rscript with terra and landscapemetrics not found (set LANDSCHAFT_RSCRIPT, LANDSCHAFT_R_LIBS)")
     return exe
 
 

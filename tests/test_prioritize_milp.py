@@ -50,6 +50,7 @@ def _assert_reference_optimum(ours: float, ref: float, sense: str) -> None:
 
 
 @pytest.mark.parametrize(("group", "name"), ALL, ids=[c for _, c in ALL])
+@pytest.mark.external_reference
 def test_builtin_highs_same_optimum(group, name):
     m = model(group, name)
     if m.genconpow is not None:
@@ -393,6 +394,7 @@ def test_zonation_start_polygons_and_errors():
         p.solve(start=[1, 0])
 
 
+@pytest.mark.timing
 def test_covering_keeps_the_time_limit_on_wide_models():
     """Gap 0 on 3e5 units: HiGHS's MIP root would ignore a 1 s limit for seconds; it is not called."""
     a, cost, rhs = _wide_cover(n=300_000, m=30, seed=5)

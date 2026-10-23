@@ -19,6 +19,7 @@ def _same(ref, ours, keys):
         np.testing.assert_array_equal(np.asarray(ours[k], float), np.asarray(ref[k], float), err_msg=k)
 
 
+@pytest.mark.external_reference
 def test_same_as_patched_molusce():
     ref = simulate_reference.result("molusce", "molusce_fixed")
     ours = simulate_cases.run_python("molusce_fixed")
@@ -26,6 +27,7 @@ def test_same_as_patched_molusce():
     _same(ref, ours, sorted(ref))  # weights, prediction, confidence and three iterations
 
 
+@pytest.mark.external_reference
 def test_published_molusce_differs_only_by_its_confidence():
     ref = simulate_reference.result("molusce", "molusce_original")
     ours = simulate_cases.run_python("molusce_original")

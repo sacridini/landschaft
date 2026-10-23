@@ -39,6 +39,7 @@ def test_same_as_dinamica():
 
 
 @pytest.mark.parametrize("beta", [2.0, 1.0, 0.7, 0.0, 3.0])
+@pytest.mark.external_reference
 def test_direct_is_the_sum_in_row_order(beta):
     rng = np.random.default_rng(5)
     mass = np.where(rng.random((23, 31)) < 0.1, rng.random((23, 31)) * 100, np.nan)

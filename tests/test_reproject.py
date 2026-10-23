@@ -116,6 +116,7 @@ def test_same_grid_is_returned_as_it_is(surface):
 @needs_gdal
 @pytest.mark.parametrize("method", METHODS)
 @pytest.mark.parametrize("target,res", [("EPSG:4326", None), ("EPSG:3035", 100), ("EPSG:3035", 12)])
+@pytest.mark.external_reference
 def test_exact_transformations_give_gdals_whole_warp(surface, method, target, res):
     out = ls.reproject(surface, target, res=res, resampling=method, tolerance=0)
     assert out.dtype == np.float32 and np.isnan(out.rio.nodata)
@@ -144,6 +145,7 @@ def typed(dtype, nodata, seed=3):
                                           (np.uint16, None), (np.int32, -1), (np.uint32, None), (np.int64, -1),
                                           (np.float64, -9999.0)])
 @pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic", "lanczos", "average", "mode", "min", "med", "rms"])
+@pytest.mark.external_reference
 def test_every_type_matches_gdal(dtype, nodata, method):
     if dtype == np.int8 and tuple(int(v) for v in rasterio.__gdal_version__.split(".")[:3]) < (3, 12, 3):
         pytest.skip("GDAL < 3.12.3 warps Int8 as Int16 (values past -128 do not avoid the NoData)")
@@ -156,6 +158,7 @@ def test_every_type_matches_gdal(dtype, nodata, method):
 
 @needs_gdal
 @pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic_spline", "average", "mode", "q3"])
+@pytest.mark.external_reference
 def test_bands_count_as_nodata_where_all_are(surface, method):
     """GDAL's unified NoData: a cell is NoData when every band is."""
     v = np.stack([surface.values, surface.values * 2, surface.values + 1])
@@ -170,6 +173,7 @@ def test_bands_count_as_nodata_where_all_are(surface, method):
 @pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic", "lanczos", "average", "mode", "max", "med"])
 @pytest.mark.parametrize("proj", ["+proj=ortho +lat_0=40 +lon_0=15 +datum=WGS84",
                                   "+proj=ortho +lat_0=0 +lon_0=170 +datum=WGS84", "EPSG:3031"])
+@pytest.mark.external_reference
 def test_a_world_in_odd_projections_matches_gdal(method, proj):
     """A global geographic source: points off the globe, the antimeridian, a pole; NoData holes
     (cells at the edge of the projection's domain take a neighbour, as in GDAL). GDAL misses a
@@ -198,6 +202,7 @@ def test_a_world_in_odd_projections_matches_gdal(method, proj):
 
 @needs_gdal
 @pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic", "average", "mode"])
+@pytest.mark.external_reference
 def test_a_geographic_source_matches_gdal(surface, method):
     lonlat = ls.reproject(surface, "EPSG:4326", tolerance=0)
     for target, res in (("EPSG:32633", None), ("EPSG:3857", None), ("EPSG:4326", 0.0007)):
@@ -206,6 +211,7 @@ def test_a_geographic_source_matches_gdal(surface, method):
 
 
 @pytest.mark.parametrize("method", ["nearest", "bilinear", "cubic", "average", "mode"])
+@pytest.mark.external_reference
 def test_the_same_crs_is_exact_at_any_tolerance(surface, method):
     """No reprojection: the coordinates are the geotransforms', GDAL's even with the default
     tolerance; a whole number of cells apart, GDAL takes the nearest cell whatever the method."""
@@ -253,6 +259,7 @@ def test_the_lattice_is_exact_at_its_nodes_and_close_between():
             assert levels[1:].sum() == 0
 
 
+@pytest.mark.external_reference
 def test_without_gdals_library_pyproj_gives_the_coordinates(surface, monkeypatch):
     monkeypatch.setattr(_gdaltransform, "_searched", True)
     monkeypatch.setattr(_gdaltransform, "_lib", None)
