@@ -31,6 +31,10 @@ public:
     // reaches in the residual graph)
     bool source_side(int v) const { return parent_[v] != kNone && tree_[v] == kSourceTree; }
 
+    // after solve(): whether a node reaches the sink in the residual graph (the sink's tree): the sink's side
+    // of the minimum cut nearest the sink
+    bool sink_side(int v) const { return parent_[v] != kNone && tree_[v] == kSinkTree; }
+
     int nodes() const { return n_; }
 
 private:

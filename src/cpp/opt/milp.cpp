@@ -129,6 +129,21 @@ bool stop_asked(double best, double bound, double gap) {
     return s->stopped;
 }
 
+double objective_steps(const Model& model) {
+    if (model.offset != 0.0) return 0.0;
+    for (i64 j = 0; j < model.ncol; ++j)
+        if (!model.integer[static_cast<std::size_t>(j)] && model.obj[static_cast<std::size_t>(j)] != 0.0) return 0.0;
+    for (const double d : {1.0, 2.0, 4.0, 5.0, 8.0, 10.0, 20.0, 25.0, 50.0, 100.0}) {
+        bool all = true;
+        for (i64 j = 0; j < model.ncol && all; ++j) {
+            const double s = model.obj[static_cast<std::size_t>(j)] * d;
+            all = std::abs(s - std::round(s)) <= 1e-9 * std::max(1.0, std::abs(s));
+        }
+        if (all) return d;
+    }
+    return 0.0;
+}
+
 SolveResult solve_highs(const Model& model, const SolveOptions& options) {
     model.check();
     if (options.threads < 1) throw std::invalid_argument("threads must be at least 1");
@@ -146,9 +161,14 @@ SolveResult solve_highs(const Model& model, const SolveOptions& options) {
     set(h, "output_flag", options.verbose);
     set(h, "threads", static_cast<HighsInt>(options.threads));
     set(h, "mip_rel_gap", options.gap);
-    set(h, "presolve", std::string(options.presolve == Presolve::off  ? "off"
-                                   : options.presolve == Presolve::on ? "on"
-                                                                      : "choose"));
+    const bool separating = options.separator && !options.relaxation;
+    set(h, "presolve", std::string(options.presolve == Presolve::off || separating ? "off"
+                                   : options.presolve == Presolve::on              ? "on"
+                                                                                   : "choose"));
+    if (separating) h.setUserSeparator(options.separator);
+    for (const auto& [name, value] : options.highs_options)
+        if (h.setOptionValue(name, value) != HighsStatus::kOk)
+            throw std::invalid_argument("HiGHS rejected the option " + name + " = " + value);
     if (std::isfinite(options.time_limit)) set(h, "time_limit", options.time_limit);
     if (options.relaxation) set(h, "solve_relaxation", true);
     if (std::isfinite(options.objective_target)) set(h, "objective_target", options.objective_target);
@@ -226,12 +246,106 @@ SolveResult solve_highs(const Model& model, const SolveOptions& options) {
         r.bound = info.mip_dual_bound;
         r.gap = info.mip_gap;
         r.nodes = static_cast<i64>(info.mip_node_count);
+        // every objective value a multiple of 1 / d: so is the optimum, and the bound rounds to one
+        const double d = objective_steps(model);
+        if (d > 0.0 && std::isfinite(r.bound)) {
+            const double s = r.bound * d, tol = 1e-9 * std::max(1.0, std::abs(s));
+            r.bound = (model.maximize ? std::floor(s + tol) : std::ceil(s - tol)) / d;
+            if (r.has_solution) {
+                const double g = model.maximize ? r.bound - r.objective : r.objective - r.bound;
+                r.gap = g <= 0 ? 0.0 : g / std::max(std::abs(r.objective), 1e-10);
+                if (r.status == "time_limit" && r.gap <= options.gap) r.status = "optimal";
+            }
+        }
     } else if (r.status == "optimal") {
         r.bound = r.objective;
         r.gap = 0.0;
         if (info.dual_solution_status == kSolutionStatusFeasible) r.row_dual = h.getSolution().row_dual;
     }
     return r;
+}
+
+RootCuts separate_root(const Model& model, const Separator& separator, const SolveOptions& options, double min_rise,
+                       int stall_rounds) {
+    model.check();
+    if (!separator) throw std::invalid_argument("separate_root needs a separator");
+    if (options.threads < 1) throw std::invalid_argument("threads must be at least 1");
+    const auto t0 = Clock::now();
+    RootCuts out;
+    const bool timed = std::isfinite(options.time_limit);
+    const auto deadline = t0 + std::chrono::duration_cast<Clock::duration>(
+                                   std::chrono::duration<double>(timed ? std::max(options.time_limit, 0.0) : 0.0));
+    auto left = [&]() { return std::chrono::duration<double>(deadline - Clock::now()).count(); };
+    if (timed && left() <= 0) {
+        out.status = "time_limit";
+        return out;
+    }
+    use_threads(options.threads);
+    Highs h;
+    set(h, "output_flag", options.verbose);
+    set(h, "threads", static_cast<HighsInt>(options.threads));
+    set(h, "presolve", std::string("off"));
+    HighsLp lp = highs_lp(model);
+    lp.integrality_.clear();
+    if (h.passModel(std::move(lp)) == HighsStatus::kError)
+        throw std::runtime_error("HiGHS rejected the model (" + model_size(model) + ")");
+    bool timed_out = false;
+    if (timed || watched()) {
+        h.setCallback([&](int, const std::string&, const HighsCallbackOutput*, HighsCallbackInput* in, void*) {
+            if ((timed && Clock::now() >= deadline) || stop_asked()) {
+                timed_out = true;
+                in->user_interrupt = true;
+            }
+        });
+        h.startCallback(kCallbackSimplexInterrupt);
+        h.startCallback(kCallbackIpmInterrupt);
+    }
+    const double sign = model.maximize ? -1.0 : 1.0;
+    double last = -kInf;
+    int stalled = 0;
+    std::vector<int> st, idx;
+    std::vector<double> val, up, lo;
+    for (;;) {
+        h.run();
+        const HighsModelStatus ms = h.getModelStatus();
+        if (ms != HighsModelStatus::kOptimal) {
+            if (timed_out || ms == HighsModelStatus::kTimeLimit) out.status = "time_limit";
+            else if (ms == HighsModelStatus::kInfeasible) out.status = "infeasible";
+            else out.status = "error: " + h.modelStatusToString(ms);
+            break;
+        }
+        out.status = "optimal";
+        const double obj = h.getInfo().objective_function_value;
+        out.bound = obj;
+        const double v = sign * obj;
+        if (std::isfinite(last)) {
+            stalled = v - last < min_rise * std::max(std::abs(v), 1.0) ? stalled + 1 : 0;
+            if (stalled >= stall_rounds) break;
+        }
+        last = std::max(last, v);
+        if (timed && left() <= 0) {
+            out.status = "time_limit";
+            break;
+        }
+        st.assign(1, 0);
+        idx.clear();
+        val.clear();
+        up.clear();
+        separator(h.getSolution().col_value, st, idx, val, up);
+        if (up.empty()) break;
+        ++out.rounds;
+        lo.assign(up.size(), -kInf);
+        if (h.addRows(static_cast<HighsInt>(up.size()), lo.data(), up.data(), static_cast<HighsInt>(idx.size()),
+                      st.data(), idx.data(), val.data()) == HighsStatus::kError)
+            throw std::runtime_error("HiGHS rejected a cut");
+        const int base = out.start.back();
+        for (std::size_t k = 1; k < st.size(); ++k) out.start.push_back(base + st[k]);
+        out.index.insert(out.index.end(), idx.begin(), idx.end());
+        out.value.insert(out.value.end(), val.begin(), val.end());
+        out.upper.insert(out.upper.end(), up.begin(), up.end());
+    }
+    out.seconds = std::chrono::duration<double>(Clock::now() - t0).count();
+    return out;
 }
 
 }  // namespace opt

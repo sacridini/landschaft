@@ -17,6 +17,7 @@
 
 #include "opt/actions.hpp"
 #include "opt/closure.hpp"
+#include "opt/connect.hpp"
 #include "opt/cover.hpp"
 #include "opt/cut.hpp"
 #include "opt/eval.hpp"
@@ -24,6 +25,7 @@
 #include "opt/marxan.hpp"
 #include "opt/maxflow.hpp"
 #include "opt/milp.hpp"
+#include "opt/patch.hpp"
 #include "opt/proxirr.hpp"
 #include "opt/wide.hpp"
 #include "opt/zones.hpp"
@@ -94,11 +96,150 @@ py::dict result_dict(opt::SolveResult&& r) {
     return d;
 }
 
+std::vector<int> int_vec(const py::handle& a) {
+    const auto v = vec<i64>(a.cast<Ints>());
+    return std::vector<int>(v.begin(), v.end());
+}
+
+// The patches of a model from dicts of arrays (OptimizationProblem.connected): the columns checked.
+std::vector<opt::Connected> connected_of(const py::list& items, i64 ncol) {
+    std::vector<opt::Connected> out;
+    for (const auto& item : items) {
+        const auto d = item.cast<py::dict>();
+        opt::Connected c;
+        c.nodes = vec<i64>(d["nodes"].cast<Ints>());
+        c.root = d["root"].cast<i64>();
+        c.arc = d["arc"].cast<i64>();
+        c.tail = int_vec(d["tail"]);
+        c.head = int_vec(d["head"]);
+        const i64 n = static_cast<i64>(c.nodes.size());
+        const i64 na = static_cast<i64>(c.tail.size());
+        if (c.head.size() != c.tail.size()) throw std::invalid_argument("a patch's tails and heads differ in length");
+        if (c.root < 0 || c.root + n > ncol || c.arc < 0 || c.arc + na > ncol)
+            throw std::invalid_argument("a patch's root or arc columns are out of range");
+        for (const i64 j : c.nodes)
+            if (j < 0 || j >= ncol) throw std::invalid_argument("a patch's node column is out of range");
+        for (std::size_t a = 0; a < c.tail.size(); ++a)
+            if (c.tail[a] < 0 || c.tail[a] >= n || c.head[a] < 0 || c.head[a] >= n)
+                throw std::invalid_argument("a patch's arc ends are out of range");
+        out.push_back(std::move(c));
+    }
+    return out;
+}
+
+// The corridor networks of a model (OptimizationProblem.corridors).
+std::vector<opt::Corridor> corridors_of(const py::list& items, i64 ncol) {
+    std::vector<opt::Corridor> out;
+    for (const auto& item : items) {
+        const auto d = item.cast<py::dict>();
+        opt::Corridor c;
+        c.n = d["n"].cast<int>();
+        c.source = d["source"].cast<int>();
+        c.sinks = int_vec(d["sinks"]);
+        c.tail = int_vec(d["tail"]);
+        c.head = int_vec(d["head"]);
+        if (c.n < 0 || c.n > ncol) throw std::invalid_argument("a corridor network has more units than columns");
+        if (c.head.size() != c.tail.size()) throw std::invalid_argument("a corridor's tails and heads differ in length");
+        auto ok = [&](int v) { return v >= 0 && v < c.n; };
+        if (!ok(c.source)) throw std::invalid_argument("a corridor's source is out of range");
+        for (const int v : c.sinks)
+            if (!ok(v)) throw std::invalid_argument("a corridor's terminal is out of range");
+        for (std::size_t e = 0; e < c.tail.size(); ++e)
+            if (!ok(c.tail[e]) || !ok(c.head[e])) throw std::invalid_argument("a corridor's edge is out of range");
+        out.push_back(std::move(c));
+    }
+    return out;
+}
+
+opt::SeparateOptions separate_options(int max_candidates) {
+    if (max_candidates < 1) throw std::invalid_argument("max_candidates must be at least 1");
+    opt::SeparateOptions s;
+    s.max_candidates = max_candidates;
+    return s;
+}
+
+py::tuple py_separate_connected(const Doubles& x, const py::list& connected, const py::list& corridors,
+                                int max_candidates) {
+    const auto xv = vec<double>(x);
+    const i64 ncol = static_cast<i64>(xv.size());
+    const auto sep = opt::connect_separator(connected_of(connected, ncol), corridors_of(corridors, ncol),
+                                            separate_options(max_candidates));
+    std::vector<int> start{0}, index;
+    std::vector<double> value, upper;
+    {
+        py::gil_scoped_release release;
+        sep(xv, start, index, value, upper);
+    }
+    auto as64 = [](const std::vector<int>& v) { return to_array(std::vector<std::int64_t>(v.begin(), v.end())); };
+    return py::make_tuple(as64(start), as64(index), to_array(std::move(value)), to_array(std::move(upper)));
+}
+
+py::dict py_improve_patch(const Doubles& cost, const Ints& start, const Ints& feature, const Doubles& amount,
+                         const Doubles& target, const Ints& adj_start, const Ints& adj, const Bytes& locked_in,
+                         const Bytes& locked_out, const Bytes& initial, double time_limit, int threads,
+                         int max_seeds, int stall_rounds) {
+    opt::PatchProblem p;
+    p.cost = vec<double>(cost);
+    p.n = static_cast<int>(p.cost.size());
+    p.start = vec<i64>(start);
+    p.feature = int_vec(feature);
+    p.amount = vec<double>(amount);
+    p.target = vec<double>(target);
+    p.adj_start = vec<i64>(adj_start);
+    p.adj = int_vec(adj);
+    p.locked_in = vec<std::uint8_t>(locked_in);
+    p.locked_out = vec<std::uint8_t>(locked_out);
+    const auto s0 = initial.size() ? vec<std::uint8_t>(initial) : std::vector<std::uint8_t>();
+    opt::PatchResult r;
+    {
+        py::gil_scoped_release release;
+        r = opt::improve_patch(p, s0, time_limit, threads, max_seeds, stall_rounds);
+    }
+    py::dict d;
+    d["has_solution"] = !r.selection.empty();
+    d["selection"] = to_array(std::move(r.selection));
+    d["cost"] = r.cost;
+    d["moves"] = r.moves;
+    d["rounds"] = r.rounds;
+    d["seconds"] = r.seconds;
+    return d;
+}
+
+py::dict py_root_cuts(const Ints& start, const Ints& index, const Doubles& value, const Doubles& obj,
+                      const Doubles& lb, const Doubles& ub, const Doubles& row_lo, const Doubles& row_hi,
+                      const Bytes& integer, bool maximize, double time_limit, int threads, const py::list& connected,
+                      const py::list& corridors, int max_candidates, double min_rise, int stall_rounds) {
+    const opt::Model m = model_of(start, index, value, obj, lb, ub, row_lo, row_hi, integer, maximize, 0.0);
+    opt::SolveOptions o;
+    o.time_limit = time_limit;
+    o.threads = threads;
+    const auto sep = opt::connect_separator(connected_of(connected, m.ncol), corridors_of(corridors, m.ncol),
+                                            separate_options(max_candidates));
+    opt::RootCuts r;
+    {
+        py::gil_scoped_release release;
+        r = opt::separate_root(m, sep, o, min_rise, stall_rounds);
+    }
+    auto as64 = [](const std::vector<int>& v) { return to_array(std::vector<std::int64_t>(v.begin(), v.end())); };
+    py::dict d;
+    d["start"] = as64(r.start);
+    d["index"] = as64(r.index);
+    d["value"] = to_array(std::move(r.value));
+    d["upper"] = to_array(std::move(r.upper));
+    d["status"] = r.status;
+    d["bound"] = r.bound;
+    d["rounds"] = r.rounds;
+    d["seconds"] = r.seconds;
+    return d;
+}
+
 py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& value, const Doubles& obj,
                         const Doubles& lb, const Doubles& ub, const Doubles& row_lo, const Doubles& row_hi,
                         const Bytes& integer, bool maximize, double offset, double gap, double time_limit,
                         int threads, const std::string& presolve, bool verbose, bool relaxation,
-                        const py::object& initial, const std::string& method, std::int64_t n_units) {
+                        const py::object& initial, const std::string& method, std::int64_t n_units,
+                        const py::list& connected, const py::list& corridors, int max_candidates,
+                        const py::dict& options) {
     const opt::Model m = model_of(start, index, value, obj, lb, ub, row_lo, row_hi, integer, maximize, offset);
     opt::SolveOptions o;
     o.gap = gap;
@@ -108,6 +249,12 @@ py::dict py_solve_highs(const Ints& start, const Ints& index, const Doubles& val
     o.verbose = verbose;
     o.relaxation = relaxation;
     if (!initial.is_none()) o.start = vec<double>(initial.cast<Doubles>());
+    for (const auto& [k, v] : options) o.highs_options.emplace_back(py::str(k), py::str(v));
+    if (!connected.empty() || !corridors.empty()) {
+        if (method != "highs") throw std::invalid_argument("patches and corridors are separated on method 'highs' only");
+        o.separator = opt::connect_separator(connected_of(connected, m.ncol), corridors_of(corridors, m.ncol),
+                                             separate_options(max_candidates));
+    }
     if (method != "highs" && method != "covering" && method != "wide" && method != "zones" && method != "zones_wide")
         throw std::invalid_argument("method must be 'highs', 'covering', 'wide', 'zones' or 'zones_wide'");
     if (method == "zones_wide" && !opt::is_zone_wide(m, n_units))
@@ -719,12 +866,32 @@ void register_python(py::module_& m) {
           py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"),
           py::arg("maximize"), py::arg("offset"), py::arg("gap"), py::arg("time_limit"), py::arg("threads"),
           py::arg("presolve"), py::arg("verbose"), py::arg("relaxation"), py::arg("initial"),
-          py::arg("method") = "highs", py::arg("n_units") = -1,
+          py::arg("method") = "highs", py::arg("n_units") = -1, py::arg("connected") = py::list(),
+          py::arg("corridors") = py::list(), py::arg("max_candidates") = 200, py::arg("options") = py::dict(),
           "Solve a model (rows in CSR) on HiGHS ('highs'), with the covering engine ('covering': sifted LP, "
           "rounding, then HiGHS), the wide engine ('wide': the first n_units columns are the planning units) or the "
           "zones engines ('zones': minimum sets, 'zones_wide': budgeted objectives; n_units units in every zone, "
           "one row per unit): "
-          "status, has_solution, x, objective, bound, gap, nodes, seconds.");
+          "status, has_solution, x, objective, bound, gap, nodes, seconds. connected: patches (dicts of nodes, root, "
+          "arc, tail, head) and corridors: corridor networks (dicts of n, source, sinks, tail, head) whose cuts are "
+          "separated inside HiGHS's branch-and-bound (presolve off; max_candidates nodes tried per patch and call); "
+          "options: more of HiGHS's options by name (values as strings).");
+    m.def("opt_improve_patch", &py_improve_patch, py::arg("cost"), py::arg("start"), py::arg("feature"),
+          py::arg("amount"), py::arg("target"), py::arg("adj_start"), py::arg("adj"), py::arg("locked_in"),
+          py::arg("locked_out"), py::arg("initial"), py::arg("time_limit"), py::arg("threads") = 1,
+          py::arg("max_seeds") = -1, py::arg("stall_rounds") = 50,
+          "A minimum set with contiguity's patch (opt/patch.hpp): grown from seeds and from `initial` (empty: "
+          "none), pruned and improved by moves; has_solution, selection, cost, moves, seconds.");
+    m.def("opt_root_cuts", &py_root_cuts, py::arg("start"), py::arg("index"), py::arg("value"), py::arg("obj"),
+          py::arg("lb"), py::arg("ub"), py::arg("row_lo"), py::arg("row_hi"), py::arg("integer"), py::arg("maximize"),
+          py::arg("time_limit"), py::arg("threads"), py::arg("connected"), py::arg("corridors"),
+          py::arg("max_candidates") = 200, py::arg("min_rise") = 1e-4, py::arg("stall_rounds") = 3,
+          "The root's cuts of the patches and corridors by rounds on the LP relaxation, re-solved warm "
+          "(opt::separate_root): start, index, value, upper (rows a x <= upper), status, bound, rounds, seconds.");
+    m.def("opt_separate_connected", &py_separate_connected, py::arg("x"), py::arg("connected"),
+          py::arg("corridors"), py::arg("max_candidates") = 200,
+          "The violated cuts of a solution x (the separator's, outside HiGHS): CSR rows a x <= upper as "
+          "(start, index, value, upper).");
 }
 
 }  // namespace opt

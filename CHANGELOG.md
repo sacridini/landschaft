@@ -76,6 +76,19 @@ in a new major version.
   own by default: raster cells sharing an edge, polygons that touch), with zones as well. On minimum sets they
   take the cut engine like the boundary penalties; `calibrate_penalty(p, "neighbor")` calibrates them.
 
+### Changed
+- `ls.prioritize`, contiguity and corridors on HiGHS: cuts inside the branch and bound. HiGHS (built in) is patched
+  with a separator of the user's cuts, run with its own at the root and at every node; the directed cuts of the
+  patches and the node cuts of the corridors are separated there in C++ (maximum flows, the sparsest cut of each),
+  and at the root by rounds on one linear relaxation re-solved warm (the rounds used to be Python's, a new LP
+  each). Minimum sets with contiguity start from a new patch heuristic (patches grown from every unit, pruned,
+  improved by moves, then perturbed and regrown in rounds that give the same patch on any number of threads), then
+  prioritizr's restriction from its patch. On the test problems and Serra Verde in blocks of 3 km the patches are
+  as cheap as or cheaper than Gurobi's in the same time, and the proven gaps narrower (see the benchmarks).
+- HiGHS's MIP bound is rounded to the objective's step when every objective value is a multiple of one (integer
+  columns with costs in whole numbers, halves, tenths, ...), and so is the closure engine's (multi-action
+  problems): an optimum is proven as soon as the bound passes the step below the best solution.
+
 ### Fixed
 - `simcore` (land change simulation) is compiled with the same IEEE flags as the other modules
   (`-ffp-contract=off -fno-fast-math` with GCC and Clang): Clang's default contraction into FMA could change its

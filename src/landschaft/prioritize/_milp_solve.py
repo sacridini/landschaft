@@ -56,10 +56,13 @@ def _is_zone_covering(m: OptimizationProblem, n_units: int) -> bool:
 
 def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, presolve: str, verbose: bool,
            start: np.ndarray | None, relaxation: bool = False, n_units: int | None = None,
-           method: str | None = None) -> dict:
+           method: str | None = None, structures: tuple[list, list] | None = None,
+           max_candidates: int = 200) -> dict:
     """HiGHS, behind landschaft's own engines: covering models (min set) and wide models with a budget
     (min shortfall, max utility, ...) get a sifted LP, rounding and a greedy step, and HiGHS's MIP only
-    if the gap is still too wide and the model narrow enough for it to keep the time limit."""
+    if the gap is still too wide and the model narrow enough for it to keep the time limit.
+    ``structures``: the patches and corridor networks whose cuts HiGHS's MIP separates at its nodes
+    (:func:`._milp_connect.structures`; presolve off)."""
     from .. import _core
 
     lo, hi = m.row_bounds()
@@ -69,7 +72,10 @@ def _highs(m: OptimizationProblem, gap: float, time_limit: float, threads: int, 
         ub=m.ub, row_lo=lo, row_hi=hi, integer=_integer(m.vtype),
         maximize=m.modelsense == "max", offset=0.0, gap=gap, time_limit=time_limit, threads=threads,
         presolve=presolve, verbose=verbose, relaxation=relaxation, initial=start,
-        method=method or _method(m, n_units), n_units=-1 if n_units is None else int(n_units))
+        method=method or ("highs" if structures else _method(m, n_units)),
+        n_units=-1 if n_units is None else int(n_units),
+        connected=[] if structures is None else structures[0], corridors=[] if structures is None else structures[1],
+        max_candidates=max_candidates)
 
 
 class Prepared:

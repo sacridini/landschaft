@@ -218,12 +218,14 @@ if(LANDSCHAFT_MILP)
     set(CSHARP OFF)
     set(HIPO OFF)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    # the script's hash in the patch command: a changed script patches a fetched copy again (it skips what is done)
+    file(MD5 ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/opt/highs_patch.cmake highs_patch_md5)
     FetchContent_Declare(highs
         URL https://github.com/ERGO-Code/HiGHS/archive/refs/tags/v1.15.1.tar.gz
         URL_HASH SHA256=a840d269dff2fafb371dd247df13ad5e026d7ce3b35ad3dc1eedd59bf0c2fb16
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         # our changes to its sources (see the script)
-        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/opt/highs_patch.cmake)
+        PATCH_COMMAND ${CMAKE_COMMAND} -DPATCH_MD5=${highs_patch_md5} -P ${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/opt/highs_patch.cmake)
     FetchContent_MakeAvailable(highs)
     unset(CMAKE_POSITION_INDEPENDENT_CODE)
     unset(BUILD_SHARED_LIBS)
@@ -233,6 +235,7 @@ if(LANDSCHAFT_MILP)
     add_library(optcore STATIC
         src/cpp/opt/actions.cpp
         src/cpp/opt/closure.cpp
+        src/cpp/opt/connect.cpp
         src/cpp/opt/cover.cpp
         src/cpp/opt/cut.cpp
         src/cpp/opt/eval.cpp
@@ -240,6 +243,7 @@ if(LANDSCHAFT_MILP)
         src/cpp/opt/marxan.cpp
         src/cpp/opt/maxflow.cpp
         src/cpp/opt/milp.cpp
+        src/cpp/opt/patch.cpp
         src/cpp/opt/proxirr.cpp
         src/cpp/opt/wide.cpp
         src/cpp/opt/zones.cpp

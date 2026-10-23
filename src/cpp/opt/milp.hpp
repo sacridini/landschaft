@@ -15,6 +15,7 @@
 #include <functional>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace opt {
@@ -40,6 +41,12 @@ struct Model {
 
 enum class Presolve { choose, off, on };
 
+// A separator of cuts for HiGHS's MIP (highs_patch.cmake): told the LP's solution at the root and at the nodes,
+// it appends cuts a x <= upper on the model's columns in compressed rows (start holds 0 when called). It may be
+// called from several of HiGHS's threads at once.
+using Separator = std::function<void(const std::vector<double>& x, std::vector<int>& start, std::vector<int>& index,
+                                     std::vector<double>& value, std::vector<double>& upper)>;
+
 struct SolveOptions {
     double gap = 0.1;                     // relative MIP gap
     double time_limit = kInf;             // seconds, kept by our clock
@@ -49,6 +56,9 @@ struct SolveOptions {
     bool relaxation = false;              // solve the LP relaxation only
     std::vector<double> start;            // a solution to start from (empty: none)
     double objective_target = -kInf;     // MIP: stop at a solution better than it (HiGHS's objective_target)
+    Separator separator;                  // MIP: cuts of the caller's (with one, presolve is off: the cuts are on
+                                          // the model's own columns)
+    std::vector<std::pair<std::string, std::string>> highs_options;  // more of HiGHS's options, by name
 };
 
 // What the solves of a thread are told to say how they go: the best solution's objective, the bound, the gap
@@ -95,10 +105,32 @@ struct SolveResult {
     std::vector<double> row_dual;  // nrow, for an LP solved to optimality (HiGHS's signs: c - A'y)
 };
 
+// The d (1, 2, 4, 5, 8, 10, 20, 25, 50 or 100) of a model whose every objective value is a multiple of 1 / d: the
+// columns with a cost are all integer and their costs multiples of 1 / d, no offset; 0 when there is none. A MIP's
+// bound from solve_highs is rounded to such a multiple (up when minimising, down when maximising).
+double objective_steps(const Model& model);
+
 // Solves on HiGHS in the calling thread. HiGHS keeps one task scheduler per
 // calling thread, sized by the first call; a call with another thread count
 // in the same thread replaces it.
 SolveResult solve_highs(const Model& model, const SolveOptions& options);
+
+// The cuts of a separator at the root, by rounds on the linear relaxation (one LP kept and re-solved warm from
+// its basis as the cuts come in) while they raise its objective: rounds stop when no cut is violated, when the
+// objective rises less than `min_rise` (relative) `stall_rounds` times running, or at the time limit.
+struct RootCuts {
+    std::vector<int> start{0};  // the cuts a x <= upper in compressed rows
+    std::vector<int> index;
+    std::vector<double> value;
+    std::vector<double> upper;
+    std::string status;         // the last LP's: "optimal", "infeasible", "time_limit", ...
+    double bound = std::numeric_limits<double>::quiet_NaN();  // the last optimal LP's objective
+    int rounds = 0;
+    double seconds = 0.0;
+};
+
+RootCuts separate_root(const Model& model, const Separator& separator, const SolveOptions& options,
+                       double min_rise = 1e-4, int stall_rounds = 3);
 
 // Makes HiGHS's scheduler of the calling thread use `threads` threads (for code that calls HiGHS itself).
 void use_highs_threads(int threads);

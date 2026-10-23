@@ -765,6 +765,95 @@ def test_contiguity_is_exact():
     assert connected_components(a[sel][:, sel], directed=False)[0] == 1
 
 
+def _grid_contiguity(side=6, nf=3, seed=3, target=0.4):
+    import pandas as pd
+    import scipy.sparse as sp
+
+    rng = np.random.default_rng(seed)
+    n = side * side
+    cost = rng.uniform(1, 10, n)
+    feats = (rng.random((nf, n)) < 0.3) * rng.uniform(1, 2, (nf, n))
+    adj = np.zeros((n, n))
+    for i in range(n):
+        r, c = divmod(i, side)
+        for rr, cc in ((r + 1, c), (r, c + 1)):
+            if rr < side and cc < side:
+                adj[i, rr * side + cc] = adj[rr * side + cc, i] = 1.0
+    table = pd.DataFrame({"id": np.arange(1, n + 1), "cost": cost, **{f"f{k}": feats[k] for k in range(nf)}})
+    return (ls.prioritize.problem(table, [f"f{k}" for k in range(nf)], cost_column="cost").add_min_set_objective()
+            .add_relative_targets(target).add_binary_decisions().add_contiguity_constraints(sp.csc_matrix(adj))), adj
+
+
+def test_directed_cuts_cut_off_disconnected_selections():
+    """The separator (opt/connect.cpp) finds no violated directed cut in a patch with its tree, and one in a
+    second patch reached by no arc from the root (a cycle-free piece without a root of its own)."""
+    from landschaft.prioritize._milp_connect import patch_columns, separate
+
+    p, adj = _grid_contiguity()
+    m = p.compile()
+    n = p.units.n
+    one = np.zeros(n)
+    one[[0, 1, 2, 8]] = 1.0  # cells 0, 1, 2 and 8 (below 2): one patch
+    x = patch_columns(m, one)
+    a, ub = separate(m, x, n)
+    assert ub.size == 0
+    c = m.connected[0]
+    x[c.nodes[[20, 21]]] = 1.0  # cells 20 and 21, joined by an arc, no root
+    arc = int(np.flatnonzero((c.tail == 20) & (c.head == 21))[0])
+    x[c.arc + arc] = 1.0
+    a, ub = separate(m, x, n)
+    assert ub.size > 0 and ((a @ x) > ub + 1e-6).any()
+    assert np.isin(np.flatnonzero(a[np.argmax(a @ x - ub)].toarray()), c.nodes[[20, 21]]).any()
+
+
+def test_patch_heuristic_gives_feasible_patches():
+    """The patch heuristic (opt/patch.cpp): one patch, the targets met and the locked units kept, never cheaper
+    than the exact optimum; a locked-out cut of the grid is respected."""
+    from scipy.sparse.csgraph import connected_components
+
+    from landschaft import _core
+    from landschaft.prioritize._milp_connect import _patch_problem
+
+    for seed in (1, 2, 3):
+        p, adj = _grid_contiguity(seed=seed)
+        m = p.compile()
+        n = p.units.n
+        pp = _patch_problem(m, n)
+        assert pp is not None
+        kw = {k: v for k, v in pp.items() if k != "rows"}
+        kw["locked_in"] = kw["locked_in"].copy()
+        kw["locked_in"][7] = 1
+        kw["locked_out"] = kw["locked_out"].copy()
+        kw["locked_out"][[12, 13]] = 1
+        h = _core.opt_improve_patch(**kw, initial=np.zeros(0, np.uint8), time_limit=0.3, threads=2)
+        assert h["has_solution"]
+        s = h["selection"].astype(bool)
+        assert s[7] and not s[12] and not s[13]
+        held = np.zeros(pp["target"].size)
+        np.add.at(held, pp["feature"], pp["amount"] * np.repeat(s, np.diff(pp["start"])))
+        assert (held >= pp["target"] - 1e-9).all()
+        sel = np.flatnonzero(s)
+        assert connected_components(adj[sel][:, sel], directed=False)[0] == 1
+        assert h["cost"] == pytest.approx(float(pp["cost"][s].sum()))
+        # a patch of the problem without the locks too: never cheaper than its optimum
+        assert h["cost"] >= p.add_highs_solver(gap=0.0).solve().objective - 1e-9
+
+
+def test_root_cuts_raise_the_relaxation():
+    """The root's directed cuts (opt::separate_root): a bound between the plain relaxation and the optimum."""
+    from landschaft.prioritize._milp_connect import root_cuts, structures
+    from landschaft.prioritize._milp_solve import _highs
+
+    p, _ = _grid_contiguity(side=7, seed=4)
+    m = p.compile()
+    lp = _highs(m, 0.0, math.inf, 1, "choose", False, None, relaxation=True, method="highs")
+    rc = root_cuts(m, structures(m, p.units.n), math.inf, 2)
+    opt = p.add_highs_solver(gap=0.0).solve().objective
+    assert rc["status"] == "optimal" and rc["model"].nrow > m.nrow
+    assert lp["objective"] - 1e-9 <= rc["bound"] <= opt + 1e-6
+    assert rc["bound"] > lp["objective"] + 1e-6
+
+
 def test_contiguity_gives_one_patch():
     from scipy.sparse.csgraph import connected_components
 

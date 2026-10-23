@@ -693,13 +693,26 @@ Result solve(const Problem& p, const Options& o, const std::vector<std::uint8_t>
         }
     }
 
-    // integral costs and weights: every objective value is an integer, and so the bound can be rounded up
-    bool integral = true;
-    auto whole = [](double v) { return std::abs(v - std::round(v)) <= 1e-9 * std::max(1.0, std::abs(v)); };
-    for (const double c : p.cost) integral = integral && whole(c);
-    for (const double w : p.pen_w) integral = integral && whole(w);
+    // costs and weights that are all multiples of 1 / d (d = 1, 2, 4, 5, ..., 100: whole numbers, halves,
+    // tenths, ...): every objective value is one too, and so the bound can be rounded up to one
+    double steps = 0.0;  // d, 0: none
+    for (const double d : {1.0, 2.0, 4.0, 5.0, 8.0, 10.0, 20.0, 25.0, 50.0, 100.0}) {
+        auto whole = [d](double v) {
+            const double s = v * d;
+            return std::abs(s - std::round(s)) <= 1e-9 * std::max(1.0, std::abs(s));
+        };
+        bool all = true;
+        for (const double c : p.cost) all = all && whole(c);
+        for (const double w : p.pen_w) all = all && whole(w);
+        if (all) {
+            steps = d;
+            break;
+        }
+    }
     auto rounded = [&](double b) {
-        return integral && std::isfinite(b) ? std::ceil(b - 1e-9 * std::max(1.0, std::abs(b))) : b;
+        if (steps <= 0.0 || !std::isfinite(b)) return b;
+        const double s = b * steps;
+        return std::ceil(s - 1e-9 * std::max(1.0, std::abs(s))) / steps;
     };
     std::vector<double> g;
     const BundleResult br = bundle_maximize(

@@ -785,9 +785,11 @@ class Problem:
         cycles. prioritizr's formulation (a tree whose edges always run from a unit to one of a lower
         index) is a restriction: it misses patches in which a unit has no selected neighbour of a higher
         index, so it can return a costlier patch than the best, or call a feasible problem infeasible.
-        On HiGHS the problem is solved in three steps: a first patch from that restriction, a bound from
-        directed cuts, then the exact MIP from the first patch. Contiguity stays the hardest spatial
-        rule: give it a time limit on more than a few hundred units.
+        On HiGHS a minimum set is solved by a patch heuristic (patches grown from every unit, pruned, then
+        perturbed and regrown), a first patch from that restriction, directed cuts at the root, then the
+        exact MIP from the best patch, with the cuts separated at its nodes too. Contiguity stays the
+        hardest spatial rule: give it a time limit on more than a few hundred units (the heuristic and the
+        cuts take their shares of it).
 
         With zones, ``zones`` is a binary symmetric zones x zones matrix: the zones linked through it
         form a cluster whose units (in any of its zones) must form one patch; a zone with 0 on the
