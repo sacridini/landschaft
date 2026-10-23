@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.50.1] - 2026-10-23
+
 ### Added
 - On PyPI: `pip install landschaft` installs binary wheels (CPython 3.10-3.14; Windows x86-64, macOS arm64 and
   x86-64, Linux x86-64 and aarch64, OpenMP included) with everything every tool uses. Releases are automatic:
@@ -19,10 +21,16 @@ in a new major version.
 - `simcore` (land change simulation) is compiled with the same IEEE flags as the other modules
   (`-ffp-contract=off -fno-fast-math` with GCC and Clang): Clang's default contraction into FMA could change its
   last bits on ARM64.
+- `ls.hydro.swat` builds on macOS: Apple's libc++ has no `std::from_chars` for reals, the SWAT+ files are read
+  with `strtof`/`strtod` there (the same values).
 
 ### Changed
 - README and installation guide: `pip install landschaft` first; building from source is for other platforms and
   development.
+- The wheels' tests leave out the comparisons with other programs' results (GDAL, R, Gurobi, InVEST, MOLUSCE,
+  plangea, numpy; marker `external_reference`), which hold bit for bit with the versions and the platform the
+  references were made with, and the wall-clock check (`timing`). The live landscapemetrics tests skip when R has
+  no terra or landscapemetrics.
 
 ## [1.50.0] - 2026-10-16
 
