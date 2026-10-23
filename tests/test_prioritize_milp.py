@@ -337,7 +337,7 @@ def test_raster_features_by_blocks(monkeypatch):
 
 def test_covering_takes_the_start_solution():
     """A feasible start is trimmed and kept when cheaper (here: no time for anything else); an
-    infeasible one is ignored."""
+    infeasible one is ignored, and with no time for the LP the solution is a greedy cover."""
     a, cost, rhs = _wide_cover()
     every = np.ones(cost.size)
     r = _cover(a, cost, rhs, "covering", time_limit=0.0, initial=every)
@@ -346,7 +346,9 @@ def test_covering_takes_the_start_solution():
     assert set(np.unique(x)) <= {0.0, 1.0} and (a @ x >= rhs * (1 - 1e-9)).all()
     assert r["objective"] == pytest.approx(cost @ x) and r["objective"] < cost.sum()
     r = _cover(a, cost, rhs, "covering", time_limit=0.0, initial=np.zeros(cost.size))  # infeasible start
-    assert not r["has_solution"]
+    x = r["x"]
+    assert r["status"] == "time_limit" and r["has_solution"] and x.any()
+    assert set(np.unique(x)) <= {0.0, 1.0} and (a @ x >= rhs * (1 - 1e-9)).all()
     with pytest.raises(ValueError, match="one value per column"):
         _cover(a, cost, rhs, "covering", initial=np.ones(3))
 

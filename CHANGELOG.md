@@ -84,7 +84,8 @@ in a new major version.
   each). Minimum sets with contiguity start from a new patch heuristic (patches grown from every unit, pruned,
   improved by moves, then perturbed and regrown in rounds that give the same patch on any number of threads), then
   prioritizr's restriction from its patch. On the test problems and Serra Verde in blocks of 3 km the patches are
-  as cheap as or cheaper than Gurobi's in the same time, and the proven gaps narrower (see the benchmarks).
+  as cheap as or cheaper than Gurobi's in the same time, and the proven gaps much narrower than before, close to
+  Gurobi's (see the benchmarks).
 - HiGHS's MIP bound is rounded to the objective's step when every objective value is a multiple of one (integer
   columns with costs in whole numbers, halves, tenths, ...), and so is the closure engine's (multi-action
   problems): an optimum is proven as soon as the bound passes the step below the best solution.
@@ -93,6 +94,8 @@ in a new major version.
   its bound fits (such sets used to be rejected).
 
 ### Fixed
+- `ls.prioritize`, minimum sets on the covering engine: with a time limit too short for its first linear relaxation,
+  it returns a greedy cover (the columns covering most of the shortfall per cost) instead of no solution.
 - `simcore` (land change simulation) is compiled with the same IEEE flags as the other modules
   (`-ffp-contract=off -fno-fast-math` with GCC and Clang): Clang's default contraction into FMA could change its
   last bits on ARM64.

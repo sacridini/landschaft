@@ -128,14 +128,19 @@ Reduced presolve(const Model& m) {
     return p;
 }
 
-// Bound fixing: with binary columns, costs >= 0 and coefficients >= 0, a greedy cover of the rows left
-// costs U >= the optimum, so a column dearer than U is in no optimal solution: fixed at 0. Cheap when
-// the rows are short of little (re-solves with most units fixed: the replacement importance), and
-// skipped when the greedy cover would take more than max_picks columns.
-void prune_by_bound(Reduced& p, i64 max_picks = 1000) {
-    if (p.infeasible || p.nrow == 0 || p.ncol == 0 || !p.nonnegative) return;
+// Whether the greedy cover applies: binary columns, costs >= 0 and coefficients >= 0.
+bool greedy_applies(const Reduced& p) {
+    if (p.infeasible || p.nrow == 0 || p.ncol == 0 || !p.nonnegative) return false;
     for (i64 j = 0; j < p.ncol; ++j)
-        if (p.c[j] < 0 || !p.integer[j] || p.lb[j] != 0.0 || p.ub[j] != 1.0) return;
+        if (p.c[j] < 0 || !p.integer[j] || p.lb[j] != 0.0 || p.ub[j] != 1.0) return false;
+    return true;
+}
+
+// A greedy cover of the rows (greedy_applies): the columns that cover most of the rows' shortfalls (as shares of
+// their right-hand sides) per cost, one after the other, until every row is met. Its cost, and the columns taken
+// in `taken`; infinite when the rows cannot all be met or it would take more than `max_picks` columns (< 0: no
+// limit).
+double greedy_cover(const Reduced& p, i64 max_picks, std::vector<std::uint8_t>& taken) {
     std::vector<double> left(p.rhs);
     auto unmet = [&](i64 r) { return left[r] > row_tol(p.rhs[r]); };
     auto key = [&](i64 j) {
@@ -156,9 +161,9 @@ void prune_by_bound(Reduced& p, i64 max_picks = 1000) {
     for (i64 r = 0; r < p.nrow; ++r) open += unmet(r);
     double bound = 0;
     i64 picks = 0;
-    std::vector<std::uint8_t> taken(static_cast<std::size_t>(p.ncol), 0);
+    taken.assign(static_cast<std::size_t>(p.ncol), 0);
     while (open > 0) {
-        if (heap.empty() || ++picks > max_picks) return;
+        if (heap.empty() || (max_picks >= 0 && ++picks > max_picks)) return kInf;
         const i64 j = heap.top().second;
         heap.pop();
         if (taken[j]) continue;
@@ -177,6 +182,18 @@ void prune_by_bound(Reduced& p, i64 max_picks = 1000) {
             if (was && !unmet(r)) --open;
         }
     }
+    return bound;
+}
+
+// Bound fixing: with binary columns, costs >= 0 and coefficients >= 0, a greedy cover of the rows left
+// costs U >= the optimum, so a column dearer than U is in no optimal solution: fixed at 0. Cheap when
+// the rows are short of little (re-solves with most units fixed: the replacement importance), and
+// skipped when the greedy cover would take more than max_picks columns.
+void prune_by_bound(Reduced& p, i64 max_picks = 1000) {
+    if (!greedy_applies(p)) return;
+    std::vector<std::uint8_t> taken;
+    const double bound = greedy_cover(p, max_picks, taken);
+    if (!std::isfinite(bound)) return;
     const double cut = bound * (1 + 1e-9) + 1e-12;
     i64 keep = 0;
     for (i64 j = 0; j < p.ncol; ++j) keep += p.c[j] <= cut;
@@ -698,6 +715,17 @@ SolveResult solve_covering(const Model& model, const SolveOptions& options) {
         if (!std::isnan(lp.lp_objective) && (!any_integer || p.nonnegative)) {
             xr = any_integer ? round_and_trim(p, lp.x) : lp.x;
             obj = objective_of(p, xr);
+        }
+        // the LP had no solution yet: a greedy cover (fast), so that a time limit still gives one
+        if (xr.empty() && any_integer && greedy_applies(p)) {
+            std::vector<std::uint8_t> taken;
+            const double g = greedy_cover(p, -1, taken);
+            if (std::isfinite(g)) {
+                xr.assign(static_cast<std::size_t>(p.ncol), 0.0);
+                for (i64 j = 0; j < p.ncol; ++j) xr[j] = taken[j];
+                xr = round_and_trim(p, std::move(xr));
+                obj = objective_of(p, xr);
+            }
         }
         take_start(xr, obj);
         if (!xr.empty()) {
