@@ -144,6 +144,12 @@ def improve_subset(m: OptimizationProblem, sm: SubsetModel, x: np.ndarray, deadl
             r = _highs(cm, ORACLE_GAP, max(min(ORACLE_SECONDS, left()), 0.0), threads, "choose", False, None)
             if not r["has_solution"]:
                 return None
+            # over the budget within the gap, but the bound fits: the cheapest selection may fit, priced exactly
+            room = sm.budget + 1e-9 * max(1.0, abs(sm.budget))
+            if r["objective"] > room and r["bound"] <= room:
+                r2 = _highs(cm, 0.0, max(min(ORACLE_SECONDS, left()), 0.0), threads, "choose", False, r["x"])
+                if r2["has_solution"] and r2["objective"] < r["objective"]:
+                    r = r2
             xu = np.asarray(r["x"], dtype=np.float64)
             xu = np.where(np.isin(np.asarray(vt), ("B", "I")), np.round(xu), xu)
         return xu if float(sm.cost @ xu) <= sm.budget + 1e-9 * max(1.0, abs(sm.budget)) else None

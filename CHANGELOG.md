@@ -88,6 +88,9 @@ in a new major version.
 - HiGHS's MIP bound is rounded to the objective's step when every objective value is a multiple of one (integer
   columns with costs in whole numbers, halves, tenths, ...), and so is the closure engine's (multi-action
   problems): an optimum is proven as soon as the bound passes the step below the best solution.
+- `ls.prioritize`, maximum features and phylogenetic objectives: the search over the targets met prices again, to
+  gap 0, a set of targets whose cheapest selection the covering engine put over the budget within its gap while
+  its bound fits (such sets used to be rejected).
 
 ### Fixed
 - `simcore` (land change simulation) is compiled with the same IEEE flags as the other modules

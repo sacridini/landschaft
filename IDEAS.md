@@ -2416,6 +2416,27 @@ Pedido: "limites fortes nos objetivos de metas, contiguidade, multi-action com f
   o Gurobi fecha o dobro (a vazão de nós do HiGHS é ~10x menor nestes modelos: ramificação forte e sub-MIPs na
   raiz). Tentado: `presolve` desligado sem cortes (pior), 20 candidatos por chamada (pior), as rodadas da raiz
   pelo `HighsSeparation` do próprio HiGHS (para cedo: 95,5 contra 101,6 das nossas rodadas no 13 x 13).
+* **D medida, não fechada** (2026-10-23; `tools/benchmark_actions.py`: as entradas da família `actions` do
+  `benchmark_optimize`, a fronteira da grade, blm 1, blm_actions 0,5; 120 s, gap 0, 4 threads, Ryzen 7 7730U):
+  1024 unidades: nosso 1160,5 / limite 1153,5 (Gurobi: ótimo 1156 em 18 s); 10⁴: 10.368 / 10.361 (Gurobi 10.362 /
+  10.361,5). O log do Gurobi: raiz 1151,8, cortes leves (Gomory, MIR, zero-half, mod-k) até 1152,75 e 2608 nós em
+  20 s. O HiGHS no mesmo modelo processa ~11 nós em 60 s (raiz de 33 s: ramificação forte, 58 mil iterações em 11
+  nós, e sub-MIPs de 20 s); `mip_pscost_minreliable=0` dá 285-473 nós, o mesmo limite; `parallel=on` (a busca
+  paralela do HiGHS 1.15, desligada por padrão) não muda nada aqui. Feito: o limite do motor de fecho e o do MIP do
+  HiGHS arredondados ao passo do objetivo (múltiplos de 1/d, d = 1, 2, 4, 5, ..., 100: aqui 0,5). Fica: um
+  branch-and-bound próprio sobre o motor de fecho (limite lagrangiano por corte mínimo com fixações; ~30 avaliações
+  do feixe por nó, cada uma com um LP mestre pequeno no HiGHS) só valeria com ramificação e cortes melhores que os
+  do HiGHS; sem isso precisaria de mais nós que os 2608 do Gurobi.
+* **E medida, não fechada** (2026-10-23; `tools/benchmark_targets.py`: 100 x 100, 30 feições gaussianas em 30 % da
+  área, metas de 30 %, orçamento de 10 %, 60 s, gap 0): max_features nosso 7 metas / limite 17 (Gurobi 7 / 15,7);
+  phylo_div 51,6 / 77,9 (Gurobi 50,1 / 73,5); phylo_end 824 / 1521 (Gurobi 790 / 1417). As soluções são melhores que
+  as do Gurobi; os limites, piores e muito acima do ótimo dos dois. Testado: cortes de cobertura nas metas
+  (Σ_S y <= |S| - 1 quando o LP de cobertura de S passa do orçamento): o LP espalha y de 0,5 a 0,87 por todas as
+  30 metas e nenhum corte é violado (as 8 primeiras já não cabem: LP de cobertura 6306 > 5552, mas Σ y = 6,2 < 7). O
+  corte útil seria Σ_S y <= k(S) com k(S) o número máximo de metas de S que cabem juntas, que é o próprio problema.
+  Feito: a busca nos subconjuntos reprecifica com gap 0 um conjunto cuja seleção do motor de cobertura passa do
+  orçamento mas cujo limite cabe (o gap de 0,5 % do oráculo rejeitava conjuntos viáveis). Fica em aberto: um
+  limite combinatório para as metas (branch-and-bound nas metas com o motor de cobertura como oráculo).
 
 ### Próximos passos (retomar daqui)
 1. Fase 11: feita até onde dava sem cortes no B&B (1.30.0); o que ficou aberto está na lista acima.
