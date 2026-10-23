@@ -37,6 +37,7 @@ def test_kernel_is_proxirr(triage):
     _bits(g, ref["gamma" + suffix])
 
 
+@pytest.mark.external_reference
 def test_long_products_are_r():
     """25 alphas per unit: R's prod() runs in 80 bits; a product in double differs from it."""
     e = oc.proxirr_many()

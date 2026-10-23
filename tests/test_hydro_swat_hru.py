@@ -55,6 +55,7 @@ PRINTS = [u + k for u in (2000, 2020, 2030, 2040, 2050, 2060, 2070, 2080, 2500, 
 
 
 @pytest.mark.parametrize("tag", PRINTS)
+@pytest.mark.external_reference
 def test_printed_outputs_match_swatplus(simulated, tag):
     case, ours, ref = simulated
     if f"t{tag}_keys" not in ref.files:

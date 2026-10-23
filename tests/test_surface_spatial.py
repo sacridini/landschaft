@@ -12,6 +12,7 @@ import surface_reference
 
 
 @pytest.mark.parametrize("case", surface_reference.case_ids("spatial"))
+@pytest.mark.external_reference
 def test_spatial_matches_geodiv(case):
     c = surface_cases.CASES[case]
     assert surface_reference.compare(case, c.py(surface_cases.RASTERS), "spatial", c.tolerance) > 0

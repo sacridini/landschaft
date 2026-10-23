@@ -48,6 +48,7 @@ def _same(df: pd.DataFrame, r: dict, key: str, cols=None):
         np.testing.assert_array_equal(np.asarray(df[col], dtype=np.float64), want, err_msg=f"{key}/{col}")
 
 
+@pytest.mark.external_reference
 def test_summaries_raster():
     r = result("eval", "eval_raster")
     p, s = _raster_problem(), oc.sol_raster()
@@ -63,6 +64,7 @@ def test_summaries_raster():
     assert list(cov["feature"]) == r["coverage/feature"]
 
 
+@pytest.mark.external_reference
 def test_summaries_proportion():
     r = result("eval", "eval_raster_proportion")
     p = oc._raster().add_absolute_targets([1.2, 0.9, 1, 120, 4]).add_proportion_decisions()
@@ -74,6 +76,7 @@ def test_summaries_proportion():
     _same(P.eval_target_coverage_summary(p, s), r, "coverage")
 
 
+@pytest.mark.external_reference
 def test_summaries_table():
     r = result("eval", "eval_table")
     p, s = _table_problem(), oc.sol_table()
@@ -89,6 +92,7 @@ def test_summaries_table():
     assert list(cov["feature"]) == r["coverage/feature"]
 
 
+@pytest.mark.external_reference
 def test_ferrier_and_rarity():
     r = result("eval", "eval_raster")
     p, s = _raster_problem(), oc.sol_raster()

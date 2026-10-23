@@ -89,6 +89,7 @@ def test_same_optimum_gurobi(group, name):
     assert obj == pytest.approx(result(group, name)["objective"][0], rel=1e-5)  # the max objectives' cost tie-break: see test_prioritize_milp
 
 
+@pytest.mark.external_reference
 def test_raster_inputs_reach_prioritizr_unchanged():
     """Planning units are the cells with a cost, in cell order; the matrix holds the features' values (NaN = 0)
     bit for bit; relative targets are shares of the whole raster's totals, summed in cell order in double
@@ -107,6 +108,7 @@ def test_raster_inputs_reach_prioritizr_unchanged():
     assert np.array_equal(m.rhs, 0.3 * np.array(totals))
 
 
+@pytest.mark.external_reference
 def test_table_targets_are_r_sums():
     """With tables, relative targets are shares of R's sum() (80-bit accumulation) of the amounts."""
     from landschaft import _core

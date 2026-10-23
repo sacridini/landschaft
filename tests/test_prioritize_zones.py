@@ -50,6 +50,7 @@ def _assert_same_model(ours, ref) -> None:
 
 
 @pytest.mark.parametrize("name", EXACT)
+@pytest.mark.external_reference
 def test_compile_is_prioritizr(name):
     _assert_same_model(optimize_cases.CASES[name].py().compile(), model("zones", name))
 
@@ -437,6 +438,7 @@ def _same_table(ours: pd.DataFrame, ref: dict, prefix: str, columns) -> None:
             np.testing.assert_array_equal(o, r, err_msg=f"{prefix}/{c}")
 
 
+@pytest.mark.external_reference
 def test_eval_summaries_with_zones():
     P = ls.prioritize
     ref = result("zones", "zones_eval_summaries")
@@ -451,6 +453,7 @@ def test_eval_summaries_with_zones():
                  "relative_target", "relative_held", "relative_shortfall"])
 
 
+@pytest.mark.external_reference
 def test_eval_proportion_with_zones():
     P = ls.prioritize
     ref = result("zones", "zones_eval_proportion")
@@ -476,6 +479,7 @@ def test_eval_spatial_with_zones():
     _same_table(a, ref, "asym", ["summary", "asym_connectivity"])
 
 
+@pytest.mark.external_reference
 def test_eval_coverage_of_zone_lists():
     ref = result("zones", "zones_eval_coverage_lists")
     p = optimize_cases._zone_general().add_min_set_objective().add_manual_targets(optimize_cases._zone_manual_table())

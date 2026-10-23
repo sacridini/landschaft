@@ -94,7 +94,7 @@ testpaths = ["tests"]
 markers = [
     "reference: compare against stored outputs of the original GTB code",
     "live_reference: run the original GTB code now (needs LANDSCHAFT_MSPA_EXE or GDL)",
-    "external_reference: bit for bit (or to a few ulps) against another program's results (GDAL, R, Gurobi, InVEST, MOLUSCE, plangea, numpy), which hold with the versions and the platform the references were made with; the wheels' tests leave them out",
+    "external_reference: bit for bit (or to a few ulps) against another program's results (GDAL, R packages, Gurobi, Marxan, InVEST, SWAT+, MOLUSCE, plangea, numpy), which hold with the versions and the platform the references were made with; the wheels' tests leave them out",
     "timing: checks the wall-clock time; the wheels' tests (shared CI machines) leave it out",
 ]
 

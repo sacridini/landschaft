@@ -62,6 +62,7 @@ def test_builtin_highs_same_optimum(group, name):
 
 
 @pytest.mark.parametrize(("group", "name"), EXACT, ids=[c for _, c in EXACT])
+@pytest.mark.external_reference
 def test_compile_is_prioritizr(group, name):
     """The same model, bit for bit: the matrix in canonical order (by row, then column; prioritizr also
     stores the zero costs and coefficients it pushes, which are no entries here)."""
@@ -735,6 +736,7 @@ def test_contiguity_gives_one_patch():
 # ----------------------------------------------------------------------------- matrices (prioritizr's)
 
 @pytest.mark.parametrize("name", ["boundary", "adjacency", "adjacency8", "connectivity", "proximity"])
+@pytest.mark.external_reference
 def test_matrices_raster_are_prioritizr(name):
     ref = result("matrices", "matrices_raster")[name]
     cost, pr = optimize_cases.pu_cost(), optimize_cases.penalty_raster()

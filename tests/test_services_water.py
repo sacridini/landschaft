@@ -54,6 +54,7 @@ def _bits(ours, ref):
 
 
 @pytest.mark.parametrize("name", ["wy_basic", "wy_full", "wy_int_inputs", "wy_float64"])
+@pytest.mark.external_reference
 def test_water_yield_matches_invest(name):
     wy, ref, meta = _run_wy(name)
     _bits(wy.fractp, ref["fractp"])

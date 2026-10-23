@@ -100,6 +100,7 @@ def _footprint(spec):
 
 
 @pytest.mark.parametrize("name", list(pc.IT_CASES))
+@pytest.mark.external_reference
 def test_intactness_is_plangea(ref, name):
     arrays, _ = ref
     spec = pc.IT_CASES[name]

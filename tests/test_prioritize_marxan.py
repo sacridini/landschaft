@@ -36,6 +36,7 @@ def _run(case: str, **kw):
 
 
 @pytest.mark.parametrize("case", list(marxan_cases.CASES))
+@pytest.mark.external_reference
 def test_runs_are_marxan(case):
     ref = _ref(case)
     res = _run(case, n_threads=3)
