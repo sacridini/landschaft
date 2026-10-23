@@ -2437,6 +2437,11 @@ Pedido: "limites fortes nos objetivos de metas, contiguidade, multi-action com f
   Feito: a busca nos subconjuntos reprecifica com gap 0 um conjunto cuja seleção do motor de cobertura passa do
   orçamento mas cujo limite cabe (o gap de 0,5 % do oráculo rejeitava conjuntos viáveis). Fica em aberto: um
   limite combinatório para as metas (branch-and-bound nas metas com o motor de cobertura como oráculo).
+* **Fechamento da fase 12** (2026-10-26, versão 1.52.0): o motor de cobertura devolve uma cobertura gulosa quando o
+  limite de tempo acaba antes do primeiro LP (antes: sem solução; o `test_covering_keeps_the_time_limit_on_wide_models`
+  falhava num notebook mais lento, Ryzen 7 7730U); a figura `prio_spatial_tools` refeita (rede de 30,4 milhões, gap
+  14 %). Linux (WSL, gcc 11.4, Python 3.11 do Miniforge): o patch do HiGHS e o C++ novo compilam, testes da
+  priorização (milp, zones, cut, actions) 401 passam, 0 falham.
 
 ### Próximos passos (retomar daqui)
 1. Fase 11: feita até onde dava sem cortes no B&B (1.30.0); o que ficou aberto está na lista acima.
