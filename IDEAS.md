@@ -4416,6 +4416,77 @@ ou pela ET das plantas, `event` 0):
 
 ---
 
+## Do Terraflux para o landschaft (pedido em 2026-10-17)
+
+O Terraflux ganhou (ou vai ganhar) funções que não existem no landschaft e fazem sentido para quem usa o Python.
+Ficam registradas aqui para portar depois, cada uma com a implementação do Terraflux como base e a mesma referência
+de paridade. O que o ecossistema do Python já resolve bem (as florestas e o boosting do scikit-learn, o
+`sklearn.inspection`, que o `Estimator` já usa) não precisa vir.
+
+**Já feitas no Terraflux, a trazer:**
+1. **Acurácia e área de um mapa por amostragem estratificada** (Olofsson et al. 2014): o tamanho da amostra e a
+   alocação por estrato, o sorteio dos pontos e os estimadores de área e acurácia com erros padrão e intervalos,
+   `olofsson` e `stehman2014` do `mapaccuracy` do R (a 1e-12). Base: `crates/ops/src/accuracy.rs` do Terraflux
+   (0.87.0), referência `tools/make_accuracy_reference.py`. Lugar natural: `ls.validation` (ou `ls.simulate`, ao lado
+   das validações).
+2. **VT0007 do Verra (UDef-A)**, a alocação do desmatamento esperado de uma jurisdição: o limiar de risco desprezível,
+   a vulnerabilidade em classes geométricas (a de referência pela distância à borda e a alternativa), a frequência
+   relativa por classe e subdivisão, a alocação com a razão de ajuste e a avaliação em grade, iguais ao UDef-ARP da
+   Clark Labs (GPL-3.0). Base: `crates/ops/src/redd.rs` do Terraflux, referência `tools/make_redd_reference.py` (roda
+   o próprio código do UDef-ARP). Lugar natural: um `ls.redd`, ou o `ls.simulate`.
+3. **Emissões e remoções da mudança de uso** ao longo de uma série de mapas, com estoques por classe e curvas de
+   rebrota (feito no Terraflux 0.91.0, `crates/ops/src/carbon.rs`): ao lado do carbono do InVEST no `ls.services`.
+
+**Do roteiro do Terraflux, com o landschaft como lugar natural** (os kernels em C++ servem aos dois):
+4. **O resto do InVEST:** a razão de entrega de nutrientes (NDR), a polinização e a produção sazonal de água.
+   **Decidido** (2026-10-18): entram primeiro aqui, no `ls.services`, como os quatro que já estão (carbono,
+   qualidade do habitat, produção anual de água, SDR): o C++ em `src/cpp/serv`, bit a bit com o natcap.invest,
+   com os testes de paridade. Depois o Terraflux os liga pelo `terraflux-ls-sys`, como fez com os outros
+   (`crates/ops/src/services.rs`). O Terraflux espera por isso e não os implementa à parte.
+5. **O Código Florestal completo**, ao lado do topo de morro: as APPs dos rios pela largura, as nascentes, as
+   declividades acima de 45°, as bordas de tabuleiro, e o déficit e o excedente de Reserva Legal por imóvel do CAR.
+   Feito no Terraflux 0.93.0 (`crates/ops/src/forest_code.rs`: as APPs dos rios, lagos e declividades, as faixas
+   consolidadas do art. 61-A e o saldo de Reserva Legal).
+6. **Dados de entrada baixados**, ao lado do `download_gbif`: WorldClim e CHELSA (atuais e futuros do CMIP6),
+   MapBiomas, Copernicus DEM, SoilGrids e catálogos STAC, recortados para a área e a grade. Feito no Terraflux
+   0.92.0 (`crates/ops/src/data.rs`, sem o STAC).
+7. **Tendência célula a célula de uma série de mapas** (Mann-Kendall e a inclinação de Sen) em C++ para mapas
+   grandes; também a autocorrelação local (I de Moran, LISA, Gi*) e a interpolação (IDW, krigagem), que o PySAL e
+   o PyKrige já fazem, mas sem o paralelismo e os mapas fora da memória do landschaft. Feito no Terraflux:
+   0.95.0 (`crates/ops/src/stats.rs`, iguais ao pymannkendall e ao esda; `tools/make_stats_reference.py`) e 0.96.0
+   (`crates/ops/src/interpolation.rs`, o variograma, o ajuste, a krigagem ordinária e o IDW do gstat do R;
+   `tools/make_interpolation_reference.py`).
+8. **Dispersão de espécies no tempo** (como o MigClim) e metapopulações (o modelo de função de incidência), juntando
+   o `ls.sdm` e o `ls.conn`. O MigClim feito no Terraflux 0.97.0 (`crates/ops/src/dispersal.rs`, o mesmo
+   resultado do C do MigClim 1.6.2 para uma semente, com o `rand()` da CRT; `tools/make_dispersal_reference.py`).
+   A metapopulação feita no Terraflux 0.98.0 (`crates/ops/src/metapopulation.rs`, igual ao `spom` do MetaLandSim
+   2.0 para uma semente; `tools/make_metapopulation_reference.py`).
+9. **Análise de sensibilidade global** (Morris, Sobol) sobre o `ls.batch` e o `ls.parallel`: o SALib existe, a
+   vantagem seria rodar os desenhos nos lotes distribuídos. Feito no Terraflux 0.94.0
+   (`crates/ops/src/sensitivity.rs`, iguais ao SALib 1.6; `tools/make_sensitivity_reference.py`).
+10. **Ferramentas gerais de raster** (Terraflux, 2026-10-18; `crates/ops/src/raster_stats.rs`,
+    `raster_neighbours.rs`, `raster_analysis.rs`). Quase todas o Python já tem (o `rasterio.features` para o sieve e
+    os polígonos, o `scipy.ndimage` para as janelas e os rótulos, o `skimage` para as curvas de nível, o `geopandas`
+    para o overlay e o join espacial). Valem para o landschaft só as que ganham com o C++ e os mapas fora da memória:
+    a zonal com zonas em raster que devolve também o mapa de cada célula com a estatística da sua zona e a área de
+    cada classe por zona (o `_zonal.py` só faz polígonos), a correlação e a regressão local em janela móvel entre
+    dois mapas (correlação, inclinação, intercepto e r², como o `focalPairs`/`focalReg` do terra), a estatística de
+    uma pilha célula a célula com a camada do máximo (argmax), e o viewshed de muitos observadores contados (o R2 de
+    Franklin e Ray, com o recurso da linha de visada para as células que nenhum raio cruza).
+11. **Rios como rede** (Terraflux, 2026-10-21; `crates/ops/src/rivers.rs`), do hydrographr sobre o Hydrography90m:
+    os pontos levados para a rede (`hydro.snap`, pela distância ou com um fluxo acumulado mínimo), a terra a montante
+    de cada trecho ou ponto resumida (`hydro.upstream`: as estatísticas de mapas e a proporção de cada classe, o
+    `get_upstream_variable`) e a bacia de cada ponto em polígonos, com as bacias encaixadas entre um ponto e o
+    seguinte (`hydro.upstream_catchment`), sobre as direções D8 do `ls.hydro`. Feitos direto em Rust, sem C++: entram
+    aqui quando o núcleo for para Rust (`RUST_PORT.md`), não como C++ novo. Lugar natural: ao lado do `ls.hydro`.
+    Sem referência bit a bit (o hydrographr roda o GRASS): conferidos contra a acumulação D8 com pesos e o
+    `watersheds` do próprio `ls.hydro`. Também feitos (Terraflux 1.9.0, `crates/ops/src/river_network.rs`): as
+    distâncias pela rede entre pontos, os trechos a montante e a jusante de cada ponto, a centralidade dos trechos e
+    o DCI das barragens (Cote et al. 2009) com o ganho de remover cada uma, iguais ao riverconn 0.3
+    (`tools/make_river_dci_reference.py`). E o Hydrography90m e o Environment90m baixados (Terraflux 1.10.0,
+    `crates/ops/src/data.rs` e `env90m.rs`): os tiles de 20° lidos só na janela da grade, e as tabelas por
+    sub-bacia, ao lado do `download_gbif`.
+
 ## Roteiro integrado dos novos módulos
 
 A integração entre os módulos do landschaft consolida um ecossistema completo para ecologia espacial e planejamento
