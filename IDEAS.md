@@ -3595,6 +3595,136 @@ Terraflux já tem; para Slurm basta `srun landschaft worker`).
 
 ---
 
+## HPC e Slurm sem configuração (pedido em 2026-10-25) — **Feito** (sem versão ainda)
+
+Pedido: o zeit acabou de ganhar o uso num cluster (fases 20 e 21 do `IDEAS.md` do zeit, 2.3.0) e o landschaft
+deve facilitar a vida do usuário do mesmo jeito. A meta é a mesma: quem usa um cluster escreve o mesmo script ou
+comando que escreveria no desktop, e o landschaft percebe onde está.
+
+```bash
+#!/bin/bash
+#SBATCH --cpus-per-task=16 --mem=32G --time=02:00:00
+python analise.py            # usa os 16 processadores do job, nenhum reservado, sem --threads nem variável
+```
+
+```bash
+landschaft slurm fad tiles/ out/ --cpus 16 --time 2:00:00   # escreve (e com --submit, envia) o job array
+landschaft status out/                                      # feitos, falhos, faltando, e o --array para reenviar
+landschaft fetch sdm                                        # no nó de login, o que o nó sem internet vai precisar
+landschaft doctor                                           # threads e de onde vieram, job, caches, rede, versões
+```
+
+**Princípio** (o do zeit): nenhuma variável de ambiente nova obrigatória; num job (Slurm, PBS, LSF) os padrões
+mudam sozinhos; o que não dá para adivinhar (nó sem internet) vira uma mensagem que diz o que fazer.
+
+### O que se achou no código (1.50.0)
+
+- **Threads** (`_threads.py`): a afinidade do processo (bom: o cpuset do Slurm já conta), mas sempre "todos menos
+  um", também num job (8 processadores pagos, 7 usados). Num cluster sem cgroup/cpuset a afinidade é o nó inteiro
+  (128 threads num job de 8). O Python 3.12 no Linux não vê a cota de CPU do cgroup (`cpu.max`, contêineres). Nenhuma
+  variável muda o padrão: só `ls.set_default_threads()` no código.
+- **`OMP_NUM_THREADS` ignorado:** a guarda dos módulos compilados chama `omp_set_num_threads(current())` antes de
+  cada chamada. O `OMP_NUM_THREADS=1` dos módulos de cluster não prejudica o C++ (o problema do zeit não existe
+  aqui), mas quem segue a prática de HPC e exporta `OMP_NUM_THREADS=8` é ignorado.
+- **Worker do dask.distributed:** cada processo de worker usa o nó inteiro menos um, em cada tarefa.
+- **Ajudantes** (`_dist/_slots.py`): os filhos recebem `OMP_NUM_THREADS`, que a nova regra passa a ler; a descoberta
+  por broadcast UDP não passa entre nós de computação.
+- **`ls.batch`/`ls.mspa_batch` num job array:** a retomada já existe (o `.json` de cada entrada, escrito por último;
+  no MSPA, o próprio `.tif`) e as saídas têm nomes por entrada, então tarefas na mesma pasta não colidem. Falta
+  dividir as entradas entre as tarefas. O MSPA marca como feito um `.tif` meio escrito (morto no limite de tempo): a
+  retomada o pularia. O `.json` do `batch` também não é escrito de forma atômica.
+- **SIGTERM** (o aviso do Slurm antes do limite de tempo): nada o trata; o lote morre no meio.
+- **Caches:** `LANDSCHAFT_CACHE` e o XDG já valem para os downloads (`_download.py`), mas o cache dos ajudantes
+  (`_dist/_worker.py`) tem raiz própria.
+- **Nós sem internet:** o erro de download diz "baixe à mão", sem dizer que o nó parece isolado nem como baixar
+  antes; não há comando para baixar no nó de login os dados de referência do `ls.sdm` e os exemplos baixados.
+- **Sem tela:** `ls.plot(...)` fora de um notebook tenta abrir uma janela (pywebview, depois o navegador) num job sem
+  `DISPLAY`, e só deixa um HTML no `/tmp`.
+- **Instalação:** wheels aarch64 já saem (`ubuntu-24.04-arm`); o `Dockerfile` existe, mas nenhuma imagem é publicada
+  para o Apptainer.
+
+### Fases
+
+- **HPC-a (correção): threads certas num job.** Uma regra em `_threads.py`, função pura testável (`decide`) e a
+  leitura do sistema (`detect`): `n_threads` > `set_default_threads()` > `LANDSCHAFT_NUM_THREADS` > threads de um
+  worker do dask.distributed > `OMP_NUM_THREADS` > processadores do job onde o processo vê mais
+  (`SLURM_CPUS_PER_TASK`, sem ele `SLURM_CPUS_ON_NODE`; `NCPUS` do PBS; `LSB_DJOB_NUMPROC` do LSF: os buracos que a
+  fase 21a do zeit achou, já aqui) > afinidade e cota do cgroup (v1 e v2). Um processador livre só fora de job e
+  com o processo vendo a máquina inteira. Aviso uma vez quando um `OMP_NUM_THREADS` menor deixa processadores do
+  job parados. Os filhos dos ajudantes recebem `LANDSCHAFT_NUM_THREADS`. Os pools (`batch`, SWAT...) derivam de
+  `default_threads()` e seguem sozinhos. — **Feito** (2eebf4b)
+- **HPC-b: lotes num job array.** `shard=` em `batch`/`mspa_batch` (`"i/n"`, ou `"array"`: a parte da tarefa do
+  array do Slurm; PBS e LSF não dizem quantas tarefas há, lá é `"i/n"`): a entrada `i` da lista ordenada vai para a
+  parte `i mod n`, divisão guardada em `<saída>/.landschaft-batch/split.json` para o reenvio de `--array=3,17` pegar
+  as mesmas entradas. **Diferente do zeit:** a parte do array não é automática, porque um script Python que roda
+  `ls.batch` em cada tarefa de um array por outro motivo (um cenário por tarefa) perderia entradas sem aviso; o
+  `landschaft slurm` escreve `--shard array`. O registro (`inputs.json` com a ferramenta, os parâmetros e as
+  entradas; `runs/<job>_<tarefa>.json` com o que cada execução terminou, falhou e por quê), `landschaft status
+  out/` (feitos, falhos, faltando, em execução, o `sbatch --array=` dos que faltam; código de saída 0 com tudo
+  feito, 3 com o resto). SIGTERM: nenhuma entrada nova começa, as em andamento têm até o fim do prazo do sinal, e com
+  `requeue=` a tarefa se reenfileira (`scontrol requeue`) se terminou ao menos uma entrada nesta execução (sem
+  progresso, não: uma entrada maior que o limite de tempo voltaria para sempre); sai com `Stopped`. Escrita
+  atômica do `.tif` do MSPA e do `.json` do `batch`. O comando `landschaft batch <ferramenta> <entradas> <saída>
+  [chave=valor ...]` e `landschaft slurm` (o script: `--cpus`, `--mem` sugerido pela maior entrada e pelos bytes por
+  pixel da ferramenta, passado também como `--max-memory`, `--time`, `--partition`, `--account`, `--tasks`,
+  `--max-running`, `--sbatch`, `--setup`, `--signal=B:TERM@120`, `--requeue`, `--submit`). — **Feito** (863a5b0)
+- **HPC-c: nós sem internet e uma raiz de cache.** `landschaft fetch sdm|examples|all` (os dados de referência do
+  `ls.sdm` e o São Lourenço do `ls.simulate`), a mensagem de nó isolado quando a conexão falha (DNS, recusa, tempo)
+  e não quando o servidor responde com erro (no `_download.fetch` e no `download_gbif`), o cache dos ajudantes sob
+  `LANDSCHAFT_CACHE`/XDG como o resto (o de antes continua usado onde já existe). — **Feito** (e655fd8)
+- **HPC-d: ajudantes num cluster.** Num job, `ls.helpers()` não escuta broadcasts por padrão e `landschaft worker`
+  sem `--connect` diz para usar `--connect` (ou um job array). A receita de uma alocação de vários nós com
+  `srun landschaft worker --connect <nó do coordenador>` fica documentada (o grupo vem do `$HOME`, que os nós
+  compartilham). Não testada num cluster de verdade. — **Feito** (1a1d282)
+- **HPC-e: sem tela.** `auto_show()` falso sem `DISPLAY`/`WAYLAND_DISPLAY` no Linux ou dentro de um job: o plot não
+  tenta janela, e uma linha diz como salvar (`.save("mapa.html")`). — **Feito** (1a1d282)
+- **HPC-f: instalação.** Imagem `ghcr.io/sacridini/landschaft:<versão>` (amd64 e arm64 nativos) a cada versão,
+  chamada pelo `release.yml` como o site (uma tag criada pelo `GITHUB_TOKEN` não dispara outro workflow), para
+  `apptainer pull docker://ghcr.io/sacridini/landschaft:<versão>`. — **Feito** (8e3c267; roda na primeira versão
+  publicada: sem Docker aqui, a imagem não foi construída localmente)
+- **HPC-g: `landschaft doctor` e o tutorial.** `landschaft doctor` / `ls.doctor()`: threads e de onde vieram, job e
+  tarefa do array, caches e se dá para gravar, se os servidores de download respondem, versões e o núcleo compilado
+  (OpenMP, AVX2). Tutorial "Landschaft num cluster (HPC, Slurm)" no site. — **Feito** (64601c0, 08ade9f)
+
+### O que foi feito, e onde fugiu do plano
+
+- **HPC-a:** a regra ficou em Python (`_threads.decide`, pura; `detect`, o sistema), não no C++: a guarda dos
+  módulos compilados já passa o número a cada chamada. Cada chamada compilada pergunta o padrão, então a leitura
+  é memorizada pelos valores das variáveis (o dicionário de `os.environ` com as chaves já codificadas): ~1 µs por
+  chamada. No Windows a afinidade vem da máscara do processo (`GetProcessAffinityMask`; o Python 3.12 não tem
+  `process_cpu_count`): uma máscara de 4 processadores dá 4 threads. O aviso do
+  `OMP_NUM_THREADS` aponta para o código de quem chamou (fora do landschaft e da importação), não para a guarda.
+- **HPC-b:** o registro e o SIGTERM só valem num job ou com `shard=`/`requeue=` (no desktop, nenhuma pasta
+  `.landschaft-batch` nova e um `kill` continua matando na hora). As threads de um lote não se interrompem no
+  meio do C++, então o SIGTERM não descarta as entradas em andamento como o zeit faz com os processos dos tiles:
+  nenhuma começa depois dele, e as em andamento têm 90 s (dos 120 do `--signal`) antes do `scontrol requeue`.
+  Um `scancel` também manda SIGTERM: o tempo que falta ao job (`squeue %L`) separa os dois (mais de 10 min =
+  cancelado, sem reenfileirar). Achado de passagem: o `mspa_batch` tomava como feito um `.tif` meio escrito.
+  `--mem` sugerido: entradas simultâneas (`min(processadores / threads por entrada, entradas por tarefa)`) x a
+  maior entrada x os bytes por pixel da ferramenta (`_TOOL_BYTES_PER_PIXEL`) + 1 GB do processo, +25%; o
+  orçamento do lote (`--max-memory`) é o `--mem` menos 1 GB.
+- **HPC-d:** um ajudante iniciado (por `srun`) antes do coordenador espera até 5 min o grupo que o
+  `ls.helpers()` cria na pasta de configuração compartilhada; testado com o coordenador e o ajudante no mesmo
+  computador e as variáveis do Slurm simuladas.
+- **Testes:** `tests/test_hpc.py` (o array simulado, partes que cobrem o lote, registro e status, saídas
+  parciais, SIGTERM com e sem reenfileirar, o script do `landschaft slurm`, os comandos, nó sem internet, raiz do
+  cache, ajudantes num job, plots sem tela, `doctor`; no Linux também um SIGTERM de verdade noutro processo) e
+  `tests/test_threads.py` (a regra, a cota do cgroup v1/v2 numa árvore falsa, a afinidade de um subprocesso no
+  Linux, o worker do dask, o aviso). Suíte inteira: Windows 4256 passaram; Linux (WSL, Python 3.12.4) 4055, e a
+  falha achada lá corrigida (o argparse do 3.12.4 deixava de fora um `chave=valor` depois de uma opção).
+
+### Para depois
+
+- **Máquina compartilhada** (fase 21 do zeit: servidor por RDP/SSH, nó de login): dividir pelos usuários ativos,
+  esperar a decisão do zeit (divisão ou fração) e a conferência num servidor RDS, e copiar a regra.
+- Partes de um array também em `simulate.scenarios`, `parallel.map` e `monte_carlo` (as sementes por índice já dão o
+  mesmo resultado; falta juntar as partes no fim).
+- Dask distribuído: o zeit mediu que dividir as threads pelos blocos é pior com o pool único do Rust; com o OpenMP do
+  landschaft cada thread que chama o C++ abre a sua equipe, então medir antes de mudar algo além do `nthreads` do
+  worker.
+
+---
+
 ## Hidrologia e forma do terreno (pedido em 2026-10-16)
 
 Quatro ferramentas de terreno de alto impacto, todas sobre um condicionamento hidrológico comum, como funções
