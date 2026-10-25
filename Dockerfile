@@ -7,6 +7,11 @@
 #   docker run --rm -it -v "$PWD:/data" landschaft               # Python shell
 #   docker run --rm -v "$PWD:/data" landschaft python script.py  # a script in the current folder
 #
+# Each release publishes it as ghcr.io/sacridini/landschaft:<version> (amd64 and arm64), for
+# Apptainer on a cluster:
+#   apptainer pull landschaft.sif docker://ghcr.io/sacridini/landschaft:<version>
+#   apptainer exec landschaft.sif python script.py
+#
 # Build arguments:
 #   PYTHON_VERSION  Python of the image (default 3.12)
 #
@@ -61,6 +66,11 @@ CMD ["pytest", "-q", "-p", "no:cacheprovider"]
 
 # ---- runtime (default target) ------------------------------------------------
 FROM base AS runtime
+
+# the repository of the image on ghcr.io (its page, and the visibility it inherits)
+LABEL org.opencontainers.image.source="https://github.com/sacridini/landschaft" \
+      org.opencontainers.image.description="Landschaft: landscape ecology, connectivity and conservation planning" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later"
 
 USER landschaft
 WORKDIR /data

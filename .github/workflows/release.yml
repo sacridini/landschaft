@@ -4,7 +4,8 @@
 # releases that version: the wheels are built and tested (cibuildwheel, see
 # [tool.cibuildwheel] in pyproject.toml), the wheels and the sdist go to PyPI,
 # the tag and the GitHub release are made (notes from CHANGELOG.md's section of
-# the version) and the website is published (docs.yml). Nothing is published
+# the version), the website is published (docs.yml) and the container images
+# (containers.yml, ghcr.io/sacridini/landschaft). Nothing is published
 # when any wheel fails its tests.
 #
 # Actions > Release > Run workflow builds and tests every wheel without publishing
@@ -146,3 +147,11 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/docs.yml
+
+  containers:
+    name: Container images
+    needs: [version, pypi]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/containers.yml

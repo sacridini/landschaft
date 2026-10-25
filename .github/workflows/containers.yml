@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# The image of the Dockerfile on the GitHub Container Registry at each release (called by
+# release.yml once the version is on PyPI: a tag made by the workflow's token starts no other
+# workflow), for Docker and for Apptainer on a cluster:
+#   apptainer pull landschaft.sif docker://ghcr.io/sacridini/landschaft:1.51.0
+#   apptainer exec landschaft.sif landschaft doctor
+# Built on native x86_64 and aarch64 machines (no emulation, which would take long to compile the
+# C++ core) and published as one tag for both. Actions > Container images > Run workflow builds
+# and checks them without pushing (or pushes, with "push").
+name: Container images
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      push:
+        description: "Push the images (the version of pyproject.toml, and latest)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/landschaft
+  PUSH: ${{ github.event_name != 'workflow_dispatch' || inputs.push }}
+
+jobs:
+  image:
+    name: Image on ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The version
+        id: version
+        run: echo "version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        if: env.PUSH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build, check and push
+        run: |
+          tag="$IMAGE:${{ steps.version.outputs.version }}-${{ matrix.arch }}"
+          docker buildx build -t "$tag" --load .
+          docker run --rm "$tag" landschaft doctor --no-network
+          docker run --rm "$tag" python -c "import landschaft as ls; print(ls.mspa(ls.load_raster(ls.example_data('input'))).shape)"
+          if [ "$PUSH" = true ]; then docker push "$tag"; fi
+
+  manifest:
+    name: One tag for both architectures
+    needs: image
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.push }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The version
+        id: version
+        run: echo "version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: The version and latest
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          docker buildx imagetools create -t "$IMAGE:$v" -t "$IMAGE:latest" "$IMAGE:$v-amd64" "$IMAGE:$v-arm64"
