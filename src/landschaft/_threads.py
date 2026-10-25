@@ -285,10 +285,17 @@ def _warn_idle(found: Threads) -> None:
     if _warned or not found.idle():
         return
     _warned = True
+    # point at the caller's code, outside landschaft (and the import machinery, which warnings skips)
+    package, level, frame = str(Path(__file__).resolve().parent), 1, sys._getframe(1)
+    while frame is not None and (frame.f_code.co_filename.startswith("<frozen")
+                                 or str(Path(frame.f_code.co_filename).resolve()).startswith(package)):
+        if not frame.f_code.co_filename.startswith("<frozen"):
+            level += 1
+        frame = frame.f_back
     warnings.warn(f"landschaft uses {found.all} thread{'s' if found.all != 1 else ''} because OMP_NUM_THREADS="
                   f"{found.all}, while this {found.scheduler} job may use {found.job_processors} processors. To "
                   f"use them, set LANDSCHAFT_NUM_THREADS={found.job_processors} (read before OMP_NUM_THREADS), "
-                  "call ls.set_default_threads() or pass n_threads.", RuntimeWarning, stacklevel=4)
+                  "call ls.set_default_threads() or pass n_threads.", RuntimeWarning, stacklevel=level + 1)
 
 
 def default_threads() -> int:

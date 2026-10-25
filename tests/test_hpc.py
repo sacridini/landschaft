@@ -396,3 +396,27 @@ def test_plots_are_not_shown_without_a_display(monkeypatch, capsys):
     assert _env.headless() is None and _env.auto_show() is True
     monkeypatch.setenv("LANDSCHAFT_PLOT_SHOW", "0")
     assert _env.auto_show() is False
+
+
+def test_doctor(monkeypatch, capsys):
+    from landschaft import _doctor
+
+    text = _doctor.report(network=False)
+    from landschaft._dist._group import version
+
+    assert text.startswith(f"landschaft {version()}") and "Threads (the default of n_threads):" in text
+    assert "Job: none" in text and "Cache:" in text and "Network" not in text
+    _array(monkeypatch, 2, first=0, last=9)
+    monkeypatch.setenv("SLURM_CPUS_PER_TASK", "1")
+    monkeypatch.setenv("OMP_NUM_THREADS", "1")
+    monkeypatch.delenv("LANDSCHAFT_NUM_THREADS", raising=False)
+    text = _doctor.report(network=False)
+    assert "Slurm job 772" in text and "array task 2 of 10 (0-9)" in text
+    assert "Display: none, inside a Slurm job" in text
+    monkeypatch.setattr(_doctor, "probe", lambda url, timeout=5.0: "the name does not resolve (no DNS)")
+    text = _doctor.report(network=True)
+    assert text.count("NO: the name does not resolve") == len(_doctor.SERVICES) and "landschaft fetch" in text
+    ls.doctor(network=False)
+    assert "Threads" in capsys.readouterr().out
+    _cli.main(["doctor", "--no-network"])
+    assert "Job: Slurm job" in capsys.readouterr().out
