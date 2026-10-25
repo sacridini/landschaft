@@ -420,3 +420,18 @@ def test_doctor(monkeypatch, capsys):
     assert "Threads" in capsys.readouterr().out
     _cli.main(["doctor", "--no-network"])
     assert "Job: Slurm job" in capsys.readouterr().out
+
+
+def test_sigterm_after_the_last_raster_is_no_stop(tiles, tmp_path, monkeypatch):
+    monkeypatch.setenv("SLURM_JOB_ID", "77")
+    calls: list = []
+
+    def tool(data, n_threads=None):
+        calls.append(1)
+        if len(calls) == 5:  # the last raster
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+        return ls.accounting(data, n_threads=n_threads)
+
+    tool.__name__ = "last"
+    runs = ls.batch(tool, tiles, tmp_path / "out", n_workers=1)
+    assert len(runs) == 5 and all(r.ok for r in runs)

@@ -188,7 +188,7 @@ class _Record:
                 if self.journal is not None:
                     self.journal.end(stopped="error")
                 raise
-            if stopping.event.is_set():
+            if stopping.event.is_set() and any(r is None for r in results):  # not when every input ended
                 stopping.finish()
                 if self.journal is not None:
                     self.journal.end(stopped=stopping.signal_name, requeued=stopping.requeued)
