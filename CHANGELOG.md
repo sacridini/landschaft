@@ -6,16 +6,9 @@ in a new major version.
 
 ## [Unreleased]
 
-## [1.50.1] - 2026-10-23
+## [1.51.0] - 2026-10-25
 
 ### Added
-- On PyPI: `pip install landschaft` installs binary wheels (CPython 3.10-3.14; Windows x86-64, macOS arm64 and
-  x86-64, Linux x86-64 and aarch64, OpenMP included) with everything every tool uses. Releases are automatic:
-  pushing to main a version of `pyproject.toml` that has no tag yet builds and tests every wheel
-  (`.github/workflows/release.yml`), publishes them and the sdist to PyPI, tags the version, makes the GitHub
-  release from this changelog and publishes the website.
-- The website on GitHub Pages, <https://sacridini.github.io/landschaft/>, published with each release
-  (`.github/workflows/docs.yml`); project URLs, keywords and classifiers in the package metadata.
 - Batches on a cluster's job array: `shard=` in `ls.batch` and `ls.mspa_batch` (`"i/n"`, or `"array"`: the part of
   this Slurm array task, from `SLURM_ARRAY_TASK_ID`, the split kept in the output folder so that tasks submitted
   again take the same inputs; every input outside an array). In a batch job, or with `shard=` or `requeue=`, the
@@ -29,11 +22,57 @@ in a new major version.
   `landschaft slurm <tool> <inputs> <output> --cpus 16 [--mem --time --partition --account --tasks --max-running
   --sbatch --setup --submit]`, which writes the job script of a job array (`--mem` suggested from the largest raster
   and the tool, and given to the batch as its memory budget; `--signal=B:TERM@120`, `--requeue`, a log per task).
+- `landschaft fetch [sdm|examples|all]` downloads beforehand, on a computer with internet access (a cluster's login
+  node), what landschaft downloads on first use (the reference data of `ls.sdm.reference_data`, the São Lourenço
+  example of `ls.simulate`). A download that cannot reach its server at all (no name resolution, refused, timed
+  out), on a compute node without internet access, says so and names the `landschaft fetch` that downloads it,
+  instead of the network library's error; `ls.sdm.download_gbif` too.
+- `landschaft doctor` / `ls.doctor()`: what landschaft finds on this computer, the first thing to run on a
+  cluster and to paste in an issue: the default threads and where their number comes from, the batch job and the
+  array task, the cache and whether it can be written, the helpers' group, whether the servers landschaft
+  downloads from answer, whether plots can open a window, and the versions (OpenMP, AVX2).
+- Container images on the GitHub Container Registry at each release, for Docker and for Apptainer on a cluster:
+  `apptainer pull landschaft.sif docker://ghcr.io/sacridini/landschaft:<version>` (amd64 and arm64, built natively
+  by `.github/workflows/containers.yml`, which `release.yml` calls).
+- The tutorial "On a cluster (HPC, Slurm)" on the website.
+
+### Changed
+- The default thread count follows the machine it runs on: inside a batch job (Slurm, PBS, LSF), or in a process
+  confined to fewer processors than the machine has, every processor it may use (none kept free); in a job that
+  sees the whole node (a cluster without cgroups), the job's processors (`SLURM_CPUS_PER_TASK`, else
+  `SLURM_CPUS_ON_NODE`; `NCPUS`; `LSB_DJOB_NUMPROC`) instead of the node's. A node of 128 cores running a job of
+  `--cpus-per-task=8` used 127 threads; it now uses 8. New variable `LANDSCHAFT_NUM_THREADS`; `OMP_NUM_THREADS`
+  is now read (after it), with a warning once when it leaves a job's processors idle (cluster modules often export
+  `OMP_NUM_THREADS=1`); in a dask.distributed worker, the worker's threads. The processors counted include the
+  CPU quota of the cgroup on Linux (containers) and the affinity mask on Windows. On a desktop, all processors but
+  one, as before.
+- Helpers in a batch job: `ls.helpers()` does not answer broadcasts there by default (they do not pass between the
+  nodes of a cluster), `landschaft worker` without `--connect` says to give the coordinator's node (or to use a job
+  array), and a helper started on another node of the allocation before the coordinator waits for the group it
+  creates in the configuration folder the nodes share: `srun ... landschaft worker --connect <node>` beside the
+  script that uses `ls.helpers()` spreads its tasks over the nodes of an allocation.
+- Plots are not shown where no window can open (inside a batch job, or on Linux without `DISPLAY` or
+  `WAYLAND_DISPLAY`): a line says so once, and `.save()` writes them.
+- The files a helper receives are kept under landschaft's cache (`LANDSCHAFT_CACHE`, else the platform's), in
+  `helper/`, as the downloads are; the folder an older landschaft kept is still used where it exists.
 
 ### Fixed
 - `ls.mspa_batch` writes each output under another name until it is whole, and `ls.batch` its JSON (the mark of
   an input done) atomically: a run killed while writing (a job's time limit) left a partial `.tif` that the next run
   took as done.
+
+## [1.50.1] - 2026-10-23
+
+### Added
+- On PyPI: `pip install landschaft` installs binary wheels (CPython 3.10-3.14; Windows x86-64, macOS arm64 and
+  x86-64, Linux x86-64 and aarch64, OpenMP included) with everything every tool uses. Releases are automatic:
+  pushing to main a version of `pyproject.toml` that has no tag yet builds and tests every wheel
+  (`.github/workflows/release.yml`), publishes them and the sdist to PyPI, tags the version, makes the GitHub
+  release from this changelog and publishes the website.
+- The website on GitHub Pages, <https://sacridini.github.io/landschaft/>, published with each release
+  (`.github/workflows/docs.yml`); project URLs, keywords and classifiers in the package metadata.
+
+### Fixed
 - `simcore` (land change simulation) is compiled with the same IEEE flags as the other modules
   (`-ffp-contract=off -fno-fast-math` with GCC and Clang): Clang's default contraction into FMA could change its
   last bits on ARM64.
