@@ -23,7 +23,8 @@ START_TIMEOUT = 300.0
 
 def child_env(cores: int) -> dict:
     env = dict(os.environ)
-    env["OMP_NUM_THREADS"] = str(max(1, cores))
+    # landschaft reads LANDSCHAFT_NUM_THREADS first; OMP_NUM_THREADS bounds the BLAS libraries of the child too
+    env["LANDSCHAFT_NUM_THREADS"] = env["OMP_NUM_THREADS"] = str(max(1, cores))
     env["PYTHONUNBUFFERED"] = "1"
     if sys.platform == "darwin":
         env["KMP_DUPLICATE_LIB_OK"] = "TRUE"
