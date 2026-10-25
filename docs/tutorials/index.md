@@ -73,6 +73,13 @@ and follow along.
     Folders of rasters, maps larger than memory, time stacks with dask and
     very large tables.
 
+-   :material-server-network:{ .lg .middle } **[On a cluster (HPC, Slurm)](hpc-slurm.md)**
+
+    ---
+
+    Scripts in batch jobs with every processor of the job, folders of
+    rasters over job arrays, time limits and nodes without internet access.
+
 -   :material-routes:{ .lg .middle } **[Routes on grids](grid-routes.md)**
 
     ---

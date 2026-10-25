@@ -16,6 +16,10 @@ reads large maps in blocks (`block_rows`).
 
 ::: landschaft.BatchResult
 
+::: landschaft.batch_status
+
+::: landschaft.batch.Stopped
+
 ### Tools of `batch`
 
 `ls.BATCH_TOOLS` lists the names `batch` accepts; any function taking a raster
@@ -68,6 +72,13 @@ the analyses of `ls` (`"fad"`, `"mspa"`, ...), `ls.surface` (`"surface.geomorpho
 | `landschaft helpers list` | the helpers waiting for work on the local network |
 | `landschaft helpers firewall` | Windows: let helpers reach this computer (TCP 47811, UDP 47810, local subnet) |
 | `landschaft helpers leave` | take this computer out of its group |
+| `landschaft batch TOOL INPUTS OUTPUT [key=value ...] [--shard I/N\|array] [--requeue] [--workers N] [--threads-per-worker N] [--max-memory 16GB]` | `ls.batch` from the command line |
+| `landschaft status OUTPUT` | the rasters done, failed and left, and the job array tasks to submit again (exit code 3 while rasters are left) |
+| `landschaft slurm TOOL INPUTS OUTPUT --cpus 16 [--mem 32G] [--time 2:00:00] [--partition P] [--submit] [key=value ...]` | write (and submit) the Slurm job script that splits the batch among the tasks of a job array |
+| `landschaft fetch [sdm\|examples\|all]` | download beforehand what Landschaft downloads on first use |
+| `landschaft doctor [--no-network]` | what Landschaft finds on this computer: threads, job, cache, network, versions |
+
+On a cluster, see [on a cluster (HPC, Slurm)](../tutorials/hpc-slurm.md).
 
 ## Maps larger than memory
 

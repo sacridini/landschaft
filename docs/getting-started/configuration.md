@@ -6,8 +6,10 @@ functions that use them or set once for the Python session.
 ## Threads
 
 Every function that runs in parallel uses **all processor cores but one** by
-default, so that the computer stays responsive while it works. You can change
-this per call or for the whole session:
+default, so that the computer stays responsive while it works; inside a batch
+job of a cluster (Slurm, PBS, LSF), or when the process may run on fewer
+processors than the computer has, it uses all of those it may use. You can
+change this per call or for the whole session:
 
 ```python
 import landschaft as ls
@@ -30,11 +32,25 @@ collection, `ls.mspa_tiled`) also take `n_workers`, the number of rasters or
 tiles in flight (`ls.batch` also `threads_per_worker`); by default the workers
 share the same cores (all but one).
 
+Without `n_threads` or `ls.set_default_threads`, the count comes from the
+environment, from the first that applies:
+
+| | |
+|---|---|
+| `LANDSCHAFT_NUM_THREADS` | this process and the processes it starts |
+| a dask.distributed worker | the worker's threads |
+| `OMP_NUM_THREADS` | as for any OpenMP program |
+| a batch job (Slurm, PBS, LSF) | the job's processors (`SLURM_CPUS_PER_TASK`...) |
+| the computer | the processors this process may run on (its affinity and CPU quota), all but one |
+
+`landschaft doctor` (or `ls.doctor()`) prints the count and where it came
+from; see [on a cluster](../tutorials/hpc-slurm.md).
+
 !!! note "Jobs that run side by side"
-    If you start several Python processes at once (e.g. on a cluster node),
-    give each a share of the cores with `ls.set_default_threads(n)` at the top
-    of each script, so that together they do not use more cores than the
-    machine has.
+    If you start several Python processes at once on one computer, give each a
+    share of the cores (`LANDSCHAFT_NUM_THREADS=4 python script.py`, or
+    `ls.set_default_threads(4)` at the top of each script), so that together
+    they do not use more cores than the machine has.
 
 ## Other computers
 
@@ -44,6 +60,15 @@ the tasks with the computers of a group running `landschaft worker`, with the
 same results; see [several computers](../tutorials/many-computers.md). The
 group's secret is kept in `%APPDATA%\landschaft` (Windows) or
 `~/.config/landschaft` (`LANDSCHAFT_CONFIG_DIR` overrides it).
+
+## Downloads and the cache
+
+A few tools download reference data the first time they need it (each file
+pinned by its checksum) into `%LOCALAPPDATA%\landschaft\cache` (Windows),
+`~/Library/Caches/landschaft` (macOS) or `~/.cache/landschaft` (Linux;
+`XDG_CACHE_HOME` moves it). `LANDSCHAFT_CACHE` puts it elsewhere, and
+`landschaft fetch` downloads everything beforehand, for computers without
+internet access.
 
 ## Memory
 

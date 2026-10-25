@@ -191,6 +191,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.default_threads`](data.md#landschaft.default_threads) | The number of threads a parallel function uses when not given one |
 | [`ls.set_default_threads`](data.md#landschaft.set_default_threads) | Set the default thread count of every parallel function for this process |
 | [`ls.max_threads`](data.md#landschaft.max_threads) | Number of processors the compiled core can use |
+| [`ls.doctor`](data.md#landschaft.doctor) | Print what landschaft finds on this computer |
 
 ### Habitat patterns
 
@@ -479,6 +480,8 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.batch`](batch.md#landschaft.batch) | Parallel processing of many rasters, one thread per raster |
 | [`ls.mspa_batch`](batch.md#landschaft.mspa_batch) | Run MSPA on many rasters in parallel and write the results |
 | [`ls.BatchResult`](batch.md#landschaft.BatchResult) | Outcome of one input of `batch` / `mspa_batch` |
+| [`ls.batch_status`](batch.md#landschaft.batch_status) | What the runs of `batch` / `mspa_batch` did in an output folder: the inputs done, failed (with their error) and not done, and the job array tasks to submit again |
+| [`ls.Stopped`](batch.md#landschaft.batch.Stopped) | A batch stopped by SIGTERM (a scheduler's warning before the job's time limit, or its cancellation): no input started after it; ``results`` holds those that ended, in input order (``None`` for the inputs not processed) |
 | [`ls.helpers`](batch.md#landschaft.parallel.helpers) | This computer and the helpers of its group, for ``on=`` (see `Helpers`) |
 | [`ls.Helpers`](batch.md#landschaft.parallel.Helpers) | This computer and the helpers of its group, for the ``on=`` argument of landschaft's functions that run many independent tasks |
 | [`ls.map`](batch.md#landschaft.parallel.map) | Run a tool on many inputs, on this computer or on helpers, in parallel |

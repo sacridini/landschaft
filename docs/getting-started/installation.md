@@ -24,6 +24,11 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install landschaft
 ```
 
+On a cluster, install in a virtual environment on the login node, or use the
+container image with Apptainer (`apptainer pull landschaft.sif
+docker://ghcr.io/sacridini/landschaft:latest`); see
+[on a cluster](../tutorials/hpc-slurm.md#install).
+
 ## Install in a conda environment
 
 [conda](https://docs.conda.io) (or mamba) provides Python and the geospatial

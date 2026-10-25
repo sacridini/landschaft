@@ -138,3 +138,5 @@ available as a constant (`ls.MSPA_CLASSES` names the MSPA codes;
 ::: landschaft.set_default_threads
 
 ::: landschaft.max_threads
+
+::: landschaft.doctor

@@ -178,6 +178,7 @@ nav:
       - Change detection: tutorials/change-detection.md
       - Large data & batch: tutorials/large-data.md
       - Several computers: tutorials/many-computers.md
+      - On a cluster (HPC, Slurm): tutorials/hpc-slurm.md
       - Neutral landscapes: tutorials/neutral-landscapes.md
       - Surface texture: tutorials/surface-texture.md
       - Terrain hydrology: tutorials/terrain-hydrology.md

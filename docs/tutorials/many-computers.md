@@ -15,6 +15,9 @@ many tasks take `on=` and give the same results as on one computer.
 - know what travels between computers, and what does not;
 - find out why a helper does not show up.
 
+On a cluster, the nodes of an allocation can be helpers too; see
+[on a cluster](hpc-slurm.md#several-nodes-for-one-script).
+
 This helps when there are **many independent tasks**. One large map is better
 served by the threads of one computer (every tool already uses them) or by
 [tiles](large-data.md#mspa-of-maps-larger-than-memory).
