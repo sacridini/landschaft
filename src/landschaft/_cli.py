@@ -131,7 +131,12 @@ def parse_params(items) -> dict:
 
 def main(argv: list | None = None) -> None:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args, extra = parser.parse_known_args(argv)
+    # the tool's KEY=VALUE after an option (older Pythons' argparse leaves them out of the positionals)
+    if extra and getattr(args, "params", None) is not None and all("=" in e and not e.startswith("-") for e in extra):
+        args.params = [*args.params, *extra]
+    elif extra:
+        parser.error(f"unrecognized arguments: {' '.join(extra)}")
     if args.version:
         print(f"landschaft {_group.version()}")
     elif args.command == "worker":
