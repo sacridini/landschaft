@@ -8,6 +8,7 @@ of many rasters, in a cluster's job array too.
     landschaft batch fad tiles/ out/  # a tool on every raster of a folder
     landschaft slurm fad tiles/ out/ --cpus 16   # the same, split among the tasks of a Slurm job array
     landschaft status out/            # what is done, failed and left
+    landschaft fetch                  # download beforehand what landschaft downloads on first use
 """
 
 from __future__ import annotations
@@ -86,6 +87,12 @@ def build_parser() -> argparse.ArgumentParser:
     sl.add_argument("--script", default=None, help="Where to write the script (default: "
                     "<output_dir>/.landschaft-batch/<tool>.sbatch)")
     sl.add_argument("--submit", action="store_true", help="Submit it with sbatch")
+
+    ft = sub.add_parser("fetch", help="Download beforehand the data landschaft downloads on first use (on a "
+                                      "cluster's login node, for compute nodes without internet access)")
+    ft.add_argument("what", nargs="?", default="all", choices=("all", "sdm", "examples"),
+                    help="sdm: the reference data of ls.sdm (~40 MB); examples: the example data that is "
+                         "downloaded; all (default): both")
     parser.landschaft_commands = {"worker": wk, "helpers": hp}
     return parser
 
@@ -147,6 +154,14 @@ def main(argv: list | None = None) -> None:
         sys.exit(0 if status.ok else 3)
     elif args.command == "slurm":
         _slurm(args)
+    elif args.command == "fetch":
+        from ._download import prefetch
+
+        try:
+            prefetch(args.what)
+        except OSError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
     else:
         parser.print_help()
 

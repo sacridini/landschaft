@@ -291,3 +291,56 @@ def test_real_sigterm(tiles, tmp_path):
     out, _ = proc.communicate(timeout=120)
     assert proc.returncode == 143 and out.strip().endswith("stopped 1")
     assert len(ls.batch_status(tmp_path / "out").done) == 1
+
+
+def test_offline_messages(tmp_path, monkeypatch):
+    import socket
+    import urllib.error
+    import urllib.request
+
+    from landschaft import _download
+    from landschaft.sdm import _gbif
+
+    assert _download.connection_failed(urllib.error.URLError(socket.gaierror(-2, "Name or service not known")))
+    assert _download.connection_failed(TimeoutError())
+    assert not _download.connection_failed(urllib.error.HTTPError("u", 404, "Not Found", {}, None))
+    assert not _download.connection_failed(ValueError("checksum"))
+
+    def no_network(*args, **kwargs):
+        raise urllib.error.URLError(socket.gaierror(-3, "Temporary failure in name resolution"))
+
+    monkeypatch.setenv("LANDSCHAFT_CACHE", str(tmp_path))
+    monkeypatch.setattr(urllib.request, "urlopen", no_network)
+    with pytest.raises(OSError, match="no internet access.*landschaft fetch sdm"):
+        _download.fetch("sdm/thing.zip", ["https://a.example/thing.zip", "https://b.example/thing.zip"])
+    with pytest.raises(OSError, match="no internet access") as info:
+        _download.fetch("other/thing.zip", "https://a.example/thing.zip")
+    assert "landschaft fetch" not in str(info.value)
+    with pytest.raises(OSError, match="GBIF.*no internet access"):
+        _gbif._get("occurrence/search", {"taxonKey": 1})
+
+    def not_found(*args, **kwargs):
+        raise urllib.error.HTTPError("https://a.example/thing.zip", 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", not_found)
+    with pytest.raises(OSError, match="could not download") as info:
+        _download.fetch("sdm/thing.zip", "https://a.example/thing.zip")
+    assert "seems to have no internet access" not in str(info.value)
+    with pytest.raises(ValueError):
+        _download.prefetch("everything")
+
+
+def test_one_cache_root(tmp_path, monkeypatch):
+    from landschaft._dist._worker import default_cache_dir
+
+    monkeypatch.setenv("LANDSCHAFT_CACHE", str(tmp_path / "cache"))
+    assert default_cache_dir() == tmp_path / "cache" / "helper"
+    monkeypatch.delenv("LANDSCHAFT_CACHE")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    if sys.platform == "win32":
+        assert default_cache_dir() == tmp_path / "local" / "landschaft" / "cache" / "helper"
+        (tmp_path / "local" / "landschaft" / "helper-cache").mkdir(parents=True)   # an older landschaft's
+        assert default_cache_dir() == tmp_path / "local" / "landschaft" / "helper-cache"
+    elif sys.platform.startswith("linux"):
+        assert default_cache_dir() == tmp_path / "xdg" / "landschaft" / "helper"

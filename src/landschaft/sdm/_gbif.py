@@ -48,8 +48,16 @@ def _get(path: str, params: dict, timeout: float = 60.0) -> dict:
     query = urllib.parse.urlencode([(k, v) for k, vs in params.items() if vs is not None
                                     for v in (vs if isinstance(vs, (list, tuple)) else [vs])])
     request = urllib.request.Request(f"{API}/{path}?{query}", headers={"User-Agent": "landschaft"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except OSError as err:
+        from .._download import connection_failed, offline_message
+
+        if connection_failed(err):
+            raise OSError(offline_message("GBIF (api.gbif.org)") + " Download the records there (download_gbif, or "
+                          "a download from gbif.org) and give them to this computer as a table.") from err
+        raise
 
 
 def _taxon_key(species) -> tuple[int, dict]:

@@ -30,9 +30,16 @@ HEARTBEAT = 5.0
 
 
 def default_cache_dir() -> Path:
+    """``helper`` in landschaft's cache (``LANDSCHAFT_CACHE``, else the platform's, see ``_download``), or
+    the folder an older landschaft kept, where it exists."""
+    from .._download import cache_dir
+
     if sys.platform == "win32":
-        return Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "landschaft" / "helper-cache"
-    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "landschaft" / "helper"
+        old = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "landschaft" / "helper-cache"
+    else:
+        old = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "landschaft" / "helper"
+    new = cache_dir() / "helper"
+    return old if not os.environ.get("LANDSCHAFT_CACHE") and old != new and old.is_dir() else new
 
 
 def default_cores() -> int:
