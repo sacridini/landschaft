@@ -16,8 +16,24 @@ in a new major version.
   release from this changelog and publishes the website.
 - The website on GitHub Pages, <https://sacridini.github.io/landschaft/>, published with each release
   (`.github/workflows/docs.yml`); project URLs, keywords and classifiers in the package metadata.
+- Batches on a cluster's job array: `shard=` in `ls.batch` and `ls.mspa_batch` (`"i/n"`, or `"array"`: the part of
+  this Slurm array task, from `SLURM_ARRAY_TASK_ID`, the split kept in the output folder so that tasks submitted
+  again take the same inputs; every input outside an array). In a batch job, or with `shard=` or `requeue=`, the
+  output folder keeps a record of the runs (`.landschaft-batch/`) and SIGTERM (the scheduler's warning before the
+  time limit) stops the batch: no raster starts after it, and `ls.batch.Stopped` holds the rasters that ended; with
+  `requeue=True` the Slurm task requeues itself (`scontrol requeue`) when it is near its time limit and finished at
+  least one raster. `ls.batch_status(output_dir)`: the rasters done, failed (with the error and the run) and left,
+  and the `sbatch --array=` of the tasks to submit again.
+- The commands `landschaft batch <tool> <inputs> <output> [key=value ...]` (`--shard`, `--requeue`, `--workers`,
+  `--threads-per-worker`, `--max-memory`), `landschaft status <output>` (exit code 3 while rasters are left) and
+  `landschaft slurm <tool> <inputs> <output> --cpus 16 [--mem --time --partition --account --tasks --max-running
+  --sbatch --setup --submit]`, which writes the job script of a job array (`--mem` suggested from the largest raster
+  and the tool, and given to the batch as its memory budget; `--signal=B:TERM@120`, `--requeue`, a log per task).
 
 ### Fixed
+- `ls.mspa_batch` writes each output under another name until it is whole, and `ls.batch` its JSON (the mark of
+  an input done) atomically: a run killed while writing (a job's time limit) left a partial `.tif` that the next run
+  took as done.
 - `simcore` (land change simulation) is compiled with the same IEEE flags as the other modules
   (`-ffp-contract=off -fno-fast-math` with GCC and Clang): Clang's default contraction into FMA could change its
   last bits on ARM64.

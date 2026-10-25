@@ -18,7 +18,7 @@ from . import _threads
 _threads.install(_core, _core.set_num_threads)
 from ._threads import default_threads, set_default_threads  # noqa: E402
 from .accounting import ACCOUNTING_CLASSES, AccountingResult, accounting
-from .batch import BATCH_TOOLS, BatchResult, batch, mspa_batch
+from .batch import BATCH_TOOLS, BatchResult, batch, batch_status, mspa_batch
 from .change import (
     FOSChangeResult,
     MorphologicalChangeResult,
@@ -288,6 +288,7 @@ __all__ = [
     "morphological_change",
     "mspa",
     "mspa_batch",
+    "batch_status",
     "mspa_colormap",
     "mspa_stats",
     "mspa_tiled",

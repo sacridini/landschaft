@@ -33,9 +33,10 @@ from ._threads import default_threads
 from .collection import RasterCollection, RasterInfo, expand_sources
 from .io import PathLike, _load_map, write_raster
 from .mspa import mspa
+from ._jobs import BatchStatus, Stopped, batch_status
 from ._save import Saveable
 
-__all__ = ["BATCH_TOOLS", "BatchResult", "batch", "mspa_batch"]
+__all__ = ["BATCH_TOOLS", "BatchResult", "Stopped", "batch", "batch_status", "mspa_batch"]
 
 T = TypeVar("T")
 
@@ -119,26 +120,82 @@ def run_parallel(
     n_workers: int | None,
     threads_per_worker: int,
     max_memory: int | str | None,
+    stop: threading.Event | None = None,
+    report: Callable[[T, object], None] | None = None,
 ) -> list:
     """Run ``work`` on every item with a thread pool and a memory budget.
 
     Results come back in input order. ``work`` must not raise if the caller
-    wants every item processed.
+    wants every item processed. Once ``stop`` is set, no item starts (its
+    result is ``None``); ``report(item, result)`` sees each result as it ends.
     """
     if n_workers is None:
         n_workers = max(1, default_threads() // max(1, threads_per_worker))
     budget = _MemoryBudget(parse_memory(max_memory))
 
     def task(item: T):
+        if stop is not None and stop.is_set():
+            return None
         with budget.reserve(pixels(item) * BYTES_PER_PIXEL):
+            if stop is not None and stop.is_set():
+                return None
             return work(item)
 
     results: dict[int, object] = {}
     with ThreadPoolExecutor(max_workers=min(n_workers, max(1, len(items)))) as pool:
         futures = {pool.submit(task, item): i for i, item in enumerate(items)}
         for fut in as_completed(futures):
-            results[futures[fut]] = fut.result()
+            i = futures[fut]
+            results[i] = fut.result()
+            if report is not None and results[i] is not None:
+                report(items[i], results[i])
     return [results[i] for i in range(len(items))]
+
+
+class _Record:
+    """A batch's part of the inputs (``shard=``) and, in a batch job or with ``shard=`` / ``requeue=``,
+    its record in ``<output_dir>/.landschaft-batch/`` and SIGTERM as a stop (see ``landschaft._jobs``)."""
+
+    def __init__(self, out_dir: Path, tool: str, params: dict, paths: list[Path], marker: Callable[[Path], Path],
+                 shard, requeue: bool, overwrite: bool):
+        from . import _jobs
+
+        self.part = _jobs.resolve_shard(out_dir, shard)
+        self.paths = [p for i, p in enumerate(paths) if self.part is None or self.part.takes(i)]
+        self.active = bool(shard is not None or requeue or _jobs.in_job())
+        self.requeue = requeue
+        self.journal = None
+        if self.active:
+            _jobs.write_manifest(out_dir, tool, _json_value(params), paths, [marker(p).name for p in paths])
+            self.skipped = {p for p in self.paths if not overwrite and marker(p).exists()}
+            self.journal = _jobs.Journal(out_dir, tool, self.part, self.paths, sorted(self.skipped))
+
+    def report(self, src: Path, result: BatchResult) -> None:
+        if self.journal is not None:
+            self.journal.result(src, result.error, skipped=src in self.skipped)
+
+    def progress(self) -> bool:
+        return self.journal is not None and self.journal.new > 0
+
+    def run(self, go: Callable[..., list]) -> list[BatchResult]:
+        """``go(stop, report)`` -> the results; Stopped when SIGTERM came."""
+        from . import _jobs
+
+        with _jobs.stopping(self.active, self.requeue, self.progress) as stopping:
+            try:
+                results = go(stopping.event if self.active else None, self.report)
+            except BaseException:
+                if self.journal is not None:
+                    self.journal.end(stopped="error")
+                raise
+            if stopping.event.is_set():
+                stopping.finish()
+                if self.journal is not None:
+                    self.journal.end(stopped=stopping.signal_name, requeued=stopping.requeued)
+                raise _jobs.Stopped(stopping.signal_name or "SIGTERM", results, stopping.requeued)
+        if self.journal is not None:
+            self.journal.end()
+        return results
 
 
 def _output_name(src: Path, connectivity, edge_width, transition, internal) -> str:
@@ -167,6 +224,8 @@ def mspa_batch(
     overwrite: bool = False,
     raise_errors: bool = False,
     on=None,
+    shard=None,
+    requeue: bool = False,
 ) -> list[BatchResult]:
     """Run MSPA on many rasters in parallel and write the results.
 
@@ -202,11 +261,14 @@ def mspa_batch(
         ``ls.helpers()``: process the rasters on this computer and on the helpers of
         its group (see :mod:`landschaft.parallel`), each with ``threads_per_worker``
         threads (``n_workers`` and ``max_memory`` do not apply).
+    shard, requeue
+        The part of the inputs to process and SIGTERM in a batch job, as in
+        :func:`batch`.
 
     Returns
     -------
     list of BatchResult
-        One entry per input, in input order.
+        One entry per input (of the part, with ``shard``), in input order.
 
     Examples
     --------
@@ -227,6 +289,11 @@ def mspa_batch(
         paths, band, size = expand_sources(inputs), None, {}
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    params = dict(connectivity=connectivity, edge_width=edge_width, transition=transition, internal=internal)
+    record = _Record(out_dir, "mspa", params, paths,
+                     lambda src: out_dir / _output_name(src, connectivity, edge_width, transition, internal),
+                     shard, requeue, overwrite)
+    paths = record.paths
     if on is not None:
         def task(src: Path):
             dst = out_dir / _output_name(src, connectivity, edge_width, transition, internal)
@@ -240,7 +307,8 @@ def mspa_batch(
             _move(folder / dst.name, dst)
             return BatchResult(src, dst, float(stats.get("compute_s") or 0.0))
 
-        return _run_on(on, "mspa", paths, task, done, threads_per_worker, out_dir, raise_errors)
+        return record.run(lambda stop, report: _reported(
+            _run_on(on, "mspa", paths, task, done, threads_per_worker, out_dir, raise_errors), paths, report))
 
     def process(src: Path) -> BatchResult:
         start = time.perf_counter()
@@ -258,21 +326,24 @@ def mspa_batch(
                 n_threads=threads_per_worker,
                 validate=False,  # load_raster already validated
             )
-            write_raster(result, dst)
+            # under another name until whole: a run killed meanwhile leaves no output taken as done
+            _replace(write_raster(result, _partial(dst)), dst)
             return BatchResult(src, dst, time.perf_counter() - start)
         except Exception as err:  # noqa: BLE001 - reported per file
             if raise_errors:
                 raise
             return BatchResult(src, None, time.perf_counter() - start, f"{type(err).__name__}: {err}")
 
-    return run_parallel(
+    return record.run(lambda stop, report: run_parallel(
         paths,
         process,
         pixels=lambda p: size.get(p) or _header_pixels(p),
         n_workers=n_workers,
         threads_per_worker=threads_per_worker,
         max_memory=max_memory,
-    )
+        stop=stop,
+        report=report,
+    ))
 
 
 def mspa_collection(
@@ -465,11 +536,33 @@ def _write_meta(meta_path: Path, name: str, src: Path, params: dict, outputs: li
                 seconds: float) -> None:
     from . import __version__
 
-    meta_path.write_text(json.dumps({
+    # it marks the input done: written whole or not at all
+    part = meta_path.with_name(f".{meta_path.name}.{os.getpid()}-{threading.get_ident()}")
+    part.write_text(json.dumps({
         "tool": name, "input": str(src), "params": _json_value(params),
         "outputs": [str(p) for p in outputs], "values": values,
         "seconds": round(seconds, 3), "landschaft": __version__,
     }, indent=1))
+    os.replace(part, meta_path)
+
+
+def _partial(dst: Path) -> Path:
+    """Where an output is written until whole (same folder and extension, so the same driver)."""
+    return dst.with_name(f".{dst.stem}.{os.getpid()}-{threading.get_ident()}.part{dst.suffix}")
+
+
+def _replace(src: Path, dst: Path) -> Path:
+    """A whole output into place, with the files GDAL wrote beside it (``.aux.xml``)."""
+    for extra in src.parent.glob(src.name + ".*"):
+        os.replace(extra, dst.with_name(dst.name + extra.name[len(src.name):]))
+    os.replace(src, dst)
+    return dst
+
+
+def _reported(results: list[BatchResult], paths: list[Path], report) -> list[BatchResult]:
+    for src, result in zip(paths, results):
+        report(src, result)
+    return results
 
 
 def _move(src: Path, dst: Path) -> Path:
@@ -536,6 +629,8 @@ def batch(
     raise_errors: bool = False,
     table_format: str = "csv",
     on=None,
+    shard=None,
+    requeue: bool = False,
     **params,
 ) -> list[BatchResult]:
     """Run a landschaft tool on many rasters in parallel and write its outputs.
@@ -576,13 +671,30 @@ def batch(
         its group (see :mod:`landschaft.parallel`), with the same outputs; ``tool``
         is then a name from :data:`BATCH_TOOLS` and ``params`` JSON values (numbers,
         strings, lists, dicts).
+    shard
+        Process only a part of the inputs, for the tasks of a cluster's job
+        array: ``"i/n"`` (or ``(i, n)``), part ``i`` (from 0) of ``n``, the
+        inputs ``i``, ``i + n``, ``i + 2n``...; ``"array"``: the part of this
+        task of a Slurm job array (``SLURM_ARRAY_TASK_ID``; all the inputs
+        outside an array), the split kept in the output folder so that tasks
+        submitted again take the same inputs. ``landschaft slurm`` writes the job
+        script.
+    requeue
+        In a Slurm job: on SIGTERM near the time limit (``#SBATCH
+        --signal=B:TERM@120``), once the rasters at work end (or 90 s pass),
+        requeue this job (``scontrol requeue``) to continue, if it finished at
+        least one raster. In a batch job (Slurm, PBS, LSF) or with ``shard`` or
+        ``requeue``, SIGTERM stops the batch (:class:`landschaft.batch.Stopped`:
+        no raster starts after it) and the output folder keeps a record of the
+        runs (:func:`batch_status`, ``landschaft status``).
     **params
         Parameters of the tool, e.g. ``variant=6`` for ``"spa"``.
 
     Returns
     -------
     list of BatchResult
-        One entry per input, in input order; ``outputs`` lists every file written.
+        One entry per input (of the part, with ``shard``), in input order;
+        ``outputs`` lists every file written.
 
     Examples
     --------
@@ -607,7 +719,8 @@ def batch(
         raise ValueError("table_format must be 'csv' or 'parquet'")
     if name == "mspa":
         return mspa_batch(inputs, output_dir, n_workers=n_workers, threads_per_worker=threads_per_worker,
-                          max_memory=max_memory, overwrite=overwrite, raise_errors=raise_errors, on=on, **params)
+                          max_memory=max_memory, overwrite=overwrite, raise_errors=raise_errors, on=on,
+                          shard=shard, requeue=requeue, **params)
     if isinstance(inputs, RasterCollection):
         paths, band = inputs.paths, inputs.band
         size = {i.path: i.pixels for i in inputs}
@@ -615,6 +728,9 @@ def batch(
         paths, band, size = expand_sources(inputs), None, {}
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    record = _Record(out_dir, name, params, paths, lambda src: out_dir / f"{src.stem}_{name}.json", shard,
+                     requeue, overwrite)
+    paths = record.paths
     thread_kw = _thread_keyword(fn)
     call_params = dict(params)
     if thread_kw and thread_kw not in call_params:
@@ -647,7 +763,8 @@ def batch(
             _write_meta(meta_path, name, src, params, outputs, stats.get("values", {}), seconds)
             return BatchResult(src, outputs[0] if outputs else meta_path, seconds, outputs=outputs + [meta_path])
 
-        return _run_on(on, name, paths, task, done, threads_per_worker, out_dir, raise_errors)
+        return record.run(lambda stop, report: _reported(
+            _run_on(on, name, paths, task, done, threads_per_worker, out_dir, raise_errors), paths, report))
 
     def process(src: Path) -> BatchResult:
         start = time.perf_counter()
@@ -666,11 +783,13 @@ def batch(
             return BatchResult(src, None, time.perf_counter() - start, f"{type(err).__name__}: {err}")
 
     per_pixel = _TOOL_BYTES_PER_PIXEL.get(name, BYTES_PER_PIXEL)
-    return run_parallel(
+    return record.run(lambda stop, report: run_parallel(
         paths,
         process,
         pixels=lambda p: (size.get(p) or _header_pixels(p)) * per_pixel // BYTES_PER_PIXEL,
         n_workers=n_workers,
         threads_per_worker=threads_per_worker,
         max_memory=max_memory,
-    )
+        stop=stop,
+        report=report,
+    ))
