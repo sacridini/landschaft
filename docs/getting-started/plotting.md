@@ -169,4 +169,6 @@ page of many bands stays light. A map of 100 million cells takes a fraction of
 a second; see [Benchmarks](../benchmarks.md#plotting).
 
 In tests and in scripts that only save plots, the environment variable
-`LANDSCHAFT_PLOT_SHOW=0` keeps windows from opening.
+`LANDSCHAFT_PLOT_SHOW=0` keeps windows from opening. Where no window can open
+(inside a batch job of Slurm, PBS or LSF, or on Linux without a display) plots
+are not shown, and a line says so once: write them with `.save()`.

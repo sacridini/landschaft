@@ -27,6 +27,7 @@ from ._slots import Slots
 from ._tasks import format_bytes, format_seconds
 
 HEARTBEAT = 5.0
+SECRET_WAIT = 300.0       # in a batch job, how long a helper waits for the coordinator's group
 
 
 def default_cache_dir() -> Path:
@@ -40,6 +41,19 @@ def default_cache_dir() -> Path:
         old = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "landschaft" / "helper"
     new = cache_dir() / "helper"
     return old if not os.environ.get("LANDSCHAFT_CACHE") and old != new and old.is_dir() else new
+
+
+def wait_for_secret(stop: threading.Event, out, seconds: float = SECRET_WAIT) -> bytes | None:
+    """In a batch job: the group's secret, once the coordinator started on another node of the
+    allocation creates it in the configuration folder the nodes share (``$HOME``)."""
+    out(f"Waiting for the coordinator to create the group in {_group.config_dir()} (up to {seconds:.0f} s)")
+    end = time.monotonic() + seconds
+    while not stop.is_set() and time.monotonic() < end:
+        secret = _group.load_secret()
+        if secret is not None:
+            return secret
+        stop.wait(1.0)
+    return None
 
 
 def default_cores() -> int:
@@ -113,10 +127,17 @@ def run_worker(*, cores: int | None = None, connect: str | None = None, join: st
     invitation code from ``landschaft helpers invite``, for the first time. ``connect``: the
     coordinator's address (host or host:port), when broadcasts do not reach it. ``once``:
     return after the first coordinator is gone."""
+    from .._jobs import in_job
     from . import _pairing
 
     out = out or (lambda text: print(text, flush=True))
     stop = stop or threading.Event()
+    scheduler = in_job()
+    if scheduler and not connect:
+        raise RuntimeError(f"inside a {scheduler} job the broadcasts of the local network do not reach the "
+                           "coordinator: give its address with --connect HOST (in an allocation of several nodes, "
+                           "srun ... landschaft worker --connect <the coordinator's node>), or split the work "
+                           "among the tasks of a job array (landschaft slurm)")
     cores = cores if cores and cores > 0 else default_cores()
     pairs = parse_maps(maps)
     if join:
@@ -124,6 +145,8 @@ def run_worker(*, cores: int | None = None, connect: str | None = None, join: st
         _group.save_secret(secret)
         out("Joined the group. From now on, just run: landschaft worker")
     secret = _group.load_secret()
+    if secret is None and scheduler:
+        secret = wait_for_secret(stop, out)
     if secret is None:
         raise RuntimeError("this computer is not in a group yet. On the main computer run `landschaft helpers "
                            "invite`, then here: landschaft worker --join <code>")

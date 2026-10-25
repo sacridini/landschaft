@@ -344,3 +344,55 @@ def test_one_cache_root(tmp_path, monkeypatch):
         assert default_cache_dir() == tmp_path / "local" / "landschaft" / "helper-cache"
     elif sys.platform.startswith("linux"):
         assert default_cache_dir() == tmp_path / "xdg" / "landschaft" / "helper"
+
+
+def test_helpers_inside_a_job(tiles, tmp_path, monkeypatch):
+    """Inside a job: no broadcasts; a helper started on another node of the allocation, before the
+    coordinator, waits for the group the coordinator creates in the shared configuration folder."""
+    import socket
+    import threading
+
+    from landschaft._dist import _group, _worker
+
+    monkeypatch.setenv("LANDSCHAFT_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("SLURM_JOB_ID", "99")
+    assert ls.helpers()._options["discovery"] is False
+    assert ls.helpers(discovery=True)._options["discovery"] is True
+    with pytest.raises(RuntimeError, match="--connect"):
+        _worker.run_worker(cores=1, stop=threading.Event(), out=lambda text: None)
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    stop, lines = threading.Event(), []
+    helper = threading.Thread(target=_worker.run_worker, daemon=True, kwargs=dict(
+        cores=2, connect=f"127.0.0.1:{port}", cache_dir=str(tmp_path / "cache"), stop=stop, out=lines.append))
+    helper.start()
+    try:
+        assert _group.load_secret() is None
+        with ls.helpers(local=False, port=port, verbose=False) as pool:     # creates the group
+            runs = ls.batch("accounting", tiles, tmp_path / "out", on=pool)
+        assert all(r.ok for r in runs) and len(runs) == 5
+        assert any("Waiting for the coordinator to create the group" in line for line in lines)
+    finally:
+        stop.set()
+        helper.join(timeout=30)
+
+
+def test_plots_are_not_shown_without_a_display(monkeypatch, capsys):
+    from landschaft._plotting import _env
+
+    monkeypatch.setenv("LANDSCHAFT_PLOT_SHOW", "1")
+    monkeypatch.setattr(_env, "_told", False)
+    monkeypatch.setenv("SLURM_JOB_ID", "5")
+    assert _env.headless() == "inside a Slurm job"
+    assert _env.auto_show() is False and _env.auto_show() is False
+    assert capsys.readouterr().err.count("plots are not shown (inside a Slurm job)") == 1
+    monkeypatch.delenv("SLURM_JOB_ID")
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    assert _env.headless() == "no display (DISPLAY is not set)"
+    monkeypatch.setenv("DISPLAY", ":0")
+    assert _env.headless() is None and _env.auto_show() is True
+    monkeypatch.setenv("LANDSCHAFT_PLOT_SHOW", "0")
+    assert _env.auto_show() is False

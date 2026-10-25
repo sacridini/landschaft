@@ -556,6 +556,7 @@ def test_windows_only_outside_notebooks(monkeypatch, forest):
     monkeypatch.setattr(_env, "open_window", lambda html, title="", **_: opened.append(title))
     monkeypatch.delenv("LANDSCHAFT_PLOT_SHOW", raising=False)
     monkeypatch.setattr(_env, "in_notebook", lambda: False)
+    monkeypatch.setattr(_env, "headless", lambda: None)  # a desktop (a CI runner has no display)
     ls.plot(forest, title="here")
     assert opened == ["here"]
     monkeypatch.setattr(_env, "in_notebook", lambda: True)

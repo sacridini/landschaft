@@ -40,8 +40,10 @@ class Helpers:
         TCP port helpers connect to (the discovery broadcasts use UDP 47810); 0 picks a
         free one.
     discovery
-        Answer the broadcasts of helpers looking for work on the local network. Without
-        it, helpers connect with ``landschaft worker --connect <this computer>``.
+        Answer the broadcasts of helpers looking for work on the local network (default:
+        yes, except inside a batch job of Slurm, PBS or LSF, between whose nodes broadcasts
+        do not pass). Without it, helpers connect with ``landschaft worker --connect <this
+        computer>``.
     verbose
         Print who joined, the progress and failures.
 
@@ -54,8 +56,12 @@ class Helpers:
     """
 
     def __init__(self, *, local: bool = True, local_threads: int | None = None, port: int = _group.TCP_PORT,
-                 discovery: bool = True, verbose: bool = True, out: Callable[[str], None] | None = None,
+                 discovery: bool | None = None, verbose: bool = True, out: Callable[[str], None] | None = None,
                  host: str = ""):
+        if discovery is None:
+            from .._jobs import in_job
+
+            discovery = in_job() is None
         self._options = dict(local=local, local_threads=local_threads, port=port, discovery=discovery,
                              verbose=verbose, out=out, host=host)
         self._coordinator: Coordinator | None = None
@@ -113,7 +119,7 @@ class Helpers:
 
 
 def helpers(*, local: bool = True, local_threads: int | None = None, port: int = _group.TCP_PORT,
-            discovery: bool = True, verbose: bool = True) -> Helpers:
+            discovery: bool | None = None, verbose: bool = True) -> Helpers:
     """This computer and the helpers of its group, for ``on=`` (see :class:`Helpers`).
 
     Parameters
@@ -125,7 +131,8 @@ def helpers(*, local: bool = True, local_threads: int | None = None, port: int =
     port
         TCP port helpers connect to.
     discovery
-        Answer helpers that look for work on the local network.
+        Answer helpers that look for work on the local network (default: yes, except inside
+        a batch job, where helpers connect with ``landschaft worker --connect``).
     verbose
         Print who joined, the progress and failures.
 
