@@ -280,7 +280,7 @@ restriction (it misses some patches, see the
 Landschaft solves the exact model: a patch heuristic, a first patch of the
 restricted model, directed cuts at the root, then HiGHS's branch and bound with
 the same cuts separated at its nodes (HiGHS is patched for it). Measured with
-`tools/benchmark_connect.py` (version 1.51; 120 s, gap 1 %, 4 threads, on a
+`tools/benchmark_connect.py` (version 1.52; 120 s, gap 1 %, 4 threads, on a
 Ryzen 7 7730U laptop), against Gurobi 13 on the same exact model, alone and
 with Landschaft's cuts added at its nodes by a callback (best patch / proven
 gap):
@@ -295,7 +295,7 @@ gap):
 
 Landschaft's patches are as cheap as or cheaper than Gurobi's, and its proven
 gaps match Gurobi's own except with feature contiguity; Gurobi's branch and
-bound does more with the same cuts. Before version 1.51, the same runs gave
+bound does more with the same cuts. Before version 1.52, the same runs gave
 Serra Verde a network of 33 981 with a gap of 24 % (in 60 s).
 
 ### Species distributions
