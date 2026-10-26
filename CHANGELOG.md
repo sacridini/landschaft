@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.52.0] - 2026-10-26
+
 ### Added
 - `ls.prioritize`: `Problem.add_neighbor_penalties(penalty, data=None, zones=None)`, prioritizr 9's neighbour
   penalties against fragmentation: the connectivity penalties of a binary symmetric adjacency matrix (the units'
