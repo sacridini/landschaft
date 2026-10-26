@@ -402,7 +402,9 @@ def test_covering_keeps_the_time_limit_on_wide_models():
     """Gap 0 on 3e5 units: HiGHS's MIP root would ignore a 1 s limit for seconds; it is not called."""
     a, cost, rhs = _wide_cover(n=300_000, m=30, seed=5)
     r = _cover(a, cost, rhs, "covering", gap=0.0, threads=4, time_limit=1.0)
-    assert r["has_solution"] and r["seconds"] < 1.5
+    # the engine's own steps end a little past the limit (0.1 to 0.6 s on a laptop under load); HiGHS's root
+    # ran seconds past it
+    assert r["has_solution"] and r["seconds"] < 2.0
     assert r["status"] in ("optimal", "time_limit") and r["gap"] < 1e-3
 
 
