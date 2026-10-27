@@ -4220,6 +4220,18 @@ ls.sdm.mess(data, fut)
 Desempenho: o `sample.int(..., prob)` sem reposição do R ficou exato e rápido (sequências de pesos iguais em
 forma fechada + Fenwick: 1 milhão de células e 30 mil sorteios em 0,24 s contra 16-20 s).
 
+### Do pipeline em R de SDM calibrado no tempo (anfíbios do Chaco, 2026-10-27)
+Análise dos scripts de um colega (CoordinateCleaner, desbaste por prevalência, KDE de grupo-alvo por grupo de
+distribuição e período, background com o ano da ocorrência, preditores do ano anterior, MaxEnt L+Q, GLM
+"expert" com a distância ao mapa da IUCN). Lacunas e decisões:
+1. **Feito (1.53.0)**: `bias_surface` (KDE gaussiana do `MASS::kde2d` nos centros das células, `bw.nrd` por eixo,
+   `limits`, pesos, `rescale`; o `h` do `kde2d` é 4 desvios-padrão).
+2. **Feito (1.53.0)**: `SDMResult.predictions` (fora da dobra, também com `on=`), para modelos empilhados.
+3. A fazer, se pedido: preditores por ano no `dataset`/`prepare` (`{ano: pilha}`, coluna de ano, `lag=`,
+   background herdando os anos das ocorrências). Hoje: `ls.extract` de todas as bandas + escolha por linha.
+4. Baixa prioridade: desbaste em grade com prioridade (manter o mais antigo), `cd_ddmm` do CoordinateCleaner,
+   `background(replace=True)` (o sorteio sem reposição satura o viés quando `n` se aproxima das células com peso).
+
 ### Erros das referências (só a forma correta, testada contra a referência corrigida)
 * CoordinateCleaner (`tools/cc_fixed.R`): raio do `cc_zero` em graus (o terra >= 1.8 o tornou 0,5 m);
   `cc_cen(test = "provinces")` = "both"; círculos que cruzam o antimeridiano ou contêm um polo; `cc_coun`
