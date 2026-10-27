@@ -119,7 +119,9 @@ and often improves models (Boria et al. 2014). The **target-group
 background** draws the background with the same bias as the presences: from
 the records of all species of the same group collected by the same methods,
 so that the bias cancels between presences and background (Phillips et al.
-2009; `ls.sdm.background(..., bias=...)`).
+2009). The effort is estimated as a kernel density of those records
+(`ls.sdm.bias_surface`, the bias grid of Fourcade et al. 2014) and the
+background drawn in proportion to it (`ls.sdm.background(..., bias=...)`).
 
 **The accessible area.** Background points describe the conditions the
 species could have chosen from. Drawing them from places it could never have

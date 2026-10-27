@@ -1,0 +1,51 @@
+{
+ "arrays": {
+  "kde_anisotropic/bw": {
+   "kind": "vector"
+  },
+  "kde_anisotropic/z": {
+   "kind": "vector"
+  },
+  "kde_fixed/bw": {
+   "kind": "vector"
+  },
+  "kde_fixed/z": {
+   "kind": "vector"
+  },
+  "kde_lonlat/bw": {
+   "kind": "vector"
+  },
+  "kde_lonlat/z": {
+   "kind": "vector"
+  },
+  "kde_nrd/bw": {
+   "kind": "vector"
+  },
+  "kde_nrd/z": {
+   "kind": "vector"
+  },
+  "kde_rescale/bw": {
+   "kind": "vector"
+  },
+  "kde_rescale/z": {
+   "kind": "vector"
+  }
+ },
+ "r": "R version 4.3.2 (2023-10-31 ucrt)",
+ "versions": {
+  "CoordinateCleaner": null,
+  "ENMeval": null,
+  "biomod2": null,
+  "blockCV": null,
+  "dismo": null,
+  "ecospat": null,
+  "glmnet": null,
+  "maxnet": null,
+  "mop": null,
+  "predicts": null,
+  "sf": "1.0.20",
+  "spThin": null,
+  "terra": "1.8.29",
+  "usdm": null
+ }
+}

@@ -21,6 +21,7 @@ Typical use::
 from ._area import accessible_area
 from ._autocorrelation import autocorrelation_range
 from ._background import background
+from ._bias import bias_surface
 from ._cells import one_per_cell
 from ._clean import clean_occurrences
 from ._data import SDMData, dataset
@@ -55,6 +56,7 @@ __all__ = [
     "area_of_habitat",
     "autocorrelation_range",
     "background",
+    "bias_surface",
     "boyce",
     "buffer_folds",
     "cell_area_km2",

@@ -46,6 +46,8 @@ suit = ls.sdm.predict(res, env)          # ensemble and its uncertainty
 
 ::: landschaft.sdm.background
 
+::: landschaft.sdm.bias_surface
+
 ::: landschaft.sdm.dataset
 
 ::: landschaft.sdm.SDMData

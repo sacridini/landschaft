@@ -19,7 +19,8 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background", "folds", "evaluate", "extrapolation", "autocorrelation"]
+GROUPS: list[str] = ["smoke", "cells", "thin", "clean", "predictors", "background", "bias", "folds", "evaluate",
+                     "extrapolation", "autocorrelation"]
 
 
 @dataclass
@@ -227,6 +228,18 @@ def bias_bio12():
     return bioclim().sel(band="bio12").drop_vars("band")
 
 
+def bias_points() -> pd.DataFrame:
+    """Records on the grid of stack_80: a cluster, a uniform spread, duplicates and a few outside the grid."""
+    from landschaft import _core
+
+    r = _core.RRandom(21)
+    x = np.concatenate([r.rnorm(120, 330_000, 6_000), r.runif(80, 300_000, 380_000), [310_500.0] * 5,
+                        [295_000.0, 392_000.0, 340_000.0]])
+    y = np.concatenate([r.rnorm(120, 7_460_000, 9_000), r.runif(80, 7_420_000, 7_500_000), [7_480_500.0] * 5,
+                        [7_450_000.0, 7_430_000.0, 7_515_000.0]])
+    return pd.DataFrame({"x": x, "y": y})
+
+
 def blk_points():
     """150 points in 10 x 7 km (UTM 22S), 40 % presences: blockCV's typical input."""
     import geopandas as gpd
@@ -375,6 +388,7 @@ INPUTS: dict[str, Callable[[], object]] = {
     "brad_points": brad_points,
     "bradypus_area": bradypus_area,
     "bias_bio12": bias_bio12,
+    "bias_points": bias_points,
     "vif_table": vif_table,
     "vif_collinear": vif_collinear,
     "vif_big": vif_big,
@@ -986,6 +1000,37 @@ for _name, _k, _seed, _args, _env, _opts in [
     _inputs = ("brad_points", "bioclim") if _env else ("brad_points",)
     CASES[_name] = Case("folds", r=_CLUSTER_R.format(seed=_seed, k=_k, args=_args), inputs=_inputs,
                         py=_cluster_py(_k, _seed, _env, **_opts))
+
+
+# MASS::kde2d at the cell centres (lims = the first and last centres, n = the grid's columns and rows); its z
+# is [x, y] with y increasing, given here as the raster's cells, row-major from the top.
+_KDE_R = ("{{ g <- {env}; cx <- xFromCol(g, 1:ncol(g)); cy <- yFromRow(g, nrow(g):1); "
+          "k <- MASS::kde2d({p}[[{xc}]], {p}[[{yc}]]{h}, n = c(ncol(g), nrow(g)), "
+          "lims = c(cx[1], cx[ncol(g)], cy[1], cy[nrow(g)])); z <- k$z[, ncol(k$z):1]; "
+          "{post}list(z = as.vector(z), bw = c(bw.nrd({p}[[{xc}]]), bw.nrd({p}[[{yc}]]))) }}")
+
+
+def _kde_py(env: str, points: str, cols: tuple, **opts):
+    def run(**kw):
+        import landschaft as ls
+
+        b = ls.sdm.bias_surface(kw[points], kw[env], mask=False, **opts)
+        bw = [ls.sdm._bias._bw_nrd(kw[points][c].to_numpy(dtype=float)) for c in cols]
+        return {"z": b.values.reshape(-1), "bw": bw}
+    return run
+
+
+for _name, _env, _p, _xc, _yc, _h, _post, _opts in [
+    ("kde_nrd", "stack_80", "bias_points", "'x'", "'y'", "", "", {}),
+    ("kde_fixed", "stack_80", "bias_points", "'x'", "'y'", ", h = 4 * 3000", "", {"bandwidth": 3000}),
+    ("kde_anisotropic", "stack_80", "bias_points", "'x'", "'y'", ", h = 4 * c(2500, 6000)", "",
+     {"bandwidth": (2500, 6000)}),
+    ("kde_rescale", "stack_80", "bias_points", "'x'", "'y'", ", h = 4 * 1500",
+     "z <- (z - min(z)) / (max(z) - min(z)) * 0.9 + 0.05; ", {"bandwidth": 1500, "rescale": (0.05, 0.95)}),
+    ("kde_lonlat", "bioclim", "bradypus", "'lon'", "'lat'", ", h = 4 * 2", "", {"bandwidth": 2.0}),
+]:
+    CASES[_name] = Case("bias", r=_KDE_R.format(env=_env, p=_p, xc=_xc, yc=_yc, h=_h, post=_post),
+                        inputs=(_env, _p), py=_kde_py(_env, _p, (_xc.strip("'"), _yc.strip("'")), **_opts))
 
 
 def case_ids(group: str) -> list[str]:
