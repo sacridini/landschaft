@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.54.0] - 2026-10-27
+
 ### Added
 - `ls.services.ndr` (InVEST's nutrient delivery ratio): the nitrogen and phosphorus loads of each land use
   (application rates or measured runoff) scaled by the runoff proxy over its mean, split into surface and, for
