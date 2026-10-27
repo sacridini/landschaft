@@ -32,9 +32,15 @@ Typical use::
                                            precipitation=monthly_rain, et0=monthly_et0, soil_group=soils,
                                            rain_events=[12, 10, 9, 6, 4, 2, 1, 1, 3, 6, 9, 11])
     swy.baseflow                               # the recharge that reaches the streams (mm / yr)
+
+    cv = ls.services.coastal_vulnerability(aoi, landmass, wwiii, bathymetry, shelf, dem, habitats,
+                                           model_resolution=250, max_fetch_distance=12000,
+                                           dem_averaging_radius=1000)
+    cv.exposure                                # exposure index of the shore points, with and without habitats
 """
 
 from ._carbon import Carbon, carbon, valuation_constant
+from ._coastal import CoastalVulnerability, coastal_vulnerability
 from ._habitat import HabitatQuality, habitat_quality
 from ._ndr import NDR, ndr
 from ._pollination import Pollination, pollination
@@ -42,6 +48,6 @@ from ._sdr import SDR, sdr
 from ._swy import SeasonalWaterYield, seasonal_water_yield
 from ._water import WaterYield, water_yield
 
-__all__ = ["Carbon", "HabitatQuality", "NDR", "Pollination", "SDR", "SeasonalWaterYield", "WaterYield",
-           "carbon", "habitat_quality", "ndr", "pollination", "sdr", "seasonal_water_yield",
-           "valuation_constant", "water_yield"]
+__all__ = ["Carbon", "CoastalVulnerability", "HabitatQuality", "NDR", "Pollination", "SDR", "SeasonalWaterYield",
+           "WaterYield", "carbon", "coastal_vulnerability", "habitat_quality", "ndr", "pollination", "sdr",
+           "seasonal_water_yield", "valuation_constant", "water_yield"]

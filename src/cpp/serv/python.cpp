@@ -40,6 +40,7 @@ void register_sdr(py::module_& m);
 void register_ndr(py::module_& m);
 void register_pollination(py::module_& m);
 void register_swy(py::module_& m);
+void register_coastal(py::module_& m);
 
 void register_python(py::module_& m) {
     register_water(m);
@@ -47,6 +48,7 @@ void register_python(py::module_& m) {
     register_ndr(m);
     register_pollination(m);
     register_swy(m);
+    register_coastal(m);
     m.def("serv_classify", [](const I64& lulc, const U8& valid, const I64& codes, int threads) {
         same_size(lulc, valid, "the mask differs in size from the map");
         I32 out(lulc.request().shape);
