@@ -654,6 +654,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.select_predictors`](sdm.md#landschaft.sdm.select_predictors) | Drop predictors that the others already explain (collinearity) |
 | [`ls.vif`](sdm.md#landschaft.sdm.vif) | Variance inflation factor of each predictor: how well the others predict it |
 | [`ls.background`](sdm.md#landschaft.sdm.background) | Background points: a sample of the conditions available to the species |
+| [`ls.bias_surface`](sdm.md#landschaft.sdm.bias_surface) | Sampling effort as a surface: a Gaussian kernel density of the records of a group |
 | [`ls.dataset`](sdm.md#landschaft.sdm.dataset) | Put presences, background points and predictor values together |
 | [`ls.SDMData`](sdm.md#landschaft.sdm.SDMData) | Presences and background (or absences) with their predictor values, ready for a model |
 | [`ls.spatial_blocks`](sdm.md#landschaft.sdm.spatial_blocks) | Folds made of spatial blocks: no fold is a neighbour of the records it tests |
@@ -775,10 +776,16 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.valuation_constant`](services.md#landschaft.services.valuation_constant) | The factor turning a change in carbon into its net present value (InVEST's) |
 | [`ls.water_yield`](services.md#landschaft.services.water_yield) | Annual water yield, consumption and hydropower value (InVEST's annual water yield model) |
 | [`ls.WaterYield`](services.md#landschaft.services.WaterYield) | Annual water yield of a landscape (`water_yield`) |
+| [`ls.seasonal_water_yield`](services.md#landschaft.services.seasonal_water_yield) | Quickflow, local recharge and baseflow by month and year (InVEST's seasonal water yield model) |
+| [`ls.SeasonalWaterYield`](services.md#landschaft.services.SeasonalWaterYield) | Quickflow, recharge and baseflow of a landscape (`seasonal_water_yield`) |
 | [`ls.sdr`](services.md#landschaft.services.sdr) | Sediment export, deposition and retention (InVEST's sediment delivery ratio model) |
 | [`ls.SDR`](services.md#landschaft.services.SDR) | Sediment export and retention of a landscape (`sdr`) |
+| [`ls.ndr`](services.md#landschaft.services.ndr) | Nutrient export and retention (InVEST's nutrient delivery ratio model) |
+| [`ls.NDR`](services.md#landschaft.services.NDR) | Nutrient export and retention of a landscape (`ndr`) |
 | [`ls.habitat_quality`](services.md#landschaft.services.habitat_quality) | Habitat degradation, quality and rarity (InVEST's habitat quality model) |
 | [`ls.HabitatQuality`](services.md#landschaft.services.HabitatQuality) | Habitat degradation, quality and rarity (`habitat_quality`) |
+| [`ls.pollination`](services.md#landschaft.services.pollination) | Pollinator abundance and crop pollination (InVEST's crop pollination model) |
+| [`ls.Pollination`](services.md#landschaft.services.Pollination) | Pollinator supply and abundance, and the yield of farms (`pollination`) |
 
 ### Uncertainty
 
