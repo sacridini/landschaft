@@ -1,0 +1,90 @@
+{
+ "model": "pollination",
+ "nodata": 255,
+ "pixel": 30.0,
+ "patched": true,
+ "bio": {
+  "lucode": [
+   1.0,
+   2.0,
+   4.0,
+   7.0,
+   9.0
+  ],
+  "nesting_cavity_availability_index": [
+   0.0,
+   0.55,
+   0.05,
+   0.45,
+   0.61
+  ],
+  "nesting_ground_availability_index": [
+   0.0,
+   0.63,
+   0.84,
+   0.77,
+   0.83
+  ],
+  "floral_resources_spring_index": [
+   0.562,
+   0.0,
+   0.075,
+   0.348,
+   0.624
+  ],
+  "floral_resources_summer_index": [
+   0.981,
+   0.0,
+   0.967,
+   0.701,
+   0.839
+  ]
+ },
+ "guild": {
+  "species": [
+   "apis",
+   "bombus"
+  ],
+  "nesting_suitability_cavity_index": [
+   0.58,
+   0.26
+  ],
+  "nesting_suitability_ground_index": [
+   0.51,
+   0.48
+  ],
+  "foraging_activity_spring_index": [
+   0.23,
+   0.14
+  ],
+  "foraging_activity_summer_index": [
+   0.98,
+   0.52
+  ],
+  "alpha": [
+   110.0,
+   55.0
+  ],
+  "relative_abundance": [
+   0.94,
+   0.23
+  ]
+ },
+ "outputs": [
+  "convolve_ps_bombus",
+  "floral_resources_apis",
+  "total_pollinator_abundance_spring",
+  "total_pollinator_abundance_summer"
+ ],
+ "nodata_values": {
+  "convolve_ps_bombus": -3.4028234663852886e+38,
+  "floral_resources_apis": -3.4028234663852886e+38,
+  "total_pollinator_abundance_spring": -1.0,
+  "total_pollinator_abundance_summer": -1.0
+ },
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

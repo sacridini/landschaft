@@ -1,0 +1,93 @@
+{
+ "model": "pollination",
+ "nodata": 255,
+ "pixel": 30.0,
+ "patched": true,
+ "bio": {
+  "lucode": [
+   1.0,
+   2.0,
+   4.0,
+   7.0,
+   9.0
+  ],
+  "nesting_cavity_availability_index": [
+   0.0,
+   0.43,
+   0.28,
+   0.1,
+   0.72
+  ],
+  "nesting_ground_availability_index": [
+   0.0,
+   0.78,
+   0.32,
+   0.09,
+   0.55
+  ],
+  "floral_resources_spring_index": [
+   0.598,
+   0.0,
+   0.664,
+   0.931,
+   0.092
+  ],
+  "floral_resources_summer_index": [
+   0.984,
+   0.0,
+   0.451,
+   0.301,
+   0.894
+  ]
+ },
+ "guild": {
+  "species": [
+   "xylocopa"
+  ],
+  "nesting_suitability_cavity_index": [
+   0.67
+  ],
+  "nesting_suitability_ground_index": [
+   0.08
+  ],
+  "foraging_activity_spring_index": [
+   0.21
+  ],
+  "foraging_activity_summer_index": [
+   0.61
+  ],
+  "alpha": [
+   1650.0
+  ],
+  "relative_abundance": [
+   0.42
+  ]
+ },
+ "outputs": [
+  "convolve_ps_xylocopa",
+  "floral_resources_xylocopa",
+  "habitat_nesting_index_xylocopa",
+  "local_foraging_effectiveness_xylocopa",
+  "pollinator_abundance_xylocopa_spring",
+  "pollinator_abundance_xylocopa_summer",
+  "pollinator_supply_xylocopa",
+  "total_pollinator_abundance_spring",
+  "total_pollinator_abundance_summer"
+ ],
+ "nodata_values": {
+  "convolve_ps_xylocopa": -3.4028234663852886e+38,
+  "floral_resources_xylocopa": -3.4028234663852886e+38,
+  "habitat_nesting_index_xylocopa": 3.4028234663852886e+38,
+  "local_foraging_effectiveness_xylocopa": -1.0,
+  "pollinator_abundance_xylocopa_spring": -1.0,
+  "pollinator_abundance_xylocopa_summer": -1.0,
+  "pollinator_supply_xylocopa": -1.0,
+  "total_pollinator_abundance_spring": -1.0,
+  "total_pollinator_abundance_summer": -1.0
+ },
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

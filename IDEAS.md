@@ -4073,10 +4073,45 @@ em `src/cpp/serv/sdr.cpp`):
 * Fica para depois: entradas em grades diferentes (o InVEST alinha e reamostra; aqui na mesma grade), o recorte à
   caixa das bacias, o D-Infinity como opção, os benefícios por ação no `ls.prioritize`, o nó do Terraflux.
 
+**Fase 6 feita** (polinização; 2026-10-27, ramo do worktree, sem versão; `ls.services.pollination`, C++ em
+`src/cpp/serv/pollination.cpp`; referência `tools/make_reference_invest_pollination.py`, 7 casos):
+* O modelo do `pollination.py` do natcap.invest 3.20.2 (Lonsdorf et al. 2009): por espécie, o índice de
+  nidificação `HN = max_n N_n ns_n` (produtos em float64, gravado em float32), as flores forrageadas
+  `FF_j = RA_j fa_j` (fa normalizada pela soma das atividades, como o numpy soma), a efetividade local
+  `FE = soma_j FF_j` em float32, os recursos florais `FR` (a convolução de FE pelo núcleo), a oferta
+  `PS = sa HN FR` e a abundância `PA_j = FF_j / FR conv(PS)` (0 onde FR é 0), somada nas espécies em float32; com
+  fazendas, os `fr_<estação>` e `n_<substrato>` delas queimados sobre os mapas (o rasterizador do GDAL, a última
+  fazenda por cima, também sobre células sem uso como lá), a abundância na fazenda
+  `PAT (1 - h) / (h (1 - 2 PAT) + PAT)` em float32 com o `half_sat` das fazendas da estação, `min(mp + FP, 1)`,
+  `max(PYT - mp, 0)` e a tabela por fazenda (médias pelo `ls.zonal_stats`, em float64).
+* As convoluções, o centro da paridade: o `exponential_decay_kernel` do pygeoprocessing (`floor(5 alpha)` de raio,
+  `exp(-d / alpha)` em double gravado em float32, a soma float32 par a par do numpy por tile de 256, a divisão em
+  float32) e o `convolve_2d(ignore_nodata_and_edges=True, mask_nodata=True)` reproduzido passo a passo: os blocos do
+  `iterblocks` (tiles de 256 alargados até 2^16 células, então mapas estreitos dão blocos mais altos), cada par
+  (bloco do mapa, bloco do núcleo) na ordem deles, `fshape` pelo `_next_regular`, o `rfftn`/`irfftn` do numpy pelo
+  mesmo pocketfft (o `pocketfft_hdronly.h` do numpy 2.5.4 vendorizado em `src/cpp/serv/pocketfft/`, BSD-3, sem
+  vetores como no build MSVC do numpy, linha a linha como o `_pocketfft_umath.cpp`), o produto complexo como o
+  laço AVX2/FMA3 do numpy (`fmaddsub`: `fma(ar, br, -(ai bi))`, `fma(ar, bi, ai br)`), a soma de cada bloco no
+  raster em float32 (o `output_array` float32 deles), a divisão pela convolução da máscara e o produto pela soma
+  float32 do núcleo. **Bit a bit** em todos os mapas, intermediários incluídos (núcleos, HN, FF, FE, FR, PS,
+  conv(PS), PA, totais, mapas das fazendas), com 2 x 2 blocos do mapa, com um núcleo de 551 células (3 x 3 blocos
+  do núcleo) e num mapa de 3000 x 3000; a tabela das fazendas a 1e-7 (o InVEST soma em float32 e grava 11 casas).
+* Erro do pygeoprocessing (só a forma correta, testada contra referência corrigida): o `convolve_2d` zera os
+  valores de cada bloco com `numpy.isclose(result, set_tol_to_zero)`, isto é, os que estão a 1e-8 de 1e-8 (de
+  -1e-13 a 2e-8), e não os a 1e-8 de 0, como documenta; aqui `|x| <= 1e-8`. Caso `pollination_faint` (flores
+  fracas: convoluções de ~1e-8 nas bordas das manchas floridas) contra o InVEST corrigido, e
+  `pollination_faint_unpatched` mostrando a diferença (8 células, 2e-8). Também: o InVEST nomeia e compartilha os
+  núcleos por `alpha` com 6 casas (duas espécies com alphas iguais até 6 casas usariam o mesmo); aqui um por alpha.
+* Desempenho (3000 x 3000, três espécies, duas estações): 1,6 s em 4 núcleos (3,4 s em 1) contra 45,5 s do InVEST
+  (que inclui gravar os GeoTIFFs). A convolução: os pares de blocos em paralelo, a transformada de cada bloco do
+  núcleo uma vez por `fshape`, a soma na ordem deles em paralelo por linha.
+* Uma fazenda sem nenhum centro de célula fica sem valores (NULL no InVEST, NaN aqui; testado). Fica para depois:
+  entradas em grades diferentes (o InVEST alinha; aqui na mesma grade) e o nó do Terraflux.
+
 ### Depois
 
-Outros modelos que usam as mesmas peças (polinização, retenção de nutrientes NDR, armazenamento sazonal de água,
-risco costeiro) ficam para avaliar quando estas fases estiverem prontas.
+Outros modelos que usam as mesmas peças (retenção de nutrientes NDR, armazenamento sazonal de água, risco
+costeiro) ficam para avaliar quando estas fases estiverem prontas.
 
 ---
 

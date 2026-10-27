@@ -31,3 +31,9 @@ scenarios goes straight in.
 ::: landschaft.services.habitat_quality
 
 ::: landschaft.services.HabitatQuality
+
+## Crop pollination
+
+::: landschaft.services.pollination
+
+::: landschaft.services.Pollination

@@ -1,0 +1,450 @@
+{
+ "model": "pollination",
+ "nodata": 255,
+ "pixel": 30.0,
+ "patched": true,
+ "bio": {
+  "lucode": [
+   1.0,
+   2.0,
+   4.0,
+   7.0,
+   9.0
+  ],
+  "nesting_cavity_availability_index": [
+   0.0,
+   0.11,
+   0.55,
+   0.53,
+   0.99
+  ],
+  "nesting_ground_availability_index": [
+   0.0,
+   0.42,
+   0.94,
+   0.17,
+   0.15
+  ],
+  "floral_resources_spring_index": [
+   0.167,
+   0.0,
+   0.931,
+   0.453,
+   0.019
+  ],
+  "floral_resources_summer_index": [
+   0.339,
+   0.0,
+   0.678,
+   0.636,
+   0.921
+  ]
+ },
+ "guild": {
+  "species": [
+   "apis",
+   "bombus"
+  ],
+  "nesting_suitability_cavity_index": [
+   0.76,
+   0.87
+  ],
+  "nesting_suitability_ground_index": [
+   0.41,
+   0.8
+  ],
+  "foraging_activity_spring_index": [
+   0.92,
+   0.77
+  ],
+  "foraging_activity_summer_index": [
+   0.7,
+   0.17
+  ],
+  "alpha": [
+   150.0,
+   60.0
+  ],
+  "relative_abundance": [
+   0.67,
+   0.64
+  ]
+ },
+ "outputs": [
+  "convolve_ps_apis",
+  "convolve_ps_bombus",
+  "farm_nesting_substrate_index_cavity",
+  "farm_nesting_substrate_index_ground",
+  "farm_pollinator_spring",
+  "farm_pollinator_summer",
+  "farm_pollinators",
+  "farm_relative_floral_abundance_index_spring",
+  "farm_relative_floral_abundance_index_summer",
+  "floral_resources_apis",
+  "floral_resources_bombus",
+  "foraged_flowers_index_apis_spring",
+  "foraged_flowers_index_apis_summer",
+  "foraged_flowers_index_bombus_spring",
+  "foraged_flowers_index_bombus_summer",
+  "habitat_nesting_index_apis",
+  "habitat_nesting_index_bombus",
+  "half_saturation_spring",
+  "half_saturation_summer",
+  "kernel_2.000000",
+  "kernel_5.000000",
+  "local_foraging_effectiveness_apis",
+  "local_foraging_effectiveness_bombus",
+  "managed_pollinators",
+  "nesting_substrate_index_cavity",
+  "nesting_substrate_index_ground",
+  "pollinator_abundance_apis_spring",
+  "pollinator_abundance_apis_summer",
+  "pollinator_abundance_bombus_spring",
+  "pollinator_abundance_bombus_summer",
+  "pollinator_supply_apis",
+  "pollinator_supply_bombus",
+  "relative_floral_abundance_index_spring",
+  "relative_floral_abundance_index_summer",
+  "total_pollinator_abundance_spring",
+  "total_pollinator_abundance_summer",
+  "total_pollinator_yield",
+  "wild_pollinator_yield"
+ ],
+ "nodata_values": {
+  "farm_pollinators": -1.0,
+  "convolve_ps_apis": -3.4028234663852886e+38,
+  "convolve_ps_bombus": -3.4028234663852886e+38,
+  "farm_nesting_substrate_index_cavity": -1.0,
+  "farm_nesting_substrate_index_ground": -1.0,
+  "farm_pollinator_spring": -1.0,
+  "farm_pollinator_summer": -1.0,
+  "farm_relative_floral_abundance_index_spring": -1.0,
+  "farm_relative_floral_abundance_index_summer": -1.0,
+  "floral_resources_apis": -3.4028234663852886e+38,
+  "floral_resources_bombus": -3.4028234663852886e+38,
+  "foraged_flowers_index_apis_spring": -1.0,
+  "foraged_flowers_index_apis_summer": -1.0,
+  "foraged_flowers_index_bombus_spring": -1.0,
+  "foraged_flowers_index_bombus_summer": -1.0,
+  "habitat_nesting_index_apis": 3.4028234663852886e+38,
+  "habitat_nesting_index_bombus": 3.4028234663852886e+38,
+  "half_saturation_spring": -1.0,
+  "half_saturation_summer": -1.0,
+  "kernel_2.000000": -3.4028234663852886e+38,
+  "kernel_5.000000": -3.4028234663852886e+38,
+  "local_foraging_effectiveness_apis": -1.0,
+  "local_foraging_effectiveness_bombus": -1.0,
+  "managed_pollinators": -1.0,
+  "nesting_substrate_index_cavity": -1.0,
+  "nesting_substrate_index_ground": -1.0,
+  "relative_floral_abundance_index_spring": -1.0,
+  "relative_floral_abundance_index_summer": -1.0,
+  "pollinator_abundance_apis_spring": -1.0,
+  "pollinator_abundance_apis_summer": -1.0,
+  "pollinator_abundance_bombus_spring": -1.0,
+  "pollinator_abundance_bombus_summer": -1.0,
+  "pollinator_supply_apis": -1.0,
+  "pollinator_supply_bombus": -1.0,
+  "total_pollinator_abundance_spring": -1.0,
+  "total_pollinator_abundance_summer": -1.0,
+  "total_pollinator_yield": -1.0,
+  "wild_pollinator_yield": -1.0
+ },
+ "farms": [
+  {
+   "ring": [
+    [
+     500247.0,
+     7999845.0
+    ],
+    [
+     500739.0,
+     7999822.0
+    ],
+    [
+     500739.0,
+     7999113.0
+    ],
+    [
+     500270.0,
+     7999113.0
+    ],
+    [
+     500247.0,
+     7999845.0
+    ]
+   ],
+   "crop_type": "apple",
+   "half_sat": 0.759,
+   "season": "spring",
+   "p_dep": 0.869,
+   "p_managed": 0.115,
+   "fr_spring": 0.089,
+   "fr_summer": 0.288,
+   "n_cavity": 0.915,
+   "n_ground": 0.244
+  },
+  {
+   "ring": [
+    [
+     501207.0,
+     7999395.0
+    ],
+    [
+     502089.0,
+     7999436.0
+    ],
+    [
+     502089.0,
+     7998513.0
+    ],
+    [
+     501166.0,
+     7998513.0
+    ],
+    [
+     501207.0,
+     7999395.0
+    ]
+   ],
+   "crop_type": "coffee",
+   "half_sat": 0.789,
+   "season": "summer",
+   "p_dep": 0.748,
+   "p_managed": 0.157,
+   "fr_spring": 0.397,
+   "fr_summer": 0.352,
+   "n_cavity": 0.685,
+   "n_ground": 0.82
+  },
+  {
+   "ring": [
+    [
+     500457.0,
+     7998795.0
+    ],
+    [
+     501339.0,
+     7998772.0
+    ],
+    [
+     501339.0,
+     7998063.0
+    ],
+    [
+     500480.0,
+     7998063.0
+    ],
+    [
+     500457.0,
+     7998795.0
+    ]
+   ],
+   "crop_type": "squash",
+   "half_sat": 0.386,
+   "season": "spring",
+   "p_dep": 0.768,
+   "p_managed": 0.219,
+   "fr_spring": 0.578,
+   "fr_summer": 0.816,
+   "n_cavity": 0.243,
+   "n_ground": 0.967
+  },
+  {
+   "ring": [
+    [
+     501807.0,
+     7998345.0
+    ],
+    [
+     502839.0,
+     7998386.0
+    ],
+    [
+     502839.0,
+     7997613.0
+    ],
+    [
+     501766.0,
+     7997613.0
+    ],
+    [
+     501807.0,
+     7998345.0
+    ]
+   ],
+   "crop_type": "apple",
+   "half_sat": 0.773,
+   "season": "summer",
+   "p_dep": 0.469,
+   "p_managed": 0.106,
+   "fr_spring": 0.429,
+   "fr_summer": 0.751,
+   "n_cavity": 0.514,
+   "n_ground": 0.313
+  },
+  {
+   "ring": [
+    [
+     502107.0,
+     7999935.0
+    ],
+    [
+     502209.0,
+     7999912.0
+    ],
+    [
+     502209.0,
+     7999833.0
+    ],
+    [
+     502130.0,
+     7999833.0
+    ],
+    [
+     502107.0,
+     7999935.0
+    ]
+   ],
+   "crop_type": "coffee",
+   "half_sat": 0.475,
+   "season": "spring",
+   "p_dep": 0.487,
+   "p_managed": 0.273,
+   "fr_spring": 0.431,
+   "fr_summer": 0.991,
+   "n_cavity": 0.232,
+   "n_ground": 0.902
+  },
+  {
+   "ring": [
+    [
+     500302.0,
+     7998198.0
+    ],
+    [
+     500311.0,
+     7998198.0
+    ],
+    [
+     500311.0,
+     7998189.0
+    ],
+    [
+     500302.0,
+     7998189.0
+    ],
+    [
+     500302.0,
+     7998198.0
+    ]
+   ],
+   "crop_type": "tiny",
+   "half_sat": 0.759,
+   "season": "spring",
+   "p_dep": 0.869,
+   "p_managed": 0.115,
+   "fr_spring": 0.089,
+   "fr_summer": 0.288,
+   "n_cavity": 0.915,
+   "n_ground": 0.244
+  }
+ ],
+ "farm_results": [
+  {
+   "crop_type": "apple",
+   "season": "spring",
+   "half_sat": 0.759,
+   "p_dep": 0.869,
+   "p_managed": 0.115,
+   "fr_spring": 0.089,
+   "fr_summer": 0.288,
+   "n_cavity": 0.915,
+   "n_ground": 0.244,
+   "p_abund": 0.0433149375,
+   "y_tot": 0.24325454235,
+   "pdep_y_w": 0.0141767133,
+   "y_wild": 0.01231956389
+  },
+  {
+   "crop_type": "coffee",
+   "season": "summer",
+   "half_sat": 0.789,
+   "p_dep": 0.748,
+   "p_managed": 0.157,
+   "fr_spring": 0.397,
+   "fr_summer": 0.352,
+   "n_cavity": 0.685,
+   "n_ground": 0.82,
+   "p_abund": 0.06111164019,
+   "y_tot": 0.39905965328,
+   "pdep_y_w": 0.03599993512,
+   "y_wild": 0.02692795172
+  },
+  {
+   "crop_type": "squash",
+   "season": "spring",
+   "half_sat": 0.386,
+   "p_dep": 0.768,
+   "p_managed": 0.219,
+   "fr_spring": 0.578,
+   "fr_summer": 0.816,
+   "n_cavity": 0.243,
+   "n_ground": 0.967,
+   "p_abund": 0.22538378835,
+   "y_tot": 0.64522695541,
+   "pdep_y_w": 0.31905600429,
+   "y_wild": 0.2450350076
+  },
+  {
+   "crop_type": "apple",
+   "season": "summer",
+   "half_sat": 0.773,
+   "p_dep": 0.469,
+   "p_managed": 0.106,
+   "fr_spring": 0.429,
+   "fr_summer": 0.751,
+   "n_cavity": 0.514,
+   "n_ground": 0.313,
+   "p_abund": 0.09425918758,
+   "y_tot": 0.5946239233,
+   "pdep_y_w": 0.0296587199,
+   "y_wild": 0.01390993968
+  },
+  {
+   "crop_type": "coffee",
+   "season": "spring",
+   "half_sat": 0.475,
+   "p_dep": 0.487,
+   "p_managed": 0.273,
+   "fr_spring": 0.431,
+   "fr_summer": 0.991,
+   "n_cavity": 0.232,
+   "n_ground": 0.902,
+   "p_abund": 0.12951442599,
+   "y_tot": 0.7147257328,
+   "pdep_y_w": 0.14122119546,
+   "y_wild": 0.06877472252
+  },
+  {
+   "crop_type": "tiny",
+   "season": "spring",
+   "half_sat": 0.759,
+   "p_dep": 0.869,
+   "p_managed": 0.115,
+   "fr_spring": 0.089,
+   "fr_summer": 0.288,
+   "n_cavity": 0.915,
+   "n_ground": 0.244,
+   "p_abund": null,
+   "y_tot": null,
+   "pdep_y_w": null,
+   "y_wild": null
+  }
+ ],
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

@@ -7,10 +7,13 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 
+#include "serv/pollination.hpp"
 #include "serv/sdr.hpp"
 #include "serv/services.hpp"
 
@@ -33,10 +36,12 @@ namespace serv {
 
 void register_water(py::module_& m);
 void register_sdr(py::module_& m);
+void register_pollination(py::module_& m);
 
 void register_python(py::module_& m) {
     register_water(m);
     register_sdr(m);
+    register_pollination(m);
     m.def("serv_classify", [](const I64& lulc, const U8& valid, const I64& codes, int threads) {
         same_size(lulc, valid, "the mask differs in size from the map");
         I32 out(lulc.request().shape);
@@ -219,6 +224,106 @@ void register_water(py::module_& m) {
         return wide ? potential_et_t<double>(cls, kc, eto, threads) : potential_et_t<float>(cls, kc, eto, threads);
     }, py::arg("cls"), py::arg("kc"), py::arg("eto"), py::arg("wide"), py::arg("threads"),
        "Potential evapotranspiration eto * kc by cell.");
+}
+
+void register_pollination(py::module_& m) {
+    using F64 = py::array_t<double, py::array::c_style | py::array::forcecast>;
+    using Out32 = py::array_t<float, py::array::c_style>;
+    auto inout = [](Out32& a, const py::array& like, const char* what) {
+        if (!a.writeable() || a.size() != like.size()) throw std::invalid_argument(what);
+        return a.mutable_data();
+    };
+    m.def("serv_poll_kernel", [](double alpha, double max_distance) {
+        i64 size = 0;
+        std::vector<float> k = exponential_kernel(alpha, max_distance, size);
+        F32 out({size, size});
+        std::copy(k.begin(), k.end(), out.mutable_data());
+        return out;
+    }, py::arg("alpha"), py::arg("max_distance"),
+       "pygeoprocessing's exponential decay kernel (float32, normalized), distances in pixels.");
+    m.def("serv_poll_convolve", [](const F32& signal, const F32& kernel, int threads) {
+        if (signal.ndim() != 2 || kernel.ndim() != 2 || kernel.shape(0) != kernel.shape(1))
+            throw std::invalid_argument("a 2-D signal and a square kernel");
+        const i64 ny = signal.shape(0), nx = signal.shape(1), k = kernel.shape(0);
+        F64 out({ny, nx});
+        {
+            py::gil_scoped_release release;
+            convolve_2d(signal.data(), ny, nx, kernel.data(), k, out.mutable_data(), threads);
+        }
+        return out;
+    }, py::arg("signal"), py::arg("kernel"), py::arg("threads"),
+       "pygeoprocessing's convolve_2d (ignore_nodata_and_edges, mask_nodata), float64, NaN missing.");
+    m.def("serv_poll_local", [](const std::vector<F32>& nesting, const F64& ns, const std::vector<F32>& floral,
+                                const F64& fa, bool keep, int threads) {
+        if (floral.empty() || nesting.empty()) throw std::invalid_argument("no season or no substrate");
+        if (ns.size() != static_cast<py::ssize_t>(nesting.size()) || fa.size() != static_cast<py::ssize_t>(floral.size()))
+            throw std::invalid_argument("one factor per map");
+        const auto shape = floral[0].request().shape;
+        std::vector<const float*> np, fp;
+        for (const auto& a : nesting) { same_size(a, floral[0], "the maps differ in size"); np.push_back(a.data()); }
+        for (const auto& a : floral) { same_size(a, floral[0], "the maps differ in size"); fp.push_back(a.data()); }
+        F32 hn(shape), fe(shape);
+        std::vector<F32> ff;
+        std::vector<float*> ffp;
+        if (keep)
+            for (std::size_t j = 0; j < floral.size(); ++j) {
+                ff.emplace_back(shape);
+                ffp.push_back(ff.back().mutable_data());
+            }
+        {
+            py::gil_scoped_release release;
+            pollination_local(np.data(), ns.data(), static_cast<int>(np.size()), fp.data(), fa.data(),
+                              static_cast<int>(fp.size()), static_cast<i64>(floral[0].size()), hn.mutable_data(),
+                              keep ? ffp.data() : nullptr, fe.mutable_data(), threads);
+        }
+        return py::make_tuple(hn, fe, ff);
+    }, py::arg("nesting"), py::arg("ns"), py::arg("floral"), py::arg("fa"), py::arg("keep"), py::arg("threads"),
+       "A species' habitat nesting, foraged flowers by season and local foraging effectiveness.");
+    m.def("serv_poll_supply", [](const F32& hn, const F64& fr, double sa, int threads) {
+        same_size(hn, fr, "the maps differ in size");
+        F32 out(hn.request().shape);
+        {
+            py::gil_scoped_release release;
+            pollination_supply(hn.data(), fr.data(), sa, static_cast<i64>(hn.size()), out.mutable_data(), threads);
+        }
+        return out;
+    }, py::arg("hn"), py::arg("fr"), py::arg("sa"), py::arg("threads"), "Pollinator supply sa HN FR (float32).");
+    m.def("serv_poll_abundance", [inout](const F32& ff, const F64& fr, const F64& cps, Out32 total, bool keep,
+                                         int threads) {
+        same_size(ff, fr, "the maps differ in size");
+        same_size(ff, cps, "the maps differ in size");
+        float* t = inout(total, ff, "total: a writable float32 map of the same size");
+        F32 pa(keep ? ff.request().shape : std::vector<py::ssize_t>{0});
+        {
+            py::gil_scoped_release release;
+            pollination_abundance(ff.data(), fr.data(), cps.data(), static_cast<i64>(ff.size()),
+                                  keep ? pa.mutable_data() : nullptr, t, threads);
+        }
+        return keep ? py::object(pa) : py::object(py::none());
+    }, py::arg("ff"), py::arg("fr"), py::arg("cps"), py::arg("total"), py::arg("keep"), py::arg("threads"),
+       "Pollinator abundance FF / FR conv(PS), added to total (float32).");
+    m.def("serv_poll_farm", [inout](const F32& half_sat, const F32& abundance, Out32 total, bool keep, int threads) {
+        same_size(half_sat, abundance, "the maps differ in size");
+        float* t = inout(total, half_sat, "total: a writable float32 map of the same size");
+        F32 fp(keep ? half_sat.request().shape : std::vector<py::ssize_t>{0});
+        {
+            py::gil_scoped_release release;
+            pollination_farm(half_sat.data(), abundance.data(), static_cast<i64>(half_sat.size()),
+                             keep ? fp.mutable_data() : nullptr, t, threads);
+        }
+        return keep ? py::object(fp) : py::object(py::none());
+    }, py::arg("half_sat"), py::arg("abundance"), py::arg("total"), py::arg("keep"), py::arg("threads"),
+       "On-farm pollinator abundance of a season, added to total (float32).");
+    m.def("serv_poll_yield", [](const F32& managed, const F32& farm, int threads) {
+        same_size(managed, farm, "the maps differ in size");
+        F32 pyt(managed.request().shape), pyw(managed.request().shape);
+        {
+            py::gil_scoped_release release;
+            pollination_yield(managed.data(), farm.data(), static_cast<i64>(managed.size()), pyt.mutable_data(),
+                              pyw.mutable_data(), threads);
+        }
+        return py::make_tuple(pyt, pyw);
+    }, py::arg("managed"), py::arg("farm"), py::arg("threads"), "Total and wild pollinator yield (float32).");
 }
 
 }  // namespace serv

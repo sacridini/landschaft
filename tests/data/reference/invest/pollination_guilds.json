@@ -1,0 +1,175 @@
+{
+ "model": "pollination",
+ "nodata": 255,
+ "pixel": 30.0,
+ "patched": true,
+ "bio": {
+  "lucode": [
+   1.0,
+   2.0,
+   4.0,
+   7.0,
+   9.0
+  ],
+  "nesting_cavity_availability_index": [
+   0.0,
+   0.03,
+   0.92,
+   0.72,
+   0.63
+  ],
+  "nesting_ground_availability_index": [
+   0.0,
+   0.57,
+   0.64,
+   0.83,
+   0.6
+  ],
+  "nesting_stem_availability_index": [
+   0.0,
+   0.28,
+   0.98,
+   0.03,
+   0.39
+  ],
+  "floral_resources_fall_index": [
+   0.882,
+   0.0,
+   0.141,
+   0.365,
+   0.428
+  ],
+  "floral_resources_spring_index": [
+   0.933,
+   0.0,
+   0.464,
+   0.973,
+   0.642
+  ]
+ },
+ "guild": {
+  "species": [
+   "andrena",
+   "halictus",
+   "osmia"
+  ],
+  "nesting_suitability_cavity_index": [
+   0.87,
+   0.25,
+   0.49
+  ],
+  "nesting_suitability_ground_index": [
+   0.03,
+   0.01,
+   0.71
+  ],
+  "nesting_suitability_stem_index": [
+   0.12,
+   0.55,
+   0.7
+  ],
+  "foraging_activity_fall_index": [
+   0.13,
+   0.5,
+   0.72
+  ],
+  "foraging_activity_spring_index": [
+   0.9,
+   0.37,
+   0.98
+  ],
+  "alpha": [
+   90.0,
+   200.0,
+   31.0
+  ],
+  "relative_abundance": [
+   0.88,
+   0.72,
+   0.51
+  ]
+ },
+ "outputs": [
+  "convolve_ps_andrena",
+  "convolve_ps_halictus",
+  "convolve_ps_osmia",
+  "floral_resources_andrena",
+  "floral_resources_halictus",
+  "floral_resources_osmia",
+  "foraged_flowers_index_andrena_fall",
+  "foraged_flowers_index_andrena_spring",
+  "foraged_flowers_index_halictus_fall",
+  "foraged_flowers_index_halictus_spring",
+  "foraged_flowers_index_osmia_fall",
+  "foraged_flowers_index_osmia_spring",
+  "habitat_nesting_index_andrena",
+  "habitat_nesting_index_halictus",
+  "habitat_nesting_index_osmia",
+  "kernel_1.033333",
+  "kernel_3.000000",
+  "kernel_6.666667",
+  "local_foraging_effectiveness_andrena",
+  "local_foraging_effectiveness_halictus",
+  "local_foraging_effectiveness_osmia",
+  "nesting_substrate_index_cavity",
+  "nesting_substrate_index_ground",
+  "nesting_substrate_index_stem",
+  "pollinator_abundance_andrena_fall",
+  "pollinator_abundance_andrena_spring",
+  "pollinator_abundance_halictus_fall",
+  "pollinator_abundance_halictus_spring",
+  "pollinator_abundance_osmia_fall",
+  "pollinator_abundance_osmia_spring",
+  "pollinator_supply_andrena",
+  "pollinator_supply_halictus",
+  "pollinator_supply_osmia",
+  "relative_floral_abundance_index_fall",
+  "relative_floral_abundance_index_spring",
+  "total_pollinator_abundance_fall",
+  "total_pollinator_abundance_spring"
+ ],
+ "nodata_values": {
+  "convolve_ps_andrena": -3.4028234663852886e+38,
+  "convolve_ps_halictus": -3.4028234663852886e+38,
+  "convolve_ps_osmia": -3.4028234663852886e+38,
+  "floral_resources_andrena": -3.4028234663852886e+38,
+  "floral_resources_halictus": -3.4028234663852886e+38,
+  "floral_resources_osmia": -3.4028234663852886e+38,
+  "foraged_flowers_index_andrena_fall": -1.0,
+  "foraged_flowers_index_andrena_spring": -1.0,
+  "foraged_flowers_index_halictus_fall": -1.0,
+  "foraged_flowers_index_halictus_spring": -1.0,
+  "foraged_flowers_index_osmia_fall": -1.0,
+  "foraged_flowers_index_osmia_spring": -1.0,
+  "habitat_nesting_index_andrena": 3.4028234663852886e+38,
+  "habitat_nesting_index_halictus": 3.4028234663852886e+38,
+  "habitat_nesting_index_osmia": 3.4028234663852886e+38,
+  "kernel_1.033333": -3.4028234663852886e+38,
+  "kernel_3.000000": -3.4028234663852886e+38,
+  "kernel_6.666667": -3.4028234663852886e+38,
+  "local_foraging_effectiveness_andrena": -1.0,
+  "local_foraging_effectiveness_halictus": -1.0,
+  "local_foraging_effectiveness_osmia": -1.0,
+  "nesting_substrate_index_cavity": -1.0,
+  "nesting_substrate_index_ground": -1.0,
+  "nesting_substrate_index_stem": -1.0,
+  "relative_floral_abundance_index_fall": -1.0,
+  "relative_floral_abundance_index_spring": -1.0,
+  "pollinator_abundance_andrena_fall": -1.0,
+  "pollinator_abundance_andrena_spring": -1.0,
+  "pollinator_abundance_halictus_fall": -1.0,
+  "pollinator_abundance_halictus_spring": -1.0,
+  "pollinator_abundance_osmia_fall": -1.0,
+  "pollinator_abundance_osmia_spring": -1.0,
+  "pollinator_supply_andrena": -1.0,
+  "pollinator_supply_halictus": -1.0,
+  "pollinator_supply_osmia": -1.0,
+  "total_pollinator_abundance_fall": -1.0,
+  "total_pollinator_abundance_spring": -1.0
+ },
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

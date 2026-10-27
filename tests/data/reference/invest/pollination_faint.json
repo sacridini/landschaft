@@ -1,0 +1,94 @@
+{
+ "model": "pollination",
+ "nodata": 255,
+ "pixel": 30.0,
+ "patched": true,
+ "bio": {
+  "lucode": [
+   1.0,
+   2.0,
+   4.0,
+   7.0,
+   9.0
+  ],
+  "nesting_cavity_availability_index": [
+   0.0,
+   0.49,
+   0.6,
+   0.46,
+   0.03
+  ],
+  "nesting_ground_availability_index": [
+   0.0,
+   0.6,
+   0.12,
+   0.14,
+   0.68
+  ],
+  "floral_resources_fall_index": [
+   0.0001,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "floral_resources_spring_index": [
+   0.0001,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ]
+ },
+ "guild": {
+  "species": [
+   "andrena",
+   "osmia"
+  ],
+  "nesting_suitability_cavity_index": [
+   0.22,
+   0.15
+  ],
+  "nesting_suitability_ground_index": [
+   0.77,
+   0.73
+  ],
+  "foraging_activity_fall_index": [
+   0.93,
+   0.87
+  ],
+  "foraging_activity_spring_index": [
+   0.7,
+   0.15
+  ],
+  "alpha": [
+   45.0,
+   31.0
+  ],
+  "relative_abundance": [
+   0.86,
+   0.92
+  ]
+ },
+ "outputs": [
+  "convolve_ps_andrena",
+  "convolve_ps_osmia",
+  "floral_resources_andrena",
+  "floral_resources_osmia",
+  "total_pollinator_abundance_fall",
+  "total_pollinator_abundance_spring"
+ ],
+ "nodata_values": {
+  "convolve_ps_andrena": -3.4028234663852886e+38,
+  "convolve_ps_osmia": -3.4028234663852886e+38,
+  "floral_resources_andrena": -3.4028234663852886e+38,
+  "floral_resources_osmia": -3.4028234663852886e+38,
+  "total_pollinator_abundance_fall": -1.0,
+  "total_pollinator_abundance_spring": -1.0
+ },
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}
