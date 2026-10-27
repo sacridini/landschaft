@@ -4,7 +4,9 @@
 The references are InVEST with two of its bugs corrected (the tool's doc). Everything is
 compared bit for bit but the fetch: a ray that crosses two or more coast edges ends, in
 InVEST, where its shortening in the R-tree's order leaves it (its last bits, ~1e-8 m),
-here at the nearest edge; REI and the local waves carry that.
+here at the nearest edge; REI and the local waves carry that. Off Windows the lon / lat
+case's projected coordinates (PROJ's trigonometry in the system's libm, the references made
+with the UCRT's) move by an ulp: there ``conftest.assert_ucrt_close``.
 """
 
 from __future__ import annotations
@@ -102,7 +104,7 @@ def test_exposure_bit_for_bit(name):
 
     r = _run(name)
     z, meta = _load(name)
-    np.testing.assert_array_equal(shapely.get_coordinates(r.exposure.geometry.values), z["out/shore_xy"])
+    _exact(shapely.get_coordinates(r.exposure.geometry.values), z["out/shore_xy"], "shore_xy")
     np.testing.assert_array_equal(r.exposure["shore_id"], z["out/shore_id"])
     for k in meta["exposure_fields"]:
         _exact(r.exposure[k], z[f"out/exposure_{k}"], k)
@@ -117,8 +119,8 @@ def test_exposure_bit_for_bit(name):
 def test_fetch_and_waves(name):
     r = _run(name)
     z, meta = _load(name)
-    np.testing.assert_array_equal(_table(r.fetch, [f"fdepth_{d}" for d in SECTORS]), z["out/fdepth"])
-    np.testing.assert_array_equal(_table(r.fetch, meta["wwiii_at_shore_fields"]), z["out/wwiii_at_shore"])
+    _exact(_table(r.fetch, [f"fdepth_{d}" for d in SECTORS]), z["out/fdepth"], "fdepth")
+    _exact(_table(r.fetch, meta["wwiii_at_shore_fields"]), z["out/wwiii_at_shore"], "wwiii_at_shore")
     fdist = _table(r.fetch, [f"fdist_{d}" for d in SECTORS])
     ref = z["out/fdist"]
     np.testing.assert_allclose(fdist, ref, rtol=0, atol=1e-7)
