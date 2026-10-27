@@ -21,15 +21,20 @@ Typical use::
                                  watersheds=ls.load_vector("watersheds.gpkg"))
     wy.watersheds                              # mean yield and volume per watershed
 
+    nd = ls.services.ndr(dem, lulc, runoff_proxy, nutrients_table, watersheds, threshold=1000,
+                         subsurface_critical_length=200, subsurface_efficiency=0.8)
+    nd.watersheds                              # nitrogen and phosphorus exports per watershed
+
     bees = ls.services.pollination(lulc, guilds, biophysical, farms=ls.load_vector("farms.gpkg"))
     bees.abundance["apis"]["spring"], bees.farms   # abundance by species and season, farm yields
 """
 
 from ._carbon import Carbon, carbon, valuation_constant
 from ._habitat import HabitatQuality, habitat_quality
+from ._ndr import NDR, ndr
 from ._pollination import Pollination, pollination
 from ._sdr import SDR, sdr
 from ._water import WaterYield, water_yield
 
-__all__ = ["Carbon", "HabitatQuality", "Pollination", "SDR", "WaterYield", "carbon", "habitat_quality", "pollination",
-           "sdr", "valuation_constant", "water_yield"]
+__all__ = ["Carbon", "HabitatQuality", "NDR", "Pollination", "SDR", "WaterYield", "carbon", "habitat_quality",
+           "ndr", "pollination", "sdr", "valuation_constant", "water_yield"]

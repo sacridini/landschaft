@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "serv/ndr.hpp"
 #include "serv/pollination.hpp"
 #include "serv/sdr.hpp"
 #include "serv/services.hpp"
@@ -36,11 +37,13 @@ namespace serv {
 
 void register_water(py::module_& m);
 void register_sdr(py::module_& m);
+void register_ndr(py::module_& m);
 void register_pollination(py::module_& m);
 
 void register_python(py::module_& m) {
     register_water(m);
     register_sdr(m);
+    register_ndr(m);
     register_pollination(m);
     m.def("serv_classify", [](const I64& lulc, const U8& valid, const I64& codes, int threads) {
         same_size(lulc, valid, "the mask differs in size from the map");
@@ -204,6 +207,31 @@ void register_sdr(py::module_& m) {
         return py::make_tuple(dep, flux);
     }, py::arg("dir"), py::arg("e_prime"), py::arg("sdr"), py::arg("block"),
        "InVEST's sediment deposition and flux (D8 for uint8 directions, else packed MFD).");
+}
+
+void register_ndr(py::module_& m) {
+    m.def("serv_ndr_retention", [](const py::array& dir, const U8& stream, const F32& eff, const F32& crit,
+                                   double cell_size, int block) {
+        if (dir.ndim() != 2) throw std::invalid_argument("expected 2-D flow directions");
+        const int ny = static_cast<int>(dir.shape(0)), nx = static_cast<int>(dir.shape(1));
+        same_size(dir, stream, "the streams differ in size from the directions");
+        same_size(dir, eff, "the retention efficiency differs in size from the directions");
+        same_size(dir, crit, "the critical length differs in size from the directions");
+        F32 out({ny, nx});
+        if (dir.dtype().is(py::dtype::of<std::uint8_t>())) {
+            const auto d = U8::ensure(dir);
+            py::gil_scoped_release release;
+            ndr_retention_d8(d.data(), stream.data(), eff.data(), crit.data(), ny, nx, cell_size, block,
+                             out.mutable_data());
+        } else {
+            const auto d = I32::ensure(dir);
+            py::gil_scoped_release release;
+            ndr_retention_mfd(d.data(), stream.data(), eff.data(), crit.data(), ny, nx, cell_size, block,
+                              out.mutable_data());
+        }
+        return out;
+    }, py::arg("dir"), py::arg("stream"), py::arg("eff"), py::arg("crit"), py::arg("cell_size"), py::arg("block"),
+       "InVEST's effective retention down to the streams (D8 for uint8 directions, else packed MFD).");
 }
 
 void register_water(py::module_& m) {

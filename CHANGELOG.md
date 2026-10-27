@@ -7,6 +7,16 @@ in a new major version.
 ## [Unreleased]
 
 ### Added
+- `ls.services.ndr` (InVEST's nutrient delivery ratio): the nitrogen and phosphorus loads of each land use
+  (application rates or measured runoff) scaled by the runoff proxy over its mean, split into surface and, for
+  nitrogen, subsurface parts; the effective retention of each cell on its way down to a stream (InVEST's
+  calculate_retention, MFD and D8, in C++), the surface NDR from the index of connectivity (IC_0 half way between its
+  extremes), the subsurface NDR, the surface, subsurface and total exports and the loads and exports per watershed.
+  Every raster of InVEST's chain in its float32 / float64 type, on pygeoprocessing's routing (`ls.hydro`): InVEST
+  3.20.2's rasters bit for bit (MFD, D8, N and P, phosphorus only, rasters of several blocks), the watershed totals to
+  3e-6 (InVEST adds the cells in float32). Corrected: InVEST measures the distance to the stream of the subsurface
+  NDR in cells against a critical length in metres; here in metres. 3000 x 3000 cells (MFD, N and P, 4 threads):
+  7.2 s against 172 s.
 - `ls.services.pollination(lulc, guilds, biophysical, farms=None, intermediates=False)`: InVEST's crop pollination
   model (Lonsdorf et al. 2009). By species of the guild table: the habitat nesting index from the nesting
   substrates, the flowers foraged in each season, the floral resources within the flight range (an exponential

@@ -26,6 +26,12 @@ scenarios goes straight in.
 
 ::: landschaft.services.SDR
 
+## Nutrient delivery ratio
+
+::: landschaft.services.ndr
+
+::: landschaft.services.NDR
+
 ## Habitat quality and rarity
 
 ::: landschaft.services.habitat_quality

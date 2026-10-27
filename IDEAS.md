@@ -4073,6 +4073,48 @@ em `src/cpp/serv/sdr.cpp`):
 * Fica para depois: entradas em grades diferentes (o InVEST alinha e reamostra; aqui na mesma grade), o recorte à
   caixa das bacias, o D-Infinity como opção, os benefícios por ação no `ls.prioritize`, o nó do Terraflux.
 
+### Fase 4: `ndr` (retenção de nutrientes)
+
+**Fase 4 feita** (2026-10-27, ramo do worktree, sem versão; `ls.services.ndr`, C++ em `src/cpp/serv/ndr.cpp`;
+referência `tools/make_reference_invest_ndr.py`, 6 casos `ndr_*` em `tests/data/reference/invest/`):
+* As mesmas peças do SDR: o `fill_pits`, o MFD ou D8, a acumulação, a declividade, a distância ao canal (com e sem o
+  peso 1 / S) e o IC. Diferenças do NDR frente ao SDR no próprio InVEST: os rios do MFD com a proporção de traço
+  padrão do pygeoprocessing (1,0; o SDR passa 0,7), cada entrada mascarada às bacias por conta própria (o MDE, o uso e
+  o *runoff proxy* não são cruzados entre si como no SDR), D_up sem o fator C (S̄ √A) e o IC_0 = (mín + máx) / 2 do
+  IC lido das estatísticas que o pygeoprocessing grava no GeoTIFF **como texto `%.14g`** (o mín e o máx exatos davam
+  até 4 ulps de diferença no NDR).
+* Portado o `calculate_retention` do InVEST (`retention.h`): sementes bloco a bloco de 256 onde o fluxo sai do mapa ou
+  cai numa célula sem fluxo, pilha, os três casos (vizinho rio, eficiência maior que a retenção do vizinho, o resto),
+  `exp(-5 passo / L_crit)` com o L_crit 0 protegido e a soma das proporções contando os vizinhos fora do mapa; os
+  valores em double até o fim, como o `ManagedRaster` com o cache inteiro. Em MFD e D8 nenhuma célula tem fluxo
+  misto (para fora e para dentro), então a ordem não muda o resultado.
+* O resto com as expressões numpy do InVEST no tipo de cada raster: a carga por classe (taxa de aplicação x (1 -
+  eff), ou o valor medido) em float32, o *runoff proxy* dividido pela média (a soma float32 bloco a bloco do
+  `raster_reduce`, com os blocos do `iterblocks`: 256 x 256, mais altos quando o mapa é estreito), carga
+  modificada, superficial e subsuperficial, eff e L_crit zerados nos rios, NDR (`exp` float32 do numpy), exportações
+  (a subsuperficial e a total em float64, como lá) e as somas por bacia (`ls.zonal_stats`). **Bit a bit** contra o
+  natcap.invest 3.20.2 em todos os rasters (os mascarados, MDE preenchido, declividades, direções, acumulações, rios,
+  S̄, D_up, 1 / S, D_dn, distância ao canal, IC, cargas, eff, L_crit, retenção efetiva, NDR superficial e
+  subsuperficial, exportações) nos casos MFD com N e P, D8 com média dada, só P, e mapas de 283 x 31 e 29 x 277 (vários
+  blocos); totais por bacia a 3e-6 (o InVEST soma em float32).
+* Erro do InVEST (só a forma correta, testada contra a referência corrigida): o NDR subsuperficial `1 - eff_sub (1 -
+  exp(-5 l / l_sub))` usa a distância ao canal em **células** (a `dist_to_channel` do pygeoprocessing; o próprio
+  "Model Spec" diz `units=pixel`) contra o comprimento crítico em **metros**: com células de 30 m a retenção máxima
+  chega 30 vezes mais longe. Aqui `l` = células x tamanho da célula. O caso `ndr_subsurface_pixels` guarda a forma do
+  InVEST e o teste mostra que só o subsuperficial muda; os outros rodam com `_calculate_sub_ndr` corrigido.
+* Mantido como no InVEST (não é claramente um erro): nos rios o IC não existe (D_dn = 0), então o NDR superficial, a
+  exportação superficial e a total ficam sem valor, mas a exportação subsuperficial existe (NDR_sub = 1): o total por
+  bacia é menor que superficial + subsuperficial (no caso `ndr_mfd`, 756 contra 824 kg/ano), e a carga gerada nas
+  células de rio não aparece na exportação superficial.
+* Num raster de 3000 x 3000 (MFD, N e P) também tudo bit a bit (rios, D_dn...), exceto a retenção efetiva e o que
+  vem dela: 1 ulp de float32 em 0,025 % das células (NDR e exportações até 4 ulps), porque o `ManagedRaster` do
+  InVEST guarda a retenção em double num cache LRU de blocos e a relê do arquivo float32 quando um bloco sai do cache
+  (como no SDR); aqui ela fica em double até o fim (a forma estável).
+* Desempenho (3000 x 3000, MFD, N e P, 4 núcleos): 7,2 s contra 172 s do InVEST (que inclui gravar os GeoTIFFs).
+* Fica para depois: entradas em grades diferentes e o recorte à caixa das bacias (como no SDR), o nó do Terraflux.
+
+### Fase 6: `pollination` (polinização)
+
 **Fase 6 feita** (polinização; 2026-10-27, ramo do worktree, sem versão; `ls.services.pollination`, C++ em
 `src/cpp/serv/pollination.cpp`; referência `tools/make_reference_invest_pollination.py`, 7 casos):
 * O modelo do `pollination.py` do natcap.invest 3.20.2 (Lonsdorf et al. 2009): por espécie, o índice de
@@ -4110,8 +4152,8 @@ em `src/cpp/serv/sdr.cpp`):
 
 ### Depois
 
-Outros modelos que usam as mesmas peças (retenção de nutrientes NDR, armazenamento sazonal de água, risco
-costeiro) ficam para avaliar quando estas fases estiverem prontas.
+Outros modelos que usam as mesmas peças (armazenamento sazonal de água, risco costeiro) ficam para
+avaliar quando estas fases estiverem prontas.
 
 ---
 

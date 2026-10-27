@@ -1,0 +1,146 @@
+{
+ "model": "ndr",
+ "nodata": 0,
+ "input_nodata": -9999.0,
+ "pixel": 30.0,
+ "watersheds": [
+  [
+   [
+    499960.0,
+    8000040.0
+   ],
+   [
+    500461.0,
+    8000040.0
+   ],
+   [
+    500521.0,
+    7991470.0
+   ],
+   [
+    499960.0,
+    7991470.0
+   ],
+   [
+    499960.0,
+    7999400.0
+   ],
+   [
+    500270.0,
+    7999550.0
+   ],
+   [
+    499960.0,
+    7999700.0
+   ],
+   [
+    499960.0,
+    8000040.0
+   ]
+  ],
+  [
+   [
+    500461.0,
+    8000040.0
+   ],
+   [
+    500970.0,
+    8000040.0
+   ],
+   [
+    500970.0,
+    7991470.0
+   ],
+   [
+    500521.0,
+    7991470.0
+   ],
+   [
+    500461.0,
+    8000040.0
+   ]
+  ]
+ ],
+ "load_type_n": [
+  "application-rate",
+  "measured-runoff",
+  "application-rate",
+  "measured-runoff",
+  "application-rate",
+  "measured-runoff"
+ ],
+ "load_type_p": [
+  "measured-runoff",
+  "application-rate",
+  "application-rate",
+  "measured-runoff",
+  "application-rate",
+  "application-rate"
+ ],
+ "pixels": false,
+ "params": {
+  "calc_n": true,
+  "calc_p": false,
+  "threshold_flow_accumulation": 45,
+  "k_param": 2.0,
+  "flow_dir_algorithm": "mfd",
+  "runoff_proxy_av": null,
+  "subsurface_critical_length_n": 150.0,
+  "subsurface_eff_n": 0.6
+ },
+ "watershed_results": [
+  {
+   "ws_id": 1,
+   "n_surface_load": 7439.546953125,
+   "n_surface_export": 1506.04400390625,
+   "n_subsurface_export": 673.1099624568006,
+   "n_total_export": 2067.206150365897,
+   "n_subsurface_load": 1581.4019531249999
+  },
+  {
+   "ws_id": 2,
+   "n_surface_load": 6677.873437499999,
+   "n_surface_export": 1446.2500781249998,
+   "n_subsurface_export": 589.2121194308947,
+   "n_total_export": 1985.937830069209,
+   "n_subsurface_load": 1421.729384765625
+  }
+ ],
+ "nodata_values": {
+  "masked_runoff_proxy": -1.0,
+  "masked_dem": -3.4028234663852886e+38,
+  "masked_lulc": -2147483648.0,
+  "filled_dem": -3.4028234663852886e+38,
+  "slope": -3.4028234663852886e+38,
+  "thresholded_slope": 3.4028234663852886e+38,
+  "flow_direction": 0.0,
+  "flow_accumulation": -1.23789789e+29,
+  "stream": 255.0,
+  "s_accumulation": -1.23789789e+29,
+  "runoff_proxy_index": 3.4028234663852886e+38,
+  "s_bar": -1.0,
+  "d_up": -1.0,
+  "s_factor_inverse": -1.0,
+  "d_dn": -1.0,
+  "dist_to_channel": -1.0,
+  "what_drains_to_stream": 255.0,
+  "ic_factor": -3.4028234663852886e+38,
+  "load_n": -1.0,
+  "modified_load_n": -1.0,
+  "surface_load_n": -1.0,
+  "eff_n": -1.0,
+  "crit_len_n": -1.0,
+  "effective_retention_n": -1.0,
+  "ndr_n": -1.0,
+  "n_surface_export": -1.0,
+  "sub_load_n": -1.0,
+  "sub_ndr_n": -1.0,
+  "n_subsurface_export": -1.0,
+  "n_total_export": -1.0
+ },
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}
