@@ -7,6 +7,21 @@ in a new major version.
 ## [Unreleased]
 
 ### Added
+- `ls.services.coastal_vulnerability` (InVEST's coastal vulnerability): shore points every `model_resolution` along
+  the landmass inside the area of interest, 16 fetch rays each (C++ with OpenMP: a uniform grid of the coast edges,
+  GEOS 3.14's segment intersection ported), the depth along them, REI, ocean and local wave power from the Wave
+  Watch III points, surge (distance to the shelf contour), relief (mean of the DEM in a disc), habitats (rasters and
+  polygons within their protection distance, `R_hab`), geomorphology, sea-level rise and population; their ranks by
+  quintiles, the exposure with and without habitats, the role of the habitats, and InVEST's intermediate tables
+  (fetch points and rays, wave energies, intermediate exposure, habitat protection) and clipped rasters. Inputs as
+  data objects or files, in any CRS (vectors by GDAL's coordinate transformation, rasters by GDAL's warp as InVEST).
+  InVEST 3.20.2 bit for bit (ranks, exposure, habitat role, depths, surge, relief, rasters; three cases, one in
+  longitude / latitude) but the fetch of rays crossing several coast edges (~1e-8 m: InVEST shortens them in its
+  R-tree's order; here the nearest edge) and what follows from it (REI, local waves, ~1e-11 relative). Corrected:
+  InVEST drops coast edges whose ends are `numpy.isclose(rtol=1e-7)`, i.e. up to ~0.8 m at UTM northings, breaking
+  the coastline (here only edges of length 0), and widens the search window for a valid depth by moving it at the
+  top and left edges of the raster (here cut at the edges). About 1992 shore points with 12 km rays: 0.26 s on 4
+  threads against 147 s for InVEST.
 - `ls.services`: inputs on different grids (another cell size, origin, extent or CRS) in `carbon` (the future map),
   `habitat_quality` (scenario maps, threat maps, an access raster), `water_yield`, `sdr`, `ndr` and
   `seasonal_water_yield`, aligned first as InVEST 3.20.2 aligns them (pygeoprocessing's

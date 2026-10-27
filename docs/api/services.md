@@ -55,3 +55,9 @@ they are, and the results come on the grid they were computed on.
 ::: landschaft.services.pollination
 
 ::: landschaft.services.Pollination
+
+## Coastal vulnerability
+
+::: landschaft.services.coastal_vulnerability
+
+::: landschaft.services.CoastalVulnerability

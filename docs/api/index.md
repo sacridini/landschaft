@@ -786,6 +786,8 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.HabitatQuality`](services.md#landschaft.services.HabitatQuality) | Habitat degradation, quality and rarity (`habitat_quality`) |
 | [`ls.pollination`](services.md#landschaft.services.pollination) | Pollinator abundance and crop pollination (InVEST's crop pollination model) |
 | [`ls.Pollination`](services.md#landschaft.services.Pollination) | Pollinator supply and abundance, and the yield of farms (`pollination`) |
+| [`ls.coastal_vulnerability`](services.md#landschaft.services.coastal_vulnerability) | Exposure of the coast to erosion and flooding (InVEST's coastal vulnerability model) |
+| [`ls.CoastalVulnerability`](services.md#landschaft.services.CoastalVulnerability) | Exposure of the coast to erosion and flooding (`coastal_vulnerability`) |
 
 ### Uncertainty
 

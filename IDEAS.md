@@ -4223,10 +4223,46 @@ C++ em `src/cpp/serv/swy.cpp`):
   (4) o erro (5) do SWY acima, que a borda do mapa de recarga alinhado mostra.
 * Fica para depois: entradas sem georreferência (arrays) continuam exigindo uma grade só.
 
+### Fase 7: `coastal_vulnerability` (risco costeiro)
+
+**Fase 7 feita** (risco costeiro; 2026-10-27, ramo do worktree, sem versão; `ls.services.coastal_vulnerability`,
+C++ em `src/cpp/serv/coastal.cpp`; referência `tools/make_reference_invest_coastal.py`, 3 casos):
+* O modelo do `coastal_vulnerability.py` do natcap.invest 3.20.2: os pontos da costa a cada `model_resolution` ao
+  longo da massa de terra recortada (caixa da AOI + fetch + resolução), unida e cortada pela AOI (o GEOS 3.13 do
+  shapely dá aqui os mesmos pontos do 3.14 do InVEST, verificado); 16 raios por ponto, a partir de 1 m do ponto, até
+  `max_fetch_distance` ou a terra (0 se começam na terra); a profundidade média ao longo do raio (pontos interpolados
+  como o GEOS, `int()` como lá); REI, a energia das ondas oceânicas e locais (Wave Watch III pelos 3 vizinhos mais
+  próximos, `numpy.average`), surge (distância ao contorno da plataforma), relevo (média do DEM com negativos a 0 num
+  disco), habitats (raster: algum valor não nulo no disco; polígonos: distância), `R_hab`, geomorfologia (média dos
+  `RANK` distintos das linhas no buffer de meia resolução), elevação do mar (2 vizinhos em 500 km) e população
+  (média por km²); os ranks pelos quintis (`nanpercentile` + `searchsorted`, relevo invertido), a exposição com e sem
+  habitats (média geométrica) e o papel dos habitats; as tabelas intermediárias e os rasters recortados do InVEST.
+* Os raios em C++ com OpenMP: as arestas da costa numa grade uniforme (CSR) percorrida pelo raio (DDA), a interseção
+  pelo `LineIntersector` do GEOS 3.14 portado (`intersectionDD` em double-double; igual ao `Intersection` do OGR em
+  20000 de 20000 casos aleatórios), a interseção mais próxima. Os rasters: o `warp_raster` do pygeoprocessing (grade
+  ajustada ao pixel, `gdalwarp -te -tr`) pelo `ls.reproject` com `tolerance=0` na mesma CRS (os bits do gdal.Warp) e
+  pelo warp do próprio GDAL (rasterio, aproximação de 1/8 de célula, um bloco) entre CRS diferentes, como o InVEST;
+  vetores pela transformação de coordenadas do GDAL.
+* **Bit a bit**: pontos da costa, profundidades, Wave Watch III nos pontos, energia oceânica, surge, relevo, elevação
+  do mar, população, todos os ranks, a exposição com e sem habitats, o papel dos habitats, a proteção por habitat e
+  os rasters (batimetria negativa, DEM positivo, habitats, população), também com entradas em longitude / latitude
+  (caso `coastal_lonlat`). Tolerância: o fetch dos raios que cruzam duas ou mais arestas (o InVEST encurta o raio
+  aresta por aresta na ordem da R-tree do libspatialindex, e o fim depende dessa ordem nos últimos bits; aqui a
+  interseção mais próxima com o raio inteiro): ~6% dos raios, até 2,5e-8 m; REI e ondas locais herdam ~1e-11
+  relativo. Não vale portar o libspatialindex (ordem do qsort em empates).
+* Erros do InVEST (só a forma correta, testada contra o InVEST corrigido): (1) descarta as arestas da costa com
+  pontas `numpy.isclose(bounds, rtol=1e-7)`, relativo às coordenadas (em nortes UTM de 8e6, arestas de até 0,8 m),
+  quebrando a linha da costa: aqui só arestas de comprimento 0 (no caso `coastal_full` o InVEST original dá 269
+  pontos em vez de 267); (2) ao procurar uma profundidade válida perto do fim do raio, alarga a janela deslocando-a em
+  vez de cortá-la nas bordas superior e esquerda do raster: aqui o quadrado em torno do ponto, cortado nas bordas.
+  Notados e não corrigidos no harness: o InVEST trunca os campos inteiros do Wave Watch III (aqui em float), e com
+  menos de 3 pontos WWIII usa vizinhos inexistentes (aqui só os pontos que há, pesados pela distância).
+* Desempenho (1992 pontos, raios de 12 km): 0,26 s em 4 núcleos (0,33 s em 1) contra 147 s do InVEST, os ranks e a
+  exposição iguais bit a bit. Fica para depois: o nó do Terraflux.
+
 ### Depois
 
-Outros modelos que usam as mesmas peças (risco costeiro) ficam para avaliar quando estas fases
-estiverem prontas.
+Nada mais da lista do InVEST: os modelos dele que usam estas peças estão todos portados.
 
 ---
 
