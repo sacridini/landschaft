@@ -244,7 +244,7 @@ def build_estimator(spec):
 
 @register("sdm.fold")
 def _sdm_fold(params: dict, inputs: Path, out: Path, threads: int) -> dict:
-    """One model on one cross-validation fold (``ls.sdm.fit``): the fold's scores."""
+    """One model on one cross-validation fold (``ls.sdm.fit``): the fold's scores and test predictions."""
     from types import SimpleNamespace
 
     import numpy as np
@@ -266,7 +266,8 @@ def _sdm_fold(params: dict, inputs: Path, out: Path, threads: int) -> dict:
     for k, v in _fold_metrics(pred, SimpleNamespace(y=y), train, test).items():
         v = float(v)
         scores[k] = repr(v) if not np.isfinite(v) else v
-    return {"scores": scores, "versions": versions()}
+    test_pred = [float(v) if np.isfinite(v) else None for v in pred[test]]
+    return {"scores": scores, "test": test_pred, "versions": versions()}
 
 
 def versions() -> dict:

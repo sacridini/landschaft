@@ -618,9 +618,13 @@ fitted estimators themselves are ordinary scikit-learn objects in
   country="BR")` queries GBIF (no account needed), or read a GBIF download
   with `ls.bio.read_occurrences`; `prepare(..., species=...)` picks one
   species from a table of many.
-- **Sampling bias**: `background(..., bias=raster)` draws the background
-  with the density of records of the whole taxonomic group (target-group
-  background), `distance=` within or beyond a distance of the records.
+- **Sampling bias**: `bias_surface(group_records, env, bandwidth=...)` is
+  the kernel density of the records of the whole taxonomic group, and
+  `background(..., bias=that)` draws the background with it (target-group
+  background); `distance=` draws within or beyond a distance of the records.
+- **Stacked models**: `res.predictions` holds every model's out-of-fold
+  predictions (from the model fitted without the row's fold), to fit a
+  model on top of them, e.g. with the distance to an expert range map.
 - **Tuning**: `data.cv` is a list of (train, test) indices, so
   `GridSearchCV(model, grid, cv=careful.cv)` tunes any estimator on the
   spatial folds.

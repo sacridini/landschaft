@@ -94,6 +94,14 @@ class SDMResult(Saveable):
         The predictors, in the order the models take them.
     ranges : pandas.DataFrame
         Minimum and maximum of each predictor in the data (for clamping).
+    predictions : pandas.DataFrame or None
+        Out-of-fold predictions: one row per row of the data, one column per
+        model, the suitability given by the model fitted without the row's
+        fold (NaN for rows in every training set, fold 0). They score the
+        models on data they did not see, and feed models stacked on top
+        (calibration, ensembles learned from the predictions, or
+        expert-range models: Merow et al. 2017). None without
+        cross-validation.
     """
 
     models: dict
@@ -103,6 +111,7 @@ class SDMResult(Saveable):
     predictors: list
     ranges: pd.DataFrame
     data: SDMData | None = field(default=None, repr=False)
+    predictions: pd.DataFrame | None = field(default=None, repr=False)
 
     def weights(self, metric: str = "auc_test") -> dict:
         """Ensemble weights: each model's mean test score above chance (AUC - 0.5, TSS, Boyce), 0 if below."""
@@ -115,8 +124,11 @@ class SDMResult(Saveable):
         return w
 
     def _save_items(self) -> dict:
-        return {"metrics": self.metrics, "summary": self.summary.reset_index(), "thresholds": self.thresholds,
-                "ranges": self.ranges.reset_index()}
+        items = {"metrics": self.metrics, "summary": self.summary.reset_index(), "thresholds": self.thresholds,
+                 "ranges": self.ranges.reset_index()}
+        if self.predictions is not None:
+            items["predictions"] = self.predictions
+        return items
 
 
 def _fold_metrics(pred: np.ndarray, data: SDMData, train: np.ndarray, test: np.ndarray) -> dict:
@@ -214,17 +226,21 @@ def _folds_on(on, models: dict, data) -> list:
                 raise RuntimeError(f"{stats.get('machine')} has scikit-learn {there.get('sklearn')}, this computer "
                                    f"{here.get('sklearn')}: the scores could differ")
             found[task.name] = {k: float(v) for k, v in stats["scores"].items()}
+            found[task.name + " test"] = np.array([np.nan if v is None else v for v in stats.get("test", [])],
+                                                  dtype=float)
 
         report = run_job(on, Job("sdm folds", tasks, collect, threads=1))
     if report.failed:
         name, error = next(iter(report.failed.items()))
         raise RuntimeError(f"{len(report.failed)} fold fit(s) failed; {name}: {error}")
     rows = []
+    oof = pd.DataFrame({name: np.full(len(data.y), np.nan) for name in models})
     for name in models:
-        for k, _ in folds:
+        for k, (_, test) in zip([k for k, _ in folds], data.cv):
             s = found[f"{name} fold {k}"]
             rows.append({"model": name, "fold": k, **{c: (int(v) if c == "n_test" else v) for c, v in s.items()}})
-    return rows
+            oof.loc[test, name] = found[f"{name} fold {k} test"]
+    return rows, oof
 
 
 def fit(data: SDMData, models=None, *, cv: bool = True, on=None) -> SDMResult:
@@ -278,15 +294,18 @@ def fit(data: SDMData, models=None, *, cv: bool = True, on=None) -> SDMResult:
         models = {type(models).__name__: models}
     X, y, w = data.X, data.y, data.sample_weight
     rows = []
+    oof = None
     if cv and data.folds is not None and on is not None:
-        rows = _folds_on(on, models, data)
+        rows, oof = _folds_on(on, models, data)
     elif cv and data.folds is not None:
+        oof = pd.DataFrame({name: np.full(len(y), np.nan) for name in models})
         for name, model in models.items():
             for k, (train, test) in enumerate(data.cv, start=1):
                 m = _fit_one(model, X.iloc[train], y[train], None if w is None else w[train])
                 pred = np.full(len(y), np.nan)
                 pred[train] = _suitability(m, X.iloc[train])
                 pred[test] = _suitability(m, X.iloc[test])
+                oof.loc[test, name] = pred[test]
                 rows.append({"model": name, "fold": k, **_fold_metrics(pred, data, train, test)})
     metrics = pd.DataFrame(rows)
     fitted = {name: _fit_one(model, X, y, w) for name, model in models.items()}
@@ -300,7 +319,7 @@ def fit(data: SDMData, models=None, *, cv: bool = True, on=None) -> SDMResult:
     else:
         summary = pd.DataFrame(index=pd.Index(list(models), name="model"))
     ranges = pd.DataFrame({"min": X.min(), "max": X.max()})
-    return SDMResult(fitted, metrics, summary, thresholds, list(data.predictors), ranges, data)
+    return SDMResult(fitted, metrics, summary, thresholds, list(data.predictors), ranges, data, oof)
 
 
 def predict(result: SDMResult, env, *, models=None, ensemble: str | None = "weighted", metric: str = "auc_test",

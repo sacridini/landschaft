@@ -121,3 +121,40 @@ def test_pipelines_get_the_weights(inputs):
     direct = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000)).fit(
         data.X, data.y, logisticregression__sample_weight=data.sample_weight)
     np.testing.assert_allclose(res.models["glm"].predict_proba(data.X), direct.predict_proba(data.X))
+
+
+def test_out_of_fold_predictions(inputs, tmp_path):
+    occ, env = inputs
+    data = ls.sdm.prepare(occ, env, clean=False, background=800, folds=4, seed=2)
+    res = ls.sdm.fit(data, {"glm": glm()})
+    oof = res.predictions
+    assert list(oof.columns) == ["glm"] and len(oof) == len(data.y)
+    # each row: the model fitted without its fold
+    for k, (train, test) in enumerate(data.cv, start=1):
+        m = glm().fit(data.X.iloc[train], data.y[train], logisticregression__sample_weight=data.sample_weight[train])
+        np.testing.assert_allclose(oof["glm"].to_numpy()[test], m.predict_proba(data.X.iloc[test])[:, 1],
+                                   rtol=1e-12)
+    # rows in every training set (fold 0) have none
+    assert np.array_equal(np.isnan(oof["glm"].to_numpy()), data.folds == 0)
+    # the test AUC of each fold, from them
+    for k, (_, test) in enumerate(data.cv, start=1):
+        p = oof["glm"].to_numpy()[test]
+        yk = data.y[test]
+        if (yk == 0).any():
+            auc = ls.sdm.evaluate(p[yk == 1], p[yk == 0]).stats["auc"]
+            assert auc == pytest.approx(res.metrics.query("fold == @k")["auc_test"].iloc[0], rel=1e-12)
+    assert (res.save(tmp_path / "res") / "predictions.csv").exists()
+    assert ls.sdm.fit(data, {"glm": glm()}, cv=False).predictions is None
+
+
+def test_out_of_fold_random_folds_and_stacking(inputs):
+    # background in the folds too (custom folds, one per row), then a model stacked on the predictions
+    occ, env = inputs
+    data = ls.sdm.prepare(occ, env, clean=False, background=800, folds=False, seed=4)
+    rng = np.random.default_rng(1)
+    data = data.with_folds(rng.integers(1, 4, size=len(data.y)))
+    res = ls.sdm.fit(data, {"glm": glm()})
+    oof = res.predictions["glm"].to_numpy()
+    assert np.isfinite(oof).all()
+    stacked = LogisticRegression().fit(oof[:, None], data.y)
+    assert stacked.coef_[0, 0] > 0

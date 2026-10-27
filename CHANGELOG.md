@@ -6,6 +6,17 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.sdm.bias_surface(points, env, bandwidth="nrd", isotropic=False, limits=None, weights=None, rescale=None)`:
+  the sampling effort of a target group as a Gaussian kernel density on the grid of the predictors, the bias grid
+  of Fourcade et al. (2014) for `background(bias=)`. `MASS::kde2d`'s density at the cell centres (equal up to
+  rounding; `kde2d(h = H)` is `bandwidth = H / 4`), with R's `bw.nrd` per axis by default, bandwidths raised /
+  lowered to `limits`, record weights and a linear rescaling (e.g. to 0.05-0.95, so that every cell keeps a
+  chance). A 20-million-cell grid with 8 000 records takes 3 s.
+- `ls.sdm.SDMResult.predictions`: the out-of-fold predictions of every model (one row per row of the data, from
+  the model fitted without the row's fold; NaN for fold 0), also with `fit(on=)`, saved with the result. They
+  feed models stacked on top, e.g. combining a model with the distance to an expert range (Merow et al. 2017).
+
 ## [1.52.0] - 2026-10-26
 
 ### Added

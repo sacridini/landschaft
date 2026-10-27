@@ -394,6 +394,7 @@ def test_sdm_folds_on_a_helper(group, tmp_path):
         there = ls.sdm.fit(data, models, on=pool)
     pd.testing.assert_frame_equal(here.metrics, there.metrics)
     pd.testing.assert_frame_equal(here.summary, there.summary)
+    pd.testing.assert_frame_equal(here.predictions, there.predictions)
     with _pool(local=True) as pool, pytest.raises(TypeError, match="scikit-learn"):
         ls.sdm.fit(data, {"x": object()}, on=pool)
 
