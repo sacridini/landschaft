@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.53.0] - 2026-10-27
+
 ### Added
 - `ls.sdm.bias_surface(points, env, bandwidth="nrd", isotropic=False, limits=None, weights=None, rescale=None)`:
   the sampling effort of a target group as a Gaussian kernel density on the grid of the predictors, the bias grid
