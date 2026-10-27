@@ -4664,6 +4664,9 @@ de paridade. O que o ecossistema do Python já resolve bem (as florestas e o boo
    qualidade do habitat, produção anual de água, SDR): o C++ em `src/cpp/serv`, bit a bit com o natcap.invest,
    com os testes de paridade. Depois o Terraflux os liga pelo `terraflux-ls-sys`, como fez com os outros
    (`crates/ops/src/services.rs`). O Terraflux espera por isso e não os implementa à parte.
+   **Feito** (1.54.0, 2026-10-27): `ls.services.ndr`, `ls.services.pollination` e
+   `ls.services.seasonal_water_yield`, bit a bit com o natcap.invest 3.20.2 (fases 4, 5 e 6 da seção do InVEST).
+   Falta ligá-los no Terraflux pelo `terraflux-ls-sys`.
 5. **O Código Florestal completo**, ao lado do topo de morro: as APPs dos rios pela largura, as nascentes, as
    declividades acima de 45°, as bordas de tabuleiro, e o déficit e o excedente de Reserva Legal por imóvel do CAR.
    Feito no Terraflux 0.93.0 (`crates/ops/src/forest_code.rs`: as APPs dos rios, lagos e declividades, as faixas
