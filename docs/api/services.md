@@ -6,6 +6,12 @@ from land use maps and parameter tables: their maps, bit for bit where the
 arithmetic permits. A simulated land use map (`ls.simulate`) or a series of
 scenarios goes straight in.
 
+The input rasters may come on different grids (cell sizes, origins, extents,
+CRS): each model aligns them first as InVEST does, on the grid of its reference
+raster (the DEM, or the land use map), and the models with watersheds or an AOI
+clip the maps to the polygons' bounds. Inputs already on that grid are used as
+they are, and the results come on the grid they were computed on.
+
 ## Carbon storage and sequestration
 
 ::: landschaft.services.carbon

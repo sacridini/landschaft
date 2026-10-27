@@ -12,7 +12,7 @@ import xarray as xr
 from .. import _core
 from .._save import Saveable
 from .._threads import resolve
-from ._common import LandUse, lookup_table, same_grid
+from ._common import LandUse, align_inputs, lookup_table, same_grid
 
 __all__ = ["Carbon", "carbon", "valuation_constant"]
 
@@ -118,7 +118,10 @@ def carbon(lulc, pools, *, future=None, price: float | None = None, discount_rat
         or a ``dict`` ``{code: {"c_above": ..., ...}}``. Every class of the maps
         must be in it.
     future
-        The alternate (future) land use map, on the same grid.
+        The alternate (future) land use map. On another grid (other cells,
+        extent or CRS) it is put on the baseline's grid first, by the nearest
+        cell (InVEST requires one grid; landschaft aligns it as InVEST's habitat
+        quality model aligns its maps).
     price, discount_rate, rate_change
         Valuation of the change (with ``future``): the price of a ton of carbon
         and the annual discount rate and change of the price, in percent.
@@ -152,6 +155,9 @@ def carbon(lulc, pools, *, future=None, price: float | None = None, discount_rat
     2  Change in Carbon Storage -13.86     t
     """
     threads = resolve(n_threads)
+    if future is not None:  # on the baseline's grid (InVEST requires one grid)
+        future = align_inputs({"lulc": (lulc, "near"), "future": (future, "near")}, reference="lulc",
+                              bbox="reference", n_threads=threads)["future"]
     lu = LandUse(lulc, nodata, "the land use map")
     codes, table = lookup_table(pools, POOLS, "the carbon pools")
     pools32 = np.ascontiguousarray(table.to_numpy(np.float64).astype(np.float32))

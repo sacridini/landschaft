@@ -13,7 +13,7 @@ from .. import _core
 from .._save import Saveable
 from .._threads import resolve
 from ..surface._grid import read_surface
-from ._common import LandUse, lookup_table, same_grid
+from ._common import LandUse, align_inputs, lookup_table, same_grid
 
 __all__ = ["HabitatQuality", "habitat_quality"]
 
@@ -97,6 +97,37 @@ def _threat_maps(maps, names, shape, scenario: str):
     return out
 
 
+def _by_threat(maps):
+    """Threat maps as a dict ``{threat: raster}`` (a 3-D DataArray: a band per threat)."""
+    if isinstance(maps, xr.DataArray) and maps.ndim == 3:
+        dim = maps.dims[0]
+        return {str(v): maps[i] for i, v in enumerate(maps[dim].values)}
+    return maps
+
+
+def _aligned(lulc, future, base, scenario_maps: dict, access, threads):
+    """Every raster on the grid of the current land use map, as InVEST aligns them.
+
+    InVEST's habitat_quality: the land use maps and the threat maps resampled to
+    the nearest cell, with the smaller side of the current map's cells both ways,
+    over its bounds and in its CRS. An access raster (InVEST takes polygons) too.
+    """
+    rasters = {"lulc": (lulc, "near"), "future": (future, "near"), "base": (base, "near")}
+    for sc, maps in scenario_maps.items():
+        if isinstance(maps, dict):
+            for t, m in maps.items():
+                rasters[f"{sc}/{t}"] = (m, "near")
+    acc_raster = access is not None and not hasattr(access, "geometry")
+    if acc_raster:
+        rasters["access"] = (access, "near")
+    out = align_inputs(rasters, reference="lulc", pixel="square", bbox="reference", n_threads=threads)
+    maps = {}
+    for sc, m in scenario_maps.items():
+        maps[sc] = {t: out[f"{sc}/{t}"] for t in m} if isinstance(m, dict) else m
+    return (out["lulc"], out.get("future"), out.get("base"), maps,
+            out["access"] if acc_raster else access)
+
+
 def _access(access, lu: LandUse):
     """The access raster (float32, 1 where not given), from a raster or polygons with an ``access`` column."""
     if access is None:
@@ -159,8 +190,11 @@ def habitat_quality(lulc, threats, sensitivity, threat_maps, *, half_saturation:
         column per threat with the sensitivity of the class to it (0 to 1).
     threat_maps
         The current map of each threat, ``{threat: raster}`` (or a 3-D DataArray
-        with a band per threat), on the grid of ``lulc``: cells other than 0 and
-        nodata are the threat (values from 0 to 1).
+        with a band per threat): cells other than 0 and nodata are the threat
+        (values from 0 to 1). Rasters on other grids (cells, extent, CRS) are put
+        on the grid of ``lulc`` first, as InVEST aligns them: the nearest cell,
+        square cells of the smaller side of ``lulc``'s, over its bounds; so are
+        the future and base maps and an access raster.
     half_saturation
         The half-saturation constant k (often half the highest degradation).
     future, future_threat_maps
@@ -200,6 +234,11 @@ def habitat_quality(lulc, threats, sensitivity, threat_maps, *, half_saturation:
     (np.True_, np.float32(0.0))
     """
     threads = resolve(n_threads)
+    scenario_maps = {"current": _by_threat(threat_maps), "future": _by_threat(future_threat_maps),
+                     "base": _by_threat(base_threat_maps)}
+    lulc, future, base, scenario_maps, access = _aligned(lulc, future, base, scenario_maps, access, threads)
+    threat_maps, future_threat_maps, base_threat_maps = (scenario_maps["current"], scenario_maps["future"],
+                                                         scenario_maps["base"])
     lu = LandUse(lulc, nodata, "the land use map")
     if not isinstance(threats, pd.DataFrame):
         raise TypeError("threats is a DataFrame with threat, max_dist, weight and decay")

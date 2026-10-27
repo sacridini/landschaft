@@ -17,6 +17,14 @@ natcap.invest (``conda create -n invest-ref -c conda-forge python=3.12 natcap.in
 threat with no pixel at all is infinitely far from every cell (InVEST's transform gives
 distances of about the raster's half perimeter there, which a long enough maximum
 distance turns into degradation).
+
+``*_grids`` cases write some inputs on other grids (another cell size, a shifted origin,
+a larger or smaller extent: ``GRIDS``) and, for the models with watersheds, watersheds
+smaller than the rasters, so that InVEST aligns and clips them; their ``<case>.json``
+keeps the grid of each such input (``grids``, GDAL geotransforms) and of the outputs
+(``out_gt``). InVEST's carbon model refuses maps on different grids: ``carbon_grids``
+aligns the future map to the baseline's grid with pygeoprocessing first, as InVEST's
+other models align their inputs.
 """
 
 from __future__ import annotations
@@ -33,6 +41,27 @@ OUT = ROOT / "tests" / "data" / "reference" / "invest"
 PIXEL = 30.0
 ORIGIN = (500000.0, 8000000.0)
 EPSG = 31983  # SIRGAS 2000 / UTM 23S
+# file stem (a trailing "*": a prefix) -> (dx, cell width, dy, cell height): a raster written
+# with its origin moved by (dx, dy) metres and that cell size; set per case from spec["grids"]
+GRIDS = {}
+LOG = {"grids": {}, "out_gt": None}  # the geotransforms written on other grids and the last one read
+
+
+def _geotransform(path):
+    stem = Path(path).stem
+    for k, (dx, px, dy, py) in GRIDS.items():
+        if stem == k or (k.endswith("*") and stem.startswith(k[:-1])):
+            gt = (ORIGIN[0] + dx, px, 0.0, ORIGIN[1] + dy, 0.0, -py)
+            LOG["grids"][stem] = gt
+            return gt
+    return ORIGIN[0], PIXEL, 0.0, ORIGIN[1], 0.0, -PIXEL
+
+
+def _set_grids(spec):
+    GRIDS.clear()
+    GRIDS.update(spec.get("grids", {}))
+    LOG["grids"].clear()
+    LOG["out_gt"] = None
 
 
 def _write_raster(path, array, nodata, gdal_type):
@@ -40,7 +69,7 @@ def _write_raster(path, array, nodata, gdal_type):
 
     ny, nx = array.shape
     ds = gdal.GetDriverByName("GTiff").Create(str(path), nx, ny, 1, gdal_type)
-    ds.SetGeoTransform((ORIGIN[0], PIXEL, 0.0, ORIGIN[1], 0.0, -PIXEL))
+    ds.SetGeoTransform(_geotransform(path))
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(EPSG)
     ds.SetProjection(srs.ExportToWkt())
@@ -55,6 +84,7 @@ def _read(path):
     from osgeo import gdal
 
     ds = gdal.Open(str(path))
+    LOG["out_gt"] = ds.GetGeoTransform()
     band = ds.GetRasterBand(1)
     a = band.ReadAsArray()
     return a, band.GetNoDataValue()
@@ -90,6 +120,9 @@ CARBON_CASES = {
     # changes of exactly -1 t/ha, InVEST's nodata of the change map: run with that nodata patched to NaN
     "carbon_minus_one_patched": dict(seed=5, alt=True, valuation=dict(price=20.0, discount=3.0, change=1.0,
                                                                        years=(2000, 2010)), minus_one=True),
+    # the future map at 45 m with its origin moved, over more than the baseline
+    "carbon_grids": dict(seed=6, alt=True, valuation=dict(price=31.0, discount=4.0, change=1.5, years=(2005, 2025)),
+                         grids={"alt": (-37.0, 45.0, 52.0, 45.0)}),
 }
 
 
@@ -126,6 +159,13 @@ def run_carbon(name, spec, tmp):
         alt[rng.random((ny, nx)) < 0.01] = nodata
         _write_raster(tmp / "alt.tif", alt, nodata, gdal.GDT_Int32)
         args.update(calc_sequestration=True, lulc_alt_path=str(tmp / "alt.tif"))
+        if "alt" in GRIDS:
+            import pygeoprocessing
+
+            bb = pygeoprocessing.get_raster_info(str(tmp / "bas.tif"))["bounding_box"]
+            pygeoprocessing.align_and_resize_raster_stack(
+                [str(tmp / "alt.tif")], [str(tmp / "alt_aligned.tif")], ["near"], (PIXEL, -PIXEL), bb)
+            args["lulc_alt_path"] = str(tmp / "alt_aligned.tif")
         inputs["alt"] = alt
     v = spec["valuation"]
     if v:
@@ -159,6 +199,10 @@ HQ_CASES = {
     "hq_empty_threat": dict(seed=14, fut=False, bas=False, access=False, empty=True, k=0.05, urban_dist=6000.0),
     "hq_empty_threat_patched": dict(seed=14, fut=False, bas=False, access=False, empty=True, k=0.05,
                                     urban_dist=6000.0, patched=True),
+    # the future map at 45 m, crops at 45 m, urban shifted, roads at 20 m over less than the land use map
+    "hq_grids": dict(seed=15, fut=True, bas=False, access=False, empty=False, k=0.1,
+                     grids={"fut": (-22.0, 45.0, 31.0, 45.0), "crops_cur": (-40.0, 45.0, 40.0, 45.0),
+                            "urban_cur": (7.0, 30.0, -11.0, 30.0), "roads_cur": (95.0, 20.0, -64.0, 20.0)}),
 }
 
 THREATS = [("crops", 600.0, 0.7, "linear"), ("roads", 1000.0, 1.0, "exponential"),
@@ -314,6 +358,10 @@ WY_CASES = {
     "wy_full": dict(seed=22, dtype="float32", demand=True, sub=True, valuation=True),
     "wy_int_inputs": dict(seed=23, dtype="int16", demand=True, sub=False, valuation=False),
     "wy_float64": dict(seed=24, dtype="float64", demand=True, sub=True, valuation=True),
+    # precipitation at 45 m, eto at 20 m (over less), pawc shifted, watersheds 100 m inside the rasters
+    "wy_grids": dict(seed=25, dtype="float32", demand=True, sub=False, valuation=False, ws_pad=-100.0,
+                     grids={"precip": (-31.0, 45.0, 26.0, 45.0), "eto": (12.0, 20.0, -9.0, 20.0),
+                            "pawc": (8.0, 30.0, -13.0, 30.0)}),
 }
 
 
@@ -404,7 +452,7 @@ def run_wy(name, spec, tmp):
     kc[2] = 1.05  # open water
     _csv(tmp / "bio.csv", ["lucode", "lulc_veg", "root_depth", "kc"], [[c, v, r, k] for c, v, r, k in
                                                                        zip(codes, veg, root, kc)])
-    ws_rings = _boxes(ny, nx, 2, 45.0)
+    ws_rings = _boxes(ny, nx, 2, spec.get("ws_pad", 45.0))
     _write_polygons(tmp / "ws.shp", ws_rings, "ws_id", [1, 2])
     args = {"workspace_dir": str(tmp / "ws_out"), "results_suffix": "", "lulc_path": str(tmp / "lulc.tif"),
             "depth_to_root_rest_layer_path": str(tmp / "depth.tif"), "precipitation_path": str(tmp / "precip.tif"),
@@ -453,6 +501,10 @@ SDR_CASES = {
     "sdr_mfd": dict(seed=31, flow="mfd", drainage=False, threshold=60),
     "sdr_d8": dict(seed=32, flow="d8", drainage=False, threshold=40),
     "sdr_drainage": dict(seed=33, flow="mfd", drainage=True, threshold=80),
+    # erosivity at 50 m (bilinear), land use at 20 m over less (mode), erodibility shifted, watersheds inside
+    "sdr_grids": dict(seed=34, flow="mfd", drainage=False, threshold=60, ws_pad=-90.0,
+                      grids={"erosivity": (-41.0, 50.0, 37.0, 50.0), "lulc": (6.0, 20.0, -4.0, 20.0),
+                             "erodibility": (9.0, 30.0, -14.0, 30.0)}),
 }
 
 
@@ -494,10 +546,11 @@ def run_sdr(name, spec, tmp):
     x0, y0 = ORIGIN
     x1, y1 = x0 + nx * PIXEL, y0 - ny * PIXEL
     xm = x0 + 37 * PIXEL + 11.0
-    ws_rings = [[(x0 - 40, y0 + 40), (xm, y0 + 40), (xm + 60, y1 - 40), (x0 - 40, y1 - 40),
-                 (x0 - 40, y0 - 20 * PIXEL), (x0 + 9 * PIXEL, y0 - 15 * PIXEL), (x0 - 40, y0 - 10 * PIXEL),
-                 (x0 - 40, y0 + 40)],
-                [(xm, y0 + 40), (x1 + 40, y0 + 40), (x1 + 40, y1 - 40), (xm + 60, y1 - 40), (xm, y0 + 40)]]
+    d = spec.get("ws_pad", 40.0)
+    ws_rings = [[(x0 - d, y0 + d), (xm, y0 + d), (xm + 60, y1 - d), (x0 - d, y1 - d),
+                 (x0 - d, y0 - 20 * PIXEL), (x0 + 9 * PIXEL, y0 - 15 * PIXEL), (x0 - d, y0 - 10 * PIXEL),
+                 (x0 - d, y0 + d)],
+                [(xm, y0 + d), (x1 + d, y0 + d), (x1 + d, y1 - d), (xm + 60, y1 - d), (xm, y0 + d)]]
     _write_polygons(tmp / "ws.shp", ws_rings, "ws_id", [1, 2])
     args = {"workspace_dir": str(tmp / "out"), "results_suffix": "", "dem_path": str(tmp / "dem.tif"),
             "erosivity_path": str(tmp / "erosivity.tif"), "erodibility_path": str(tmp / "erodibility.tif"),
@@ -544,9 +597,12 @@ def main(argv):
     names = argv or list(cases)
     for name in names:
         kind, spec = cases[name]
+        _set_grids(spec)
         with tempfile.TemporaryDirectory(prefix=f"invest-{name}-", ignore_cleanup_errors=True) as tmp:
             tmp = Path(tmp)
             inputs, outputs, meta = runners[kind](name, spec, tmp)
+        if GRIDS:
+            meta.update(grids=dict(LOG["grids"]), out_gt=LOG["out_gt"])
         meta["versions"] = {"natcap.invest": natcap.invest.__version__, "pygeoprocessing": pygeoprocessing.__version__,
                             "numpy": numpy.__version__}
         arrays = {f"in/{k}": v for k, v in inputs.items()}

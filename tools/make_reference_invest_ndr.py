@@ -29,6 +29,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from make_reference_invest import (
+    GRIDS,
+    LOG,
     ORIGIN,
     OUT,
     PIXEL,
@@ -37,6 +39,7 @@ from make_reference_invest import (
     _lulc,
     _read,
     _read_polygons,
+    _set_grids,
     _write_polygons,
     _write_raster,
 )
@@ -49,6 +52,9 @@ CASES = {
     "ndr_wide": dict(seed=45, shape=(29, 277), flow="d8", n=True, p=True, threshold=35, k=2.5, av=None),
     "ndr_subsurface_pixels": dict(seed=41, shape=(61, 79), flow="mfd", n=True, p=True, threshold=60, k=2.0,
                                   av=None, pixels=True),
+    # the land use at 45 m, the runoff proxy at 20 m over less, watersheds 75 m inside the rasters
+    "ndr_grids": dict(seed=46, shape=(61, 79), flow="mfd", n=True, p=True, threshold=60, k=2.0, av=None,
+                      ws_pad=-75.0, grids={"lulc": (-17.0, 45.0, 23.0, 45.0), "runoff": (5.0, 20.0, -7.0, 20.0)}),
 }
 
 
@@ -112,10 +118,11 @@ def run_ndr(name, spec, tmp):
     x1, y1 = x0 + nx * PIXEL, y0 - ny * PIXEL
     xm = x0 + (nx // 2) * PIXEL + 11.0
     ym = min(ny - 2, 20)
-    ws_rings = [[(x0 - 40, y0 + 40), (xm, y0 + 40), (xm + 60, y1 - 40), (x0 - 40, y1 - 40),
-                 (x0 - 40, y0 - ym * PIXEL), (x0 + min(9, nx // 3) * PIXEL, y0 - (ym - 5) * PIXEL),
-                 (x0 - 40, y0 - (ym - 10) * PIXEL), (x0 - 40, y0 + 40)],
-                [(xm, y0 + 40), (x1 + 40, y0 + 40), (x1 + 40, y1 - 40), (xm + 60, y1 - 40), (xm, y0 + 40)]]
+    d = spec.get("ws_pad", 40.0)
+    ws_rings = [[(x0 - d, y0 + d), (xm, y0 + d), (xm + 60, y1 - d), (x0 - d, y1 - d),
+                 (x0 - d, y0 - ym * PIXEL), (x0 + min(9, nx // 3) * PIXEL, y0 - (ym - 5) * PIXEL),
+                 (x0 - d, y0 - (ym - 10) * PIXEL), (x0 - d, y0 + d)],
+                [(xm, y0 + d), (x1 + d, y0 + d), (x1 + d, y1 - d), (xm + 60, y1 - d), (xm, y0 + d)]]
     _write_polygons(tmp / "ws.shp", ws_rings, "ws_id", [1, 2])
     args = {"workspace_dir": str(tmp / "out"), "results_suffix": "", "dem_path": str(tmp / "dem.tif"),
             "lulc_path": str(tmp / "lulc.tif"), "runoff_proxy_path": str(tmp / "runoff.tif"),
@@ -162,8 +169,11 @@ def main(argv):
 
     OUT.mkdir(parents=True, exist_ok=True)
     for name in argv or list(CASES):
+        _set_grids(CASES[name])
         with tempfile.TemporaryDirectory(prefix=f"invest-{name}-", ignore_cleanup_errors=True) as tmp:
             inputs, outputs, meta = run_ndr(name, CASES[name], Path(tmp))
+        if GRIDS:
+            meta.update(grids=dict(LOG["grids"]), out_gt=LOG["out_gt"])
         meta["versions"] = {"natcap.invest": natcap.invest.__version__, "pygeoprocessing": pygeoprocessing.__version__,
                             "numpy": numpy.__version__}
         arrays = {f"in/{k}": v for k, v in inputs.items()}

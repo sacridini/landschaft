@@ -11,12 +11,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from test_services import CRS, _case, _raster
+from test_services import CRS, _case, _gt, _on_invest_grid, _raster
 
 import landschaft as ls
 
-PATCHED = ["swy_mfd_patched", "swy_d8_patched", "swy_float64_patched"]
-USER = ["swy_user_recharge_patched", "swy_user_recharge_d8_patched"]
+PATCHED = ["swy_mfd_patched", "swy_d8_patched", "swy_float64_patched", "swy_grids_patched"]
+USER = ["swy_user_recharge_patched", "swy_user_recharge_d8_patched", "swy_grids_recharge_patched"]
 MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
 
 
@@ -40,15 +40,15 @@ def _run(name, **kw):
     p = meta["params"]
     args = dict(threshold=p["threshold"], method=p["flow"], beta=p["beta"], gamma=p["gamma"])
     if "recharge" in inputs:
-        args["recharge"] = _raster(inputs["recharge"], nd)
+        args["recharge"] = _raster(inputs["recharge"], nd, _gt(meta, "l"))
         bio = None
     else:
         bio = _bio(inputs)
-        args["precipitation"] = [_raster(a, nd) for a in inputs["precip"]]
-        args["et0"] = [_raster(a, nd) for a in inputs["et0"]]
-        args["soil_group"] = _raster(inputs["soil"], 255)
+        args["precipitation"] = [_raster(a, nd, _gt(meta, f"p{m + 1}")) for m, a in enumerate(inputs["precip"])]
+        args["et0"] = [_raster(a, nd, _gt(meta, f"e{m + 1}")) for m, a in enumerate(inputs["et0"])]
+        args["soil_group"] = _raster(inputs["soil"], 255, _gt(meta, "soil"))
         if "zones" in inputs:
-            args["climate_zones"] = _raster(inputs["zones"], -1)
+            args["climate_zones"] = _raster(inputs["zones"], -1, _gt(meta, "cz"))
             args["climate_zone_table"] = pd.DataFrame({"cz_id": inputs["zone_ids"],
                                                        **{m: inputs["zone_events"][:, i] for i, m in enumerate(MONTHS)}})
         else:
@@ -56,7 +56,8 @@ def _run(name, **kw):
         args["alpha"] = (pd.DataFrame({"month": range(1, 13), "alpha": inputs["alpha"]}) if "alpha" in inputs
                          else p["alpha"])
     args.update(kw)
-    s = ls.services.seasonal_water_yield(_raster(inputs["dem"], nd), _raster(inputs["lulc"], 0), bio,
+    s = ls.services.seasonal_water_yield(_raster(inputs["dem"], nd, _gt(meta, "dem")),
+                                         _raster(inputs["lulc"], 0, _gt(meta, "lulc")), bio,
                                          _polygons(meta["watersheds"]), **args)
     return s, ref, meta
 
@@ -81,6 +82,7 @@ def _check_sheds(s, meta):
 @pytest.mark.external_reference
 def test_swy_matches_invest(name):
     s, ref, meta = _run(name)
+    _on_invest_grid(s.vri, ref["vri"], meta)
     inter = s.intermediate
     for key in ("pit_filled_dem", "flow_dir", "cn", "si"):
         _same(inter[key], ref[key], key)
@@ -104,6 +106,7 @@ def test_swy_matches_invest(name):
 @pytest.mark.external_reference
 def test_swy_user_recharge_matches_invest(name):
     s, ref, meta = _run(name)
+    _on_invest_grid(s.vri, ref["vri"], meta)
     for ours, key in ((s.stream, "stream"), (s.local_recharge, "l"), (s.l_avail, "l_avail"), (s.l_sum, "l_sum"),
                       (s.baseflow, "b"), (s.b_sum, "b_sum"), (s.vri, "vri")):
         _same(ours, ref[key], key)

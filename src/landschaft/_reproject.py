@@ -334,6 +334,28 @@ class _Points:
         return out.reshape(len(rows), len(cols), 2)
 
 
+def _approx_rows(points: _Points, cols, rows, offset: float, width: int) -> np.ndarray:
+    """The coordinates GDALApproxTransform gives the warp kernel (gdal.Warp's default error
+    threshold, 0.125) for grids in one CRS: each destination row of ``width`` samples is
+    transformed at its first, middle and last sample and interpolated in between (the
+    transform is affine, so within the threshold), rows of up to 5 samples exactly. For a
+    destination GDAL warps in one chunk: (len(rows), len(cols), 2)."""
+    cols = np.asarray(cols, dtype=np.float64) + offset
+    v = np.asarray(rows, dtype=np.float64) + offset
+    if width <= 5:
+        return points.grid(cols - offset, rows, offset, 1)
+    x0, xm, xe = offset, (width - 1) // 2 + offset, (width - 1) + offset
+    out = np.empty((len(v), len(cols), 2))
+    for k, y in enumerate(v):
+        sx, sy = points(np.array([x0, xm, xe]), np.full(3, y))
+        dx = (sx[2] - sx[0]) / (xe - x0)
+        dy = (sy[2] - sy[0]) / (xe - x0)
+        dist = cols - x0
+        out[k, :, 0] = sx[0] + dx * dist
+        out[k, :, 1] = sy[0] + dy * dist
+    return out
+
+
 def _translation(points: _Points, src_t, dst_t) -> bool:
     """GDALTransformIsTranslationOnPixelBoundaries: the same CRS (not geographic, which GDAL
     reprojects anyway), cell size and a whole number of cells apart; GDAL then takes the
@@ -576,7 +598,7 @@ class _Warp:
     gives the same bits."""
 
     def __init__(self, src_shape, src_t, src_crs, dst_t, dst_shape, dst_crs, method, src_nodata, dst_nodata, dtype,
-                 tolerance, n, n_threads):
+                 tolerance, n, n_threads, gdal_rows: bool = False):
         self.src_shape, self.shape, self.n = src_shape, dst_shape, n
         self.src_nodata, self.dst_nodata, self.dtype = src_nodata, dst_nodata, dtype
         self.tolerance = tolerance
@@ -590,7 +612,12 @@ class _Warp:
         self.offset = 0.0 if self.area else 0.5
         self.extra = 1 if self.area else 0
         self.scales = _kernel_scales(self.points, src_shape, dst_shape, method, translation)
-        if self.points.same:
+        # gdal_rows: the coordinates of GDAL's approximate transformer (_approx_rows), for the
+        # methods that sample the cells' centres (the others keep the exact ones)
+        self.gdal_rows = gdal_rows and self.points.same and not self.area and not translation
+        if self.gdal_rows:
+            self.kind = _DENSE
+        elif self.points.same:
             self.kind = _AFFINE
         elif tolerance == 0:
             self.kind = _EXACT if self.points.gdal is not None else _DENSE
@@ -656,6 +683,12 @@ class _Warp:
                              kind, offset, gt, inv, level, grid0, node_off, nodes, cells, dense, dense_row0,
                              dense_col0, address, args)
 
+    def _grid(self, cols, rows, n_threads: int) -> np.ndarray:
+        """The source coordinates of the samples of a _DENSE warp: (len(rows), len(cols), 2)."""
+        if self.gdal_rows:
+            return _approx_rows(self.points, cols, rows, self.offset, self.shape[1])
+        return self.points.grid(cols, rows, self.offset, n_threads)
+
     def _handles(self, n: int):
         """GDAL's transformer for the kernel (n threads), but for the same CRS (never needed)."""
         return self.points.handles(n) if self.kind != _AFFINE else (0, np.empty(0, dtype=np.uintp))
@@ -665,7 +698,7 @@ class _Warp:
         from . import _core
 
         lat = self.lattice(r0, c0, nr - self.extra, nc - self.extra, n_threads) if self.kind == _LATTICE else None
-        dense = (self.points.grid(np.arange(c0, c0 + nc), np.arange(r0, r0 + nr), self.offset, n_threads), r0, c0) \
+        dense = (self._grid(np.arange(c0, c0 + nc), np.arange(r0, r0 + nr), n_threads), r0, c0) \
             if self.kind == _DENSE else None
         handles = self._handles(1)
         try:
@@ -688,8 +721,7 @@ class _Warp:
             rows = max(1, _DENSE_POINTS // (cw + self.extra))
             for a in range(r0, r0 + rh, rows):
                 nr = min(rows, r0 + rh - a)
-                g = self.points.grid(np.arange(c0, c0 + cw + self.extra), np.arange(a, a + nr + self.extra),
-                                     self.offset, n_threads)
+                g = self._grid(np.arange(c0, c0 + cw + self.extra), np.arange(a, a + nr + self.extra), n_threads)
                 out[:, a - r0:a - r0 + nr] = self._call(src, origin, a, c0, nr, cw, (g, a, c0), handles)
             return out
         finally:
@@ -892,7 +924,7 @@ class _GdalWarp:
 
 
 def _reproject_raster(data: xr.DataArray, dst_t, dst_shape, dst_crs, coords, resampling: str,
-                      n_threads: int | None, tolerance: float = 0.125) -> xr.DataArray:
+                      n_threads: int | None, tolerance: float = 0.125, gdal_rows: bool = False) -> xr.DataArray:
     from ._threads import resolve
 
     if data.rio.crs is None:
@@ -925,7 +957,7 @@ def _reproject_raster(data: xr.DataArray, dst_t, dst_shape, dst_crs, coords, res
                          float(tolerance), n)
     else:
         warp = _Warp((h, w), src_t, src_crs, dst_t, dst_shape, dst_crs, method, src_nodata, dst_nodata, dtype,
-                     float(tolerance), n, threads)
+                     float(tolerance), n, threads, gdal_rows)
     values = data.data
     if values.dtype != dtype:
         values = values.astype(dtype)

@@ -22,7 +22,7 @@ from .. import _core
 from .._save import Saveable
 from .._threads import resolve
 from ..surface._grid import read_surface
-from ._common import LandUse, lookup_table
+from ._common import LandUse, align_inputs, lookup_table
 from ._sdr import BLOCK, _inside, _report, _rmap, _routing, _thresholds
 
 __all__ = ["NDR", "ndr"]
@@ -190,10 +190,10 @@ def ndr(dem, lulc, runoff_proxy, biophysical, watersheds, *, threshold: float, k
     dem
         Elevations (projected, in metres).
     lulc
-        Land use map (integer codes), on the DEM's grid.
+        Land use map (integer codes).
     runoff_proxy
         The capacity of the runoff to carry the nutrients (a quickflow index or the
-        annual precipitation, any units), on the DEM's grid.
+        annual precipitation, any units).
     biophysical
         A DataFrame by class (``lucode``): for nitrogen ``load_n`` (kg / ha / yr),
         ``load_type_n`` (``"application-rate"``: the load is multiplied by
@@ -223,6 +223,13 @@ def ndr(dem, lulc, runoff_proxy, biophysical, watersheds, *, threshold: float, k
     Returns
     -------
     NDR
+
+    Notes
+    -----
+    The rasters may be on different grids (cells, extent, CRS): as InVEST does,
+    they are put on the DEM's cells first, by the nearest cell, over the
+    intersection of their bounds and the watersheds' (its corner moved onto the
+    DEM's cells), so the maps cover the watersheds' box only.
 
     Examples
     --------
@@ -269,6 +276,10 @@ def ndr(dem, lulc, runoff_proxy, biophysical, watersheds, *, threshold: float, k
             raise ValueError("the subsurface efficiency is between 0 and 1")
     if runoff_proxy_mean is not None and not runoff_proxy_mean > 0:
         raise ValueError("the runoff proxy mean must be positive")
+    # InVEST's alignment: the DEM's cells over the rasters and the watersheds, the nearest cell
+    g = align_inputs({"dem": (dem, "near"), "lulc": (lulc, "near"), "runoff_proxy": (runoff_proxy, "near")},
+                     reference="dem", vectors=[watersheds], n_threads=threads)
+    dem, lulc, runoff_proxy = g["dem"], g["lulc"], g["runoff_proxy"]
     lu = LandUse(lulc, nodata, "the land use map")
     shape = lu.shape
     codes, bio, types = _table(biophysical, nutrients)

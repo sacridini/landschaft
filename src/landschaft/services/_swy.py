@@ -21,7 +21,7 @@ from .. import _core
 from .._save import Saveable
 from .._threads import resolve
 from ..surface._grid import read_surface
-from ._common import LandUse, lookup_table
+from ._common import LandUse, align_inputs, lookup_table
 from ._sdr import BLOCK, _dtype_of, _routing
 
 __all__ = ["SeasonalWaterYield", "seasonal_water_yield"]
@@ -287,8 +287,10 @@ def seasonal_water_yield(dem, lulc, biophysical, watersheds, *, threshold: float
     float64 types: the DEM filled, routed (pygeoprocessing's multiple flow
     directions or D8) and traced into streams as pygeoprocessing does, the
     quickflow, curve numbers, recharge and baseflow; the polygon sums agree to
-    float32 precision (InVEST adds the cells in float32). Four bugs of InVEST
+    float32 precision (InVEST adds the cells in float32). Five bugs of InVEST
     are corrected (and the tests compare against InVEST with them corrected):
+    cells without recharge add none to the baseflow (InVEST reads their nodata
+    as numbers, which makes the baseflow infinite there and upslope),
     ``L_sum_avail`` sums the upslope terms by their shares of the flow (InVEST
     takes their mean weighted by the raw flow weights, so a cell fed by three
     cells gets the mean of their recharge instead of the sum), the flow off the
@@ -302,7 +304,7 @@ def seasonal_water_yield(dem, lulc, biophysical, watersheds, *, threshold: float
     dem
         Elevations (projected, in metres).
     lulc
-        Land use map (integer codes), on the DEM's grid.
+        Land use map (integer codes).
     biophysical
         A DataFrame by class (``lucode``): ``cn_a`` to ``cn_d`` (the curve
         number of each hydrologic soil group, 0 to 100) and ``kc_1`` to ``kc_12``
@@ -339,6 +341,13 @@ def seasonal_water_yield(dem, lulc, biophysical, watersheds, *, threshold: float
     Returns
     -------
     SeasonalWaterYield
+
+    Notes
+    -----
+    The rasters may be on different grids (cells, extent, CRS): as InVEST does,
+    they are put on the DEM's cells first, by the nearest cell, over the
+    intersection of their bounds and the watersheds' (its corner moved onto the
+    DEM's cells), so the maps cover the watersheds' box only.
 
     Examples
     --------
@@ -379,6 +388,30 @@ def seasonal_water_yield(dem, lulc, biophysical, watersheds, *, threshold: float
     if not isinstance(watersheds, gpd.GeoDataFrame):
         raise TypeError("the watersheds are a GeoDataFrame")
     beta_f, gamma_f = _number(beta, "beta"), _number(gamma, "gamma")
+    # InVEST's alignment: the DEM's cells over the rasters and the area of interest, the nearest cell
+    rasters = {"lulc": (lulc, "near"), "dem": (dem, "near")}
+    if recharge is None:
+        if precipitation is not None:
+            precipitation = _monthly(precipitation, "the precipitation")
+            rasters.update({f"p{m}": (x, "near") for m, x in enumerate(precipitation)})
+        if et0 is not None:
+            et0 = _monthly(et0, "the ET0")
+            rasters.update({f"e{m}": (x, "near") for m, x in enumerate(et0)})
+        rasters["soil_group"] = (soil_group, "near")
+        if rain_events is None:
+            rasters["climate_zones"] = (climate_zones, "near")
+    else:
+        rasters["recharge"] = (recharge, "near")
+    g = align_inputs(rasters, reference="dem", vectors=[watersheds], n_threads=threads)
+    lulc, dem = g["lulc"], g["dem"]
+    if recharge is None:
+        if precipitation is not None:
+            precipitation = [g[f"p{m}"] for m in range(12)]
+        if et0 is not None:
+            et0 = [g[f"e{m}"] for m in range(12)]
+        soil_group, climate_zones = g.get("soil_group"), g.get("climate_zones", climate_zones)
+    else:
+        recharge = g["recharge"]
     lu = LandUse(lulc, nodata, "the land use map")
     shape = lu.shape
     dem_v, dem_dt = _grid(dem, shape, "the DEM")

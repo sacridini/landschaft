@@ -6,6 +6,22 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.services`: inputs on different grids (another cell size, origin, extent or CRS) in `carbon` (the future map),
+  `habitat_quality` (scenario maps, threat maps, an access raster), `water_yield`, `sdr`, `ndr` and
+  `seasonal_water_yield`, aligned first as InVEST 3.20.2 aligns them (pygeoprocessing's
+  `align_and_resize_raster_stack`: the reference raster's cells and CRS, the intersection of the bounds, snapped to
+  the reference's cells, nearest / bilinear / mode by input) with landschaft's warp kernel on the coordinates of
+  GDAL's approximate transformer; `water_yield`, `sdr`, `ndr` and `seasonal_water_yield` clip the maps to the bounds
+  of the watersheds / AOI, as InVEST does. Inputs already on the grid are used as they are (no copy, the same
+  results); the results come on the aligned grid. Bit for bit against InVEST on misaligned inputs (20, 45 and 50 m
+  cells on 30 m, shifted origins, larger and smaller extents, watersheds inside the rasters) in every raster.
+  Differences: cells outside an input without nodata get no value (GDAL writes 0); `carbon` aligns a future map on
+  another grid (InVEST refuses it); rasters in another CRS go to the reference's CRS in every model. InVEST's
+  baseflow reads the local and available recharge of cells without them (as at the edge of an aligned recharge
+  map) as numbers (nodata -9999 and 3.4e38: infinite B and B_sum there and upslope); `seasonal_water_yield` counts
+  no recharge there, as before, now tested against InVEST with that corrected.
+
 ## [1.54.0] - 2026-10-27
 
 ### Added

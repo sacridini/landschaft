@@ -20,7 +20,7 @@ from .. import _core
 from .._save import Saveable
 from .._threads import resolve
 from ..surface._grid import read_surface
-from ._common import LandUse, lookup_table
+from ._common import LandUse, align_inputs, lookup_table
 
 __all__ = ["SDR", "sdr"]
 
@@ -213,7 +213,7 @@ def sdr(dem, erosivity, erodibility, lulc, biophysical, watersheds, *, threshold
         Elevations (projected, in metres).
     erosivity, erodibility
         Rainfall erosivity R (MJ mm / (ha h yr)) and soil erodibility K
-        (t ha h / (ha MJ mm)), on the DEM's grid.
+        (t ha h / (ha MJ mm)).
     lulc
         Land use map (integer codes).
     biophysical
@@ -237,6 +237,15 @@ def sdr(dem, erosivity, erodibility, lulc, biophysical, watersheds, *, threshold
     Returns
     -------
     SDR
+
+    Notes
+    -----
+    The rasters may be on different grids (cells, extent, CRS): as InVEST does,
+    they are put on the DEM's grid first, square cells of its smaller side in its
+    CRS, over the intersection of their bounds and the watersheds' (its corner
+    moved onto the DEM's cells); the DEM, erosivity and erodibility bilinear,
+    the land use map by its most frequent class, the drainage by the nearest
+    cell. The maps cover the watersheds' box only.
 
     Examples
     --------
@@ -267,6 +276,13 @@ def sdr(dem, erosivity, erodibility, lulc, biophysical, watersheds, *, threshold
         raise ValueError("method is 'mfd' or 'd8'")
     if not threshold > 0:
         raise ValueError("threshold must be positive")
+    # InVEST's alignment: square cells of the DEM's smaller side, in its CRS, over the rasters and the
+    # watersheds; the continuous rasters bilinear, the land use map by its most frequent class
+    g = align_inputs({"dem": (dem, "bilinear"), "lulc": (lulc, "mode"), "erosivity": (erosivity, "bilinear"),
+                      "erodibility": (erodibility, "bilinear"), "drainage": (drainage, "near")}, reference="dem",
+                     pixel="square", vectors=[watersheds], transform_bounds=True, n_threads=threads)
+    dem, lulc, erosivity, erodibility, drainage = (g["dem"], g["lulc"], g["erosivity"], g["erodibility"],
+                                                   g.get("drainage"))
     lu = LandUse(lulc, nodata, "the land use map")
     shape = lu.shape
     codes, bio = lookup_table(biophysical, ["usle_c", "usle_p"], "the biophysical table")

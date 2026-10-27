@@ -30,12 +30,17 @@ with the fix):
   ``L_sum`` (eq. 108, the outlet), while one draining into a hole of the DEM (nodata in
   the stream map) gets ``L_sum``. Fixed by counting the flow off the raster as the flow
   into the holes;
+* the baseflow reads the local and the available recharge of a cell without them
+  (nodata: a recharge map with holes, or the cells at its edge once aligned to the DEM)
+  as values (-9999, 3.4e38), which makes ``B`` and ``B_sum`` infinite or meaningless
+  there and upslope. Fixed by counting no recharge there, as the accumulation of
+  ``L_sum`` does;
 * the curve numbers are written in the type of the land use and soil group rasters
   together, so with integer rasters (the usual case) fractional curve numbers of the
   table are truncated; here they are written as float64 then (the same S as InVEST's
   for integer curve numbers, which it divides in float64).
 
-The first three are in InVEST's C++ (``swy.h``): its ``seasonal_water_yield_core.pyx`` is
+The first four are in InVEST's C++ (``swy.h``): its ``seasonal_water_yield_core.pyx`` is
 rebuilt (Cython, MSVC) with the patched header and used in place of the installed one.
 """
 
@@ -53,6 +58,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from make_reference_invest import (
+    GRIDS,
+    LOG,
     OUT,
     PIXEL,
     _boxes,
@@ -61,6 +68,7 @@ from make_reference_invest import (
     _lulc,
     _read,
     _read_polygons,
+    _set_grids,
     _write_polygons,
     _write_raster,
 )
@@ -84,6 +92,17 @@ CASES = {
     "swy_user_recharge_d8_patched": dict(seed=45, flow="d8", dtype="float32", zones=False, monthly_alpha=False,
                                          user_l=True, beta="1", gamma="1", alpha="1/12", threshold=30,
                                          frac_cn=False, patched=True),
+    # the land use at 45 m, the precipitation at 20 m over less, the evapotranspiration at 50 m, the soil
+    # groups and climate zones shifted, the AOI 80 m inside the rasters
+    "swy_grids_patched": dict(seed=46, flow="mfd", dtype="float32", zones=True, monthly_alpha=False, user_l=False,
+                              beta="0.8", gamma="0.9", alpha="1/12", threshold=50, frac_cn=False, patched=True,
+                              ws_pad=-80.0, grids={"lulc": (-29.0, 45.0, 33.0, 45.0), "soil": (4.0, 30.0, -6.0, 30.0),
+                                                   "p*": (11.0, 20.0, -8.0, 20.0), "e*": (-50.0, 50.0, 50.0, 50.0),
+                                                   "cz": (-13.0, 30.0, 9.0, 30.0)}),
+    "swy_grids_recharge_patched": dict(seed=47, flow="d8", dtype="float32", zones=False, monthly_alpha=False,
+                                       user_l=True, beta="1", gamma="1", alpha="1/12", threshold=40, frac_cn=False,
+                                       patched=True, ws_pad=-60.0,
+                                       grids={"l": (14.0, 20.0, -3.0, 20.0), "lulc": (8.0, 30.0, -5.0, 30.0)}),
 }
 
 
@@ -107,6 +126,22 @@ def _patched_core(build: Path):
          ("            work_queue.pop();\n"
           "            if (flow_dir_raster.get(xi, yi) == flow_dir_raster.nodata) {\n"
           "              continue;\n"
+          "            }\n"), 1),
+        # baseflow: a cell without local recharge (nodata) adds none, as in the accumulation of L_sum
+        (("                l_j = l_raster.get(neighbor.x, neighbor.y);\n"
+          "                l_avail_j = l_avail_raster.get(neighbor.x, neighbor.y);\n"),
+         ("                l_j = l_raster.get(neighbor.x, neighbor.y);\n"
+          "                l_avail_j = l_avail_raster.get(neighbor.x, neighbor.y);\n"
+          "                if (is_close(l_j, l_raster.nodata)) {\n"
+          "                  l_j = 0;\n"
+          "                }\n"
+          "                if (is_close(l_avail_j, l_avail_raster.nodata)) {\n"
+          "                  l_avail_j = 0;\n"
+          "                }\n"), 1),
+        ("            l_i = l_raster.get(xi, yi);\n",
+         ("            l_i = l_raster.get(xi, yi);\n"
+          "            if (is_close(l_i, l_raster.nodata)) {\n"
+          "              l_i = 0;\n"
           "            }\n"), 1),
         # baseflow: the flow off the raster as the flow into a hole (an outlet, eq. 108)
         (("                neighbor.y < 0 or neighbor.y >= flow_dir_raster.raster_y_size) {\n"
@@ -217,7 +252,7 @@ def run_swy(name, spec, tmp, core=None):
     _csv(tmp / "bio.csv", header, [[c, *cn[i], *kc[i]] for i, c in enumerate(codes)])
     inputs["cn"] = cn
     inputs["kc"] = kc
-    ws_rings = _boxes(ny, nx, 2, 45.0)
+    ws_rings = _boxes(ny, nx, 2, spec.get("ws_pad", 45.0))
     _write_polygons(tmp / "aoi.shp", ws_rings, "ws_id", [1, 2])
     args = {"workspace_dir": str(tmp / "out"), "results_suffix": "", "threshold_flow_accumulation": spec["threshold"],
             "et0_raster_table": str(tmp / "et0.csv"), "precip_raster_table": str(tmp / "precip.csv"),
@@ -307,8 +342,11 @@ def main(argv):
         core = _patched_core(Path(build)) if any(CASES[n]["patched"] for n in names) else None
         for name in names:
             spec = CASES[name]
+            _set_grids(spec)
             with tempfile.TemporaryDirectory(prefix=f"invest-{name}-", ignore_cleanup_errors=True) as tmp:
                 inputs, outputs, meta = run_swy(name, spec, Path(tmp), core)
+            if GRIDS:
+                meta.update(grids=dict(LOG["grids"]), out_gt=LOG["out_gt"])
             meta["versions"] = {"natcap.invest": natcap.invest.__version__,
                                 "pygeoprocessing": pygeoprocessing.__version__, "numpy": numpy.__version__}
             arrays = {f"in/{k}": v for k, v in inputs.items()}

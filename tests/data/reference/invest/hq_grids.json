@@ -1,0 +1,117 @@
+{
+ "model": "habitat_quality",
+ "nodata": 255,
+ "pixel": 30.0,
+ "k": 0.1,
+ "threats": [
+  {
+   "threat": "crops",
+   "max_dist": 600.0,
+   "weight": 0.7,
+   "decay": "linear"
+  },
+  {
+   "threat": "roads",
+   "max_dist": 1000.0,
+   "weight": 1.0,
+   "decay": "exponential"
+  },
+  {
+   "threat": "urban",
+   "max_dist": 270.0,
+   "weight": 0.35,
+   "decay": "linear"
+  }
+ ],
+ "threat_nodata": {
+  "roads": -9.0
+ },
+ "scenarios": [
+  "cur",
+  "fut"
+ ],
+ "polygons": [],
+ "rarity": {},
+ "patched": false,
+ "outputs": [
+  "access_layer",
+  "deg_sum_c",
+  "deg_sum_f",
+  "degradation_[THREAT]_cur/crops",
+  "degradation_[THREAT]_cur/roads",
+  "degradation_[THREAT]_cur/urban",
+  "degradation_[THREAT]_fut/crops",
+  "degradation_[THREAT]_fut/roads",
+  "degradation_[THREAT]_fut/urban",
+  "quality_c",
+  "quality_f"
+ ],
+ "registry": [
+  "[THREAT]_aligned/*",
+  "[THREAT]_distance_transform_cur/*",
+  "[THREAT]_distance_transform_fut/*",
+  "access_layer",
+  "deg_sum_c",
+  "deg_sum_f",
+  "degradation_[THREAT]_cur/*",
+  "degradation_[THREAT]_fut/*",
+  "filtered_[DECAY]_[THREAT]_cur/*",
+  "filtered_[DECAY]_[THREAT]_fut/*",
+  "habitat_cur",
+  "habitat_fut",
+  "lulc_cur_aligned",
+  "lulc_fut_aligned",
+  "quality_c",
+  "quality_f",
+  "sens_[THREAT]_cur/*",
+  "sens_[THREAT]_fut/*",
+  "taskgraph_cache"
+ ],
+ "grids": {
+  "crops_cur": [
+   499960.0,
+   45.0,
+   0.0,
+   8000040.0,
+   0.0,
+   -45.0
+  ],
+  "roads_cur": [
+   500095.0,
+   20.0,
+   0.0,
+   7999936.0,
+   0.0,
+   -20.0
+  ],
+  "urban_cur": [
+   500007.0,
+   30.0,
+   0.0,
+   7999989.0,
+   0.0,
+   -30.0
+  ],
+  "fut": [
+   499978.0,
+   45.0,
+   0.0,
+   8000031.0,
+   0.0,
+   -45.0
+  ]
+ },
+ "out_gt": [
+  500000.0,
+  30.0,
+  0.0,
+  8000000.0,
+  0.0,
+  -30.0
+ ],
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

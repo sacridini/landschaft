@@ -6,11 +6,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from test_services import CRS, _case, _raster
+from test_services import CRS, _case, _gt, _on_invest_grid, _raster
 
 import landschaft as ls
 
-CASES = ["sdr_mfd", "sdr_d8", "sdr_drainage"]
+CASES = ["sdr_mfd", "sdr_d8", "sdr_drainage", "sdr_grids"]
 FIELDS = ["usle_tot", "sed_export", "sed_dep", "avoid_exp", "avoid_eros"]
 
 
@@ -30,9 +30,10 @@ def _run(name, **kw):
         p["flow_dir_algorithm"] = kw.pop("method")
     extra = {}
     if "drainage" in inputs:
-        extra["drainage"] = _raster(inputs["drainage"], 255)
-    s = ls.services.sdr(_raster(inputs["dem"], nd), _raster(inputs["erosivity"], nd), _raster(inputs["erodibility"], nd),
-                        _raster(inputs["lulc"], meta["nodata"]), bio, _polygons(meta["watersheds"]),
+        extra["drainage"] = _raster(inputs["drainage"], 255, _gt(meta, "drainage"))
+    s = ls.services.sdr(_raster(inputs["dem"], nd, _gt(meta, "dem")), _raster(inputs["erosivity"], nd, _gt(meta, "erosivity")),
+                        _raster(inputs["erodibility"], nd, _gt(meta, "erodibility")),
+                        _raster(inputs["lulc"], meta["nodata"], _gt(meta, "lulc")), bio, _polygons(meta["watersheds"]),
                         threshold=p["threshold_flow_accumulation"], k=p["k_param"], ic_0=p["ic_0_param"],
                         sdr_max=p["sdr_max"], l_max=p["l_max"], method=p["flow_dir_algorithm"], **extra, **kw)
     return s, ref, meta
@@ -50,6 +51,7 @@ def _same(ours, ref, name):
 @pytest.mark.external_reference
 def test_sdr_matches_invest(name):
     s, ref, meta = _run(name)
+    _on_invest_grid(s.sed_export, ref["sed_export"], meta)
     inter = s.intermediate
     for key in ("pit_filled_dem", "slope", "slope_threshold", "flow_accumulation", "ls", "w", "w_threshold", "cp",
                 "w_bar", "s_bar", "d_up", "ws_inverse", "d_dn", "e_prime", "flux"):

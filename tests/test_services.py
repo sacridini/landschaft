@@ -25,15 +25,30 @@ def _case(name):
     return {k[3:]: z[k] for k in z.files if k.startswith("in/")}, {k[4:]: z[k] for k in z.files if k.startswith("out/")}, meta
 
 
-def _raster(a, nodata=None):
+def _raster(a, nodata=None, gt=None):
+    """``a`` on the cases' grid, or on the GDAL geotransform ``gt`` (an input of a ``*_grids`` case)."""
+    x0, px, _, y0, _, py = gt or (ORIGIN[0], PIXEL, 0.0, ORIGIN[1], 0.0, -PIXEL)
     ny, nx = a.shape
-    x = ORIGIN[0] + (np.arange(nx) + 0.5) * PIXEL
-    y = ORIGIN[1] - (np.arange(ny) + 0.5) * PIXEL
+    x = x0 + (np.arange(nx) + 0.5) * px
+    y = y0 + (np.arange(ny) + 0.5) * py
     da = xr.DataArray(a, dims=("y", "x"), coords={"y": y, "x": x})
-    da = da.rio.write_crs(CRS).rio.write_transform(Affine(PIXEL, 0, ORIGIN[0], 0, -PIXEL, ORIGIN[1]))
+    da = da.rio.write_crs(CRS).rio.write_transform(Affine(px, 0, x0, 0, py, y0))
     if nodata is not None:
         da = da.rio.write_nodata(nodata)
     return da
+
+
+def _gt(meta, stem):
+    """The grid InVEST read the input ``stem`` on (None: the cases' grid)."""
+    return meta.get("grids", {}).get(stem)
+
+
+def _on_invest_grid(da, ref, meta):
+    """A result on the grid InVEST computed its outputs on (the aligned, clipped grid of a ``*_grids`` case)."""
+    assert da.shape == ref.shape
+    if "out_gt" in meta:
+        assert da.rio.transform() == Affine.from_gdal(*meta["out_gt"])
+        assert da.rio.crs.to_epsg() == 31983
 
 
 def _same(ours, ref):
@@ -61,12 +76,12 @@ def _pools(inputs):
 
 
 @pytest.mark.parametrize("name", ["carbon_storage", "carbon_sequestration", "carbon_valuation",
-                                  "carbon_valuation_flat", "carbon_minus_one_patched"])
+                                  "carbon_valuation_flat", "carbon_minus_one_patched", "carbon_grids"])
 def test_carbon_matches_invest(name):
     inputs, ref, meta = _case(name)
     kw = {}
     if "alt" in inputs:
-        kw["future"] = _raster(inputs["alt"], meta["nodata"])
+        kw["future"] = _raster(inputs["alt"], meta["nodata"], _gt(meta, "alt"))
     v = meta["valuation"]
     if v:
         kw.update(price=v["price"], discount_rate=v["discount"], rate_change=v["change"], year=v["years"][0],
@@ -76,6 +91,7 @@ def test_carbon_matches_invest(name):
     for pool in ("c_above", "c_below", "c_soil", "c_dead"):
         _same(c.pools[pool], ref[f"{pool}_bas"])
     if "alt" in inputs:
+        _on_invest_grid(c.storage_future, ref["c_storage_alt"], meta)
         _same(c.storage_future, ref["c_storage_alt"])
         _same(c.change, ref["c_change_bas_alt"])
         for pool in ("c_above", "c_below", "c_soil", "c_dead"):
@@ -123,7 +139,7 @@ def _hq_inputs(inputs, meta, scenario):
         nd = meta["threat_nodata"].get(t["threat"])
         if nd is not None:
             a = np.where(a == nd, np.nan, a)
-        maps[t["threat"]] = _raster(a)
+        maps[t["threat"]] = _raster(a, gt=_gt(meta, f"{t['threat']}_{scenario}"))
     return maps
 
 
@@ -142,9 +158,10 @@ def _run_hq(name, **extra):
     threats = pd.DataFrame(meta["threats"])
     kw = {}
     if "fut" in inputs:
-        kw.update(future=_raster(inputs["fut"], meta["nodata"]), future_threat_maps=_hq_inputs(inputs, meta, "fut"))
+        kw.update(future=_raster(inputs["fut"], meta["nodata"], _gt(meta, "fut")),
+                  future_threat_maps=_hq_inputs(inputs, meta, "fut"))
     if "bas" in inputs:
-        kw["base"] = _raster(inputs["bas"], meta["nodata"])
+        kw["base"] = _raster(inputs["bas"], meta["nodata"], _gt(meta, "bas"))
     if meta["polygons"]:
         import geopandas as gpd
         from shapely.geometry import Polygon
@@ -156,10 +173,11 @@ def _run_hq(name, **extra):
     return hq, ref, meta
 
 
-@pytest.mark.parametrize("name", ["hq_current", "hq_scenarios", "hq_access", "hq_empty_threat_patched"])
+@pytest.mark.parametrize("name", ["hq_current", "hq_scenarios", "hq_access", "hq_empty_threat_patched", "hq_grids"])
 @pytest.mark.external_reference
 def test_habitat_quality_matches_invest(name):
     hq, ref, meta = _run_hq(name)
+    _on_invest_grid(hq.quality["current"], ref["quality_c"], meta)
     for sc, s in (("current", "cur"), ("future", "fut")):
         if f"deg_sum_{s[0]}" not in ref:
             continue
@@ -234,6 +252,25 @@ def test_habitat_quality_checks_its_inputs():
         ls.services.habitat_quality(lulc, threats, sens.drop(columns="r"), {"r": road}, half_saturation=0.1)
     hq = ls.services.habitat_quality(lulc, threats, sens, {"r": road}, half_saturation=0.1, n_threads=1)
     assert hq.quality["current"].rio.crs is not None
+
+
+def test_align_inputs_keeps_the_grid_and_marks_cells_outside():
+    from landschaft.services._common import align_inputs
+
+    inputs, ref, meta = _case("wy_grids")
+    lulc = _raster(inputs["lulc"], meta["nodata"])
+    depth = _raster(inputs["depth"], meta["input_nodata"])
+    out = align_inputs({"lulc": (lulc, "near"), "depth": (depth, "near"), "none": (None, "near")}, reference="lulc")
+    assert out["lulc"] is lulc and out["depth"] is depth and "none" not in out  # on the grid: no copy
+    # a raster without nodata over less than the reference: no value outside it (GDAL writes 0 there)
+    small = _raster(np.ones((10, 12), np.float32), gt=(ORIGIN[0] + 7.0, 20.0, 0.0, ORIGIN[1] - 3.0, 0.0, -20.0))
+    out = align_inputs({"lulc": (lulc, "near"), "small": (small, "bilinear")}, reference="lulc", bbox="reference")
+    a = out["small"].values
+    assert a.shape == lulc.shape and out["small"].rio.transform() == lulc.rio.transform()
+    assert np.isnan(a[-1, -1]) and a[2, 2] == 1.0
+    far = _raster(np.ones((5, 5), np.float32), gt=(ORIGIN[0] + 1e6, 30.0, 0.0, ORIGIN[1], 0.0, -30.0))
+    with pytest.raises(ValueError, match="do not overlap"):
+        align_inputs({"lulc": (lulc, "near"), "far": (far, "near")}, reference="lulc")
 
 
 def test_results_save_and_load(tmp_path):

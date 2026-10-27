@@ -4035,8 +4035,8 @@ invest-ref`: o python da env chamado direto não acha as DLLs, "DLL load failed 
   / 1000 menos o consumo médio). Também: o "Model Spec" diz `consum_mn` em m3/ha, mas o valor é por célula (o
   landschaft documenta "por célula").
 * Desempenho (3000 x 3000, 4 bacias, demanda, 3 núcleos): 0,8 s contra 11,0 s do InVEST.
-* Fica para depois: o recorte dos mapas à caixa das bacias (o InVEST alinha as entradas à interseção com a caixa
-  do vetor; aqui os mapas cobrem a grade toda), entradas em grades diferentes (aqui na mesma grade).
+* O recorte dos mapas à caixa das bacias e as entradas em grades diferentes: **feitos** (2026-10-27, ver "Entradas
+  em grades diferentes" abaixo).
 
 ### Fase 3 (conectividade sedimentar): `sdr`
 
@@ -4070,8 +4070,8 @@ em `src/cpp/serv/sdr.cpp`):
   do cache (o resultado depende do tamanho do raster); aqui o fluxo fica em double até o fim (a forma estável).
   `connectivity_index` com o mesmo W e o MDE mascarado dá o IC do SDR bit a bit.
 * Desempenho (3000 x 3000, MFD, 5 núcleos): 9,8 s contra 114 s do InVEST.
-* Fica para depois: entradas em grades diferentes (o InVEST alinha e reamostra; aqui na mesma grade), o recorte à
-  caixa das bacias, o D-Infinity como opção, os benefícios por ação no `ls.prioritize`, o nó do Terraflux.
+* Fica para depois: o D-Infinity como opção, os benefícios por ação no `ls.prioritize`, o nó do Terraflux (as
+  grades diferentes e o recorte à caixa das bacias: **feitos** em 2026-10-27, ver abaixo).
 
 ### Fase 4: `ndr` (retenção de nutrientes)
 
@@ -4111,7 +4111,8 @@ referência `tools/make_reference_invest_ndr.py`, 6 casos `ndr_*` em `tests/data
   InVEST guarda a retenção em double num cache LRU de blocos e a relê do arquivo float32 quando um bloco sai do cache
   (como no SDR); aqui ela fica em double até o fim (a forma estável).
 * Desempenho (3000 x 3000, MFD, N e P, 4 núcleos): 7,2 s contra 172 s do InVEST (que inclui gravar os GeoTIFFs).
-* Fica para depois: entradas em grades diferentes e o recorte à caixa das bacias (como no SDR), o nó do Terraflux.
+* Fica para depois: o nó do Terraflux (as grades diferentes e o recorte à caixa das bacias: **feitos** em
+  2026-10-27, ver abaixo).
 
 ### Fase 5 (produção sazonal de água): `seasonal_water_yield`
 
@@ -4142,8 +4143,10 @@ C++ em `src/cpp/serv/swy.cpp`):
   grupos de solo juntos, então com mapas inteiros (o comum) os CN fracionários da tabela são truncados: aqui em
   float64 (com CN inteiros dá o mesmo S do InVEST, que divide em float64; em float32 o S mudava no último bit).
   O caso `swy_mfd` (InVEST sem correção) confere as partes que os erros não tocam.
-* A recarga dada (`recharge=`): células sem valor contam 0 no roteamento (como na acumulação; o InVEST usaria o
-  valor de nodata como número).
+* A recarga dada (`recharge=`): células sem valor contam 0 no roteamento (como na acumulação). Erro (5) do InVEST,
+  corrigido na referência desde 2026-10-27: o fluxo de base lê L e L_avail das células sem valor como números
+  (-9999 e 3,4e38), e B e B_sum ficam infinitos ou sem sentido ali e a montante (caso `swy_grids_recharge_patched`:
+  a borda do mapa de recarga alinhado ao MDE fica sem valor).
 * Num raster de 3000 x 3000 o cache LRU do `ManagedRaster` (64 blocos de 256 x 256 por raster) relê do arquivo
   float32 os blocos que saíram dele, então o InVEST arredonda no meio do caminho: QF igual em todas as células;
   L, L_avail e Vri diferem em 0,001 % das células, B em 0,005 %, B_sum em 0,1 %, L_sum_avail em 0,5 % e L_sum em
@@ -4152,8 +4155,8 @@ C++ em `src/cpp/serv/swy.cpp`):
 * Desempenho (3000 x 3000, MFD, 12 meses, 4 núcleos): 20,8 s contra 305 s do InVEST (com a E/S dele). O resto
   é o `exp1` do scipy (o mesmo do InVEST, por isso não portado; em pedaços em paralelo, 0,4 s por mês) e as
   duas passadas pelo fluxo, sequenciais (recarga 3,2 s, fluxo de base 1,9 s).
-* Fica para depois: o recorte dos mapas à caixa da AOI e entradas em grades diferentes (o InVEST alinha e reamostra;
-  aqui na mesma grade), o relatório HTML do InVEST, o nó do Terraflux.
+* Fica para depois: o relatório HTML do InVEST, o nó do Terraflux (o recorte à caixa da AOI e as grades
+  diferentes: **feitos** em 2026-10-27, ver abaixo).
 
 ### Fase 6: `pollination` (polinização)
 
@@ -4190,7 +4193,35 @@ C++ em `src/cpp/serv/swy.cpp`):
   (que inclui gravar os GeoTIFFs). A convolução: os pares de blocos em paralelo, a transformada de cada bloco do
   núcleo uma vez por `fshape`, a soma na ordem deles em paralelo por linha.
 * Uma fazenda sem nenhum centro de célula fica sem valores (NULL no InVEST, NaN aqui; testado). Fica para depois:
-  entradas em grades diferentes (o InVEST alinha; aqui na mesma grade) e o nó do Terraflux.
+  o nó do Terraflux. Grades diferentes: não há o que alinhar (um raster só; as fazendas já vão para o CRS do uso).
+
+### Entradas em grades diferentes e recorte às bacias (todas as fases)
+
+**Feito** (2026-10-27, ramo do worktree, sem versão; `align_inputs` em `services/_common.py`):
+* O `align_and_resize_raster_stack` do pygeoprocessing 2.4.11 como cada modelo do InVEST 3.20.2 o chama, com o
+  kernel de warp do landschaft (não o `gdal.Warp`): a célula da referência (o MDE no SDR, NDR e SWY, o uso nos
+  outros; no habitat e no SDR o lado menor, quadrada), o CRS dela, a caixa (a interseção dos rasters e da caixa das
+  bacias / AOI no water_yield, SDR, NDR e SWY; a do uso atual no carbono e no habitat), o canto encaixado nas
+  células da referência e o método de cada entrada (vizinho mais próximo; no SDR bilinear no MDE, na erosividade e
+  na erodibilidade e moda no uso). No SDR a caixa passa pelo `transform_bounding_box` (11 pontos por lado), como lá.
+  Grade, tamanho e geotransform iguais aos do pygeoprocessing.
+* As coordenadas de origem como o transformador aproximado do GDAL as dá (o `gdal.Warp` com o limiar de erro padrão,
+  0,125, que o pygeoprocessing mantém): por linha do destino, a transformação exata da primeira amostra, da do meio e
+  da última e a interpolação entre elas (`_approx_rows` em `_reproject.py`); com as exatas (`-et 0`) a bilinear dava
+  1 ulp numa célula do caso SDR. Num destino que o GDAL divide em pedaços (acima do limite de memória do warp) as
+  linhas dele são mais curtas e pode sobrar 1 ulp (não testado).
+* Entradas já na grade passam sem cópia (os resultados de antes não mudam; testado); os resultados ficam na grade
+  alinhada e recortada (transform e CRS nos DataArrays).
+* Referências: `carbon_grids`, `hq_grids`, `wy_grids`, `sdr_grids`, `ndr_grids`, `swy_grids_patched` e
+  `swy_grids_recharge_patched` (o `GRIDS` dos harnesses: células de 20, 45 e 50 m sobre 30 m, origens deslocadas,
+  extensões maiores e menores, bacias e AOI dentro dos rasters). **Bit a bit** em todos os rasters; totais por bacia
+  como nos outros casos.
+* Diferenças (a forma correta): (1) o GDAL dá 0 às células fora de um raster sem nodata; aqui ficam sem valor
+  (testado; os casos de referência têm nodata); (2) o carbono do InVEST recusa um mapa futuro noutra grade: aqui ele
+  é alinhado à do atual (a referência é o InVEST com o futuro alinhado antes pelo pygeoprocessing); (3) rasters
+  noutro CRS vão para o CRS da referência em todos os modelos (o InVEST só reprojeta onde passa a projeção alvo);
+  (4) o erro (5) do SWY acima, que a borda do mapa de recarga alinhado mostra.
+* Fica para depois: entradas sem georreferência (arrays) continuam exigindo uma grade só.
 
 ### Depois
 

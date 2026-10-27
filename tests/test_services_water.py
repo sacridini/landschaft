@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from test_services import CRS, PIXEL, _case, _raster
+from test_services import CRS, PIXEL, _case, _gt, _on_invest_grid, _raster
 
 import landschaft as ls
 
@@ -27,8 +27,8 @@ def _bio(inputs):
 
 def _args(inputs, meta):
     nd = meta["input_nodata"]
-    return (_raster(inputs["lulc"], meta["nodata"]), _bio(inputs),
-            *[_raster(inputs[k], nd) for k in ("precip", "eto", "depth", "pawc")])
+    return (_raster(inputs["lulc"], meta["nodata"], _gt(meta, "lulc")), _bio(inputs),
+            *[_raster(inputs[k], nd, _gt(meta, k)) for k in ("precip", "eto", "depth", "pawc")])
 
 
 def _run_wy(name):
@@ -53,10 +53,11 @@ def _bits(ours, ref):
     assert_ucrt_close(a, ref)
 
 
-@pytest.mark.parametrize("name", ["wy_basic", "wy_full", "wy_int_inputs", "wy_float64"])
+@pytest.mark.parametrize("name", ["wy_basic", "wy_full", "wy_int_inputs", "wy_float64", "wy_grids"])
 @pytest.mark.external_reference
 def test_water_yield_matches_invest(name):
     wy, ref, meta = _run_wy(name)
+    _on_invest_grid(wy.wyield, ref["wyield"], meta)
     _bits(wy.fractp, ref["fractp"])
     _bits(wy.wyield, ref["wyield"])
     _bits(wy.aet, ref["aet"])

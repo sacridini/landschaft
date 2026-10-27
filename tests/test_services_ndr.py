@@ -6,11 +6,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from test_services import CRS, _case, _raster
+from test_services import CRS, _case, _gt, _on_invest_grid, _raster
 
 import landschaft as ls
 
-CASES = ["ndr_mfd", "ndr_d8", "ndr_p_only", "ndr_tall", "ndr_wide"]
+CASES = ["ndr_mfd", "ndr_d8", "ndr_p_only", "ndr_tall", "ndr_wide", "ndr_grids"]
 CHAIN = ["masked_dem", "masked_lulc", "masked_runoff_proxy", "filled_dem", "slope", "thresholded_slope",
          "flow_direction", "flow_accumulation", "s_accumulation", "runoff_proxy_index", "s_bar", "d_up",
          "s_factor_inverse", "d_dn", "dist_to_channel"]
@@ -41,8 +41,10 @@ def _run(name, **kw):
                 subsurface_critical_length=p["subsurface_critical_length_n"],
                 subsurface_efficiency=p["subsurface_eff_n"])
     args.update(kw)
-    r = ls.services.ndr(_raster(inputs["dem"], nd), _raster(inputs["lulc"], meta["nodata"]),
-                        _raster(inputs["runoff"], nd), _table(inputs, meta), _polygons(meta["watersheds"]), **args)
+    r = ls.services.ndr(_raster(inputs["dem"], nd, _gt(meta, "dem")),
+                        _raster(inputs["lulc"], meta["nodata"], _gt(meta, "lulc")),
+                        _raster(inputs["runoff"], nd, _gt(meta, "runoff")), _table(inputs, meta),
+                        _polygons(meta["watersheds"]), **args)
     return r, ref, meta
 
 
@@ -58,6 +60,7 @@ def _same(ours, ref, name):
 @pytest.mark.external_reference
 def test_ndr_matches_invest(name):
     r, ref, meta = _run(name)
+    _on_invest_grid(r.ndr_n if r.ndr_n is not None else r.ndr_p, ref["ndr_n" if r.ndr_n is not None else "ndr_p"], meta)
     inter = r.intermediate
     for key in CHAIN:
         _same(inter[key], ref[key], key)

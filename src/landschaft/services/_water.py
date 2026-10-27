@@ -14,7 +14,7 @@ from .. import _core
 from .._save import Saveable
 from .._threads import resolve
 from ..surface._grid import read_surface
-from ._common import LandUse, lookup_table
+from ._common import LandUse, align_inputs, lookup_table
 
 __all__ = ["WaterYield", "water_yield"]
 
@@ -168,8 +168,8 @@ def water_yield(lulc, biophysical, precipitation, eto, depth, pawc, *, seasonali
         A DataFrame by class (``lucode``): ``lulc_veg`` (1 vegetation, 0 not),
         ``root_depth`` (mm) and ``kc`` (crop coefficient).
     precipitation, eto
-        Annual precipitation and reference evapotranspiration (mm), on the grid of
-        ``lulc``. Cells with no rain are left out, as InVEST does.
+        Annual precipitation and reference evapotranspiration (mm). Cells with
+        no rain are left out, as InVEST does.
     depth
         Depth to the root restricting layer (mm).
     pawc
@@ -193,6 +193,13 @@ def water_yield(lulc, biophysical, precipitation, eto, depth, pawc, *, seasonali
     -------
     WaterYield
 
+    Notes
+    -----
+    The rasters may be on different grids (cells, extent, CRS): as InVEST does,
+    they are put on the cells of ``lulc`` first, by the nearest cell, over the
+    intersection of their bounds and the watersheds' (its corner moved onto
+    ``lulc``'s cells), so the maps cover the watersheds' box only.
+
     Examples
     --------
     >>> import numpy as np
@@ -212,6 +219,11 @@ def water_yield(lulc, biophysical, precipitation, eto, depth, pawc, *, seasonali
            [582.6, 864.3, 240. ]])
     """
     threads = resolve(n_threads)
+    # InVEST's alignment: the land use map's cells over the rasters and the watersheds
+    g = align_inputs({"eto": (eto, "near"), "precipitation": (precipitation, "near"), "depth": (depth, "near"),
+                      "pawc": (pawc, "near"), "lulc": (lulc, "near")}, reference="lulc", vectors=[watersheds],
+                     n_threads=threads)
+    eto, precipitation, depth, pawc, lulc = (g["eto"], g["precipitation"], g["depth"], g["pawc"], g["lulc"])
     lu = LandUse(lulc, nodata, "the land use map")
     shape = lu.shape
     codes, bio = lookup_table(biophysical, ["lulc_veg", "root_depth", "kc"], "the biophysical table")
