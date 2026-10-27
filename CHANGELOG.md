@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.55.0] - 2026-10-27
+
 ### Added
 - `ls.services.coastal_vulnerability` (InVEST's coastal vulnerability): shore points every `model_resolution` along
   the landmass inside the area of interest, 16 fetch rays each (C++ with OpenMP: a uniform grid of the coast edges,
