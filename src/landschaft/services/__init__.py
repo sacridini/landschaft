@@ -27,6 +27,11 @@ Typical use::
 
     bees = ls.services.pollination(lulc, guilds, biophysical, farms=ls.load_vector("farms.gpkg"))
     bees.abundance["apis"]["spring"], bees.farms   # abundance by species and season, farm yields
+
+    swy = ls.services.seasonal_water_yield(dem, lulc, swy_biophysical, watersheds, threshold=1000,
+                                           precipitation=monthly_rain, et0=monthly_et0, soil_group=soils,
+                                           rain_events=[12, 10, 9, 6, 4, 2, 1, 1, 3, 6, 9, 11])
+    swy.baseflow                               # the recharge that reaches the streams (mm / yr)
 """
 
 from ._carbon import Carbon, carbon, valuation_constant
@@ -34,7 +39,9 @@ from ._habitat import HabitatQuality, habitat_quality
 from ._ndr import NDR, ndr
 from ._pollination import Pollination, pollination
 from ._sdr import SDR, sdr
+from ._swy import SeasonalWaterYield, seasonal_water_yield
 from ._water import WaterYield, water_yield
 
-__all__ = ["Carbon", "HabitatQuality", "NDR", "Pollination", "SDR", "WaterYield", "carbon", "habitat_quality",
-           "ndr", "pollination", "sdr", "valuation_constant", "water_yield"]
+__all__ = ["Carbon", "HabitatQuality", "NDR", "Pollination", "SDR", "SeasonalWaterYield", "WaterYield",
+           "carbon", "habitat_quality", "ndr", "pollination", "sdr", "seasonal_water_yield",
+           "valuation_constant", "water_yield"]

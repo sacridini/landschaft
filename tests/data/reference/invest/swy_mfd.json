@@ -1,0 +1,302 @@
+{
+ "model": "seasonal_water_yield",
+ "input_nodata": -9999.0,
+ "pixel": 30.0,
+ "watersheds": [
+  [
+   [
+    499955.0,
+    8000045.0
+   ],
+   [
+    501058.0,
+    8000045.0
+   ],
+   [
+    501132.0,
+    7998245.0
+   ],
+   [
+    499955.0,
+    7998245.0
+   ],
+   [
+    499955.0,
+    8000045.0
+   ]
+  ],
+  [
+   [
+    501058.0,
+    8000045.0
+   ],
+   [
+    502235.0,
+    8000045.0
+   ],
+   [
+    502235.0,
+    7998245.0
+   ],
+   [
+    501132.0,
+    7998245.0
+   ],
+   [
+    501058.0,
+    8000045.0
+   ]
+  ]
+ ],
+ "params": {
+  "flow": "mfd",
+  "beta": "1",
+  "gamma": "1",
+  "alpha": "1/12",
+  "threshold": 50
+ },
+ "patched": false,
+ "nodata_values": {
+  "pit_filled_dem": -9999.0,
+  "flow_dir": 0.0,
+  "flow_accum": -1.23789789e+29,
+  "stream": 255.0,
+  "n_events1": -1.0,
+  "n_events10": -1.0,
+  "n_events11": -1.0,
+  "n_events12": -1.0,
+  "n_events2": -1.0,
+  "n_events3": -1.0,
+  "n_events4": -1.0,
+  "n_events5": -1.0,
+  "n_events6": -1.0,
+  "n_events7": -1.0,
+  "n_events8": -1.0,
+  "n_events9": -1.0,
+  "cn": 32767.0,
+  "si": -1.0,
+  "qf_1": -1.0,
+  "qf_10": -1.0,
+  "qf_11": -1.0,
+  "qf_12": -1.0,
+  "qf_2": -1.0,
+  "qf_3": -1.0,
+  "qf_4": -1.0,
+  "qf_5": -1.0,
+  "qf_6": -1.0,
+  "qf_7": -1.0,
+  "qf_8": -1.0,
+  "qf_9": -1.0,
+  "qf": 3.4028234663852886e+38,
+  "kc_1": -1.0,
+  "kc_10": -1.0,
+  "kc_11": -1.0,
+  "kc_12": -1.0,
+  "kc_2": -1.0,
+  "kc_3": -1.0,
+  "kc_4": -1.0,
+  "kc_5": -1.0,
+  "kc_6": -1.0,
+  "kc_7": -1.0,
+  "kc_8": -1.0,
+  "kc_9": -1.0,
+  "l": -1.0000000331813535e+32,
+  "l_avail": -1.0000000331813535e+32,
+  "l_sum_avail": -1.0000000331813535e+32,
+  "aet": -1.0000000331813535e+32,
+  "annual_precip": -1.0000000331813535e+32,
+  "vri": -1.0000000331813535e+32,
+  "l_sum": -1.23789789e+29,
+  "b": -1.0000000331813535e+32,
+  "b_sum": -1.0000000331813535e+32
+ },
+ "watershed_results": [
+  {
+   "ws_id": 1,
+   "qb": 61.2021446228,
+   "vri_sum": 0.42653802037,
+   "geom_id": 0
+  },
+  {
+   "ws_id": 2,
+   "qb": 82.44217681885,
+   "vri_sum": 0.57346189022,
+   "geom_id": 1
+  }
+ ],
+ "monthly": [
+  {
+   "geom_id": 0,
+   "month": 1,
+   "quickflow": 82928.20358276367,
+   "baseflow": 24684.894561767574,
+   "precipitation": 350566.7541503906
+  },
+  {
+   "geom_id": 0,
+   "month": 2,
+   "quickflow": 90299.8649597168,
+   "baseflow": 24684.894561767574,
+   "precipitation": 363131.24084472656
+  },
+  {
+   "geom_id": 0,
+   "month": 3,
+   "quickflow": 0.0,
+   "baseflow": 24684.894561767574,
+   "precipitation": 346106.4971923828
+  },
+  {
+   "geom_id": 0,
+   "month": 4,
+   "quickflow": 185537.85095214844,
+   "baseflow": 24684.894561767574,
+   "precipitation": 298657.3699951172
+  },
+  {
+   "geom_id": 0,
+   "month": 5,
+   "quickflow": 106442.00820922852,
+   "baseflow": 24684.894561767574,
+   "precipitation": 239640.2984619141
+  },
+  {
+   "geom_id": 0,
+   "month": 6,
+   "quickflow": 33329.81758117676,
+   "baseflow": 24684.894561767574,
+   "precipitation": 173802.84576416016
+  },
+  {
+   "geom_id": 0,
+   "month": 7,
+   "quickflow": 0.0,
+   "baseflow": 24684.894561767574,
+   "precipitation": 0.0
+  },
+  {
+   "geom_id": 0,
+   "month": 8,
+   "quickflow": 26674.018478393555,
+   "baseflow": 24684.894561767574,
+   "precipitation": 109900.82015991212
+  },
+  {
+   "geom_id": 0,
+   "month": 9,
+   "quickflow": 27583.01181793213,
+   "baseflow": 24684.894561767574,
+   "precipitation": 126755.58471679688
+  },
+  {
+   "geom_id": 0,
+   "month": 10,
+   "quickflow": 34989.676666259766,
+   "baseflow": 24684.894561767574,
+   "precipitation": 177223.05450439453
+  },
+  {
+   "geom_id": 0,
+   "month": 11,
+   "quickflow": 67458.77380371094,
+   "baseflow": 24684.894561767574,
+   "precipitation": 239196.89025878903
+  },
+  {
+   "geom_id": 0,
+   "month": 12,
+   "quickflow": 124115.00701904295,
+   "baseflow": 24684.894561767574,
+   "precipitation": 298370.8740234375
+  },
+  {
+   "geom_id": 1,
+   "month": 1,
+   "quickflow": 61450.103759765625,
+   "baseflow": 30120.215606689453,
+   "precipitation": 351944.6319580078
+  },
+  {
+   "geom_id": 1,
+   "month": 2,
+   "quickflow": 64788.1965637207,
+   "baseflow": 30120.215606689453,
+   "precipitation": 363035.82458496094
+  },
+  {
+   "geom_id": 1,
+   "month": 3,
+   "quickflow": 0.0,
+   "baseflow": 30120.215606689453,
+   "precipitation": 350727.3193359375
+  },
+  {
+   "geom_id": 1,
+   "month": 4,
+   "quickflow": 172599.78790283203,
+   "baseflow": 30120.215606689453,
+   "precipitation": 298209.29260253906
+  },
+  {
+   "geom_id": 1,
+   "month": 5,
+   "quickflow": 93804.0641784668,
+   "baseflow": 30120.215606689453,
+   "precipitation": 238849.03564453125
+  },
+  {
+   "geom_id": 1,
+   "month": 6,
+   "quickflow": 21118.881225585938,
+   "baseflow": 30120.215606689453,
+   "precipitation": 170947.74627685547
+  },
+  {
+   "geom_id": 1,
+   "month": 7,
+   "quickflow": 0.0,
+   "baseflow": 30120.215606689453,
+   "precipitation": 0.0
+  },
+  {
+   "geom_id": 1,
+   "month": 8,
+   "quickflow": 19737.585639953613,
+   "baseflow": 30120.215606689453,
+   "precipitation": 109981.67266845705
+  },
+  {
+   "geom_id": 1,
+   "month": 9,
+   "quickflow": 18346.271896362305,
+   "baseflow": 30120.215606689453,
+   "precipitation": 126706.47583007812
+  },
+  {
+   "geom_id": 1,
+   "month": 10,
+   "quickflow": 22594.22664642334,
+   "baseflow": 30120.215606689453,
+   "precipitation": 176348.4603881836
+  },
+  {
+   "geom_id": 1,
+   "month": 11,
+   "quickflow": 50573.97537231445,
+   "baseflow": 30120.215606689453,
+   "precipitation": 235582.96508789065
+  },
+  {
+   "geom_id": 1,
+   "month": 12,
+   "quickflow": 108330.23529052734,
+   "baseflow": 30120.215606689453,
+   "precipitation": 300587.5305175781
+  }
+ ],
+ "versions": {
+  "natcap.invest": "3.20.2",
+  "pygeoprocessing": "2.4.11",
+  "numpy": "2.5.4"
+ }
+}

@@ -294,6 +294,7 @@ add_library(servcore STATIC
     src/cpp/serv/pollination.cpp
     src/cpp/serv/sdr.cpp
     src/cpp/serv/services.cpp
+    src/cpp/serv/swy.cpp
 )
 target_include_directories(servcore PUBLIC src/cpp)
 set_target_properties(servcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -465,7 +466,8 @@ if(LANDSCHAFT_PYTHON)
                         src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
                         src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
                         src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp src/cpp/hydro/python.cpp
-                        src/cpp/serv/python.cpp src/cpp/swat/python.cpp)
+                        src/cpp/serv/python.cpp src/cpp/serv/python_swy.cpp
+                        src/cpp/swat/python.cpp)
     target_link_libraries(_core PRIVATE eigen_headers)
     target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
                           iocore sdmcore simcore optcore restcore hydrocore servcore swatcore)

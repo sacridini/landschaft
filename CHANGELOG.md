@@ -29,6 +29,20 @@ in a new major version.
   pygeoprocessing bug corrected: `convolve_2d` zeroes a block's values within 1e-8 of 1e-8 (from -1e-13 to 2e-8)
   instead of within 1e-8 of 0, as it documents. 3000 x 3000 cells, three species and two seasons: 1.6 s on four
   cores (3.4 s on one) against 45.5 s for InVEST.
+- `ls.services.seasonal_water_yield(dem, lulc, biophysical, watersheds, threshold=, precipitation=, et0=,
+  soil_group=, rain_events= | climate_zones= + climate_zone_table=, alpha=1/12, beta=1, gamma=1, recharge=None,
+  method="mfd")`: InVEST's seasonal water yield model. The monthly quickflow of the storms (SCS curve numbers by land
+  use and soil group, the rain events per month or per climate zone), the local recharge, the recharge available
+  from upslope and the actual evapotranspiration, the baseflow (B, B_sum) and Vri, by MFD or D8 routing, or the
+  routing of a recharge map given (`recharge=`); the mean recharge and the Vri sum per polygon and the monthly
+  quickflow, baseflow and precipitation in m3 (`monthly`). Bit for bit with natcap.invest 3.20.2 in every raster
+  (the DEM filled and routed by `ls.hydro`'s pygeoprocessing port, the routing of the recharge and the baseflow in
+  C++), with four of its bugs corrected and tested against InVEST patched
+  (`tools/make_reference_invest_swy.py`): the available recharge from upslope is the sum of the upslope terms by
+  their shares of the flow (eq. 103; InVEST takes their mean by the raw MFD weights), the flow off the raster ends
+  the baseflow path as the flow into a hole does (InVEST gives those outlets B_sum = 0), a cell without elevation
+  that a D8 direction points into gets no recharge (InVEST computes one and reads past its offset tables), and
+  fractional curve numbers are kept with integer land use and soil maps (InVEST truncates them).
 
 ## [1.53.0] - 2026-10-27
 

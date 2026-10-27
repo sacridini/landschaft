@@ -4113,6 +4113,48 @@ referência `tools/make_reference_invest_ndr.py`, 6 casos `ndr_*` em `tests/data
 * Desempenho (3000 x 3000, MFD, N e P, 4 núcleos): 7,2 s contra 172 s do InVEST (que inclui gravar os GeoTIFFs).
 * Fica para depois: entradas em grades diferentes e o recorte à caixa das bacias (como no SDR), o nó do Terraflux.
 
+### Fase 5 (produção sazonal de água): `seasonal_water_yield`
+
+**Fase 5 feita** (produção sazonal de água; 2026-10-27, ramo do worktree, sem versão; `ls.services.seasonal_water_yield`,
+C++ em `src/cpp/serv/swy.cpp`):
+* Referência: natcap.invest 3.20.2 na env `invest-ref` (`conda run --no-capture-output -n invest-ref`; sem o
+  `--no-capture-output` o conda quebra no `subprocess` da compilação), `tools/make_reference_invest_swy.py` (6 casos:
+  MFD, D8 com zonas climáticas e alfa mensal, float64 com CN fracionários, recarga dada em MFD e D8).
+* O que é álgebra (CN, S, o escoamento rápido de cada mês com o `exp1` do scipy, Kc, eventos de chuva, a soma dos
+  meses) em numpy com os tipos e as máscaras do `raster_map` do InVEST; o que segue o fluxo (a recarga local,
+  eqs. 100-104, das cristas para baixo; o fluxo de base, eqs. 107-110, das saídas para cima) portado do `swy.h` com
+  os iteradores de vizinhos do `ManagedRaster.h` (proporções em float, alfa x beta em float, somas em double); o
+  roteamento (preenchimento, MFD/D8, acumulação, rios com o traço 1,0 do `extract_streams_mfd`) é o do `ls.hydro`.
+  O Vri soma L por blocos do `iterblocks` (256 x 256 alargados até 2^16 células) com a soma do numpy em float32,
+  como lá. **Bit a bit** em todos os rasters dos casos (L, L_avail, L_sum_avail, L_sum, B, B_sum, Vri, AET, P, QF e
+  os 12 meses, CN, S, Kc, eventos, direções, acumulação, rios); `qb`, `vri_sum` e a tabela mensal (m3) a 3e-6 (o
+  InVEST soma em float32).
+* Erros do InVEST (só a forma correta; a referência é o próprio InVEST com o `swy.h` corrigido e recompilado pelo
+  Cython/MSVC dentro do script, e o CN corrigido): (1) `L_sum_avail` (eq. 103 do Guia: soma de `p_ji (L_avail_j +
+  L_sum_avail_j)`) sai como a **média** dos termos de montante pesada pelos pesos brutos do MFD
+  (`UpslopeNeighborsNoDivide` e a divisão pela soma deles): uma célula que recebe de três tem a média, não a soma, e
+  uma que recebe 1/8 do fluxo de uma vizinha recebe tudo; (2) o fluxo de base conta o fluxo que sai do raster na soma
+  das direções mas não soma nada por ele, então uma saída pela borda tem `B_sum = 0` em vez de `L_sum` (eq. 108),
+  enquanto uma que drena para um buraco do MDE (nodata no mapa de rios) tem `L_sum`: aqui a borda vale como o
+  buraco; (3) com D8, uma direção pode apontar para um buraco do MDE (o pygeoprocessing drena para eles): o InVEST
+  calcula recarga nessa célula sem elevação (que entra na soma do Vri) e lê a direção dela (128) fora das tabelas de
+  deslocamento; aqui as células sem direção não são visitadas; (4) o CN é gravado no tipo do uso do solo e dos
+  grupos de solo juntos, então com mapas inteiros (o comum) os CN fracionários da tabela são truncados: aqui em
+  float64 (com CN inteiros dá o mesmo S do InVEST, que divide em float64; em float32 o S mudava no último bit).
+  O caso `swy_mfd` (InVEST sem correção) confere as partes que os erros não tocam.
+* A recarga dada (`recharge=`): células sem valor contam 0 no roteamento (como na acumulação; o InVEST usaria o
+  valor de nodata como número).
+* Num raster de 3000 x 3000 o cache LRU do `ManagedRaster` (64 blocos de 256 x 256 por raster) relê do arquivo
+  float32 os blocos que saíram dele, então o InVEST arredonda no meio do caminho: QF igual em todas as células;
+  L, L_avail e Vri diferem em 0,001 % das células, B em 0,005 %, B_sum em 0,1 %, L_sum_avail em 0,5 % e L_sum em
+  4 % (até 1,2e-6 relativo, o último bit de float32 propagado); aqui os valores ficam em double até o fim (a forma
+  estável, que não depende do tamanho do raster).
+* Desempenho (3000 x 3000, MFD, 12 meses, 4 núcleos): 20,8 s contra 305 s do InVEST (com a E/S dele). O resto
+  é o `exp1` do scipy (o mesmo do InVEST, por isso não portado; em pedaços em paralelo, 0,4 s por mês) e as
+  duas passadas pelo fluxo, sequenciais (recarga 3,2 s, fluxo de base 1,9 s).
+* Fica para depois: o recorte dos mapas à caixa da AOI e entradas em grades diferentes (o InVEST alinha e reamostra;
+  aqui na mesma grade), o relatório HTML do InVEST, o nó do Terraflux.
+
 ### Fase 6: `pollination` (polinização)
 
 **Fase 6 feita** (polinização; 2026-10-27, ramo do worktree, sem versão; `ls.services.pollination`, C++ em
@@ -4152,8 +4194,8 @@ referência `tools/make_reference_invest_ndr.py`, 6 casos `ndr_*` em `tests/data
 
 ### Depois
 
-Outros modelos que usam as mesmas peças (armazenamento sazonal de água, risco costeiro) ficam para
-avaliar quando estas fases estiverem prontas.
+Outros modelos que usam as mesmas peças (risco costeiro) ficam para avaliar quando estas fases
+estiverem prontas.
 
 ---
 

@@ -20,6 +20,12 @@ scenarios goes straight in.
 
 ::: landschaft.services.WaterYield
 
+## Seasonal water yield
+
+::: landschaft.services.seasonal_water_yield
+
+::: landschaft.services.SeasonalWaterYield
+
 ## Sediment delivery ratio
 
 ::: landschaft.services.sdr
