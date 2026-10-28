@@ -138,6 +138,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Stratified samples of a map, its accuracy and the area of its classes (Olofsson et al. 2014).
 
+-   :material-pine-tree:{ .lg .middle } **[Deforestation allocation (VT0007)](redd.md)**
+
+    ---
+
+    Verra's VT0007 as UDef-ARP: risk threshold, vulnerability, fit, allocation, assessment.
+
 -   :material-leaf-circle-outline:{ .lg .middle } **[Ecosystem services](services.md)**
 
     ---
@@ -799,6 +805,21 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.accuracy.assess`](accuracy.md#landschaft.accuracy.assess) | The accuracy and the area of a map's classes from a stratified random sample labelled with the reference |
 | [`ls.accuracy.Accuracy`](accuracy.md#landschaft.accuracy.Accuracy) | The accuracy and the area of a map's classes from a stratified sample (`assess`) |
 | [`ls.accuracy.qnorm`](accuracy.md#landschaft.accuracy.qnorm) | The standard normal's quantile (Wichura's AS 241, as R's ``qnorm``) |
+
+### Deforestation allocation (VT0007)
+
+| Name | Summary |
+|---|---|
+| [`ls.redd.edge_distance`](redd.md#landschaft.redd.edge_distance) | The distance of every forest cell to the nearest cell without forest, in map units (VT0007's input) |
+| [`ls.redd.nrt`](redd.md#landschaft.redd.nrt) | VT0007's negligible risk threshold (UDef-ARP's ``nrt_calculation``) |
+| [`ls.redd.benchmark`](redd.md#landschaft.redd.benchmark) | VT0007's benchmark vulnerability map (UDef-ARP's ``geometric_classification``) |
+| [`ls.redd.alternative`](redd.md#landschaft.redd.alternative) | VT0007's alternative vulnerability map (UDef-ARP's ``geometric_classification_alternative``) |
+| [`ls.redd.fit`](redd.md#landschaft.redd.fit) | VT0007's fit of a vulnerability map to a period's deforestation (UDef-ARP's fitting) |
+| [`ls.redd.Fit`](redd.md#landschaft.redd.Fit) | The fit of a vulnerability map to a period's deforestation (`fit`) |
+| [`ls.redd.allocate`](redd.md#landschaft.redd.allocate) | VT0007's allocation of the expected deforestation (UDef-ARP's prediction) |
+| [`ls.redd.Allocation`](redd.md#landschaft.redd.Allocation) | VT0007's allocation of the expected deforestation (`allocate`) |
+| [`ls.redd.assess`](redd.md#landschaft.redd.assess) | VT0007's assessment of an allocation (UDef-ARP's model evaluation) |
+| [`ls.redd.Assessment`](redd.md#landschaft.redd.Assessment) | VT0007's assessment of an allocation (`assess`) |
 
 ### Ecosystem services
 

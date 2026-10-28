@@ -53,6 +53,8 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
           "Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation."),
          ("accuracy.md", "Map accuracy & area", ":material-target:",
           "Stratified samples of a map, its accuracy and the area of its classes (Olofsson et al. 2014)."),
+         ("redd.md", "Deforestation allocation (VT0007)", ":material-pine-tree:",
+          "Verra's VT0007 as UDef-ARP: risk threshold, vulnerability, fit, allocation, assessment."),
          ("services.md", "Ecosystem services", ":material-leaf-circle-outline:",
           "InVEST's models: carbon, habitat quality, water yield and hydropower, sediment delivery."),
          ("uncertainty.md", "Uncertainty", ":material-plus-minus-variant:",
@@ -130,6 +132,8 @@ def prefix(ident: str) -> str:
         return "ls.uncertainty."
     if ".accuracy." in ident:
         return "ls.accuracy."
+    if ".redd." in ident:
+        return "ls.redd."
     if ".sensitivity." in ident:
         return "ls.sensitivity."
     if ".stats." in ident:

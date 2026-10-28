@@ -38,6 +38,12 @@ in a new major version.
   weighting with every point or the nearest, to 1e-12) and `kriging` (ordinary kriging, prediction and variance,
   with every point or the nearest, to 1e-10). Points from a GeoDataFrame (reprojected to the map's CRS) or an
   array of x, y and the value; C++ with OpenMP.
+- `ls.redd`: Verra's VT0007, the allocation of a jurisdiction's unplanned deforestation (UDef-A), as Clark Labs'
+  UDef-ARP and Terraflux's `redd.*`, the same numbers: `edge_distance`, `nrt` (the negligible risk threshold),
+  `benchmark` and `alternative` (the vulnerability in classes of geometric widths, from the distance to the edge or
+  a map of vulnerability), `fit` (the relative frequency per class and subdivision, the fitted density), `allocate`
+  (the activity data or a period's deforestation, never above a cell, a region the fit lacks filled from its class)
+  and `assess` (the assessment grid: MAE, median error, intersection over union, R², OLS and Theil-Sen lines).
 - Raster tools from Terraflux: `ls.stats.cell_stats` (a statistic of a stack's layers at every cell, the statistics
   of `zonal_stats` and `argmax` / `argmin`, the layer of the largest or smallest value, as `stack.reduce`),
   `ls.stats.local_correlation` (Pearson's correlation, slope, intercept and r² of two maps in a moving window, square

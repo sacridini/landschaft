@@ -211,6 +211,7 @@ nav:
       - Species distributions: api/sdm.md
       - Land change simulation: api/simulate.md
       - Map accuracy & area: api/accuracy.md
+      - Deforestation allocation (VT0007): api/redd.md
       - Ecosystem services: api/services.md
       - Uncertainty: api/uncertainty.md
       - Sensitivity analysis: api/sensitivity.md

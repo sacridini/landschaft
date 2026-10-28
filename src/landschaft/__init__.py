@@ -98,6 +98,7 @@ from . import parallel
 from .parallel import Helpers, helpers
 from ._save import load_result
 from . import prioritize
+from . import redd
 from . import sdm
 from . import simulate
 from . import sensitivity
@@ -219,6 +220,7 @@ __all__ = [
     "cost",
     "nlm",
     "prioritize",
+    "redd",
     "sdm",
     "simulate",
     "sensitivity",
