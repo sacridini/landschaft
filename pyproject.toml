@@ -78,7 +78,7 @@ cmake.build-type = "Release"
 # only landschaft's modules: HiGHS (built in) installs its headers and library too
 install.components = ["landschaft"]
 # the sdist holds what the build needs; tests, docs and tools stay in the repository
-sdist.exclude = [".github", ".dockerignore", "Dockerfile", "IDEAS.md", "RUST_PORT.md", "assets", "docs", "mkdocs.yml", "site",
+sdist.exclude = [".github", ".dockerignore", "Dockerfile", "IDEAS.md", "assets", "docs", "mkdocs.yml", "site",
                  "tests", "tools"]
 
 # Windows: build with MSVC, whatever else is on PATH. A CMake that knows the installed Visual Studio

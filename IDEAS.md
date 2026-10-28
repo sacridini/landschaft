@@ -4769,7 +4769,8 @@ de paridade. O que o ecossistema do Python já resolve bem (as florestas e o boo
     de cada trecho ou ponto resumida (`hydro.upstream`: as estatísticas de mapas e a proporção de cada classe, o
     `get_upstream_variable`) e a bacia de cada ponto em polígonos, com as bacias encaixadas entre um ponto e o
     seguinte (`hydro.upstream_catchment`), sobre as direções D8 do `ls.hydro`. Feitos direto em Rust, sem C++: entram
-    aqui quando o núcleo for para Rust (`RUST_PORT.md`), não como C++ novo. Lugar natural: ao lado do `ls.hydro`.
+    aqui portados para C++ como o resto (o port do núcleo para Rust foi abandonado em 2026-10-28). Lugar natural: ao
+    lado do `ls.hydro`.
     Sem referência bit a bit (o hydrographr roda o GRASS): conferidos contra a acumulação D8 com pesos e o
     `watersheds` do próprio `ls.hydro`. Também feitos (Terraflux 1.9.0, `crates/ops/src/river_network.rs`): as
     distâncias pela rede entre pontos, os trechos a montante e a jusante de cada ponto, a centralidade dos trechos e
