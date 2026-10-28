@@ -134,24 +134,26 @@ def test_fetch_and_waves(name):
     r = _run(name)
     z, meta = _load(name)
     same = _same_projection(name)
+    # (elsewhere the ulps the coordinates move by carry on along the rays and the waves)
+    rtol, atol = (1e-9, 1e-7) if same else (1e-6, 1e-6)
     _exact(_table(r.fetch, [f"fdepth_{d}" for d in SECTORS]), z["out/fdepth"], "fdepth", same)
     _exact(_table(r.fetch, meta["wwiii_at_shore_fields"]), z["out/wwiii_at_shore"], "wwiii_at_shore", same)
     fdist = _table(r.fetch, [f"fdist_{d}" for d in SECTORS])
     ref = z["out/fdist"]
-    np.testing.assert_allclose(fdist, ref, rtol=0, atol=1e-7)
+    np.testing.assert_allclose(fdist, ref, rtol=0, atol=atol)
     if same:
         assert np.mean(fdist == ref) > 0.9  # only rays across several edges differ
-    np.testing.assert_allclose(r.fetch["REI"], z["out/rei"], rtol=1e-9, atol=1e-9)
+    np.testing.assert_allclose(r.fetch["REI"], z["out/rei"], rtol=rtol, atol=1e-9)
     import shapely
 
     ends = shapely.get_coordinates(r.fetch_rays.geometry.values).reshape(-1, 4)
-    np.testing.assert_allclose(ends, z["out/ray_ends"], rtol=0, atol=1e-7)
+    np.testing.assert_allclose(ends, z["out/ray_ends"], rtol=0, atol=atol)
     _exact(r.wave_energies["E_ocean"], z["out/wave_E_ocean"], "E_ocean", same)
     for k in ("E_local", "Eo_El_diff", "maxH_local", "minH_local", "maxT_local", "minT_local"):
-        np.testing.assert_allclose(r.wave_energies[k], z[f"out/wave_{k}"], rtol=1e-9, atol=1e-12, err_msg=k)
+        np.testing.assert_allclose(r.wave_energies[k], z[f"out/wave_{k}"], rtol=rtol, atol=1e-12, err_msg=k)
     assert list(r.wave_energies["max_E_type"].fillna("")) == meta["max_E_type"]
-    np.testing.assert_allclose(r.intermediate["wind"], z["out/intermediate_wind"], rtol=1e-9, atol=1e-9)
-    np.testing.assert_allclose(r.intermediate["wave"], z["out/intermediate_wave"], rtol=1e-9, atol=1e-12)
+    np.testing.assert_allclose(r.intermediate["wind"], z["out/intermediate_wind"], rtol=rtol, atol=1e-9)
+    np.testing.assert_allclose(r.intermediate["wave"], z["out/intermediate_wave"], rtol=rtol, atol=1e-12)
 
 
 @pytest.mark.parametrize("name", CASES)

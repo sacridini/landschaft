@@ -351,6 +351,7 @@ def test_helpers_inside_a_job(tiles, tmp_path, monkeypatch):
     coordinator, waits for the group the coordinator creates in the shared configuration folder."""
     import socket
     import threading
+    import time
 
     from landschaft._dist import _group, _worker
 
@@ -369,10 +370,14 @@ def test_helpers_inside_a_job(tiles, tmp_path, monkeypatch):
     helper.start()
     try:
         assert _group.load_secret() is None
+        waiting = "Waiting for the coordinator to create the group"
+        end = time.monotonic() + 30
+        while not any(waiting in line for line in lines) and time.monotonic() < end:  # the helper first
+            time.sleep(0.02)
         with ls.helpers(local=False, port=port, verbose=False) as pool:     # creates the group
             runs = ls.batch("accounting", tiles, tmp_path / "out", on=pool)
         assert all(r.ok for r in runs) and len(runs) == 5
-        assert any("Waiting for the coordinator to create the group" in line for line in lines)
+        assert any(waiting in line for line in lines)
     finally:
         stop.set()
         helper.join(timeout=30)
