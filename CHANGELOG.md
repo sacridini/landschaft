@@ -6,6 +6,12 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.56.0] - 2026-10-28
+
+1.55.0 was not published: one test of its wheels (coastal vulnerability's lon / lat case, compared bit for bit
+where the PROJ of rasterio 1.4 and macOS's libm move the coordinates by an ulp) failed on macOS and on Windows with
+Python 3.10 and 3.11. Its changes (the section below) are published with this version.
+
 ### Added
 - `ls.download`: data downloaded on demand onto the grid of a map (or of an extent in longitudes and latitudes),
   as Terraflux's `data.*`: `worldclim` and `chelsa` (WorldClim 2.1 and CHELSA 2.1, now and under CMIP6's models,
