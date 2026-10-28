@@ -58,7 +58,9 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("uncertainty.md", "Uncertainty", ":material-plus-minus-variant:",
           "Totals, products, the delta method, Monte Carlo and confidence intervals."),
          ("sensitivity.md", "Sensitivity analysis", ":material-tune-variant:",
-          "Morris's elementary effects and Sobol's indices of a model's parameters (SALib's).")]
+          "Morris's elementary effects and Sobol's indices of a model's parameters (SALib's)."),
+         ("stats.md", "Statistics of maps", ":material-chart-bell-curve-cumulative:",
+          "Trends of every cell (Mann-Kendall, Sen's slope), Moran's I, LISA and hot spots (Gi*).")]
 
 INTRO = '''# API reference
 
@@ -130,6 +132,8 @@ def prefix(ident: str) -> str:
         return "ls.accuracy."
     if ".sensitivity." in ident:
         return "ls.sensitivity."
+    if ".stats." in ident:
+        return "ls.stats."
     if ".hydro.swat." in ident:
         return "ls.hydro.swat."
     if ".hydro." in ident:

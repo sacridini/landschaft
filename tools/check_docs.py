@@ -110,6 +110,7 @@ def public_objects():
     import landschaft.sensitivity
     import landschaft.services
     import landschaft.simulate
+    import landschaft.stats
     import landschaft.surface
     import landschaft.uncertainty
 
@@ -117,7 +118,7 @@ def public_objects():
     for mod in (landschaft, landschaft.conn, landschaft.circuit, landschaft.nlm, landschaft.bio, landschaft.cost,
                 landschaft.surface, landschaft.hydro, landschaft.hydro.swat, landschaft.parallel, landschaft.prioritize, landschaft.sdm,
                 landschaft.simulate, landschaft.uncertainty, landschaft.services, landschaft.accuracy,
-                landschaft.sensitivity):
+                landschaft.sensitivity, landschaft.stats):
         for name in getattr(mod, "__all__", []):
             obj = getattr(mod, name)
             if id(obj) in seen or not callable(obj):

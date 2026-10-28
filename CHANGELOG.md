@@ -25,6 +25,13 @@ in a new major version.
   scrambled Sobol' sequence, with or without the second order), `evaluate` (a model at every run, here or on the
   helpers of `ls.parallel` for a tool given as `ls.parallel.call` with `param(i)`; `summary=` for maps), `analyze`
   (Morris's μ, μ*, σ and μ*'s bootstrap interval; Sobol's S1, ST, S2 and their bootstrap intervals).
+- `ls.stats`: statistics of maps, as Terraflux's `stats.*`: `trend` (the Mann-Kendall test and Sen's slope of every
+  cell of a series of maps: slope, intercept, p, z, Kendall's tau, up / down / none) and `mann_kendall` (one series;
+  pymannkendall's `original_test`, the same bits), `moran` (global Moran's I, its moments, z and p under normality
+  and randomisation, and a pseudo p of permutations), `lisa` (local Moran's I, quadrants, z, conditional
+  permutations and clusters) and `getis_ord` (Gi*, z, p and hot and cold spots) over the rook or queen contiguity of
+  the cells (PySAL's esda 2.10, to 1e-12). C++ with OpenMP, scipy's `ndtr` (Cephes) and numpy's `default_rng` for
+  the permutations; the same with any number of threads.
 
 ### Removed
 - `RUST_PORT.md`: the plan to port the C++ core to Rust is dropped.

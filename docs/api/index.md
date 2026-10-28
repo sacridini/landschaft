@@ -156,6 +156,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Morris's elementary effects and Sobol's indices of a model's parameters (SALib's).
 
+-   :material-chart-bell-curve-cumulative:{ .lg .middle } **[Statistics of maps](stats.md)**
+
+    ---
+
+    Trends of every cell (Mann-Kendall, Sen's slope), Moran's I, LISA and hot spots (Gi*).
+
 </div>
 
 ## All functions and classes
@@ -836,3 +842,17 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.sensitivity.evaluate`](sensitivity.md#landschaft.sensitivity.evaluate) | The outputs of a model at every run of a design |
 | [`ls.sensitivity.analyze`](sensitivity.md#landschaft.sensitivity.analyze) | The indices of a global sensitivity analysis from its runs and their outputs (SALib's, the same numbers) |
 | [`ls.sensitivity.Sensitivity`](sensitivity.md#landschaft.sensitivity.Sensitivity) | The indices of a sensitivity analysis (`analyze`) |
+
+### Statistics of maps
+
+| Name | Summary |
+|---|---|
+| [`ls.stats.trend`](stats.md#landschaft.stats.trend) | The monotonic trend of every cell along a series of maps (pymannkendall's ``original_test``, the same numbers) |
+| [`ls.stats.Trend`](stats.md#landschaft.stats.Trend) | Every cell's trend along a series of maps (`trend`) |
+| [`ls.stats.mann_kendall`](stats.md#landschaft.stats.mann_kendall) | The Mann-Kendall test and Sen's slope of one series (pymannkendall's ``original_test``, the same bits) |
+| [`ls.stats.moran`](stats.md#landschaft.stats.moran) | The global Moran's I of a map (PySAL's ``esda.Moran``, to rounding) |
+| [`ls.stats.Moran`](stats.md#landschaft.stats.Moran) | The global Moran's I of a map (`moran`) |
+| [`ls.stats.lisa`](stats.md#landschaft.stats.lisa) | The local Moran's I of every cell (Anselin's LISA; PySAL's ``esda.Moran_Local``, to rounding) |
+| [`ls.stats.LISA`](stats.md#landschaft.stats.LISA) | The local Moran's I of every cell (`lisa`) |
+| [`ls.stats.getis_ord`](stats.md#landschaft.stats.getis_ord) | Getis and Ord's Gi* of every cell (PySAL's ``esda.G_Local`` with ``star`` and row-standardised weights) |
+| [`ls.stats.GetisOrd`](stats.md#landschaft.stats.GetisOrd) | Getis and Ord's Gi* of every cell (`getis_ord`) |

@@ -214,6 +214,7 @@ nav:
       - Ecosystem services: api/services.md
       - Uncertainty: api/uncertainty.md
       - Sensitivity analysis: api/sensitivity.md
+      - Statistics of maps: api/stats.md
   - Benchmarks: benchmarks.md
   - About:
       - Changelog: about/changelog.md
