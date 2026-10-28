@@ -261,6 +261,7 @@ endif()
 add_library(sdmcore STATIC
     src/cpp/sdm/clean.cpp
     src/cpp/sdm/collinear.cpp
+    src/cpp/sdm/dispersal.cpp
     src/cpp/sdm/extrapolation.cpp
     src/cpp/sdm/geocircle/geocircle.cpp
     src/cpp/sdm/geocircle/geocircle_geodesic.cpp

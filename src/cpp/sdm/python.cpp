@@ -20,6 +20,7 @@
 #include "lsm/rmath.hpp"
 #include "sdm/clean.hpp"
 #include "sdm/collinear.hpp"
+#include "sdm/dispersal.hpp"
 #include "sdm/extrapolation.hpp"
 #include "sdm/geocircle/geocircle.hpp"
 #include "sdm/rstats.hpp"
@@ -208,9 +209,78 @@ py::dict py_kmeans(const py::array_t<double, py::array::c_style | py::array::for
     return kmeans_dict(std::move(r), p);
 }
 
+using IVec = py::array_t<std::int32_t, py::array::c_style | py::array::forcecast>;
+
+py::tuple py_migclim(const IVec& initial, const IVec& suitability, const std::optional<IVec>& barriers, int steps,
+                     const std::vector<double>& kernel, int ini_maturity, int full_maturity,
+                     const std::vector<double>& propagules, int threshold, double ldd_frequency, int ldd_min,
+                     int ldd_max, bool weak, std::uint32_t seed) {
+    if (initial.ndim() != 2 || suitability.ndim() != 3 || suitability.shape(1) != initial.shape(0) ||
+        suitability.shape(2) != initial.shape(1))
+        throw std::invalid_argument("initial (ny, nx) and suitability (periods, ny, nx)");
+    if (barriers && (barriers->ndim() != 2 || barriers->shape(0) != initial.shape(0) ||
+                     barriers->shape(1) != initial.shape(1)))
+        throw std::invalid_argument("barriers: the initial distribution's shape");
+    if (kernel.empty()) throw std::invalid_argument("kernel: one probability at least");
+    const auto ages = static_cast<std::size_t>(std::max(full_maturity - ini_maturity, 1));
+    if (ini_maturity < 1 || full_maturity < ini_maturity || propagules.size() < ages)
+        throw std::invalid_argument("ini_maturity, full_maturity, propagules");
+    MigClimSettings s;
+    s.steps = steps;
+    s.kernel = kernel;
+    s.ini_maturity = ini_maturity;
+    s.full_maturity = full_maturity;
+    s.propagules = propagules;
+    s.threshold = threshold;
+    s.ldd_frequency = ldd_frequency;
+    s.ldd_min = ldd_min;
+    s.ldd_max = ldd_max;
+    s.weak = weak;
+    s.seed = seed;
+    const i64 ny = initial.shape(0), nx = initial.shape(1), periods = suitability.shape(0);
+    MigClimRun r;
+    {
+        py::gil_scoped_release release;
+        r = migclim(ny, nx, initial.data(), suitability.data(), periods, barriers ? barriers->data() : nullptr, s);
+    }
+    const auto n_steps = static_cast<py::ssize_t>(r.ids.size());
+    auto fin = to_array(std::move(r.fin)).reshape({static_cast<py::ssize_t>(ny), static_cast<py::ssize_t>(nx)});
+    auto st = to_array(std::move(r.steps))
+                  .reshape({n_steps, static_cast<py::ssize_t>(ny), static_cast<py::ssize_t>(nx)});
+    auto stats = to_array(std::move(r.stats)).reshape({n_steps + 1, static_cast<py::ssize_t>(10)});
+    return py::make_tuple(fin, st, to_array(std::move(r.ids)), stats);
+}
+
+py::array_t<std::uint8_t> py_metapopulation(const Vec& x, const Vec& y, const Vec& area,
+                                            const py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>& occupied,
+                                            i64 steps, int kernel, int connectivity, int colonisation, int extinction,
+                                            double alpha, double xp, double yp, double e, double b, double beta,
+                                            double c1, double c2, double z, double r, std::int32_t seed) {
+    const i64 n = static_cast<i64>(x.size());
+    if (y.size() != n || area.size() != n || occupied.size() != n)
+        throw std::invalid_argument("x, y, area and occupied differ in length");
+    IfmModel m{kernel, connectivity, colonisation, extinction, alpha, xp, yp, e, b, beta, c1, c2, z, r};
+    std::vector<std::uint8_t> out;
+    {
+        py::gil_scoped_release release;
+        out = metapopulation(x.data(), y.data(), area.data(), occupied.data(), n, steps, m, seed);
+    }
+    return to_array(std::move(out)).reshape({static_cast<py::ssize_t>(steps), static_cast<py::ssize_t>(n)});
+}
+
 }  // namespace
 
 void register_python(py::module_& m) {
+    m.def("sdm_migclim", &py_migclim, py::arg("initial"), py::arg("suitability"), py::arg("barriers"),
+          py::arg("steps"), py::arg("kernel"), py::arg("ini_maturity"), py::arg("full_maturity"),
+          py::arg("propagules"), py::arg("threshold"), py::arg("ldd_frequency"), py::arg("ldd_min"),
+          py::arg("ldd_max"), py::arg("weak"), py::arg("seed"),
+          "MigClim 1.6's automaton (mcMigrate): (final, steps, step ids, statistics)");
+    m.def("sdm_metapopulation", &py_metapopulation, py::arg("x"), py::arg("y"), py::arg("area"),
+          py::arg("occupied"), py::arg("steps"), py::arg("kernel"), py::arg("connectivity"),
+          py::arg("colonisation"), py::arg("extinction"), py::arg("alpha"), py::arg("xp"), py::arg("yp"),
+          py::arg("e"), py::arg("b"), py::arg("beta"), py::arg("c1"), py::arg("c2"), py::arg("z"), py::arg("r"),
+          py::arg("seed"), "MetaLandSim's spom iterated: the occupancy after every step (steps, n)");
     register_maxnet_python(m);
     m.def("sdm_circles", &py_circles, py::arg("lon"), py::arg("lat"), py::arg("d"), py::arg("kind"),
           "Circles of radius d around points as CoordinateCleaner draws them: 'geosphere' (73 vertices, "

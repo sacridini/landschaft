@@ -69,6 +69,15 @@ The graph class is `ls.HabitatGraph`; the other functions are in the
 
 ::: landschaft.conn.focal_nodes
 
+## Metapopulations
+
+Hanski's incidence function model as R's MetaLandSim (`spom`) iterates it: the colonisation and extinction of the
+patches of a network over time, the same run as R's for a seed.
+
+::: landschaft.conn.metapopulation
+
+::: landschaft.conn.Metapopulation
+
 ## Networks of MSPA cores and bridges
 
 ::: landschaft.gtn_components

@@ -106,6 +106,16 @@ suit = ls.sdm.predict(res, env)          # ensemble and its uncertainty
 
 ::: landschaft.sdm.importance
 
+## Dispersal in a changing climate
+
+MigClim 1.6's cellular automaton: the colonisation of the suitable cells of successive periods within the
+dispersal kernel's distance, barriers, long-distance dispersal and the cells' maturity; the same run as MigClim's
+for a seed (its random numbers are Microsoft's C runtime `rand()`).
+
+::: landschaft.sdm.migrate
+
+::: landschaft.sdm.Migration
+
 ## Area of habitat
 
 ::: landschaft.sdm.area_of_habitat

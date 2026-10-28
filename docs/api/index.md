@@ -52,7 +52,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     ---
 
-    Habitat graphs, IIC/PC/ECA, importance, ProtConn, grids, MSPA networks.
+    Habitat graphs, IIC/PC/ECA, importance, ProtConn, grids, metapopulations, MSPA networks.
 
 -   :material-lightning-bolt-outline:{ .lg .middle } **[Circuit connectivity](circuits.md)**
 
@@ -124,7 +124,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     ---
 
-    Clean records, choose predictors and background, spatial folds, fit, evaluate, project.
+    Clean records, choose predictors and background, spatial folds, fit, evaluate, project, disperse.
 
 -   :material-timeline-clock-outline:{ .lg .middle } **[Land change simulation](simulate.md)**
 
@@ -229,11 +229,11 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
 | Name | Summary |
 |---|---|
-| [`ls.mspa`](patterns.md#landschaft.mspa) | Morphological Spatial Pattern Analysis (MSPA) |
+| [`landschaft.mspa`](patterns.md#landschaft.mspa) | Morphological Spatial Pattern Analysis (MSPA) |
 | [`ls.mspa_stats`](patterns.md#landschaft.mspa_stats) | Area of every MSPA class |
-| [`ls.spa`](patterns.md#landschaft.spa) | Simplified Pattern Analysis (GuidosToolbox *Pattern -> Morphological -> SPA2/3/5/6*) |
+| [`landschaft.spa`](patterns.md#landschaft.spa) | Simplified Pattern Analysis (GuidosToolbox *Pattern -> Morphological -> SPA2/3/5/6*) |
 | [`ls.SPAResult`](patterns.md#landschaft.SPAResult) | Result of `spa` |
-| [`ls.accounting`](patterns.md#landschaft.accounting) | Accounting: foreground objects grouped into size classes |
+| [`landschaft.accounting`](patterns.md#landschaft.accounting) | Accounting: foreground objects grouped into size classes |
 | [`ls.AccountingResult`](patterns.md#landschaft.AccountingResult) | Result of `accounting` |
 | [`ls.parcellation`](patterns.md#landschaft.parcellation) | How finely the landscape is divided into parcels |
 | [`ls.ParcellationResult`](patterns.md#landschaft.ParcellationResult) | Results from landscape parcellation analysis |
@@ -243,11 +243,11 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
 | Name | Summary |
 |---|---|
-| [`ls.fad`](fragmentation.md#landschaft.fad) | Forest Area Density (FAD) & Multiscale Fragmentation Analysis |
+| [`landschaft.fad`](fragmentation.md#landschaft.fad) | Forest Area Density (FAD) & Multiscale Fragmentation Analysis |
 | [`ls.FADResult`](fragmentation.md#landschaft.FADResult) | Result of single-scale FAD analysis (`fad`) |
 | [`ls.fad_multiscale`](fragmentation.md#landschaft.fad_multiscale) | Compute Multiscale Forest Area Density (FAD-MS) matching GuidosToolbox |
 | [`ls.FADMultiscaleResult`](fragmentation.md#landschaft.FADMultiscaleResult) | Result of multiscale FAD analysis (`fad_multiscale`) |
-| [`ls.fos`](fragmentation.md#landschaft.fos) | Fragmentation at a Fixed Observation Scale (GuidosToolbox *Fragmentation -> FOS*) |
+| [`landschaft.fos`](fragmentation.md#landschaft.fos) | Fragmentation at a Fixed Observation Scale (GuidosToolbox *Fragmentation -> FOS*) |
 | [`ls.FOSResult`](fragmentation.md#landschaft.FOSResult) | Result of `fos` |
 | [`ls.landscape_mosaic`](fragmentation.md#landschaft.landscape_mosaic) | Compute Landscape Mosaic (LM) moving-window metric matching GuidosToolbox batch_lm |
 | [`ls.landscape_mosaic_stats`](fragmentation.md#landschaft.landscape_mosaic_stats) | Compute Landscape Mosaic 103-class frequency distribution matching GTB heatmap.csv |
@@ -311,6 +311,8 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.conn.eca_change_grid`](networks.md#landschaft.conn.eca_change_grid) | ECA change between times in every cell of a grid, as Makurhini's ``MK_dECA_grid`` |
 | [`ls.conn.eca_change`](networks.md#landschaft.conn.eca_change) | ECA of habitat graphs over time and its change, as Makurhini's ``MK_dECA`` |
 | [`ls.conn.focal_nodes`](networks.md#landschaft.conn.focal_nodes) | IIC or PC of every node's neighbourhood and the node's importance in it (``MK_Focal_nodes``) |
+| [`ls.conn.metapopulation`](networks.md#landschaft.conn.metapopulation) | A metapopulation in a network of habitat patches: Hanski's incidence function model as MetaLandSim simulates it |
+| [`ls.conn.Metapopulation`](networks.md#landschaft.conn.Metapopulation) | A metapopulation's simulation (`metapopulation`) |
 | [`ls.gtn_components`](networks.md#landschaft.gtn_components) | Components of the habitat network formed by MSPA Cores and Bridges |
 | [`ls.GTNComponentsResult`](networks.md#landschaft.GTNComponentsResult) | Result of `gtn_components` |
 | [`ls.gtn_importance`](networks.md#landschaft.gtn_importance) | Importance of every link (Bridge) and stepping-stone node (Core) of the MSPA network |
@@ -487,7 +489,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.ProximityResult`](distance.md#landschaft.ProximityResult) | Result of `proximity` |
 | [`ls.original_vegetation`](distance.md#landschaft.original_vegetation) | The original vegetation of converted land, and what restoration brings back |
 | [`ls.OriginalVegetation`](distance.md#landschaft.OriginalVegetation) | Result of `original_vegetation` |
-| [`ls.intactness`](distance.md#landschaft.intactness) | Ecological intactness from the human footprint (Beyer et al. 2020) |
+| [`landschaft.intactness`](distance.md#landschaft.intactness) | Ecological intactness from the human footprint (Beyer et al. 2020) |
 | [`ls.intactness_gradient`](distance.md#landschaft.intactness_gradient) | What restoring each cell adds to the total ecological intactness |
 
 ### Change detection
@@ -510,22 +512,22 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
 | Name | Summary |
 |---|---|
-| [`ls.batch`](batch.md#landschaft.batch) | Parallel processing of many rasters, one thread per raster |
+| [`landschaft.batch`](batch.md#landschaft.batch) | Parallel processing of many rasters, one thread per raster |
 | [`ls.mspa_batch`](batch.md#landschaft.mspa_batch) | Run MSPA on many rasters in parallel and write the results |
 | [`ls.BatchResult`](batch.md#landschaft.BatchResult) | Outcome of one input of `batch` / `mspa_batch` |
 | [`ls.batch_status`](batch.md#landschaft.batch_status) | What the runs of `batch` / `mspa_batch` did in an output folder: the inputs done, failed (with their error) and not done, and the job array tasks to submit again |
-| [`ls.Stopped`](batch.md#landschaft.batch.Stopped) | A batch stopped by SIGTERM (a scheduler's warning before the job's time limit, or its cancellation): no input started after it; ``results`` holds those that ended, in input order (``None`` for the inputs not processed) |
+| [`landschaft.batch.Stopped`](batch.md#landschaft.batch.Stopped) | A batch stopped by SIGTERM (a scheduler's warning before the job's time limit, or its cancellation): no input started after it; ``results`` holds those that ended, in input order (``None`` for the inputs not processed) |
 | [`ls.helpers`](batch.md#landschaft.parallel.helpers) | This computer and the helpers of its group, for ``on=`` (see `Helpers`) |
 | [`ls.Helpers`](batch.md#landschaft.parallel.Helpers) | This computer and the helpers of its group, for the ``on=`` argument of landschaft's functions that run many independent tasks |
-| [`ls.map`](batch.md#landschaft.parallel.map) | Run a tool on many inputs, on this computer or on helpers, in parallel |
-| [`ls.tiled`](batch.md#landschaft.parallel.tiled) | Run a neighbourhood tool on a large raster tile by tile, on this computer or on helpers |
-| [`ls.call`](batch.md#landschaft.parallel.call) | A registered tool with its arguments, the drawn ones marked by `param` |
-| [`ls.param`](batch.md#landschaft.parallel.param) | The ``index``-th drawn parameter, in the arguments of a `call` |
-| [`ls.run_worker`](batch.md#landschaft.parallel.run_worker) | Lend this computer to the group: wait for tasks and run them, until Ctrl+C |
-| [`ls.invite_helpers`](batch.md#landschaft.parallel.invite_helpers) | Show an invitation code and let other computers join this one's group with ``landschaft worker --join <code>``, for ``minutes`` |
-| [`ls.list_helpers`](batch.md#landschaft.parallel.list_helpers) | The helpers of this computer's group waiting for work now (busy ones are not looking): ``[{"name", "address", "cores", "version"}]`` |
-| [`ls.leave_group`](batch.md#landschaft.parallel.leave_group) | Forget this computer's group (it no longer helps nor uses helpers) |
-| [`ls.open_firewall`](batch.md#landschaft.parallel.open_firewall) | Let helpers reach this computer: the Windows firewall rules for the local network |
+| [`ls.parallel.map`](batch.md#landschaft.parallel.map) | Run a tool on many inputs, on this computer or on helpers, in parallel |
+| [`ls.parallel.tiled`](batch.md#landschaft.parallel.tiled) | Run a neighbourhood tool on a large raster tile by tile, on this computer or on helpers |
+| [`ls.parallel.call`](batch.md#landschaft.parallel.call) | A registered tool with its arguments, the drawn ones marked by `param` |
+| [`ls.parallel.param`](batch.md#landschaft.parallel.param) | The ``index``-th drawn parameter, in the arguments of a `call` |
+| [`ls.parallel.run_worker`](batch.md#landschaft.parallel.run_worker) | Lend this computer to the group: wait for tasks and run them, until Ctrl+C |
+| [`ls.parallel.invite_helpers`](batch.md#landschaft.parallel.invite_helpers) | Show an invitation code and let other computers join this one's group with ``landschaft worker --join <code>``, for ``minutes`` |
+| [`ls.parallel.list_helpers`](batch.md#landschaft.parallel.list_helpers) | The helpers of this computer's group waiting for work now (busy ones are not looking): ``[{"name", "address", "cores", "version"}]`` |
+| [`ls.parallel.leave_group`](batch.md#landschaft.parallel.leave_group) | Forget this computer's group (it no longer helps nor uses helpers) |
+| [`ls.parallel.open_firewall`](batch.md#landschaft.parallel.open_firewall) | Let helpers reach this computer: the Windows firewall rules for the local network |
 | [`ls.mspa_tiled`](batch.md#landschaft.mspa_tiled) | MSPA of a large map by overlapping tiles, identical to GTB's MSPA Tiling |
 | [`ls.tile_layout`](batch.md#landschaft.tile_layout) | GTB's tiles along one axis of ``size`` pixels |
 
@@ -588,217 +590,219 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
 | Name | Summary |
 |---|---|
-| [`ls.zonation`](prioritization.md#landschaft.prioritize.zonation) | Rank the cells of a landscape for conservation, as Zonation 5 does |
-| [`ls.ZonationResult`](prioritization.md#landschaft.prioritize.ZonationResult) | The result of `zonation` |
-| [`ls.run_project`](prioritization.md#landschaft.prioritize.run_project) | Run a Zonation 5 project (see `read_project`) |
-| [`ls.read_project`](prioritization.md#landschaft.prioritize.read_project) | The `zonation` arguments of a Zonation 5 project |
-| [`ls.Kernel`](prioritization.md#landschaft.prioritize.Kernel) | A dispersal kernel of Zonation 5's connectivity transforms |
-| [`ls.Interaction`](prioritization.md#landschaft.prioritize.Interaction) | An interaction connectivity transform (Zonation's ``-i``/``-I``): a feature weighted by the connectivity of a resource (``positive``) or reduced by it |
-| [`ls.convolve`](prioritization.md#landschaft.prioritize.convolve) | Convolve a raster with a kernel normalized to sum 1, as Zonation 5 does |
-| [`ls.AreaStatistics`](prioritization.md#landschaft.prioritize.AreaStatistics) | Statistics of areas of a ranking (`area_statistics`) |
-| [`ls.ImpactScenario`](prioritization.md#landschaft.prioritize.ImpactScenario) | An impact assessment scenario (Zonation's ``-s``): land-use change at sources |
-| [`ls.ImpactSource`](prioritization.md#landschaft.prioritize.ImpactSource) | An impact source of an impact group (a line of Zonation's impact buffers file) |
-| [`ls.CumulativeScenario`](prioritization.md#landschaft.prioritize.CumulativeScenario) | A cumulative impact assessment scenario (Zonation's ``-e``) |
-| [`ls.Pressure`](prioritization.md#landschaft.prioritize.Pressure) | A pressure raster of a cumulative impact scenario |
-| [`ls.problem`](prioritization.md#landschaft.prioritize.problem) | A conservation planning problem (prioritizr's ``problem()``) |
-| [`ls.Problem`](prioritization.md#landschaft.prioritize.Problem) | A conservation planning problem (prioritizr's ``problem()``): see `problem` |
-| [`ls.Solution`](prioritization.md#landschaft.prioritize.Solution) | A solution of a `Problem` |
-| [`ls.Portfolio`](prioritization.md#landschaft.prioritize.Portfolio) | Several solutions of a problem (`add_cuts_portfolio` and the others) |
-| [`ls.OptimizationProblem`](prioritization.md#landschaft.prioritize.OptimizationProblem) | A compiled model: ``modelsense`` of ``obj @ x`` subject to ``A x (sense) rhs``, ``lb <= x <= ub`` and ``x`` of type ``vtype`` (``"B"`` binary, ``"C"`` continuous, ``"I"`` integer); the layout of prioritizr's ``compile()`` |
-| [`ls.h3_units`](prioritization.md#landschaft.prioritize.h3_units) | H3 hexagons as planning units: the hexagons of an H3 ``resolution`` that cover a cost raster, with their cost |
-| [`ls.example_data`](prioritization.md#landschaft.prioritize.example_data) | Path of an example data set for prioritization: **Serra Verde**, an imaginary coastal region of 60 x 90 cells of 1 km (SIRGAS 2000 / UTM 23S) |
-| [`ls.category_layer`](prioritization.md#landschaft.prioritize.category_layer) | The zone of every cell of a stack of zone layers (prioritizr's ``category_layer()``): the number (1, 2, ...) of the layer with the largest value above 0, 0 where none is, NaN where every layer is NaN. ``stack``: a raster with a layer per zone (a solution's ``selection``) or a mapping zone -> raster |
-| [`ls.binary_stack`](prioritization.md#landschaft.prioritize.binary_stack) | One 0 / 1 raster per zone from a raster of zone numbers (prioritizr's ``binary_stack()``): a mapping zone -> raster, ready for `add_locked_in_constraints` (for example an existing zoning plan). ``zones``: the zones' names in the order of their numbers (default: those of a solution's ``zones`` map, else ``"1"``, ``"2"``, ...); cells with 0 or NaN are in no zone |
-| [`ls.boundary_matrix`](prioritization.md#landschaft.prioritize.boundary_matrix) | The length of the boundary every two units share, and every unit's perimeter on the diagonal (prioritizr's ``boundary_matrix()``): raster cells with data share ``xres`` with the cells above and below and ``yres`` with those left and right, perimeter ``2 (xres + yres)``; polygons share the length of their common paths, perimeters their own, rounded to 8 decimals |
-| [`ls.adjacency_matrix`](prioritization.md#landschaft.prioritize.adjacency_matrix) | 1 for every two adjacent units (prioritizr's ``adjacency_matrix()``): raster cells with data that share an edge (``directions`` 4) or also a corner (8); polygons that intersect, touching at a corner included |
-| [`ls.connectivity_matrix`](prioritization.md#landschaft.prioritize.connectivity_matrix) | Connectivity between adjacent units (prioritizr's ``connectivity_matrix()``): the length of their shared boundary times the mean of ``y`` in the two (``y``: a raster on the units' grid; with polygons a raster summed over each, or a column name) |
-| [`ls.proximity_matrix`](prioritization.md#landschaft.prioritize.proximity_matrix) | 1 for every two units within ``distance`` of each other (prioritizr's ``proximity_matrix()``): raster cell centres, or polygons by their nearest points |
-| [`ls.decay_connectivity`](prioritization.md#landschaft.prioritize.decay_connectivity) | Connectivity from distances between units as a dispersal probability (Conefor's negative exponential): ``exp(-ln(2) d / median)``, 0.5 at the ``median`` dispersal distance, dropped below ``min_probability`` (sparse), 0 on the diagonal and for unreachable pairs (``inf``, NaN) |
-| [`ls.unit_points`](prioritization.md#landschaft.prioritize.unit_points) | A point per unit, (n, 2) coordinates: raster cell centres (every cell), or a point inside every polygon (shapely's point on surface), to measure distances between units with `cost_distance` or `commute_distance` |
-| [`ls.eval_n_summary`](prioritization.md#landschaft.prioritize.eval_n_summary) | The number of selected planning units (the sum of the solution's values) |
-| [`ls.eval_cost_summary`](prioritization.md#landschaft.prioritize.eval_cost_summary) | The solution's total cost |
-| [`ls.eval_boundary_summary`](prioritization.md#landschaft.prioritize.eval_boundary_summary) | The solution's boundary length: the edges between selected and other units, plus ``edge_factor`` x the selected units' edges on the outside of the planning units |
-| [`ls.eval_connectivity_summary`](prioritization.md#landschaft.prioritize.eval_connectivity_summary) | The connectivity among the selected units: the sum of ``data[i, j]`` x the solution's values of units i and j (a symmetric matrix over the units) |
-| [`ls.eval_asym_connectivity_summary`](prioritization.md#landschaft.prioritize.eval_asym_connectivity_summary) | As `eval_connectivity_summary` for an asymmetric matrix (its diagonal counted once) |
-| [`ls.eval_feature_representation_summary`](prioritization.md#landschaft.prioritize.eval_feature_representation_summary) | Every feature's total amount and the amount the solution holds, absolute and relative |
-| [`ls.eval_target_coverage_summary`](prioritization.md#landschaft.prioritize.eval_target_coverage_summary) | Every target's feature, whether it is met, the feature's total, and the target, the amount held and the shortfall, absolute and relative (shares of the total; 0 when the total is 0) |
-| [`ls.eval_replacement_importance`](prioritization.md#landschaft.prioritize.eval_replacement_importance) | The replacement cost of every selected unit (Cabeza & Moilanen 2006): how much the objective worsens when the unit is left out and the problem solved again with the other selected units kept (infinite when nothing can replace it), rescaled to 0.01-1 |
-| [`ls.eval_ferrier_importance`](prioritization.md#landschaft.prioritize.eval_ferrier_importance) | Ferrier et al. (2000)'s irreplaceability of the selected units for every feature and in total (prioritizr's version: the problem needs one ">=" target per feature, amounts >= 0) |
-| [`ls.eval_rare_richness_importance`](prioritization.md#landschaft.prioritize.eval_rare_richness_importance) | The rarity-weighted richness of the selected units (Albuquerque & Beier 2015): the sum over the features of the unit's amount / the feature's largest amount / its total, rescaled to 0.01-1 |
-| [`ls.eval_rank_importance`](prioritization.md#landschaft.prioritize.eval_rank_importance) | Rank importance (Jung et al. 2021, prioritizr's eval_rank_importance): the problem is solved with increasing budgets (the min set objective becomes min shortfall), only the solution's units allowed and each step keeping the units of the step before; a unit's rank is how early it enters (n = the first budget, ..., 1 = the last), rescaled to 0.01-1. ``n`` budgets evenly spaced between the locked-in units' cost and the solution's, or the ``budgets`` themselves |
-| [`ls.eval_extinction_risk`](prioritization.md#landschaft.prioritize.eval_extinction_risk) | Every feature's extinction risk by the species-area relationship, 1 - (held / total)^z (z = 0.25 by default, one value or one per feature), and their sum (the expected number of features lost) |
-| [`ls.eval_landscape_metrics`](prioritization.md#landschaft.prioritize.eval_landscape_metrics) | Landscape metrics of a raster solution (`landscape_metrics` of the map of the selected cells: class 1 selected, 0 not, outside the planning units no data): e.g. the number, sizes and shapes of the selected patches |
-| [`ls.eval_mspa`](prioritization.md#landschaft.prioritize.eval_mspa) | MSPA (`mspa`) of a raster solution: the selected cells as foreground, the other planning units as background, the cells outside them missing |
-| [`ls.eval_landscape_identification`](prioritization.md#landschaft.prioritize.eval_landscape_identification) | Landscape identification: the separate areas of the top fraction of a priority surface, and what each holds (Zonation's area statistics of separate areas, over any surface) |
-| [`ls.eval_landscape_comparison`](prioritization.md#landschaft.prioritize.eval_landscape_comparison) | Landscape comparison: how much the top fractions of two priority surfaces overlap (Zonation's solution comparison at several fractions, prioripy's ``eval_landscape_comparison``) |
-| [`ls.position_rank`](prioritization.md#landschaft.prioritize.position_rank) | Zonation's ranks of a surface by position: the i-th lowest of the N finite cells gets float32(i * (1 / N)); ties go to the earlier cell in row order first; NaN stays NaN |
-| [`ls.LandscapeAreas`](prioritization.md#landschaft.prioritize.LandscapeAreas) | The areas of the top fraction of a priority surface (`eval_landscape_identification`) |
-| [`ls.LandscapeComparison`](prioritization.md#landschaft.prioritize.LandscapeComparison) | Two priority surfaces compared at several top fractions (`eval_landscape_comparison`) |
-| [`ls.eval_proxirr`](prioritization.md#landschaft.prioritize.eval_proxirr) | ProxIRR (Baisero et al. 2022) of every planning unit for the problem's targets, as the CRAN package proxirr computes it |
-| [`ls.eval_proxirr_marxan`](prioritization.md#landschaft.prioritize.eval_proxirr_marxan) | ProxIRR of a Marxan problem's planning units (proxirr's ``marxan_alphas``, ``marxan_betas`` and ``marxan_gammas``), from the tables `marxan` takes |
-| [`ls.ProxIRR`](prioritization.md#landschaft.prioritize.ProxIRR) | ProxIRR of every planning unit (`eval_proxirr`, `eval_proxirr_marxan`) |
-| [`ls.calibrate_penalty`](prioritization.md#landschaft.prioritize.calibrate_penalty) | The blended approach: the problem solved with a range of penalty weights (``values``; default ``n`` values evenly spaced in log scale over 1/100 to 100 times the Cohon et al. penalty), every candidate's cost and criterion (boundary length, connectivity, ...), and the candidates TOPSIS and the knee of the curve choose. ``p``: the problem without the penalty |
-| [`ls.calibrate_budget`](prioritization.md#landschaft.prioritize.calibrate_budget) | The hierarchical approach: the least cost solution first (``p``, a min set problem without the penalty, solved to optimality), then the least penalty within cost thresholds above its cost (``thresholds``, or the cost x (1 + ``inflation``); default inflation 1e-5 to 4 in 9 steps, the thresholds rounded up as in prioritizr's tutorial) |
-| [`ls.cohon_penalty`](prioritization.md#landschaft.prioritize.cohon_penalty) | The penalty of Cohon et al. (1979): the trade-off rate between the solution with the least cost (``p`` as given, a min set problem without the penalty) and the one with the least penalty (min penalties within a budget above every unit's cost): \|cost difference / criterion difference\|, rounded to 5 decimals |
-| [`ls.pareto_front`](prioritization.md#landschaft.prioritize.pareto_front) | The trade-off between cost and representation: the least total shortfall of the targets (min shortfall objective: the sum of the shortfalls as shares of their targets) within ``n`` budgets evenly spaced up to the least-cost solution's cost (above the cost of the locked-in units, which every budget includes), or the ``budgets`` given. ``p``: a problem with targets (its objective is replaced) |
-| [`ls.calibrate`](prioritization.md#landschaft.prioritize.calibrate) | Any trade-off parameter: ``make(value)`` gives the problem for every value (a feature's weight, a target, a penalty of any kind...), ``criterion(problem, solution)`` the quantity traded off against the cost (smaller is better) |
-| [`ls.TradeOffs`](prioritization.md#landschaft.prioritize.TradeOffs) | Candidate solutions over a trade-off parameter |
-| [`ls.topsis`](prioritization.md#landschaft.prioritize.topsis) | TOPSIS (as R's ``topsis`` package): the alternatives (rows of ``decision``) scored by their closeness to the ideal (``impacts``: "+" larger is better, "-" smaller is better, per column; equal ``weights`` by default) |
-| [`ls.knee_point`](prioritization.md#landschaft.prioritize.knee_point) | The knee (elbow) of a trade-off curve: the point farthest from the straight line between its ends, both axes scaled to 0-1 (the points in the order of x) |
-| [`ls.mean_sd`](prioritization.md#landschaft.prioritize.mean_sd) | plangea's choice of weights (``post_choose_weights``): every criterion (a column of ``decision``) rescaled to 0-1 over the alternatives (a constant one to 1), the "-" ones (smaller is better) inverted, and every alternative scored by the mean of its criteria divided by their standard deviation (good on all of them at once) |
-| [`ls.iterative_solve`](prioritization.md#landschaft.prioritize.iterative_solve) | Solve, change the problem, solve again: ``update(step, solution, problem)`` gives the next problem (for instance from the landscape a ``ls.simulate`` step leaves, with the solution's cells protected by `protected_cells` in the simulation's rules), or ``None`` to stop |
-| [`ls.protected_cells`](prioritization.md#landschaft.prioritize.protected_cells) | The selected cells of a raster solution as a boolean raster (for ``ls.simulate``'s restrictions) |
-| [`ls.zonation_features`](prioritization.md#landschaft.prioritize.zonation_features) | The features as Zonation 5 transforms them before ranking (condition, connectivity kernels, interactions, matrix connectivity, retention, impacts: see `zonation` for each), back in the features' own units, for an optimization problem (``problem(cost, zonation_features(...))``) |
-| [`ls.compare_zonation`](prioritization.md#landschaft.prioritize.compare_zonation) | Compare an optimization solution of ``p`` (solved if not given) with a Zonation ranking of the same features and costs (run with ``rule`` and ``zonation_kw`` if not given: a `ZonationResult` or a rank raster) cut at the solution's cost |
-| [`ls.ZonationComparison`](prioritization.md#landschaft.prioritize.ZonationComparison) | A Zonation ranking and an optimization solution with the same budget |
-| [`ls.sdm_features`](prioritization.md#landschaft.prioritize.sdm_features) | Features from species distribution models (``ls.sdm``): every result's prediction on ``env`` (its ensemble when it has several models, else its model), as a stack for `problem` |
-| [`ls.report`](prioritization.md#landschaft.prioritize.report) | Solve ``p`` (unless a solution is given) and evaluate the solution: the number of units, cost, boundary (raster and polygon units), the features' representation and the targets' coverage; with ``importance`` the Ferrier irreplaceability of the selected units (problems with one target per feature) or else their rarity-weighted richness; with ``extinction_z`` the species-area extinction risk; with ``zonation`` the comparison with a Zonation ranking at the same cost (raster units) |
-| [`ls.PrioritizationReport`](prioritization.md#landschaft.prioritize.PrioritizationReport) | A solution and its evaluation in one object: ``ls.plot(report)`` draws it, ``ls.plot(report).save( "report.html")`` writes it as a page that works offline, ``ls.save(report, folder)`` its tables and maps |
-| [`ls.coarsen`](prioritization.md#landschaft.prioritize.coarsen) | A problem's rasters on blocks of ``factor`` x ``factor`` cells (for continental problems: solve the coarse problem, then `refine` the selection): every block's cost and amounts are the sums of its cells' with a cost (the fine planning units; a block without any has none), so the refined selection holds what the coarse one does |
-| [`ls.refine`](prioritization.md#landschaft.prioritize.refine) | A selection on coarse blocks (a `Solution` of a `coarsen`-ed problem, or its selection raster) back on the fine grid of ``like`` (the fine cost raster): every cell takes its block's value, NaN where ``like`` has none |
-| [`ls.actions_data`](prioritization.md#landschaft.prioritize.actions_data) | The inputs of a multi-action problem, checked and completed as prioriactions's ``inputData()`` |
-| [`ls.actions_raster_data`](prioritization.md#landschaft.prioritize.actions_raster_data) | The inputs of a multi-action problem from rasters (see `actions_data` for the tables) |
-| [`ls.ActionsData`](prioritization.md#landschaft.prioritize.ActionsData) | Checked inputs of a multi-action problem (prioriactions's ``inputData()``): see `actions_data` |
-| [`ls.ActionsProblem`](prioritization.md#landschaft.prioritize.ActionsProblem) | A multi-action problem (prioriactions's ``problem()``): see `problem` |
-| [`ls.ActionsSolution`](prioritization.md#landschaft.prioritize.ActionsSolution) | A solution of an `ActionsProblem` |
-| [`ls.ActionsPortfolio`](prioritization.md#landschaft.prioritize.ActionsPortfolio) | Several solutions of an `ActionsProblem` (`add_cuts_portfolio` and the others) |
-| [`ls.restoration_problem`](prioritization.md#landschaft.prioritize.restoration_problem) | A restoration problem: how much of every converted cell to restore (and of natural land to conserve or convert) |
-| [`ls.RestorationProblem`](prioritization.md#landschaft.prioritize.RestorationProblem) | A restoration problem (see `restoration_problem`), built up by its ``add_*`` methods; every method returns a new problem |
-| [`ls.RestorationSolution`](prioritization.md#landschaft.prioritize.RestorationSolution) | A restoration plan |
-| [`ls.RestorationTradeOff`](prioritization.md#landschaft.prioritize.RestorationTradeOff) | Plans over a trade-off (`tradeoff`) or over sets of weights (`compare_weights`) |
-| [`ls.ecosystem_areas`](prioritization.md#landschaft.prioritize.ecosystem_areas) | The natural area of every ecosystem (ecoregion) now and before conversion, and what restoring a cell gives it: the input of `add_extinction_risk_benefit` for the risk of ecosystem collapse (plangea's ``ec``) |
-| [`ls.ecosystem_targets`](prioritization.md#landschaft.prioritize.ecosystem_targets) | Share a restoration target among ecosystems for the least risk of collapse (plangea's ecosystemic sub-region targets, ``harmonize_sr_ecosys``) |
-| [`ls.eval_risk_reduction`](prioritization.md#landschaft.prioritize.eval_risk_reduction) | The reduction of the extinction risk a plan brings (plangea's ``multi_exrisk_aggregate``), with the uncertainty of the species-area exponent z |
-| [`ls.RiskReduction`](prioritization.md#landschaft.prioritize.RiskReduction) | Result of `eval_risk_reduction`: per species, its habitat now (``current``), without the plan (``baseline``: less than now when conservation's baseline loses land) and gained by it, its risk before and after; the total reduction (negative when conversion raises the risk) and its standard deviation from the uncertainty of z |
-| [`ls.marxan`](prioritization.md#landschaft.prioritize.marxan) | Run Marxan: ``num_reps`` independent runs of annealing and iterative improvement (or the greedy heuristics) minimising cost + ``blm`` x boundary + penalties for the features' shortfalls |
-| [`ls.MarxanResult`](prioritization.md#landschaft.prioritize.MarxanResult) | The runs of `marxan` |
+| [`ls.prioritize.zonation`](prioritization.md#landschaft.prioritize.zonation) | Rank the cells of a landscape for conservation, as Zonation 5 does |
+| [`ls.prioritize.ZonationResult`](prioritization.md#landschaft.prioritize.ZonationResult) | The result of `zonation` |
+| [`ls.prioritize.run_project`](prioritization.md#landschaft.prioritize.run_project) | Run a Zonation 5 project (see `read_project`) |
+| [`ls.prioritize.read_project`](prioritization.md#landschaft.prioritize.read_project) | The `zonation` arguments of a Zonation 5 project |
+| [`ls.prioritize.Kernel`](prioritization.md#landschaft.prioritize.Kernel) | A dispersal kernel of Zonation 5's connectivity transforms |
+| [`ls.prioritize.Interaction`](prioritization.md#landschaft.prioritize.Interaction) | An interaction connectivity transform (Zonation's ``-i``/``-I``): a feature weighted by the connectivity of a resource (``positive``) or reduced by it |
+| [`ls.prioritize.convolve`](prioritization.md#landschaft.prioritize.convolve) | Convolve a raster with a kernel normalized to sum 1, as Zonation 5 does |
+| [`ls.prioritize.AreaStatistics`](prioritization.md#landschaft.prioritize.AreaStatistics) | Statistics of areas of a ranking (`area_statistics`) |
+| [`ls.prioritize.ImpactScenario`](prioritization.md#landschaft.prioritize.ImpactScenario) | An impact assessment scenario (Zonation's ``-s``): land-use change at sources |
+| [`ls.prioritize.ImpactSource`](prioritization.md#landschaft.prioritize.ImpactSource) | An impact source of an impact group (a line of Zonation's impact buffers file) |
+| [`ls.prioritize.CumulativeScenario`](prioritization.md#landschaft.prioritize.CumulativeScenario) | A cumulative impact assessment scenario (Zonation's ``-e``) |
+| [`ls.prioritize.Pressure`](prioritization.md#landschaft.prioritize.Pressure) | A pressure raster of a cumulative impact scenario |
+| [`ls.prioritize.problem`](prioritization.md#landschaft.prioritize.problem) | A conservation planning problem (prioritizr's ``problem()``) |
+| [`ls.prioritize.Problem`](prioritization.md#landschaft.prioritize.Problem) | A conservation planning problem (prioritizr's ``problem()``): see `problem` |
+| [`ls.prioritize.Solution`](prioritization.md#landschaft.prioritize.Solution) | A solution of a `Problem` |
+| [`ls.prioritize.Portfolio`](prioritization.md#landschaft.prioritize.Portfolio) | Several solutions of a problem (`add_cuts_portfolio` and the others) |
+| [`ls.prioritize.OptimizationProblem`](prioritization.md#landschaft.prioritize.OptimizationProblem) | A compiled model: ``modelsense`` of ``obj @ x`` subject to ``A x (sense) rhs``, ``lb <= x <= ub`` and ``x`` of type ``vtype`` (``"B"`` binary, ``"C"`` continuous, ``"I"`` integer); the layout of prioritizr's ``compile()`` |
+| [`ls.prioritize.h3_units`](prioritization.md#landschaft.prioritize.h3_units) | H3 hexagons as planning units: the hexagons of an H3 ``resolution`` that cover a cost raster, with their cost |
+| [`ls.prioritize.example_data`](prioritization.md#landschaft.prioritize.example_data) | Path of an example data set for prioritization: **Serra Verde**, an imaginary coastal region of 60 x 90 cells of 1 km (SIRGAS 2000 / UTM 23S) |
+| [`ls.prioritize.category_layer`](prioritization.md#landschaft.prioritize.category_layer) | The zone of every cell of a stack of zone layers (prioritizr's ``category_layer()``): the number (1, 2, ...) of the layer with the largest value above 0, 0 where none is, NaN where every layer is NaN. ``stack``: a raster with a layer per zone (a solution's ``selection``) or a mapping zone -> raster |
+| [`ls.prioritize.binary_stack`](prioritization.md#landschaft.prioritize.binary_stack) | One 0 / 1 raster per zone from a raster of zone numbers (prioritizr's ``binary_stack()``): a mapping zone -> raster, ready for `add_locked_in_constraints` (for example an existing zoning plan). ``zones``: the zones' names in the order of their numbers (default: those of a solution's ``zones`` map, else ``"1"``, ``"2"``, ...); cells with 0 or NaN are in no zone |
+| [`ls.prioritize.boundary_matrix`](prioritization.md#landschaft.prioritize.boundary_matrix) | The length of the boundary every two units share, and every unit's perimeter on the diagonal (prioritizr's ``boundary_matrix()``): raster cells with data share ``xres`` with the cells above and below and ``yres`` with those left and right, perimeter ``2 (xres + yres)``; polygons share the length of their common paths, perimeters their own, rounded to 8 decimals |
+| [`ls.prioritize.adjacency_matrix`](prioritization.md#landschaft.prioritize.adjacency_matrix) | 1 for every two adjacent units (prioritizr's ``adjacency_matrix()``): raster cells with data that share an edge (``directions`` 4) or also a corner (8); polygons that intersect, touching at a corner included |
+| [`ls.prioritize.connectivity_matrix`](prioritization.md#landschaft.prioritize.connectivity_matrix) | Connectivity between adjacent units (prioritizr's ``connectivity_matrix()``): the length of their shared boundary times the mean of ``y`` in the two (``y``: a raster on the units' grid; with polygons a raster summed over each, or a column name) |
+| [`ls.prioritize.proximity_matrix`](prioritization.md#landschaft.prioritize.proximity_matrix) | 1 for every two units within ``distance`` of each other (prioritizr's ``proximity_matrix()``): raster cell centres, or polygons by their nearest points |
+| [`ls.prioritize.decay_connectivity`](prioritization.md#landschaft.prioritize.decay_connectivity) | Connectivity from distances between units as a dispersal probability (Conefor's negative exponential): ``exp(-ln(2) d / median)``, 0.5 at the ``median`` dispersal distance, dropped below ``min_probability`` (sparse), 0 on the diagonal and for unreachable pairs (``inf``, NaN) |
+| [`ls.prioritize.unit_points`](prioritization.md#landschaft.prioritize.unit_points) | A point per unit, (n, 2) coordinates: raster cell centres (every cell), or a point inside every polygon (shapely's point on surface), to measure distances between units with `cost_distance` or `commute_distance` |
+| [`ls.prioritize.eval_n_summary`](prioritization.md#landschaft.prioritize.eval_n_summary) | The number of selected planning units (the sum of the solution's values) |
+| [`ls.prioritize.eval_cost_summary`](prioritization.md#landschaft.prioritize.eval_cost_summary) | The solution's total cost |
+| [`ls.prioritize.eval_boundary_summary`](prioritization.md#landschaft.prioritize.eval_boundary_summary) | The solution's boundary length: the edges between selected and other units, plus ``edge_factor`` x the selected units' edges on the outside of the planning units |
+| [`ls.prioritize.eval_connectivity_summary`](prioritization.md#landschaft.prioritize.eval_connectivity_summary) | The connectivity among the selected units: the sum of ``data[i, j]`` x the solution's values of units i and j (a symmetric matrix over the units) |
+| [`ls.prioritize.eval_asym_connectivity_summary`](prioritization.md#landschaft.prioritize.eval_asym_connectivity_summary) | As `eval_connectivity_summary` for an asymmetric matrix (its diagonal counted once) |
+| [`ls.prioritize.eval_feature_representation_summary`](prioritization.md#landschaft.prioritize.eval_feature_representation_summary) | Every feature's total amount and the amount the solution holds, absolute and relative |
+| [`ls.prioritize.eval_target_coverage_summary`](prioritization.md#landschaft.prioritize.eval_target_coverage_summary) | Every target's feature, whether it is met, the feature's total, and the target, the amount held and the shortfall, absolute and relative (shares of the total; 0 when the total is 0) |
+| [`ls.prioritize.eval_replacement_importance`](prioritization.md#landschaft.prioritize.eval_replacement_importance) | The replacement cost of every selected unit (Cabeza & Moilanen 2006): how much the objective worsens when the unit is left out and the problem solved again with the other selected units kept (infinite when nothing can replace it), rescaled to 0.01-1 |
+| [`ls.prioritize.eval_ferrier_importance`](prioritization.md#landschaft.prioritize.eval_ferrier_importance) | Ferrier et al. (2000)'s irreplaceability of the selected units for every feature and in total (prioritizr's version: the problem needs one ">=" target per feature, amounts >= 0) |
+| [`ls.prioritize.eval_rare_richness_importance`](prioritization.md#landschaft.prioritize.eval_rare_richness_importance) | The rarity-weighted richness of the selected units (Albuquerque & Beier 2015): the sum over the features of the unit's amount / the feature's largest amount / its total, rescaled to 0.01-1 |
+| [`ls.prioritize.eval_rank_importance`](prioritization.md#landschaft.prioritize.eval_rank_importance) | Rank importance (Jung et al. 2021, prioritizr's eval_rank_importance): the problem is solved with increasing budgets (the min set objective becomes min shortfall), only the solution's units allowed and each step keeping the units of the step before; a unit's rank is how early it enters (n = the first budget, ..., 1 = the last), rescaled to 0.01-1. ``n`` budgets evenly spaced between the locked-in units' cost and the solution's, or the ``budgets`` themselves |
+| [`ls.prioritize.eval_extinction_risk`](prioritization.md#landschaft.prioritize.eval_extinction_risk) | Every feature's extinction risk by the species-area relationship, 1 - (held / total)^z (z = 0.25 by default, one value or one per feature), and their sum (the expected number of features lost) |
+| [`ls.prioritize.eval_landscape_metrics`](prioritization.md#landschaft.prioritize.eval_landscape_metrics) | Landscape metrics of a raster solution (`landscape_metrics` of the map of the selected cells: class 1 selected, 0 not, outside the planning units no data): e.g. the number, sizes and shapes of the selected patches |
+| [`ls.prioritize.eval_mspa`](prioritization.md#landschaft.prioritize.eval_mspa) | MSPA (`mspa`) of a raster solution: the selected cells as foreground, the other planning units as background, the cells outside them missing |
+| [`ls.prioritize.eval_landscape_identification`](prioritization.md#landschaft.prioritize.eval_landscape_identification) | Landscape identification: the separate areas of the top fraction of a priority surface, and what each holds (Zonation's area statistics of separate areas, over any surface) |
+| [`ls.prioritize.eval_landscape_comparison`](prioritization.md#landschaft.prioritize.eval_landscape_comparison) | Landscape comparison: how much the top fractions of two priority surfaces overlap (Zonation's solution comparison at several fractions, prioripy's ``eval_landscape_comparison``) |
+| [`ls.prioritize.position_rank`](prioritization.md#landschaft.prioritize.position_rank) | Zonation's ranks of a surface by position: the i-th lowest of the N finite cells gets float32(i * (1 / N)); ties go to the earlier cell in row order first; NaN stays NaN |
+| [`ls.prioritize.LandscapeAreas`](prioritization.md#landschaft.prioritize.LandscapeAreas) | The areas of the top fraction of a priority surface (`eval_landscape_identification`) |
+| [`ls.prioritize.LandscapeComparison`](prioritization.md#landschaft.prioritize.LandscapeComparison) | Two priority surfaces compared at several top fractions (`eval_landscape_comparison`) |
+| [`ls.prioritize.eval_proxirr`](prioritization.md#landschaft.prioritize.eval_proxirr) | ProxIRR (Baisero et al. 2022) of every planning unit for the problem's targets, as the CRAN package proxirr computes it |
+| [`ls.prioritize.eval_proxirr_marxan`](prioritization.md#landschaft.prioritize.eval_proxirr_marxan) | ProxIRR of a Marxan problem's planning units (proxirr's ``marxan_alphas``, ``marxan_betas`` and ``marxan_gammas``), from the tables `marxan` takes |
+| [`ls.prioritize.ProxIRR`](prioritization.md#landschaft.prioritize.ProxIRR) | ProxIRR of every planning unit (`eval_proxirr`, `eval_proxirr_marxan`) |
+| [`ls.prioritize.calibrate_penalty`](prioritization.md#landschaft.prioritize.calibrate_penalty) | The blended approach: the problem solved with a range of penalty weights (``values``; default ``n`` values evenly spaced in log scale over 1/100 to 100 times the Cohon et al. penalty), every candidate's cost and criterion (boundary length, connectivity, ...), and the candidates TOPSIS and the knee of the curve choose. ``p``: the problem without the penalty |
+| [`ls.prioritize.calibrate_budget`](prioritization.md#landschaft.prioritize.calibrate_budget) | The hierarchical approach: the least cost solution first (``p``, a min set problem without the penalty, solved to optimality), then the least penalty within cost thresholds above its cost (``thresholds``, or the cost x (1 + ``inflation``); default inflation 1e-5 to 4 in 9 steps, the thresholds rounded up as in prioritizr's tutorial) |
+| [`ls.prioritize.cohon_penalty`](prioritization.md#landschaft.prioritize.cohon_penalty) | The penalty of Cohon et al. (1979): the trade-off rate between the solution with the least cost (``p`` as given, a min set problem without the penalty) and the one with the least penalty (min penalties within a budget above every unit's cost): \|cost difference / criterion difference\|, rounded to 5 decimals |
+| [`ls.prioritize.pareto_front`](prioritization.md#landschaft.prioritize.pareto_front) | The trade-off between cost and representation: the least total shortfall of the targets (min shortfall objective: the sum of the shortfalls as shares of their targets) within ``n`` budgets evenly spaced up to the least-cost solution's cost (above the cost of the locked-in units, which every budget includes), or the ``budgets`` given. ``p``: a problem with targets (its objective is replaced) |
+| [`ls.prioritize.calibrate`](prioritization.md#landschaft.prioritize.calibrate) | Any trade-off parameter: ``make(value)`` gives the problem for every value (a feature's weight, a target, a penalty of any kind...), ``criterion(problem, solution)`` the quantity traded off against the cost (smaller is better) |
+| [`ls.prioritize.TradeOffs`](prioritization.md#landschaft.prioritize.TradeOffs) | Candidate solutions over a trade-off parameter |
+| [`ls.prioritize.topsis`](prioritization.md#landschaft.prioritize.topsis) | TOPSIS (as R's ``topsis`` package): the alternatives (rows of ``decision``) scored by their closeness to the ideal (``impacts``: "+" larger is better, "-" smaller is better, per column; equal ``weights`` by default) |
+| [`ls.prioritize.knee_point`](prioritization.md#landschaft.prioritize.knee_point) | The knee (elbow) of a trade-off curve: the point farthest from the straight line between its ends, both axes scaled to 0-1 (the points in the order of x) |
+| [`ls.prioritize.mean_sd`](prioritization.md#landschaft.prioritize.mean_sd) | plangea's choice of weights (``post_choose_weights``): every criterion (a column of ``decision``) rescaled to 0-1 over the alternatives (a constant one to 1), the "-" ones (smaller is better) inverted, and every alternative scored by the mean of its criteria divided by their standard deviation (good on all of them at once) |
+| [`ls.prioritize.iterative_solve`](prioritization.md#landschaft.prioritize.iterative_solve) | Solve, change the problem, solve again: ``update(step, solution, problem)`` gives the next problem (for instance from the landscape a ``ls.simulate`` step leaves, with the solution's cells protected by `protected_cells` in the simulation's rules), or ``None`` to stop |
+| [`ls.prioritize.protected_cells`](prioritization.md#landschaft.prioritize.protected_cells) | The selected cells of a raster solution as a boolean raster (for ``ls.simulate``'s restrictions) |
+| [`ls.prioritize.zonation_features`](prioritization.md#landschaft.prioritize.zonation_features) | The features as Zonation 5 transforms them before ranking (condition, connectivity kernels, interactions, matrix connectivity, retention, impacts: see `zonation` for each), back in the features' own units, for an optimization problem (``problem(cost, zonation_features(...))``) |
+| [`ls.prioritize.compare_zonation`](prioritization.md#landschaft.prioritize.compare_zonation) | Compare an optimization solution of ``p`` (solved if not given) with a Zonation ranking of the same features and costs (run with ``rule`` and ``zonation_kw`` if not given: a `ZonationResult` or a rank raster) cut at the solution's cost |
+| [`ls.prioritize.ZonationComparison`](prioritization.md#landschaft.prioritize.ZonationComparison) | A Zonation ranking and an optimization solution with the same budget |
+| [`ls.prioritize.sdm_features`](prioritization.md#landschaft.prioritize.sdm_features) | Features from species distribution models (``ls.sdm``): every result's prediction on ``env`` (its ensemble when it has several models, else its model), as a stack for `problem` |
+| [`ls.prioritize.report`](prioritization.md#landschaft.prioritize.report) | Solve ``p`` (unless a solution is given) and evaluate the solution: the number of units, cost, boundary (raster and polygon units), the features' representation and the targets' coverage; with ``importance`` the Ferrier irreplaceability of the selected units (problems with one target per feature) or else their rarity-weighted richness; with ``extinction_z`` the species-area extinction risk; with ``zonation`` the comparison with a Zonation ranking at the same cost (raster units) |
+| [`ls.prioritize.PrioritizationReport`](prioritization.md#landschaft.prioritize.PrioritizationReport) | A solution and its evaluation in one object: ``ls.plot(report)`` draws it, ``ls.plot(report).save( "report.html")`` writes it as a page that works offline, ``ls.save(report, folder)`` its tables and maps |
+| [`ls.prioritize.coarsen`](prioritization.md#landschaft.prioritize.coarsen) | A problem's rasters on blocks of ``factor`` x ``factor`` cells (for continental problems: solve the coarse problem, then `refine` the selection): every block's cost and amounts are the sums of its cells' with a cost (the fine planning units; a block without any has none), so the refined selection holds what the coarse one does |
+| [`ls.prioritize.refine`](prioritization.md#landschaft.prioritize.refine) | A selection on coarse blocks (a `Solution` of a `coarsen`-ed problem, or its selection raster) back on the fine grid of ``like`` (the fine cost raster): every cell takes its block's value, NaN where ``like`` has none |
+| [`ls.prioritize.actions_data`](prioritization.md#landschaft.prioritize.actions_data) | The inputs of a multi-action problem, checked and completed as prioriactions's ``inputData()`` |
+| [`ls.prioritize.actions_raster_data`](prioritization.md#landschaft.prioritize.actions_raster_data) | The inputs of a multi-action problem from rasters (see `actions_data` for the tables) |
+| [`ls.prioritize.ActionsData`](prioritization.md#landschaft.prioritize.ActionsData) | Checked inputs of a multi-action problem (prioriactions's ``inputData()``): see `actions_data` |
+| [`ls.prioritize.ActionsProblem`](prioritization.md#landschaft.prioritize.ActionsProblem) | A multi-action problem (prioriactions's ``problem()``): see `problem` |
+| [`ls.prioritize.ActionsSolution`](prioritization.md#landschaft.prioritize.ActionsSolution) | A solution of an `ActionsProblem` |
+| [`ls.prioritize.ActionsPortfolio`](prioritization.md#landschaft.prioritize.ActionsPortfolio) | Several solutions of an `ActionsProblem` (`add_cuts_portfolio` and the others) |
+| [`ls.prioritize.restoration_problem`](prioritization.md#landschaft.prioritize.restoration_problem) | A restoration problem: how much of every converted cell to restore (and of natural land to conserve or convert) |
+| [`ls.prioritize.RestorationProblem`](prioritization.md#landschaft.prioritize.RestorationProblem) | A restoration problem (see `restoration_problem`), built up by its ``add_*`` methods; every method returns a new problem |
+| [`ls.prioritize.RestorationSolution`](prioritization.md#landschaft.prioritize.RestorationSolution) | A restoration plan |
+| [`ls.prioritize.RestorationTradeOff`](prioritization.md#landschaft.prioritize.RestorationTradeOff) | Plans over a trade-off (`tradeoff`) or over sets of weights (`compare_weights`) |
+| [`ls.prioritize.ecosystem_areas`](prioritization.md#landschaft.prioritize.ecosystem_areas) | The natural area of every ecosystem (ecoregion) now and before conversion, and what restoring a cell gives it: the input of `add_extinction_risk_benefit` for the risk of ecosystem collapse (plangea's ``ec``) |
+| [`ls.prioritize.ecosystem_targets`](prioritization.md#landschaft.prioritize.ecosystem_targets) | Share a restoration target among ecosystems for the least risk of collapse (plangea's ecosystemic sub-region targets, ``harmonize_sr_ecosys``) |
+| [`ls.prioritize.eval_risk_reduction`](prioritization.md#landschaft.prioritize.eval_risk_reduction) | The reduction of the extinction risk a plan brings (plangea's ``multi_exrisk_aggregate``), with the uncertainty of the species-area exponent z |
+| [`ls.prioritize.RiskReduction`](prioritization.md#landschaft.prioritize.RiskReduction) | Result of `eval_risk_reduction`: per species, its habitat now (``current``), without the plan (``baseline``: less than now when conservation's baseline loses land) and gained by it, its risk before and after; the total reduction (negative when conversion raises the risk) and its standard deviation from the uncertainty of z |
+| [`ls.prioritize.marxan`](prioritization.md#landschaft.prioritize.marxan) | Run Marxan: ``num_reps`` independent runs of annealing and iterative improvement (or the greedy heuristics) minimising cost + ``blm`` x boundary + penalties for the features' shortfalls |
+| [`ls.prioritize.MarxanResult`](prioritization.md#landschaft.prioritize.MarxanResult) | The runs of `marxan` |
 
 ### Species distributions
 
 | Name | Summary |
 |---|---|
-| [`ls.prepare`](sdm.md#landschaft.sdm.prepare) | Prepare occurrence records and predictors for a species distribution model, in one call |
-| [`ls.download_gbif`](sdm.md#landschaft.sdm.download_gbif) | Occurrence records of a species from GBIF, with coordinates |
-| [`ls.clean_occurrences`](sdm.md#landschaft.sdm.clean_occurrences) | Flag or drop occurrence records with suspicious coordinates |
-| [`ls.reference_data`](sdm.md#landschaft.sdm.reference_data) | A geographic reference data set for cleaning occurrence records |
-| [`ls.one_per_cell`](sdm.md#landschaft.sdm.one_per_cell) | Keep one occurrence record per cell of the predictor grid |
-| [`ls.thin`](sdm.md#landschaft.sdm.thin) | Thin occurrence records so that no two kept records are closer than ``distance`` |
-| [`ls.accessible_area`](sdm.md#landschaft.sdm.accessible_area) | The area the species could have reached: where its background is drawn |
-| [`ls.select_predictors`](sdm.md#landschaft.sdm.select_predictors) | Drop predictors that the others already explain (collinearity) |
-| [`ls.vif`](sdm.md#landschaft.sdm.vif) | Variance inflation factor of each predictor: how well the others predict it |
-| [`ls.background`](sdm.md#landschaft.sdm.background) | Background points: a sample of the conditions available to the species |
-| [`ls.bias_surface`](sdm.md#landschaft.sdm.bias_surface) | Sampling effort as a surface: a Gaussian kernel density of the records of a group |
-| [`ls.dataset`](sdm.md#landschaft.sdm.dataset) | Put presences, background points and predictor values together |
-| [`ls.SDMData`](sdm.md#landschaft.sdm.SDMData) | Presences and background (or absences) with their predictor values, ready for a model |
-| [`ls.spatial_blocks`](sdm.md#landschaft.sdm.spatial_blocks) | Folds made of spatial blocks: no fold is a neighbour of the records it tests |
-| [`ls.autocorrelation_range`](sdm.md#landschaft.sdm.autocorrelation_range) | The range of spatial autocorrelation of each predictor (and their median), in metres |
-| [`ls.spatial_clusters`](sdm.md#landschaft.sdm.spatial_clusters) | Folds from k-means clusters of the records' coordinates (or of their environment) |
-| [`ls.buffer_folds`](sdm.md#landschaft.sdm.buffer_folds) | Leave-one-out folds with a buffer: each presence is a test, nothing within ``size`` trains |
-| [`ls.quadrant_folds`](sdm.md#landschaft.sdm.quadrant_folds) | Four folds from the occurrences split at their median latitude and longitude (ENMeval "block") |
-| [`ls.checkerboard_folds`](sdm.md#landschaft.sdm.checkerboard_folds) | Folds from a checkerboard of aggregated cells (ENMeval "checkerboard") |
-| [`ls.random_folds`](sdm.md#landschaft.sdm.random_folds) | Random k-fold of the presences, background always training (ENMeval "randomkfold") |
-| [`ls.jackknife_folds`](sdm.md#landschaft.sdm.jackknife_folds) | Leave-one-out: each presence its own fold, background always training (ENMeval "jackknife") |
-| [`ls.MaxNet`](sdm.md#landschaft.sdm.MaxNet) | Maxent fitted as R's maxnet does it, natively: the same model, faster |
-| [`ls.evaluate`](sdm.md#landschaft.sdm.evaluate) | Evaluate predictions at presences against background points (or absences) |
-| [`ls.Evaluation`](sdm.md#landschaft.sdm.Evaluation) | How well predictions separate presences from background (or absences) |
-| [`ls.boyce`](sdm.md#landschaft.sdm.boyce) | Continuous Boyce index: does predicted suitability rise with the frequency of presences? |
-| [`ls.threshold`](sdm.md#landschaft.sdm.threshold) | A threshold that turns continuous predictions into presence / absence |
-| [`ls.omission_rate`](sdm.md#landschaft.sdm.omission_rate) | Share of test presences predicted below a threshold set on the training presences |
-| [`ls.mess`](sdm.md#landschaft.sdm.mess) | Multivariate environmental similarity surface: how far conditions lie outside the reference |
-| [`ls.mop`](sdm.md#landschaft.sdm.mop) | Mobility-oriented parity: where new conditions are outside or far from the reference ones |
-| [`ls.exdet`](sdm.md#landschaft.sdm.exdet) | Extrapolation detection: univariate (NT1) and combinatorial (NT2) novelty |
-| [`ls.fit`](sdm.md#landschaft.sdm.fit) | Fit models to SDMData, cross-validate them on its folds, and fit them to all the data |
-| [`ls.SDMResult`](sdm.md#landschaft.sdm.SDMResult) | Fitted models, their cross-validated scores and what is needed to project them |
-| [`ls.predict`](sdm.md#landschaft.sdm.predict) | Project fitted models onto rasters of predictors (present or future conditions) |
-| [`ls.response_curves`](sdm.md#landschaft.sdm.response_curves) | How each model's suitability changes along one predictor, the others held at their mean (or median) |
-| [`ls.importance`](sdm.md#landschaft.sdm.importance) | Permutation importance: how much AUC drops when a predictor's values are shuffled |
-| [`ls.area_of_habitat`](sdm.md#landschaft.sdm.area_of_habitat) | Area of habitat of species: their ranges refined by habitats and elevations |
-| [`ls.HabitatAreas`](sdm.md#landschaft.sdm.HabitatAreas) | Result of `area_of_habitat` |
-| [`ls.cell_area_km2`](sdm.md#landschaft.sdm.cell_area_km2) | The area of every cell of a raster's grid in km²: the product of the resolutions in a projected coordinate system (in its linear unit), the cell on the ellipsoid in a geographic one |
-| [`ls.example_data`](sdm.md#landschaft.sdm.example_data) | Path of an example data set for species distribution modelling |
+| [`ls.sdm.prepare`](sdm.md#landschaft.sdm.prepare) | Prepare occurrence records and predictors for a species distribution model, in one call |
+| [`ls.sdm.download_gbif`](sdm.md#landschaft.sdm.download_gbif) | Occurrence records of a species from GBIF, with coordinates |
+| [`ls.sdm.clean_occurrences`](sdm.md#landschaft.sdm.clean_occurrences) | Flag or drop occurrence records with suspicious coordinates |
+| [`ls.sdm.reference_data`](sdm.md#landschaft.sdm.reference_data) | A geographic reference data set for cleaning occurrence records |
+| [`ls.sdm.one_per_cell`](sdm.md#landschaft.sdm.one_per_cell) | Keep one occurrence record per cell of the predictor grid |
+| [`ls.sdm.thin`](sdm.md#landschaft.sdm.thin) | Thin occurrence records so that no two kept records are closer than ``distance`` |
+| [`ls.sdm.accessible_area`](sdm.md#landschaft.sdm.accessible_area) | The area the species could have reached: where its background is drawn |
+| [`ls.sdm.select_predictors`](sdm.md#landschaft.sdm.select_predictors) | Drop predictors that the others already explain (collinearity) |
+| [`ls.sdm.vif`](sdm.md#landschaft.sdm.vif) | Variance inflation factor of each predictor: how well the others predict it |
+| [`ls.sdm.background`](sdm.md#landschaft.sdm.background) | Background points: a sample of the conditions available to the species |
+| [`ls.sdm.bias_surface`](sdm.md#landschaft.sdm.bias_surface) | Sampling effort as a surface: a Gaussian kernel density of the records of a group |
+| [`ls.sdm.dataset`](sdm.md#landschaft.sdm.dataset) | Put presences, background points and predictor values together |
+| [`ls.sdm.SDMData`](sdm.md#landschaft.sdm.SDMData) | Presences and background (or absences) with their predictor values, ready for a model |
+| [`ls.sdm.spatial_blocks`](sdm.md#landschaft.sdm.spatial_blocks) | Folds made of spatial blocks: no fold is a neighbour of the records it tests |
+| [`ls.sdm.autocorrelation_range`](sdm.md#landschaft.sdm.autocorrelation_range) | The range of spatial autocorrelation of each predictor (and their median), in metres |
+| [`ls.sdm.spatial_clusters`](sdm.md#landschaft.sdm.spatial_clusters) | Folds from k-means clusters of the records' coordinates (or of their environment) |
+| [`ls.sdm.buffer_folds`](sdm.md#landschaft.sdm.buffer_folds) | Leave-one-out folds with a buffer: each presence is a test, nothing within ``size`` trains |
+| [`ls.sdm.quadrant_folds`](sdm.md#landschaft.sdm.quadrant_folds) | Four folds from the occurrences split at their median latitude and longitude (ENMeval "block") |
+| [`ls.sdm.checkerboard_folds`](sdm.md#landschaft.sdm.checkerboard_folds) | Folds from a checkerboard of aggregated cells (ENMeval "checkerboard") |
+| [`ls.sdm.random_folds`](sdm.md#landschaft.sdm.random_folds) | Random k-fold of the presences, background always training (ENMeval "randomkfold") |
+| [`ls.sdm.jackknife_folds`](sdm.md#landschaft.sdm.jackknife_folds) | Leave-one-out: each presence its own fold, background always training (ENMeval "jackknife") |
+| [`ls.sdm.MaxNet`](sdm.md#landschaft.sdm.MaxNet) | Maxent fitted as R's maxnet does it, natively: the same model, faster |
+| [`ls.sdm.evaluate`](sdm.md#landschaft.sdm.evaluate) | Evaluate predictions at presences against background points (or absences) |
+| [`ls.sdm.Evaluation`](sdm.md#landschaft.sdm.Evaluation) | How well predictions separate presences from background (or absences) |
+| [`ls.sdm.boyce`](sdm.md#landschaft.sdm.boyce) | Continuous Boyce index: does predicted suitability rise with the frequency of presences? |
+| [`ls.sdm.threshold`](sdm.md#landschaft.sdm.threshold) | A threshold that turns continuous predictions into presence / absence |
+| [`ls.sdm.omission_rate`](sdm.md#landschaft.sdm.omission_rate) | Share of test presences predicted below a threshold set on the training presences |
+| [`ls.sdm.mess`](sdm.md#landschaft.sdm.mess) | Multivariate environmental similarity surface: how far conditions lie outside the reference |
+| [`ls.sdm.mop`](sdm.md#landschaft.sdm.mop) | Mobility-oriented parity: where new conditions are outside or far from the reference ones |
+| [`ls.sdm.exdet`](sdm.md#landschaft.sdm.exdet) | Extrapolation detection: univariate (NT1) and combinatorial (NT2) novelty |
+| [`ls.sdm.fit`](sdm.md#landschaft.sdm.fit) | Fit models to SDMData, cross-validate them on its folds, and fit them to all the data |
+| [`ls.sdm.SDMResult`](sdm.md#landschaft.sdm.SDMResult) | Fitted models, their cross-validated scores and what is needed to project them |
+| [`ls.sdm.predict`](sdm.md#landschaft.sdm.predict) | Project fitted models onto rasters of predictors (present or future conditions) |
+| [`ls.sdm.response_curves`](sdm.md#landschaft.sdm.response_curves) | How each model's suitability changes along one predictor, the others held at their mean (or median) |
+| [`ls.sdm.importance`](sdm.md#landschaft.sdm.importance) | Permutation importance: how much AUC drops when a predictor's values are shuffled |
+| [`ls.sdm.migrate`](sdm.md#landschaft.sdm.migrate) | A species' dispersal through the habitat suitability of successive periods, as MigClim simulates it |
+| [`ls.sdm.Migration`](sdm.md#landschaft.sdm.Migration) | A dispersal simulation (`migrate`) |
+| [`ls.sdm.area_of_habitat`](sdm.md#landschaft.sdm.area_of_habitat) | Area of habitat of species: their ranges refined by habitats and elevations |
+| [`ls.sdm.HabitatAreas`](sdm.md#landschaft.sdm.HabitatAreas) | Result of `area_of_habitat` |
+| [`ls.sdm.cell_area_km2`](sdm.md#landschaft.sdm.cell_area_km2) | The area of every cell of a raster's grid in km²: the product of the resolutions in a projected coordinate system (in its linear unit), the cell on the ellipsoid in a geographic one |
+| [`ls.sdm.example_data`](sdm.md#landschaft.sdm.example_data) | Path of an example data set for species distribution modelling |
 
 ### Land change simulation
 
 | Name | Summary |
 |---|---|
-| [`ls.changes`](simulate.md#landschaft.simulate.changes) | Land change along a series of categorical maps |
-| [`ls.Changes`](simulate.md#landschaft.simulate.Changes) | Land change along a series of categorical maps (see `changes`) |
-| [`ls.IntensityAnalysis`](simulate.md#landschaft.simulate.IntensityAnalysis) | Intensity analysis of land change (Aldwaik & Pontius 2012), as OpenLand computes it |
-| [`ls.crosstab`](simulate.md#landschaft.simulate.crosstab) | Cells of each class of one map that hold each class of another (a transition matrix of counts) |
-| [`ls.difference_components`](simulate.md#landschaft.simulate.difference_components) | Agreement and the components of difference of each category and overall (diffeR's ``diffTablej``) |
-| [`ls.overall_difference`](simulate.md#landschaft.simulate.overall_difference) | The overall difference and its components (diffeR's ``overallDiff``, ``overallQtyD``...) |
-| [`ls.difference_resolutions`](simulate.md#landschaft.simulate.difference_resolutions) | Quantity, exchange and shift differences at increasingly coarse resolutions (diffeR's ``differenceMR``) |
-| [`ls.composite_matrix`](simulate.md#landschaft.simulate.composite_matrix) | Cross-tabulation at a coarser resolution by the composite method (diffeR's ``composite``) |
-| [`ls.memberships`](simulate.md#landschaft.simulate.memberships) | The share of each category in each block of factor x factor cells (diffeR's ``memberships``) |
-| [`ls.mad`](simulate.md#landschaft.simulate.mad) | Mean absolute deviation between two continuous maps and its components (diffeR's ``MAD``) |
-| [`ls.sample_to_population`](simulate.md#landschaft.simulate.sample_to_population) | A sample's cross-tabulation scaled to the population of each row category (diffeR's ``sample2pop``) |
-| [`ls.Markov`](simulate.md#landschaft.simulate.Markov) | A Markov chain of land change: the transition probabilities of a period and of each time step |
-| [`ls.WeightsOfEvidence`](simulate.md#landschaft.simulate.WeightsOfEvidence) | Weights of evidence of land use transitions, calibrated on two maps (Dinamica EGO's method) |
-| [`ls.weights_of_evidence`](simulate.md#landschaft.simulate.weights_of_evidence) | Calibrate weights of evidence in one call: ``WeightsOfEvidence(ranges, **kwargs).fit(t0, t1, drivers)`` |
-| [`ls.LogisticRegression`](simulate.md#landschaft.simulate.LogisticRegression) | Logistic regression of the presence of each land use class on the drivers (lulcc's ``glmModels``) |
-| [`ls.Estimator`](simulate.md#landschaft.simulate.Estimator) | Potential of each class from a scikit-learn classifier, one model per class |
-| [`ls.MultiCriteria`](simulate.md#landschaft.simulate.MultiCriteria) | Potential from weighted factors, the weights from pairwise comparisons (AHP; MOLUSCE's MCE) |
-| [`ls.RasterPotential`](simulate.md#landschaft.simulate.RasterPotential) | A potential given as maps: one layer per class (or transition), as computed elsewhere |
-| [`ls.Model`](simulate.md#landschaft.simulate.Model) | A land change model: potential, demand, allocation and rules |
-| [`ls.Simulation`](simulate.md#landschaft.simulate.Simulation) | The maps of a simulation and what happened at each step |
-| [`ls.AreaDemand`](simulate.md#landschaft.simulate.AreaDemand) | Cells each class must cover at each time step (CLUE-S's demand) |
-| [`ls.Rules`](simulate.md#landschaft.simulate.Rules) | Decision rules of the allocation (lulcc's ``rules``, ``elas``, ``mask``, ``hist``, ``neighb``) |
-| [`ls.Neighbourhood`](simulate.md#landschaft.simulate.Neighbourhood) | Neighbourhood thresholds (lulcc's ``NeighbRasterStack`` and ``nb.rules``) |
-| [`ls.CLUE`](simulate.md#landschaft.simulate.CLUE) | CLUE-S allocation (Verburg et al. 2002), as lulcc's ``CluesModel`` |
-| [`ls.Ordered`](simulate.md#landschaft.simulate.Ordered) | The ordered allocation of Fuchs et al. (2013) with stochastic choice, as lulcc's ``OrderedModel`` |
-| [`ls.distance_to`](simulate.md#landschaft.simulate.distance_to) | Distance from each cell to the nearest cell of some classes |
-| [`ls.share_of`](simulate.md#landschaft.simulate.share_of) | Share of the cells around each cell that hold some classes |
-| [`ls.gravity_of`](simulate.md#landschaft.simulate.gravity_of) | Gravitational interaction potential of the cells of some classes |
-| [`ls.Regional`](simulate.md#landschaft.simulate.Regional) | A demand per region (municipalities, biomes, basins...) |
-| [`ls.CLUMondo`](simulate.md#landschaft.simulate.CLUMondo) | CLUMondo's demand-driven allocation of land systems |
-| [`ls.ServiceDemand`](simulate.md#landschaft.simulate.ServiceDemand) | The demand for goods and services at each time step (CLUMondo's ``demand.in``) |
-| [`ls.Supply`](simulate.md#landschaft.simulate.Supply) | What one cell of each land system supplies of each good or service (CLUMondo's ``lusmatrix``) |
-| [`ls.NeighbourhoodEffect`](simulate.md#landschaft.simulate.NeighbourhoodEffect) | CLUMondo's neighbourhood function (``neighmat.txt`` and ``alloc2.reg``) |
-| [`ls.LandSystemStack`](simulate.md#landschaft.simulate.LandSystemStack) | Binary layers, possibly overlapping, as land systems (bit masks) |
-| [`ls.Roles`](simulate.md#landschaft.simulate.Roles) | What each transition between land systems does to their layers |
-| [`ls.Cap`](simulate.md#landschaft.simulate.Cap) | At most so many cells (or so much area) a year may make a role's transitions (or given pairs) |
-| [`ls.Succession`](simulate.md#landschaft.simulate.Succession) | Autonomous change after some years, whatever the demand (CLUMondo's code 1000 + years) |
-| [`ls.ExpanderPatcher`](simulate.md#landschaft.simulate.ExpanderPatcher) | Dinamica's Expander and Patcher allocation of transitions (``AllocateTransitions``) |
-| [`ls.ContinuousPatcher`](simulate.md#landschaft.simulate.ContinuousPatcher) | New patches that take a stock (biomass, carbon, timber) up to a quota |
-| [`ls.StockAllocation`](simulate.md#landschaft.simulate.StockAllocation) | What `allocate` took |
-| [`ls.StockSimulation`](simulate.md#landschaft.simulate.StockSimulation) | What `run` did, step by step |
-| [`ls.RoadBuilder`](simulate.md#landschaft.simulate.RoadBuilder) | New roads each step, from the network towards attractive places |
-| [`ls.RoadDistance`](simulate.md#landschaft.simulate.RoadDistance) | Distance to a growing road network: a dynamic variable (see `dynamic`) |
-| [`ls.friction_cost`](simulate.md#landschaft.simulate.friction_cost) | Cost of reaching every cell from the nearest source over a friction surface |
-| [`ls.destinations`](simulate.md#landschaft.simulate.destinations) | Cells drawn by attraction in quadrants of a map |
-| [`ls.pathways`](simulate.md#landschaft.simulate.pathways) | Paths from source cells to a network down a cost surface |
-| [`ls.CARS`](simulate.md#landschaft.simulate.CARS) | PLUS's CA based on multi-type random patch seeds (Liang et al. 2021) |
-| [`ls.MolusceWoE`](simulate.md#landschaft.simulate.MolusceWoE) | MOLUSCE's weights of evidence (``WoeManager``): one model per transition, persistence included |
-| [`ls.MolusceCA`](simulate.md#landschaft.simulate.MolusceCA) | MOLUSCE's simulator: each iteration makes the observed transitions where the model is most confident |
-| [`ls.PatchGrowing`](simulate.md#landschaft.simulate.PatchGrowing) | FUTURES' patch growing allocation (r.futures.simulation) |
-| [`ls.DevelopmentDemand`](simulate.md#landschaft.simulate.DevelopmentDemand) | Cells each subregion develops at each step (r.futures.simulation's ``demand`` file) |
-| [`ls.DevelopmentPotential`](simulate.md#landschaft.simulate.DevelopmentPotential) | The development potential's coefficients per subregion (r.futures.potential's table) |
-| [`ls.development_pressure`](simulate.md#landschaft.simulate.development_pressure) | The development pressure of each cell (r.futures.devpressure) |
-| [`ls.Flooding`](simulate.md#landschaft.simulate.Flooding) | FUTURES' flood submodel (Sanchez et al. 2023): floods, damage, response, abandonment, migration |
-| [`ls.patch_library`](simulate.md#landschaft.simulate.patch_library) | The sizes of the patches developed between two maps (r.futures.calib's patch library) |
-| [`ls.calibrate_patches`](simulate.md#landschaft.simulate.calibrate_patches) | Calibrate FUTURES' patch compactness and discount factor (r.futures.calib) |
-| [`ls.three_map_comparison`](simulate.md#landschaft.simulate.three_map_comparison) | Compare the reference maps at the start and the end with the simulated end at several resolutions |
-| [`ls.ThreeMapComparison`](simulate.md#landschaft.simulate.ThreeMapComparison) | Three maps compared at several resolutions (lulcc's ``ThreeMapComparison``) |
-| [`ls.compare_maps`](simulate.md#landschaft.simulate.compare_maps) | MOLUSCE's comparison of two maps (``DependenceCoef``): kappa, agreement and dependence |
-| [`ls.error_budget`](simulate.md#landschaft.simulate.error_budget) | MOLUSCE's error budget (Pontius 2002): agreement for levels of information, at coarser resolutions |
-| [`ls.futures_validation`](simulate.md#landschaft.simulate.futures_validation) | FUTURES' validation (``r.futures.validation``): disagreement, kappa, kappa simulation, change metrics |
-| [`ls.futures_validation_grid`](simulate.md#landschaft.simulate.futures_validation_grid) | FUTURES' validation per tile or per region (``r.futures.gridvalidation``) |
-| [`ls.fuzzy_similarity`](simulate.md#landschaft.simulate.fuzzy_similarity) | Fuzzy similarity of two categorical maps (Dinamica EGO's ``CalcReciprocalSimilarityMap``) |
-| [`ls.FuzzySimilarity`](simulate.md#landschaft.simulate.FuzzySimilarity) | The fuzzy similarity of two maps (`fuzzy_similarity`) |
-| [`ls.differences`](simulate.md#landschaft.simulate.differences) | The map of differences: each cell that changed between the maps, in its new class; NaN elsewhere |
-| [`ls.similarity_of_differences`](simulate.md#landschaft.simulate.similarity_of_differences) | Dinamica EGO's validation: fuzzy similarity of the observed and the simulated change, per window |
-| [`ls.validate`](simulate.md#landschaft.simulate.validate) | Compare a simulated map with the observed one in every way the land change tools do |
-| [`ls.Validation`](simulate.md#landschaft.simulate.Validation) | Every comparison of a simulated map with the observed one (`validate`) |
-| [`ls.calibrate`](simulate.md#landschaft.simulate.calibrate) | Search the settings of a model that best reproduce an observed map |
-| [`ls.Calibration`](simulate.md#landschaft.simulate.Calibration) | The result of `calibrate` |
-| [`ls.run`](simulate.md#landschaft.simulate.run) | Fit a land change model on two maps, check it on the observed period and project it |
-| [`ls.Projection`](simulate.md#landschaft.simulate.Projection) | The result of `run` |
-| [`ls.agreement`](simulate.md#landschaft.simulate.agreement) | How a simulated map matches the observed one, cell by cell and in quantity |
-| [`ls.presets`](simulate.md#landschaft.simulate.presets) | The classic land change models, assembled from ls.simulate's pieces |
-| [`ls.terraflux`](simulate.md#landschaft.simulate.terraflux) | Run a Terraflux model with the ``terraflux`` command; the simulated maps ``(step, y, x)`` |
-| [`ls.scenarios`](simulate.md#landschaft.simulate.scenarios) | Run a model under several scenarios, several times each, in parallel |
-| [`ls.Ensemble`](simulate.md#landschaft.simulate.Ensemble) | The simulations of `scenarios`: every scenario, replicate and year |
-| [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |
+| [`ls.simulate.changes`](simulate.md#landschaft.simulate.changes) | Land change along a series of categorical maps |
+| [`ls.simulate.Changes`](simulate.md#landschaft.simulate.Changes) | Land change along a series of categorical maps (see `changes`) |
+| [`ls.simulate.IntensityAnalysis`](simulate.md#landschaft.simulate.IntensityAnalysis) | Intensity analysis of land change (Aldwaik & Pontius 2012), as OpenLand computes it |
+| [`ls.simulate.crosstab`](simulate.md#landschaft.simulate.crosstab) | Cells of each class of one map that hold each class of another (a transition matrix of counts) |
+| [`ls.simulate.difference_components`](simulate.md#landschaft.simulate.difference_components) | Agreement and the components of difference of each category and overall (diffeR's ``diffTablej``) |
+| [`ls.simulate.overall_difference`](simulate.md#landschaft.simulate.overall_difference) | The overall difference and its components (diffeR's ``overallDiff``, ``overallQtyD``...) |
+| [`ls.simulate.difference_resolutions`](simulate.md#landschaft.simulate.difference_resolutions) | Quantity, exchange and shift differences at increasingly coarse resolutions (diffeR's ``differenceMR``) |
+| [`ls.simulate.composite_matrix`](simulate.md#landschaft.simulate.composite_matrix) | Cross-tabulation at a coarser resolution by the composite method (diffeR's ``composite``) |
+| [`ls.simulate.memberships`](simulate.md#landschaft.simulate.memberships) | The share of each category in each block of factor x factor cells (diffeR's ``memberships``) |
+| [`ls.simulate.mad`](simulate.md#landschaft.simulate.mad) | Mean absolute deviation between two continuous maps and its components (diffeR's ``MAD``) |
+| [`ls.simulate.sample_to_population`](simulate.md#landschaft.simulate.sample_to_population) | A sample's cross-tabulation scaled to the population of each row category (diffeR's ``sample2pop``) |
+| [`ls.simulate.Markov`](simulate.md#landschaft.simulate.Markov) | A Markov chain of land change: the transition probabilities of a period and of each time step |
+| [`ls.simulate.WeightsOfEvidence`](simulate.md#landschaft.simulate.WeightsOfEvidence) | Weights of evidence of land use transitions, calibrated on two maps (Dinamica EGO's method) |
+| [`ls.simulate.weights_of_evidence`](simulate.md#landschaft.simulate.weights_of_evidence) | Calibrate weights of evidence in one call: ``WeightsOfEvidence(ranges, **kwargs).fit(t0, t1, drivers)`` |
+| [`ls.simulate.LogisticRegression`](simulate.md#landschaft.simulate.LogisticRegression) | Logistic regression of the presence of each land use class on the drivers (lulcc's ``glmModels``) |
+| [`ls.simulate.Estimator`](simulate.md#landschaft.simulate.Estimator) | Potential of each class from a scikit-learn classifier, one model per class |
+| [`ls.simulate.MultiCriteria`](simulate.md#landschaft.simulate.MultiCriteria) | Potential from weighted factors, the weights from pairwise comparisons (AHP; MOLUSCE's MCE) |
+| [`ls.simulate.RasterPotential`](simulate.md#landschaft.simulate.RasterPotential) | A potential given as maps: one layer per class (or transition), as computed elsewhere |
+| [`ls.simulate.Model`](simulate.md#landschaft.simulate.Model) | A land change model: potential, demand, allocation and rules |
+| [`ls.simulate.Simulation`](simulate.md#landschaft.simulate.Simulation) | The maps of a simulation and what happened at each step |
+| [`ls.simulate.AreaDemand`](simulate.md#landschaft.simulate.AreaDemand) | Cells each class must cover at each time step (CLUE-S's demand) |
+| [`ls.simulate.Rules`](simulate.md#landschaft.simulate.Rules) | Decision rules of the allocation (lulcc's ``rules``, ``elas``, ``mask``, ``hist``, ``neighb``) |
+| [`ls.simulate.Neighbourhood`](simulate.md#landschaft.simulate.Neighbourhood) | Neighbourhood thresholds (lulcc's ``NeighbRasterStack`` and ``nb.rules``) |
+| [`ls.simulate.CLUE`](simulate.md#landschaft.simulate.CLUE) | CLUE-S allocation (Verburg et al. 2002), as lulcc's ``CluesModel`` |
+| [`ls.simulate.Ordered`](simulate.md#landschaft.simulate.Ordered) | The ordered allocation of Fuchs et al. (2013) with stochastic choice, as lulcc's ``OrderedModel`` |
+| [`ls.simulate.distance_to`](simulate.md#landschaft.simulate.distance_to) | Distance from each cell to the nearest cell of some classes |
+| [`ls.simulate.share_of`](simulate.md#landschaft.simulate.share_of) | Share of the cells around each cell that hold some classes |
+| [`ls.simulate.gravity_of`](simulate.md#landschaft.simulate.gravity_of) | Gravitational interaction potential of the cells of some classes |
+| [`ls.simulate.Regional`](simulate.md#landschaft.simulate.Regional) | A demand per region (municipalities, biomes, basins...) |
+| [`ls.simulate.CLUMondo`](simulate.md#landschaft.simulate.CLUMondo) | CLUMondo's demand-driven allocation of land systems |
+| [`ls.simulate.ServiceDemand`](simulate.md#landschaft.simulate.ServiceDemand) | The demand for goods and services at each time step (CLUMondo's ``demand.in``) |
+| [`ls.simulate.Supply`](simulate.md#landschaft.simulate.Supply) | What one cell of each land system supplies of each good or service (CLUMondo's ``lusmatrix``) |
+| [`ls.simulate.NeighbourhoodEffect`](simulate.md#landschaft.simulate.NeighbourhoodEffect) | CLUMondo's neighbourhood function (``neighmat.txt`` and ``alloc2.reg``) |
+| [`ls.simulate.LandSystemStack`](simulate.md#landschaft.simulate.LandSystemStack) | Binary layers, possibly overlapping, as land systems (bit masks) |
+| [`ls.simulate.Roles`](simulate.md#landschaft.simulate.Roles) | What each transition between land systems does to their layers |
+| [`ls.simulate.Cap`](simulate.md#landschaft.simulate.Cap) | At most so many cells (or so much area) a year may make a role's transitions (or given pairs) |
+| [`ls.simulate.Succession`](simulate.md#landschaft.simulate.Succession) | Autonomous change after some years, whatever the demand (CLUMondo's code 1000 + years) |
+| [`ls.simulate.ExpanderPatcher`](simulate.md#landschaft.simulate.ExpanderPatcher) | Dinamica's Expander and Patcher allocation of transitions (``AllocateTransitions``) |
+| [`ls.simulate.ContinuousPatcher`](simulate.md#landschaft.simulate.ContinuousPatcher) | New patches that take a stock (biomass, carbon, timber) up to a quota |
+| [`ls.simulate.StockAllocation`](simulate.md#landschaft.simulate.StockAllocation) | What `allocate` took |
+| [`ls.simulate.StockSimulation`](simulate.md#landschaft.simulate.StockSimulation) | What `run` did, step by step |
+| [`ls.simulate.RoadBuilder`](simulate.md#landschaft.simulate.RoadBuilder) | New roads each step, from the network towards attractive places |
+| [`ls.simulate.RoadDistance`](simulate.md#landschaft.simulate.RoadDistance) | Distance to a growing road network: a dynamic variable (see `dynamic`) |
+| [`ls.simulate.friction_cost`](simulate.md#landschaft.simulate.friction_cost) | Cost of reaching every cell from the nearest source over a friction surface |
+| [`ls.simulate.destinations`](simulate.md#landschaft.simulate.destinations) | Cells drawn by attraction in quadrants of a map |
+| [`ls.simulate.pathways`](simulate.md#landschaft.simulate.pathways) | Paths from source cells to a network down a cost surface |
+| [`ls.simulate.CARS`](simulate.md#landschaft.simulate.CARS) | PLUS's CA based on multi-type random patch seeds (Liang et al. 2021) |
+| [`ls.simulate.MolusceWoE`](simulate.md#landschaft.simulate.MolusceWoE) | MOLUSCE's weights of evidence (``WoeManager``): one model per transition, persistence included |
+| [`ls.simulate.MolusceCA`](simulate.md#landschaft.simulate.MolusceCA) | MOLUSCE's simulator: each iteration makes the observed transitions where the model is most confident |
+| [`ls.simulate.PatchGrowing`](simulate.md#landschaft.simulate.PatchGrowing) | FUTURES' patch growing allocation (r.futures.simulation) |
+| [`ls.simulate.DevelopmentDemand`](simulate.md#landschaft.simulate.DevelopmentDemand) | Cells each subregion develops at each step (r.futures.simulation's ``demand`` file) |
+| [`ls.simulate.DevelopmentPotential`](simulate.md#landschaft.simulate.DevelopmentPotential) | The development potential's coefficients per subregion (r.futures.potential's table) |
+| [`ls.simulate.development_pressure`](simulate.md#landschaft.simulate.development_pressure) | The development pressure of each cell (r.futures.devpressure) |
+| [`ls.simulate.Flooding`](simulate.md#landschaft.simulate.Flooding) | FUTURES' flood submodel (Sanchez et al. 2023): floods, damage, response, abandonment, migration |
+| [`ls.simulate.patch_library`](simulate.md#landschaft.simulate.patch_library) | The sizes of the patches developed between two maps (r.futures.calib's patch library) |
+| [`ls.simulate.calibrate_patches`](simulate.md#landschaft.simulate.calibrate_patches) | Calibrate FUTURES' patch compactness and discount factor (r.futures.calib) |
+| [`ls.simulate.three_map_comparison`](simulate.md#landschaft.simulate.three_map_comparison) | Compare the reference maps at the start and the end with the simulated end at several resolutions |
+| [`ls.simulate.ThreeMapComparison`](simulate.md#landschaft.simulate.ThreeMapComparison) | Three maps compared at several resolutions (lulcc's ``ThreeMapComparison``) |
+| [`ls.simulate.compare_maps`](simulate.md#landschaft.simulate.compare_maps) | MOLUSCE's comparison of two maps (``DependenceCoef``): kappa, agreement and dependence |
+| [`ls.simulate.error_budget`](simulate.md#landschaft.simulate.error_budget) | MOLUSCE's error budget (Pontius 2002): agreement for levels of information, at coarser resolutions |
+| [`ls.simulate.futures_validation`](simulate.md#landschaft.simulate.futures_validation) | FUTURES' validation (``r.futures.validation``): disagreement, kappa, kappa simulation, change metrics |
+| [`ls.simulate.futures_validation_grid`](simulate.md#landschaft.simulate.futures_validation_grid) | FUTURES' validation per tile or per region (``r.futures.gridvalidation``) |
+| [`ls.simulate.fuzzy_similarity`](simulate.md#landschaft.simulate.fuzzy_similarity) | Fuzzy similarity of two categorical maps (Dinamica EGO's ``CalcReciprocalSimilarityMap``) |
+| [`ls.simulate.FuzzySimilarity`](simulate.md#landschaft.simulate.FuzzySimilarity) | The fuzzy similarity of two maps (`fuzzy_similarity`) |
+| [`ls.simulate.differences`](simulate.md#landschaft.simulate.differences) | The map of differences: each cell that changed between the maps, in its new class; NaN elsewhere |
+| [`ls.simulate.similarity_of_differences`](simulate.md#landschaft.simulate.similarity_of_differences) | Dinamica EGO's validation: fuzzy similarity of the observed and the simulated change, per window |
+| [`ls.simulate.validate`](simulate.md#landschaft.simulate.validate) | Compare a simulated map with the observed one in every way the land change tools do |
+| [`ls.simulate.Validation`](simulate.md#landschaft.simulate.Validation) | Every comparison of a simulated map with the observed one (`validate`) |
+| [`ls.simulate.calibrate`](simulate.md#landschaft.simulate.calibrate) | Search the settings of a model that best reproduce an observed map |
+| [`ls.simulate.Calibration`](simulate.md#landschaft.simulate.Calibration) | The result of `calibrate` |
+| [`ls.simulate.run`](simulate.md#landschaft.simulate.run) | Fit a land change model on two maps, check it on the observed period and project it |
+| [`ls.simulate.Projection`](simulate.md#landschaft.simulate.Projection) | The result of `run` |
+| [`ls.simulate.agreement`](simulate.md#landschaft.simulate.agreement) | How a simulated map matches the observed one, cell by cell and in quantity |
+| [`ls.simulate.presets`](simulate.md#landschaft.simulate.presets) | The classic land change models, assembled from ls.simulate's pieces |
+| [`ls.simulate.terraflux`](simulate.md#landschaft.simulate.terraflux) | Run a Terraflux model with the ``terraflux`` command; the simulated maps ``(step, y, x)`` |
+| [`ls.simulate.scenarios`](simulate.md#landschaft.simulate.scenarios) | Run a model under several scenarios, several times each, in parallel |
+| [`ls.simulate.Ensemble`](simulate.md#landschaft.simulate.Ensemble) | The simulations of `scenarios`: every scenario, replicate and year |
+| [`ls.simulate.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |
 
 ### Map accuracy & area
 
@@ -843,25 +847,25 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
 | Name | Summary |
 |---|---|
-| [`ls.carbon`](services.md#landschaft.services.carbon) | Carbon storage of a landscape and its change between two maps (InVEST's carbon model) |
-| [`ls.Carbon`](services.md#landschaft.services.Carbon) | Carbon stored in a landscape, and its change (`carbon`) |
-| [`ls.valuation_constant`](services.md#landschaft.services.valuation_constant) | The factor turning a change in carbon into its net present value (InVEST's) |
-| [`ls.emissions`](services.md#landschaft.services.emissions) | The carbon emitted and removed by land change over a series of maps (the IPCC's stock-difference method) |
-| [`ls.Emissions`](services.md#landschaft.services.Emissions) | The carbon emitted and removed along a series of land use maps (`emissions`) |
-| [`ls.water_yield`](services.md#landschaft.services.water_yield) | Annual water yield, consumption and hydropower value (InVEST's annual water yield model) |
-| [`ls.WaterYield`](services.md#landschaft.services.WaterYield) | Annual water yield of a landscape (`water_yield`) |
-| [`ls.seasonal_water_yield`](services.md#landschaft.services.seasonal_water_yield) | Quickflow, local recharge and baseflow by month and year (InVEST's seasonal water yield model) |
-| [`ls.SeasonalWaterYield`](services.md#landschaft.services.SeasonalWaterYield) | Quickflow, recharge and baseflow of a landscape (`seasonal_water_yield`) |
-| [`ls.sdr`](services.md#landschaft.services.sdr) | Sediment export, deposition and retention (InVEST's sediment delivery ratio model) |
-| [`ls.SDR`](services.md#landschaft.services.SDR) | Sediment export and retention of a landscape (`sdr`) |
-| [`ls.ndr`](services.md#landschaft.services.ndr) | Nutrient export and retention (InVEST's nutrient delivery ratio model) |
-| [`ls.NDR`](services.md#landschaft.services.NDR) | Nutrient export and retention of a landscape (`ndr`) |
-| [`ls.habitat_quality`](services.md#landschaft.services.habitat_quality) | Habitat degradation, quality and rarity (InVEST's habitat quality model) |
-| [`ls.HabitatQuality`](services.md#landschaft.services.HabitatQuality) | Habitat degradation, quality and rarity (`habitat_quality`) |
-| [`ls.pollination`](services.md#landschaft.services.pollination) | Pollinator abundance and crop pollination (InVEST's crop pollination model) |
-| [`ls.Pollination`](services.md#landschaft.services.Pollination) | Pollinator supply and abundance, and the yield of farms (`pollination`) |
-| [`ls.coastal_vulnerability`](services.md#landschaft.services.coastal_vulnerability) | Exposure of the coast to erosion and flooding (InVEST's coastal vulnerability model) |
-| [`ls.CoastalVulnerability`](services.md#landschaft.services.CoastalVulnerability) | Exposure of the coast to erosion and flooding (`coastal_vulnerability`) |
+| [`ls.services.carbon`](services.md#landschaft.services.carbon) | Carbon storage of a landscape and its change between two maps (InVEST's carbon model) |
+| [`ls.services.Carbon`](services.md#landschaft.services.Carbon) | Carbon stored in a landscape, and its change (`carbon`) |
+| [`ls.services.valuation_constant`](services.md#landschaft.services.valuation_constant) | The factor turning a change in carbon into its net present value (InVEST's) |
+| [`ls.services.emissions`](services.md#landschaft.services.emissions) | The carbon emitted and removed by land change over a series of maps (the IPCC's stock-difference method) |
+| [`ls.services.Emissions`](services.md#landschaft.services.Emissions) | The carbon emitted and removed along a series of land use maps (`emissions`) |
+| [`ls.services.water_yield`](services.md#landschaft.services.water_yield) | Annual water yield, consumption and hydropower value (InVEST's annual water yield model) |
+| [`ls.services.WaterYield`](services.md#landschaft.services.WaterYield) | Annual water yield of a landscape (`water_yield`) |
+| [`ls.services.seasonal_water_yield`](services.md#landschaft.services.seasonal_water_yield) | Quickflow, local recharge and baseflow by month and year (InVEST's seasonal water yield model) |
+| [`ls.services.SeasonalWaterYield`](services.md#landschaft.services.SeasonalWaterYield) | Quickflow, recharge and baseflow of a landscape (`seasonal_water_yield`) |
+| [`ls.services.sdr`](services.md#landschaft.services.sdr) | Sediment export, deposition and retention (InVEST's sediment delivery ratio model) |
+| [`ls.services.SDR`](services.md#landschaft.services.SDR) | Sediment export and retention of a landscape (`sdr`) |
+| [`ls.services.ndr`](services.md#landschaft.services.ndr) | Nutrient export and retention (InVEST's nutrient delivery ratio model) |
+| [`ls.services.NDR`](services.md#landschaft.services.NDR) | Nutrient export and retention of a landscape (`ndr`) |
+| [`ls.services.habitat_quality`](services.md#landschaft.services.habitat_quality) | Habitat degradation, quality and rarity (InVEST's habitat quality model) |
+| [`ls.services.HabitatQuality`](services.md#landschaft.services.HabitatQuality) | Habitat degradation, quality and rarity (`habitat_quality`) |
+| [`ls.services.pollination`](services.md#landschaft.services.pollination) | Pollinator abundance and crop pollination (InVEST's crop pollination model) |
+| [`ls.services.Pollination`](services.md#landschaft.services.Pollination) | Pollinator supply and abundance, and the yield of farms (`pollination`) |
+| [`ls.services.coastal_vulnerability`](services.md#landschaft.services.coastal_vulnerability) | Exposure of the coast to erosion and flooding (InVEST's coastal vulnerability model) |
+| [`ls.services.CoastalVulnerability`](services.md#landschaft.services.CoastalVulnerability) | Exposure of the coast to erosion and flooding (`coastal_vulnerability`) |
 
 ### Uncertainty
 

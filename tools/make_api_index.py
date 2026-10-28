@@ -24,7 +24,7 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("landscape-metrics.md", "Landscape metrics", ":material-chart-box-outline:",
           "Patch, class and landscape metrics; windows, plots, zones, time series."),
          ("networks.md", "Habitat networks", ":material-graph-outline:",
-          "Habitat graphs, IIC/PC/ECA, importance, ProtConn, grids, MSPA networks."),
+          "Habitat graphs, IIC/PC/ECA, importance, ProtConn, grids, metapopulations, MSPA networks."),
          ("circuits.md", "Circuit connectivity", ":material-lightning-bolt-outline:",
           "Omniscape and Circuitscape: current, resistance distance, networks."),
          ("surface.md", "Surface metrics", ":material-terrain:",
@@ -48,7 +48,7 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("prioritization.md", "Spatial prioritization", ":material-star-circle-outline:",
           "Zonation's ranking of the cells for conservation: rules, weights, costs, curves."),
          ("sdm.md", "Species distributions", ":material-map-search-outline:",
-          "Clean records, choose predictors and background, spatial folds, fit, evaluate, project."),
+          "Clean records, choose predictors and background, spatial folds, fit, evaluate, project, disperse."),
          ("simulate.md", "Land change simulation", ":material-timeline-clock-outline:",
           "Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation."),
          ("accuracy.md", "Map accuracy & area", ":material-target:",
@@ -148,7 +148,17 @@ def prefix(ident: str) -> str:
         return "ls.hydro."
     if ".circuit." in ident and name != "omniscape":
         return "circuit."
-    return "ls."
+    import landschaft
+
+    if getattr(landschaft, name, None) is resolve(ident):
+        return "ls."
+    # a submodule's name that ls does not re-export: ls.sdm.thin, ls.prioritize.zonation...
+    parts = [p for p in ident.split(".")[1:-1] if not p.startswith("_")]
+    obj = landschaft
+    for p in [*parts, name]:
+        obj = getattr(obj, p, None)
+    # (a module a function of the same name hides, as ls.batch: its full path)
+    return ("ls." if obj is resolve(ident) else "landschaft.") + "".join(p + "." for p in parts)
 
 
 def main() -> None:

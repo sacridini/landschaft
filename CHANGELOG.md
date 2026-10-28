@@ -58,6 +58,16 @@ in a new major version.
   observer and target heights, a radius and the earth's curvature, as `raster.viewshed`; the observers in parallel),
   `ls.zonal_map` (every cell given its zone's statistic) and `ls.tabulate_area` (the area of every class in every
   zone: cells, area, hectares or shares, as `raster.tabulate`). C++ with OpenMP.
+- `ls.sdm.migrate`: a species' dispersal through the habitat suitability of successive periods, MigClim 1.6's
+  cellular automaton (as Terraflux's `sdm.migrate`): the dispersal kernel, the cells' maturity and propagule
+  production, weak or strong barriers, long-distance dispersal, a threshold of suitability; MigClim's final map,
+  every step's state and its statistics, the same bits as MigClim 1.6.2 for a seed (Microsoft's C runtime `rand()`).
+  C++.
+- `ls.conn.metapopulation`: a metapopulation in a network of habitat patches over time, Hanski's incidence function
+  model as R's MetaLandSim 2.0 (`spom`) iterates it (as Terraflux's `conn.metapopulation`): exponential or power
+  kernels, connectivity with or without the patch's area, logistic, exponential or power colonisation, extinction
+  by area with or without the rescue effect; the occupancy of every step, the patches' incidence, the same run as
+  R's for a seed. C++.
 
 ### Removed
 - `RUST_PORT.md`: the plan to port the C++ core to Rust is dropped.

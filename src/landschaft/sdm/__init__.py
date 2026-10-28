@@ -40,6 +40,7 @@ from ._folds import (
 from ._gbif import download_gbif
 from ._habitat import HabitatAreas, area_of_habitat, cell_area_km2
 from ._maxnet import MaxNet
+from ._migrate import Migration, migrate
 from ._models import SDMResult, fit, importance, predict, response_curves
 from ._predictors import select_predictors, vif
 from ._prepare import prepare
@@ -50,6 +51,7 @@ __all__ = [
     "Evaluation",
     "HabitatAreas",
     "MaxNet",
+    "Migration",
     "SDMData",
     "SDMResult",
     "accessible_area",
@@ -71,6 +73,7 @@ __all__ = [
     "fit",
     "jackknife_folds",
     "mess",
+    "migrate",
     "mop",
     "omission_rate",
     "one_per_cell",
