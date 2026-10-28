@@ -144,6 +144,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Verra's VT0007 as UDef-ARP: risk threshold, vulnerability, fit, allocation, assessment.
 
+-   :material-gavel:{ .lg .middle } **[Brazil's Forest Code](forest_code.md)**
+
+    ---
+
+    APPs of rivers, lakes, springs, slopes, hilltops; the Reserva Legal's balance per property.
+
 -   :material-leaf-circle-outline:{ .lg .middle } **[Ecosystem services](services.md)**
 
     ---
@@ -820,6 +826,18 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.redd.Allocation`](redd.md#landschaft.redd.Allocation) | VT0007's allocation of the expected deforestation (`allocate`) |
 | [`ls.redd.assess`](redd.md#landschaft.redd.assess) | VT0007's assessment of an allocation (UDef-ARP's model evaluation) |
 | [`ls.redd.Assessment`](redd.md#landschaft.redd.Assessment) | VT0007's assessment of an allocation (`assess`) |
+
+### Brazil's Forest Code
+
+| Name | Summary |
+|---|---|
+| [`ls.forest_code.app`](forest_code.md#landschaft.forest_code.app) | The Áreas de Preservação Permanente of Brazil's Forest Code (Lei 12.651/2012, art. 4) |
+| [`ls.forest_code.APP`](forest_code.md#landschaft.forest_code.APP) | The Áreas de Preservação Permanente of a map (`app`) |
+| [`ls.forest_code.river_margin`](forest_code.md#landschaft.forest_code.river_margin) | Art. 4, I: the margin of a river of a width (metres): 30 m below 10 m wide, 50 to 50, 100 to 200, 200 to 600, 500 |
+| [`ls.forest_code.consolidated_river`](forest_code.md#landschaft.forest_code.consolidated_river) | Art. 61-A, §§ 1-4: a river's margin in a consolidated area by the property's fiscal modules |
+| [`ls.forest_code.consolidated_lake`](forest_code.md#landschaft.forest_code.consolidated_lake) | Art. 61-A, § 6: a lake's margin in a consolidated area: 5, 8, 15 m up to 1, 2, 4 modules; 30 m beyond |
+| [`ls.forest_code.reserve`](forest_code.md#landschaft.forest_code.reserve) | The balance of every rural property's Reserva Legal (Lei 12.651/2012) |
+| [`ls.forest_code.ReservaLegal`](forest_code.md#landschaft.forest_code.ReservaLegal) | The Reserva Legal's balance of every rural property (`reserve`) |
 
 ### Ecosystem services
 

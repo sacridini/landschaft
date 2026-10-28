@@ -44,6 +44,12 @@ in a new major version.
   a map of vulnerability), `fit` (the relative frequency per class and subdivision, the fitted density), `allocate`
   (the activity data or a period's deforestation, never above a cell, a region the fit lacks filled from its class)
   and `assess` (the assessment grid: MAE, median error, intersection over union, R², OLS and Theil-Sen lines).
+- `ls.forest_code`: Brazil's Forest Code (Lei 12.651/2012), as Terraflux's `forest_code.*`: `app` (the APPs of
+  art. 4: the margins of rivers by their width and of natural lakes by their area, springs, veredas, slopes above
+  45°, hilltops, land above 1,800 m and protected classes; art. 61-A's narrower margins in the areas consolidated by
+  2008 by the property's fiscal modules; exact distances from cell centres) and `reserve` (the Reserva Legal's
+  balance of every property: art. 12's shares, as a number or a map, art. 15's APP counted, art. 67's small
+  properties; deficit and surplus per property and as a map).
 - Raster tools from Terraflux: `ls.stats.cell_stats` (a statistic of a stack's layers at every cell, the statistics
   of `zonal_stats` and `argmax` / `argmin`, the layer of the largest or smallest value, as `stack.reduce`),
   `ls.stats.local_correlation` (Pearson's correlation, slope, intercept and r² of two maps in a moving window, square

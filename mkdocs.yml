@@ -212,6 +212,7 @@ nav:
       - Land change simulation: api/simulate.md
       - Map accuracy & area: api/accuracy.md
       - Deforestation allocation (VT0007): api/redd.md
+      - Brazil's Forest Code: api/forest_code.md
       - Ecosystem services: api/services.md
       - Uncertainty: api/uncertainty.md
       - Sensitivity analysis: api/sensitivity.md
