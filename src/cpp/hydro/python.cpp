@@ -289,6 +289,42 @@ void register_python(py::module_& m) {
         return to_raster(std::move(out), ny, nx);
     }, py::arg("dir"), py::arg("targets"), py::arg("dx"), py::arg("dy"),
        "Length of the D8 path from each cell to the first target cell.");
+
+    using Index = py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>;
+    m.def("hydro_river_distances", [](const Index& down, const Array& step, const Index& cells) {
+        if (down.size() != step.size()) throw std::invalid_argument("down and step differ in size");
+        const i64 n = static_cast<i64>(down.size()), p = static_cast<i64>(cells.size());
+        for (i64 i = 0; i < p; ++i)
+            if (cells.data()[i] >= n) throw std::invalid_argument("a point's cell is off the grid");
+        RiverDistances r;
+        {
+            py::gil_scoped_release release;
+            r = river_distances(down.data(), step.data(), n, cells.data(), p);
+        }
+        return py::make_tuple(py::array_t<double>(static_cast<py::ssize_t>(r.network.size()), r.network.data()),
+                              py::array_t<std::uint8_t>(static_cast<py::ssize_t>(r.connected.size()),
+                                                        r.connected.data()),
+                              py::array_t<std::uint8_t>(static_cast<py::ssize_t>(r.flow.size()), r.flow.data()));
+    }, py::arg("down"), py::arg("step"), py::arg("cells"),
+       "Distances along the network between every two points: (network, connected, flow) by pair (i, j > i).");
+
+    m.def("hydro_along_network", [](const Index& down, const Array& step, const Mask& on, const Index& cells,
+                                     double upstream, double downstream) {
+        if (down.size() != step.size() || down.size() != on.size())
+            throw std::invalid_argument("down, step and on differ in size");
+        const i64 n = static_cast<i64>(down.size()), p = static_cast<i64>(cells.size());
+        for (i64 i = 0; i < p; ++i)
+            if (cells.data()[i] >= n) throw std::invalid_argument("a point's cell is off the grid");
+        py::array_t<std::int32_t> label(static_cast<py::ssize_t>(n));
+        py::array_t<double> dist(static_cast<py::ssize_t>(n));
+        {
+            py::gil_scoped_release release;
+            along_network(down.data(), step.data(), on.data(), n, cells.data(), p, upstream, downstream,
+                          label.mutable_data(), dist.mutable_data());
+        }
+        return py::make_tuple(label, dist);
+    }, py::arg("down"), py::arg("step"), py::arg("on"), py::arg("cells"), py::arg("upstream"),
+       py::arg("downstream"), "The stretches of river up and down from each point: (point 1.., distance).");
 }
 
 }  // namespace hydro

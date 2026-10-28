@@ -120,4 +120,22 @@ std::vector<std::int32_t> watersheds(const std::int8_t* dir, const std::int32_t*
 std::vector<double> flow_distance(const std::int8_t* dir, const std::uint8_t* targets, int ny, int nx, double dx,
                                   double dy);
 
+// Rivers as a network, on `down` (the cell each cell drains to, -1 none) and `step` (the
+// length of the step from each cell to it).
+//
+// The distance along the network between every two points (cells; -1 off the network),
+// the pairs (i, j > i) in a row: down from each to the first cell their paths share (NaN
+// and connected 0 when none), flow 1 when that cell is one of theirs.
+struct RiverDistances {
+    std::vector<double> network;
+    std::vector<std::uint8_t> connected, flow;
+};
+RiverDistances river_distances(const i64* down, const double* step, i64 n, const i64* cells, i64 p);
+
+// The stretches of river within `downstream` down the path of each point and within
+// `upstream` up the stream cells (`on`) flowing into it: each cell's nearest point along
+// the network (1.., 0 none) and its distance (infinity none).
+void along_network(const i64* down, const double* step, const std::uint8_t* on, i64 n, const i64* cells, i64 p,
+                   double upstream, double downstream, std::int32_t* label, double* dist);
+
 }  // namespace hydro

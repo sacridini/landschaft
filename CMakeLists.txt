@@ -170,6 +170,7 @@ add_library(hydrocore STATIC
     src/cpp/hydro/breach.cpp
     src/cpp/hydro/hydro.cpp
     src/cpp/hydro/mfd.cpp
+    src/cpp/hydro/rivers.cpp
 )
 target_include_directories(hydrocore PUBLIC src/cpp)
 set_target_properties(hydrocore PROPERTIES POSITION_INDEPENDENT_CODE ON)

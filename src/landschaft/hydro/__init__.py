@@ -14,15 +14,19 @@ Typical use::
     links, reaches = ls.hydro.stream_links(filled, rivers)
     basins = ls.hydro.watersheds(filled, links)
     wetness = ls.hydro.twi(filled)
+    forest_upstream = ls.hydro.upstream(filled, links=links, classes=landcover).table
 """
 
 from ._flow import (D8_CODES, breach, distance_to_channel, fill, flow_accumulation, flow_direction, hand,
                     streams)
 from ._basins import snap_outlets, stream_links, watersheds
 from ._indices import spi, sti, twi
+from ._rivers import (DCI, Catchments, NetworkReach, Upstream, along_network, centrality, dci, network_distance,
+                      snap_points, upstream, upstream_catchment)
 from ..services._sdr import connectivity_index
 from . import swat
 
-__all__ = ["D8_CODES", "breach", "connectivity_index", "distance_to_channel", "fill", "flow_accumulation",
-           "flow_direction", "hand", "snap_outlets", "spi", "sti", "stream_links", "streams", "swat", "twi",
-           "watersheds"]
+__all__ = ["D8_CODES", "DCI", "Catchments", "NetworkReach", "Upstream", "along_network", "breach", "centrality",
+           "connectivity_index", "dci", "distance_to_channel", "fill", "flow_accumulation", "flow_direction", "hand",
+           "network_distance", "snap_outlets", "snap_points", "spi", "sti", "stream_links", "streams", "swat", "twi",
+           "upstream", "upstream_catchment", "watersheds"]

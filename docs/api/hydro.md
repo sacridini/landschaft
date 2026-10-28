@@ -63,6 +63,38 @@ delineation steps of the watershed model (see
 
 ::: landschaft.hydro.snap_outlets
 
+## Rivers as a network
+
+The tools of hydrographr on the Hydrography90m and of R's riverconn, on the D8
+directions: points (gauges, dams, records) moved onto the streams, the land
+upstream of every link or point summarised (the mean slope, the share of
+forest upstream), the catchment of every point as a polygon, distances along
+the river between points, the stretches up and down the river from each point,
+the centrality of the links, and the dendritic connectivity index of a network
+cut by barriers (Cote et al. 2009) with the gain of removing each barrier.
+
+::: landschaft.hydro.snap_points
+
+::: landschaft.hydro.upstream
+
+::: landschaft.hydro.Upstream
+
+::: landschaft.hydro.upstream_catchment
+
+::: landschaft.hydro.Catchments
+
+::: landschaft.hydro.network_distance
+
+::: landschaft.hydro.along_network
+
+::: landschaft.hydro.NetworkReach
+
+::: landschaft.hydro.centrality
+
+::: landschaft.hydro.dci
+
+::: landschaft.hydro.DCI
+
 ## Height above the nearest drainage
 
 ::: landschaft.hydro.hand

@@ -68,6 +68,16 @@ in a new major version.
   kernels, connectivity with or without the patch's area, logistic, exponential or power colonisation, extinction
   by area with or without the rescue effect; the occupancy of every step, the patches' incidence, the same run as
   R's for a seed. C++.
+- Rivers as a network in `ls.hydro`, as Terraflux's `hydro.snap`, `hydro.upstream`, `hydro.upstream_catchment`,
+  `hydro.network_distance`, `hydro.along_network`, `hydro.centrality` and `hydro.dci` (hydrographr's tools on the
+  Hydrography90m, R's riverconn): `snap_points` (points moved onto the nearest stream cell, or the nearest of a
+  minimum flow accumulation), `upstream` (the land upstream of every link or point: the statistics of maps and the
+  share of each class, as the D8 accumulation sums them), `upstream_catchment` (every point's catchment as a polygon,
+  and the nested catchments), `network_distance` (distances along the river between every two points, and whether
+  one drains into the other), `along_network` (the stretches of river within a distance up and down from each
+  point), `centrality` (the links' degree, Shreve magnitude, length upstream, betweenness and closeness) and `dci`
+  (the dendritic connectivity index of a network cut by barriers, potamodromous and diadromous, every segment's
+  reach and the gain of removing each barrier: riverconn 0.3 to 1e-12). The walks along the network in C++.
 
 ### Removed
 - `RUST_PORT.md`: the plan to port the C++ core to Rust is dropped.

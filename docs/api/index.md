@@ -70,7 +70,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     ---
 
-    Filling, flow directions and accumulation, streams, watersheds, HAND, wetness indices.
+    Filling, flow directions and accumulation, streams, watersheds, HAND, wetness indices, river networks.
 
 -   :material-water-outline:{ .lg .middle } **[Watershed model (SWAT+)](swat.md)**
 
@@ -417,6 +417,17 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.hydro.stream_links`](hydro.md#landschaft.hydro.stream_links) | The links of a stream network: the stretches between sources, junctions and outlets |
 | [`ls.hydro.watersheds`](hydro.md#landschaft.hydro.watersheds) | The area draining to each seed: every cell labelled with the first seed below it |
 | [`ls.hydro.snap_outlets`](hydro.md#landschaft.hydro.snap_outlets) | The stream cell each outlet point stands for |
+| [`ls.hydro.snap_points`](hydro.md#landschaft.hydro.snap_points) | Points moved onto the stream network, as hydrographr's ``snap_to_network`` |
+| [`ls.hydro.upstream`](hydro.md#landschaft.hydro.upstream) | The land upstream of every link of a stream network, or of every point on it, summarised |
+| [`ls.hydro.Upstream`](hydro.md#landschaft.hydro.Upstream) | The land upstream of links or points (`upstream`) |
+| [`ls.hydro.upstream_catchment`](hydro.md#landschaft.hydro.upstream_catchment) | The catchment of every point (a gauge, a dam, a site), as hydrographr's ``get_upstream_catchment`` |
+| [`ls.hydro.Catchments`](hydro.md#landschaft.hydro.Catchments) | The catchments of points (`upstream_catchment`) |
+| [`ls.hydro.network_distance`](hydro.md#landschaft.hydro.network_distance) | The distance along the river network between every two points, as hydrographr's ``get_distance`` |
+| [`ls.hydro.along_network`](hydro.md#landschaft.hydro.along_network) | The stretches of river up and down from every point within a distance along the network |
+| [`ls.hydro.NetworkReach`](hydro.md#landschaft.hydro.NetworkReach) | The stretches of river up and down from points (`along_network`) |
+| [`ls.hydro.centrality`](hydro.md#landschaft.hydro.centrality) | The place of every link in its river network, as hydrographr's ``get_centrality`` on the graph of the links |
+| [`ls.hydro.dci`](hydro.md#landschaft.hydro.dci) | The dendritic connectivity index of a river network cut by barriers (Cote et al. 2009), as R's riverconn |
+| [`ls.hydro.DCI`](hydro.md#landschaft.hydro.DCI) | The dendritic connectivity index of a river network cut by barriers (`dci`) |
 | [`ls.hydro.hand`](hydro.md#landschaft.hydro.hand) | Height Above the Nearest Drainage (HAND; Rennó et al. 2008, Nobre et al. 2011) |
 | [`ls.hydro.twi`](hydro.md#landschaft.hydro.twi) | Topographic wetness index: ln(a / tan(slope)) (Beven & Kirkby 1979) |
 | [`ls.hydro.spi`](hydro.md#landschaft.hydro.spi) | Stream power index: a · tan(slope) (Moore, Grayson & Ladson 1991), the erosive power of overland flow |
