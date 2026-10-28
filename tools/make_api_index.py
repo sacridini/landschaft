@@ -17,6 +17,8 @@ API = ROOT / "docs" / "api"
 
 PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
           "Read, write and reclassify rasters, collections, colour tables, threads."),
+         ("download.md", "Data on demand", ":material-cloud-download-outline:",
+          "WorldClim, CHELSA, Copernicus DEM, SoilGrids, MapBiomas, Hydrography90m, STAC, onto a map's grid."),
          ("patterns.md", "Habitat patterns", ":material-shape-outline:",
           "MSPA, SPA, objects by size, parcels and contortion."),
          ("fragmentation.md", "Fragmentation", ":material-view-grid-outline:",
@@ -142,6 +144,8 @@ def prefix(ident: str) -> str:
         return "ls.sensitivity."
     if ".stats." in ident:
         return "ls.stats."
+    if ".download." in ident:
+        return "ls.download."
     if ".hydro.swat." in ident:
         return "ls.hydro.swat."
     if ".hydro." in ident:

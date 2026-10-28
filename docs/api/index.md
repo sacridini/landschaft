@@ -30,6 +30,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Read, write and reclassify rasters, collections, colour tables, threads.
 
+-   :material-cloud-download-outline:{ .lg .middle } **[Data on demand](download.md)**
+
+    ---
+
+    WorldClim, CHELSA, Copernicus DEM, SoilGrids, MapBiomas, Hydrography90m, STAC, onto a map's grid.
+
 -   :material-shape-outline:{ .lg .middle } **[Habitat patterns](patterns.md)**
 
     ---
@@ -224,6 +230,21 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.set_default_threads`](data.md#landschaft.set_default_threads) | Set the default thread count of every parallel function for this process |
 | [`ls.max_threads`](data.md#landschaft.max_threads) | Number of processors the compiled core can use |
 | [`ls.doctor`](data.md#landschaft.doctor) | Print what landschaft finds on this computer |
+
+### Data on demand
+
+| Name | Summary |
+|---|---|
+| [`ls.download.worldclim`](download.md#landschaft.download.worldclim) | WorldClim 2.1's climate on a grid: the historical climate (1970-2000) or a CMIP6 future |
+| [`ls.download.chelsa`](download.md#landschaft.download.chelsa) | CHELSA 2.1's bioclimatic variables on a grid: 1981-2010, or a CMIP6 future |
+| [`ls.download.copernicus_dem`](download.md#landschaft.download.copernicus_dem) | The Copernicus DEM (GLO-30 or GLO-90) on a grid, from its tiles of a degree over the grid |
+| [`ls.download.soilgrids`](download.md#landschaft.download.soilgrids) | SoilGrids 2.0's properties on a grid, at depths |
+| [`ls.download.mapbiomas`](download.md#landschaft.download.mapbiomas) | MapBiomas Brazil's land use and cover of years on a grid (collections 9, 10 and 11) |
+| [`ls.download.hydrography90m`](download.md#landschaft.download.hydrography90m) | Hydrography90m (Amatulli et al. 2022) on a grid: the river network of the world at 90 m |
+| [`ls.download.environment90m`](download.md#landschaft.download.environment90m) | The environment of every sub-catchment of a map of Hydrography90m's sub-catchments, from Environment90m |
+| [`ls.download.Environment90m`](download.md#landschaft.download.Environment90m) | The environment of Hydrography90m's sub-catchments (`environment90m`) |
+| [`ls.download.raster`](download.md#landschaft.download.raster) | Any raster GDAL reads (a URL, a file), or several, warped onto a grid; only the part the grid covers is read |
+| [`ls.download.stac`](download.md#landschaft.download.stac) | The scenes of a STAC catalogue over a grid, each asset warped onto it and the scenes combined |
 
 ### Habitat patterns
 

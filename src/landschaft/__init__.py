@@ -36,6 +36,7 @@ from .collection import RasterCollection, RasterInfo
 from . import conn
 from .conn import HabitatGraph
 from . import cost
+from . import download
 from . import forest_code
 from .contagion import clustering_fac, contagion_pff
 from .datasets import EXAMPLE_DATA, example_data
@@ -219,6 +220,7 @@ __all__ = [
     "bio",
     "circuit",
     "cost",
+    "download",
     "forest_code",
     "nlm",
     "prioritize",

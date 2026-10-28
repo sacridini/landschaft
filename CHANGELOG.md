@@ -7,6 +7,15 @@ in a new major version.
 ## [Unreleased]
 
 ### Added
+- `ls.download`: data downloaded on demand onto the grid of a map (or of an extent in longitudes and latitudes),
+  as Terraflux's `data.*`: `worldclim` and `chelsa` (WorldClim 2.1 and CHELSA 2.1, now and under CMIP6's models,
+  scenarios and periods), `copernicus_dem` (30 or 90 m, its tiles mosaicked), `soilgrids` (SoilGrids 2.0's
+  properties, depths and quantiles), `mapbiomas` (Brazil's collections, any years), `hydrography90m` (streams,
+  sub-catchments, basins, terrain), `raster` (any URL or path) and `stac` (the scenes of a STAC catalogue for some
+  dates, a query and cloud filter, their median, mean, min, max or first; links signed by a function, as Planetary Computer's), plus
+  `environment90m` (Environment90m's climate, land cover and soil statistics of Hydrography90m's sub-catchments, as
+  a table or a map). GDAL reads only the part of each file the grid covers; the warped layers are kept in the cache
+  and read again, not downloaded.
 - `ls.services.emissions`: the carbon emitted and removed by land change over a series of maps (the IPCC's
   stock-difference method), as Terraflux's `carbon.emissions`: every cell's stock at every date from its class (a
   stock per class, or a curve of regrowth, Chapman-Richards or linear, from the date the class appeared in the cell),

@@ -192,6 +192,7 @@ nav:
   - API reference:
       - api/index.md
       - Data & configuration: api/data.md
+      - Data on demand: api/download.md
       - Habitat patterns: api/patterns.md
       - Fragmentation: api/fragmentation.md
       - Landscape metrics: api/landscape-metrics.md
