@@ -774,6 +774,8 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.carbon`](services.md#landschaft.services.carbon) | Carbon storage of a landscape and its change between two maps (InVEST's carbon model) |
 | [`ls.Carbon`](services.md#landschaft.services.Carbon) | Carbon stored in a landscape, and its change (`carbon`) |
 | [`ls.valuation_constant`](services.md#landschaft.services.valuation_constant) | The factor turning a change in carbon into its net present value (InVEST's) |
+| [`ls.emissions`](services.md#landschaft.services.emissions) | The carbon emitted and removed by land change over a series of maps (the IPCC's stock-difference method) |
+| [`ls.Emissions`](services.md#landschaft.services.Emissions) | The carbon emitted and removed along a series of land use maps (`emissions`) |
 | [`ls.water_yield`](services.md#landschaft.services.water_yield) | Annual water yield, consumption and hydropower value (InVEST's annual water yield model) |
 | [`ls.WaterYield`](services.md#landschaft.services.WaterYield) | Annual water yield of a landscape (`water_yield`) |
 | [`ls.seasonal_water_yield`](services.md#landschaft.services.seasonal_water_yield) | Quickflow, local recharge and baseflow by month and year (InVEST's seasonal water yield model) |

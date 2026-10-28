@@ -20,6 +20,17 @@ they are, and the results come on the grid they were computed on.
 
 ::: landschaft.services.valuation_constant
 
+## Emissions and removals of land change
+
+The carbon of a series of land use maps by the IPCC's stock-difference method:
+a stock per class, or a curve of regrowth from the date a class appeared in a
+cell (Chapman-Richards or linear, for secondary forest); emissions and removals
+by period, by transition and by cell.
+
+::: landschaft.services.emissions
+
+::: landschaft.services.Emissions
+
 ## Annual water yield and hydropower
 
 ::: landschaft.services.water_yield

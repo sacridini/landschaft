@@ -37,10 +37,15 @@ Typical use::
                                            model_resolution=250, max_fetch_distance=12000,
                                            dem_averaging_radius=1000)
     cv.exposure                                # exposure index of the shore points, with and without habitats
+
+    em = ls.services.emissions(ls.load_raster("lulc_2000_2010_2020.tif"), {1: 150, 2: 10, 3: 40},
+                               regrowth={3: {"max": 120, "rate": 0.05}})
+    em.periods                                 # emissions and removals of land change, t CO2 per period
 """
 
 from ._carbon import Carbon, carbon, valuation_constant
 from ._coastal import CoastalVulnerability, coastal_vulnerability
+from ._emissions import Emissions, emissions
 from ._habitat import HabitatQuality, habitat_quality
 from ._ndr import NDR, ndr
 from ._pollination import Pollination, pollination
@@ -48,6 +53,6 @@ from ._sdr import SDR, sdr
 from ._swy import SeasonalWaterYield, seasonal_water_yield
 from ._water import WaterYield, water_yield
 
-__all__ = ["Carbon", "CoastalVulnerability", "HabitatQuality", "NDR", "Pollination", "SDR", "SeasonalWaterYield",
-           "WaterYield", "carbon", "coastal_vulnerability", "habitat_quality", "ndr", "pollination", "sdr",
-           "seasonal_water_yield", "valuation_constant", "water_yield"]
+__all__ = ["Carbon", "CoastalVulnerability", "Emissions", "HabitatQuality", "NDR", "Pollination", "SDR",
+           "SeasonalWaterYield", "WaterYield", "carbon", "coastal_vulnerability", "emissions", "habitat_quality",
+           "ndr", "pollination", "sdr", "seasonal_water_yield", "valuation_constant", "water_yield"]

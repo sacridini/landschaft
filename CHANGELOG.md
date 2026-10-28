@@ -6,6 +6,17 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.services.emissions`: the carbon emitted and removed by land change over a series of maps (the IPCC's
+  stock-difference method), as Terraflux's `carbon.emissions`: every cell's stock at every date from its class (a
+  stock per class, or a curve of regrowth, Chapman-Richards or linear, from the date the class appeared in the cell),
+  emissions and removals by period and by transition (area, emissions, removals per pair of classes), the stocks
+  and every cell's net emission, in t CO2 or t C. C++ with OpenMP; the sums by fixed blocks of cells (the same with
+  any number of threads).
+
+### Removed
+- `RUST_PORT.md`: the plan to port the C++ core to Rust is dropped.
+
 ## [1.55.0] - 2026-10-27
 
 ### Added

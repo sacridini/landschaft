@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "serv/emissions.hpp"
 #include "serv/ndr.hpp"
 #include "serv/pollination.hpp"
 #include "serv/sdr.hpp"
@@ -26,6 +27,7 @@ using I64 = py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>
 using U8 = py::array_t<std::uint8_t, py::array::c_style | py::array::forcecast>;
 using I32 = py::array_t<std::int32_t, py::array::c_style | py::array::forcecast>;
 using F32 = py::array_t<float, py::array::c_style | py::array::forcecast>;
+using F64 = py::array_t<double, py::array::c_style | py::array::forcecast>;
 
 void same_size(const py::array& a, const py::array& b, const char* what) {
     if (a.size() != b.size()) throw std::invalid_argument(what);
@@ -77,6 +79,49 @@ void register_python(py::module_& m) {
         return py::make_tuple(out[0], out[1], out[2], out[3], out[4]);
     }, py::arg("cls"), py::arg("pools"), py::arg("threads"),
        "The four carbon pools and their float32 total, by cell.");
+
+    m.def("serv_emission_stocks", [](const I32& cls, const F64& times, const F64& stock, const I32& form,
+                                     const F64& rmax, const F64& rate, const F64& shape, int threads) {
+        if (cls.ndim() != 2) throw std::invalid_argument("cls must be dates x cells");
+        const int t = static_cast<int>(cls.shape(0));
+        const i64 n = static_cast<i64>(cls.shape(1));
+        if (times.size() != t) throw std::invalid_argument("a time per map");
+        const auto k = stock.size();
+        if (form.size() != k || rmax.size() != k || rate.size() != k || shape.size() != k)
+            throw std::invalid_argument("a stock and a regrowth per class");
+        F64 out({static_cast<py::ssize_t>(t), static_cast<py::ssize_t>(n)});
+        {
+            py::gil_scoped_release release;
+            emission_stocks(cls.data(), t, n, times.data(), stock.data(), form.data(), rmax.data(), rate.data(),
+                            shape.data(), out.mutable_data(), threads);
+        }
+        return out;
+    }, py::arg("cls"), py::arg("times"), py::arg("stock"), py::arg("form"), py::arg("rmax"), py::arg("rate"),
+       py::arg("shape"), py::arg("threads"),
+       "Every cell's carbon stock at every date (dates x cells, tC/ha) from the class indices and the classes' "
+       "stocks and regrowth.");
+
+    m.def("serv_emission_flows", [](const F64& stocks, const I32& cls, int k, double factor, double ha,
+                                    int threads) {
+        if (stocks.ndim() != 2 || cls.ndim() != 2 || stocks.shape(0) != cls.shape(0) ||
+            stocks.shape(1) != cls.shape(1))
+            throw std::invalid_argument("stocks and classes must be dates x cells");
+        const int t = static_cast<int>(cls.shape(0));
+        const i64 n = static_cast<i64>(cls.shape(1));
+        if (t < 2) throw std::invalid_argument("two dates at least");
+        F64 net(n);
+        F64 periods({static_cast<py::ssize_t>(t - 1), static_cast<py::ssize_t>(2)});
+        F64 trans({static_cast<py::ssize_t>(t - 1), static_cast<py::ssize_t>(k), static_cast<py::ssize_t>(k),
+                   static_cast<py::ssize_t>(3)});
+        {
+            py::gil_scoped_release release;
+            emission_flows(stocks.data(), cls.data(), t, n, k, factor, ha, net.mutable_data(),
+                           periods.mutable_data(), trans.mutable_data(), threads);
+        }
+        return py::make_tuple(net, periods, trans);
+    }, py::arg("stocks"), py::arg("cls"), py::arg("k"), py::arg("factor"), py::arg("ha"), py::arg("threads"),
+       "The net emission of every cell, the emissions and removals of every period and, by period and pair of "
+       "classes, the cells, emissions and removals.");
 
     m.def("serv_total", [](const F32& x, int threads) {
         py::gil_scoped_release release;
