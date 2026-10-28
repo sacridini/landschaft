@@ -25,9 +25,13 @@ def close(got, want, tol):
 
 
 def test_ndtr_and_ndtri_are_scipys(z):
-    from scipy.special import ndtri
+    from conftest import UCRT_LIBM
+    from scipy.special import ndtr, ndtri
 
-    np.testing.assert_array_equal(_core.stats_ndtr(z["ndtr/x"]), z["ndtr/y"])
+    # Cephes' erfc calls the C library's exp: the references carry the UCRT's (made on Windows),
+    # elsewhere scipy's ndtr with the same libm
+    x = z["ndtr/x"]
+    np.testing.assert_array_equal(_core.stats_ndtr(x), z["ndtr/y"] if UCRT_LIBM else ndtr(x))
     q = np.concatenate([np.linspace(1e-12, 1 - 1e-12, 2001), [1e-300, 0.5, 0.025, 0.975]])
     close(_core.stats_ndtri(q), ndtri(q), 1e-15)
 
