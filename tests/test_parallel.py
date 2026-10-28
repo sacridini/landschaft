@@ -378,6 +378,18 @@ def test_monte_carlo_on_a_helper(group, tmp_path):
         ls.uncertainty.monte_carlo(lambda p: p[0], [1.0], [0.1], n=5, on=pool)
 
 
+def test_sensitivity_runs_on_a_helper(group, tmp_path):
+    src = np.zeros((25, 25))
+    src[5, 7] = 1
+    src[18, 12] = 2
+    f = ls.parallel.call("surface.gravity", src, exponent=ls.parallel.param(0))
+    d = ls.sensitivity.design("morris", {"exponent": (1.0, 3.0), "unused": (5.0, 15.0)}, n=6, seed=2)
+    here = ls.sensitivity.evaluate(f, d, summary=np.mean)
+    with _pool(local=False) as pool, _Helper(pool, tmp_path / "cache"):
+        there = ls.sensitivity.evaluate(f, d, on=pool, chunk=5, summary=np.mean)
+    np.testing.assert_array_equal(here, there)
+
+
 def test_sdm_folds_on_a_helper(group, tmp_path):
     pytest.importorskip("sklearn")
     from sklearn.linear_model import LogisticRegression

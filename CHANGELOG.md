@@ -20,6 +20,11 @@ in a new major version.
   matrix in shares of the area, user's, producer's and overall accuracies and the area of each class with standard
   errors and confidence intervals: R's mapaccuracy 0.1.2 `olofsson` and `stehman2014`, strata of their own, to
   1e-12; Olofsson et al.'s published example: 21 158 ± 6 158 ha), `qnorm` (R's AS 241).
+- `ls.sensitivity`: global sensitivity analysis as SALib 1.6 computes it, the same numbers (as Terraflux's
+  `sensitivity.*`): `design` (Morris's trajectories on a grid of levels; Saltelli's runs of Sobol's method on scipy's
+  scrambled Sobol' sequence, with or without the second order), `evaluate` (a model at every run, here or on the
+  helpers of `ls.parallel` for a tool given as `ls.parallel.call` with `param(i)`; `summary=` for maps), `analyze`
+  (Morris's μ, μ*, σ and μ*'s bootstrap interval; Sobol's S1, ST, S2 and their bootstrap intervals).
 
 ### Removed
 - `RUST_PORT.md`: the plan to port the C++ core to Rust is dropped.

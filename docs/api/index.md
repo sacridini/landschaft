@@ -150,6 +150,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Totals, products, the delta method, Monte Carlo and confidence intervals.
 
+-   :material-tune-variant:{ .lg .middle } **[Sensitivity analysis](sensitivity.md)**
+
+    ---
+
+    Morris's elementary effects and Sobol's indices of a model's parameters (SALib's).
+
 </div>
 
 ## All functions and classes
@@ -820,3 +826,13 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.uncertainty.monte_carlo`](uncertainty.md#landschaft.uncertainty.monte_carlo) | Uncertainty of a result by drawing its parameters (Monte Carlo) |
 | [`ls.uncertainty.MonteCarloResult`](uncertainty.md#landschaft.uncertainty.MonteCarloResult) | Result of `monte_carlo` |
 | [`ls.uncertainty.interval`](uncertainty.md#landschaft.uncertainty.interval) | The normal confidence interval of a value: value -/+ z sd, z the normal quantile of the level |
+
+### Sensitivity analysis
+
+| Name | Summary |
+|---|---|
+| [`ls.sensitivity.design`](sensitivity.md#landschaft.sensitivity.design) | The runs of a global sensitivity analysis (SALib's samplers, the same values) |
+| [`ls.sensitivity.Design`](sensitivity.md#landschaft.sensitivity.Design) | The runs of a sensitivity analysis (`design`) |
+| [`ls.sensitivity.evaluate`](sensitivity.md#landschaft.sensitivity.evaluate) | The outputs of a model at every run of a design |
+| [`ls.sensitivity.analyze`](sensitivity.md#landschaft.sensitivity.analyze) | The indices of a global sensitivity analysis from its runs and their outputs (SALib's, the same numbers) |
+| [`ls.sensitivity.Sensitivity`](sensitivity.md#landschaft.sensitivity.Sensitivity) | The indices of a sensitivity analysis (`analyze`) |

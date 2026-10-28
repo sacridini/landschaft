@@ -213,6 +213,7 @@ nav:
       - Map accuracy & area: api/accuracy.md
       - Ecosystem services: api/services.md
       - Uncertainty: api/uncertainty.md
+      - Sensitivity analysis: api/sensitivity.md
   - Benchmarks: benchmarks.md
   - About:
       - Changelog: about/changelog.md
