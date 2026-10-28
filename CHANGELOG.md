@@ -38,6 +38,14 @@ in a new major version.
   weighting with every point or the nearest, to 1e-12) and `kriging` (ordinary kriging, prediction and variance,
   with every point or the nearest, to 1e-10). Points from a GeoDataFrame (reprojected to the map's CRS) or an
   array of x, y and the value; C++ with OpenMP.
+- Raster tools from Terraflux: `ls.stats.cell_stats` (a statistic of a stack's layers at every cell, the statistics
+  of `zonal_stats` and `argmax` / `argmin`, the layer of the largest or smallest value, as `stack.reduce`),
+  `ls.stats.local_correlation` (Pearson's correlation, slope, intercept and r² of two maps in a moving window, square
+  or circle, as terra's `focalPairs` / `focalReg` and `raster.local_correlation`), `ls.surface.viewshed` (how many
+  observers see every cell, Franklin and Ray's R2 rays with the line of sight of the cells no ray crosses, the
+  observer and target heights, a radius and the earth's curvature, as `raster.viewshed`; the observers in parallel),
+  `ls.zonal_map` (every cell given its zone's statistic) and `ls.tabulate_area` (the area of every class in every
+  zone: cells, area, hectares or shares, as `raster.tabulate`). C++ with OpenMP.
 
 ### Removed
 - `RUST_PORT.md`: the plan to port the C++ core to Rust is dropped.

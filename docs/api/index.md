@@ -160,7 +160,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     ---
 
-    Trends of every cell, Moran's I, LISA, hot spots (Gi*); variograms, IDW and kriging.
+    Trends of every cell, Moran's I, LISA, Gi*; kriging, IDW; cell statistics, local correlation.
 
 </div>
 
@@ -180,6 +180,8 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.write_vector`](data.md#landschaft.write_vector) | Write a vector layer, the format given by the file extension |
 | [`ls.rasterize`](data.md#landschaft.rasterize) | Burn vector features into a raster on the grid of another raster |
 | [`ls.zonal_stats`](data.md#landschaft.zonal_stats) | Statistics of a raster in every zone: polygons, or the labels of a raster |
+| [`ls.zonal_map`](data.md#landschaft.zonal_map) | Every cell given a statistic of its zone (zonal statistics as a raster) |
+| [`ls.tabulate_area`](data.md#landschaft.tabulate_area) | The area of every class of a map in every zone of another (ArcGIS's Tabulate Area) |
 | [`ls.extract`](data.md#landschaft.extract) | The values of a raster at points |
 | [`ls.load_table`](data.md#landschaft.load_table) | Read a table, the format given by the file extension |
 | [`ls.write_table`](data.md#landschaft.write_table) | Write a table, the format given by the file extension |
@@ -381,6 +383,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.surface.Geomorphons`](surface.md#landschaft.surface.Geomorphons) | The geomorphons of a DEM (`geomorphons`) |
 | [`ls.surface.hilltop`](surface.md#landschaft.surface.hilltop) | Hilltops as permanent protection areas (APP de topo de morro) |
 | [`ls.surface.Hilltop`](surface.md#landschaft.surface.Hilltop) | The hilltops of a DEM (`hilltop`) |
+| [`ls.surface.viewshed`](surface.md#landschaft.surface.viewshed) | How many observers see every cell of an elevation map (gdal_viewshed, GRASS's r.viewshed, for many observers) |
 | [`ls.surface.gravity`](surface.md#landschaft.surface.gravity) | Gravitational interaction potential of source cells |
 | [`ls.surface.fit_plane`](surface.md#landschaft.surface.fit_plane) | The least-squares polynomial surface of a given order |
 | [`ls.surface.best_fit_plane`](surface.md#landschaft.surface.best_fit_plane) | The polynomial surface of order 0 to 3 that fits a surface best |
@@ -850,6 +853,9 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.stats.trend`](stats.md#landschaft.stats.trend) | The monotonic trend of every cell along a series of maps (pymannkendall's ``original_test``, the same numbers) |
 | [`ls.stats.Trend`](stats.md#landschaft.stats.Trend) | Every cell's trend along a series of maps (`trend`) |
 | [`ls.stats.mann_kendall`](stats.md#landschaft.stats.mann_kendall) | The Mann-Kendall test and Sen's slope of one series (pymannkendall's ``original_test``, the same bits) |
+| [`ls.stats.cell_stats`](stats.md#landschaft.stats.cell_stats) | A statistic of a stack's layers at every cell (ArcGIS's Cell Statistics, terra's ``app``) |
+| [`ls.stats.local_correlation`](stats.md#landschaft.stats.local_correlation) | The correlation and the least squares line between two maps in a moving window (terra's ``focalPairs``, ``focalReg``) |
+| [`ls.stats.LocalCorrelation`](stats.md#landschaft.stats.LocalCorrelation) | The correlation and least squares line of two maps in a moving window (`local_correlation`) |
 | [`ls.stats.moran`](stats.md#landschaft.stats.moran) | The global Moran's I of a map (PySAL's ``esda.Moran``, to rounding) |
 | [`ls.stats.Moran`](stats.md#landschaft.stats.Moran) | The global Moran's I of a map (`moran`) |
 | [`ls.stats.lisa`](stats.md#landschaft.stats.lisa) | The local Moran's I of every cell (Anselin's LISA; PySAL's ``esda.Moran_Local``, to rounding) |

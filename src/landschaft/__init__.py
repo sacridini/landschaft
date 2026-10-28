@@ -55,7 +55,7 @@ from .gtn import (
     gtn_importance,
 )
 from ._reproject import reproject
-from ._zonal import extract, zonal_stats
+from ._zonal import extract, tabulate_area, zonal_map, zonal_stats
 from ._plotting import Plot, plot
 from .io import (
     ACCOUNTING_COLORMAP,
@@ -288,6 +288,8 @@ __all__ = [
     "Helpers",
     "parallel",
     "zonal_stats",
+    "zonal_map",
+    "tabulate_area",
     "write_vector",
     "max_threads",
     "default_threads",

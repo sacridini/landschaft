@@ -31,6 +31,7 @@ from ._metrics import list_metrics, metrics
 from ._plane import best_fit_plane, fit_plane, remove_plane
 from ._spatial import aacf, scl, sfd, srw, std, stxr
 from ._terrain import curvature, dissection, hli, hsp, spherical_sd, srr, terrain, tpi, trasp, tri, vrm
+from ._viewshed import viewshed
 from ._window import window_metrics
 
 __all__ = [
@@ -49,8 +50,8 @@ __all__ = [
     "flat_area",
     "geomorphons",
     "gravity",
-    "hilltop",
     "height_ba",
+    "hilltop",
     "hli",
     "hsp",
     "list_metrics",
@@ -88,6 +89,7 @@ __all__ = [
     "tpi",
     "trasp",
     "tri",
+    "viewshed",
     "vrm",
     "window_metrics",
 ]

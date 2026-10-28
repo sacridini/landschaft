@@ -29,7 +29,9 @@ Typical use::
 
 from ._autocorr import LISA, GetisOrd, Moran, getis_ord, lisa, moran
 from ._interp import Kriging, Variogram, VariogramModel, idw, kriging, variogram
+from ._raster import LocalCorrelation, cell_stats, local_correlation
 from ._trend import Trend, mann_kendall, trend
 
-__all__ = ["LISA", "GetisOrd", "Kriging", "Moran", "Trend", "Variogram", "VariogramModel", "getis_ord", "idw",
-           "kriging", "lisa", "mann_kendall", "moran", "trend", "variogram"]
+__all__ = ["LISA", "GetisOrd", "Kriging", "LocalCorrelation", "Moran", "Trend", "Variogram", "VariogramModel",
+           "cell_stats", "getis_ord", "idw", "kriging", "lisa", "local_correlation", "mann_kendall", "moran", "trend",
+           "variogram"]

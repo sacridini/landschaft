@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "stats/interp.hpp"
+#include "stats/raster.hpp"
 #include "stats/special.hpp"
 #include "stats/stats.hpp"
 
@@ -203,6 +204,50 @@ void register_python(py::module_& m) {
     }, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("shape"), py::arg("nugget"), py::arg("psill"),
        py::arg("range"), py::arg("px"), py::arg("py"), py::arg("nmax"), py::arg("threads"),
        "gstat's ordinary kriging at places: prediction, variance (nmax <= 0: every point).");
+
+    m.def("stats_cell_stats", [](const F64& layers, int stat, double q, int threads) {
+        if (layers.ndim() != 2) throw std::invalid_argument("layers must be layers x cells");
+        const std::int64_t k = layers.shape(0), n = layers.shape(1);
+        F64 out(static_cast<py::ssize_t>(n));
+        {
+            py::gil_scoped_release release;
+            cell_stats(layers.data(), k, n, stat, q, out.mutable_data(), threads);
+        }
+        return out;
+    }, py::arg("layers"), py::arg("stat"), py::arg("q"), py::arg("threads"),
+       "A statistic of the layers at every cell (codes of io_zonal_stats; 14 argmax, 15 argmin).");
+
+    m.def("stats_local_correlation", [](const F64& x, const F64& y, int radius, bool circle, int min_cells,
+                                        int threads) {
+        if (x.ndim() != 2 || y.ndim() != 2 || x.shape(0) != y.shape(0) || x.shape(1) != y.shape(1))
+            throw std::invalid_argument("x and y: 2-D maps of one shape");
+        const int ny = static_cast<int>(x.shape(0)), nx = static_cast<int>(x.shape(1));
+        F64 out({static_cast<py::ssize_t>(4), static_cast<py::ssize_t>(ny), static_cast<py::ssize_t>(nx)});
+        {
+            py::gil_scoped_release release;
+            local_correlation(x.data(), y.data(), ny, nx, radius, circle, min_cells, out.mutable_data(), threads);
+        }
+        return out;
+    }, py::arg("x"), py::arg("y"), py::arg("radius"), py::arg("circle"), py::arg("min_cells"), py::arg("threads"),
+       "Correlation, slope, intercept and r2 of y on x in a moving window: 4 x ny x nx.");
+
+    m.def("stats_viewshed", [](const F64& dem, double rw, double rh,
+                               const py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>& rows,
+                               const py::array_t<std::int64_t, py::array::c_style | py::array::forcecast>& cols,
+                               double eye, double target, double reach, bool curvature, int threads) {
+        if (dem.ndim() != 2) throw std::invalid_argument("expected a 2-D map");
+        if (rows.size() != cols.size()) throw std::invalid_argument("rows and cols differ in length");
+        const int ny = static_cast<int>(dem.shape(0)), nx = static_cast<int>(dem.shape(1));
+        F64 out({static_cast<py::ssize_t>(ny), static_cast<py::ssize_t>(nx)});
+        {
+            py::gil_scoped_release release;
+            viewshed(dem.data(), ny, nx, rw, rh, rows.data(), cols.data(), rows.size(), eye, target, reach, curvature,
+                     out.mutable_data(), threads);
+        }
+        return out;
+    }, py::arg("dem"), py::arg("rw"), py::arg("rh"), py::arg("rows"), py::arg("cols"), py::arg("eye"),
+       py::arg("target"), py::arg("reach"), py::arg("curvature"), py::arg("threads"),
+       "How many observers see every cell (Franklin and Ray's R2).");
 
     m.def("stats_numpy_choice", [](std::uint64_t seed, std::uint64_t pop, std::uint64_t size, int draws) {
         NumpyRng rng(seed);

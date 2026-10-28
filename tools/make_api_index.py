@@ -60,7 +60,7 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
          ("sensitivity.md", "Sensitivity analysis", ":material-tune-variant:",
           "Morris's elementary effects and Sobol's indices of a model's parameters (SALib's)."),
          ("stats.md", "Statistics of maps", ":material-chart-bell-curve-cumulative:",
-          "Trends of every cell, Moran's I, LISA, hot spots (Gi*); variograms, IDW and kriging.")]
+          "Trends of every cell, Moran's I, LISA, Gi*; kriging, IDW; cell statistics, local correlation.")]
 
 INTRO = '''# API reference
 

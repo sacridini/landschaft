@@ -6,8 +6,10 @@ Mann-Kendall test and Sen's slope of every cell (pymannkendall's
 and Ord's Gi* over the rook or queen contiguity of the cells (PySAL's esda, to
 rounding), with pseudo p values of random permutations; and the interpolation of
 points onto a map as R's gstat: sample variograms and their fit, inverse
-distance weighting and ordinary kriging. C++ with OpenMP; the same with any
-number of threads. The `ls.stats` module.
+distance weighting and ordinary kriging; statistics of a stack at every cell
+(with the layer of the peak) and the correlation of two maps in a moving
+window. C++ with OpenMP; the same with any number of threads. The `ls.stats`
+module.
 
 <!-- no-run -->
 ```python
@@ -26,6 +28,9 @@ v = ls.stats.variogram(pts, "carbon", model="exponential")
 k = ls.stats.kriging(pts, ndvi[0], v, "carbon")    # onto the cells of a map
 k.prediction, k.variance
 ls.stats.idw(pts, ndvi[0], "carbon", nmax=12)
+
+ls.stats.cell_stats(ndvi, "argmax")                # the year of the peak
+ls.stats.local_correlation(ndvi[0], rain, radius=5).slope
 ```
 
 ## Trends
@@ -35,6 +40,16 @@ ls.stats.idw(pts, ndvi[0], "carbon", nmax=12)
 ::: landschaft.stats.Trend
 
 ::: landschaft.stats.mann_kendall
+
+## Statistics of a stack
+
+::: landschaft.stats.cell_stats
+
+## Local correlation
+
+::: landschaft.stats.local_correlation
+
+::: landschaft.stats.LocalCorrelation
 
 ## Spatial autocorrelation
 

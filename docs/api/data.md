@@ -35,6 +35,10 @@ them together.
 
 ::: landschaft.zonal_stats
 
+::: landschaft.zonal_map
+
+::: landschaft.tabulate_area
+
 ::: landschaft.extract
 
 ## Tables

@@ -152,6 +152,10 @@ from the lines of sight of every cell: GRASS GIS's `r.geomorphon`, bit for bit
 
 ::: landschaft.surface.Hilltop
 
+## Viewshed
+
+::: landschaft.surface.viewshed
+
 ## Spatial interaction
 
 ::: landschaft.surface.gravity

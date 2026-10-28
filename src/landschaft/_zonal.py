@@ -387,3 +387,137 @@ def extract(raster, points, *, method: str = "nearest", buffer: float | None = N
     for b, label in enumerate(labels):
         result[label] = out[:, b]
     return result
+
+
+def zonal_map(raster, zones, stat: str = "mean", *, n_threads: int | None = None) -> xr.DataArray:
+    """Every cell given a statistic of its zone (zonal statistics as a raster).
+
+    The mean elevation of each cell's watershed, the forest share of its
+    municipality as a map, the rank of its zone: :func:`zonal_stats` with a
+    raster of zones, painted back on the zones' cells (ArcGIS's Zonal
+    Statistics, Terraflux's ``raster.zonal`` map).
+
+    Parameters
+    ----------
+    raster
+        Georeferenced ``(y, x)`` or ``(band, y, x)`` DataArray; NaN and its
+        NoData are no data.
+    zones
+        A raster of zone labels on the same grid (its NoData and NaN are no
+        zone).
+    stat
+        One statistic of :func:`zonal_stats` (default ``"mean"``).
+    n_threads
+        Threads (default: all cores but one).
+
+    Returns
+    -------
+    xarray.DataArray
+        On the raster's grid (a layer per band of a stack): every cell its
+        zone's statistic, NaN outside the zones.
+
+    Examples
+    --------
+    >>> import landschaft as ls
+    >>> dem = ls.load_raster(ls.example_data("orelevation"))
+    >>> classes = ls.reclassify(dem, [(0, 800, 1), (800, 1200, 2), (1200, 3000, 3)])
+    >>> m = ls.zonal_map(dem, classes, "max")
+    >>> sorted(float(v) for v in set(m.values[~m.isnull().values].tolist()))
+    [799.0, 1199.0, 1390.0]
+    """
+    if isinstance(stat, (list, tuple)):
+        raise TypeError("stat: one statistic")
+    if not isinstance(zones, (xr.DataArray, np.ndarray)) or np.ndim(zones) != 2:
+        raise TypeError("zones: a 2-D raster of zone labels")
+    table = zonal_stats(raster, zones, [stat], n_threads=n_threads)
+    raster_da, _, _, _, _, _ = _raster(raster)
+    if isinstance(zones, xr.DataArray) and zones.rio.crs is not None and zones.shape != raster_da.shape[-2:]:
+        from .io import match_grid
+
+        multi = raster_da.ndim == 3
+        zones = match_grid(zones, raster_da.isel({raster_da.dims[0]: 0}) if multi else raster_da,
+                           resampling="nearest")
+    zv = np.asarray(zones, dtype=np.float64)
+    znd = zones.rio.nodata if isinstance(zones, xr.DataArray) else None
+    labels = table["zone"].to_numpy(np.float64)
+    idx = np.clip(np.searchsorted(labels, zv), 0, max(len(labels) - 1, 0))
+    valid = ~np.isnan(zv) & (labels[idx] == zv) if len(labels) else np.zeros(zv.shape, bool)
+    if znd is not None and not (isinstance(znd, float) and np.isnan(znd)):
+        valid &= zv != float(znd)
+    layers = [np.where(valid, table[c].to_numpy(np.float64)[idx], np.nan) for c in table.columns[1:]]
+    data = layers[0] if raster_da.ndim == 2 else np.stack(layers)
+    out = raster_da.copy(data=data).rename(str(stat))
+    out.attrs = {}
+    out.encoding = {}
+    return out.rio.write_nodata(np.nan)
+
+
+def tabulate_area(zones, classes, *, units: str = "cells", nodata=None) -> pd.DataFrame:
+    """The area of every class of a map in every zone of another (ArcGIS's Tabulate Area).
+
+    Forest, pasture and crops per municipality or watershed, as cells, area
+    or each class's share of the zone (Terraflux's ``raster.tabulate``). The
+    cells without a zone or a class are left out.
+
+    Parameters
+    ----------
+    zones
+        A raster of zone labels.
+    classes
+        A categorical raster on the same grid.
+    units
+        ``"cells"`` (default), ``"area"`` (map units squared, from the cells'
+        resolution), ``"hectares"`` (of a map in metres) or ``"share"`` (of
+        the zone's cells with a class).
+    nodata
+        Value marking missing cells (default: the rasters' no-data value).
+
+    Returns
+    -------
+    pandas.DataFrame
+        ``zone``, a column ``class_<k>`` per class and ``total``; a row per
+        zone (increasing).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import landschaft as ls
+    >>> zones = np.array([[1, 1, 2], [1, 2, 2]])
+    >>> lc = np.array([[3, 4, 4], [3, 3, 4]])
+    >>> ls.tabulate_area(zones, lc, units="share").round(3)
+       zone  class_3  class_4  total
+    0     1    0.667    0.333    1.0
+    1     2    0.333    0.667    1.0
+    """
+    from .simulate._maps import cell_area_of, read_map
+
+    if units not in ("cells", "area", "hectares", "share"):
+        raise ValueError(f"units: cells, area, hectares or share, not {units!r}")
+    zm, cm = read_map(zones, nodata), read_map(classes, nodata)
+    if zm.shape != cm.shape:
+        raise ValueError(f"the zones and the classes differ in shape: {zm.shape} and {cm.shape}")
+    zv, cv = zm.as_float().ravel(), cm.as_float().ravel()
+    ok = ~(np.isnan(zv) | np.isnan(cv))
+    zone_ids, zi = np.unique(zv[ok], return_inverse=True)
+    class_ids, ci = np.unique(cv[ok], return_inverse=True)
+    m = np.bincount(zi * len(class_ids) + ci, minlength=len(zone_ids) * len(class_ids)).astype(np.float64)
+    m = m.reshape(len(zone_ids), len(class_ids))
+    total = m.sum(axis=1)
+    if units == "share":
+        with np.errstate(invalid="ignore", divide="ignore"):
+            scale = np.where(total > 0, 1.0 / total, np.nan)[:, None]
+    else:
+        unit = 1.0 if units == "cells" else cell_area_of(zm, None)
+        scale = unit / 10_000.0 if units == "hectares" else unit
+
+    def label(v):
+        f = float(v)
+        return str(int(f)) if f == int(f) else str(f)
+
+    out = pd.DataFrame(m * scale, columns=[f"class_{label(c)}" for c in class_ids])
+    out["total"] = total * (scale[:, 0] if units == "share" else scale)
+    zl = zone_ids
+    out.insert(0, "zone", zl.astype(np.int64) if np.all(zl == np.round(zl)) else zl)
+    if units == "cells":
+        out[out.columns[1:]] = out[out.columns[1:]].astype(np.int64)
+    return out
