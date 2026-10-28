@@ -32,6 +32,12 @@ in a new major version.
   permutations and clusters) and `getis_ord` (Gi*, z, p and hot and cold spots) over the rook or queen contiguity of
   the cells (PySAL's esda 2.10, to 1e-12). C++ with OpenMP, scipy's `ndtr` (Cephes) and numpy's `default_rng` for
   the permutations; the same with any number of threads.
+- `ls.stats` interpolation of points onto a map, as Terraflux's `stats.variogram`, `stats.idw` and `stats.kriging`
+  and R's gstat 2.1: `variogram` (the sample variogram, the same bits, and a spherical, exponential or Gaussian
+  model fitted by fit.variogram's weighted least squares, the same bits when it converges), `idw` (inverse distance
+  weighting with every point or the nearest, to 1e-12) and `kriging` (ordinary kriging, prediction and variance,
+  with every point or the nearest, to 1e-10). Points from a GeoDataFrame (reprojected to the map's CRS) or an
+  array of x, y and the value; C++ with OpenMP.
 
 ### Removed
 - `RUST_PORT.md`: the plan to port the C++ core to Rust is dropped.

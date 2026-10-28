@@ -304,6 +304,7 @@ set_target_properties(servcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 # Statistics of maps: trends (Mann-Kendall, Sen), spatial autocorrelation (Moran, LISA, Gi*),
 # interpolation (IDW, variograms, kriging).
 add_library(statscore STATIC
+    src/cpp/stats/interp.cpp
     src/cpp/stats/special.cpp
     src/cpp/stats/stats.cpp
 )

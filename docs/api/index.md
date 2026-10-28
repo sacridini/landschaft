@@ -160,7 +160,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     ---
 
-    Trends of every cell (Mann-Kendall, Sen's slope), Moran's I, LISA and hot spots (Gi*).
+    Trends of every cell, Moran's I, LISA, hot spots (Gi*); variograms, IDW and kriging.
 
 </div>
 
@@ -856,3 +856,9 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.stats.LISA`](stats.md#landschaft.stats.LISA) | The local Moran's I of every cell (`lisa`) |
 | [`ls.stats.getis_ord`](stats.md#landschaft.stats.getis_ord) | Getis and Ord's Gi* of every cell (PySAL's ``esda.G_Local`` with ``star`` and row-standardised weights) |
 | [`ls.stats.GetisOrd`](stats.md#landschaft.stats.GetisOrd) | Getis and Ord's Gi* of every cell (`getis_ord`) |
+| [`ls.stats.variogram`](stats.md#landschaft.stats.variogram) | The sample variogram of points and a model fitted to it (R's gstat ``variogram`` and ``fit.variogram``) |
+| [`ls.stats.Variogram`](stats.md#landschaft.stats.Variogram) | The sample variogram of points and the model fitted to it (`variogram`) |
+| [`ls.stats.VariogramModel`](stats.md#landschaft.stats.VariogramModel) | A variogram model: a nugget and a structure of a shape, its partial sill and range (gstat's ``vgm``) |
+| [`ls.stats.idw`](stats.md#landschaft.stats.idw) | Inverse distance weighting of points onto a map (R's gstat ``idw``, the same numbers) |
+| [`ls.stats.kriging`](stats.md#landschaft.stats.kriging) | Ordinary kriging of points onto a map (R's gstat ``krige``, to rounding: 1e-10) |
+| [`ls.stats.Kriging`](stats.md#landschaft.stats.Kriging) | Ordinary kriging of points onto a map (`kriging`) |

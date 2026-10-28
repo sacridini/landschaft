@@ -154,3 +154,95 @@ def test_missing_cells_threads_and_the_map(z):
     assert ls.stats.moran(f2, nodata=-9999, permutations=0).n == 499
     with pytest.raises(ValueError, match="queen or rook"):
         ls.stats.moran(f, contiguity="bishop")
+
+
+# -- interpolation against R's gstat 2.1 (interpolation.npz, tools/make_reference_interpolation.py) -------------------
+
+@pytest.fixture(scope="module")
+def g():
+    return dict(np.load(REF / "interpolation.npz"))
+
+
+def _like(nan_at=None):
+    v = np.zeros((20, 25))
+    if nan_at is not None:
+        v.flat[nan_at] = np.nan
+    return xr.DataArray(v, dims=("y", "x"), coords={"y": 78 - 4 * np.arange(20.0), "x": 2 + 4 * np.arange(25.0)})
+
+
+def test_the_sample_variogram_is_gstats(g):
+    pts = g["points"]
+    v = ls.stats.variogram(pts, model=None)
+    for c in ("np", "dist", "gamma"):
+        np.testing.assert_array_equal(v.table[c].to_numpy(float), g[f"vario/{c}"])
+    assert v.model is None and v.table["model"].isna().all()
+    v = ls.stats.variogram(pts, cutoff=50, width=5, model=None)
+    for c in ("np", "dist", "gamma"):
+        np.testing.assert_array_equal(v.table[c].to_numpy(float), g[f"vario50/{c}"])
+
+
+def test_the_fits_are_gstats(g):
+    pts, s2 = g["points"], g["s2"][0]
+    for name, shape in [("Sph", "spherical"), ("Exp", "exponential"), ("Gau", "gaussian")]:
+        if shape == "gaussian":
+            # it does not converge in 200 iterations, nor gstat's: the last oscillations carry the libm's last bit
+            with pytest.warns(RuntimeWarning, match="converge"):
+                v = ls.stats.variogram(pts, model=shape, psill=s2, range=20, nugget=s2 / 10)
+        else:
+            v = ls.stats.variogram(pts, model=shape, psill=s2, range=20, nugget=s2 / 10)
+        got = [v.model.nugget, v.model.psill, v.model.range]
+        if shape == "gaussian":
+            close(got, g[f"fit{name}/params"], 1e-5)
+        else:
+            np.testing.assert_array_equal(got, g[f"fit{name}/params"])
+            assert v.converged
+        np.testing.assert_array_equal(v.table["model"], v.model.gamma(v.table["dist"]))
+
+
+@pytest.mark.parametrize("threads", [1, 2])
+def test_idw_and_kriging_are_gstats(g, threads):
+    pts, like = g["points"], _like()
+    close(ls.stats.idw(pts, like, n_threads=threads).values.ravel(), g["idw2/pred"], 1e-12)
+    close(ls.stats.idw(pts, like, power=2.5, nmax=8, n_threads=threads).values.ravel(), g["idw25/pred"], 1e-12)
+    sph = ls.stats.VariogramModel("spherical", psill=1.2, range=30, nugget=0.2)
+    for key, nmax in [("ok", None), ("ok10", 10)]:
+        k = ls.stats.kriging(pts, like, sph, nmax=nmax, n_threads=threads)
+        close(k.prediction.values.ravel(), g[f"{key}/pred"], 1e-10)
+        close(k.variance.values.ravel(), g[f"{key}/var"], 1e-10)
+    nug, ps, rg = g["fitExp/params"]
+    k = ls.stats.kriging(pts, like, {"shape": "exponential", "psill": ps, "range": rg, "nugget": nug},
+                         n_threads=threads)
+    close(k.prediction.values.ravel(), g["okexp/pred"], 1e-10)
+    close(k.variance.values.ravel(), g["okexp/var"], 1e-10)
+
+
+def test_from_points_to_a_map(g):
+    import geopandas as gpd
+
+    p = g["points"]
+    gdf = gpd.GeoDataFrame({"z": p[:, 2], "id": np.arange(len(p)).astype(str)},
+                           geometry=gpd.points_from_xy(p[:, 0], p[:, 1]), crs="EPSG:32723")
+    like = _like(7).rio.write_crs("EPSG:32723")
+    v = ls.stats.variogram(gdf, model="exponential", range=20, psill=0.6, nugget=0.06)
+    assert len(v.table) == len(g["vario/np"]) and v.converged
+    k = ls.stats.kriging(gdf, like, v)
+    assert np.isnan(k.prediction.values.flat[7]) and np.isnan(k.variance.values.flat[7])
+    assert (k.variance.values[~np.isnan(k.variance.values)] > 0).all()
+    assert k.prediction.rio.crs == like.rio.crs
+    m = ls.stats.idw(gdf, like, "z").values.ravel()
+    close(np.delete(m, 7), np.delete(g["idw2/pred"], 7), 1e-12)
+    # the points are reprojected to the map's CRS
+    m2 = ls.stats.idw(gdf.to_crs("EPSG:4326"), like, "z").values.ravel()
+    close(np.delete(m2, 7), np.delete(g["idw2/pred"], 7), 1e-6)
+    # a value missing leaves the point out; a point at a cell's centre gives its value there
+    q = np.vstack([p, [[2.0, 78.0, np.nan]], [[6.0, 78.0, 9.0]]])
+    assert ls.stats.idw(q, like).values[0, 1] == 9.0
+    with pytest.raises(ValueError, match="field"):
+        ls.stats.idw(gdf.assign(w=1.0), like)
+    with pytest.raises(ValueError, match="no model"):
+        ls.stats.kriging(gdf, like, ls.stats.variogram(gdf, model=None))
+    with pytest.raises(ValueError, match="singular"):
+        ls.stats.kriging(np.array([[1.0, 1, 1], [1, 1, 2], [5, 5, 3]]), like,
+                         ls.stats.VariogramModel("spherical", psill=1, range=10))
+    with pytest.raises(ValueError, match="coordinates"):
+        ls.stats.idw(gdf, np.zeros((3, 3)))

@@ -8,10 +8,12 @@
 #include <pybind11/stl.h>
 
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <stdexcept>
 #include <vector>
 
+#include "stats/interp.hpp"
 #include "stats/special.hpp"
 #include "stats/stats.hpp"
 
@@ -33,6 +35,18 @@ F64 on_map(const F64& map, const stats::Lattice& l, const std::vector<double>& v
     for (py::ssize_t i = 0; i < map.size(); ++i) o[i] = std::numeric_limits<double>::quiet_NaN();
     for (std::size_t k = 0; k < l.cells.size(); ++k) o[l.cells[k]] = v[k];
     return out;
+}
+
+std::int64_t same_size(std::initializer_list<const F64*> arrays) {
+    const py::ssize_t n = (*arrays.begin())->size();
+    for (const F64* a : arrays)
+        if (a->size() != n) throw std::invalid_argument("the coordinates and values differ in length");
+    return static_cast<std::int64_t>(n);
+}
+
+stats::VarioModel model_of(int shape, double nugget, double psill, double range) {
+    if (shape < 0 || shape > 2) throw std::invalid_argument("shape: 0 spherical, 1 exponential, 2 gaussian");
+    return {static_cast<stats::Shape>(shape), nugget, psill, range};
 }
 
 std::vector<double> values(const F64& map, const stats::Lattice& l) {
@@ -121,6 +135,74 @@ void register_python(py::module_& m) {
         }
         return py::make_tuple(on_map(map, l, g), on_map(map, l, z), on_map(map, l, p), on_map(map, l, s));
     }, py::arg("map"), py::arg("queen"), py::arg("threads"), "Getis and Ord's Gi* maps: G, z, p, spots.");
+
+    m.def("stats_default_cutoff", [](const F64& x, const F64& y) {
+        return default_cutoff(x.data(), y.data(), same_size({&x, &y}));
+    }, py::arg("x"), py::arg("y"), "gstat's default cutoff: a third of the diagonal of the points' bounding box.");
+
+    m.def("stats_variogram", [](const F64& x, const F64& y, const F64& z, double cutoff, double width) {
+        const SampleVariogram s = sample_variogram(x.data(), y.data(), z.data(), same_size({&x, &y, &z}), cutoff,
+                                                   width);
+        return py::make_tuple(F64(static_cast<py::ssize_t>(s.np.size()), s.np.data()),
+                              F64(static_cast<py::ssize_t>(s.dist.size()), s.dist.data()),
+                              F64(static_cast<py::ssize_t>(s.gamma.size()), s.gamma.data()));
+    }, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("cutoff"), py::arg("width"),
+       "gstat's sample variogram: np, dist, gamma of the classes with pairs.");
+
+    m.def("stats_fit_variogram", [](const F64& np_, const F64& dist, const F64& gamma, int shape, double nugget,
+                                    double psill, double range, bool fit_nugget, bool fit_psill, bool fit_range) {
+        SampleVariogram s;
+        const std::int64_t n = same_size({&np_, &dist, &gamma});
+        s.np.assign(np_.data(), np_.data() + n);
+        s.dist.assign(dist.data(), dist.data() + n);
+        s.gamma.assign(gamma.data(), gamma.data() + n);
+        const VarioFit f = fit_variogram(s, model_of(shape, nugget, psill, range), fit_nugget, fit_psill, fit_range);
+        return py::make_tuple(f.model.nugget, f.model.psill, f.model.range, f.sserr, f.singular, f.converged);
+    }, py::arg("np"), py::arg("dist"), py::arg("gamma"), py::arg("shape"), py::arg("nugget"), py::arg("psill"),
+       py::arg("range"), py::arg("fit_nugget"), py::arg("fit_psill"), py::arg("fit_range"),
+       "gstat's fit.variogram: nugget, psill, range, sserr, singular, converged.");
+
+    m.def("stats_vario_gamma", [](const F64& h, int shape, double nugget, double psill, double range) {
+        const VarioModel md = model_of(shape, nugget, psill, range);
+        F64 out(h.request().shape);
+        for (py::ssize_t i = 0; i < h.size(); ++i) out.mutable_data()[i] = md.gamma(h.data()[i]);
+        return out;
+    }, py::arg("h"), py::arg("shape"), py::arg("nugget"), py::arg("psill"), py::arg("range"),
+       "A variogram model's semivariance at distances.");
+
+    m.def("stats_idw", [](const F64& x, const F64& y, const F64& z, const F64& px, const F64& py_, double power,
+                          std::int64_t nmax, int threads) {
+        const std::int64_t n = same_size({&x, &y, &z});
+        const std::int64_t m_ = same_size({&px, &py_});
+        F64 out(static_cast<py::ssize_t>(m_));
+        {
+            py::gil_scoped_release release;
+            idw(x.data(), y.data(), z.data(), n, px.data(), py_.data(), m_, power, nmax, out.mutable_data(),
+                threads);
+        }
+        return out;
+    }, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("px"), py::arg("py"), py::arg("power"), py::arg("nmax"),
+       py::arg("threads"), "gstat's inverse distance weighting at places (nmax <= 0: every point).");
+
+    m.def("stats_krige", [](const F64& x, const F64& y, const F64& z, int shape, double nugget, double psill,
+                            double range, const F64& px, const F64& py_, std::int64_t nmax, int threads) {
+        const std::int64_t n = same_size({&x, &y, &z});
+        const std::int64_t m_ = same_size({&px, &py_});
+        const VarioModel md = model_of(shape, nugget, psill, range);
+        F64 pred(static_cast<py::ssize_t>(m_)), var(static_cast<py::ssize_t>(m_));
+        bool ok;
+        {
+            py::gil_scoped_release release;
+            ok = krige(x.data(), y.data(), z.data(), n, md, px.data(), py_.data(), m_, nmax, pred.mutable_data(),
+                       var.mutable_data(), threads);
+        }
+        if (!ok)
+            throw std::invalid_argument(
+                "the covariances of the points are singular (points at one place, or no nugget among neighbours)");
+        return py::make_tuple(pred, var);
+    }, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("shape"), py::arg("nugget"), py::arg("psill"),
+       py::arg("range"), py::arg("px"), py::arg("py"), py::arg("nmax"), py::arg("threads"),
+       "gstat's ordinary kriging at places: prediction, variance (nmax <= 0: every point).");
 
     m.def("stats_numpy_choice", [](std::uint64_t seed, std::uint64_t pop, std::uint64_t size, int draws) {
         NumpyRng rng(seed);
