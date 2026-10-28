@@ -4,9 +4,10 @@
 The references are InVEST with two of its bugs corrected (the tool's doc). Everything is
 compared bit for bit but the fetch: a ray that crosses two or more coast edges ends, in
 InVEST, where its shortening in the R-tree's order leaves it (its last bits, ~1e-8 m),
-here at the nearest edge; REI and the local waves carry that. Off Windows the lon / lat
-case's projected coordinates (PROJ's trigonometry in the system's libm, the references made
-with the UCRT's) move by an ulp: there ``conftest.assert_ucrt_close``.
+here at the nearest edge; REI and the local waves carry that. The lon / lat case's fetch is
+projected by GDAL's PROJ (rasterio's), the references made on Windows with PROJ 9.8: off
+Windows (the system's libm) or with another PROJ (rasterio 1.4's wheels, on Python 3.10 and
+3.11) its coordinates move by an ulp, so there ``conftest.assert_ucrt_close``'s tolerance.
 """
 
 from __future__ import annotations
@@ -84,10 +85,23 @@ def _run(name, threads=4):
     return ls.services.coastal_vulnerability(**_inputs(name), n_threads=threads)
 
 
-def _exact(ours, ref, what):
-    from conftest import assert_ucrt_close
+def _exact(ours, ref, what, exact=True):
+    from conftest import UCRT_RTOL, assert_ucrt_close
 
-    assert_ucrt_close(np.asarray(ours, np.float64), np.asarray(ref, np.float64), err_msg=what)
+    if exact:
+        assert_ucrt_close(np.asarray(ours, np.float64), np.asarray(ref, np.float64), err_msg=what)
+    else:
+        np.testing.assert_allclose(np.asarray(ours, np.float64), np.asarray(ref, np.float64), rtol=UCRT_RTOL or 1e-5,
+                                   atol=0, equal_nan=True, err_msg=what)
+
+
+def _same_projection(name):
+    """Whether the case's coordinates are projected as the references' were (module docstring)."""
+    import rasterio
+    from conftest import UCRT_LIBM
+
+    proj = tuple(int(v) for v in rasterio.__proj_version__.split(".")[:2])
+    return name != "coastal_lonlat" or (UCRT_LIBM and proj >= (9, 8))
 
 
 def _table(df, cols):
@@ -119,18 +133,20 @@ def test_exposure_bit_for_bit(name):
 def test_fetch_and_waves(name):
     r = _run(name)
     z, meta = _load(name)
-    _exact(_table(r.fetch, [f"fdepth_{d}" for d in SECTORS]), z["out/fdepth"], "fdepth")
-    _exact(_table(r.fetch, meta["wwiii_at_shore_fields"]), z["out/wwiii_at_shore"], "wwiii_at_shore")
+    same = _same_projection(name)
+    _exact(_table(r.fetch, [f"fdepth_{d}" for d in SECTORS]), z["out/fdepth"], "fdepth", same)
+    _exact(_table(r.fetch, meta["wwiii_at_shore_fields"]), z["out/wwiii_at_shore"], "wwiii_at_shore", same)
     fdist = _table(r.fetch, [f"fdist_{d}" for d in SECTORS])
     ref = z["out/fdist"]
     np.testing.assert_allclose(fdist, ref, rtol=0, atol=1e-7)
-    assert np.mean(fdist == ref) > 0.9  # only rays across several edges differ
+    if same:
+        assert np.mean(fdist == ref) > 0.9  # only rays across several edges differ
     np.testing.assert_allclose(r.fetch["REI"], z["out/rei"], rtol=1e-9, atol=1e-9)
     import shapely
 
     ends = shapely.get_coordinates(r.fetch_rays.geometry.values).reshape(-1, 4)
     np.testing.assert_allclose(ends, z["out/ray_ends"], rtol=0, atol=1e-7)
-    _exact(r.wave_energies["E_ocean"], z["out/wave_E_ocean"], "E_ocean")
+    _exact(r.wave_energies["E_ocean"], z["out/wave_E_ocean"], "E_ocean", same)
     for k in ("E_local", "Eo_El_diff", "maxH_local", "minH_local", "maxT_local", "minT_local"):
         np.testing.assert_allclose(r.wave_energies[k], z[f"out/wave_{k}"], rtol=1e-9, atol=1e-12, err_msg=k)
     assert list(r.wave_energies["max_E_type"].fillna("")) == meta["max_E_type"]
