@@ -51,6 +51,8 @@ PAGES = [("data.md", "Data & configuration", ":material-database-outline:",
           "Clean records, choose predictors and background, spatial folds, fit, evaluate, project."),
          ("simulate.md", "Land change simulation", ":material-timeline-clock-outline:",
           "Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation."),
+         ("accuracy.md", "Map accuracy & area", ":material-target:",
+          "Stratified samples of a map, its accuracy and the area of its classes (Olofsson et al. 2014)."),
          ("services.md", "Ecosystem services", ":material-leaf-circle-outline:",
           "InVEST's models: carbon, habitat quality, water yield and hydropower, sediment delivery."),
          ("uncertainty.md", "Uncertainty", ":material-plus-minus-variant:",
@@ -122,6 +124,8 @@ def prefix(ident: str) -> str:
         return "ls.surface."
     if ".uncertainty." in ident:
         return "ls.uncertainty."
+    if ".accuracy." in ident:
+        return "ls.accuracy."
     if ".hydro.swat." in ident:
         return "ls.hydro.swat."
     if ".hydro." in ident:

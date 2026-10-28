@@ -13,6 +13,13 @@ in a new major version.
   emissions and removals by period and by transition (area, emissions, removals per pair of classes), the stocks
   and every cell's net emission, in t CO2 or t C. C++ with OpenMP; the sums by fixed blocks of cells (the same with
   any number of threads).
+- `ls.accuracy`: the accuracy and the area of a map from a stratified random sample (Olofsson et al. 2014), as
+  Terraflux's `accuracy.*`: `sample_size` (equation 13 from the user's accuracies expected of each stratum and the
+  standard error wanted; allocation with a minimum per stratum, proportional, equal or Neyman's), `sample` (the points
+  numpy's `default_rng(seed).choice` draws, stratum after stratum, as a GeoDataFrame to label), `assess` (the error
+  matrix in shares of the area, user's, producer's and overall accuracies and the area of each class with standard
+  errors and confidence intervals: R's mapaccuracy 0.1.2 `olofsson` and `stehman2014`, strata of their own, to
+  1e-12; Olofsson et al.'s published example: 21 158 ± 6 158 ha), `qnorm` (R's AS 241).
 
 ### Removed
 - `RUST_PORT.md`: the plan to port the C++ core to Rust is dropped.

@@ -28,6 +28,7 @@ from .change import (
     morphological_change,
     simple_change,
 )
+from . import accuracy
 from . import bio
 from . import circuit
 from .circuit import omniscape
@@ -208,6 +209,7 @@ __all__ = [
     "VEGETATION_SOURCES",
     "SpatialEntropyResult",
     "accounting",
+    "accuracy",
     "accounting_colormap",
     "change_colormap",
     "bio",

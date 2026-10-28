@@ -132,6 +132,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Land use change: transitions, potentials, CLUE / Dinamica / PLUS allocation, validation.
 
+-   :material-target:{ .lg .middle } **[Map accuracy & area](accuracy.md)**
+
+    ---
+
+    Stratified samples of a map, its accuracy and the area of its classes (Olofsson et al. 2014).
+
 -   :material-leaf-circle-outline:{ .lg .middle } **[Ecosystem services](services.md)**
 
     ---
@@ -766,6 +772,18 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.scenarios`](simulate.md#landschaft.simulate.scenarios) | Run a model under several scenarios, several times each, in parallel |
 | [`ls.Ensemble`](simulate.md#landschaft.simulate.Ensemble) | The simulations of `scenarios`: every scenario, replicate and year |
 | [`ls.example_data`](simulate.md#landschaft.simulate.example_data) | Path of an example data set for land change modelling |
+
+### Map accuracy & area
+
+| Name | Summary |
+|---|---|
+| [`ls.accuracy.sample_size`](accuracy.md#landschaft.accuracy.sample_size) | The size of a stratified random sample for the accuracy and the area of a map, and its share of each stratum |
+| [`ls.accuracy.SampleSize`](accuracy.md#landschaft.accuracy.SampleSize) | The size of a stratified sample and its share of each stratum (`sample_size`) |
+| [`ls.accuracy.allocate`](accuracy.md#landschaft.accuracy.allocate) | The sample of each stratum, and whether the minima asked for more than ``n`` |
+| [`ls.accuracy.sample`](accuracy.md#landschaft.accuracy.sample) | A stratified random sample of a map's cells for its accuracy and area (Olofsson et al. 2014) |
+| [`ls.accuracy.assess`](accuracy.md#landschaft.accuracy.assess) | The accuracy and the area of a map's classes from a stratified random sample labelled with the reference |
+| [`ls.accuracy.Accuracy`](accuracy.md#landschaft.accuracy.Accuracy) | The accuracy and the area of a map's classes from a stratified sample (`assess`) |
+| [`ls.accuracy.qnorm`](accuracy.md#landschaft.accuracy.qnorm) | The standard normal's quantile (Wichura's AS 241, as R's ``qnorm``) |
 
 ### Ecosystem services
 
