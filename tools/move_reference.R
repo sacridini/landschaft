@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Golden outputs of R's move2 for ls.move (run by tools/make_reference_move.py).
+# Golden outputs of R's move2 and amt for ls.move (run by tools/make_reference_move.py).
 #
 # Usage: Rscript move_reference.R job.json outdir
 # job.json: {"sets": {name: {"dir", "n", "crs", "track", "extra"}}, "cases": [{"name", "data", "code"}]}
@@ -18,6 +18,7 @@ job <- fromJSON(args[1], simplifyVector = FALSE)
 outdir <- args[2]
 tools <- Sys.getenv("TOOLS")
 source(file.path(tools, "move2_fixed.R"))
+source(file.path(tools, "amt_fixed.R"))
 
 read_f64 <- function(path, n) readBin(path, "double", n = n, size = 8, endian = "little")
 

@@ -136,7 +136,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     ---
 
-    Movebank tracks, steps, speeds and turns, filters, interpolation, track lines (move2).
+    Movebank tracks, steps, speeds and turns, filters, track lines (move2); random steps for step selection (amt).
 
 -   :material-timeline-clock-outline:{ .lg .middle } **[Land change simulation](simulate.md)**
 
@@ -783,6 +783,23 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.move.segments`](move.md#landschaft.move.segments) | The step from each location to the next of its track as a line (move2's ``mt_segments``) |
 | [`ls.move.track_data`](move.md#landschaft.move.track_data) | One row per track with the columns whose value does not change within a track (move2's ``mt_track_data``) |
 | [`ls.move.aeqd_crs`](move.md#landschaft.move.aeqd_crs) | An azimuthal equidistant projection centred on the tracks (move2's ``mt_aeqd_crs``) |
+| [`ls.move.resample`](move.md#landschaft.move.resample) | Locations at a regular rate, in bursts (amt's ``track_resample``, the same locations and bursts) |
+| [`ls.move.filter_min_n_burst`](move.md#landschaft.move.filter_min_n_burst) | The bursts (`resample`) of at least ``min_n`` locations (amt's ``filter_min_n_burst``) |
+| [`ls.move.steps`](move.md#landschaft.move.steps) | The steps between consecutive locations of each track (amt's ``steps``, ``steps_by_burst``) |
+| [`ls.move.time_of_day`](move.md#landschaft.move.time_of_day) | Day or night at each location, or at the end or start of each step (amt's ``time_of_day``) |
+| [`ls.move.nsd`](move.md#landschaft.move.nsd) | Net squared displacement: the squared distance of each location from the first of its track (amt's ``nsd``) |
+| [`ls.move.cum_dist`](move.md#landschaft.move.cum_dist) | The length of each track: the sum of its steps (amt's ``cum_dist``), metres in longitude / latitude |
+| [`ls.move.tot_dist`](move.md#landschaft.move.tot_dist) | The distance from the first to the last location of each track (amt's ``tot_dist``) |
+| [`ls.move.straightness`](move.md#landschaft.move.straightness) | `tot_dist` over `cum_dist`: 1 for a straight track, near 0 for a tortuous one (amt's ``straightness``) |
+| [`ls.move.msd`](move.md#landschaft.move.msd) | Mean squared distance of the locations of each track from their centre (amt's ``msd``) |
+| [`ls.move.sinuosity`](move.md#landschaft.move.sinuosity) | Sinuosity of each track (Benhamou 2004; amt's ``sinuosity``) |
+| [`ls.move.tac`](move.md#landschaft.move.tac) | Turn angle correlation of each track (Dray et al. 2010; amt's ``tac``) |
+| [`ls.move.make_distribution`](move.md#landschaft.move.make_distribution) | A distribution of step lengths or turn angles (amt's ``make_distribution``, ``make_*_distr``) |
+| [`ls.move.Distribution`](move.md#landschaft.move.Distribution) | A distribution of step lengths or turn angles (amt's ``amt_distr``) |
+| [`ls.move.fit_distr`](move.md#landschaft.move.fit_distr) | A distribution fitted to step lengths or turn angles (amt's ``fit_distr``, the same numbers) |
+| [`ls.move.random_numbers`](move.md#landschaft.move.random_numbers) | Draws of a distribution of steps (amt's ``random_numbers``) |
+| [`ls.move.random_steps`](move.md#landschaft.move.random_steps) | Each observed step with ``n_control`` random steps from its start (amt's ``random_steps``) |
+| [`ls.move.extract_covariates`](move.md#landschaft.move.extract_covariates) | The values of rasters at locations, or at the ends or starts of steps (amt's ``extract_covariates``) |
 
 ### Land change simulation
 

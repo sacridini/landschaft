@@ -4947,7 +4947,28 @@ ls.move.validate(ud, cur)
   4326 (~900 m nos fishers): só a forma correta, testada contra `mt_aeqd_crs_fixed`. Tempos com milissegundos: o R
   carrega ~1e-7 s de erro nos lags (segundos desde 1970 em double); o `ls.move` usa as diferenças exatas em ns
   (teste com tolerância só nesse caso).
-* Próximo: fase 2 (download do Movebank).
+* Fase 2 adiada (2026-10-29): a API do Movebank responde 401 sem login e o usuário não tem conta; fica para
+  quando houver uma (gratuita) para gravar respostas reais. O vocabulário (servidor NERC) é público.
+* **Fase 3 feita** (2026-10-29, sem versão), bit a bit contra o amt 0.3.1 (casos do grupo `amt` em
+  `tests/move_cases.py`, `tests/data/reference/move/amt.npz`, 15 testes em `tests/test_move_amt.py`): `resample`
+  (o `mk_reg`), `filter_min_n_burst`, `steps` (por track e por burst, como o `steps_by_burst`; `lonlat` pelo CRS),
+  `nsd`, `cum_dist`, `tot_dist`, `straightness`, `msd`, `sinuosity`, `tac`, `time_of_day` (o suncalc com o meio-dia
+  em UTC; o R roda com `TZ=UTC`), `make_distribution` / `Distribution`, `fit_distr` (gama: o Nelder-Mead e o
+  `optimHess` do R, o `solve` pelo dgetrf2; von Mises: o `mle.vonmises` do circular, com o `besselI` do R
+  vendorizado; lnorm, hnorm, unif), `random_numbers` (o `rgamma` do R vendorizado, `rvm` do circular),
+  `random_steps` (sorteios na ordem das promessas do R; o `fitdist` com `keepdata = FALSE` sorteia a subamostra que
+  guarda, `sample.int(n - 2, min(100, n) - 2)`, antes dos sorteios dos comprimentos: repetido) e
+  `extract_covariates` (a regra do `cellFromXY` do terra pelo `grid_cells` do `ls.sdm`). O nmath do R 4.4.2
+  (dgamma, rgamma, lgamma, besselI e dependências) em `src/cpp/move/vendor/rmath-4.4.2` com as funções x87 do mingw
+  (`log1p`, `expm1` novos em `lsm/x87_msvc.asm`) e o `lgamma` Cephes do mingw portado.
+* Erros do amt encontrados (só a forma correta, testada contra `tools/amt_fixed.R`): em longitude / latitude o
+  `direction_abs` toma o rumo do geosphere (horário a partir do norte) como ângulo anti-horário a partir do leste
+  (aqui `90 - rumo`); o `sinuosity` converte de graus ângulos que já estão em radianos; o `fit_distr(x, "exp")` falha
+  (o BFGS do `fitdistrplus` com passo 1e-3 no gradiente leva a taxa abaixo de 0) para taxas abaixo de 1e-3, ou seja,
+  passos médios acima de 1000 m: aqui a taxa de máxima verossimilhança `1 / mean(x)`, de onde o BFGS parte. O
+  `vcov` do von Mises guarda o erro padrão; aqui a variância.
+* Falta da fase 3: `extract_covariates_along` (os valores ao longo do passo) e `intensity_use` (precisa do
+  `hr_mcp`, fase 5). Próximo: fase 4 (iSSF).
 
 ### Pontos a decidir no caminho
 * O nível de paridade do ctmm: o otimizador e o pREML são longos; se o passo a passo não for viável, tolerância

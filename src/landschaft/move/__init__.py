@@ -28,9 +28,14 @@ from ._geometry import aeqd_crs, interpolate, segments, track_data, track_lines
 from ._measures import azimuth, distance, speed, time_lags, turn_angle
 from ._read import as_tracks, load_tracks
 from ._simulate import simulate_brownian
+from ._ssf import Distribution, extract_covariates, fit_distr, make_distribution, random_numbers, random_steps
+from ._steps import (cum_dist, filter_min_n_burst, msd, nsd, resample, sinuosity, steps, straightness, tac,
+                     time_of_day, tot_dist)
 from ._tracks import set_columns
 
-__all__ = ["aeqd_crs", "as_tracks", "azimuth", "distance", "filter_movebank_visible", "filter_per_interval",
-           "filter_unique", "interpolate", "load_tracks", "movebank_visible", "per_interval", "segments",
-           "set_columns", "simulate_brownian", "speed", "time_lags", "track_data", "track_lines", "turn_angle",
-           "unique"]
+__all__ = ["aeqd_crs", "as_tracks", "azimuth", "cum_dist", "distance", "Distribution", "extract_covariates",
+           "filter_min_n_burst", "filter_movebank_visible", "filter_per_interval", "filter_unique", "fit_distr",
+           "interpolate", "load_tracks", "make_distribution", "movebank_visible", "msd", "nsd", "per_interval",
+           "random_numbers", "random_steps", "resample", "segments", "set_columns", "simulate_brownian", "sinuosity",
+           "speed", "steps", "straightness", "tac", "time_lags", "time_of_day", "tot_dist", "track_data",
+           "track_lines", "turn_angle", "unique"]

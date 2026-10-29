@@ -138,3 +138,91 @@ set.seed(5); d <- mt_sim_brownian_motion()
 c2 <- st_coordinates(d)
 list(x1 = c1[, 1], y1 = c1[, 2], x2 = c2[, 1], y2 = c2[, 2])"""),
 }
+
+# amt (group "amt"): x's tracks as amt tracks (amt_tracks, tools/amt_fixed.R), results of the tracks in turn
+
+_AMT_STEPS = """s <- lapply(amt_tracks(x), function(tr) amt::steps(tr{args}))
+list(sl = amt_cat(s, "sl_"), dir = amt_cat(s, "direction_p"), ta = amt_cat(s, "ta_"),
+     x2 = amt_cat(s, "x2_"), y2 = amt_cat(s, "y2_"), dt = amt_cat(s, "dt_"))"""
+
+# the raster of the extract cases: 40 x 50 cells of 37 m, its left edge on the 7th location, its top on the 12th
+EXTRACT_RASTER = {"nrows": 40, "ncols": 50, "res": 37.0, "x_from": 6, "y_from": 11, "na_every": 13}
+_RASTER = """xy <- sf::st_coordinates(x)
+X0 <- xy[7, 1]; Y1 <- xy[12, 2]
+r <- terra::rast(nrows = 40, ncols = 50, xmin = X0, xmax = X0 + 50 * 37, ymin = Y1 - 40 * 37, ymax = Y1,
+                 crs = "EPSG:32723")
+v <- as.numeric(1:2000); v[v %% 13 == 0] <- NA; terra::values(r) <- v; names(r) <- "cover"
+"""
+
+CASES.update({
+    "amt_steps_utm": Case("utm", _AMT_STEPS.format(args=""), "amt"),
+    "amt_steps_plain": Case("plain", _AMT_STEPS.format(args=""), "amt"),
+    "amt_steps_ll": Case("ll", _AMT_STEPS.format(args=", lonlat = TRUE"), "amt"),
+    "amt_resample": Case("utm", """tr <- amt_tracks(x)
+a <- lapply(tr, function(t) amt::track_resample(t, rate = lubridate::seconds(60), tolerance = lubridate::seconds(15)))
+b <- lapply(tr, function(t) amt::track_resample(t, rate = lubridate::minutes(15), tolerance = lubridate::minutes(2),
+                                                start = 3))
+f <- lapply(a, amt::filter_min_n_burst, min_n = 4)
+s <- lapply(a, function(t) suppressWarnings(amt::steps_by_burst(t)))
+list(t_a = amt_cat(a, "t_"), burst_a = amt_cat(a, "burst_"), t_b = amt_cat(b, "t_"), burst_b = amt_cat(b, "burst_"),
+     t_f = amt_cat(f, "t_"), burst_f = amt_cat(f, "burst_"),
+     sl = amt_cat(s, "sl_"), dir = amt_cat(s, "direction_p"), ta = amt_cat(s, "ta_"), sburst = amt_cat(s, "burst_"))""",
+                         "amt"),
+    "amt_summaries_utm": Case("utm", """tr <- amt_tracks(x)
+list(nsd = unlist(lapply(tr, amt::nsd)), msd = sapply(tr, amt::msd),
+     cum = sapply(tr, function(t) as.numeric(amt::cum_dist(t))), tot = sapply(tr, function(t) as.numeric(amt::tot_dist(t))),
+     straight = sapply(tr, function(t) as.numeric(amt::straightness(t))),
+     sinuosity = sapply(tr, amt::sinuosity), tac = sapply(tr, amt::tac))""", "amt"),
+    "amt_summaries_ll": Case("ll", """tr <- amt_tracks(x)
+list(nsd = unlist(lapply(tr, amt::nsd)), msd = sapply(tr, amt::msd),
+     cum = sapply(tr, function(t) as.numeric(amt::cum_dist(t))), tot = sapply(tr, function(t) as.numeric(amt::tot_dist(t))))""",
+                             "amt"),
+    "amt_fit": Case("utm", """out <- list()
+for (tr in amt_tracks(x)) {
+  s <- amt::steps(tr)
+  g <- suppressMessages(amt::fit_distr(s$sl_, "gamma")); v <- amt::fit_distr(s$ta_, "vonmises")
+  l <- amt::fit_distr(s$sl_[s$sl_ > 0], "lnorm")
+  out <- c(out, list(c(g$params$shape, g$params$scale, as.vector(g$vcov), v$params$kappa, as.numeric(v$vcov)^2,
+                       amt_fit_distr_fixed(s$sl_[s$sl_ > 0], "exp")$params$rate, l$params$meanlog, l$params$sdlog,
+                       amt::fit_distr(s$sl_, "hnorm")$params$sd, unlist(amt::fit_distr(s$ta_, "unif")$params))))
+}
+list(fits = unlist(out))""", "amt"),
+    "amt_random_numbers": Case("plain", """d <- list(amt::make_gamma_distr(0.4, 120), amt::make_gamma_distr(3.5, 20), amt::make_exp_distr(0.02),
+          amt::make_lnorm_distr(3, 0.7), amt::make_hnorm_distr(50), amt::make_unif_distr(),
+          amt::make_vonmises_distr(0), amt::make_vonmises_distr(2.5))
+list(draws = unlist(lapply(d, function(z) { set.seed(17); amt::random_numbers(z, n = 300) })))""", "amt"),
+    "amt_random_steps": Case("utm", """set.seed(42)
+r <- lapply(amt_tracks(x), function(tr) amt::random_steps(amt::steps(tr), n_control = 5))
+set.seed(3)
+u <- lapply(amt_tracks(x), function(tr) amt::random_steps(amt::steps(tr), n_control = 3,
+                                                          sl_distr = amt::make_exp_distr(0.01),
+                                                          ta_distr = amt::make_unif_distr()))
+list(x2 = amt_cat(r, "x2_"), y2 = amt_cat(r, "y2_"), sl = amt_cat(r, "sl_"), ta = amt_cat(r, "ta_"),
+     case = amt_cat(r, "case_"), id = amt_cat(r, "step_id_"),
+     ux2 = amt_cat(u, "x2_"), uy2 = amt_cat(u, "y2_"), usl = amt_cat(u, "sl_"), uta = amt_cat(u, "ta_"))""", "amt"),
+    "amt_random_steps_bursts": Case("utm", """set.seed(7)
+r <- lapply(amt_tracks(x), function(tr) {
+  b <- amt::track_resample(tr, rate = lubridate::seconds(60), tolerance = lubridate::seconds(15))
+  suppressWarnings(amt::random_steps(amt::steps_by_burst(b)))
+})
+list(x2 = amt_cat(r, "x2_"), y2 = amt_cat(r, "y2_"), sl = amt_cat(r, "sl_"), ta = amt_cat(r, "ta_"),
+     case = amt_cat(r, "case_"), id = amt_cat(r, "step_id_"), burst = amt_cat(r, "burst_"))""", "amt"),
+    "amt_time_of_day": Case("ll", """tr <- amt_tracks(x)
+s <- lapply(tr, amt::steps)
+list(tod = unlist(lapply(tr, function(t) as.numeric(amt::time_of_day(t)$tod_))),
+     crep = unlist(lapply(tr, function(t) as.numeric(amt::time_of_day(t, include.crepuscule = TRUE)$tod_))),
+     end = unlist(lapply(s, function(t) as.numeric(amt::time_of_day(t, include.crepuscule = TRUE)$tod_end_))),
+     start = unlist(lapply(s, function(t) as.numeric(amt::time_of_day(t, where = "start")$tod_start_))))""", "amt"),
+    "amt_time_of_day_fishers": Case("fishers", """x <- x[!sf::st_is_empty(x), ]
+list(crep = unlist(lapply(amt_tracks(x), function(t) as.numeric(amt::time_of_day(t, include.crepuscule = TRUE)$tod_))))""",
+                                    "amt"),
+    "amt_extract": Case("utm", _RASTER + """tr <- amt_tracks(x)
+s <- lapply(tr, amt::steps)
+set.seed(42)
+rs <- lapply(tr, function(t) amt::random_steps(amt::steps(t), n_control = 5))
+list(track = unlist(lapply(tr, function(t) amt::extract_covariates(t, r)$cover)),
+     both_start = unlist(lapply(s, function(t) amt::extract_covariates(t, r, where = "both")$cover_start)),
+     both_end = unlist(lapply(s, function(t) amt::extract_covariates(t, r, where = "both")$cover_end)),
+     start = unlist(lapply(s, function(t) amt::extract_covariates(t, r, where = "start")$cover)),
+     random = unlist(lapply(rs, function(t) amt::extract_covariates(t, r)$cover)))""", "amt"),
+})

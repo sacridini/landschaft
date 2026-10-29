@@ -134,6 +134,12 @@ double geosphere_distance(double lon1, double lat1, double lon2, double lat2) {
     return s12;
 }
 
+double geosphere_bearing(double lon1, double lat1, double lon2, double lat2) {
+    double s12, azi1, azi2;
+    geosphere_wgs84().Inverse(lat1, lon1, lat2, lon2, s12, azi1, azi2);
+    return azi1;
+}
+
 void terra_direct(double lon1, double lat1, double azi1, double s12, double& lon2, double& lat2) {
     double azi2;
     terra_geodesic::sdm_terra_geod_direct(terra_wgs84(), lat1, lon1, azi1, s12, &lat2, &lon2, &azi2);

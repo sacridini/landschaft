@@ -20,8 +20,26 @@ in a new major version.
   centred on the tracks) and `simulate_brownian` (R's `rnorm` after `set.seed`: move2's tracks). C++ with OpenMP;
   the same with any number of threads. Tested against move2 on random tracks (millimetre to continental steps, the
   antimeridian, near the poles) and on move2's fishers.
+- `ls.move`, its second part: amt 0.3.1's (Signer et al. 2019) steps for step selection functions, the same numbers
+  bit for bit. `resample` (locations at a regular rate within a tolerance, in bursts) and `filter_min_n_burst`;
+  `steps` (lengths, directions and turn angles per track or burst, great circles and geodesic bearings in
+  longitude / latitude); `nsd`, `cum_dist`, `tot_dist`, `straightness`, `msd`, `sinuosity` and `tac` of each track;
+  `time_of_day` (suncalc's sunrise, sunset and civil twilight; day, night, dawn, dusk); `make_distribution`,
+  `fit_distr` (gamma by fitdistrplus' Nelder-Mead with its variances, von Mises by circular's `mle.vonmises`,
+  log-normal, half-normal, uniform, exponential) and `random_numbers`; `random_steps` (each observed step with
+  random steps drawn from those distributions; with a seed, R's random numbers: amt's steps) and
+  `extract_covariates` (raster values at locations or at the starts and ends of steps, terra's cell rule).
+- Builds with MSVC start at most 4 compilers per Python module (`/MP4`, the CMake variable `LANDSCHAFT_MSVC_MP`):
+  pybind11's `/MP` started one per logical core whatever the build's parallel level.
 
 ### Fixed (in the reference)
+- amt's directions in longitude / latitude take geosphere's bearing (clockwise from north) as the anticlockwise
+  angle from east; `ls.move.steps` converts it (`90 - bearing`). amt's `sinuosity` converts the turn angles, already
+  in radians, from degrees; `ls.move.sinuosity` takes them in radians. amt's `fit_distr(x, "exp")` fails for rates
+  below 0.001 (mean steps over 1000 m: fitdistrplus' numerical gradient steps the rate below 0);
+  `ls.move.fit_distr` gives the maximum likelihood rate, `1 / mean(x)`. amt stores the standard error of the von
+  Mises kappa as its `vcov`; `ls.move.fit_distr` stores the variance. Tested against amt with the code fixed
+  (`tools/amt_fixed.R`).
 - move2's `mt_aeqd_crs` transforms the centroid to EPSG 4236 (Hu Tzu Shan 1950) instead of 4326 (WGS 84), moving
   the centre by about 900 m on its fishers; `ls.move.aeqd_crs` takes it in WGS 84 (tested against move2 with the code fixed,
   `tools/move2_fixed.R`).

@@ -48,6 +48,55 @@ done:
     ret
 lsm_x87_log ENDP
 
+; double lsm_x87_log1p(double x), x > -1 and finite: mingw-w64's log1p()
+; (math/x86/log1p.S): fyl2xp1 when |x| < 0.29, else fyl2x of 1 + x, with the
+; sum and the logarithm in extended precision.
+lsm_x87_log1p PROC
+    movsd   REAL8 PTR [rsp+8], xmm0
+    fnstcw  WORD PTR [rsp+16]
+    mov     ax, WORD PTR [rsp+16]
+    and     ax, 0F0FFh
+    or      ax, 0300h
+    mov     WORD PTR [rsp+18], ax
+    fldcw   WORD PTR [rsp+18]
+    fldln2
+    fld     REAL8 PTR [rsp+8]
+    fld     st(0)
+    fabs
+    fcomp   limit
+    fnstsw  ax
+    and     ah, 01h
+    jz      log1p_fyl2x
+    fyl2xp1
+    jmp     log1p_done
+log1p_fyl2x:
+    fadd    one
+    fyl2x
+log1p_done:
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_log1p ENDP
+
+; double lsm_x87_f2xm1(double x), |x| <= 1: 2^x - 1 by f2xm1 in extended
+; precision, rounded to double (mingw-w64's expm1() for |x| < log(2)).
+lsm_x87_f2xm1 PROC
+    movsd   REAL8 PTR [rsp+8], xmm0
+    fnstcw  WORD PTR [rsp+16]
+    mov     ax, WORD PTR [rsp+16]
+    and     ax, 0F0FFh
+    or      ax, 0300h
+    mov     WORD PTR [rsp+18], ax
+    fldcw   WORD PTR [rsp+18]
+    fld     REAL8 PTR [rsp+8]
+    f2xm1
+    fstp    REAL8 PTR [rsp+8]
+    fldcw   WORD PTR [rsp+16]
+    movsd   xmm0, REAL8 PTR [rsp+8]
+    ret
+lsm_x87_f2xm1 ENDP
+
 ; double lsm_x87_sqrt(double x), x >= 0
 lsm_x87_sqrt PROC
     movsd   REAL8 PTR [rsp+8], xmm0

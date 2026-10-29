@@ -18,6 +18,8 @@
 #if defined(_MSC_VER) && !defined(__clang__) && defined(_M_X64)
 #define LSM_X87_MASM 1
 extern "C" double lsm_x87_log(double x);
+extern "C" double lsm_x87_log1p(double x);
+extern "C" double lsm_x87_f2xm1(double x);
 extern "C" double lsm_x87_sqrt(double x);
 extern "C" double lsm_x87_sin(double x);
 extern "C" double lsm_x87_cos(double x);
@@ -68,6 +70,32 @@ inline double r_log(double x) {
     return static_cast<double>(r);
 #else
     return std::log(x);
+#endif
+}
+
+// R's log1p(x): mingw-w64's (fyl2xp1 when |x| < 0.29, else fyl2x of 1 + x,
+// in extended precision), which R's nmath calls (ebd0, log1pmx, lgamma1p).
+inline double r_log1p(double x) {
+    if (!(x > -1) || !std::isfinite(x)) return std::log1p(x);
+#if defined(LSM_X87_MASM)
+    return lsm_x87_log1p(x);
+#elif defined(LSM_X87_INLINE)
+    detail::X87Precision precision;
+    long double v = x;
+    long double r;
+    if (std::fabs(v) < static_cast<long double>(0.29)) {
+        __asm__("fldln2
+	fxch
+	fyl2xp1" : "=t"(r) : "0"(v) : "st(1)");
+    } else {
+        v += 1.0L;
+        __asm__("fldln2
+	fxch
+	fyl2x" : "=t"(r) : "0"(v) : "st(1)");
+    }
+    return static_cast<double>(r);
+#else
+    return std::log1p(x);
 #endif
 }
 
@@ -294,6 +322,28 @@ inline double r_exp(double x) {
 #else
     return std::exp(x);
 #endif
+}
+
+// R's expm1(x): mingw-w64's (math/x86/expm1.def.h): f2xm1 of x / log(2) in
+// extended precision when |x| < log(2), else exp(x) - 1 (r_exp).
+inline double r_expm1(double x) {
+    if (std::isnan(x) || x == 0) return x;
+    if (std::isinf(x)) return x < 0 ? -1.0 : x;
+    constexpr double kLn2 = 6.93147180559945309417E-1;
+    if (std::fabs(x) < kLn2) {
+        const double t = x / kLn2;
+#if defined(LSM_X87_MASM)
+        return lsm_x87_f2xm1(t);
+#elif defined(LSM_X87_INLINE)
+        detail::X87Precision precision;
+        long double v = t;
+        __asm__("f2xm1" : "+t"(v));
+        return static_cast<double>(v);
+#else
+        return std::expm1(x);
+#endif
+    }
+    return r_exp(x) - 1.0;
 }
 
 // R's x^y (R_pow: powl on 64-bit Windows) with mingw-w64 v11's powl:

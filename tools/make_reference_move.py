@@ -1,19 +1,23 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Generate golden outputs of R's move2 for ls.move.
+"""Generate golden outputs of R's move2 and amt for ls.move.
 
 Usage::
 
     python tools/make_reference_move.py [--case NAME ...]
 
 Draws the track sets of ``tests/move_cases.py``, runs the cases through
-``tools/move_reference.R`` (with ``tools/move2_fixed.R``, move2's corrected
-functions) and stores the inputs in ``tests/data/reference/move/inputs.npz``
-and the results in ``tests/data/reference/move/move2.npz`` (``<case>/<key>``).
+``tools/move_reference.R`` (with ``tools/move2_fixed.R`` and
+``tools/amt_fixed.R``, the packages' corrected functions) and stores the
+inputs in ``tests/data/reference/move/inputs.npz`` and the results in
+``tests/data/reference/move/<group>.npz`` (``move2.npz``, ``amt.npz``; keys
+``<case>/<key>``).
 ``--case`` regenerates only the named cases (the others are kept).
 
 Needs Rscript (``LANDSCHAFT_RSCRIPT`` as in ``tests/lsm_reference.py``) and the
 library ``%LOCALAPPDATA%/R/landschaft-move-lib`` (``LANDSCHAFT_MOVE_R_LIBS``) with
-move2 0.5.0, sf, s2, lwgeom and units. The test-suite reads the stored files,
+move2 0.5.0, sf, s2, lwgeom, units, amt 0.3.1, fitdistrplus 1.2-6, circular
+0.5-2, geosphere 1.6-8, suncalc 0.5.1 and terra. Runs R with ``TZ=UTC`` (suncalc
+takes the noon of the machine's time zone). The test-suite reads the stored files,
 so it runs anywhere without R.
 """
 
@@ -48,6 +52,7 @@ def r_env() -> dict[str, str]:
     env["R_LIBS"] = os.pathsep.join([*libs, *filter(None, [env.get("R_LIBS")])])
     env["TOOLS"] = str(ROOT / "tools")
     env["OMP_NUM_THREADS"] = "1"
+    env["TZ"] = "UTC"
     return env
 
 
@@ -83,13 +88,15 @@ def main() -> None:
         manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         arrays = {f"{m['case']}/{m['key']}": np.fromfile(out / m["file"], "<f8") for m in manifest}
     OUT.mkdir(parents=True, exist_ok=True)
-    npz = OUT / "move2.npz"
-    if args.case and npz.exists():
-        with np.load(npz) as old:
-            arrays = {**{k: old[k] for k in old.files if k.split("/", 1)[0] not in cases}, **arrays}
-    np.savez_compressed(npz, **arrays)
+    for group in sorted({c.group for c in cases.values()}):
+        mine = {k: v for k, v in arrays.items() if cases[k.split("/", 1)[0]].group == group}
+        npz = OUT / f"{group}.npz"
+        if args.case and npz.exists():
+            with np.load(npz) as old:
+                mine = {**{k: old[k] for k in old.files if k.split("/", 1)[0] not in cases}, **mine}
+        np.savez_compressed(npz, **mine)
+        print(f"{group}: {len(mine)} arrays -> {npz.relative_to(ROOT)}")
     np.savez_compressed(OUT / "inputs.npz", **inputs)
-    print(f"{len(cases)} cases, {len(arrays)} arrays -> {npz.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

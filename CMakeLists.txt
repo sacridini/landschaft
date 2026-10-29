@@ -314,15 +314,20 @@ add_library(statscore STATIC
 target_include_directories(statscore PUBLIC src/cpp)
 set_target_properties(statscore PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# Movement ecology (ls.move): steps of tracks as move2 computes them (s2, lwgeom's PROJ geodesics).
+# Movement ecology (ls.move): steps of tracks as move2 and amt compute them (s2, lwgeom's PROJ geodesics,
+# R's nmath, optim and circular's von Mises).
 add_library(movecore STATIC
+    src/cpp/move/amt.cpp
+    src/cpp/move/distr.cpp
     src/cpp/move/geo.cpp
     src/cpp/move/geodesic_proj.cpp
+    src/cpp/move/rnmath.cpp
     src/cpp/move/track.cpp
 )
 target_include_directories(movecore PUBLIC src/cpp)
 set_target_properties(movecore PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(movecore PUBLIC lsmcore nlmcore costcore)
+# sdmcore: geosphere's geodesics (amt's bearings)
+target_link_libraries(movecore PUBLIC lsmcore nlmcore costcore sdmcore)
 # Land use change (ls.simulate): cross-tabulation and change counts.
 add_library(simcore STATIC
     src/cpp/sim/change.cpp
@@ -493,6 +498,9 @@ else()
 endif()
 
 if(LANDSCHAFT_PYTHON)
+    # pybind11 compiles a module's files with /MP, one cl.exe per logical core:
+    # capped, so two modules building at once (msbuild /m:2) stay within 8 processes
+    set(LANDSCHAFT_MSVC_MP 4 CACHE STRING "Most cl.exe processes /MP starts for each Python module (MSVC)")
     pybind11_add_module(_core MODULE src/cpp/bindings.cpp src/cpp/circuit/python.cpp src/cpp/nlm/python.cpp
                         src/cpp/bio/python.cpp src/cpp/cost/python.cpp src/cpp/surf/python.cpp
                         src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
@@ -503,7 +511,7 @@ if(LANDSCHAFT_PYTHON)
     target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
                           iocore sdmcore simcore optcore restcore hydrocore servcore swatcore statscore movecore)
     if(MSVC)
-        target_compile_options(_core PRIVATE /fp:precise)
+        target_compile_options(_core PRIVATE /fp:precise /MP${LANDSCHAFT_MSVC_MP})
     else()
         target_compile_options(_core PRIVATE -ffp-contract=off -fno-fast-math)
     endif()
@@ -526,7 +534,7 @@ if(LANDSCHAFT_PYTHON)
             target_link_libraries(_circuit_avx2 PRIVATE OpenMP::OpenMP_CXX)
         endif()
         if(MSVC)
-            target_compile_options(_circuit_avx2 PRIVATE /arch:AVX2 /fp:precise)
+            target_compile_options(_circuit_avx2 PRIVATE /arch:AVX2 /fp:precise /MP${LANDSCHAFT_MSVC_MP})
         else()
             target_compile_options(_circuit_avx2 PRIVATE -mavx2 -mfma -ffp-contract=off -fno-fast-math)
         endif()

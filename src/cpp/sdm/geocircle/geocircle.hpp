@@ -41,6 +41,9 @@ using GeoParts = std::vector<GeoRing>;
 // distance of Inverse (geosphere::distGeo). Degrees and metres.
 void geosphere_direct(double lon1, double lat1, double azi1, double s12, double& lon2, double& lat2);
 double geosphere_distance(double lon1, double lat1, double lon2, double lat2);
+// The azimuth at the first point (degrees from north, clockwise) of Inverse
+// (geosphere::bearing).
+double geosphere_bearing(double lon1, double lat1, double lon2, double lat2);
 
 // terra 1.9-50 (GeographicLib C 1.52): geod_direct and the distance of
 // geod_inverse.
