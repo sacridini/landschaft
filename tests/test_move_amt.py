@@ -12,7 +12,7 @@ from affine import Affine
 
 import landschaft as ls
 from move_cases import EXTRACT_RASTER
-from test_move import FISHERS, same, same_libm, track_set
+from test_move import FISHERS, METRES, same, same_angle, same_libm, track_set
 
 REF = Path(__file__).parent / "data" / "reference" / "move"
 
@@ -31,9 +31,9 @@ def inputs():
 def test_steps_are_amts(ref, inputs, name):
     s = ls.move.steps(track_set(inputs, name))
     case = f"amt_steps_{name}"
-    same_libm(s["sl_"], ref[f"{case}/sl"], "sl_")
-    same_libm(s["direction_p"], ref[f"{case}/dir"], "direction_p")
-    same_libm(s["ta_"], ref[f"{case}/ta"], "ta_")
+    same_libm(s["sl_"], ref[f"{case}/sl"], "sl_", METRES if name == "ll" else 1e-14)
+    same_angle(s["direction_p"], ref[f"{case}/dir"], s["sl_"], "direction_p")
+    same_angle(s["ta_"], ref[f"{case}/ta"], s["sl_"], "ta_", turn=True)
     same(s["x2_"], ref[f"{case}/x2"])
     same(s["y2_"], ref[f"{case}/y2"])
     same(s["dt_"].dt.total_seconds(), ref[f"{case}/dt"])

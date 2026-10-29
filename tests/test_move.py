@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """ls.move against R's move2 0.5.0 (tests/move_cases.py, tools/make_reference_move.py)."""
 
+import platform
 from pathlib import Path
 
 import geopandas as gpd
@@ -12,9 +13,19 @@ from shapely import Point
 
 import landschaft as ls
 from landschaft import _core
+from conftest import BITWISE, UCRT_LIBM
 
 REF = Path(__file__).parent / "data" / "reference" / "move"
 FISHERS = Path(__file__).parent / "data" / "move" / "fishers.csv.gz"
+
+# R made the references on Windows with an Intel CPU, whose x87 unit gives the bits of sin, cos and atan2
+# (conftest.BITWISE) and whose UCRT gives asin's: there the steps on the sphere and the ellipsoid must be
+# R's. AMD's x87 microcode rounds a few of those results otherwise (4 of the fishers' 32904 distances),
+# ARM has no x87 and other systems another libm, so elsewhere the positions behind a step agree to a few
+# units in the last place of the Earth's radius: METRES (1.5e-9 m seen) on lengths, METRES / length on
+# angles.
+EXACT = UCRT_LIBM and BITWISE and "GenuineIntel" in platform.processor()
+METRES = 1e-8
 
 
 @pytest.fixture(scope="module")
@@ -47,37 +58,63 @@ def same(got, want, err=""):
     np.testing.assert_array_equal(np.asarray(got, float), np.asarray(want, float), err_msg=err)
 
 
-def same_libm(got, want, err=""):
-    """Equal on Windows; elsewhere within ulps: the steps on the sphere and the ellipsoid go through
-    asin (the UCRT's) and mingw-w64's x87 sin / cos / atan2, which other platforms' libms round otherwise."""
-    from conftest import UCRT_LIBM
-
-    if UCRT_LIBM:
+def same_libm(got, want, err="", atol=1e-14):
+    """Equal where the references were made (EXACT); elsewhere within ulps, or ``atol`` (an array: per
+    value)."""
+    if EXACT:
         same(got, want, err)
     else:
-        np.testing.assert_allclose(np.asarray(got, float), np.asarray(want, float), rtol=1e-14, atol=1e-14,
-                                   err_msg=err)
+        got, want = np.asarray(got, float), np.asarray(want, float)
+        np.testing.assert_array_equal(np.isnan(got), np.isnan(want), err_msg=err)
+        bad = ~(np.abs(got - want) <= 1e-14 * np.abs(want) + atol) & ~np.isnan(want)
+        assert not bad.any(), f"{err}: {bad.sum()} values differ, at {np.flatnonzero(bad)[:5]}: "                               f"{got[bad][:5]} vs {want[bad][:5]}"
+
+
+def same_angle(got, want, length, err="", turn=False, period=2 * np.pi):
+    """Angles (``period`` per circle) as same_libm, off EXACT within METRES / ``length`` (the steps'
+    lengths, in metres); a ``turn`` angle takes the shorter of the steps on either side. Zero-length
+    steps have no direction to compare."""
+    length = np.asarray(length, float)
+    if turn:
+        length = np.fmin(np.fmin(np.r_[np.nan, length[:-1]], length), np.r_[length[1:], np.nan])
+    if EXACT:
+        same(got, want, err)
+        return
+    got, want = np.asarray(got, float), np.asarray(want, float)
+    np.testing.assert_array_equal(np.isnan(got), np.isnan(want), err_msg=err)
+    d = np.abs(np.remainder(got - want + period / 2, period) - period / 2)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        tol = 1e-14 * np.abs(want) + 2 * METRES / length * (period / (2 * np.pi))
+    bad = ~(d <= tol) & ~np.isnan(want) & (length > 0)
+    assert not bad.any(), f"{err}: {bad.sum()} values differ, at {np.flatnonzero(bad)[:5]}: "                           f"{got[bad][:5]} vs {want[bad][:5]}"
 
 
 @pytest.mark.parametrize("name", ["ll", "utm", "plain"])
 def test_steps_are_move2s(ref, inputs, name):
     tr = track_set(inputs, name)
     case = f"measures_{name}"
-    check = same_libm if name == "ll" else same
-    check(ls.move.distance(tr), ref[f"{case}/distance"], "distance")
+    d = ls.move.distance(tr)
+    if name == "ll":
+        same_libm(d, ref[f"{case}/distance"], "distance", METRES)
+    else:
+        same(d, ref[f"{case}/distance"], "distance")
     if f"{case}/azimuth" in ref:
-        same_libm(ls.move.azimuth(tr), ref[f"{case}/azimuth"], "azimuth")
-        same_libm(ls.move.turn_angle(tr), ref[f"{case}/turnangle"], "turn angle")
+        same_angle(ls.move.azimuth(tr), ref[f"{case}/azimuth"], d, "azimuth")
+        same_angle(ls.move.turn_angle(tr), ref[f"{case}/turnangle"], d, "turn angle", turn=True)
     same(ls.move.time_lags(tr), ref[f"{case}/time_lags"], "time lags")
     if f"{case}/speed" in ref:
-        check(ls.move.speed(tr), ref[f"{case}/speed"], "speed")
+        if name == "ll":
+            same_libm(ls.move.speed(tr), ref[f"{case}/speed"], "speed", METRES / ls.move.time_lags(tr))
+        else:
+            same(ls.move.speed(tr), ref[f"{case}/speed"], "speed")
 
 
 def test_the_fishers_steps(ref, fishers):
     tr = fishers[~fishers.geometry.is_empty]
-    same_libm(ls.move.distance(tr), ref["measures_fishers/distance"])
-    same_libm(ls.move.azimuth(tr), ref["measures_fishers/azimuth"])
-    same_libm(ls.move.turn_angle(tr), ref["measures_fishers/turnangle"])
+    d = ls.move.distance(tr)
+    same_libm(d, ref["measures_fishers/distance"], "distance", METRES)
+    same_angle(ls.move.azimuth(tr), ref["measures_fishers/azimuth"], d, "azimuth")
+    same_angle(ls.move.turn_angle(tr), ref["measures_fishers/turnangle"], d, "turn angle", turn=True)
     # the times have milliseconds: R holds them as seconds since 1970 in doubles (to ~1e-7 s), ls.move's
     # lags are exact differences of nanoseconds
     np.testing.assert_allclose(ls.move.time_lags(tr), ref["measures_fishers/time_lags"], rtol=0, atol=5e-7)
@@ -87,8 +124,13 @@ def test_the_fishers_steps(ref, fishers):
 
 def test_units(ref, inputs):
     tr = track_set(inputs, "ll")
-    np.testing.assert_allclose(ls.move.distance(tr, "km"), ref["km_deg/km"], rtol=2.3e-16)
-    np.testing.assert_allclose(ls.move.azimuth(tr, "deg"), ref["km_deg/deg"], rtol=2.3e-16)
+    if EXACT:
+        np.testing.assert_allclose(ls.move.distance(tr, "km"), ref["km_deg/km"], rtol=2.3e-16)
+        np.testing.assert_allclose(ls.move.azimuth(tr, "deg"), ref["km_deg/deg"], rtol=2.3e-16)
+    else:
+        d = ls.move.distance(tr)
+        same_libm(ls.move.distance(tr, "km"), ref["km_deg/km"], "km", METRES / 1000)
+        same_angle(ls.move.azimuth(tr, "deg"), ref["km_deg/deg"], d, "deg", period=360.0)
     lag = ls.move.time_lags(tr)
     np.testing.assert_allclose(ls.move.time_lags(tr, "h"), lag / 3600)
 

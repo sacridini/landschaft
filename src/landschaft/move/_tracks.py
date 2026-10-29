@@ -76,12 +76,17 @@ def track_codes(values) -> np.ndarray:
     return codes.astype(np.int64)
 
 
+def _nanoseconds(s: pd.Series) -> np.ndarray:
+    """Datetimes as int64 nanoseconds since the epoch (UTC), whatever the column's unit (pandas 3 reads
+    ISO 8601 text to seconds, milliseconds or microseconds; before pandas 2 they are always nanoseconds)."""
+    return (s.dt.as_unit("ns") if hasattr(s.dt, "as_unit") else s).array.asi8
+
+
 def time_seconds(values) -> np.ndarray:
     """Times as float seconds; lags between datetimes are differences of int64 nanoseconds (exact)."""
     s = pd.Series(values)
     if pd.api.types.is_datetime64_any_dtype(s.dtype):
-        ns = s.array.asi8 if hasattr(s.array, "asi8") else s.to_numpy("datetime64[ns]").view(np.int64)
-        return ns.astype(np.float64) / 1e9
+        return _nanoseconds(s).astype(np.float64) / 1e9
     if pd.api.types.is_timedelta64_dtype(s.dtype):
         return s.to_numpy("timedelta64[ns]").view(np.int64).astype(np.float64) / 1e9
     if pd.api.types.is_numeric_dtype(s.dtype):
@@ -97,8 +102,7 @@ def lags(values, code: np.ndarray) -> np.ndarray:
     if n < 2:
         return out
     if pd.api.types.is_datetime64_any_dtype(s.dtype):
-        ns = s.array.asi8 if hasattr(s.array, "asi8") else s.to_numpy("datetime64[ns]").view(np.int64)
-        d = np.diff(ns).astype(np.float64) / 1e9
+        d = np.diff(_nanoseconds(s)).astype(np.float64) / 1e9
         d[np.asarray(pd.isna(s))[1:] | np.asarray(pd.isna(s))[:-1]] = np.nan
     else:
         d = np.diff(time_seconds(s))
