@@ -104,6 +104,7 @@ def public_objects():
     import landschaft.download
     import landschaft.hydro
     import landschaft.hydro.swat
+    import landschaft.move
     import landschaft.nlm
     import landschaft.parallel
     import landschaft.forest_code
@@ -122,7 +123,7 @@ def public_objects():
                 landschaft.surface, landschaft.hydro, landschaft.hydro.swat, landschaft.parallel, landschaft.prioritize, landschaft.sdm,
                 landschaft.simulate, landschaft.uncertainty, landschaft.services, landschaft.accuracy,
                 landschaft.sensitivity, landschaft.stats, landschaft.redd,
-                landschaft.forest_code, landschaft.download):
+                landschaft.forest_code, landschaft.download, landschaft.move):
         for name in getattr(mod, "__all__", []):
             obj = getattr(mod, name)
             if id(obj) in seen or not callable(obj):

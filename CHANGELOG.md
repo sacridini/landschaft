@@ -6,6 +6,28 @@ in a new major version.
 
 ## [Unreleased]
 
+### Added
+- `ls.move`: animal movement, its first part R's move2 0.5.0 (Kranstauber et al. 2024), the same numbers bit for
+  bit. `ls.load_tracks` reads Movebank's files (`.csv`, `.csv.gz`, `.zip`: UTC times, the deployment's tag when an
+  animal carried several, records without a location kept empty) into GeoDataFrames of points, one row per location;
+  `as_tracks` takes any table of locations and `set_columns` records which columns hold the time and the track.
+  `distance` (on the sphere of S2 in longitude / latitude, as `sf::st_distance`), `time_lags`, `speed`, `azimuth`
+  (lwgeom's geodesic azimuth on the CRS's ellipsoid, GeographicLib) and `turn_angle` of every step, in their units;
+  `unique` / `filter_unique` (subsets of other records, first, last, a random one), `per_interval` /
+  `filter_per_interval` (lubridate's intervals, first, last or random), `movebank_visible` /
+  `filter_movebank_visible`; `interpolate` (on the great circle in proportion to the time, at given times or every
+  interval, gaps longer than a lag left empty), `track_lines`, `segments`, `track_data`, `aeqd_crs` (a projection
+  centred on the tracks) and `simulate_brownian` (R's `rnorm` after `set.seed`: move2's tracks). C++ with OpenMP;
+  the same with any number of threads. Tested against move2 on random tracks (millimetre to continental steps, the
+  antimeridian, near the poles) and on move2's fishers.
+
+### Fixed (in the reference)
+- move2's `mt_aeqd_crs` transforms the centroid to EPSG 4236 (Hu Tzu Shan 1950) instead of 4326 (WGS 84), moving
+  the centre by about 900 m on its fishers; `ls.move.aeqd_crs` takes it in WGS 84 (tested against move2 with the code fixed,
+  `tools/move2_fixed.R`).
+- Times with milliseconds: move2's lags and speeds carry R's seconds since 1970 in doubles (about 1e-7 s off);
+  `ls.move.time_lags` takes exact differences of the nanoseconds.
+
 ## [1.56.0] - 2026-10-28
 
 1.55.0 was not published: one test of its wheels (coastal vulnerability's lon / lat case, compared bit for bit

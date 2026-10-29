@@ -52,6 +52,7 @@
 #include "opt/python.hpp"
 #include "rest/python.hpp"
 #include "serv/python.hpp"
+#include "move/python.hpp"
 #include "stats/python.hpp"
 #include "swat/python.hpp"
 #include "conn/cost.hpp"
@@ -1459,6 +1460,7 @@ PYBIND11_MODULE(_core, m) {
     rest::register_python(m);
     serv::register_python(m);
     stats::register_python(m);
+    move::register_python(m);
     swat::register_python(m);
     m.def("cpu_supports_avx2_fma", &cpu_supports_avx2_fma, "AVX2 and FMA usable (landschaft._circuit_avx2).");
     m.def("conn_raster_nodes", &conn_raster_nodes, py::arg("values"), py::arg("na"), py::arg("xmin"), py::arg("xmax"),

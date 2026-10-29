@@ -132,6 +132,12 @@ ls.sdm.prepare(occ, env)            # species distribution models
 
     Clean records, choose predictors and background, spatial folds, fit, evaluate, project, disperse.
 
+-   :material-map-marker-path:{ .lg .middle } **[Animal movement](move.md)**
+
+    ---
+
+    Movebank tracks, steps, speeds and turns, filters, interpolation, track lines (move2).
+
 -   :material-timeline-clock-outline:{ .lg .middle } **[Land change simulation](simulate.md)**
 
     ---
@@ -752,6 +758,31 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | [`ls.sdm.HabitatAreas`](sdm.md#landschaft.sdm.HabitatAreas) | Result of `area_of_habitat` |
 | [`ls.sdm.cell_area_km2`](sdm.md#landschaft.sdm.cell_area_km2) | The area of every cell of a raster's grid in km²: the product of the resolutions in a projected coordinate system (in its linear unit), the cell on the ellipsoid in a geographic one |
 | [`ls.sdm.example_data`](sdm.md#landschaft.sdm.example_data) | Path of an example data set for species distribution modelling |
+
+### Animal movement
+
+| Name | Summary |
+|---|---|
+| [`ls.load_tracks`](move.md#landschaft.move.load_tracks) | Read a Movebank file into tracks (move2's ``mt_read``): a GeoDataFrame of points in EPSG:4326 |
+| [`ls.move.as_tracks`](move.md#landschaft.move.as_tracks) | Tracks from a table of locations (move2's ``mt_as_move2``): a GeoDataFrame ``ls.move`` understands |
+| [`ls.move.set_columns`](move.md#landschaft.move.set_columns) | Record which columns hold the time and the track (``tracks.attrs``), so later calls need not name them |
+| [`ls.move.simulate_brownian`](move.md#landschaft.move.simulate_brownian) | Tracks of Brownian motion (move2's ``mt_sim_brownian_motion``) |
+| [`ls.move.distance`](move.md#landschaft.move.distance) | Distance from each location to the next location of its track |
+| [`ls.move.time_lags`](move.md#landschaft.move.time_lags) | Time from each location to the next of its track (move2's ``mt_time_lags``), in seconds |
+| [`ls.move.speed`](move.md#landschaft.move.speed) | Speed of each step: `distance` over `time_lags` (move2's ``mt_speed``) |
+| [`ls.move.azimuth`](move.md#landschaft.move.azimuth) | Direction of each step, clockwise from north (move2's ``mt_azimuth``) |
+| [`ls.move.turn_angle`](move.md#landschaft.move.turn_angle) | Change of direction at each location, in [-pi, pi) (move2's ``mt_turnangle``) |
+| [`ls.move.unique`](move.md#landschaft.move.unique) | Which locations to keep so that no two of a track share their time (move2's ``mt_unique``) |
+| [`ls.move.filter_unique`](move.md#landschaft.move.filter_unique) | ``tracks`` without duplicated times within a track (move2's ``mt_filter_unique``; see `unique`) |
+| [`ls.move.per_interval`](move.md#landschaft.move.per_interval) | Which locations to keep for one per time interval of each track (move2's ``mt_per_interval``) |
+| [`ls.move.filter_per_interval`](move.md#landschaft.move.filter_per_interval) | ``tracks`` with one location per time interval of each track (see `per_interval`) |
+| [`ls.move.movebank_visible`](move.md#landschaft.move.movebank_visible) | Which locations Movebank shows (move2's ``mt_movebank_visible``): a boolean mask |
+| [`ls.move.filter_movebank_visible`](move.md#landschaft.move.filter_movebank_visible) | ``tracks`` without the locations Movebank hides (see `movebank_visible`) |
+| [`ls.move.interpolate`](move.md#landschaft.move.interpolate) | Locations at given times between the recorded ones (move2's ``mt_interpolate``) |
+| [`ls.move.track_lines`](move.md#landschaft.move.track_lines) | Each track as a line through its locations in time order (move2's ``mt_track_lines``) |
+| [`ls.move.segments`](move.md#landschaft.move.segments) | The step from each location to the next of its track as a line (move2's ``mt_segments``) |
+| [`ls.move.track_data`](move.md#landschaft.move.track_data) | One row per track with the columns whose value does not change within a track (move2's ``mt_track_data``) |
+| [`ls.move.aeqd_crs`](move.md#landschaft.move.aeqd_crs) | An azimuthal equidistant projection centred on the tracks (move2's ``mt_aeqd_crs``) |
 
 ### Land change simulation
 

@@ -1080,6 +1080,7 @@ Todos os módulos planejados são plenamente viáveis e compatíveis com a licen
 | **Marxan** 4.0.6 (simulated annealing) | **MIT** (Possingham, Ball, Watts; código em `C:\Users\eduar\Documents\dev\marxan`) | **Compatível**. Porte em `src/cpp/opt/marxan` com paridade contra o executável (gcc). |
 | **move2** 0.5.0 / **move** 4.2.7 / **amt** 0.3.1.0 / **moveHMM** 1.12 / **momentuHMM** 1.5.8 / **ctmm** 1.3.0 / **enerscape** 1.2.0 (`ls.move`) | **GPL >= 3 / GPL-3** (R, C, C++; conferido no CRAN em 2026-10-29) | **100% compatível**. Reimplementação em C++ com os pacotes como referência de paridade. |
 | **recurse** 1.4.0 (`ls.move`) | **MIT** (R + C++) | **Compatível com a GPL-3**. |
+| **GeographicLib C** 2.1 (o `geodesic.c` do PROJ 9.4.1, vendorizado em `src/cpp/move/vendor/`) | **MIT** (Charles Karney) | **Compatível com a GPL-3**. O azimute geodésico do lwgeom bit a bit. |
 
 ---
 
@@ -4925,6 +4926,28 @@ ls.move.validate(ud, cur)
 10. Capítulo do Learn ("Animal movement": do Movebank à resistência), tutorial, glossário, índice da API;
     benchmarks contra os pacotes R, o movingpandas e o scikit-mobility; depois o Terraflux os liga pelo
     `terraflux-ls-sys`.
+
+### Andamento (2026-10-29)
+* **Fases 0 e 1 feitas** (sem versão). Harness: `tools/move_reference.R` (roda os casos de `tests/move_cases.py`),
+  `tools/make_reference_move.py` (grava `tests/data/reference/move/move2.npz` e as entradas em `inputs.npz`, os
+  mesmos números em toda plataforma), `tools/move2_fixed.R`; a biblioteca R em `%LOCALAPPDATA%/R/landschaft-move-lib`
+  (move2, amt, move, moveHMM, momentuHMM, ctmm, recurse, enerscape e dependências; sf / s2 / lwgeom da biblioteca
+  do usuário; o lwgeom 0.2.17 do GitHub). Dados: os fishers do move2 (LaPoint et al. 2013, Movebank, CC0) em
+  `tests/data/move/fishers.csv.gz`.
+* Base do move2 bit a bit (Windows; tolerância de ulps nas outras libms, `UCRT_LIBM`): `distance` (s2: o ponto
+  pela PlateCarree(180), `2·asin(0.5·sqrt(min(4, |a-b|²)))·6371010`), `azimuth` (o lwgeom: graus pelas funções de
+  normalização dele, depois o `geod_inverse` do GeographicLib C 2.1 do PROJ 9.4.1, vendorizado em
+  `src/cpp/move/vendor/`; NaN abaixo de 1e-14), `turn_angle` (o `%%` do pacote units é `e1 - round(e1/e2)·e2`, não
+  o do R; o `%/%` é o do R em 80 bits), `time_lags`, `speed`, `unique` (a ordem do `expand.grid` no `subsets`, a do
+  dplyr nos grupos), `per_interval` (as regras do `floor_date` do lubridate), `movebank_visible`, `interpolate` (a
+  interpolação do s2: `RobustCrossProd`, `atan2` x87; sem CRS, o `st_line_sample` do GDAL), `aeqd_crs` (o centroide
+  do s2), `simulate_brownian` (o `RRng` do nlm; o `cumsum` em 80 bits), `load_tracks`, `track_lines`, `segments`,
+  `track_data`. 28 testes; página `docs/api/move.md`.
+* Erros do move2 encontrados: o `mt_aeqd_crs` transforma o centroide para EPSG:4236 (Hu Tzu Shan 1950) em vez de
+  4326 (~900 m nos fishers): só a forma correta, testada contra `mt_aeqd_crs_fixed`. Tempos com milissegundos: o R
+  carrega ~1e-7 s de erro nos lags (segundos desde 1970 em double); o `ls.move` usa as diferenças exatas em ns
+  (teste com tolerância só nesse caso).
+* Próximo: fase 2 (download do Movebank).
 
 ### Pontos a decidir no caminho
 * O nível de paridade do ctmm: o otimizador e o pREML são longos; se o passo a passo não for viável, tolerância

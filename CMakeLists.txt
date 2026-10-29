@@ -313,6 +313,16 @@ add_library(statscore STATIC
 )
 target_include_directories(statscore PUBLIC src/cpp)
 set_target_properties(statscore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Movement ecology (ls.move): steps of tracks as move2 computes them (s2, lwgeom's PROJ geodesics).
+add_library(movecore STATIC
+    src/cpp/move/geo.cpp
+    src/cpp/move/geodesic_proj.cpp
+    src/cpp/move/track.cpp
+)
+target_include_directories(movecore PUBLIC src/cpp)
+set_target_properties(movecore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(movecore PUBLIC lsmcore nlmcore costcore)
 # Land use change (ls.simulate): cross-tabulation and change counts.
 add_library(simcore STATIC
     src/cpp/sim/change.cpp
@@ -421,6 +431,7 @@ if(LANDSCHAFT_OPENMP)
         target_link_libraries(restcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(servcore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(statscore PUBLIC OpenMP::OpenMP_CXX)
+        target_link_libraries(movecore PUBLIC OpenMP::OpenMP_CXX)
         target_link_libraries(swatcore PUBLIC OpenMP::OpenMP_CXX)
         # conda's libomp is found through @rpath: keep its directory in the
         # installed modules (created below) too, not only in the build tree.
@@ -454,6 +465,7 @@ if(MSVC)
     target_compile_options(restcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(servcore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(statscore PRIVATE /fp:precise /W4 /permissive-)
+    target_compile_options(movecore PRIVATE /fp:precise /W4 /permissive-)
     target_compile_options(swatcore PRIVATE /fp:precise /W4 /permissive-)
 else()
     target_compile_options(gtbcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
@@ -475,6 +487,7 @@ else()
     target_compile_options(restcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(servcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     target_compile_options(statscore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
+    target_compile_options(movecore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra)
     # a double literal or promotion in the float code would change its bits
     target_compile_options(swatcore PRIVATE -ffp-contract=off -fno-fast-math -Wall -Wextra -Wdouble-promotion)
 endif()
@@ -485,10 +498,10 @@ if(LANDSCHAFT_PYTHON)
                         src/cpp/prio/python.cpp src/cpp/io/python.cpp src/cpp/sdm/python.cpp src/cpp/sdm/maxnet_python.cpp
                         src/cpp/sim/python.cpp src/cpp/opt/python.cpp src/cpp/rest/python.cpp src/cpp/hydro/python.cpp
                         src/cpp/serv/python.cpp src/cpp/serv/python_coastal.cpp src/cpp/serv/python_swy.cpp
-                        src/cpp/swat/python.cpp src/cpp/stats/python.cpp)
+                        src/cpp/swat/python.cpp src/cpp/stats/python.cpp src/cpp/move/python.cpp)
     target_link_libraries(_core PRIVATE eigen_headers)
     target_link_libraries(_core PRIVATE gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore
-                          iocore sdmcore simcore optcore restcore hydrocore servcore swatcore statscore)
+                          iocore sdmcore simcore optcore restcore hydrocore servcore swatcore statscore movecore)
     if(MSVC)
         target_compile_options(_core PRIVATE /fp:precise)
     else()
@@ -522,7 +535,7 @@ if(LANDSCHAFT_PYTHON)
 else()
     # The static libraries and their headers, for native programs (Terraflux links simcore and what it needs).
     install(TARGETS gtbcore lsmcore conncore circuitcore nlmcore biocore costcore surfcore priocore iocore sdmcore
-                    simcore restcore hydrocore servcore swatcore statscore
+                    simcore restcore hydrocore servcore swatcore statscore movecore
             ARCHIVE DESTINATION lib)
     # with HiGHS's library, which its own rules install
     if(LANDSCHAFT_MILP)

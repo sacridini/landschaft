@@ -105,7 +105,8 @@ from . import sdm
 from . import simulate
 from . import sensitivity
 from . import services
-from . import stats
+from . import move, stats
+from .move import load_tracks
 from . import surface
 from . import hydro
 from . import uncertainty
@@ -230,6 +231,8 @@ __all__ = [
     "sensitivity",
     "services",
     "stats",
+    "move",
+    "load_tracks",
     "surface",
     "hydro",
     "uncertainty",
