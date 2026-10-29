@@ -154,6 +154,13 @@ and follow along.
     fit and cross-validate models on spatial folds, project and check
     extrapolation.
 
+-   :material-paw:{ .lg .middle } **[Animal movement](animal-movement.md)**
+
+    ---
+
+    Read GPS tracks, measure their steps, resample them in bursts and draw
+    the random steps and covariates of a step selection function.
+
 -   :material-map-clock-outline:{ .lg .middle } **[Land change simulation](land-change-simulation.md)**
 
     ---

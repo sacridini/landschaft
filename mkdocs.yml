@@ -163,7 +163,8 @@ nav:
           - 12.10 · The planning process: learn/prioritization/process.md
       - 13 · Species distributions: learn/sdm.md
       - 14 · Simulating land change: learn/simulation.md
-      - 15 · From question to tool: learn/choosing.md
+      - 15 · Animal movement: learn/movement.md
+      - 16 · From question to tool: learn/choosing.md
       - Glossary: learn/glossary.md
       - Further reading: learn/reading.md
   - Tutorials:
@@ -188,6 +189,7 @@ nav:
       - Optimized conservation plans: tutorials/conservation-plans.md
       - Restoration priorities: tutorials/restoration-plans.md
       - Species distributions: tutorials/species-distributions.md
+      - Animal movement: tutorials/animal-movement.md
       - Land change simulation: tutorials/land-change-simulation.md
   - API reference:
       - api/index.md

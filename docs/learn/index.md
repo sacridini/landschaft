@@ -21,7 +21,7 @@ any thread further.
       [installed](../getting-started/installation.md).
     - **Answer the questions** at the end of each chapter before opening the
       answers.
-    - **Come back to [chapter 15](choosing.md)** when you start a project: it
+    - **Come back to [chapter 16](choosing.md)** when you start a project: it
       goes from questions to tools.
 
 ## Chapters
@@ -130,7 +130,15 @@ any thread further.
     main families, validation against persistence at several resolutions,
     calibration by patterns, scenarios and replicates.
 
--   **15 · [From question to tool](choosing.md)**
+-   **15 · [Animal movement](movement.md)**
+
+    ---
+
+    Tracks and their errors, steps and turn angles, the effect of the
+    sampling rate, the shape of a track, step selection functions and
+    resistance from movement.
+
+-   **16 · [From question to tool](choosing.md)**
 
     ---
 

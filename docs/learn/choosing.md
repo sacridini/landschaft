@@ -1,4 +1,4 @@
-<p class="ls-chapter">Chapter 15</p>
+<p class="ls-chapter">Chapter 16</p>
 
 # From question to tool
 
@@ -76,6 +76,9 @@ and a checklist of what to report.
 | where a species could live, from records and environmental maps | `ls.sdm.prepare`, `ls.sdm.fit`, `ls.sdm.predict` | [13](sdm.md) |
 | how well a distribution model predicts new places | spatial folds, `ls.sdm.evaluate` (AUC, TSS, Boyce, omission) | [13](sdm.md) |
 | where a projection to another climate or region extrapolates | `ls.sdm.mess`, `ls.sdm.mop`, `ls.sdm.exdet` | [13](sdm.md) |
+| **Animal movement** | | |
+| how far, how fast and how tortuously tracked animals move | `ls.move.steps`, `speed`, `turn_angle`, `sinuosity`, `nsd` | [15](movement.md) |
+| which places animals choose as they move, as data for a step selection function | `ls.move.resample`, `random_steps`, `extract_covariates` | [15](movement.md) |
 | **Change** | | |
 | what was gained and lost, and whether it is real | `ls.simple_change`, `ls.morphological_change` | [10](change.md) |
 | how fragmentation classes shifted | `ls.fos_change`, `ls.fad_multiscale_change` | [10](change.md) |

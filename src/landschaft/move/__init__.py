@@ -22,6 +22,7 @@ Typical use::
     ls.write_vector(lines, "tracks.gpkg")
 """
 
+from ._examples import example_data
 from ._filters import (filter_movebank_visible, filter_per_interval, filter_unique, movebank_visible, per_interval,
                        unique)
 from ._geometry import aeqd_crs, interpolate, segments, track_data, track_lines
@@ -33,7 +34,8 @@ from ._steps import (cum_dist, filter_min_n_burst, msd, nsd, resample, sinuosity
                      time_of_day, tot_dist)
 from ._tracks import set_columns
 
-__all__ = ["aeqd_crs", "as_tracks", "azimuth", "cum_dist", "distance", "Distribution", "extract_covariates",
+__all__ = ["aeqd_crs", "as_tracks", "azimuth", "cum_dist", "distance", "Distribution", "example_data",
+           "extract_covariates",
            "filter_min_n_burst", "filter_movebank_visible", "filter_per_interval", "filter_unique", "fit_distr",
            "interpolate", "load_tracks", "make_distribution", "movebank_visible", "msd", "nsd", "per_interval",
            "random_numbers", "random_steps", "resample", "segments", "set_columns", "simulate_brownian", "sinuosity",

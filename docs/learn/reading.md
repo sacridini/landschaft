@@ -125,6 +125,23 @@ at the end of each chapter give the primary sources of every method.
 
 </div>
 
+### Animal movement
+
+<div class="ls-refs" markdown>
+
+- Turchin, P. (1998). *Quantitative Analysis of Movement: Measuring and Modeling Population Redistribution in Animals and Plants*. Sinauer.
+  The classic text on steps, random walks and their measurement.
+- Nathan, R., Getz, W. M., Revilla, E., Holyoak, M., Kadmon, R., Saltz, D., & Smouse, P. E. (2008). A movement ecology paradigm for unifying organismal movement research. *Proceedings of the National Academy of Sciences*, 105(49), 19052–19059.
+  The framework of the field: internal state, motion and navigation capacities, external factors.
+- Thurfjell, H., Ciuti, S., & Boyce, M. S. (2014). Applications of step-selection functions in ecology and conservation. *Movement Ecology*, 2, 4.
+  A review of step selection functions and their practical choices.
+- Avgar, T., Potts, J. R., Lewis, M. A., & Boyce, M. S. (2016). Integrated step selection analysis: bridging the gap between resource selection and animal movement. *Methods in Ecology and Evolution*, 7(5), 619–630.
+  Why the movement terms belong in the model, and what their coefficients mean.
+- Fieberg, J., Signer, J., Smith, B., & Avgar, T. (2021). A 'How to' guide for interpreting parameters in habitat-selection analyses. *Journal of Animal Ecology*, 90(5), 1027–1043.
+  Reading the coefficients of resource and step selection functions correctly.
+
+</div>
+
 ### Restoration and change
 
 <div class="ls-refs" markdown>
@@ -144,6 +161,7 @@ at the end of each chapter give the primary sources of every method.
 | Conefor, Makurhini | habitat networks, ProtConn | Saura & Torné (2009); Godínez-Gómez & Correa Ayram (2020) |
 | Circuitscape, Omniscape | circuit connectivity | Anantharaman et al. (2020); Landau et al. (2021) |
 | CoordinateCleaner, spThin, usdm, blockCV, ENMeval, ecospat, predicts | cleaning, thinning, predictors, folds and evaluation of species distribution models | Zizka et al. (2019); Aiello-Lammens et al. (2015); Valavi et al. (2019); Muscarella et al. (2014) |
+| move2, amt | animal tracks, steps, resampling, random steps for step selection | Kranstauber et al. (2024); Signer et al. (2019) |
 
 The [benchmarks page](../benchmarks.md#accuracy) describes how each
 reproduction is tested.
@@ -151,5 +169,7 @@ reproduction is tested.
 <div class="ls-refs" markdown>
 
 - Godínez-Gómez, O., & Correa Ayram, C. A. (2020). *Makurhini: Analyzing landscape connectivity* (R package). Zenodo.
+- Kranstauber, B., Safi, K., & Scharf, A. K. (2024). move2: R package for processing movement data. *Methods in Ecology and Evolution*, 15(9), 1561–1567.
+- Signer, J., Fieberg, J., & Avgar, T. (2019). Animal movement tools (amt): R package for managing tracking data and conducting habitat selection analyses. *Ecology and Evolution*, 9(2), 880–890.
 
 </div>

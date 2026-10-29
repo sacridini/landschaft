@@ -29,6 +29,13 @@ in a new major version.
   log-normal, half-normal, uniform, exponential) and `random_numbers`; `random_steps` (each observed step with
   random steps drawn from those distributions; with a seed, R's random numbers: amt's steps) and
   `extract_covariates` (raster values at locations or at the starts and ends of steps, terra's cell rule).
+- `ls.move.example_data`: move2's fishers (Movebank's CSV, eight animals near Albany, New York) and amt's
+  elevation, land use and population density around four of them (also `ls.example_data("fishers")`,
+  `"fishers_elevation"`, `"fishers_landuse"`, `"fishers_popden"`).
+- Documentation: the tutorial *Animal movement* (reading, cleaning and measuring tracks, resampling in bursts,
+  random steps and covariates for a step selection function) and the Learn chapter 15 *Animal movement* (tracks
+  and their errors, steps and turn angles, the sampling rate, track shape, step selection, integrated step
+  selection, resistance from movement); *From question to tool* becomes chapter 16.
 - Builds with MSVC start at most 4 compilers per Python module (`/MP4`, the CMake variable `LANDSCHAFT_MSVC_MP`):
   pybind11's `/MP` started one per logical core whatever the build's parallel level.
 
@@ -45,6 +52,10 @@ in a new major version.
   `tools/move2_fixed.R`).
 - Times with milliseconds: move2's lags and speeds carry R's seconds since 1970 in doubles (about 1e-7 s off);
   `ls.move.time_lags` takes exact differences of the nanoseconds.
+
+### Fixed
+- The tables of `ls.move.random_steps` could not be printed or concatenated: pandas compares `attrs`, where the
+  fitted distributions keep their variance-covariance DataFrame. `Distribution` equality now leaves `vcov` out.
 
 ## [1.56.0] - 2026-10-28
 

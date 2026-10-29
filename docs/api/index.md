@@ -764,6 +764,7 @@ ls.sdm.prepare(occ, env)            # species distribution models
 | Name | Summary |
 |---|---|
 | [`ls.load_tracks`](move.md#landschaft.move.load_tracks) | Read a Movebank file into tracks (move2's ``mt_read``): a GeoDataFrame of points in EPSG:4326 |
+| [`ls.move.example_data`](move.md#landschaft.move.example_data) | Path of an example data set for movement ecology |
 | [`ls.move.as_tracks`](move.md#landschaft.move.as_tracks) | Tracks from a table of locations (move2's ``mt_as_move2``): a GeoDataFrame ``ls.move`` understands |
 | [`ls.move.set_columns`](move.md#landschaft.move.set_columns) | Record which columns hold the time and the track (``tracks.attrs``), so later calls need not name them |
 | [`ls.move.simulate_brownian`](move.md#landschaft.move.simulate_brownian) | Tracks of Brownian motion (move2's ``mt_sim_brownian_motion``) |

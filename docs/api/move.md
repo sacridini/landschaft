@@ -14,7 +14,8 @@ turn angles, summaries of tracks (straightness, sinuosity, net squared
 displacement...), day and night, distributions of step lengths and turn angles,
 random steps and the covariates at their ends, with amt's numbers (and R's
 random numbers given a seed). C++ with OpenMP; the same with any number of
-threads. The `ls.move` module.
+threads. The `ls.move` module; the [tutorial](../tutorials/animal-movement.md) walks
+through it on the tracks of fishers.
 
 <!-- no-run -->
 ```python
@@ -57,6 +58,8 @@ Every function finds the time and the track in the usual columns (`timestamp`,
 ## Tracks
 
 ::: landschaft.move.load_tracks
+
+::: landschaft.move.example_data
 
 ::: landschaft.move.as_tracks
 

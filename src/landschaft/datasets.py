@@ -42,6 +42,10 @@ _MODULE_DATA: dict[str, tuple[str, str]] = {
     "bioclim": ("landschaft.sdm", "bioclim.tif"),
     "biome": ("landschaft.sdm", "biome.tif"),
     "swat_hubbard_brook": ("landschaft.hydro.swat", "hubbard_brook.zip"),
+    "fishers": ("landschaft.move", "fishers.csv.gz"),
+    "fishers_elevation": ("landschaft.move", "elevation.tif"),
+    "fishers_landuse": ("landschaft.move", "landuse.tif"),
+    "fishers_popden": ("landschaft.move", "popden.tif"),
 }
 
 
@@ -82,6 +86,11 @@ def example_data(name: str = "input") -> Path:
         ``"swat_hubbard_brook"`` (the SWAT+ project of Hubbard Brook W2, a zip of
         its TxtInOut files, 2000-2002; its parameters.bsn, written for an earlier
         SWAT+, has the peak rate factor SWAT+ 62 expects, 484).
+
+        Animal movement (see :func:`landschaft.move.example_data`): ``"fishers"``
+        (GPS tracks of eight fishers, Movebank's CSV) and the landscape of four
+        of them, ``"fishers_elevation"``, ``"fishers_landuse"`` and
+        ``"fishers_popden"``.
 
     Returns
     -------

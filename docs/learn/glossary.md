@@ -52,6 +52,9 @@ Bridge
 Budget
 :   The most a plan may cost, in the units of the cost layer; the constraint of the budget objectives (maximum utility, minimum shortfall, ...). [Ch. 12.4](prioritization/optimization.md#budget-objectives)
 
+Burst
+:   A run of locations of a track at a regular rate with none missing; resampled tracks are split into bursts so that no step bridges a gap. [Ch. 15](movement.md#the-sampling-rate)
+
 Calibration (of a penalty)
 :   Solving a problem with a range of penalty values and choosing one on the curve of cost against the penalized quantity, e.g. at its knee or by TOPSIS. [Ch. 12.6](prioritization/tradeoffs.md#calibrating-a-penalty)
 
@@ -100,6 +103,9 @@ Core area
 
 Core-area Zonation (CAZ)
 :   A Zonation rule: the marginal loss of a cell follows the features that would lose the largest fraction of what remains of them (`CAZMAX`; `CAZ1` and `CAZ2` combine the fractions as sums or sums of squares). [Ch. 12.3](prioritization/ranking.md#how-zonation-ranks)
+
+Correlated random walk
+:   A model of movement in which each step length and each turn angle are drawn independently from fixed distributions; the null model of movement analyses. [Ch. 15](movement.md#steps-and-turns)
 
 Corridor constraint
 :   A rule that given areas (terminals) are selected and joined by selected units, through low resistance. [Ch. 12.5](prioritization/spatial.md#rules-on-the-shape-of-the-plan)
@@ -202,6 +208,9 @@ IIC
 :   Integral index of connectivity: habitat availability on a binary graph,
     discounting pairs by the number of links between them. [Ch. 7](networks.md)
 
+Integrated step selection analysis (iSSA)
+:   A step selection function with the step length, its logarithm and the cosine of the turn angle among the covariates, which corrects the movement kernel for the effect of the landscape. [Ch. 15](movement.md#integrated-step-selection)
+
 Irreplaceability
 :   How much the conservation goals depend on an area; an area holding the only population of a species cannot be replaced. [Ch. 12.1](prioritization.md#core-ideas)
 
@@ -278,6 +287,9 @@ MSPA
 Multi-action planning
 :   Choosing which management action to take where (monitoring, actions against each threat) to meet recovery and conservation targets at least cost, or with the most benefit. [Ch. 12.8](prioritization/actions.md)
 
+Net squared displacement (NSD)
+:   The squared distance of each location of a track from the first; it levels off for residents, keeps rising for dispersers. [Ch. 15](movement.md#the-shape-of-a-track)
+
 Neutral landscape model
 :   An artificial map with known properties, used as a baseline to test the
     effects of pattern. [Ch. 3](fragmentation.md); tools:
@@ -340,8 +352,14 @@ ProtConn
 :   The percentage of a region that is protected and connected.
     [Ch. 7](networks.md#protected-area-connectivity)
 
+Random steps
+:   Steps drawn from the start of an observed step, with lengths and turn angles from the distributions of the observed steps: what the animal could have done instead. [Ch. 15](movement.md#used-and-available)
+
 Rarity-weighted richness
 :   The sum over the features of a unit's amount divided by the feature's total: a quick score of how much rare biodiversity a unit holds. [Ch. 12.7](prioritization/evaluation.md#which-places-matter-most)
+
+Relative selection strength
+:   exp(β) of a step or resource selection function: how many times more likely a step is to end where a covariate is one unit higher, all else equal. [Ch. 15](movement.md#used-and-available)
 
 Replacement cost
 :   How much more a plan costs when a unit is left out and the rest optimized again; zero when an equally good substitute exists. [Ch. 12.7](prioritization/evaluation.md#which-places-matter-most)
@@ -360,6 +378,9 @@ Shrinkage
 Simulated annealing
 :   A heuristic that improves a plan by random swaps, sometimes accepting worse plans to escape local optima; Marxan's method. It gives no guarantee of quality. [Ch. 12.4](prioritization/optimization.md#exact-methods-and-heuristics)
 
+Sinuosity
+:   The tortuosity of a path from its mean step length, the variation of the steps and the mean cosine of the turn angles (Benhamou 2004). [Ch. 15](movement.md#the-shape-of-a-track)
+
 Solver
 :   A program that solves optimization models, such as HiGHS or Gurobi. [Ch. 12.4](prioritization/optimization.md#inside-the-solver)
 
@@ -374,6 +395,12 @@ Species distribution model (SDM)
 
 Species-area relationship
 :   The number of species, or a species' persistence, grows with habitat area as a power, S ∝ A<sup>z</sup>, z near 0.25; the base of the minimum extinction risk objective. [Ch. 12.4](prioritization/optimization.md#extinction-risk-instead-of-targets)
+
+Step (movement)
+:   The straight line between two consecutive locations of a track, with its length, duration and heading. [Ch. 15](movement.md#steps-and-turns)
+
+Step selection function (SSF)
+:   A conditional logistic regression comparing each observed step with random steps from the same start, which estimates the selection of the landscape as the animal moves. [Ch. 15](movement.md#used-and-available)
 
 Structuring element
 :   In mathematical morphology, the small reference shape used to probe the
@@ -418,6 +445,9 @@ Transition matrix
 
 TSS
 :   True skill statistic: sensitivity + specificity − 1 at a threshold, from −1 to 1 (0 for a random model). [Ch. 13](sdm.md#tss-the-boyce-index-and-omission)
+
+Turn angle
+:   The change of heading from one step to the next, 0 for a straight continuation and ±π for a reversal. [Ch. 15](movement.md#steps-and-turns)
 
 VIF
 :   Variance inflation factor: 1 / (1 − R²) of a predictor regressed on the others; above 5–10, collinearity makes its effect unstable. [Ch. 13](sdm.md#predictors-and-collinearity)

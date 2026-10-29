@@ -1519,6 +1519,106 @@ def swat_discharge():
     save(fig, "swat_discharge")
 
 
+_MOVE = {}
+
+# GlobCover classes of the fishers' land use map (docs/tutorials/animal-movement.md)
+GLOBCOVER = {20: ((214, 200, 120), "cropland mosaic"), 30: ((190, 205, 120), "vegetation mosaic"),
+             50: ((22, 101, 52), "broadleaved forest"), 70: ((6, 78, 59), "needleleaved forest"),
+             100: ((77, 124, 15), "mixed forest"), 110: ((132, 170, 80), "forest-shrubland mosaic"),
+             120: ((170, 190, 110), "grassland-forest mosaic"), 140: ((234, 214, 130), "herbaceous"),
+             160: ((45, 140, 130), "flooded forest"), 190: ((185, 28, 28), "urban"),
+             210: ((37, 99, 235), "water")}
+
+
+def move_run():
+    """The tutorial's tracks, bursts and random steps (docs/tutorials/animal-movement.md)."""
+    if not _MOVE:
+        import warnings
+
+        tracks = ls.load_tracks(ls.move.example_data("fishers"))
+        tracks = tracks[~tracks.geometry.is_empty]
+        landuse = ls.load_raster(ls.move.example_data("landuse"))
+        four = tracks[tracks["individual-local-identifier"].isin(["F1", "F2", "M1", "M4"])].to_crs(landuse.rio.crs)
+        bursts = ls.move.filter_min_n_burst(ls.move.resample(four, "30min", "3min"), 3)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ssf = ls.move.random_steps(ls.move.steps(bursts), n_control=10, seed=1)
+        _MOVE.update(four=four, landuse=landuse, ssf=ssf)
+    return _MOVE
+
+
+def globcover_map(ax, landuse, legend=True):
+    vals = landuse.values
+    keys = sorted(GLOBCOVER)
+    rgb = np.ones((*vals.shape, 3))
+    for k in keys:
+        rgb[vals == k] = np.array(GLOBCOVER[k][0]) / 255
+    ax.imshow(rgb, extent=_cost_extent(landuse), interpolation="nearest", alpha=0.55)
+    if legend:
+        present = set(np.unique(vals[~np.isnan(vals)]).astype(int)) if vals.dtype.kind == "f" else set(np.unique(vals))
+        handles = [Patch(color=np.array(GLOBCOVER[k][0]) / 255, alpha=0.55, label=GLOBCOVER[k][1])
+                   for k in keys if k in present]
+        ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.01, 1), frameon=False, fontsize=8,
+                  title="land use", title_fontsize=8)
+
+
+@figure
+def move_tracks():
+    run = move_run()
+    fig, ax = plt.subplots(figsize=(8.2, 7))
+    globcover_map(ax, run["landuse"])
+    colors = {"F1": "#7c3aed", "F2": "#db2777", "M1": "#ea580c", "M4": "#0f172a"}
+    for name, one in run["four"].groupby("individual-local-identifier"):
+        ax.plot(one.geometry.x, one.geometry.y, color=colors[name], lw=0.5, alpha=0.85)
+        ax.plot([], [], color=colors[name], lw=2, label=name)
+    handles, labels = ax.get_legend_handles_labels()
+    leg = ax.get_legend()
+    ax.add_artist(leg)
+    ax.legend(handles, labels, loc="lower left", frameon=True, fontsize=8, title="fisher", title_fontsize=8)
+    ax.set_title("four fishers near Albany, New York")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    km = 2000
+    x0, y0 = ax.get_xlim()[1] - 3000, ax.get_ylim()[0] + 600
+    ax.plot([x0, x0 + km], [y0, y0], color="black", lw=2)
+    ax.text(x0 + km / 2, y0 + 250, "2 km", ha="center", fontsize=8)
+    save(fig, "move_tracks")
+
+
+@figure
+def move_random_steps():
+    run = move_run()
+    ssf = run["ssf"]
+    one = ssf[(ssf["individual-local-identifier"] == "F2")]
+    burst = one.loc[one["case_"], "burst_"].value_counts()
+    burst = burst[burst >= 6].index[0]
+    b = one[one["burst_"] == burst]
+    obs = b[b["case_"]].sort_values("step_id_").head(6)
+    rnd = b[~b["case_"] & b["step_id_"].isin(obs["step_id_"])]
+    fig, ax = plt.subplots(figsize=(7.4, 6.2))
+    pad = 250
+    xs = np.concatenate([obs[["x1_", "x2_"]].values.ravel(), rnd["x2_"].values])
+    ys = np.concatenate([obs[["y1_", "y2_"]].values.ravel(), rnd["y2_"].values])
+    globcover_map(ax, run["landuse"], legend=False)
+    for _, r in rnd.iterrows():
+        ax.plot([r["x1_"], r["x2_"]], [r["y1_"], r["y2_"]], color="#64748b", lw=0.6, alpha=0.7)
+    ax.scatter(rnd["x2_"], rnd["y2_"], s=9, color="#64748b", zorder=3, label="ends of random steps")
+    path_x = np.append(obs["x1_"].values, obs["x2_"].values[-1])
+    path_y = np.append(obs["y1_"].values, obs["y2_"].values[-1])
+    ax.plot(path_x, path_y, color="#0f172a", lw=2, zorder=4, label="observed steps")
+    ax.scatter(path_x, path_y, s=22, color="#0f172a", zorder=5)
+    for i, (x, y) in enumerate(zip(path_x[:-1], path_y[:-1])):
+        ax.annotate(str(i + 1), (x, y), xytext=(4, 4), textcoords="offset points", fontsize=8, fontweight="bold")
+    ax.set_xlim(xs.min() - pad, xs.max() + pad)
+    ax.set_ylim(ys.min() - pad, ys.max() + pad)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.legend(loc="lower left", frameon=True, fontsize=8)
+    ax.set_title("six 30-minute steps of F2, 10 random steps from each start")
+    save(fig, "move_random_steps")
+
+
 def main() -> None:
     names = sys.argv[1:] or list(FIGURES)
     for name in names:
