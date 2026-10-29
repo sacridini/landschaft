@@ -1078,6 +1078,8 @@ Todos os módulos planejados são plenamente viáveis e compatíveis com a licen
 | **exactextract** (cobertura exata de células por polígonos, usada pelo exactextractr do prioritizr) | **Apache-2.0** (C++, ISciences) | **Compatível com a GPL-3**. Porte em `src/cpp/io/exact` (sem GEOS), com o `LICENSE` original na pasta. |
 | **Gurobi** | Comercial (licença acadêmica gratuita) | Só **opcional** em tempo de execução (gurobipy); nunca obrigatório nem embutido. |
 | **Marxan** 4.0.6 (simulated annealing) | **MIT** (Possingham, Ball, Watts; código em `C:\Users\eduar\Documents\dev\marxan`) | **Compatível**. Porte em `src/cpp/opt/marxan` com paridade contra o executável (gcc). |
+| **move2** 0.5.0 / **move** 4.2.7 / **amt** 0.3.1.0 / **moveHMM** 1.12 / **momentuHMM** 1.5.8 / **ctmm** 1.3.0 / **enerscape** 1.2.0 (`ls.move`) | **GPL >= 3 / GPL-3** (R, C, C++; conferido no CRAN em 2026-10-29) | **100% compatível**. Reimplementação em C++ com os pacotes como referência de paridade. |
+| **recurse** 1.4.0 (`ls.move`) | **MIT** (R + C++) | **Compatível com a GPL-3**. |
 
 ---
 
@@ -4796,6 +4798,140 @@ de paridade. O que o ecossistema do Python já resolve bem (as florestas e o boo
     `network_distance`, `along_network`, `centrality` e `dci` (C++, o DCI a 1e-12 do riverconn; a2a5775); o
     Hydrography90m e o Environment90m no `ls.download` (53dc05b).
 
+---
+
+## Ecologia do movimento (`ls.move`, pedido em 2026-10-29)
+
+Pedido: trazer o move2 (gitlab.com/bartk/move2) e os pacotes do R que costumam ser usados com ele. Análise acordada
+com o usuário: o move2 é sobretudo infraestrutura (um `sf` que sabe quais colunas são o tempo e a trajetória, o cliente
+do Movebank, os verbos do dplyr) e tem pouca análise. O valor para o landschaft está na **ponte entre o movimento e a
+paisagem**: a seleção de passos virando resistência para o `ls.cost`, o Omniscape e o `ls.conn`; os corredores
+observados validando a conectividade; as áreas de vida alimentando as métricas e a priorização. Submódulo
+`landschaft.move` (`ls.move`) com o C++ em `src/cpp/move/` (`movecore`); o enerscape entra no `ls.cost`.
+
+### Escopo (versões do CRAN em 2026-10-29)
+| Pacote | Licença | Entra | Fica de fora |
+|---|---|---|---|
+| **move2** 0.5.0 (Kranstauber et al. 2024) | GPL >= 3 | `mt_read` e o download do Movebank (estudo, deployments, vocabulário); `mt_distance`, `mt_speed`, `mt_azimuth`, `mt_turnangle`, `mt_time_lags`; `mt_filter_unique`, `mt_filter_per_interval`, `mt_filter_movebank_visible`; `mt_interpolate`; `mt_track_lines`, `mt_segments`; `mt_aeqd_crs`; `mt_sim_brownian_motion` | asserções (`mt_is_*`, `mt_has_*`: viram validação interna), getters e setters das colunas, `mt_stack`, os verbos do dplyr sobre os dados das trajetórias, `to_move` / `mt_as_move2`, o chaveiro de credenciais |
+| **amt** 0.3.1.0 (Signer et al. 2019) | GPL-3 | `track_resample`, bursts, `steps`, `random_steps` (gama e von Mises do `fit_distr`), `extract_covariates` (início, fim, ao longo do passo), `fit_issf` / `fit_clogit`, `log_rss`, `simulate_path` (núcleo de redistribuição); `hr_mcp`, `hr_kde`, `hr_locoh`, `hr_isopleths`, `hr_overlap`; `nsd`, `straightness`, `sinuosity`, `tac`, `time_of_day` | `hr_akde` / `hr_od` (vêm do próprio ctmm), os gráficos do ggplot |
+| **move** 4.2.7 (o v1, Kranstauber) | GPL >= 3 | `brownian.motion.variance.dyn` e `brownian.bridge.dyn` (dBBMM), `brownian.bridge` (BBMM), `getVolumeUD`, `corridor` (LaPoint et al. 2013) | o resto (o move2 o substitui) |
+| **moveHMM** 1.12 e **momentuHMM** 1.5.8 | GPL-3 | `prepData`, `fitHMM` (passo: gama, Weibull, lognormal, exponencial, com inflação de zeros; ângulo: von Mises, Cauchy embrulhada), `viterbi`, `stateProbs`, pseudorresíduos, covariáveis nas transições; do momentuHMM: covariáveis nos parâmetros das distribuições (matrizes de desenho), vários fluxos de dados, mais distribuições | `crawlWrap` / `MIfitHMM` (imputação pelo crawl) a princípio |
+| **ctmm** 1.3.0 (Calabrese, Fleming et al.) | GPL-3 | `variogram`, os modelos IID / BM / OU / OUF / IOU (isotrópicos e anisotrópicos), `ctmm.guess`, `ctmm.fit` (pREML e ML), `ctmm.select`, `akde` (com pesos ótimos), `occurrence`, `speed` / `speeds`, `overlap`, `outlie` | `uere.fit` e o erro de telemetria numa segunda etapa; `rsf.fit` depois, se pedido; o ctmmweb |
+| **recurse** 1.4.0 (Bracis et al. 2018) | MIT | `getRecursions`, `getRecursionsAtLocations`, `getRecursionsInPolygon` (revisitas e tempo de residência, com o instante em que a trajetória cruza o raio interpolado) | - |
+| **enerscape** 1.2.0 (Berti et al. 2022) | GPL-3 | `enerscape` (custo energético do transporte pela declividade e a massa do animal, Pontzer 2016) como `ls.cost.energy_landscape` | - |
+
+Ficam fora (decidido em 2026-10-29): adehabitatHR/LT (o amt cobre os mesmos estimadores), moveVis (animação; se fizer
+falta, é o `ls.plot`), aniMotum (filtro de erro do Argos por espaço de estados no TMB: pesado e de nicho), wildlifeDI,
+spatsoc, migrateR, marcher e segclust2d (interação entre indivíduos e migração, sem relação com a paisagem).
+
+### Princípios
+* **Objetos de dados, arquivos pelo `ls.load_*`** (regra de I/O da 0.97): uma trajetória é um GeoDataFrame comum
+  (um evento por linha: `track`, `time`, a geometria e os atributos do evento). Os nomes das colunas de tempo e de
+  trajetória e a tabela dos atributos de cada trajetória (sexo, espécie, deployment) ficam em `gdf.attrs`, como nos
+  atributos do `sf` do move2, mas **nenhuma função depende só deles** (o pandas perde `attrs` em várias operações):
+  toda função aceita `time=` e `track=`, com os `attrs` e depois os nomes do Movebank (`timestamp`,
+  `individual_local_identifier`) como padrão. Sem classe nova.
+* **Três níveis**, como no `ls.sdm`: funções por etapa (`steps`, `random_steps`, `fit_issf`...), um atalho de uma
+  chamada onde o fluxo é padrão (`ls.move.issf(tracks, env, ...)`: reamostragem, passos, passos aleatórios,
+  extração e ajuste, com `report` e `settings`) e as saídas como DataArray / GeoDataFrame que entram direto nos
+  outros módulos.
+* **Paridade** com o pacote de referência de cada função: bit a bit onde o cálculo é determinístico; as etapas
+  aleatórias com os geradores do R já portados no `nlm` (mais os que faltarem: o `rvonmises` do circular); os
+  ajustes por otimizador (`nlm` do moveHMM, `optim` do fitdistrplus, o otimizador do ctmm) passo a passo quando der
+  (como o Gauss-Newton do gstat no `ls.stats`) e por tolerância quando não, com o cuidado de que ajustes que não
+  convergem podem ser caóticos (o variograma gaussiano do `ls.stats`, 2026-10-29). Bugs das referências: só a
+  forma correta, testada contra a referência corrigida.
+* **Desempenho**: C++/OpenMP por trajetória e por bloco de raster (dBBMM, KDE e AKDE em grades grandes), com
+  `n_threads` (padrão: todos os núcleos menos um). Dados do Movebank chegam a milhões de pontos.
+* **Geodésicas**: as distâncias e azimutes em lon/lat reaproveitam o GeographicLib já portado em
+  `src/cpp/sdm/geocircle` (o do geosphere e o do terra); a fase 0 confere o que o move2 usa de fato (o
+  `sf::st_distance` passa pelo s2, esférico, quando `sf_use_s2()` está ligado; o `mt_azimuth` pelo
+  `lwgeom::st_geod_azimuth`, elipsoidal) e porta a mesma conta, sem o pyproj.
+* **Dependências**: nenhuma nova. O `clogit` do survival, o `nlm` do R e os estimadores do KernSmooth / MASS
+  são portados; o download do Movebank usa a API REST direto (credenciais em `MOVEBANK_USERNAME` /
+  `MOVEBANK_PASSWORD` ou argumentos; a licença de cada estudo aceita com `accept_license=True`, como no move2), com
+  o cache do `_download.py`.
+
+### Do movimento para a paisagem (as integrações que justificam o módulo)
+| Saída do `ls.move` | Entra em | Como |
+|---|---|---|
+| Coeficientes da iSSF (`fit_issf`) | `ls.cost`, `ls.circuit` (Omniscape), `ls.conn` | `ls.move.resistance(model, env, transform=...)`: a seleção relativa (`exp(β·x)`) virando resistência pelas transformações da literatura (Zeller et al. 2012, Keeley et al. 2016), como DataArray |
+| Trajetórias simuladas pela iSSF (`simulate_path`) | `ls.conn`, `ls.prioritize` | densidade de caminhos simulados como mapa de conectividade (Signer et al. 2024) |
+| UD do dBBMM, `corridor` | validação da conectividade | `ls.move.validate(tracks_or_ud, surface)`: correlação de postos entre o uso e a corrente / resistência e a fração do UD dentro dos corredores (Zeller et al. 2018) |
+| Áreas de vida (MCP, KDE, LoCoH, AKDE) | `ls.zonal_metrics`, `ls.prioritize` | polígonos e UDs como zonas das métricas de paisagem e como feições da priorização |
+| Estados do HMM | iSSF | passos filtrados por estado (a resistência só do deslocamento) |
+| Revisitas do recurse | `ls.prioritize`, `ls.sdm` | rasters de revisitas e de tempo de residência como feições |
+| `energy_landscape` | `ls.cost` | superfície de custo energético para caminhos e corredores |
+| Pontos desbastados por intervalo | `ls.sdm` | presenças (`ls.sdm.dataset`) com a disponibilidade pela área de vida (RSF, desenho III de Johnson 1980) |
+
+### Pipeline típico
+```python
+import landschaft as ls
+
+tr  = ls.move.download(study_id=1234567, accept_license=True)    # ou ls.load_tracks("estudo.csv")
+tr  = ls.move.filter_unique(tr)
+tr["speed"] = ls.move.speed(tr)                                  # m/s, NaN no último ponto de cada trajetória
+env = ls.load_raster(["floresta.tif", "dem.tif", "estradas_dist.tif"], stack=True)
+
+# seleção de passos -> resistência -> corrente
+st  = ls.move.steps(ls.move.resample(tr, "2h", tolerance="10min"))
+ss  = ls.move.random_steps(st, n=10, seed=42)
+ss  = ls.move.extract_covariates(ss, env, where="end")
+fit = ls.move.fit_issf(ss, "case ~ floresta + dem + estradas_dist + log_sl + cos_ta")
+res = ls.move.resistance(fit, env)
+cur = ls.circuit.omniscape(res, radius=50)
+
+# ou numa chamada
+fit = ls.move.issf(tr, env, interval="2h", n_random=10, seed=42)
+print(fit.report)
+
+# áreas de vida e corredores observados
+hr  = ls.move.home_range(tr, method="akde", level=0.95)          # "mcp", "kde", "locoh", "akde"
+ud  = ls.move.dbbmm(tr, like=env, location_error=20, window=31, margin=11)
+ls.move.validate(ud, cur)
+```
+
+### Fases
+0. Harness: biblioteca R própria (`%LOCALAPPDATA%/R/landschaft-move-lib`: move2, sf, s2, lwgeom, amt, survival,
+   circular, fitdistrplus, KernSmooth, FNN, move, moveHMM, momentuHMM, ctmm, recurse, enerscape),
+   `tools/move_reference.R`, `tools/make_reference_move.py`, `tests/move_cases.py`. Dados de exemplo: os fishers do
+   amt (`amt_fisher` + `amt_fisher_covar`), o búfalo do ctmm e o elk do moveHMM (pacotes GPL; conferir a origem e a
+   licença de cada conjunto). Conferir no código as contas geodésicas do move2 (s2 ou GeographicLib) e os geradores
+   do `random_steps`.
+1. Base do move2: `ls.load_tracks` (o CSV / zip do Movebank, como o `mt_read`), as métricas (`distance`, `speed`,
+   `azimuth`, `turn_angle`, `time_lags`), `filter_unique`, `filter_per_interval`, `interpolate`, `track_lines`,
+   `segments`, `aeqd_crs`, `simulate_brownian` (o `rnorm` do R). Bit a bit.
+2. Movebank: `download` (eventos, estudos, deployments, vocabulário; a licença; o cache), `movebank_visible`.
+   Testes com respostas gravadas; o download real marcado `external_reference`.
+3. amt, a trajetória e os passos: `resample`, bursts, `steps`, `nsd`, `straightness`, `sinuosity`, `tac`,
+   `time_of_day` (o algoritmo do suncalc), `random_steps` (o `fit_distr` da gama pelo `fitdistrplus`, o von Mises),
+   `extract_covariates` (pelo `ls.extract`; ao longo do passo como o amt).
+4. iSSF: `fit_issf` / `fit_clogit` (o `coxph` / `clogit` do survival portado: Newton-Raphson determinístico, bit a
+   bit), `log_rss`, `issf` (uma chamada), `resistance`, `simulate_path`. As integrações com o `ls.cost`, o Omniscape
+   e o `ls.conn`.
+5. Áreas de vida do amt: `hr_mcp`, `hr_kde` (larguras de banda `href` e as do KernSmooth), `hr_locoh` (k, a, r), as
+   isopletas, `hr_overlap` (HR, PHR, VI, BA, UDOI, HD); a API `home_range(method=...)`.
+6. move v1: dBBMM (a variância por janela móvel com os pontos de quebra pelo BIC), BBMM, `getVolumeUD`, `corridor`.
+   `validate` contra as superfícies de conectividade.
+7. recurse (revisitas e tempo de residência, em pontos, em locais e em polígonos) e enerscape
+   (`ls.cost.energy_landscape`).
+8. HMM: o moveHMM (`prepData`, `fitHMM` com o `nlm` do R portado, o algoritmo forward em C++, `viterbi`,
+   `stateProbs`, pseudorresíduos, covariáveis nas transições); depois o que o momentuHMM acrescenta (matrizes de
+   desenho, vários fluxos, mais distribuições).
+9. ctmm: o variograma empírico, os modelos, a verossimilhança pelo filtro de Kalman, `ctmm.fit` (pREML e ML),
+   `ctmm.select`, `akde` com pesos ótimos, `occurrence`, `speed`, `overlap`, `outlie`. A maior fase; pode se dividir
+   em 9a (variograma, modelos, ajuste, seleção) e 9b (AKDE, ocorrência, velocidade, sobreposição). Paridade por
+   tolerância.
+10. Capítulo do Learn ("Animal movement": do Movebank à resistência), tutorial, glossário, índice da API;
+    benchmarks contra os pacotes R, o movingpandas e o scikit-mobility; depois o Terraflux os liga pelo
+    `terraflux-ls-sys`.
+
+### Pontos a decidir no caminho
+* O nível de paridade do ctmm: o otimizador e o pREML são longos; se o passo a passo não for viável, tolerância
+  nos parâmetros e nas áreas (como no Omniscape).
+* O `crawlWrap` do momentuHMM (imputação contínua pelo crawl): só se pedido; exige portar o crawl.
+* O `rsf.fit` do ctmm (RSF ponderada pela autocorrelação) como alternativa à iSSF para a resistência.
+
 ## Roteiro integrado dos novos módulos
 
 A integração entre os módulos do landschaft consolida um ecossistema completo para ecologia espacial e planejamento
@@ -4851,6 +4987,17 @@ flowchart TD
         SIM_STEP --> FUZZY["Validação (fuzzy, Pontius)"]
     end
 
+    subgraph Modulo_Movimento ["4. Ecologia do Movimento (ls.move)"]
+        TRK["Trajetórias (Movebank / move2)"]
+        HMM["Estados comportamentais (HMM)"]
+        ISSF["Seleção de passos (iSSF, amt)"]
+        HR["Áreas de vida (MCP / KDE / AKDE)"]
+        UD["Uso observado (dBBMM, corridor, recurse)"]
+
+        TRK --> HMM --> ISSF
+        TRK --> HR & UD
+    end
+
     %% Conexões e Sinergias
     BIO --> CLEAN
     PROJ -->|"Superfície de Adequabilidade (Feições q_ij)"| CAZ & ABF
@@ -4863,6 +5010,10 @@ flowchart TD
     SIM_STEP -.-> LSM & MSPA
     LSM & MSPA -.->|"Calibração Orientada a Padrões (Loss Function)"| SIM_STEP
     MAP_PRIO -.->|"Zona de Restrição / Custo de Conversão"| SIM_STEP
+    ISSF -->|"Resistência (exp(β·x))"| CONN
+    UD -.->|"Validação da conectividade"| CONN
+    HR -->|"Zonas e feições"| LSM & PROB
+    TRK -->|"Presenças desbastadas"| CLEAN
 ```
 
 ---
