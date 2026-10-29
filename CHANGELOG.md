@@ -6,6 +6,19 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.58.0] - 2026-10-29
+
+1.57.0 was not published: two `ls.move` tests of its wheels failed on every platform (the fixes below). Its
+changes (the section below) are published with this version.
+
+### Fixed
+- `ls.move` with pandas 3, which reads Movebank's ISO 8601 times to milliseconds or microseconds rather than
+  nanoseconds: time lags, speeds, interpolation, resampling, steps and `time_of_day` took those units for
+  nanoseconds (lags 1000 times too short). Times are now converted to nanoseconds first, whatever their unit.
+- The `ls.move` tests compare the steps in longitude / latitude bit for bit where move2's and amt's references were
+  made (Windows, an Intel CPU's x87 unit); elsewhere (AMD's x87 rounds 4 of the fishers' 32904 distances otherwise,
+  ARM has none) within 1e-8 m on lengths and 1e-8 m over the step's length on angles.
+
 ## [1.57.0] - 2026-10-29
 
 ### Added
