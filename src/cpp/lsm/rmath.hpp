@@ -84,14 +84,10 @@ inline double r_log1p(double x) {
     long double v = x;
     long double r;
     if (std::fabs(v) < static_cast<long double>(0.29)) {
-        __asm__("fldln2
-	fxch
-	fyl2xp1" : "=t"(r) : "0"(v) : "st(1)");
+        __asm__("fldln2\n\tfxch\n\tfyl2xp1" : "=t"(r) : "0"(v) : "st(1)");
     } else {
         v += 1.0L;
-        __asm__("fldln2
-	fxch
-	fyl2x" : "=t"(r) : "0"(v) : "st(1)");
+        __asm__("fldln2\n\tfxch\n\tfyl2x" : "=t"(r) : "0"(v) : "st(1)");
     }
     return static_cast<double>(r);
 #else
