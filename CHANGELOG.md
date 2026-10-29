@@ -6,6 +6,8 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.57.0] - 2026-10-29
+
 ### Added
 - `ls.move`: animal movement, its first part R's move2 0.5.0 (Kranstauber et al. 2024), the same numbers bit for
   bit. `ls.load_tracks` reads Movebank's files (`.csv`, `.csv.gz`, `.zip`: UTC times, the deployment's tag when an
