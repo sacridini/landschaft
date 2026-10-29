@@ -155,3 +155,5 @@ jobs:
       contents: read
       packages: write
     uses: ./.github/workflows/containers.yml
+    with:
+      push: true

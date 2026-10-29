@@ -11,7 +11,13 @@
 name: Container images
 
 on:
+  # A called workflow sees its caller's event: release.yml run by hand is a workflow_dispatch
+  # too, so it says to push (inputs.push) rather than the event deciding it.
   workflow_call:
+    inputs:
+      push:
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       push:
@@ -25,7 +31,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/landschaft
-  PUSH: ${{ github.event_name != 'workflow_dispatch' || inputs.push }}
+  PUSH: ${{ inputs.push }}
 
 jobs:
   image:
@@ -66,7 +72,7 @@ jobs:
   manifest:
     name: One tag for both architectures
     needs: image
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.push }}
+    if: ${{ inputs.push }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
