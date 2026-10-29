@@ -194,6 +194,14 @@ def test_distributions():
     assert np.isclose(ls.move.fit_distr(sl, "exp").params["rate"], 1 / np.mean(sl), rtol=1e-15)
 
 
+def test_random_steps_survive_pandas_concat(inputs):
+    # the fitted distributions in attrs hold a vcov DataFrame; pandas compares attrs when it concatenates
+    r = ls.move.random_steps(ls.move.steps(track_set(inputs, "utm")), n_control=5, seed=42)
+    both = pd.concat([r, r])
+    assert both.attrs == r.attrs
+    repr(r.iloc[:, :3].join(r.iloc[:, 3:]))
+
+
 def test_random_steps_refuses_lonlat(inputs):
     with pytest.raises(ValueError, match="projected"):
         ls.move.random_steps(ls.move.steps(track_set(inputs, "ll")))

@@ -30,7 +30,8 @@ class Distribution:
     """
     name: str
     params: dict
-    vcov: pd.DataFrame | None = field(default=None, repr=False)
+    # not compared: pandas compares attrs (where random_steps keeps its distributions) when it concatenates
+    vcov: pd.DataFrame | None = field(default=None, repr=False, compare=False)
 
     def _draw_params(self) -> list[float]:
         p = self.params
