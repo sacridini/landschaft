@@ -4969,6 +4969,9 @@ ls.move.validate(ud, cur)
   `vcov` do von Mises guarda o erro padrão; aqui a variância.
 * Falta da fase 3: `extract_covariates_along` (os valores ao longo do passo) e `intensity_use` (precisa do
   `hr_mcp`, fase 5). Próximo: fase 4 (iSSF).
+* **No Terraflux** (2026-10-29): as fases 1 a 3 portadas como `move.*` (27 operadores, o `movecore` pelo shim),
+  bit a bit com o `ls.move` nos casos de `tests/move_cases.py` (`tools/make_move_reference.py` de lá). As fases
+  seguintes vão para lá do mesmo jeito.
 
 ### Pontos a decidir no caminho
 * O nível de paridade do ctmm: o otimizador e o pREML são longos; se o passo a passo não for viável, tolerância
