@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from ._actions import ActionsData, actions_data
+from ._actions import ActionsData, _complete
 from ._milp import _raster_units
 
 __all__ = ["actions_raster_data"]
@@ -125,23 +125,34 @@ def actions_raster_data(monitoring_cost: xr.DataArray, features, threats, action
             status[np.isfinite(v) & (v != 0)] = code
     pu = pd.DataFrame({"id": ids, "monitoring_cost": fu.cost, "status": status})
 
+    # the tables straight from the matrices (features x units, threats x units): the units are 1..n in
+    # order, every pair once, so actions_data's checks of the tables hold already
     f = fu.rij.tocoo()
-    dist_features = pd.DataFrame({"pu": f.col + 1.0, "feature": f.row + 1.0, "amount": f.data})
+    if (f.data < 0).any():
+        raise ValueError("feature amounts must be >= 0")
+    keep = f.data != 0
+    df_unit, df_feature, amount = f.col[keep].astype(np.int64), f.row[keep].astype(np.int64), f.data[keep]
+    dist_features = pd.DataFrame({"pu": df_unit + 1.0, "feature": df_feature + 1.0, "amount": amount})
 
-    t = tu.rij.tocoo()
+    t = tu.rij.T.tocsr()  # by unit, then threat
+    t.sort_indices()
     if (t.data < 0).any():
         raise ValueError("threat intensities must be >= 0")
+    dt_unit = np.repeat(np.arange(n, dtype=np.int64), np.diff(t.indptr))
+    dt_threat = t.indices.astype(np.int64)
+    keep = t.data != 0
+    dt_unit, dt_threat, amount = dt_unit[keep], dt_threat[keep], t.data[keep]
     costs = _per_layer(action_cost, tnames, "action_cost")
-    acost = np.empty(t.data.size)
+    acost = np.empty(amount.size)
     for k, c in enumerate(costs):
-        rows = t.row == k
-        v = _cells(c, monitoring_cost, cells, f"action_cost of {tnames[k]}")[t.col[rows]]
+        rows = dt_threat == k
+        v = _cells(c, monitoring_cost, cells, f"action_cost of {tnames[k]}")[dt_unit[rows]]
         if not np.isfinite(v).all():
             raise ValueError(f"action_cost of {tnames[k]} has no value in cells where the threat occurs")
         acost[rows] = v
-    dist_threats = pd.DataFrame({"pu": t.col + 1.0, "threat": t.row + 1.0, "amount": t.data, "action_cost": acost,
-                                 "status": np.zeros(t.data.size)})
-    dist_threats = dist_threats.sort_values(["pu", "threat"], kind="stable").reset_index(drop=True)
+    # the actions in locked-out units are locked out
+    dist_threats = pd.DataFrame({"pu": dt_unit + 1.0, "threat": dt_threat + 1.0, "amount": amount,
+                                 "action_cost": acost, "status": np.where(status[dt_unit] == 3, 3.0, 0.0)})
     threat_table = pd.DataFrame({"id": np.arange(1.0, len(tnames) + 1), "name": tnames,
                                  "blm_actions": np.asarray(_per_layer(blm_actions, tnames, "blm_actions"), float)})
 
@@ -154,7 +165,7 @@ def actions_raster_data(monitoring_cost: xr.DataArray, features, threats, action
             pos = {name: k + 1.0 for k, name in enumerate(names)}
             sens[col] = [pos[v] if v in pos else float(v) for v in sens[col]]
 
-    bnd = None
+    bnd = bnd_units = None
     if boundary:
         from ._milp_matrices import boundary_matrix
 
@@ -164,21 +175,19 @@ def actions_raster_data(monitoring_cost: xr.DataArray, features, threats, action
         unit[cells] = np.arange(n)
         a, b = unit[m.row], unit[m.col]
         keep = (a >= 0) & (b >= 0) & (a <= b)
+        bnd_units = (a[keep], b[keep])
         bnd = pd.DataFrame({"id1": a[keep] + 1.0, "id2": b[keep] + 1.0, "boundary": m.data[keep]})
 
     feats = pd.DataFrame({"id": np.arange(1.0, len(fnames) + 1), "name": fnames, "target_recovery": 0.0,
                           "target_conservation": 0.0})
-    d = actions_data(pu, feats, dist_features, threat_table, dist_threats, sens, bnd)
+    d = _complete(pu, feats, dist_features, df_unit, df_feature, threat_table, dist_threats, dt_unit, dt_threat,
+                  sens, bnd, bnd_units)
     tr = np.asarray(_per_layer(target_recovery, fnames, "target_recovery"), dtype=np.float64)
     tc = np.asarray(_per_layer(target_conservation, fnames, "target_conservation"), dtype=np.float64)
     if relative:
         if ((tr < 0) | (tr > 1) | (tc < 0) | (tc > 1)).any():
             raise ValueError("relative targets must be between 0 and 1")
-        from ._actions import _pairs
-
-        p = _pairs(d)
-        held = np.zeros((2, len(fnames)))
-        np.add.at(held, (p.threatened.astype(np.int64), p.feature), p.amount)
+        held = _held(d)
         # features dropped by actions_data (no amount) are not in d.features
         pos = d.features["id"].to_numpy(dtype=np.int64) - 1
         tr, tc = tr[pos] * held[1], tc[pos] * held[0]
@@ -193,6 +202,36 @@ def actions_raster_data(monitoring_cost: xr.DataArray, features, threats, action
     from dataclasses import replace
 
     return replace(d, features=features_table, grid=(monitoring_cost, cells))
+
+
+def _held(d: ActionsData) -> np.ndarray:
+    """Every feature's amount (2 x features) in the units where none of the threats that harm it occurs
+    (row 0) and where one does (row 1), summed by feature, then unit, as over prioriactions's pairs."""
+    nf, nt = len(d.features), len(d.threats)
+    df = d.dist_features
+    unit, feature = df["internal_pu"].to_numpy(), df["internal_feature"].to_numpy()
+    amount = df["amount"].to_numpy(dtype=np.float64)
+    if nt > 63:
+        from ._actions import _pairs
+
+        p = _pairs(d)
+        unit, feature, amount, threatened = p.unit, p.feature, p.amount, p.threatened
+    else:  # the threats in every unit and harming every feature as bits
+        if feature.size > 1 and not ((feature[1:] > feature[:-1]) | ((feature[1:] == feature[:-1])
+                                                                     & (unit[1:] > unit[:-1]))).all():
+            order = np.lexsort((unit, feature))
+            unit, feature, amount = unit[order], feature[order], amount[order]
+        bit = np.left_shift(np.uint64(1), np.arange(nt, dtype=np.uint64))
+        in_unit = np.zeros(len(d.pu), dtype=np.uint64)
+        dt = d.dist_threats
+        np.bitwise_or.at(in_unit, dt["internal_pu"].to_numpy(), bit[dt["internal_threat"].to_numpy()])
+        harms = np.zeros(nf, dtype=np.uint64)
+        s = d.sensitivity
+        np.bitwise_or.at(harms, s["internal_feature"].to_numpy(), bit[s["internal_threat"].to_numpy()])
+        threatened = (in_unit[unit] & harms[feature]) != 0
+    # bincount adds in the order of the rows, as add.at
+    held = np.bincount(feature + nf * threatened.astype(np.int64), weights=amount, minlength=2 * nf)
+    return held.reshape(2, nf)
 
 
 def solution_maps(data: ActionsData, units: np.ndarray, actions: np.ndarray) -> xr.DataArray:

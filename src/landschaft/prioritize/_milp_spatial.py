@@ -120,17 +120,24 @@ def r_round(x: np.ndarray, digits: int) -> np.ndarray:
     """R's round(x, digits) (R >= 4.0): of the two decimal candidates around x, the closer one to x
     (not x * 10^d rounded, as numpy does), the even one on a tie."""
     x = np.asarray(x, dtype=np.float64)
-    sgn = np.where(x < 0, -1.0, 1.0)
-    a = np.abs(x)
+    if x.ndim == 0:
+        return r_round(x.reshape(1), digits)[0]
     p10 = 10.0 ** digits
-    x10 = p10 * a
-    i10 = np.floor(x10)
+    a = np.abs(x)
+    i10 = a * p10
+    xu = np.ceil(i10)
+    xu /= p10
+    np.floor(i10, out=i10)
     xd = i10 / p10
-    xu = np.ceil(x10) / p10
     du = xu - a
-    dd = a - xd
-    up = (du < dd) | ((du == dd) & (np.fmod(i10, 2.0) == 1))
-    return sgn * np.where(up, xu, xd)
+    dd = np.subtract(a, xd, out=a)
+    up = du < dd
+    tie = du == dd
+    if tie.any():
+        up |= tie & (np.fmod(i10, 2.0) == 1)
+    np.copyto(xd, xu, where=up)
+    np.negative(xd, out=xd, where=x < 0)
+    return xd
 
 
 def _r_round(m: sp.csc_matrix, digits: int) -> sp.csc_matrix:

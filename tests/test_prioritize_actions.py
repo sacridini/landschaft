@@ -352,6 +352,58 @@ def test_raster_inputs_checked():
     assert d.pu.loc[d.pu["status"] == 3].shape[0] == 1
 
 
+def test_raster_relative_targets_without_a_feature():
+    """A feature raster without amounts is dropped (with prioriactions's warning) and the relative targets
+    are the other features' shares (the targets were once one per layer and failed)."""
+    cost, feats, thr, _ = _rasters()
+    empty = feats.copy(data=feats.values.copy())
+    empty.values[1] = 0.0
+    with pytest.warns(UserWarning, match="not represented"):
+        d = ls.prioritize.actions_raster_data(cost, empty, thr, 1.0, target_recovery=0.5)
+    full = ls.prioritize.actions_raster_data(cost, feats, thr, 1.0, target_recovery=0.5)
+    assert list(d.features["name"]) == ["sp1", "sp3"]
+    np.testing.assert_array_equal(d.features["target_recovery"].to_numpy(),
+                                  full.features["target_recovery"].to_numpy()[[0, 2]])
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_raster_held_amounts_are_the_pairs(seed):
+    """The relative targets' amounts by bits of threats per unit and feature: bit for bit the sums over
+    the model's (feature, unit) pairs."""
+    from landschaft.prioritize._actions import _pairs
+    from landschaft.prioritize._actions_raster import _held
+
+    cost, feats, thr, _ = _rasters(seed=seed, ny=14, nx=11)
+    sens = pd.DataFrame({"feature": ["sp1", "sp2", "sp3", "sp3"], "threat": ["fire", "cattle", "fire", "cattle"]})
+    for s in (None, sens.iloc[[0, 1, 2]], sens):
+        d = ls.prioritize.actions_raster_data(cost, feats, thr, 1.0, sensitivity=s)
+        p = _pairs(d)
+        ref = np.zeros((2, len(d.features)))
+        np.add.at(ref, (p.threatened.astype(np.int64), p.feature), p.amount)
+        assert np.array_equal(_held(d), ref)
+
+
+def test_table_ids_in_any_order():
+    """Units' ids unsorted, with gaps and as integers: the same problem as ids 1..n in order."""
+    pu, ft = optimize_cases.pa_pu(), optimize_cases.pa_features()
+    df, th, dt = optimize_cases.pa_dist_features(), optimize_cases.pa_threats(), optimize_cases.pa_dist_threats()
+    new = {float(v): int(10 * v + 3) for v in pu["id"]}
+    rng = np.random.default_rng(0)
+    pu2 = pu.assign(id=pu["id"].map(new)).sample(frac=1.0, random_state=1)
+    df2 = df.assign(pu=df["pu"].map(new)).iloc[rng.permutation(len(df))]
+    dt2 = dt.assign(pu=dt["pu"].map(new)).iloc[rng.permutation(len(dt))]
+    a = ls.prioritize.actions_data(pu, ft, df, th, dt)
+    b = ls.prioritize.actions_data(pu2, ft, df2, th, dt2)
+    np.testing.assert_array_equal(b.pu["id"].to_numpy(), np.sort(list(new.values())))
+    ca, cb = a.problem("minimizeCosts").compile(), b.problem("minimizeCosts").compile()
+    assert ca.A.shape == cb.A.shape
+    np.testing.assert_array_equal(ca.lb, cb.lb)
+    np.testing.assert_array_equal(np.sort(ca.obj), np.sort(cb.obj))
+    sa = a.problem("minimizeCosts").add_highs_solver(gap=0).solve()
+    sb = b.problem("minimizeCosts").add_highs_solver(gap=0).solve()
+    assert sa.objective == pytest.approx(sb.objective, rel=1e-12)
+
+
 def test_raster_solution_saves(tmp_path):
     cost, feats, thr, acost = _rasters()
     d = ls.prioritize.actions_raster_data(cost, feats, thr, 1.0, target_recovery=0.3)

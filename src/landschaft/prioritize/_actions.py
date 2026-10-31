@@ -218,7 +218,10 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
 
     _require(pu, "pu", ("id", "monitoring_cost"))
     _numeric(pu, "pu", ("id", "monitoring_cost"))
-    if not len(pu) or pu["id"].duplicated().any():
+    ids = _values(pu["id"])
+    order = None if ids.size < 2 or (ids[1:] > ids[:-1]).all() else np.argsort(ids, kind="stable")
+    pu_ids = ids if order is None else ids[order]
+    if not len(pu) or (pu_ids[1:] == pu_ids[:-1]).any():
         raise ValueError("pu needs unique ids")
     if "status" in pu.columns:
         _numeric(pu, "pu", ("status",))
@@ -226,7 +229,9 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
             raise ValueError("pu status must be 0, 2 or 3")
     else:
         pu["status"] = 0.0
-    pu = pu.sort_values("id", kind="stable").reset_index(drop=True)
+    if order is not None:
+        pu = pu.iloc[order]
+    pu = pu.reset_index(drop=True)
 
     _require(features, "features", ("id", "target_recovery"))
     _numeric(features, "features", ("id", "target_recovery"))
@@ -247,12 +252,17 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
 
     _require(dist_features, "dist_features", ("pu", "feature", "amount"))
     _numeric(dist_features, "dist_features", ("pu", "feature", "amount"))
-    if not len(dist_features) or (dist_features["amount"] < 0).any():
+    amount = dist_features["amount"].to_numpy(dtype=np.float64)
+    if not len(dist_features) or (amount < 0).any():
         raise ValueError("dist_features needs rows with amounts >= 0")
-    if not dist_features["pu"].isin(pu["id"]).all() or not dist_features["feature"].isin(features["id"]).all():
+    df_unit = _positions(pu_ids, _values(dist_features["pu"]))
+    df_feature = _positions(_values(features["id"]), _values(dist_features["feature"]))
+    if (df_unit < 0).any() or (df_feature < 0).any():
         raise ValueError("dist_features refers to planning units or features that do not exist")
-    dist_features = dist_features[dist_features["amount"] != 0]
-    if dist_features.duplicated(["pu", "feature"]).any():
+    keep = amount != 0
+    if not keep.all():
+        dist_features, df_unit, df_feature = dist_features[keep], df_unit[keep], df_feature[keep]
+    if _pair_duplicates(df_unit, len(pu), df_feature, len(features)):
         raise ValueError("There are duplicate values of the pu and feature pair in dist_features")
 
     _require(threats, "threats", ("id",))
@@ -274,11 +284,14 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
 
     _require(dist_threats, "dist_threats", ("pu", "threat", "action_cost", "amount"))
     _numeric(dist_threats, "dist_threats", ("pu", "threat", "action_cost", "amount"))
-    if not len(dist_threats) or (dist_threats["amount"] < 0).any():
+    amount = dist_threats["amount"].to_numpy(dtype=np.float64)
+    if not len(dist_threats) or (amount < 0).any():
         raise ValueError("dist_threats needs rows with amounts >= 0")
-    if not dist_threats["pu"].isin(pu["id"]).all():
+    dt_unit = _positions(pu_ids, _values(dist_threats["pu"]))
+    if (dt_unit < 0).any():
         raise ValueError("dist_threats refers to planning units that do not exist")
-    if not dist_threats["threat"].isin(threats["id"]).all():
+    dt_threat = _positions(_values(threats["id"]), _values(dist_threats["threat"]))
+    if (dt_threat < 0).any():
         raise ValueError("dist_threats refers to threats that do not exist")
     if "status" in dist_threats.columns:
         _numeric(dist_threats, "dist_threats", ("status",))
@@ -286,17 +299,77 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
             raise ValueError("dist_threats status must be 0, 2 or 3")
     else:
         dist_threats["status"] = 0.0
-    out_ids = pu.loc[pu["status"] == 3, "id"]
-    for uid in out_ids:  # the actions in locked-out units are locked out
-        rows = dist_threats["pu"] == uid
-        if (dist_threats.loc[rows, "status"] == 2).any():
+    rows = (pu["status"].to_numpy(dtype=np.float64) == 3)[dt_unit]
+    if rows.any():  # the actions in locked-out units are locked out
+        locked_in = dist_threats["status"].to_numpy(dtype=np.float64) == 2
+        for uid in pu_ids[np.unique(dt_unit[rows & locked_in])]:
             _warn(f"The pu {uid:g} was set as locked out so it is not possible to set actions on it (lock in). "
                   "Therefore, all actions in that unit will be set as locked out")
         dist_threats.loc[rows, "status"] = 3.0
-    dist_threats = dist_threats[dist_threats["amount"] != 0]
-    if dist_threats.duplicated(["pu", "threat"]).any():
+    keep = amount != 0
+    if not keep.all():
+        dist_threats, dt_unit, dt_threat = dist_threats[keep], dt_unit[keep], dt_threat[keep]
+    if _pair_duplicates(dt_unit, len(pu), dt_threat, len(threats)):
         raise ValueError("There are duplicate values of the pu and threat pair in dist_threats")
 
+    bnd_units = None
+    if boundary is not None:
+        boundary = pd.DataFrame(boundary).copy()
+        _require(boundary, "boundary", ("id1", "id2", "boundary"))
+        _numeric(boundary, "boundary", ("id1", "id2", "boundary"))
+        bnd_units = (_positions(pu_ids, _values(boundary["id1"])), _positions(pu_ids, _values(boundary["id2"])))
+    return _complete(pu, features, dist_features, df_unit, df_feature, threats, dist_threats, dt_unit, dt_threat,
+                     sensitivity, boundary, bnd_units)
+
+
+def _values(col: pd.Series) -> np.ndarray:
+    """A column of ids as integers or floats."""
+    v = col.to_numpy()
+    return v if v.dtype.kind in "if" else col.to_numpy(dtype=np.float64)
+
+
+def _positions(ids: np.ndarray, values: np.ndarray) -> np.ndarray:
+    """The position of every value among ``ids`` (unique, in any order); -1 where it is none of them."""
+    if ids.dtype.kind != "i" or values.dtype.kind != "i":
+        ids, values = ids.astype(np.float64, copy=False), values.astype(np.float64, copy=False)
+    out = np.full(values.size, -1, dtype=np.int64)
+    if not ids.size or not values.size:
+        return out
+    step = np.diff(ids)
+    if (step == 1).all():  # ids first, first + 1, ...: by subtraction
+        p = values - ids[0]
+        ok = (p >= 0) & (p < ids.size) & (p == np.floor(p))
+        out[ok] = p[ok]
+        return out
+    order = None if (step > 0).all() else np.argsort(ids, kind="stable")
+    s = ids if order is None else ids[order]
+    p = np.minimum(np.searchsorted(s, values), s.size - 1)
+    ok = s[p] == values
+    out[ok] = p[ok] if order is None else order[p[ok]]
+    return out
+
+
+def _pair_duplicates(a: np.ndarray, na: int, b: np.ndarray, nb: int) -> bool:
+    """Whether a pair (a, b) of positions occurs twice (linear when the pairs come sorted either way)."""
+    if a.size < 2:
+        return False
+    for key in (a * nb + b, b * na + a):
+        if (key[1:] > key[:-1]).all():
+            return False
+    key = np.sort(a * nb + b)
+    return bool((key[1:] == key[:-1]).any())
+
+
+def _complete(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.DataFrame, df_unit: np.ndarray,
+              df_feature: np.ndarray, threats: pd.DataFrame, dist_threats: pd.DataFrame, dt_unit: np.ndarray,
+              dt_threat: np.ndarray, sensitivity: pd.DataFrame | None, boundary: pd.DataFrame | None,
+              bnd_units: tuple[np.ndarray, np.ndarray] | None) -> ActionsData:
+    """The rest of :func:`actions_data` (sensitivity, defaults, warnings, drops, rounding, internal ids) on
+    checked tables: ``pu`` sorted by its ids (unique); every row of ``dist_features`` and ``dist_threats``
+    with an amount > 0, given by the position of its unit in ``pu`` and of its feature (threat) in
+    ``features`` (``threats``), no pair twice; the locked-out units' actions locked out; ``bnd_units`` the
+    positions of the boundary's units (-1: not a unit)."""
+    pu_ids = _values(pu["id"])
     if sensitivity is not None:
         sensitivity = pd.DataFrame(sensitivity).copy()
         _require(sensitivity, "sensitivity", ("feature", "threat"))
@@ -309,11 +382,13 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
     sensitivity["delta1"] = sensitivity["delta1"].fillna(0.0) if "delta1" in sensitivity else 0.0
     if "delta2" not in sensitivity:
         sensitivity["delta2"] = np.nan
-    # delta2 by default: the threat's highest amount
-    top = dist_threats.groupby("threat")["amount"].max()
+    # delta2 by default: the threat's highest amount (NaN: a threat without amounts or none)
+    top = np.full(len(threats) + 1, -np.inf)
+    np.maximum.at(top, dt_threat, dist_threats["amount"].to_numpy(dtype=np.float64))
+    top[np.isneginf(top)] = np.nan
     d2 = sensitivity["delta2"].to_numpy(dtype=np.float64, copy=True)
     fill = np.isnan(d2)
-    d2[fill] = sensitivity["threat"].map(top).to_numpy(dtype=np.float64)[fill]
+    d2[fill] = top[_positions(_values(threats["id"]), _values(sensitivity["threat"]))][fill]
     sensitivity["delta2"] = d2
     sensitivity["delta3"] = sensitivity["delta3"].fillna(0.0) if "delta3" in sensitivity else 0.0
     sensitivity["delta4"] = sensitivity["delta4"].fillna(1.0) if "delta4" in sensitivity else 1.0
@@ -324,44 +399,57 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
         raise ValueError("Every value of delta3 parameter must be less than every value of delta4 parameter")
 
     if boundary is not None:
-        boundary = pd.DataFrame(boundary).copy()
-        _require(boundary, "boundary", ("id1", "id2", "boundary"))
-        _numeric(boundary, "boundary", ("id1", "id2", "boundary"))
+        boundary = boundary.copy()
         boundary["boundary"] = r_round(boundary["boundary"].to_numpy(dtype=np.float64), 3)
 
     if (pu["monitoring_cost"] < 0).any():
         raise ValueError("argument to pu has negative monitoring cost data")
-    empty_pu = np.setdiff1d(pu["id"].unique(), dist_features["pu"].unique())
-    if empty_pu.size:
-        _warn("The following pu's do not contain features: " + _ids(empty_pu))
-    missing_f = np.setdiff1d(features["id"].unique(), dist_features["feature"].unique())
-    if missing_f.size:
+    held = np.zeros(len(pu), dtype=bool)
+    held[df_unit] = True
+    if not held.all():
+        _warn("The following pu's do not contain features: " + _ids(pu_ids[~held]))
+    f_keep = np.zeros(len(features), dtype=bool)
+    f_keep[df_feature] = True
+    if not f_keep.all():
+        missing_f = np.sort(_values(features["id"])[~f_keep])
         _warn("The following features are not represented (it'll not be considered in the model): "
               + " ".join(f"{v:g}" for v in missing_f))
-        features = features[~features["id"].isin(missing_f)]
+        features = features[f_keep]
         sensitivity = sensitivity[~sensitivity["feature"].isin(missing_f)]
     not_threatened = np.setdiff1d(features["id"].unique(), sensitivity["feature"].unique())
     if not_threatened.size:
         _warn("The following features are not threatened: " + " ".join(f"{v:g}" for v in not_threatened))
-    missing_t = np.setdiff1d(threats["id"].unique(), dist_threats["threat"].unique())
-    if missing_t.size:
+    t_ids = _values(threats["id"])
+    t_keep = np.zeros(len(threats), dtype=bool)
+    t_keep[dt_threat] = True
+    if not t_keep.all():
+        missing_t = np.sort(t_ids[~t_keep])
         _warn("The following threats are not represented (it'll not be considered in the model): "
               + " ".join(f"{v:g}" for v in missing_t))
-        threats = threats[~threats["id"].isin(missing_t)]
         sensitivity = sensitivity[~sensitivity["threat"].isin(missing_t)]
-    harmless = np.setdiff1d(threats["id"].unique(), sensitivity["threat"].unique())
+    harmless = np.setdiff1d(threats["id"][t_keep].unique(), sensitivity["threat"].unique())
     if harmless.size:
         _warn("The following threats are not dangerous to any features (it'll not be considered in the model): "
               + " ".join(f"{v:g}" for v in harmless))
-        threats = threats[~threats["id"].isin(harmless)]
-        dist_threats = dist_threats[~dist_threats["threat"].isin(harmless)]
+        t_keep &= ~np.isin(t_ids, harmless)
+        rows = t_keep[dt_threat]
+        dist_threats, dt_unit, dt_threat = dist_threats[rows], dt_unit[rows], dt_threat[rows]
+    if not t_keep.all():
+        threats = threats[t_keep]
     if boundary is not None:
-        keep = boundary["id1"].isin(pu["id"]) & boundary["id2"].isin(pu["id"])
+        b1, b2 = bnd_units
+        keep = (b1 >= 0) & (b2 >= 0)
         if not keep.all():
             _warn("The boundary data contain pu which ids does not exist in pu data (it'll not be considered in "
                   "the model)")
-            boundary = boundary[keep]
+            boundary, b1, b2 = boundary[keep], b1[keep], b2[keep]
 
+    pu = pu.reset_index(drop=True)
+    features = features.reset_index(drop=True)
+    threats = threats.reset_index(drop=True)
+    dist_features = dist_features.reset_index(drop=True)
+    dist_threats = dist_threats.reset_index(drop=True)
+    sensitivity = sensitivity.reset_index(drop=True)
     pu["monitoring_cost"] = r_round(pu["monitoring_cost"].to_numpy(dtype=np.float64), 3)
     features["target_recovery"] = r_round(features["target_recovery"].to_numpy(dtype=np.float64), 3)
     features["target_conservation"] = r_round(features["target_conservation"].to_numpy(dtype=np.float64), 3)
@@ -372,30 +460,24 @@ def actions_data(pu: pd.DataFrame, features: pd.DataFrame, dist_features: pd.Dat
     for d in ("delta1", "delta2", "delta3", "delta4"):
         sensitivity[d] = r_round(sensitivity[d].to_numpy(dtype=np.float64), 3)
 
-    pu = pu.reset_index(drop=True)
-    features = features.reset_index(drop=True)
-    threats = threats.reset_index(drop=True)
-    dist_features = dist_features.reset_index(drop=True)
-    dist_threats = dist_threats.reset_index(drop=True)
-    sensitivity = sensitivity.reset_index(drop=True)
     pu["internal_id"] = np.arange(len(pu))
     features["internal_id"] = np.arange(len(features))
     threats["internal_id"] = np.arange(len(threats))
-    pu_ix = pd.Series(pu["internal_id"].to_numpy(), index=pu["id"].to_numpy())
-    f_ix = pd.Series(features["internal_id"].to_numpy(), index=features["id"].to_numpy())
-    t_ix = pd.Series(threats["internal_id"].to_numpy(), index=threats["id"].to_numpy())
-    dist_features["internal_pu"] = pu_ix.reindex(dist_features["pu"].to_numpy()).to_numpy()
-    dist_features["internal_feature"] = f_ix.reindex(dist_features["feature"].to_numpy()).to_numpy()
-    dist_threats["internal_pu"] = pu_ix.reindex(dist_threats["pu"].to_numpy()).to_numpy()
-    dist_threats["internal_threat"] = t_ix.reindex(dist_threats["threat"].to_numpy()).to_numpy()
-    sensitivity = sensitivity[sensitivity["feature"].isin(f_ix.index) & sensitivity["threat"].isin(t_ix.index)]
-    sensitivity = sensitivity.reset_index(drop=True)
-    sensitivity["internal_feature"] = f_ix.reindex(sensitivity["feature"].to_numpy()).to_numpy()
-    sensitivity["internal_threat"] = t_ix.reindex(sensitivity["threat"].to_numpy()).to_numpy()
+    # the positions among the features (threats) kept
+    dist_features["internal_pu"] = df_unit.astype(np.int64, copy=False)
+    dist_features["internal_feature"] = (np.cumsum(f_keep) - 1)[df_feature]
+    dist_threats["internal_pu"] = dt_unit.astype(np.int64, copy=False)
+    dist_threats["internal_threat"] = (np.cumsum(t_keep) - 1)[dt_threat]
+    sf = _positions(_values(features["id"]), _values(sensitivity["feature"]))
+    st = _positions(_values(threats["id"]), _values(sensitivity["threat"]))
+    keep = (sf >= 0) & (st >= 0)
+    sensitivity = sensitivity[keep].reset_index(drop=True)
+    sensitivity["internal_feature"] = sf[keep]
+    sensitivity["internal_threat"] = st[keep]
     if boundary is not None:
         boundary = boundary.reset_index(drop=True)
-        boundary["internal_id1"] = pu_ix.reindex(boundary["id1"].to_numpy()).to_numpy()
-        boundary["internal_id2"] = pu_ix.reindex(boundary["id2"].to_numpy()).to_numpy()
+        boundary["internal_id1"] = b1.astype(np.int64, copy=False)
+        boundary["internal_id2"] = b2.astype(np.int64, copy=False)
     return ActionsData(pu=pu, features=features, dist_features=dist_features, threats=threats,
                        dist_threats=dist_threats, sensitivity=sensitivity, boundary=boundary)
 
