@@ -6,6 +6,20 @@ in a new major version.
 
 ## [Unreleased]
 
+## [1.58.1] - 2026-10-31
+
+### Changed
+- Multi-action planning (`ls.prioritize.actions_data`, `actions_raster_data`) builds its inputs 2 to 4 times
+  faster on large problems (10^6 cells, 10 features, 3 threats: 1.9 s to 0.47 s from rasters, 1.85 s to 0.79 s
+  from tables): the tables' checks and id lookups in numpy rather than pandas, rasters straight to the checked
+  inputs without checking tables built from them again, relative targets by the threats in every unit as bits.
+  The inputs, warnings, errors and models are the same, bit for bit.
+- prioritizr's and prioriactions's rounding (R's `round`) 1.65 times faster, with the same results.
+
+### Fixed
+- `actions_raster_data` with relative targets failed when a feature's raster had no amounts; the feature is now
+  dropped (with prioriactions's warning) and the other features' targets are their shares.
+
 ## [1.58.0] - 2026-10-29
 
 1.57.0 was not published: two `ls.move` tests of its wheels failed on every platform (the fixes below). Its
